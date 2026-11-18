@@ -716,7 +716,7 @@ func storageWords(rows []telemetry.StorageRow) string {
 	for _, r := range rows {
 		total += r.Bytes
 	}
-	return fmt.Sprintf("People chats take %s on disk.", humanBytes(total))
+	return fmt.Sprintf("People chats and groups take %s on disk.", humanBytes(total))
 }
 
 func humanBytes(n int64) string {

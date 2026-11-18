@@ -888,6 +888,8 @@ func TestGroupsBlocking(t *testing.T) {
 	ada, _ := w.many(t, "+2348031140701", "Ada Obi")
 	bola, bolaID := w.many(t, "+2348031140702", "Bola Ade")
 	chidi, chidiID := w.many(t, "+2348031140703", "Chidi Eze")
+	// Chidi makes three groups in an hour: past a first week's two (§8.2).
+	w.older(t, chidiID)
 	for _, c := range []*client{bola, chidi} {
 		adds(t, ada, c)
 		adds(t, c, ada)
@@ -1274,7 +1276,9 @@ func TestGroupsLinkJoinsPerHour(t *testing.T) {
 func TestGroupsInTheOneList(t *testing.T) {
 	defer api.SetPeopleListPage(2)()
 	w := newJoinedWorld(t)
-	ada, _ := w.many(t, "+2348031141601", "Ada Obi")
+	ada, adaID := w.many(t, "+2348031141601", "Ada Obi")
+	// Three groups in an hour: past a first week's two (§8.2).
+	w.older(t, adaID)
 	bola, bolaID := w.many(t, "+2348031141602", "Bola Ade")
 	adds(t, ada, bola)
 	adds(t, bola, ada)

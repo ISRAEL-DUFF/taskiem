@@ -194,12 +194,17 @@ func Dashboard() ([]byte, error) {
 	y += 8
 	row("People chats' storage", y)
 	y++
-	add("timeseries", "People chats on disk", "Bytes of the people chats' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 100 GiB, or over 5 GiB more in a day, opens a ticket.", "bytes", gridPos{8, 12, 0, y},
+	add("timeseries", "People chats and groups on disk", "Bytes of the people chats' and groups' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 150 GiB, or over 8 GiB more in a day, opens a ticket.", "bytes", gridPos{8, 8, 0, y},
 		[]target{
 			{Expr: "max by (table) (taskiem_people_storage_bytes)", LegendFormat: "{{table}}", RefID: "A"},
 			{Expr: "sum(max by (table) (taskiem_people_storage_bytes))", LegendFormat: "all", RefID: "B"},
 		}, nil)
-	add("timeseries", "People chats' rows", "Rows of the people chats' tables (Postgres's estimate).", "short", gridPos{8, 12, 12, y},
+	add("timeseries", "Groups on disk", "Bytes of groups' one copy of their messages and files (5b), and their growth over a day.", "bytes", gridPos{8, 8, 8, y},
+		[]target{
+			{Expr: `max by (table) (taskiem_people_storage_bytes{table=~"group_.*"})`, LegendFormat: "{{table}}", RefID: "A"},
+			{Expr: `sum(max by (table) (taskiem_people_storage_bytes{table=~"group_.*"})) - sum(max by (table) (taskiem_people_storage_bytes{table=~"group_.*"} offset 1d))`, LegendFormat: "grew in a day", RefID: "B"},
+		}, nil)
+	add("timeseries", "People chats' and groups' rows", "Rows of the people chats' and groups' tables (Postgres's estimate).", "short", gridPos{8, 8, 16, y},
 		[]target{{Expr: "max by (table) (taskiem_people_storage_rows)", LegendFormat: "{{table}}", RefID: "A"}}, nil)
 
 	d := map[string]any{

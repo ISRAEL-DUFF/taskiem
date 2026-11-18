@@ -320,13 +320,31 @@ func RulesTestYAML() ([]byte, error) {
 				InputSeries: []promSeries{
 					// 60 GiB for a day, then growing 100 MiB every 5 minutes
 					// (about 28 GiB a day); with 1 GiB of messages, still under
-					// 100 GiB at 40h, so only the growth sets it off.
+					// 150 GiB at 40h, so only the growth sets it off.
 					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x288 64424509440+104857600x288"},
 					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x600"},
 				},
 				AlertRuleTests: []promAlertTest{
 					{EvalTime: "20h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
 					{EvalTime: "40h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "groups' storage counts with people chats'",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// People chats steady at 100 GiB, groups' files steady at
+					// 40 GiB: 140 GiB, under the line and not growing. From 30h
+					// groups' files grow 50 MiB every 5 minutes (about 14 GiB
+					// a day): past 150 GiB within the day, and over 8 GiB more.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "107374182400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "42949672960x360 42949672960+52428800x240"},
+					{Series: `taskiem_people_storage_bytes{table="group_messages",instance="a"}`, Values: "1073741824x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "29h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
 				},
 			},
 		},

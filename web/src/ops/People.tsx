@@ -2,7 +2,8 @@
 // "As built: stage 5a gaps, safety and moderation"; docs/runbooks/people-moderators.md):
 // people's reports of people and of businesses, the messages the checks
 // held and their verdicts, a person's standing with the moderators'
-// actions, and appeals. No one at Taskiem reads a people chat except to
+// actions, groups (5b: reports from inside a group, a group's page, its
+// link turned off or the group closed), and appeals. No one at Taskiem reads a people chat except to
 // handle a report of it: opening a report, a held message or a file in
 // them asks why, and the server records who, what, why and when before it
 // shows anything. Every decision asks for the operator's passkey again.
@@ -12,6 +13,11 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { actorLabel } from "../lib/ops";
 import {
   ACTION_LABELS,
+  anyActionLabel,
+  GROUP_ACTION_LABELS,
+  groupActionHelp,
+  groupActionOperation,
+  groupActionRequest,
   actionHelp,
   actionName,
   actionIsGrave,
@@ -23,6 +29,7 @@ import {
   reportFileURL,
   reportReasonLabel,
   whyOK,
+  type GroupAction,
   type ModerationAction,
 } from "../lib/peoplesafety";
 import { ErrorBox, Field, Items, Item, Row, fmtTime, useAction, useLoad } from "../ui";
@@ -32,6 +39,7 @@ import {
   type OpsAppeal,
   type OpsCustomerReport,
   type OpsCustomerReportRow,
+  type OpsGroup,
   type OpsHeld,
   type OpsHeldRow,
   type OpsPeopleReport,
@@ -92,7 +100,10 @@ export function PeopleSafety() {
                 />
               ))}
             </Items>
-            <p className="hint">Prometheus has the same figures (taskiem_people_storage_bytes); over 100 GB, or 5 GB more in a day, opens a ticket.</p>
+            <p className="hint">
+              Groups keep one copy of their messages and files (group_messages, group_files). Prometheus has the same figures (taskiem_people_storage_bytes); over 150
+              GB together, or 8 GB more in a day, opens a ticket.
+            </p>
           </section>
         </>
       )}
@@ -152,10 +163,14 @@ export function PeopleReports() {
                   icon="inbox"
                   tone={r.status === "open" ? "warn" : "muted"}
                   testid="ops-people-report"
-                  title={`${r.reported_name || "Deleted account"}: ${reportReasonLabel(r.reason)}`}
+                  title={
+                    r.group_id && !r.reported_id
+                      ? `A group: ${reportReasonLabel(r.reason)}`
+                      : `${r.reported_name || "Deleted account"}: ${reportReasonLabel(r.reason)}`
+                  }
                   side={fmtTime(r.created_at)}
                   sub={[
-                    r.from_request ? "From a message request" : "From a chat",
+                    r.group_id ? (r.reported_id ? "A member, from a group" : "The whole group") : r.from_request ? "From a message request" : "From a chat",
                     `${r.files} ${r.files === 1 ? "file" : "files"} kept`,
                     `reported by ${r.reports_against} ${r.reports_against === 1 ? "person" : "people"}`,
                     r.detached ? "the reporter deleted their account" : "",
@@ -237,7 +252,7 @@ function OpenFailed({ error, again }: { error: unknown; again: () => void }) {
 
 /** Lifting a decision in force: why (recorded, and kept with the decision),
  * confirmed, then with the passkey, as the other decisions are. */
-function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction }; onDone: () => void }) {
+function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction | GroupAction }; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const lift = useAction();
@@ -253,7 +268,7 @@ function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction }
       className="ops-lift"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!reason.trim() || !confirm(`Lift the ${name.toLowerCase()}? They are told it is lifted.`)) return;
+        if (!reason.trim() || !confirm(`Lift the ${name.toLowerCase()}? ${a.action.startsWith("group_") ? "The group's admins are" : "They are"} told it is lifted.`)) return;
         void lift.run(async () => {
           await withStepUp("ops.people.lift", a.id, `/people/actions/${a.id}/lift`, { reason: reason.trim() });
           setOpen(false);
@@ -320,7 +335,7 @@ function ReportMessage({ m, file }: { m: OpsReportMessage; file?: { url: string;
       </span>
       <div className="grow">
         <div className="item-top">
-          <span className="title">{m.from_reporter ? "The reporter" : "The person reported"}</span>
+          <span className="title">{m.from_reporter ? "The reporter" : (m.sender ?? "The person reported")}</span>
           <span className="hint">{fmtTime(m.at)}</span>
         </div>
         {m.deleted ? (
@@ -366,7 +381,7 @@ export function PeopleReport() {
       <p className="crumbs">
         <Link to="/ops/people/reports">Reports</Link>
       </p>
-      <h1>Report of a person</h1>
+      <h1>Report</h1>
       <WhyGate key={id} what="report">{(why, again) => <PeopleReportOpened id={id} why={why} again={again} />}</WhyGate>
     </>
   );
@@ -384,19 +399,32 @@ function PeopleReportOpened({ id, why, again }: { id: string; why: string; again
     <>
       <section className="card" data-testid="ops-people-report-head">
         <h2>
-          {r.reported_name || "Deleted account"}: {reportReasonLabel(r.reason)}
+          {r.group_id && !r.reported_id ? "A group" : r.reported_name || "Deleted account"}: {reportReasonLabel(r.reason)}
         </h2>
+        {data.group && (
+          <p data-testid="ops-report-group">
+            In the group <strong>{data.group.name || "with no name"}</strong> ({data.group.members} {data.group.members === 1 ? "member" : "members"} when reported
+            {data.group.left ? "; the reporter had left it" : ""}).
+          </p>
+        )}
         <p>{r.note ? <>The reporter wrote: “{r.note}”</> : "No note from the reporter."}</p>
         <p className="hint">
           Reported {fmtTime(r.created_at)}
           {r.from_request ? ", from a message request" : ""}
           {r.reporter_id ? "" : ". The reporter has since deleted their account"}. {data.sealed ? "Kept sealed under its own key." : ""}
         </p>
-        {r.reported_id && (
-          <Link className="button" to={`/ops/people/persons/${r.reported_id}?report=${r.id}`}>
-            Warn, limit, suspend or close<span className="sr-only"> {r.reported_name}</span>
-          </Link>
-        )}
+        <div className="row-actions">
+          {r.reported_id && (
+            <Link className="button" to={`/ops/people/persons/${r.reported_id}?report=${r.id}`}>
+              Warn, limit, suspend or close<span className="sr-only"> {r.reported_name}</span>
+            </Link>
+          )}
+          {r.group_id && (
+            <Link className="button" to={`/ops/people/groups/${r.group_id}?report=${r.id}`} data-testid="ops-report-open-group">
+              The group: its members and actions
+            </Link>
+          )}
+        </div>
       </section>
       <section aria-labelledby="report-messages">
         <h2 id="report-messages">The last {msgs.length} messages</h2>
@@ -531,7 +559,7 @@ export function HeldQueue() {
               icon="lock"
               tone={h.state === "held" ? "warn" : "muted"}
               testid="ops-held"
-              title={`${h.sender_name || "Deleted account"} to ${h.recipient_name || "Deleted account"}`}
+              title={`${h.sender_name || "Deleted account"} to ${h.group_id ? "a group" : h.recipient_name || "Deleted account"}`}
               side={fmtTime(h.created_at)}
               sub={h.reasons.map(checkReasonLabel).join(", ") || "Held by the checks"}
               sideSub={h.state === "held" ? "Waiting" : `${h.state === "released" ? "Released" : "Confirmed"} by ${actorLabel(h.decided_by ?? "")}`}
@@ -559,7 +587,7 @@ export function HeldQueue() {
               side={<span className="hint">{fmtTime(v.at)}</span>}
               sub={
                 <span className="sub">
-                  {v.verdict === "hold" ? "Held" : "Warned"} · to {v.to_name || "Deleted account"} · {v.reasons.map(checkReasonLabel).join(", ")}
+                  {v.verdict === "hold" ? "Held" : "Warned"} · to {v.group_id ? "a group" : v.to_name || "Deleted account"} · {v.reasons.map(checkReasonLabel).join(", ")}
                 </span>
               }
             />
@@ -596,8 +624,9 @@ function HeldOpened({ id, why, again }: { id: string; why: string; again: () => 
     <>
       <section className="card" data-testid="ops-held-message">
         <h2>
-          {h.sender_name || "Deleted account"} to {h.recipient_name || "Deleted account"}
+          {h.sender_name || "Deleted account"} to {h.group_id ? "a group" : h.recipient_name || "Deleted account"}
         </h2>
+        {h.group_id && <p className="hint">A group's message is one copy: no member got it. Released, it is sent to the group then.</p>}
         <p className="hint">
           Held {fmtTime(h.created_at)}: {h.reasons.map(checkReasonLabel).join(", ") || "by the checks"}.
         </p>
@@ -802,8 +831,13 @@ export function Appeals() {
       {data?.appeals.map((a) => (
         <section className="card" key={a.id} data-testid="ops-appeal" aria-label={`Appeal from ${a.name}`}>
           <h2>
-            <Link to={`/ops/people/persons/${a.person_id}`}>{a.name || "No name"}</Link>: {ACTION_LABELS[a.action]}
+            <Link to={`/ops/people/persons/${a.person_id}`}>{a.name || "No name"}</Link>: {anyActionLabel(a.action)}
           </h2>
+          {a.group_id && (
+            <p>
+              For a group they run: <Link to={`/ops/people/groups/${a.group_id}`}>the group's page</Link>
+            </p>
+          )}
           <p className="hint">
             Decided by {actorLabel(a.operator)}: {a.action_reason}
             {a.until ? ` (until ${fmtTime(a.until)})` : ""}. Appealed {fmtTime(a.created_at)}.
@@ -842,6 +876,165 @@ export function Appeals() {
           )}
         </section>
       ))}
+    </>
+  );
+}
+
+/** /ops/people/groups/:id: a group for moderators, opened saying why (who is in it
+ * is a person's data); never its name or messages, which a report shows. Turn its
+ * invite link off or close it, each with the passkey; act on its members as people. */
+export function GroupSafety() {
+  const { id = "" } = useParams();
+  return (
+    <>
+      <p className="crumbs">
+        <Link to="/ops/people/reports">Reports</Link>
+      </p>
+      <h1>A group</h1>
+      <WhyGate key={id} what="group">{(why, again) => <GroupOpened id={id} why={why} again={again} />}</WhyGate>
+    </>
+  );
+}
+
+function GroupOpened({ id, why, again }: { id: string; why: string; again: () => void }) {
+  const [params] = useSearchParams();
+  const report = params.get("report") ?? undefined;
+  const { data, error, reload } = useLoad(() => opsGet<OpsGroup>(`/people/groups/${id}?why=${encodeURIComponent(why)}`), [id, why]);
+  const [action, setAction] = useState<GroupAction>("group_link_off");
+  const [reason, setReason] = useState("");
+  const act = useAction();
+  if (error) return <OpenFailed error={error} again={again} />;
+  if (!data) return <div className="empty">Opening…</div>;
+  const g = data.group;
+  const take = () => {
+    if (action === "group_close" && !confirm("Close the group? Its members are told, its admins can appeal, and it is deleted in 30 days.")) return;
+    void act.run(async () => {
+      const body: Record<string, unknown> = { action: groupActionRequest(action), reason: reason.trim() };
+      if (report) body.report_id = report;
+      await withStepUp(groupActionOperation(action), id, `/people/groups/${id}/actions`, body);
+      setReason("");
+      reload();
+    }, "Done: the members are told");
+  };
+  return (
+    <>
+      <section className="card" data-testid="ops-group">
+        <h2>Standing</h2>
+        {g ? (
+          <>
+            <p>
+              <strong>{g.closed_at ? `Closed: deleted ${fmtTime(g.close_until)} unless an appeal holds it` : "Open"}</strong>
+              {g.link_stopped_at ? ". Its invite link is turned off." : g.link_on ? ". Its invite link is on." : ". No invite link."}
+            </p>
+            <ul>
+              <li>
+                Made {fmtTime(g.created_at)} by{" "}
+                {g.created_by ? <Link to={`/ops/people/persons/${g.created_by}`}>{g.creator_name || "No name"}</Link> : "a deleted account"}
+              </li>
+              <li>
+                {g.members} {g.members === 1 ? "member" : "members"}, {g.admins} {g.admins === 1 ? "admin" : "admins"}
+              </li>
+              <li>
+                {g.reports} {g.reports === 1 ? "report" : "reports"}, {g.held} held {g.held === 1 ? "message" : "messages"}
+              </li>
+              <li>Last message {fmtTime(g.last_message_at)}</li>
+            </ul>
+          </>
+        ) : (
+          <p data-testid="ops-group-gone">This group was deleted. What moderators decided is kept below.</p>
+        )}
+      </section>
+      {g && (
+        <section className="card" aria-labelledby="group-action">
+          <h2 id="group-action">Take an action on the group</h2>
+          {report && <p className="hint">For the report you came from.</p>}
+          <Field label="Action">
+            <select value={action} onChange={(e) => setAction(e.target.value as GroupAction)} data-testid="ops-group-action">
+              {(Object.keys(GROUP_ACTION_LABELS) as GroupAction[]).map((a) => (
+                <option key={a} value={a}>
+                  {GROUP_ACTION_LABELS[a]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="hint">{groupActionHelp(action)}</p>
+          <Field label="Reason (the group's admins are told it, in these words)">
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={3} />
+          </Field>
+          <ErrorBox error={act.error} />
+          <button className={action === "group_close" ? "danger" : "primary"} disabled={act.busy || !reason.trim()} onClick={take}>
+            {GROUP_ACTION_LABELS[action]} with passkey
+          </button>
+        </section>
+      )}
+      <h2>Members</h2>
+      <p className="hint">Act on a member as on anyone: warn, limit, suspend or close their account from their page.</p>
+      {data.members.length === 0 && <div className="empty">No one.</div>}
+      {data.members.length > 0 && (
+        <Items label="The group's members">
+          {data.members.map((m) => (
+            <Item
+              key={m.person_id}
+              to={`/ops/people/persons/${m.person_id}${report ? `?report=${report}` : ""}`}
+              icon="members"
+              tone={m.left_at ? "muted" : m.suspended ? "danger" : undefined}
+              testid="ops-group-member"
+              title={m.deleted ? "Deleted account" : m.name || "No name"}
+              side={m.role === "admin" ? "Admin" : "Member"}
+              sub={[`joined ${fmtTime(m.joined_at)}`, m.left_at ? `${m.left_how === "removed" ? "removed" : "left"} ${fmtTime(m.left_at)}` : "", m.suspended ? "suspended" : ""]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          ))}
+        </Items>
+      )}
+      <h2>Reports</h2>
+      {data.reports.length === 0 && <div className="empty">None.</div>}
+      {data.reports.length > 0 && (
+        <Items label="Reports of the group and its members">
+          {data.reports.map((r) => (
+            <Item
+              key={r.id}
+              to={`/ops/people/reports/${r.id}`}
+              icon="inbox"
+              tone={r.status === "open" ? "warn" : "muted"}
+              title={`${r.reported_id ? r.reported_name || "Deleted account" : "The group"}: ${reportReasonLabel(r.reason)}`}
+              side={fmtTime(r.created_at)}
+              sideSub={r.status === "open" ? "Open" : "Reviewed"}
+            />
+          ))}
+        </Items>
+      )}
+      <h2>What moderators decided</h2>
+      {data.actions.length === 0 && <div className="empty">Nothing yet.</div>}
+      {data.actions.length > 0 && (
+        <Items label="What moderators decided about the group">
+          {data.actions.map((a) => {
+            const live = !a.lifted_at && !a.closed_at;
+            return (
+              <Row
+                key={a.id}
+                icon="lock"
+                tone={live ? "danger" : "muted"}
+                testid="ops-group-decision"
+                title={GROUP_ACTION_LABELS[a.action]}
+                side={<span className="hint">{fmtTime(a.created_at)}</span>}
+                sub={
+                  <span className="sub">
+                    {a.reason} · by {actorLabel(a.operator)}
+                    {a.until ? ` · deleted ${fmtTime(a.until)} unless appealed` : ""}
+                    {a.lifted_at ? ` · lifted by ${actorLabel(a.lifted_by ?? "")} ${fmtTime(a.lifted_at)}` : ""}
+                    {a.closed_at ? ` · ${a.close_note ?? "deleted"} ${fmtTime(a.closed_at)}` : ""}
+                    {a.appeal_state ? ` · the admins' appeal ${a.appeal_state}` : ""}
+                  </span>
+                }
+              >
+                {live && g && <LiftAction a={a} onDone={reload} />}
+              </Row>
+            );
+          })}
+        </Items>
+      )}
     </>
   );
 }

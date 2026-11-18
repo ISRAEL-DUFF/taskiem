@@ -785,14 +785,14 @@ func TestPeopleStorageWatched(t *testing.T) {
 			}
 		}
 	}
-	if seen["taskiem_people_storage_rows"] != 4 || seen["taskiem_people_storage_bytes"] != 4 {
+	if seen["taskiem_people_storage_rows"] != 6 || seen["taskiem_people_storage_bytes"] != 6 {
 		t.Fatalf("metrics: %v", seen)
 	}
 	o := mod.must(200, "GET", "/v1/ops/people/overview", nil)
-	if len(o["storage"].([]any)) != 4 || !strings.Contains(o["storage_words"].(string), "People chats take") {
+	if len(o["storage"].([]any)) != 6 || !strings.Contains(o["storage_words"].(string), "People chats and groups take") {
 		t.Fatalf("the overview: %v", o)
 	}
-	if s := mod.must(200, "GET", "/v1/ops/people/storage", nil); len(s["tables"].([]any)) != 4 {
+	if s := mod.must(200, "GET", "/v1/ops/people/storage", nil); len(s["tables"].([]any)) != 6 {
 		t.Fatalf("storage: %v", s)
 	}
 }

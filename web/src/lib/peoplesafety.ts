@@ -158,8 +158,40 @@ export function appealWords(a: StandingAppeal): string {
 }
 
 /** The name of an action in the person's list. */
-export const actionName = (a: ModerationAction) =>
-  ({ warn: "Warning", limit: "Limit on message requests", suspend: "Suspension", close: "Closure" })[a];
+export const actionName = (a: ModerationAction | GroupAction) =>
+  ({
+    warn: "Warning",
+    limit: "Limit on message requests",
+    suspend: "Suspension",
+    close: "Closure",
+    group_link_off: "Invite link turned off",
+    group_close: "Group closure",
+  })[a];
+
+// --- groups (api/ops_people_groups.go, 5b B) ---
+
+export type GroupAction = "group_link_off" | "group_close";
+
+/** A moderator's action on a group, as a verb on a button and in a list. */
+export const GROUP_ACTION_LABELS: Record<GroupAction, string> = {
+  group_link_off: "Turn off its invite link",
+  group_close: "Close the group",
+};
+
+/** What a group's action does, said before a moderator takes it. */
+export function groupActionHelp(a: GroupAction): string {
+  return a === "group_link_off"
+    ? "Joining by its link stops at once, and its admins can't make a new link until you lift this. The members are told in the group."
+    : "No one can send messages in it, join it or change it. The members are told in the group, and its admins can appeal. It is deleted with all its messages in 30 days unless the closure is lifted or an appeal is overturned.";
+}
+
+/** The request body's action and the step-up operation a group's action is bound to. */
+export const groupActionRequest = (a: GroupAction) => (a === "group_link_off" ? "link_off" : "close");
+export const groupActionOperation = (a: GroupAction) => `ops.people.group.${groupActionRequest(a)}`;
+
+/** Any action's name on a button, a person's or a group's. */
+export const anyActionLabel = (a: string) =>
+  (ACTION_LABELS as Record<string, string>)[a] ?? (GROUP_ACTION_LABELS as Record<string, string>)[a] ?? a;
 
 // --- lawful requests ---
 

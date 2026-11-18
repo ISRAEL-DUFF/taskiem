@@ -263,12 +263,15 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 			if m.sender != nil {
 				known = cards[*m.sender].InContacts
 			}
-			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || (v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known)
+			// A share card naming an account, from someone the person hasn't
+			// added, always warns as a transfer does (§11 A, as 5a's).
+			splitPay := v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known
+			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || splitPay
 			// The checks' mark shows only to those who haven't added the
 			// sender (B1).
-			if m.screen != nil && !known {
+			if (m.screen != nil && !known) || splitPay {
 				v.Warn = true
-				v.WarnTransfer = v.WarnTransfer || *m.screen == "transfer"
+				v.WarnTransfer = v.WarnTransfer || (m.screen != nil && *m.screen == "transfer")
 			}
 		}
 		out = append(out, v)
