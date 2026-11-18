@@ -1,6 +1,6 @@
 # Field work: jobs done at customers' places, the staff who do them, and where they are
 
-Status: **Draft** 2026-11-18, for review, not scheduled · Decision: [0070](../decisions/0070-field-work-and-isps.md) (proposed) · Workstream **F0 to F9**, one pull request per milestone · Written with the founder · First business to use it: an internet provider ([the ISP area](isps.md)) · Replaces: ISPOps, the founder's field-agent system (backend, admin portal, field app, customer app), absorbed here and retired; its repositories and where each feature's implementation is: [§20.1](#201-where-to-find-it-in-ispops)
+Status: **Draft** 2026-11-18, for review, not scheduled · Decision: [0070](../decisions/0070-field-work-and-isps.md) (proposed) · Workstream **F0 to F9**, one pull request per milestone · Written with the founder · First business to use it: an internet provider ([the ISP area](isps.md)) · Replaces: ISPOps, the founder's field-agent system (backend, admin portal, field app, customer app), absorbed here and retired; its repositories and where each feature's implementation is: [§20.1](#201-where-to-find-it-in-ispops) · Worked examples, one job followed end to end per scenario: [field work examples](field-work-examples.md)
 
 A business whose staff go out to customers (an internet provider installing and repairing lines, a solar installer, a CCTV company, a generator or air-conditioner repairer, a cleaning firm) needs the same things whatever it sells:
 
@@ -482,7 +482,7 @@ F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 
 - **Web:** each page, with Field work off and on; the board's drag; the map with no agent on a job; accessibility and plain-words lists.
 - **App:** the field mode only for `job.work`; steps offline then online; a step while the job was cancelled offline; permission refused; the foreground service starting with Start job and stopping with End job, Could not finish, Hold and Cancel.
 - **On real phones:** background location on Android (several makers' battery savers) and iPhone, over a day of several jobs, with battery measured.
-- **End to end:** an office member makes and assigns a job; the agent starts the job, arrives, works offline, ends it with a photo and parts, and starts their next; the customer sees the card move, confirms and rates; the invoice template runs on End job.
+- **End to end:** each [worked example](field-work-examples.md) is a test, step by step; the first: an office member makes and assigns a job; the agent starts the job, arrives, works offline, ends it with a photo and parts, and starts their next; the customer sees the card move, confirms and rates; the invoice template runs on End job.
 
 ## 23. Risks and open questions
 
