@@ -8654,10 +8654,11 @@ class PeoplePrivacy {
 }
 
 class PutMyPeoplePrivacyRequest {
-  const PutMyPeoplePrivacyRequest({this.findByNumber, this.findFromContacts, this.lastSeen, this.message, this.photo, this.readTicks, this.showNumber});
+  const PutMyPeoplePrivacyRequest({this.findByNumber, this.findFromContacts, this.groupsAdd, this.lastSeen, this.message, this.photo, this.readTicks, this.showNumber});
 
   final String? findByNumber;
   final bool? findFromContacts;
+  final String? groupsAdd;
   final String? lastSeen;
   final String? message;
   final String? photo;
@@ -8667,6 +8668,7 @@ class PutMyPeoplePrivacyRequest {
   factory PutMyPeoplePrivacyRequest.fromJson(Map<String, dynamic> j) => PutMyPeoplePrivacyRequest(
         findByNumber: j['find_by_number'] == null ? null : j['find_by_number'] as String,
         findFromContacts: j['find_from_contacts'] == null ? null : j['find_from_contacts'] as bool,
+        groupsAdd: j['groups_add'] == null ? null : j['groups_add'] as String,
         lastSeen: j['last_seen'] == null ? null : j['last_seen'] as String,
         message: j['message'] == null ? null : j['message'] as String,
         photo: j['photo'] == null ? null : j['photo'] as String,
@@ -8677,6 +8679,7 @@ class PutMyPeoplePrivacyRequest {
   Map<String, dynamic> toJson() => {
         'find_by_number': ?findByNumber,
         'find_from_contacts': ?findFromContacts,
+        'groups_add': ?groupsAdd,
         'last_seen': ?lastSeen,
         'message': ?message,
         'photo': ?photo,
@@ -11049,20 +11052,20 @@ class BlockGroupMemberResponse {
 }
 
 class GroupLink {
-  const GroupLink({this.code, this.createdAt, this.qr, this.true_, this.url, this.words});
+  const GroupLink({this.code, this.createdAt, required this.on, this.qr, this.url, this.words});
 
   final String? code;
   final DateTime? createdAt;
+  final bool on;
   final String? qr;
-  final bool? true_;
   final String? url;
   final String? words;
 
   factory GroupLink.fromJson(Map<String, dynamic> j) => GroupLink(
         code: j['code'] == null ? null : j['code'] as String,
         createdAt: j['created_at'] == null ? null : DateTime.parse(j['created_at'] as String),
+        on: j['on'] as bool,
         qr: j['qr'] == null ? null : j['qr'] as String,
-        true_: j['true'] == null ? null : j['true'] as bool,
         url: j['url'] == null ? null : j['url'] as String,
         words: j['words'] == null ? null : j['words'] as String,
       );
@@ -11070,8 +11073,8 @@ class GroupLink {
   Map<String, dynamic> toJson() => {
         'code': ?code,
         'created_at': ?createdAt?.toUtc().toIso8601String(),
+        'on': on,
         'qr': ?qr,
-        'true': ?true_,
         'url': ?url,
         'words': ?words,
       };

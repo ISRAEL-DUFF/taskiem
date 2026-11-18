@@ -691,7 +691,7 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 	var results []addResult
 	var owed []groupInvitePush
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
-		results, owed = nil, nil
+		results, owed = []addResult{}, nil
 		if err := notSuspendedTx(ctx, tx, person); err != nil {
 			return err
 		}

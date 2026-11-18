@@ -1661,3 +1661,4 @@ group_links.replaced_at
 group_photos.group_id
 group_photos.type
 group_photos.sealed
+group_invites.invited_by

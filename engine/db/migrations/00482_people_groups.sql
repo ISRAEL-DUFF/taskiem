@@ -290,7 +290,7 @@ GRANT SELECT (id, approve_joins, photo_at, sealed), INSERT, UPDATE (last_message
 CREATE POLICY dispatch_all ON group_keys TO taskiem_dispatch USING (true) WITH CHECK (true);
 GRANT SELECT (group_id, sealed, kms_key), INSERT ON group_keys TO taskiem_dispatch;
 CREATE POLICY dispatch_all ON group_invites TO taskiem_dispatch USING (true) WITH CHECK (true);
-GRANT SELECT (group_id, person_id, hidden), DELETE ON group_invites TO taskiem_dispatch;
+GRANT SELECT (group_id, person_id, hidden, invited_by), DELETE ON group_invites TO taskiem_dispatch;
 CREATE POLICY dispatch_all ON group_join_requests TO taskiem_dispatch USING (true) WITH CHECK (true);
 GRANT SELECT (group_id, person_id), INSERT ON group_join_requests TO taskiem_dispatch;
 CREATE POLICY dispatch_read ON group_links FOR SELECT TO taskiem_dispatch USING (true);

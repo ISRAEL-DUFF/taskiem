@@ -31,7 +31,11 @@ func adds(t *testing.T, a, b *client) {
 // person added.
 func newGroup(t *testing.T, c *client, name string, ids ...uuid.UUID) (string, map[uuid.UUID]string) {
 	t.Helper()
-	out := c.must(201, "POST", "/v1/me/groups", map[string]any{"name": name, "person_ids": ids})
+	body := map[string]any{"name": name}
+	if len(ids) > 0 {
+		body["person_ids"] = ids
+	}
+	out := c.must(201, "POST", "/v1/me/groups", body)
 	return out["group"].(map[string]any)["id"].(string), addedOf(t, out)
 }
 
@@ -603,6 +607,10 @@ func TestGroupsMessages(t *testing.T) {
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE group_messages SET created_at = created_at - interval '25 hours' WHERE id = $1`, old["id"]); err != nil {
 		t.Fatal(err)
 	}
+	// (everyone in the group from before then, so it is still seen)
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE group_members SET visible = tstzmultirange(tstzrange(now() - interval '2 days', NULL)) WHERE group_id = $1`, gid); err != nil {
+		t.Fatal(err)
+	}
 	ada.must(409, "DELETE", "/v1/me/groups/"+gid+"/messages/"+old["id"].(string)+"?for=everyone", nil)
 	// A place, and a share card that warns a member who has not added
 	// the sender (Chidi added Ada: no warning; a stranger joining would).
@@ -637,7 +645,9 @@ func TestGroupsMessages(t *testing.T) {
 	// from a people chat into a group; at most 5 at once; a share card
 	// not at all.
 	g2, _ := newGroup(t, ada, "Family", chidiID)
-	adaB, _ := friends(t, ada, bola, bolaID)
+	// Bola added Ada: Ada's chat goes straight to Bola's chats.
+	adaB := chatWith(t, ada, bolaID)
+	send(t, ada, adaB, "Hi Bola")
 	fw := ada.must(200, "POST", "/v1/me/forward", map[string]any{"group_id": gid, "message_id": reply["id"], "to_chats": []string{adaB}, "to_groups": []string{g2}})
 	if len(fw["sent"].([]any)) != 2 || len(fw["failed"].([]any)) != 0 {
 		t.Fatalf("forwarded: %v", fw)

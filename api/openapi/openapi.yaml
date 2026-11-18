@@ -25392,6 +25392,8 @@ paths:
                   $ref: '#/components/schemas/PeopleAudience'
                 show_number:
                   type: boolean
+                groups_add:
+                  $ref: '#/components/schemas/PeopleAudience'
       responses:
         '200':
           description: The settings
@@ -43549,9 +43551,9 @@ components:
     GroupLink:
       type: object
       additionalProperties: false
-      required: [on]
+      required: ['on']
       properties:
-        on:
+        'on':
           type: boolean
         code:
           type: string
