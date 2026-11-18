@@ -657,7 +657,10 @@ func (s *Server) opsDecideHeld(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		d := peopleDraft{kind: h.Kind, body: c.Body, card: c.Card, location: c.Location, replyTo: h.ReplyTo, forwards: h.Forwards, released: true}
+		// The held message's id as its client id: a release retried after
+		// a failure below delivers it once.
+		d := peopleDraft{kind: h.Kind, body: c.Body, card: c.Card, location: c.Location, replyTo: h.ReplyTo, forwards: h.Forwards, released: true,
+			clientID: "held:" + h.ID.String()}
 		if h.fileSealed != nil {
 			data, err := box.Open(peoplesafety.FileRow(h.ID), h.fileSealed)
 			if err != nil {

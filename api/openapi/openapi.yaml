@@ -22215,7 +22215,6 @@ paths:
         `can_appeal` can be appealed once (POST /v1/me/standing/appeals).'
       security:
       - sessionCookie: []
-        csrfHeader: []
       - sessionToken: []
       - apiKey: []
       responses:

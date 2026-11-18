@@ -372,6 +372,15 @@ func TestPeopleHeldForReview(t *testing.T) {
 	if mine := messagesOf(t, dayo, chat); len(mine) != 1 || mine[0]["id"] != rel["message_id"] {
 		t.Fatalf("Dayo's copy: %v", mine)
 	}
+	// A release retried (as if its decision had failed to be written after
+	// the delivery) delivers it once.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_held SET state = 'held', decided_by = NULL, decided_at = NULL, released_message = NULL WHERE id = $1`, second); err != nil {
+		t.Fatal(err)
+	}
+	again := mod.write(200, "ops.people.held.release", second, "/v1/ops/people/held/"+second+"/release", nil)
+	if again["message_id"] != rel["message_id"] || len(messagesOf(t, ada, req)) != 1 {
+		t.Fatalf("released twice: %v", again)
+	}
 	if l := mod.must(200, "GET", "/v1/ops/people/held?state=all", nil)["held"].([]any); len(l) != 2 {
 		t.Fatalf("all held: %v", l)
 	}
