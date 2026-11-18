@@ -374,7 +374,7 @@ func (s *Server) myStanding(w http.ResponseWriter, r *http.Request) {
 			}
 			a.Words = moderationWords(a.Action, a.Until)
 			a.CanAppeal = a.Appeal == nil && a.LiftedAt == nil && (a.InForce || a.Action == peoplesafety.ActionWarn) &&
-				!(a.Action == peoplesafety.ActionClose && a.Until != nil && !a.Until.After(time.Now()))
+				(a.Action != peoplesafety.ActionClose || a.Until == nil || a.Until.After(time.Now()))
 			return a, nil
 		})
 		return err

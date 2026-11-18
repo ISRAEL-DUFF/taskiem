@@ -400,6 +400,12 @@ func (s *Server) confirmStorefrontOrders(w http.ResponseWriter, r *http.Request)
 
 // --- the page /m/{code}, when no web app is served here ---
 
+// cardPageCSS is the layout of a page that is one centred card (this one
+// and a person's link page, personLinkSource).
+//
+//nolint:misspell // "center" is CSS's own word
+const cardPageCSS = `main{max-width:28rem;margin:0 auto;padding:2rem 1rem}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.5rem;text-align:center}`
+
 const chatLinkSource = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{if .Gone}}This link no longer works{{else if .Missing}}Link not found{{else}}Chat with {{.Card.Name}}{{end}} · Taskiem</title>
@@ -408,7 +414,7 @@ const chatLinkSource = `<!doctype html>
 :root{color-scheme:light dark;--bg:#fafaf7;--fg:#1c1c1a;--muted:#5f5f5a;--card:#fff;--line:#e4e4de;--accent:#0f6b4f;--on:#fff}
 @media (prefers-color-scheme:dark){:root{--bg:#121211;--fg:#f1f1ec;--muted:#a9a9a2;--card:#1d1d1b;--line:#33332f;--accent:#3fb489;--on:#08140f}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:28rem;margin:0 auto;padding:2rem 1rem}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.5rem;text-align:center}
+` + cardPageCSS + `
 img{width:96px;height:96px;border-radius:50%;object-fit:cover}h1{font-size:1.5rem;margin:.75rem 0 .25rem}p{margin:.25rem 0;color:var(--muted)}
 .btn{display:block;margin-top:1rem;padding:.8rem 1rem;border-radius:999px;text-decoration:none;font-weight:600;border:1px solid var(--accent);color:var(--accent)}
 .btn.main{background:var(--accent);color:var(--on)}ul{list-style:none;padding:0;margin:1rem 0 0;color:var(--muted);font-size:.9rem}

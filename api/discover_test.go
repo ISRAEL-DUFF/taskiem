@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -321,7 +322,7 @@ func TestDiscoverNarrowFunctions(t *testing.T) {
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM discover_index`).Scan(&rows); err != nil || rows != 0 {
 		t.Fatalf("another business read the index: %d %v", rows, err)
 	}
-	if _, err := discover.ProfileOf(ctx, tx, tenantUUID(t, other), time.Now()); err != discover.ErrNotFound {
+	if _, err := discover.ProfileOf(ctx, tx, tenantUUID(t, other), time.Now()); !errors.Is(err, discover.ErrNotFound) {
 		t.Fatalf("an unlisted business's profile: %v", err)
 	}
 }

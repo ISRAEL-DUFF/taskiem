@@ -673,6 +673,10 @@ test("live: a message, typing and presence without a reload; search, starred, a 
   await expect(bola.page).toHaveURL(/\/you\/people\/[0-9a-f-]{36}\?at=/);
   const atZobo = bola.page.getByTestId("people-message").filter({ hasText: "zobo drink" });
   await expect(atZobo).toHaveClass(/flash/);
+  // Still in view once the chat has settled: its composer is in under it
+  // (on a slow runner the chat's head, and so the composer, came after
+  // the messages and hid the message the thread was opened at).
+  await expect(bola.page.getByLabel("Message Ada Obi")).toBeVisible();
   await expect(atZobo).toBeInViewport();
 
   // Starred: Bola stars it; the starred list opens the chat at it.

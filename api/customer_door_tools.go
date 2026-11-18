@@ -457,11 +457,8 @@ type orderLine struct {
 	Quantity int    `json:"quantity"`
 }
 
-// Refusals of an order placed in the app.
-var (
-	errAppOrdersClosed = errors.New("orders closed")
-	errAppItem         = errors.New("an item")
-)
+// errAppOrdersClosed refuses an order placed in the app.
+var errAppOrdersClosed = errors.New("orders closed")
 
 // doorPlaceOrder is POST /v1/me/chats/{id}/orders, with an
 // Idempotency-Key: {lines, fulfilment, zone, address, note}. The order is

@@ -531,10 +531,10 @@ func TestCustomerDoorIsolation(t *testing.T) {
 	if err := db.InPersonTx(ctx, app, adaID, func(tx pgx.Tx) error {
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages`).Scan(&n); err != nil || n != 1 {
-			return fmt.Errorf("Ada sees %d messages: %v", n, err)
+			return fmt.Errorf("Ada sees %d messages: %w", n, err)
 		}
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM customer_conversations`).Scan(&n); err != nil || n != 0 {
-			return fmt.Errorf("Ada sees %d business threads with no door: %v", n, err)
+			return fmt.Errorf("Ada sees %d business threads with no door: %w", n, err)
 		}
 		return nil
 	}); err != nil {
@@ -595,7 +595,7 @@ func TestCustomerDoorIsolation(t *testing.T) {
 		}
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_conversations WHERE tenant_id <> $1`, bola).Scan(&n); err != nil || n != 0 {
-			return fmt.Errorf("Ada's other chats seen: %d %v", n, err)
+			return fmt.Errorf("Ada's other chats seen: %d %w", n, err)
 		}
 		return nil
 	}); err != nil {

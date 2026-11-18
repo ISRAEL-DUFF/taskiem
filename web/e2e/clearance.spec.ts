@@ -143,6 +143,6 @@ test("the clearance list, the gate's answers, an override until its end date, an
   expect(await gate.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await axeBoth(gate, "the gate (phone)");
   await gate.getByRole("button", { name: "Sign out" }).click();
-  await expect(gate.getByRole("heading", { name: "Sign in to Taskiem" })).toBeVisible();
+  await expect(gate.getByRole("heading", { name: "Welcome to Taskiem" })).toBeVisible();
   expect(await gate.evaluate(() => sessionStorage.getItem("taskiem-gate-recent"))).toBeNull();
 });

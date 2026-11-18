@@ -351,7 +351,7 @@ func TestPeopleChatsIsolation(t *testing.T) {
 		_, err = savepointExec(ctx, tx, `SELECT taskiem_people_reach($1)`, adaChat)
 		var pe *pgconn.PgError
 		if !errors.As(err, &pe) || pe.Code != "P0002" {
-			return fmt.Errorf("the reach with another's chat: %v", err)
+			return fmt.Errorf("the reach with another's chat: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -369,7 +369,7 @@ func TestPeopleChatsIsolation(t *testing.T) {
 		_, err = savepointExec(ctx, tx, `SELECT taskiem_people_reach($1)`, adaChat)
 		var pe *pgconn.PgError
 		if !errors.As(err, &pe) || pe.Code != "42501" {
-			return fmt.Errorf("the reach from a business: %v", err)
+			return fmt.Errorf("the reach from a business: %w", err)
 		}
 		return nil
 	}); err != nil {

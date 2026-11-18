@@ -415,10 +415,10 @@ func signupAfterTerms(st *signupState) string {
 
 // signupKindAnswer reads the answer to "a business, or workflows?".
 func signupKindAnswer(word, reply string) string {
-	switch {
-	case reply == "su:kind:business":
+	switch reply {
+	case "su:kind:business":
 		return areas.TenantBusiness
-	case reply == "su:kind:workflows":
+	case "su:kind:workflows":
 		return areas.TenantWorkflows
 	}
 	switch word {

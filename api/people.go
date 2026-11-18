@@ -10,6 +10,7 @@ package api
 // engine/people's PeoplePolicy.
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -202,16 +203,17 @@ func (s *Server) personPhoto(w http.ResponseWriter, r *http.Request) {
 		s.peopleFail(w, r, err)
 		return
 	}
-	writePhoto(w, ctype, data, at, "private, max-age=300")
+	writePhoto(w, r, ctype, data, at, "private, max-age=300")
 }
 
-func writePhoto(w http.ResponseWriter, ctype string, data []byte, at time.Time, cache string) {
+// writePhoto answers a photo as its stored type, never sniffed;
+// http.ServeContent sets its length and Last-Modified, and answers a
+// conditional request with 304.
+func writePhoto(w http.ResponseWriter, r *http.Request, ctype string, data []byte, at time.Time, cache string) {
 	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Header().Set("Cache-Control", cache)
-	w.Header().Set("Last-Modified", at.UTC().Format(http.TimeFormat))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	_, _ = w.Write(data)
+	http.ServeContent(w, r, "", at, bytes.NewReader(data))
 }
 
 // --- settings ---
@@ -765,7 +767,7 @@ func (s *Server) personLinkPhoto(w http.ResponseWriter, r *http.Request) {
 		s.peopleFail(w, r, err)
 		return
 	}
-	writePhoto(w, ctype, data, at, "public, max-age=300")
+	writePhoto(w, r, ctype, data, at, "public, max-age=300")
 }
 
 // --- presence ---
@@ -831,7 +833,7 @@ const personLinkSource = `<!doctype html>
 :root{color-scheme:light dark;--bg:#fafaf7;--fg:#1c1c1a;--muted:#5f5f5a;--card:#fff;--line:#e4e4de;--accent:#0f6b4f;--on:#fff}
 @media (prefers-color-scheme:dark){:root{--bg:#121211;--fg:#f1f1ec;--muted:#a9a9a2;--card:#1d1d1b;--line:#33332f;--accent:#3fb489;--on:#08140f}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:28rem;margin:0 auto;padding:2rem 1rem}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.5rem;text-align:center}
+` + cardPageCSS + `
 img{width:96px;height:96px;border-radius:50%;object-fit:cover}h1{font-size:1.5rem;margin:.75rem 0 .25rem}p{margin:.25rem 0;color:var(--muted)}
 .btn{display:block;margin-top:1rem;padding:.8rem 1rem;border-radius:999px;text-decoration:none;font-weight:600;border:1px solid var(--accent);color:var(--accent)}
 .btn.main{background:var(--accent);color:var(--on)}

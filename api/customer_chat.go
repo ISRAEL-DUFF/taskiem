@@ -1152,7 +1152,7 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	return out, true, nil
 }
 
-// customerClientLock serializes sends of one client_id in a business, so
+// customerClientLock serialises sends of one client_id in a business, so
 // two sends of it at once on the customer's two lines (§11) never both go.
 func customerClientLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, clientID string) error {
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('customer-client:' || $1::text || ':' || $2, 0))`, tenant, clientID)
