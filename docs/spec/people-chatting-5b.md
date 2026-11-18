@@ -4,7 +4,7 @@ Date: 18 November 2026 · Plan: [People chatting with people](people-chatting.md
 
 Every sentence of the plan that applies to stage 5b, as a checklist, so nothing is left out and nothing is called "left on purpose" without the founder agreeing. Each line ships on Android, iPhone and the web together, with server tests, web end-to-end tests and app tests. App screens are built to the app's own look ([mobile-app-look.md](mobile-app-look.md)), never the web's.
 
-Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (server)" and "As built: stage 5b, group safety (server)" in [the plan](people-chatting.md)), the web and the app to come; ● built on the server, the web and the app ("As built: stage 5b, groups (app)" and "groups (web)"). Questions marked (?…) are settled at the end.
+Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (server)" and "As built: stage 5b, group safety (server)" in [the plan](people-chatting.md)), the web and the app to come; ● built on the server, the web and the app ("As built: stage 5b, groups (app)" and "groups (web)"; C: "As built: stage 5b, ordering together"). Questions marked (?…) are settled at the end.
 
 ## A. Groups (§9, §13, §17 Q7, Q16, Q17)
 
@@ -60,17 +60,17 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 
 ## C. Ordering together (§10.3, §11 C, §17 Q8)
 
-- ☐ **Start:** "Order together from {business}" in a group posts a shared basket card (§10.3).
-- ☐ **The basket:** each member adds their own items from the business's shop through the customer door, and the card shows who wants what (§10.3). It includes:
+- ● **Start:** "Order together from {business}" in a group posts a shared basket card (§10.3).
+- ● **The basket:** each member adds their own items from the business's shop through the customer door, and the card shows who wants what (§10.3). It includes:
   - sizes and colours as the shop has them;
   - live prices and stock;
   - delivery or pick-up, and the zone.
-- ☐ **Closing the basket:** who may close it and place the order, and whether it can be locked before placing (?C1).
-- ☐ **One person places the order** through the door, as their own order. The business sees one order from that person, with a note of whose lines are whose, and never sees the group (§10.3).
-- ☐ **Paying:** either the placer pays all, or each person pays the business for their share (§11 C, §17 Q8) (?C2).
-- ☐ **After placing:** the basket card follows the order live (state, paid parts, delivery). Each member sees their share.
-- ☐ **Splitting with share cards:** if the placer paid everything, they can send each member a "Your share" card from the basket in one step (§11 A).
-- ☐ **One-to-one too:** ordering together works between two people as well as in a group (?C3).
+- ● **Closing the basket:** who may close it and place the order, and whether it can be locked before placing (?C1).
+- ● **One person places the order** through the door, as their own order. The business sees one order from that person, with a note of whose lines are whose, and never sees the group (§10.3).
+- ● **Paying:** either the placer pays all, or each person pays the business for their share (§11 C, §17 Q8) (?C2).
+- ● **After placing:** the basket card follows the order live (state, paid parts, delivery). Each member sees their share.
+- ● **Splitting with share cards:** if the placer paid everything, they can send each member a "Your share" card from the basket in one step (§11 A).
+- ● **One-to-one too:** ordering together works between two people as well as in a group (?C3).
 
 ## D. Carried over from 5a, now for groups
 

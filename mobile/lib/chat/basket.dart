@@ -611,9 +611,15 @@ class _PlaceStepState extends State<_PlaceStep> {
     final t = TkTheme.tokens(context);
     final b = widget.basket;
     final each = b.shop?.eachOffered ?? false;
-    Widget choice(String value, String label) => TkChoiceRow(
-      control: TkRadio(checked: _payment == value),
-      label: Text(label, style: tkText(size: 15, weight: 600, color: t.text)),
+    final look = TkLook.of(context);
+    Widget choice(String value, String label, String sub) => TkListRow(
+      title: label,
+      sub: sub,
+      icon: value == 'all' ? 'b-money' : 'b-bag',
+      square: value == 'all' ? look.lime : look.orange,
+      status: _payment == value ? 'Chosen' : null,
+      statusTone: CardTone.lime,
+      semanticsLabel: '$label${_payment == value ? ', chosen' : ''}',
       onTap: () => setState(() => _payment = value),
     );
     return Column(
@@ -622,13 +628,13 @@ class _PlaceStepState extends State<_PlaceStep> {
           child: TkFormBody(
             children: [
               Text('You place this as your own order of ${naira(b.totalKobo)} with ${b.business}.', style: tkText(size: 15, lineHeight: 1.4, color: t.text)),
-              TkKitField(
-                label: 'Who pays',
-                field: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [choice('all', 'I’ll pay all'), if (each) choice('each', 'Each pays their share')],
-                ),
+              TkSection(
+                title: 'Who pays',
+                inset: 56,
+                children: [
+                  choice('all', 'I’ll pay all', 'Then send each a “Your share” card'),
+                  if (each) choice('each', 'Each pays their share', 'Their items and an equal part of the delivery'),
+                ],
               ),
               Text(basketPayNote(each, b.business), style: tkHint(t)),
               if (b.fulfilment == 'delivery') ...[

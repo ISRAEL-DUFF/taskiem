@@ -123,6 +123,18 @@ Built in the app's own look from the start (no `TkButton`, web modal, `TkRadio` 
 | Choices, confirms and actions | `chat/groups.dart` `pickOneOf`, `askSure`, `pickAction` | Settings, delete, leave, member actions | App-look sheets in place of the web's modals | [fine]; 5a screens could move onto them |
 | Who can add me to groups | `chat/people_settings.dart` (a row) | Privacy with people | My contacts, Everyone, Nobody | [fine] a `pickOneOf` sheet; the page's other rows keep their [minor] note |
 
+## 5c. Ordering together (stage 5b C, branch `stage5b-together`)
+
+Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkListRow`, `TkCallout`, `TkSmallButton`, `TkCta`; no `TkButton`, web modal, `TkRadio` or `TkChoiceRow`), guarded by `test/basket_test.dart`.
+
+| Screen | File | Reached from | Holds | Look today |
+| --- | --- | --- | --- | --- |
+| Order together from… | `chat/basket.dart` `pickTogetherBusiness` | The + of a people chat or a group › Order together | The businesses you chat with | [fine] |
+| The basket | `chat/basket.dart` `BasketSheet` | A basket card's Open basket | Pine summary (total, state, items, delivery, paid), what stands in the way (`TkCallout`), the order as it moves, who wants what with each share, the actions, the holder's pick-up or delivery and area, hand on, cancel, where it is kept | [fine]; the card in the chat is 5a's `PeopleCardView` (its notes hold) |
+| My items | `chat/basket.dart` `_MineStep` | The basket › Add my items | The shop's items, each size and colour a row, with a stepper | [fine]; a product's sizes are rows rather than a picker |
+| Place the order | `chat/basket.dart` `_PlaceStep` | The basket › Place the order | Who pays (rows marked Chosen), address, landmark, note | [fine] |
+| Where to be paid back | `chat/basket.dart` `_AccountStep` | Send each their share, with no saved account | Bank, number, name | [fine] |
+
 ## 6. Shared parts the branch added or changed
 
 | Part | File | Note |
