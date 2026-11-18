@@ -30,9 +30,19 @@ export function usePagedList<R extends Paged, T>(
   fns.current = { rowsOf, key };
   const busyMore = useRef(false);
 
+  const order = useRef(new ReadOrder());
+
   const reload = useCallback(() => {
+    const seq = order.current.start();
     get<R>(base).then(
       (r) => {
+        // An answer older than one shown, or asked before a live patch
+        // (it would undo it): dropped, and read again when it was the last.
+        const take = order.current.take(seq);
+        if (take !== "apply") {
+          if (take === "again") reload();
+          return;
+        }
         const { rowsOf: of, key: k } = fns.current;
         setError(undefined);
         setSt((s) => {
@@ -78,14 +88,42 @@ export function usePagedList<R extends Paged, T>(
   }, [base, cur?.more, cur?.next]);
 
   const patch = useCallback(
-    (fn: (rows: T[]) => T[] | undefined) =>
+    (fn: (rows: T[]) => T[] | undefined) => {
+      // A read already asked for may not hold this change yet.
+      order.current.patched();
       setSt((s) => {
         if (!s || s.base !== base) return s;
         const rows = fn(s.rows);
         return rows && rows !== s.rows ? { ...s, rows } : s;
-      }),
+      });
+    },
     [base],
   );
 
   return { rows: cur?.rows, head: cur?.head, error, more: !!cur?.more, loadingMore, loadMore, reload, patch };
+}
+
+/** The order of a list's reads against its live patches: an answer is
+ * shown only when it is newer than the last one shown and was asked for
+ * after the last patch. One asked before a patch could undo it: it is
+ * dropped, and when no later read is on its way the list is read again. */
+export class ReadOrder {
+  private asked = 0;
+  private shown = 0;
+  private patchedAfter = 0;
+  /** A read starts: its number. */
+  start(): number {
+    return ++this.asked;
+  }
+  /** A live patch: every read asked so far may not hold it. */
+  patched(): void {
+    this.patchedAfter = this.asked;
+  }
+  /** A read's answer came: show it, drop it, or drop it and read again. */
+  take(seq: number): "apply" | "drop" | "again" {
+    if (seq <= this.shown) return "drop";
+    if (seq <= this.patchedAfter) return seq === this.asked ? "again" : "drop";
+    this.shown = seq;
+    return "apply";
+  }
 }
