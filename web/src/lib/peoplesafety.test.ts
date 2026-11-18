@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountIDProblem,
   actionHelp,
   actionIsGrave,
   actionOperation,
@@ -10,6 +11,7 @@ import {
   endedHalves,
   checkReasonLabel,
   heldFileURL,
+  isAccountID,
   isPhoto,
   lagosDay,
   periodWords,
@@ -72,6 +74,15 @@ describe("the person's standing", () => {
 });
 
 describe("lawful requests", () => {
+  it("checks account ids before the passkey is asked for", () => {
+    expect(isAccountID("0b6f3c1e-2a4d-4c8e-9f10-123456789abc")).toBe(true);
+    expect(isAccountID(" 0B6F3C1E-2A4D-4C8E-9F10-123456789ABC ")).toBe(true);
+    expect(isAccountID("dayo-ola")).toBe(false);
+    expect(isAccountID("")).toBe(false);
+    expect(accountIDProblem("")).toBeUndefined();
+    expect(accountIDProblem("0b6f3c1e-2a4d-4c8e-9f10-123456789abc")).toBeUndefined();
+    expect(accountIDProblem("12345")).toMatch(/not an account id/);
+  });
   it("turns a day into its start in Lagos, and the day after for an end", () => {
     expect(lagosDay("2026-11-18")).toBe("2026-11-17T23:00:00.000Z");
     expect(lagosDay("2026-11-18", true)).toBe("2026-11-18T23:00:00.000Z");

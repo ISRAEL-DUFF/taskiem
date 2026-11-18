@@ -188,6 +188,14 @@ export function periodWords(p: Pick<LawfulPeriod, "received" | "answered" | "ref
   return `${p.received} received, ${p.answered} answered, ${p.refused} refused.`;
 }
 
+/** An account id as typed into a lawful request: a UUID, spaces around it aside. */
+export const isAccountID = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim());
+
+/** What is wrong with an account id field, if anything (empty is for `required`). */
+export function accountIDProblem(s: string): string | undefined {
+  return s.trim() && !isAccountID(s) ? "That is not an account id: it looks like 8-4-4-4-12 letters and figures." : undefined;
+}
+
 /** A date input's value (YYYY-MM-DD) as the start of that day in Lagos, RFC 3339. */
 export function lagosDay(day: string, end = false): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return undefined;

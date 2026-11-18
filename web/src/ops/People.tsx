@@ -196,11 +196,14 @@ export function PeopleReports() {
 }
 
 /** Asks why before anything of a person's is opened; the reason goes with
- * the request and is recorded with the operator's name. */
-function WhyGate({ what, children }: { what: string; children: (why: string) => ReactNode }) {
+ * the request and is recorded with the operator's name. Keyed by what is
+ * opened, so a reason given for one is never sent for another; `again`
+ * asks for the reason once more (the reason kept to change), after an
+ * opening that failed. */
+function WhyGate({ what, children }: { what: string; children: (why: string, again: () => void) => ReactNode }) {
   const [draft, setDraft] = useState("");
   const [why, setWhy] = useState("");
-  if (why) return <>{children(why)}</>;
+  if (why) return <>{children(why, () => setWhy(""))}</>;
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (whyOK(draft)) setWhy(draft.trim());
@@ -215,6 +218,61 @@ function WhyGate({ what, children }: { what: string; children: (why: string) => 
       <button className="primary" type="submit" disabled={!whyOK(draft)}>
         Open {what}
       </button>
+    </form>
+  );
+}
+
+/** An opening that failed: what went wrong, and the reason asked again to retry. */
+function OpenFailed({ error, again }: { error: unknown; again: () => void }) {
+  return (
+    <section className="card" data-testid="ops-open-failed">
+      <ErrorBox error={error} />
+      <button className="primary" onClick={again} data-testid="ops-open-again">
+        Try again
+      </button>
+    </section>
+  );
+}
+
+/** Lifting a decision in force: why (recorded, and kept with the decision),
+ * confirmed, then with the passkey, as the other decisions are. */
+function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction }; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const lift = useAction();
+  const name = ACTION_LABELS[a.action];
+  if (!open)
+    return (
+      <button className="small" onClick={() => setOpen(true)} data-testid="ops-lift-open">
+        Lift<span className="sr-only"> the {name}</span>
+      </button>
+    );
+  return (
+    <form
+      className="ops-lift"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!reason.trim() || !confirm(`Lift the ${name.toLowerCase()}? They are told it is lifted.`)) return;
+        void lift.run(async () => {
+          await withStepUp("ops.people.lift", a.id, `/people/actions/${a.id}/lift`, { reason: reason.trim() });
+          setOpen(false);
+          setReason("");
+          onDone();
+        }, "Lifted: they are told");
+      }}
+    >
+      <Field label={`Why you are lifting the ${name.toLowerCase()} (recorded with your name)`}>
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} rows={2} />
+      </Field>
+      <ErrorBox error={lift.error} />
+      <div className="row-actions">
+        <button className="primary" type="submit" disabled={lift.busy || !reason.trim()}>
+          Lift with passkey<span className="sr-only"> the {name}</span>
+        </button>
+        <button type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }
@@ -308,14 +366,14 @@ export function PeopleReport() {
         <Link to="/ops/people/reports">Reports</Link>
       </p>
       <h1>Report of a person</h1>
-      <WhyGate what="report">{(why) => <PeopleReportOpened id={id} why={why} />}</WhyGate>
+      <WhyGate key={id} what="report">{(why, again) => <PeopleReportOpened id={id} why={why} again={again} />}</WhyGate>
     </>
   );
 }
 
-function PeopleReportOpened({ id, why }: { id: string; why: string }) {
+function PeopleReportOpened({ id, why, again }: { id: string; why: string; again: () => void }) {
   const { data, error, reload } = useLoad(() => opsGet<OpsPeopleReport>(`/people/reports/${id}?why=${encodeURIComponent(why)}`), [id, why]);
-  if (error) return <ErrorBox error={error} />;
+  if (error) return <OpenFailed error={error} again={again} />;
   if (!data) return <div className="empty">Opening…</div>;
   const r = data.report;
   const files = new Map(data.files.map((f) => [f.message_id, f]));
@@ -382,14 +440,14 @@ export function CustomerReport() {
         <Link to="/ops/people/reports?kind=business">Reports of businesses</Link>
       </p>
       <h1>Report of a business</h1>
-      <WhyGate what="report">{(why) => <CustomerReportOpened id={id} why={why} />}</WhyGate>
+      <WhyGate key={id} what="report">{(why, again) => <CustomerReportOpened id={id} why={why} again={again} />}</WhyGate>
     </>
   );
 }
 
-function CustomerReportOpened({ id, why }: { id: string; why: string }) {
+function CustomerReportOpened({ id, why, again }: { id: string; why: string; again: () => void }) {
   const { data, error, reload } = useLoad(() => opsGet<OpsCustomerReport>(`/customer-reports/${id}?why=${encodeURIComponent(why)}`), [id, why]);
-  if (error) return <ErrorBox error={error} />;
+  if (error) return <OpenFailed error={error} again={again} />;
   if (!data) return <div className="empty">Opening…</div>;
   const r = data.report;
   const msgs = [...(r.messages ?? [])].reverse();
@@ -520,15 +578,15 @@ export function HeldMessage() {
         <Link to="/ops/people/held">Held messages</Link>
       </p>
       <h1>Held message</h1>
-      <WhyGate what="message">{(why) => <HeldOpened id={id} why={why} />}</WhyGate>
+      <WhyGate key={id} what="message">{(why, again) => <HeldOpened id={id} why={why} again={again} />}</WhyGate>
     </>
   );
 }
 
-function HeldOpened({ id, why }: { id: string; why: string }) {
+function HeldOpened({ id, why, again }: { id: string; why: string; again: () => void }) {
   const { data, error, reload } = useLoad(() => opsGet<OpsHeld>(`/people/held/${id}?why=${encodeURIComponent(why)}`), [id, why]);
   const [shown, setShown] = useState(false);
-  if (error) return <ErrorBox error={error} />;
+  if (error) return <OpenFailed error={error} again={again} />;
   if (!data) return <div className="empty">Opening…</div>;
   const h = data.held;
   const m = data.message;
@@ -616,7 +674,6 @@ export function PersonStanding() {
   const [reason, setReason] = useState("");
   const [days, setDays] = useState("");
   const act = useAction();
-  const lift = useAction();
   if (error) return <ErrorBox error={error} />;
   if (!data) return <div className="empty">Loading…</div>;
   const p = data.person;
@@ -682,7 +739,6 @@ export function PersonStanding() {
         </section>
       )}
       <h2>What moderators decided</h2>
-      <ErrorBox error={lift.error} />
       {data.actions.length === 0 && <div className="empty">Nothing yet.</div>}
       {data.actions.length > 0 && (
         <Items label="What moderators decided">
@@ -706,20 +762,7 @@ export function PersonStanding() {
                   </span>
                 }
               >
-                {live && (
-                  <button
-                    className="small"
-                    disabled={lift.busy}
-                    onClick={() =>
-                      void lift.run(async () => {
-                        await withStepUp("ops.people.lift", a.id, `/people/actions/${a.id}/lift`, { reason: "" });
-                        reload();
-                      }, "Lifted: they are told")
-                    }
-                  >
-                    Lift with passkey<span className="sr-only"> the {ACTION_LABELS[a.action]}</span>
-                  </button>
-                )}
+                {live && <LiftAction a={a} onDone={reload} />}
               </Row>
             );
           })}
