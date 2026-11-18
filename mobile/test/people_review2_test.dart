@@ -10,10 +10,17 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskiem/chat/attachments.dart' show PickedFile;
+import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
 import 'package:taskiem/chat/people_live.dart';
+import 'package:taskiem/chat/pick_problem.dart';
+import 'package:taskiem/chat/product_form.dart' show PhotoAdd;
+import 'package:taskiem/main.dart';
+import 'package:taskiem/theme/theme.dart';
 
 import 'people_test.dart';
 import 'support.dart' show loadFonts;
@@ -23,6 +30,35 @@ Map<String, dynamic> msg(String id, {bool mine = false, String body = 'Hello', S
 };
 
 void hear(PeopleLive live, String event, Object data, {String? id}) => live.hearEvent((event: event, data: jsonEncode(data), id: id));
+
+/// The phone refusing the camera and photos (as image_picker throws when
+/// CAMERA is declared and the person says no), or with no camera.
+class RefusedPickers extends Pickers {
+  const RefusedPickers({this.code = 'camera_access_denied'});
+  final String code;
+  @override
+  Future<PickedFile?> camera({double? side}) async => throw PlatformException(code: code);
+  @override
+  Future<PickedFile?> photo({double? side}) async => throw PlatformException(code: 'photo_access_denied');
+  @override
+  Future<List<PickedFile>> photos(int limit, {double? side}) async => throw PlatformException(code: 'photo_access_denied');
+}
+
+/// How often the phone's settings were opened.
+class SettingsSpy {
+  int opened = 0;
+}
+
+SettingsSpy spySettings() {
+  final s = SettingsSpy();
+  final was = openPhoneSettings;
+  openPhoneSettings = () async => s.opened++;
+  addTearDown(() => openPhoneSettings = was);
+  return s;
+}
+
+const cameraRefused = 'Taskiem isn’t allowed to use your camera. To take a photo, allow Camera for Taskiem in your phone’s settings.';
+const photosRefused = 'Taskiem isn’t allowed to see your photos. To choose one, allow Photos for Taskiem in your phone’s settings.';
 
 void main() {
   setUpAll(loadFonts);
@@ -79,6 +115,73 @@ void main() {
       expect(d.messages!.first.id, 'm0');
       d.dispose();
       live.dispose();
+    });
+  });
+
+  group('2. the camera or photos refused', () {
+    test('what the picker throws, in plain words', () {
+      expect(pickProblemOf(PlatformException(code: 'camera_access_denied')), PickProblem.refused);
+      expect(pickProblemOf(PlatformException(code: 'photo_access_denied')), PickProblem.refused);
+      expect(pickProblemOf(PlatformException(code: 'no_available_camera')), PickProblem.noCamera);
+      expect(pickProblemOf(StateError('x')), PickProblem.failed);
+      expect(pickProblemWords(PickProblem.refused), cameraRefused);
+      expect(pickProblemWords(PickProblem.refused, camera: false), photosRefused);
+    });
+
+    testWidgets('a people chat: the camera button and + A photo say why, with Open settings; nothing sent', (t) async {
+      phone(t);
+      final spy = spySettings();
+      final api = adaChat();
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d, pickers: const RefusedPickers())));
+      await settle(t);
+      await press(t, find.bySemanticsLabel('Take a photo'));
+      expect(find.text(cameraRefused), findsOneWidget);
+      await t.tap(find.text('Open settings'));
+      await t.pump();
+      expect(spy.opened, 1);
+      expect(find.text(cameraRefused), findsNothing);
+
+      await press(t, find.bySemanticsLabel('Chat tools'));
+      await press(t, find.text('A photo'));
+      expect(find.text(photosRefused), findsOneWidget);
+      expect(api.calls.where((c) => c.method == 'POST' && c.url.path.endsWith('/files')), isEmpty);
+      await t.tap(find.bySemanticsLabel('Dismiss'));
+      await drain(t);
+    });
+
+    testWidgets('no camera on the phone: said, without settings', (t) async {
+      phone(t);
+      spySettings();
+      final api = adaChat();
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d, pickers: const RefusedPickers(code: 'no_available_camera'))));
+      await settle(t);
+      await press(t, find.bySemanticsLabel('Take a photo'));
+      expect(find.text(pickProblemWords(PickProblem.noCamera)), findsOneWidget);
+      expect(find.text('Open settings'), findsNothing);
+      await t.tap(find.bySemanticsLabel('Dismiss'));
+      await drain(t);
+    });
+
+    testWidgets('a product’s photos: Take a photo refused says why, with Open settings', (t) async {
+      phone(t);
+      final spy = spySettings();
+      var picked = 0;
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: Center(child: PhotoAdd(pickers: const RefusedPickers(), room: 3, onPick: (_) => picked++))));
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel('Take a photo'));
+      await settle(t);
+      expect(find.text(cameraRefused), findsOneWidget);
+      await t.tap(find.text('Open settings'));
+      await t.pump();
+      expect(spy.opened, 1);
+      await t.tap(find.bySemanticsLabel('From your phone'));
+      await settle(t);
+      expect(find.text(photosRefused), findsOneWidget);
+      expect(picked, 0);
+      await t.tap(find.bySemanticsLabel('Dismiss'));
+      await drain(t);
     });
   });
 }

@@ -51,6 +51,7 @@ import 'people_search.dart';
 import 'people_standing.dart';
 import 'thread.dart';
 import 'words.dart';
+import 'pick_problem.dart';
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -893,10 +894,22 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     if (kind == null || !mounted) return;
     switch (kind) {
       case PeopleShare.photo:
-        final f = await widget.pickers.photo();
+        final PickedFile? f;
+        try {
+          f = await widget.pickers.photo();
+        } on Object catch (e) {
+          if (mounted) sayPickProblem(context, e, camera: false);
+          return;
+        }
         if (f != null && mounted) await _file(f);
       case PeopleShare.file:
-        final f = await widget.pickers.document();
+        final PickedFile? f;
+        try {
+          f = await widget.pickers.document();
+        } on Object {
+          if (mounted) showTkToast(context, 'That could not be opened. Try again.', error: true);
+          return;
+        }
         if (f != null && mounted) await _file(f);
       case PeopleShare.place:
         final place = await pickPlace(context, widget.places);

@@ -7,6 +7,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
+import 'package:taskiem/chat/pick_problem.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/app/links.dart';
@@ -25,6 +27,12 @@ class _Camera extends Pickers {
   const _Camera();
   @override
   Future<PickedFile?> camera({double? side}) async => PickedFile(bytes: Uint8List.fromList([1, 2, 3]), name: 'door.jpg', type: 'image/jpeg');
+}
+
+class _NoCamera extends Pickers {
+  const _NoCamera();
+  @override
+  Future<PickedFile?> camera({double? side}) async => throw PlatformException(code: 'camera_access_denied');
 }
 
 void main() {
@@ -231,5 +239,24 @@ void main() {
         ),
       );
     }
+  });
+
+  testWidgets('a delivery at the door, the camera refused: said with Open settings, nothing sent', (t) async {
+    final settingsWas = openPhoneSettings;
+    var opened = 0;
+    openPhoneSettings = () async => opened++;
+    addTearDown(() => openPhoneSettings = settingsWas);
+    final r = await open(t, delivery('arrived', proof: true), pickers: const _NoCamera());
+    await t.tap(find.bySemanticsLabel('Take the photo'));
+    await settle(t);
+    expect(find.textContaining('Taskiem isn’t allowed to use your camera'), findsOneWidget);
+    await t.tap(find.text('Open settings'));
+    await t.pump();
+    expect(opened, 1);
+    await t.tap(find.bySemanticsLabel('Delivered'));
+    await settle(t);
+    expect(r.sent, isEmpty, reason: 'no photo yet');
+    await t.pumpWidget(const SizedBox());
+    await t.pump(const Duration(seconds: 5));
   });
 }

@@ -24,6 +24,7 @@ import 'composer.dart' show Pickers;
 import 'customer.dart';
 import 'door.dart';
 import 'words.dart';
+import 'pick_problem.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 String _str(Object? v) => v is String ? v : '';
@@ -39,10 +40,22 @@ Future<void> showRichReply(BuildContext context, CustomerData d, {Pickers picker
   if (kind == null || !context.mounted) return;
   switch (kind) {
     case RichKind.photo:
-      final f = await pickers.photo();
+      final PickedFile? f;
+      try {
+        f = await pickers.photo();
+      } on Object catch (e) {
+        if (context.mounted) sayPickProblem(context, e, camera: false);
+        return;
+      }
       if (f != null && context.mounted) await _file(context, d, f);
     case RichKind.file:
-      final f = await pickers.document();
+      final PickedFile? f;
+      try {
+        f = await pickers.document();
+      } on Object {
+        if (context.mounted) showTkToast(context, 'That could not be opened. Try again.', error: true);
+        return;
+      }
       if (f != null && context.mounted) await _file(context, d, f);
     case RichKind.offer:
       final words = box.text.trim();

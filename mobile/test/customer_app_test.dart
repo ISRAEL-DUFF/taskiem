@@ -9,6 +9,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
+import 'package:taskiem/chat/pick_problem.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/chat_link_page.dart';
@@ -72,6 +74,12 @@ class _Pick extends Pickers {
   const _Pick();
   @override
   Future<PickedFile?> photo({double? side}) async => PickedFile(bytes: Uint8List(64), name: 'cake.jpg', type: 'image/jpeg');
+}
+
+class _NoPhotos extends Pickers {
+  const _NoPhotos();
+  @override
+  Future<PickedFile?> photo({double? side}) async => throw PlatformException(code: 'photo_access_denied');
 }
 
 Api business({Map<String, dynamic>? c}) {
@@ -416,6 +424,27 @@ void main() {
     expect(find.textContaining('Your Orders area is off'), findsOneWidget);
     await press(t, find.bySemanticsLabel('Take chats in the Taskiem app').last);
     expect(api.sent('PUT', '/v1/customers/chat-settings'), isEmpty);
+    await drain(t);
+  });
+
+  testWidgets('A photo from +, the photos refused: said with Open settings, nothing sent', (t) async {
+    phone(t);
+    final settingsWas = openPhoneSettings;
+    var opened = 0;
+    openPhoneSettings = () async => opened++;
+    addTearDown(() => openPhoneSettings = settingsWas);
+    final api = business();
+    final chats = ChatsData(api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false), now: () => at);
+    final d = CustomerData(chats, 'cc1', follow: false);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: d, pickers: const _NoPhotos())));
+    await settle(t);
+    await press(t, find.bySemanticsLabel('Send an order, a pay link, a booking, a product or a file'));
+    await press(t, find.text('A photo'));
+    expect(find.textContaining('Taskiem isn’t allowed to see your photos'), findsOneWidget);
+    await t.tap(find.text('Open settings'));
+    await t.pump();
+    expect(opened, 1);
+    expect(api.sent('POST', '/v1/customer-chats/cc1/files'), isEmpty);
     await drain(t);
   });
 }

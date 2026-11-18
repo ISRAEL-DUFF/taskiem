@@ -27,6 +27,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'tools_panel.dart';
+import 'pick_problem.dart';
 
 /// Where a file to send comes from: the phone's gallery, camera and files.
 class Pickers {
@@ -275,12 +276,16 @@ class ComposerState extends State<Composer> {
         'document' => widget.pickers.document(),
         _ => widget.pickers.camera(),
       });
-    } on PlatformException catch (e) {
-      setState(
-        () => _error = e.code.contains('denied') || e.code.contains('access')
-            ? 'Taskiem may not use your ${what == 'camera' ? 'camera' : 'photos'}: allow it in your phone’s settings.'
-            : 'That could not be opened. Try again.',
-      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      // The camera or photos refused (Android asks before every photo
+      // taken, CAMERA being declared): plain words and the phone's
+      // settings.
+      if (what == 'document') {
+        setState(() => _error = 'That could not be opened. Try again.');
+      } else {
+        sayPickProblem(context, e, camera: what == 'camera');
+      }
     }
   }
 

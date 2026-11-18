@@ -21,6 +21,7 @@ import 'customer.dart' show phoneWords;
 import 'storefront_orders_page.dart' show groupedPhone;
 import 'attachments.dart' show PickedFile;
 import 'words.dart';
+import 'pick_problem.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -273,8 +274,9 @@ class _DeliveryViewState extends State<DeliveryView> {
     try {
       final p = await widget.pickers.camera(side: 1600);
       if (p != null && mounted) setState(() => _photo = p);
-    } on Object {
-      if (mounted) setState(() => _error = 'Taskiem could not open your camera. Allow it in your phone’s settings, then try again.');
+    } on Object catch (e) {
+      // Plain words, and the phone's settings when refused.
+      if (mounted) sayPickProblem(context, e);
     }
   }
 

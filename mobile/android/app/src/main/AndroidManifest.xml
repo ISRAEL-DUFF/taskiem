@@ -13,11 +13,14 @@
          asked only after the person agrees in the app; read, hashed, never kept. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <!-- Sending a place in a chat with a person (lib/chat/people_place.dart),
-         asked only when the person taps Location; read once, never followed. -->
+         asked only when the person taps A place; read once, never followed. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <!-- Scanning a person's QR code in the app (lib/chat/people_scan.dart),
-         asked only when the person taps Scan a QR code. -->
+         asked only when the person taps Scan a QR code. Declared, it makes
+         the image picker ask for the camera before each photo taken too;
+         refused, every place that takes a photo says so with the way to
+         the phone's settings (lib/chat/pick_problem.dart). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="Taskiem"
