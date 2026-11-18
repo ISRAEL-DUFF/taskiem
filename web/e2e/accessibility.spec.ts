@@ -979,6 +979,7 @@ for (const scheme of ["light", "dark"] as const)
       };
       await page.route(/\/v1\/me\/groups\/g[12]\/members$/, (r) => r.fulfill(json(members)));
       await page.route(/\/v1\/me\/groups\/g[12]\/link$/, (r) => r.fulfill(json({ on: true, code: "ab23cd45ef", url: "http://localhost/g/ab23cd45ef", created_at: now, words: "Join my group", qr: "/brand/seal/mark-512.png" })));
+      await page.route(/\/v1\/me\/groups\/g[12]\/media(\?|$)/, (r) => r.fulfill(json({ messages: [], more: false })));
       await page.route(/\/v1\/me\/groups\/g[12]\/joins$/, (r) => r.fulfill(json({ requests: [{ person_id: "p5", name: "Efe Ige", at: now }] })));
       const event = (id: string, type: string, body: string, taskiem = false) => ({ id, group_id: "g1", mine: false, sender_id: taskiem ? null : "p2", sender: taskiem ? "Taskiem" : "Bola Ade", kind: "event", body, event: { type, actor_id: "p2" }, created_at: now });
       await page.route(/\/v1\/me\/groups\/g1\/messages(\?|$)/, (r) =>
