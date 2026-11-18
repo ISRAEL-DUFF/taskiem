@@ -2125,11 +2125,10 @@ func (s *Server) groupLinkQR(w http.ResponseWriter, r *http.Request) {
 
 // groupLinkFound is what a group's link names.
 type groupLinkFound struct {
-	group    uuid.UUID
-	replaced bool
-	name     string
-	members  int
-	photoAt  *time.Time
+	group   uuid.UUID
+	name    string
+	members int
+	photoAt *time.Time
 }
 
 // findGroupLink reads a group's link (anyone holding it): errDoorNone for
