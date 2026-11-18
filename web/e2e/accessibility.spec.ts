@@ -395,6 +395,8 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
       // No saved addresses yet (Settings).
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
+      // No push keys here: this browser's notifications are not offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
@@ -522,6 +524,8 @@ for (const scheme of ["light", "dark"] as const)
       );
       // You's settings read which pushes the person gets.
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
+      // No push keys here: this browser's notifications are not offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.route("**/v1/me/addresses", (r) =>
         r.fulfill(json({ addresses: [{ id: "a1", label: "Home", line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "+2348031234567", default: true, created_at: now, updated_at: now }] })),
       );
@@ -594,6 +598,8 @@ for (const scheme of ["light", "dark"] as const)
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
       await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: false })));
+      // The server has push keys: this browser's notifications are offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
       await page.route("**/v1/me/privacy", (r) =>
         r.fulfill(
           json({
@@ -611,6 +617,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/you/settings");
       await expect(page.getByTestId("you-photo").getByText("Only you see it.")).toBeVisible();
       await expect(page.getByTestId("you-notify-offers")).not.toBeChecked();
+      await expect(page.getByTestId("you-push-on")).toHaveText("Notify me on this browser");
       await check("/you/settings with a photo and notifications");
       await page.goto("/you/settings/privacy");
       await expect(page.getByTestId("privacy-business")).toHaveCount(2);
