@@ -267,11 +267,12 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 			// added, always warns as a transfer does (§11 A, as 5a's).
 			splitPay := v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known
 			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || splitPay
-			// The checks' mark shows only to those who haven't added the
-			// sender (B1).
+			// The checks' mark (warn: a group never keeps 5a's "transfer",
+			// whose one recipient is known when it is sent; here splitPay
+			// decides it for each member as they read) shows only to those
+			// who haven't added the sender (B1).
 			if (m.screen != nil && !known) || splitPay {
 				v.Warn = true
-				v.WarnTransfer = v.WarnTransfer || (m.screen != nil && *m.screen == "transfer")
 			}
 		}
 		out = append(out, v)

@@ -251,6 +251,48 @@ func TestHeldSendRetried(t *testing.T) {
 	}
 }
 
+// A share card asking to be paid, in a group, is warned of as a transfer
+// for each member who hasn't added its sender, decided as they read it; a
+// group message never keeps 5a's transfer mark (only the checks' warn).
+func TestGroupShareCardWarnedWhenRead(t *testing.T) {
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159951", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159952", "Bola Ade")
+	chidi, chidiID := w.many(t, "+2348031159953", "Chidi Eze")
+	for _, id := range []uuid.UUID{adaID, bolaID, chidiID} {
+		w.older(t, id)
+	}
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	adds(t, ada, chidi)
+	adds(t, chidi, ada)
+	gid, _ := newGroup(t, ada, "Party", bolaID, chidiID)
+	card := bola.must(201, "POST", "/v1/me/groups/"+gid+"/messages", splitCard("The cake"))["id"].(string)
+	seen := func(c *client) map[string]any {
+		for _, m := range gmessages(t, c, gid) {
+			if m["id"] == card {
+				return m
+			}
+		}
+		t.Fatal("no card")
+		return nil
+	}
+	if m := seen(chidi); m["warn"] != true || m["warn_transfer"] != true {
+		t.Fatalf("Chidi hasn't added Bola: %v", m)
+	}
+	if m := seen(ada); m["warn"] == true || m["warn_transfer"] == true {
+		t.Fatalf("Ada has: %v", m)
+	}
+	// Chidi adds Bola: no warning from then.
+	adds(t, chidi, bola)
+	if m := seen(chidi); m["warn"] == true || m["warn_transfer"] == true {
+		t.Fatalf("Chidi added Bola: %v", m)
+	}
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE group_messages SET screen = 'transfer' WHERE id = $1`, card); err == nil {
+		t.Fatal("a group message took 5a's transfer mark")
+	}
+}
+
 // reportedBy is the person's ReportedBy signal, as their own transaction
 // reads it.
 func reportedBy(t *testing.T, w *peopleWorld, id uuid.UUID) int {
