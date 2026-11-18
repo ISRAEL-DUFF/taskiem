@@ -46,6 +46,7 @@ import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
 import 'people_cards.dart';
 import 'people_live.dart';
+import 'people_place.dart';
 import 'people_search.dart';
 import 'thread.dart';
 import 'words.dart';
@@ -458,6 +459,26 @@ class PeopleChatData extends ChangeNotifier {
     return h;
   }
 
+  /// A place (where the phone is, with a name if given).
+  Future<bool> sendPlace(PeopleLocation place) async {
+    final what = 'place:${place.lat},${place.lng}:${place.label ?? ''}';
+    final client = _clientFor(what);
+    try {
+      final sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(location: place, clientId: client));
+      if (_disposed) return true;
+      messages = _merge(messages ?? const [], [PeopleLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_chat());
+      return true;
+    } on Object catch (e) {
+      _keepUnsure(e, what, client);
+      error = sendFailure(e);
+      _changed();
+      return false;
+    }
+  }
+
   /// A card (a business, a product, an order, a delivery, your share).
   Future<bool> sendCard(SendPeopleMessageRequestCard card) async {
     final what = 'card:${jsonEncode(card.toJson())}';
@@ -635,8 +656,11 @@ String peopleHeadLine(PeopleChat? c, DateTime now, {bool offline = false, bool t
 
 /// The chat with a person.
 class PeopleChatScreen extends StatefulWidget {
-  const PeopleChatScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.notify, this.openBusiness, this.openOrder});
+  const PeopleChatScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.notify, this.openBusiness, this.openOrder, this.places = const DevicePlaceFinder()});
   final PeopleChatData data;
+
+  /// Where the phone is, asked only when A place is tapped (a test's own).
+  final PlaceFinder places;
   final VoidCallback? onBack;
   final Pickers pickers;
   final Recorder? recorder;
@@ -829,6 +853,9 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       case PeopleShare.file:
         final f = await widget.pickers.document();
         if (f != null && mounted) await _file(f);
+      case PeopleShare.place:
+        final place = await pickPlace(context, widget.places);
+        if (place != null && mounted) await d.sendPlace(place);
       case PeopleShare.split:
         final card = await showSplitForm(context, d.auth);
         if (card != null) await d.sendCard(card);
@@ -1137,12 +1164,29 @@ class PeopleBubble extends StatelessWidget {
               ?q,
               if (a != null) AttachmentView(m: doorFileMessage(id: m.id, mine: mine, a: a, at: m.createdAt), files: files, other: other, room: room, local: line.file),
               if (place != null)
-                Row(
-                  children: [
-                    TkIcon('pin', size: 16, stroke: 2, color: meta),
-                    const SizedBox(width: 6),
-                    Flexible(child: Text((place.label ?? '').isEmpty ? 'A place' : place.label!, style: tkText(size: 15, weight: 600, color: t.text))),
-                  ],
+                // Opens in the phone's own map app.
+                Semantics(
+                  button: true,
+                  label: '${(place.label ?? '').isEmpty ? 'A place' : place.label!}, open it in your map app',
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => openPlace(place),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TkIcon('pin', size: 16, stroke: 2, color: meta),
+                            const SizedBox(width: 6),
+                            Flexible(child: Text((place.label ?? '').isEmpty ? 'A place' : place.label!, style: tkText(size: 15, weight: 600, color: t.text))),
+                          ],
+                        ),
+                        Text('Open in maps', style: tkText(size: 13, weight: 600, color: mine ? t.chatOutMeta : TkLook.of(context).limeInk)),
+                      ],
+                    ),
+                  ),
                 ),
               if (deleted)
                 Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))

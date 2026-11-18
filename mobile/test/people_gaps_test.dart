@@ -19,6 +19,7 @@ import 'package:taskiem/chat/my_chat.dart';
 import 'package:taskiem/chat/people_chat.dart';
 import 'package:taskiem/chat/people_find.dart';
 import 'package:taskiem/chat/people_live.dart';
+import 'package:taskiem/chat/people_place.dart';
 import 'package:taskiem/chat/people_search.dart';
 import 'package:taskiem/chat/live.dart' show LiveTiming;
 import 'package:taskiem/main.dart';
@@ -446,4 +447,83 @@ void main() {
       await drain(t);
     });
   });
+
+  group('a place', () {
+    test('opens in the map app: geo: on Android, Apple Maps on an iPhone', () {
+      const l = PeopleLocation(lat: 6.5244, lng: 3.3792, label: 'Our gate');
+      expect(mapUriOf(l, platform: TargetPlatform.android).toString(), 'geo:6.5244,3.3792?q=6.5244%2C3.3792(Our%20gate)');
+      expect(mapUriOf(const PeopleLocation(lat: 6.5244, lng: 3.3792), platform: TargetPlatform.android).toString(), 'geo:6.5244,3.3792?q=6.5244%2C3.3792');
+      final apple = mapUriOf(l, platform: TargetPlatform.iOS);
+      expect(apple.host, 'maps.apple.com');
+      expect(apple.queryParameters, {'ll': '6.5244,3.3792', 'q': 'Our gate'});
+      expect(webMapOf(l).queryParameters['query'], '6.5244,3.3792');
+    });
+
+    Future<void> openPlaceSheet(WidgetTester t) async {
+      await press(t, find.bySemanticsLabel('Chat tools'));
+      await press(t, find.text('A place'));
+    }
+
+    testWidgets('refused, then refused for good (the settings offered): plain words, nothing sent; allowed: shown first, named, sent, opened in maps', (t) async {
+      phone(t);
+      final api = adaChat();
+      Map<String, dynamic>? sent;
+      api.routes['POST /v1/me/people/pc1/messages'] = (r) {
+        sent = api.body(r);
+        return {'id': 'm9', 'mine': true, 'kind': 'location', 'body': 'Our gate', 'location': sent!['location'], 'status': 'sent', 'read_at': null, 'created_at': '2026-11-17T10:29:00Z'};
+      };
+      final finder = FakePlaces()..problem = PlaceProblem.refused;
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d, places: finder)));
+      await settle(t);
+      await openPlaceSheet(t);
+      expect(finder.asked, 1, reason: 'asked only on tap');
+      expect(find.text(placeProblemWords(PlaceProblem.refused)), findsOneWidget);
+      finder.problem = PlaceProblem.refusedForever;
+      await press(t, find.text('Try again'));
+      expect(find.text(placeProblemWords(PlaceProblem.refusedForever)), findsOneWidget);
+      await press(t, find.text('Open your phone’s settings'));
+      expect(finder.settings, [PlaceProblem.refusedForever]);
+      finder.problem = null;
+      await press(t, find.text('Try again'));
+      expect(find.text('Where you are now'), findsOneWidget, reason: 'seen before it goes');
+      expect(find.text('6.52440, 3.37920'), findsOneWidget);
+      expect(find.text('To within about 12 m'), findsOneWidget);
+      expect(sent, isNull);
+      await typeIn(t, find.byKey(const ValueKey('place-label')), 'Our gate');
+      await press(t, find.text('Send this place'));
+      expect(sent?['location'], {'lat': 6.5244, 'lng': 3.3792, 'label': 'Our gate'});
+      expect(sent?['client_id'], isNotNull);
+      expect(find.bySemanticsLabel('Our gate, open it in your map app'), findsOneWidget);
+
+      final opened = <PeopleLocation>[];
+      final was = openPlace;
+      openPlace = (l) async {
+        opened.add(l);
+        return true;
+      };
+      addTearDown(() => openPlace = was);
+      await press(t, find.bySemanticsLabel('Our gate, open it in your map app'));
+      expect(opened.single.label, 'Our gate');
+      await drain(t);
+    });
+  });
+}
+
+/// The phone's location, as a test gives it.
+class FakePlaces extends PlaceFinder {
+  PlaceProblem? problem;
+  int asked = 0;
+  final settings = <PlaceProblem>[];
+
+  @override
+  Future<({double lat, double lng, double? accuracy})> here() async {
+    asked++;
+    final p = problem;
+    if (p != null) throw PlaceRefused(p);
+    return (lat: 6.5244, lng: 3.3792, accuracy: 12.0);
+  }
+
+  @override
+  Future<void> openSettings(PlaceProblem problem) async => settings.add(problem);
 }

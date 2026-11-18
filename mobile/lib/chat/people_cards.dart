@@ -448,7 +448,7 @@ Future<void> shareWithPeople(BuildContext context, Auth auth, SendPeopleMessageR
 // --- what to share, from a people chat ---
 
 /// What the + of a people chat offers.
-enum PeopleShare { photo, file, business, product, order, delivery, split }
+enum PeopleShare { photo, file, place, business, product, order, delivery, split }
 
 /// The + by the box of a people chat: a photo or a file, a card of a
 /// business you chat with, one of its products, one of your orders or
@@ -474,6 +474,7 @@ class _ShareMenu extends StatelessWidget {
               children: [
                 row(PeopleShare.photo, 'b-camera', look.teal, 'A photo', 'Up to 10 MB'),
                 row(PeopleShare.file, 'b-note', look.blue, 'A PDF', 'Up to 25 MB'),
+                row(PeopleShare.place, 'b-pin', look.red, 'A place', 'Where you are now, sent once'),
               ],
             ),
             const SizedBox(height: 14),
