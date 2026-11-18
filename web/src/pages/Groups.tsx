@@ -305,7 +305,10 @@ export function GroupInfoPage() {
   const loc = useLocation();
   const base = `/v1/me/groups/${encodeURIComponent(id)}`;
   const group = useLoad(() => get<Group>(base), [base]);
-  const g = group.data;
+  // A switch moves at once; the group as the server answered it follows.
+  const [fresh, setFresh] = useState<Group>();
+  useEffect(() => setFresh(undefined), [group.data]);
+  const g = fresh ?? group.data;
   const admin = !!g && !g.left && g.role === "admin";
   const members = useLoad(() => (g && !g.left ? get<GroupMembers>(`${base}/members`) : Promise.resolve(undefined)), [base, !!g, g?.left]);
   const act = useAction();
@@ -330,16 +333,30 @@ export function GroupInfoPage() {
     reloadGroup();
     reloadMembers();
   };
-  const setGroup = (body: Record<string, unknown>, said: string) =>
-    act.run(async () => {
-      await put(base, body);
-      reload();
-    }, said);
-  const setMine = (body: Record<string, boolean>, said: string) =>
-    act.run(async () => {
-      await put(`${base}/me`, body);
-      reloadGroup();
-    }, said);
+  const setGroup = (body: Record<string, unknown>, said: string) => {
+    if (g) setFresh({ ...g, ...body });
+    return act
+      .run(async () => {
+        setFresh(await put<Group>(base, body));
+        reload();
+      }, said)
+      .then((ok) => {
+        if (!ok) setFresh(undefined);
+        return ok;
+      });
+  };
+  const setMine = (body: Record<string, boolean>, said: string) => {
+    if (g) setFresh({ ...g, ...body });
+    return act
+      .run(async () => {
+        setFresh(await put<Group>(`${base}/me`, body));
+        reloadGroup();
+      }, said)
+      .then((ok) => {
+        if (!ok) setFresh(undefined);
+        return ok;
+      });
+  };
   const leave = async () => {
     if (!g) return;
     const yes = await sure.confirm({
