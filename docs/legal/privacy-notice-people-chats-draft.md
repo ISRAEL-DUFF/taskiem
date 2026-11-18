@@ -46,7 +46,7 @@ Nigerian law can require us to give data, including the words of chats between p
 | The other person's copy | They delete it or their account; deleting yours does not delete theirs |
 | A report and what was sent with it | A year after a moderator reviews it |
 | A message the checks held | 90 days after it was held or decided |
-| The checks' decisions (not the words) | **[engineering: 00475's retention]** |
+| The checks' decisions (not the words) | 90 days, or until the sender deletes their account |
 | Moderators' decisions and appeals | While the account exists **[counsel]** |
 | Records of who opened what | **[counsel: as audit records]** |
 
