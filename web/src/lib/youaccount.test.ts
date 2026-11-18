@@ -31,8 +31,8 @@ describe("You's photo", () => {
 });
 
 describe("You's notifications and privacy", () => {
-  it("has the five kinds, people's two last", () => {
-    expect(NOTIFY_KINDS.map((k) => k.key)).toEqual(["messages", "updates", "offers", "people", "requests"]);
+  it("has the six kinds, people's three last", () => {
+    expect(NOTIFY_KINDS.map((k) => k.key)).toEqual(["messages", "updates", "offers", "people", "requests", "groups"]);
   });
   it("says which businesses have the number", () => {
     const date = (iso: string) => iso.slice(0, 10);

@@ -50,6 +50,9 @@ import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, typ
 import { usePagedList } from "../lib/usePagedList";
 import { chatsPoll, hasBusinessRow, rowsWithChat, typingWords } from "../lib/peoplelive";
 import { usePeopleLive } from "./PeopleLive";
+import { groupPreview, invitesWords, rowsWithGroup } from "../lib/groups";
+import { groupDraft } from "./GroupChat";
+import { NewGroupSheet } from "./Groups";
 import { MoreRows } from "./MoreRows";
 
 // A person's chats with businesses, on their own side (You;
@@ -132,7 +135,8 @@ export function PersonChatList() {
     () =>
       live.subscribe((e) => {
         if (e.type === "chat") patch((rows) => rowsWithChat(rows, e.data, archived));
-        if (e.type === "chat" || e.type === "ready" || (e.type === "gone" && e.data.id === null)) {
+        if (e.type === "group") patch((rows) => rowsWithGroup(rows, e.data, archived));
+        if (e.type === "chat" || e.type === "group" || e.type === "group_invite" || e.type === "ready" || (e.type === "gone" && e.data.id === null)) {
           window.clearTimeout(soon.current);
           soon.current = window.setTimeout(reload, 500);
         }
@@ -143,6 +147,8 @@ export function PersonChatList() {
   const data = list.head;
   const chats = list.rows ?? [];
   const requests = data?.requests ?? 0;
+  const invites = data?.invites ?? 0;
+  const [making, setMaking] = useState(false);
   return (
     <section className="card person-chats" aria-labelledby="you-chats">
       <div className="toolbar">
@@ -152,6 +158,11 @@ export function PersonChatList() {
         {!archived && (
           <button type="button" className="small primary" onClick={() => setFinding(true)} data-testid="people-new-chat-open">
             <Icon name="plus" /> New chat
+          </button>
+        )}
+        {!archived && (
+          <button type="button" className="small" onClick={() => setMaking(true)} data-testid="group-new-open">
+            <Icon name="members" /> New group
           </button>
         )}
         <button type="button" className="small" aria-pressed={archived} onClick={() => setArchived(!archived)} data-testid="person-archived">
@@ -169,13 +180,13 @@ export function PersonChatList() {
         </div>
       )}
       <ErrorBox error={list.error} />
-      {!archived && requests > 0 && (
+      {!archived && requests + invites > 0 && (
         <Link className="people-requests-entry" to="/you/people/requests" data-testid="people-requests-entry">
           <Icon name="inbox" />
-          <span className="grow">Message requests</span>
+          <span className="grow">{invites > 0 && requests === 0 ? "Invites to groups" : "Message requests"}</span>
           <span className="unread-count">
-            <span aria-hidden="true">{requests}</span>
-            <span className="sr-only">{requestsWords(requests)} waiting</span>
+            <span aria-hidden="true">{requests + invites}</span>
+            <span className="sr-only">{[requests ? requestsWords(requests) : "", invites ? invitesWords(invites) : ""].filter(Boolean).join(" and ")} waiting</span>
           </span>
         </Link>
       )}
@@ -187,11 +198,57 @@ export function PersonChatList() {
       )}
       {/* Who is typing, said politely to a screen reader (the rows say "typing…"). */}
       <p className="sr-only" aria-live="polite" data-testid="people-typing-live">
-        {typingWords(chats.filter((c) => c.kind === "person" && live.typing.has(c.id)).map((c) => c.name))}
+        {typingWords([
+          ...chats.filter((c) => c.kind === "person" && live.typing.has(c.id)).map((c) => c.name),
+          ...chats.filter((c) => c.kind === "group" && live.groupTyping.has(c.id)).map((c) => `Someone in ${c.name}`),
+        ])}
       </p>
       {chats.length > 0 && (
         <ul className="chat-rows" aria-label={archived ? "Archived chats" : "Your chats"} data-testid="person-chats">
           {chats.map((c) => {
+            if (c.kind === "group") {
+              const g = c.group;
+              const draft = groupDraft(c.id);
+              const typing = live.groupTyping.has(c.id);
+              return (
+                <ChatRow
+                  key={`group:${c.id}`}
+                  to={rowPath(c)}
+                  letter={c.name}
+                  logo={g?.photo?.url}
+                  title={
+                    <>
+                      {c.name}
+                      <span className="sr-only">{g?.mentioned ? " (a group, you were mentioned)" : " (a group)"}</span>
+                    </>
+                  }
+                  mark={
+                    <span className="chat-kind" data-testid="chat-kind-group" aria-hidden="true">
+                      {g?.mentioned && <span className="group-row-at">@ </span>}
+                      Group
+                    </span>
+                  }
+                  time={listTime(c.last_at)}
+                  preview={
+                    typing ? (
+                      <span data-testid="group-row-typing">typing…</span>
+                    ) : draft ? (
+                      <>
+                        <span className="draft">Draft:</span> {draft}
+                      </>
+                    ) : g ? (
+                      groupPreview(g)
+                    ) : (
+                      c.last
+                    )
+                  }
+                  typing={typing}
+                  unread={c.unread}
+                  muted={c.muted}
+                  testid="group-chat"
+                />
+              );
+            }
             const person = c.kind === "person";
             const draft = person ? peopleDraft(c.id) : getDraft(draftKey(c.id));
             const typing = person && live.typing.has(c.id);
@@ -238,6 +295,7 @@ export function PersonChatList() {
       )}
       <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" testid="person-chats-more" />
       {finding && <NewChatSheet onClose={() => setFinding(false)} />}
+      {making && <NewGroupSheet onClose={() => setMaking(false)} />}
     </section>
   );
 }

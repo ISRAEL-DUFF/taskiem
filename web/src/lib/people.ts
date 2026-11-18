@@ -9,6 +9,7 @@
 
 import { ApiError } from "../api";
 import { clock, dayLabel } from "./linkchat";
+import type { Group } from "./groups";
 import type { BusinessTrust, DeliveryProgress } from "./personchat";
 import type { OrderPhoto } from "./youorders";
 
@@ -82,11 +83,13 @@ export interface PeoplePrivacy {
   read_ticks: boolean;
   photo: Audience;
   show_number: boolean;
+  /** Who can add me to groups (stage 5b, A3): my contacts by default. */
+  groups_add?: Audience;
 }
 
 /** One row of You's one Chats list (GET /v1/me/conversations). */
 export interface ChatListItem {
-  kind: "business" | "person";
+  kind: "business" | "person" | "group";
   id: string;
   name: string;
   business_id?: string;
@@ -107,6 +110,8 @@ export interface ChatListItem {
   blocked: boolean;
   waiting?: boolean;
   person?: PersonCard;
+  /** A group's row (stage 5b): the group as the person sees it. */
+  group?: Group;
 }
 
 /** A page of a list: `more` says another follows, `next` (passed as
@@ -121,6 +126,8 @@ export interface ChatList extends Paged {
   /** Unread in the whole list, not this page alone. */
   unread: number;
   requests: number;
+  /** Invites to groups waiting for the person (stage 5b). */
+  invites?: number;
 }
 
 /** GET /v1/me/people. */
@@ -337,6 +344,7 @@ export function mayDeleteForEveryone(m: Pick<PeopleMessage, "mine" | "deleted" |
 
 /** Where a row of the one Chats list opens. */
 export function rowPath(c: Pick<ChatListItem, "kind" | "id">): string {
+  if (c.kind === "group") return `/you/groups/${encodeURIComponent(c.id)}`;
   return c.kind === "person" ? `/you/people/${encodeURIComponent(c.id)}` : `/you/chats/${encodeURIComponent(c.id)}`;
 }
 
@@ -487,7 +495,7 @@ export function startWords(e: unknown): string {
 }
 
 /** The messages after a page came: by id, oldest first. */
-export function mergePeople(cur: PeopleMessage[], more: PeopleMessage[]): PeopleMessage[] {
+export function mergePeople<M extends Pick<PeopleMessage, "id" | "created_at">>(cur: M[], more: M[]): M[] {
   const byID = new Map(cur.map((m) => [m.id, m]));
   for (const m of more) byID.set(m.id, m);
   return [...byID.values()].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || (a.id < b.id ? -1 : 1));
@@ -496,7 +504,7 @@ export function mergePeople(cur: PeopleMessage[], more: PeopleMessage[]): People
 /** The thread after its latest page was read again: the page in place of
  * what it covers, older messages kept when there are more, and sends on
  * their way. */
-export function withLatestPeople(cur: PeopleMessage[], page: PeopleMessage[], more: boolean): PeopleMessage[] {
+export function withLatestPeople<M extends Pick<PeopleMessage, "id" | "created_at" | "local">>(cur: M[], page: M[], more: boolean): M[] {
   const from = page[0] ? Date.parse(page[0].created_at) : Infinity;
   const kept = cur.filter((m) => m.local || (more && Date.parse(m.created_at) < from));
   return mergePeople(kept, page);

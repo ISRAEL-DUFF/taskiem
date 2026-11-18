@@ -36,6 +36,7 @@ import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./page
 import { AccountDeleted } from "./pages/YouAccount";
 import { TransparencyPage } from "./pages/Transparency";
 import { PeopleOnYou, PersonLinkPage } from "./pages/People";
+import { GroupLinkPage } from "./pages/Groups";
 import { ChatLinkPage } from "./pages/ChatLinkPage";
 import { CustomerChatSettings } from "./pages/CustomerChatSettings";
 import { DiscoverSettings } from "./pages/DiscoverSettings";
@@ -293,6 +294,14 @@ function Shell() {
     return alone(
       <Routes>
         <Route path="/p/:code" element={<PersonLinkPage />} />
+      </Routes>,
+    );
+  // A group's link (people-chatting §9, A4): its name, photo and count,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/g\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/g/:code" element={<GroupLinkPage />} />
       </Routes>,
     );
   if (me === null) {
@@ -785,6 +794,7 @@ function SignedIn() {
                   <Route path="/second-proof" element={<SecondProofPage />} />
                   <Route path="/you/chats/:id" element={<ChatOnYou />} />
                   <Route path="/you/people/*" element={<PeopleOnYou />} />
+                  <Route path="/you/groups/*" element={<PeopleOnYou />} />
                   <Route
                     path="/you"
                     element={

@@ -666,3 +666,30 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .people-place-preview a { flex-basis: 100%; }
 .you-browser-push { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .you-browser-push h3 { margin: 0 0 4px; }
+
+/* People groups (docs/spec/people-chatting.md §9, stage 5b): events as
+   centred lines, each sender's name and photo, mentions, reaction counts,
+   "Read by", the info page's lists. */
+.group-event { align-self: center; display: flex; align-items: center; gap: 6px; max-width: min(90%, 520px); margin: 6px 0; padding: 4px 12px; border-radius: 10px; background: var(--panel); color: var(--muted); font-size: 12.5px; text-align: center; box-shadow: 0 1px 0.5px var(--chat-shadow); overflow-wrap: anywhere; }
+.group-event.taskiem { color: var(--text); border: 1px solid var(--border-strong); }
+.group-event svg { width: 14px; height: 14px; flex: none; }
+.bubble .group-sender { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.bubble .group-sender-photo { width: 20px; height: 20px; font-size: 10px; flex: none; }
+.bubble .group-mentioned { display: block; font-size: 12px; font-weight: 600; color: var(--tint-text); }
+.bubble.mentions-me { box-shadow: 0 1px 0.5px var(--chat-shadow), inset 3px 0 0 var(--accent); }
+.bubble .group-mention { background: var(--tint); color: var(--tint-text); border-radius: 4px; padding: 0 2px; font-weight: 600; }
+.bubble .group-reactions { padding: 0; background: none; border: 0; cursor: pointer; min-height: 0; }
+.bubble .group-reactions .reaction-chip.mine { background: var(--tint); }
+.group-head-link { color: inherit; text-decoration: none; }
+.group-head-link:hover { text-decoration: underline; }
+.group-closed { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.group-closed p { margin: 0; }
+.group-readers { list-style: none; margin: 0; padding: 0; }
+.group-readers li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.group-readers li:last-child { border-bottom: 0; }
+.group-readers time { color: var(--muted); font-size: 13px; flex: none; }
+.group-readers .grow { flex: 1; min-width: 0; }
+.group-added { margin: 0; padding-left: 18px; }
+.group-added li { margin: 4px 0; overflow-wrap: anywhere; }
+.group-row-at { color: var(--accent); font-weight: 700; }
+.group-info .people-info .row-actions { flex-wrap: wrap; justify-content: center; }

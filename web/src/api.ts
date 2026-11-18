@@ -106,8 +106,8 @@ export async function api<T = unknown>(
 }
 
 /** POSTs a multipart form (file uploads); the browser sets its boundary. */
-export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
-  return request<T>("POST", path, form, {});
+export function upload<T = unknown>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
+  return request<T>(method, path, form, {});
 }
 
 /** POSTs a file as the raw request body, with its own Content-Type (storefront photos). */

@@ -5,6 +5,7 @@
 // Pure helpers, tested on their own; the pages use them.
 
 import { mergePeople, type ChatListItem, type PeopleChat, type PeopleMessage } from "./people";
+import type { LiveGroup, LiveGroupInvite, LiveGroupMessage, LiveGroupReceipts } from "./groups";
 
 // --- the live connection's events ---
 
@@ -35,6 +36,11 @@ export type PeopleLiveEvent =
   | { type: "message"; data: LiveMessage }
   | { type: "chat"; data: LiveChat }
   | { type: "gone"; data: LiveGone }
+  /** Groups (stage 5b): a message, the group itself, our ticks, an invite. */
+  | { type: "group_message"; data: LiveGroupMessage }
+  | { type: "group"; data: LiveGroup }
+  | { type: "group_receipts"; data: LiveGroupReceipts }
+  | { type: "group_invite"; data: LiveGroupInvite }
   /** The connection opened (again): what was missed while it was down is read once. */
   | { type: "ready" };
 
