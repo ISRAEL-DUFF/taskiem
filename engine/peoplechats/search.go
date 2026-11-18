@@ -56,12 +56,18 @@ func SearchKey(key []byte, owner uuid.UUID) []byte {
 	return m.Sum(nil)
 }
 
-var fold = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+// fold is a new transformer each time: a transform.Chain keeps state while
+// it runs, so one shared between requests indexing at the same moment
+// corrupted words and panicked (slice bounds out of range).
+func fold() transform.Transformer {
+	return transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+}
 
 // Normalise is a word as it is indexed and searched: lower case, without
-// accents (Ọ̀ is o), letters and digits only.
+// accents (Ọ̀ is o), letters and digits only. It is safe to call at once
+// from many goroutines.
 func Normalise(word string) string {
-	s, _, err := transform.String(fold, word)
+	s, _, err := transform.String(fold(), word)
 	if err != nil {
 		s = word
 	}

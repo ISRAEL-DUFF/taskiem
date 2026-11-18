@@ -3,6 +3,7 @@ package peoplechats_test
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -96,5 +97,36 @@ func TestSnippet(t *testing.T) {
 	}
 	if s := peoplechats.Snippet("nothing here", words, 60); s != "" {
 		t.Fatalf("no match: %q", s)
+	}
+}
+
+// TestNormaliseAtOnce: many goroutines normalising at the same moment get
+// the same words as one alone (a shared transform.Chain once panicked).
+func TestNormaliseAtOnce(t *testing.T) {
+	words := []string{"Ọ̀rẹ́", "Café", "BÚKÀ", "naïve", "Ẹ̀kọ́", "hello", "ÀṢẸ"}
+	want := make([]string, len(words))
+	for i, w := range words {
+		want[i] = peoplechats.Normalise(w)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan string, 64)
+	for g := 0; g < 32; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := 0; n < 200; n++ {
+				for i, w := range words {
+					if got := peoplechats.Normalise(w); got != want[i] {
+						errs <- got + " != " + want[i]
+						return
+					}
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Fatal(e)
 	}
 }
