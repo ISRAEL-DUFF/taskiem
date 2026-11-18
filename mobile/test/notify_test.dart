@@ -533,6 +533,20 @@ void main() {
     expect(said, ['Chidi'], reason: 'the chat on the screen shows nothing');
   });
 
+  test('a push of kind you about the person’s standing opens Your standing', () async {
+    final (_, n, fb, _) = await signedIn(PushServer());
+    await n.start();
+    fb.taps.add({'link': '/you/settings/standing', 'tag': 'standing', 'kind': 'you'});
+    await pumpEventQueue();
+    final link = n.takePending();
+    expect(link, '/you/settings/standing');
+    expect(appPath(link), isTrue);
+    expect(youChatOf(link), isNull);
+    expect(youRouteOf(link!), (page: YouPage.standing, id: '', ref: '', tool: null));
+    expect(routeOf(link).screen, RouteScreen.youPage, reason: 'opened over a business’s home too');
+    expect(youRouteOf('/you/settings'), (page: YouPage.chats, id: '', ref: '', tool: null));
+  });
+
   group('Settings', () {
     setUpAll(loadFonts);
 

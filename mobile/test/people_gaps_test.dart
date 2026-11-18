@@ -25,6 +25,11 @@ import 'package:taskiem/chat/people_find.dart';
 import 'package:taskiem/chat/people_contacts.dart';
 import 'package:taskiem/chat/people_live.dart';
 import 'package:taskiem/chat/people_scan.dart';
+import 'package:taskiem/chat/people_settings.dart' show PeoplePrivacyPage;
+import 'package:taskiem/chat/people_standing.dart';
+import 'package:taskiem/app/links.dart' show openInBrowser;
+import 'package:taskiem/app/route.dart' show youRouteOf;
+import 'package:taskiem/screens/you_links.dart' show openYouPage;
 import 'package:taskiem/chat/people_place.dart';
 import 'package:taskiem/chat/people_search.dart';
 import 'package:taskiem/chat/live.dart' show LiveTiming;
@@ -631,6 +636,153 @@ void main() {
     expect(find.text('Delete for everyone'), findsNothing, reason: 'theirs: for me only');
     expect(find.text(deleteForEveryoneNote), findsNothing);
     await drain(t);
+  });
+
+  group('your standing', () {
+    Map<String, dynamic> standing({int unseen = 1, bool appealed = false}) => {
+      'state': 'suspended',
+      'words': 'You can’t message people until 24 Nov. You can still read your chats.',
+      'until': '2026-11-24T10:00:00Z',
+      'unseen': unseen,
+      'appeal_words': 'You can appeal each decision once. A moderator who did not make it reads your appeal.',
+      'actions': [
+        {
+          'id': 'a2', 'action': 'suspend', 'reason': 'Many people reported scam messages from you.', 'at': '2026-11-17T09:00:00Z', 'until': '2026-11-24T10:00:00Z',
+          'in_force': true, 'lifted_at': null, 'seen': unseen == 0, 'words': 'You can’t message people until 24 Nov.', 'can_appeal': !appealed,
+          'appeal': appealed ? {'id': 'ap1', 'text': 'It was a joke', 'state': 'open', 'at': '2026-11-17T10:00:00Z', 'decided_at': null, 'note': null} : null,
+        },
+        {
+          'id': 'a1', 'action': 'warn', 'reason': 'Spam', 'at': '2026-11-01T09:00:00Z', 'until': null, 'in_force': false, 'lifted_at': null, 'seen': true,
+          'words': 'A warning.', 'can_appeal': false,
+          'appeal': {'id': 'ap0', 'text': 'No', 'state': 'upheld', 'at': '2026-11-02T10:00:00Z', 'decided_at': '2026-11-03T10:00:00Z', 'note': 'The messages were spam.'},
+        },
+      ],
+    };
+
+    test('an appeal refused, in plain words for each answer', () {
+      expect(appealFailure(ApiError(400, {'error': 'x'})), contains('Write why'));
+      expect(appealFailure(ApiError(404, {'error': 'x'})), contains('isn’t on your account'));
+      expect(appealFailure(ApiError(409, {'error': 'x'})), contains('already appealed'));
+      expect(appealFailure(ApiError(429, {'error': 'x'})), contains('many appeals'));
+      expect(pointsToStanding(ApiError(403, {'error': 'Taskiem’s moderators have stopped your account from messaging people for now. See Your standing in Settings to find out why and to appeal.'})), isTrue);
+      expect(pointsToStanding(ApiError(403, {'error': 'Held.'})), isFalse);
+      expect(standingTitle('limited'), 'Your message requests are limited');
+    });
+
+    testWidgets('Your standing: the state and each decision, marked seen; an appeal sent once, its refusals said', (t) async {
+      phone(t, 2000);
+      final api = Api();
+      var appealed = false;
+      api.routes['GET /v1/me/standing'] = (_) => standing(unseen: appealed ? 0 : 1, appealed: appealed);
+      api.routes['POST /v1/me/standing/seen'] = (_) => answer({}, 204);
+      var tries = 0;
+      api.routes['POST /v1/me/standing/appeals'] = (r) {
+        tries++;
+        if (tries == 1) return answer({'error': 'Too many'}, 429);
+        appealed = true;
+        return answer({'appeal': {'id': 'ap1', 'text': api.body(r)['text'], 'state': 'open', 'at': '2026-11-17T10:00:00Z', 'decided_at': null, 'note': null}, 'said': 'Your appeal was sent. A moderator will read it.'}, 201);
+      };
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YourStandingScreen(auth: api.auth(), now: () => at)));
+      await settle(t);
+      expect(find.text('Your account can’t message people for now'), findsOneWidget);
+      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
+      expect(find.text('A moderator looked at your appeal and kept the decision. They said: The messages were spam.'), findsOneWidget);
+      expect(api.sent('POST', '/v1/me/standing/seen'), hasLength(1), reason: 'opened: seen');
+      await press(t, find.bySemanticsLabel('Appeal the suspension'));
+      await press(t, find.text('Send the appeal'));
+      expect(find.text('Write why you think this decision is wrong.'), findsOneWidget);
+      expect(api.sent('POST', '/v1/me/standing/appeals'), isEmpty);
+      await typeIn(t, find.byKey(const ValueKey('appeal-text')), 'Those were my own family.');
+      await press(t, find.text('Send the appeal'));
+      expect(find.text(appealFailure(ApiError(429, const {}))), findsOneWidget);
+      await press(t, find.text('Send the appeal'));
+      expect(api.body(api.sent('POST', '/v1/me/standing/appeals').last), {'action_id': 'a2', 'text': 'Those were my own family.'});
+      expect(find.text('Your appeal was sent. A moderator will read it.'), findsOneWidget);
+      expect(find.text('You appealed. A moderator will read it and we will tell you what they decide.'), findsOneWidget);
+      expect(find.bySemanticsLabel('Appeal the suspension'), findsNothing, reason: 'once');
+
+      final opened = <Uri>[];
+      final was = openInBrowser;
+      openInBrowser = (u) async {
+        opened.add(u);
+        return true;
+      };
+      addTearDown(() => openInBrowser = was);
+      await press(t, find.text('Requests from the authorities'));
+      expect(opened.single.path, '/transparency');
+      await drain(t);
+    });
+
+    testWidgets('You: the notice while a decision is unseen; opened, it goes', (t) async {
+      phone(t);
+      final api = Api();
+      var unseen = 1;
+      api.routes['GET /v1/me/standing'] = (_) => standing(unseen: unseen);
+      api.routes['POST /v1/me/standing/seen'] = (_) {
+        unseen = 0;
+        return answer({}, 204);
+      };
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
+      await settle(t);
+      expect(find.bySemanticsLabel('Your account can’t message people for now. Read what Taskiem’s moderators decided'), findsOneWidget);
+      await press(t, find.text('Read what Taskiem’s moderators decided'));
+      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
+      t.state<NavigatorState>(find.byType(Navigator)).pop();
+      await settle(t);
+      expect(find.text('Read what Taskiem’s moderators decided'), findsNothing);
+      await drain(t);
+    });
+
+    testWidgets('the push’s link /you/settings/standing opens Your standing', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/me/standing'] = (_) => standing(unseen: 0);
+      final auth = api.auth();
+      await t.pumpWidget(TaskiemApp(
+        mode: TkMode.light,
+        home: Builder(builder: (context) => Center(child: GestureDetector(onTap: () => openYouPage(context, auth, youRouteOf('/you/settings/standing')!, open: (id, {notice, draft = '', tool}) async {}), child: const Text('Open')))),
+      ));
+      await press(t, find.text('Open'));
+      expect(find.text('Your standing'), findsWidgets);
+      expect(find.text('Your account can’t message people for now'), findsOneWidget);
+      await drain(t);
+    });
+
+    testWidgets('a suspended sender’s 403: the server’s words, and Your standing one tap away', (t) async {
+      phone(t);
+      final api = adaChat();
+      api.routes['GET /v1/me/standing'] = (_) => standing(unseen: 0);
+      api.routes['POST /v1/me/people/pc1/messages'] = (_) => answer({'error': 'Taskiem’s moderators have stopped your account from messaging people for now. See Your standing in Settings to find out why and to appeal.'}, 403);
+      await openPeople(t, api);
+      await typeIn(t, find.bySemanticsLabel('Message Ada Obi'), 'Hello?');
+      await press(t, find.bySemanticsLabel('Send'));
+      expect(find.textContaining('See Your standing in Settings'), findsWidgets);
+      await press(t, find.text('Your standing'));
+      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
+      await drain(t);
+    });
+
+    testWidgets('Privacy with people: the published count of requests from the authorities', (t) async {
+      phone(t, 2400);
+      final api = Api();
+      api.routes['GET /v1/me/privacy/people'] = (_) => {
+        'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'photo': 'contacts', 'show_number': false, 'read_ticks': true,
+      };
+      final opened = <Uri>[];
+      final was = openInBrowser;
+      openInBrowser = (u) async {
+        opened.add(u);
+        return true;
+      };
+      addTearDown(() => openInBrowser = was);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeoplePrivacyPage(auth: api.auth())));
+      await settle(t);
+      await press(t, find.bySemanticsLabel('See how many requests from the authorities Taskiem received'));
+      expect(opened.single.toString(), endsWith('/transparency'));
+      await drain(t);
+    });
   });
 }
 

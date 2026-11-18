@@ -16,6 +16,7 @@ import '../kit/modal.dart';
 import '../screens/settings_more.dart' show SettingsCard, SettingsNote, SettingsPage;
 import 'my_chat.dart' show sayFailure;
 import 'people.dart';
+import 'people_standing.dart' show openTransparency;
 import 'words.dart';
 
 /// An audience in words.
@@ -161,6 +162,17 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
             ],
           ),
           const SettingsNote(peopleKeptWords),
+          // Lawful requests are counted and published (§8.5).
+          SettingsCard(
+            title: 'Requests from the authorities',
+            children: [
+              TkFormRow(
+                title: 'How many Taskiem received',
+                sub: 'Taskiem answers only proper legal process and publishes the count every half-year',
+                trailing: TkSmallButton(label: 'See', semantics: 'See how many requests from the authorities Taskiem received', onPressed: () => openTransparency(context)),
+              ),
+            ],
+          ),
         ],
       ],
     );

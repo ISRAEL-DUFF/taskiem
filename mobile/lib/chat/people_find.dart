@@ -34,6 +34,7 @@ import 'people.dart';
 import 'people_contacts.dart';
 import 'people_live.dart';
 import 'people_scan.dart';
+import 'people_standing.dart' show YourStandingScreen, pointsToStanding;
 import 'words.dart';
 
 /// Opens a chat with a person by its id (over You); [started] is the chat
@@ -49,7 +50,16 @@ Future<void> chatWithPerson(BuildContext context, Auth auth, OpenPeopleChat open
     final c = await auth.api.startPeopleChat(body: StartPeopleChatRequest(personId: person, linkCode: linkCode));
     await open(c.id, started: c);
   } on Object catch (e) {
-    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+    if (!context.mounted) return;
+    // Their own account stopped by the moderators: the words point to
+    // Your standing, one tap away.
+    showTkToast(
+      context,
+      sayFailure(e),
+      error: true,
+      action: pointsToStanding(e) ? 'Your standing' : null,
+      onAction: pointsToStanding(e) ? () => tkPush<void>(context, YourStandingScreen(auth: auth)) : null,
+    );
   }
 }
 

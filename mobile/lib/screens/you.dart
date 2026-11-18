@@ -27,6 +27,7 @@ import '../chat/people_contacts.dart' show ContactMatch, ContactsMatchScreen, De
 import '../chat/people_find.dart';
 import '../chat/people_live.dart';
 import '../chat/people_search.dart';
+import '../chat/people_standing.dart';
 import '../chat/people_settings.dart' show BlockedPeopleScreen, PeoplePrivacyPage;
 import '../chat/your_orders.dart' show YourOrderPage;
 import '../app/prefs.dart' show Prefs;
@@ -105,6 +106,10 @@ class _YouHomeState extends State<YouHome> with Polling {
   /// Found by the daily re-check of the phone's contacts (§5.3): not in
   /// the person's contacts yet; kept only while You is open.
   List<ContactMatch> _fromContacts = const [];
+
+  /// The person's standing with the moderators, read quietly: its notice
+  /// shows while a decision is unseen.
+  PersonStanding? _standing;
 
   /// Told each time Orders is shown again: it reads itself again.
   final _ordersShown = ValueNotifier<int>(0);
@@ -215,8 +220,24 @@ class _YouHomeState extends State<YouHome> with Polling {
     super.dispose();
   }
 
+  /// Your standing, read quietly: nothing shown when it cannot be read.
+  Future<void> _readStanding() async {
+    try {
+      final s = await widget.auth.api.getMyStanding();
+      if (mounted) setState(() => _standing = s);
+    } on Object {
+      // No notice.
+    }
+  }
+
+  Future<void> _openStanding() async {
+    await tkPush<void>(context, YourStandingScreen(auth: widget.auth, now: widget.now));
+    await _readStanding();
+  }
+
   Future<void> _load() async {
     await Future.wait([
+      _readStanding(),
       _chats.load(),
       () async {
         try {
@@ -466,6 +487,7 @@ class _YouHomeState extends State<YouHome> with Polling {
               ],
             ),
           if (_error != null) TkErrorBox(_error!),
+          if ((_standing?.unseen ?? 0) > 0) StandingNotice(standing: _standing!, onOpen: _openStanding),
           if (auth.me?.secondProof?.required == true)
             TkPanel(
               padding: const EdgeInsets.all(16),
@@ -759,6 +781,13 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-x-ring',
                   square: look.red,
                   onTap: () => tkPush<void>(context, BlockedPeopleScreen(auth: auth, now: now)),
+                ),
+                TkListRow(
+                  title: 'Your standing',
+                  sub: 'What Taskiem’s moderators decided, and how to appeal',
+                  icon: 'b-alert',
+                  square: look.orange,
+                  onTap: () => tkPush<void>(context, YourStandingScreen(auth: auth, now: now)),
                 ),
                 TkListRow(
                   title: 'Your bank account for shares',

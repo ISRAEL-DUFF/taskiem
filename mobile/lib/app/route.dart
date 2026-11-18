@@ -6,7 +6,7 @@
 enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
-enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request }
+enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request, standing }
 
 /// A page of You: [id] is the chat (a business's, or a person's, a
 /// request's: people-chatting §7), the business (an order's, a profile's,
@@ -66,6 +66,11 @@ YouRoute? _youRouteOf(String path) {
       if (parts.length != 3) return null;
       final id = part(2);
       return id == null ? r(YouPage.chats) : r(YouPage.person, id);
+    // Your standing with Taskiem's moderators (a push of kind you, tag
+    // standing: people-chatting, "safety and moderation").
+    case 'settings':
+      if (parts.length == 3 && parts[2] == 'standing') return r(YouPage.standing);
+      return r(YouPage.chats);
     case 'orders':
       if (parts.length == 2) return r(YouPage.orders);
       if (parts.length != 4) return null;

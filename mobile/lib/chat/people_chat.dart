@@ -48,6 +48,7 @@ import 'people_cards.dart';
 import 'people_live.dart';
 import 'people_place.dart';
 import 'people_search.dart';
+import 'people_standing.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -157,6 +158,10 @@ class PeopleChatData extends ChangeNotifier {
 
   /// The chat is not there (deleted, or a request deleted elsewhere).
   bool missing = false;
+
+  /// A send was refused because the person's own account is stopped from
+  /// messaging people (403): the screen points to Your standing.
+  bool toStanding = false;
 
   /// What a change from the menu could not do, said once by the screen.
   String? actionError;
@@ -434,6 +439,7 @@ class PeopleChatData extends ChangeNotifier {
       _keepUnsure(e, what, client);
       if (!_back.isClosed && words.isNotEmpty) _back.add(words);
       error = sendFailure(e);
+      toStanding = pointsToStanding(e);
       unawaited(_chat());
     }
     _changed();
@@ -442,6 +448,7 @@ class PeopleChatData extends ChangeNotifier {
   /// The client id for [what]: the one it went with when it was sent last
   /// with no answer, else a new one.
   String _clientFor(String what) {
+    toStanding = false;
     final again = _unsure;
     _unsure = null;
     return again != null && again.what == what ? again.client : newClientId(now(), ++_localN);
@@ -477,6 +484,7 @@ class PeopleChatData extends ChangeNotifier {
     } on Object catch (e) {
       _keepUnsure(e, what, client);
       error = sendFailure(e);
+      toStanding = pointsToStanding(e);
       _changed();
       return false;
     }
@@ -497,6 +505,7 @@ class PeopleChatData extends ChangeNotifier {
     } on Object catch (e) {
       _keepUnsure(e, what, client);
       error = sendFailure(e);
+      toStanding = pointsToStanding(e);
       _changed();
       return false;
     }
@@ -1024,6 +1033,12 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                             },
                           ),
                   ),
+                  if (d.toStanding)
+                    _Note(
+                      text: 'Taskiem’s moderators have stopped your account from messaging people for now.',
+                      action: 'Your standing',
+                      onAction: () => tkPush<void>(context, YourStandingScreen(auth: d.auth, now: d.now)),
+                    ),
                   if (c != null && c.request && !d.missing) _RequestBar(name: name, onAccept: _accept, onDelete: _decline, onBlock: () => _block(report: true)),
                   if (c != null && c.waiting && !c.request) _Note(text: 'Your messages wait in $name’s requests until they accept.'),
                   if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),

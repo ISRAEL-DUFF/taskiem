@@ -14,6 +14,7 @@ import '../chat/discover.dart' show DiscoverProfileScreen, DiscoverTab;
 import '../chat/my_chat.dart';
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_find.dart' show OpenPeopleChat, PeopleRequestsScreen;
+import '../chat/people_standing.dart' show YourStandingScreen;
 import '../chat/your_orders.dart' show YourOrderPage, YourOrdersTab, aboutOrderDraft;
 import '../kit/mobile.dart' show tkPush;
 
@@ -46,6 +47,9 @@ Future<void> openYouPage(
       showTab?.call(youTabChats);
       unawaited(tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, now: now)));
       await person(r.id);
+    case YouPage.standing:
+      showTab?.call(youTabChats);
+      await tkPush<void>(context, YourStandingScreen(auth: auth, now: now));
     case YouPage.chats:
       showTab?.call(youTabChats);
     case YouPage.chat:
