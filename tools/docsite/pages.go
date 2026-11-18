@@ -57,6 +57,7 @@ var internal = []struct{ pattern, why string }{
 	{"integrations/xenibase-storage-api", "a copy of a partner's API reference, for the team"},
 	{"integrations/payrolla-reference/*", "Payrolla's own integration pack and reply (decision 0044 R0), for the team"},
 	{"integrations/payrolla-reference/api/*", "Payrolla's own API, webhook and embedding reference, for the team"},
+	{"integrations/phpradius-reference", "a copy of PHP Radius's client API reference (the vendor's Postman collection, scrubbed), for the team"},
 	{"media", "storage for storefronts and forms is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"embed-sites", "embedding storefronts and forms is built but off until Phase 5 ships; publish it with storefronts"},
 	{"storefronts", "storefronts are built but off until Phase 5 ships; publish with them"},
