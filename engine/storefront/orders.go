@@ -1093,6 +1093,10 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 			}
 		}
 	}
+	// Shares of orders people placed together, paid by their own links.
+	if err := o.checkShares(ctx, tenant); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 
