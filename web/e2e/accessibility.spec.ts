@@ -816,6 +816,11 @@ for (const scheme of ["light", "dark"] as const)
       await page.route(/\/v1\/me\/people\/search\?/, (r) => r.fulfill(json({ results: [{ chat_id: "c1", chat, message: saturday, snippet: "Are you coming on Saturday?" }], more: true, next: "x" })));
       await page.route(/\/v1\/me\/people\/starred(\?|$)/, (r) => r.fulfill(json({ starred: [{ chat_id: "c1", chat, message: saturday, starred_at: now }], more: false })));
       await page.route(/\/v1\/me\/people(\?|$)/, (r) => r.fulfill(json({ chats: [chat], unread: 0, requests: 1 })));
+      // Groups are searched, starred and invited beside (stage 5b): none here.
+      await page.route(/\/v1\/me\/groups\/search\?/, (r) => r.fulfill(json({ results: [], more: false })));
+      await page.route(/\/v1\/me\/groups\/starred(\?|$)/, (r) => r.fulfill(json({ starred: [], more: false })));
+      await page.route("**/v1/me/groups/invites", (r) => r.fulfill(json({ invites: [] })));
+      await page.route(/\/v1\/me\/groups(\?|$)/, (r) => r.fulfill(json({ groups: [], unread: 0, invites: 0, more: false })));
       await page.route("**/v1/me/people/blocked", (r) => r.fulfill(json({ people: [{ person_id: "p3", name: "Dayo Ola", chat_id: "c3", at: now }] })));
       await page.route("**/v1/me/contacts", (r) =>
         r.fulfill(json({ contacts: [{ ...kemi, source: "number", added_at: now }, { ...card("p4", { name: "Bola Ade", last_seen_at: null, online: null }), source: "link", added_at: now }] })),
@@ -897,6 +902,190 @@ for (const scheme of ["light", "dark"] as const)
       }
       expect(found, found.join("\n\n")).toEqual([]);
     });
+
+// People groups on You (people-chatting.md §9, stage 5b): a group in the one
+// Chats list with an invite in Requests, New group with what each add did,
+// a group with every kind of message (events, Taskiem's, mentions,
+// reactions counted, our ticks, a warning), Read by, a group's info as an
+// admin (members, invited, settings, the link and who waits), reporting a
+// member, a closed group's notice and appeal, search in a group, and a
+// group's link signed out; the server's answers stood in for (groups.spec.ts
+// goes through them on the real server).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`people groups pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const card = (id: string, name: string) => ({ id, name, deleted: false, contact_name: null, in_contacts: true, they_added_you: true, photo: null, last_seen_at: now, online: false, read_ticks: true });
+      const group = (over: Record<string, unknown> = {}) => ({
+        id: "g1",
+        kind: "group",
+        name: "Yaba friends",
+        description: "Saturday football and jollof",
+        photo: null,
+        members: 3,
+        role: "admin",
+        left: false,
+        admins_only_post: false,
+        admins_only_edit: true,
+        approve_joins: true,
+        can_post: true,
+        can_edit: true,
+        muted: false,
+        archived: false,
+        mentions: true,
+        unread: 1,
+        mentioned: true,
+        last: "@Ada see you",
+        last_mine: false,
+        last_sender: "Bola Ade",
+        last_at: now,
+        joined_at: now,
+        join_requests: 1,
+        ...over,
+      });
+      const closedWords = "Taskiem's moderators closed this group. No one can send messages in it, and it will be deleted on Fri 18 Dec 2026 unless its admins appeal.";
+      const closed = group({ id: "g2", name: "Market deals", role: "admin", can_post: false, can_edit: false, closed: { at: now, until: now, words: closedWords, can_appeal: true, action_id: "a1", reason: "Scams" } });
+      await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route("**/v1/me/push/key", (r) => r.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) =>
+        r.fulfill(json({ chats: [{ kind: "group", id: "g1", name: "Yaba friends", last: "@Ada see you", last_mine: false, last_at: now, unread: 1, muted: false, archived: false, blocked: false, group: group() }], unread: 1, requests: 0, invites: 1 })),
+      );
+      await page.route("**/v1/me/groups/invites", (r) => r.fulfill(json({ invites: [{ group_id: "g9", name: "Church choir", photo: null, invited_by: "p2", by: "Bola Ade", at: now }] })));
+      await page.route("**/v1/me/people/requests", (r) => r.fulfill(json({ requests: [] })));
+      await page.route(/\/v1\/me\/people(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
+      await page.route(/\/v1\/me\/groups(\?|$)/, (r) => r.fulfill(json({ groups: [group()], unread: 1, invites: 1, more: false })));
+      await page.route("**/v1/me/contacts", (r) => r.fulfill(json({ contacts: [{ ...card("p2", "Bola Ade"), source: "number", added_at: now }, { ...card("p3", "Chidi Eze"), source: "link", added_at: now }] })));
+      await page.route(/\/v1\/me\/groups\/g1(\?|$)/, (r) => r.fulfill(json(group())));
+      await page.route(/\/v1\/me\/groups\/g2(\?|$)/, (r) => r.fulfill(json(closed)));
+      await page.route(/\/v1\/me\/groups\/g[12]\/read$/, (r) => r.fulfill({ status: 204 }));
+      const members = {
+        members: [
+          { person_id: "me", name: "Ada Obi", role: "admin", joined_at: now, you: true },
+          { person_id: "p2", name: "Bola Ade", role: "member", joined_at: now, you: false, person: card("p2", "Bola Ade") },
+          { person_id: "p3", name: "Chidi Eze", role: "admin", joined_at: now, you: false, person: card("p3", "Chidi Eze") },
+        ],
+        invited: [{ person_id: "p4", name: "Dayo Ola", at: now }],
+        waiting: [{ person_id: "p5", name: "Efe Ige", at: now }],
+      };
+      await page.route(/\/v1\/me\/groups\/g[12]\/members$/, (r) => r.fulfill(json(members)));
+      await page.route(/\/v1\/me\/groups\/g[12]\/link$/, (r) => r.fulfill(json({ on: true, code: "ab23cd45ef", url: "http://localhost/g/ab23cd45ef", created_at: now, words: "Join my group", qr: "/brand/seal/mark-512.png" })));
+      await page.route(/\/v1\/me\/groups\/g[12]\/joins$/, (r) => r.fulfill(json({ requests: [{ person_id: "p5", name: "Efe Ige", at: now }] })));
+      const event = (id: string, type: string, body: string, taskiem = false) => ({ id, group_id: "g1", mine: false, sender_id: taskiem ? null : "p2", sender: taskiem ? "Taskiem" : "Bola Ade", kind: "event", body, event: { type, actor_id: "p2" }, created_at: now });
+      await page.route(/\/v1\/me\/groups\/g1\/messages(\?|$)/, (r) =>
+        r.fulfill(
+          json({
+            messages: [
+              event("e1", "created", "Ada Obi made the group"),
+              { id: "m1", group_id: "g1", mine: false, sender_id: "p2", sender: "Bola Ade", kind: "text", body: "Who is coming on Saturday?", created_at: now, reactions: [{ reaction: "👍", count: 2 }], my_reaction: "👍" },
+              { id: "m2", group_id: "g1", mine: true, sender_id: "me", sender: "You", kind: "text", body: "@Chidi Eze bring the ball", mentions: ["p3"], reply_to: "m1", status: "read", created_at: now },
+              { id: "m3", group_id: "g1", mine: false, sender_id: "p3", sender: "Chidi Eze", kind: "text", body: "@Ada see you", mentions: ["me"], mentions_me: true, created_at: now },
+              { id: "m4", group_id: "g1", mine: false, sender_id: null, sender: "Deleted account", kind: "text", body: "Pay into my account 0123456789", warn_transfer: true, warn: true, created_at: now },
+              { id: "m5", group_id: "g1", mine: true, sender_id: "me", sender: "You", kind: "card", body: "", card: { type: "split", title: "Your share", amount_kobo: 300_000, what: "the ball", pay_to: { bank: "GTBank", account_number: "0123456789", account_name: "Ada Obi" }, paid: true, paid_by_me: false }, status: "delivered", created_at: now },
+              event("e2", "taskiem_link_off", "Taskiem's moderators turned this group's invite link off.", true),
+            ],
+            more: false,
+          }),
+        ),
+      );
+      await page.route(/\/v1\/me\/groups\/g2\/messages(\?|$)/, (r) =>
+        r.fulfill(json({ messages: [{ ...event("e3", "taskiem_closed", closedWords, true), group_id: "g2" }], more: false })),
+      );
+      await page.route(/\/v1\/me\/groups\/g1\/messages\/m2\/info$/, (r) =>
+        r.fulfill(json({ read_by: [{ person_id: "p3", name: "Chidi Eze", at: now }], delivered_to: [{ person_id: "p2", name: "Bola Ade", at: now }], waiting: 0 })),
+      );
+      await page.route(/\/v1\/me\/groups\/search\?/, (r) =>
+        r.fulfill(json({ results: [{ group_id: "g1", group: group(), message: { id: "m1", group_id: "g1", mine: false, sender_id: "p2", sender: "Bola Ade", kind: "text", body: "Who is coming on Saturday?", created_at: now }, snippet: "Who is coming on Saturday?" }], more: false })),
+      );
+      await page.route(/\/v1\/me\/groups$/, (r) =>
+        r.request().method() === "POST" ? r.fulfill(json({ group: group({ id: "g3", name: "Book club" }), added: [{ person_id: "p2", state: "added" }, { person_id: "p3", state: "invited" }] }, 201)) : r.fallback(),
+      );
+      await page.route("**/v1/group-links/ab23cd45ef", (r) => r.fulfill(json({ code: "ab23cd45ef", link: "http://localhost/g/ab23cd45ef", name: "Yaba friends", photo: null, members: 3, full: false })));
+
+      await page.goto("/you");
+      await expect(page.getByTestId("group-chat")).toBeVisible();
+      await expect(page.getByTestId("people-requests-entry")).toContainText("Invites to groups");
+      await check("/you with a group");
+      await page.getByTestId("group-new-open").click();
+      await page.getByTestId("group-new-name").fill("Book club");
+      await page.getByTestId("group-pick-person").first().check();
+      await page.getByTestId("group-pick-person").nth(1).check();
+      await check("New group");
+      await page.getByTestId("group-new-make").click();
+      await expect(page.getByTestId("group-added-row")).toHaveCount(2);
+      await expect(page.getByTestId("group-added")).toContainText("Invited: they'll see it in their Requests");
+      await check("New group made");
+
+      await page.goto("/you/people/requests");
+      await expect(page.getByTestId("group-invite")).toBeVisible();
+      await check("/you/people/requests with a group invite");
+
+      await page.goto("/you/groups/g1");
+      await expect(page.getByTestId("group-event").first()).toBeVisible();
+      await expect(page.getByTestId("group-mentions-me")).toBeVisible();
+      await expect(page.getByTestId("group-mention").first()).toBeVisible();
+      await expect(page.getByTestId("group-reactions")).toBeVisible();
+      await expect(page.getByTestId("group-transfer-warning")).toBeVisible();
+      await expect(page.getByTestId("group-sender").first()).toBeVisible();
+      await check("/you/groups/{id}");
+      const mine = page.getByTestId("group-message").filter({ hasText: "bring the ball" });
+      await mine.hover();
+      await mine.locator(".bubble-chevron").click({ force: true });
+      await page.getByTestId("chat-more").getByRole("button", { name: "Message info", exact: true }).click();
+      await expect(page.getByTestId("group-read-by-list")).toContainText("Chidi Eze");
+      await check("Read by");
+
+      await page.goto("/you/groups/g1/info");
+      await expect(page.getByTestId("group-member")).toHaveCount(3);
+      await expect(page.getByTestId("group-invited")).toBeVisible();
+      await expect(page.getByTestId("group-waiting")).toBeVisible();
+      await expect(page.getByTestId("group-qr")).toBeVisible();
+      await check("/you/groups/{id}/info");
+      await page.getByTestId("group-add-open").click();
+      await expect(page.getByTestId("group-add-sheet")).toBeVisible();
+      await check("add people");
+      await page.getByTestId("group-add-sheet").getByRole("button", { name: /Close/ }).first().click();
+      await page.getByTestId("group-member-report").first().click();
+      await expect(page.getByTestId("group-report-sheet")).toBeVisible();
+      await check("report a member");
+
+      await page.goto("/you/groups/g2");
+      await expect(page.getByTestId("group-closed")).toBeVisible();
+      await check("a closed group");
+      await page.goto("/you/groups/g2/info");
+      await expect(page.getByTestId("group-appeal-text")).toBeVisible();
+      await check("a closed group's info with the appeal");
+
+      await page.goto("/you/people/search?q=saturday&group=g1&name=Yaba%20friends");
+      await expect(page.getByTestId("group-found")).toBeVisible();
+      await check("search in a group");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// A group's link signed out (people-chatting §9, A4): its name, photo and count, Join on Taskiem.
+for (const scheme of ["light", "dark"] as const)
+  test(`a group's link passes axe, ${scheme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    await page.route("**/v1/group-links/ab23cd45ef", (r) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "ab23cd45ef", link: "http://localhost/g/ab23cd45ef", name: "Yaba friends", photo: null, members: 12, full: false }) }),
+    );
+    await page.goto("/g/ab23cd45ef");
+    await expect(page.getByTestId("group-link-signin")).toBeVisible();
+    await expect(page.getByTestId("group-link-count")).toContainText("12 members");
+    const vs = await axe(page);
+    expect(vs, describe("/g/{code}", vs)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  });
 
 // A person's link signed out (people-chatting §5.2): the name, Chat on Taskiem.
 for (const scheme of ["light", "dark"] as const)
