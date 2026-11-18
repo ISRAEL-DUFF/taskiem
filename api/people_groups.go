@@ -490,7 +490,7 @@ func (s *Server) groupViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 // groupListCols reads, beside groupRowCols, the person's last visible
 // message, the members now, unread and mentioned, for the person ($1).
 var groupListCols = groupRowCols + `,
-	(SELECT count(*)::int FROM group_members x WHERE x.group_id = g.id AND x.left_at IS NULL) AS members,
+	taskiem_group_count(g.id) AS members, -- one membership check, not one per member's row (00490)
 	(SELECT count(*)::int FROM group_messages u WHERE u.group_id = g.id AND u.created_at > m.read_upto AND u.sender_id IS DISTINCT FROM $1
 	   AND u.kind <> 'event' AND u.deleted_at IS NULL AND m.visible @> u.created_at
 	   AND NOT EXISTS (SELECT 1 FROM group_marks k WHERE k.group_id = u.group_id AND k.message_id = u.id AND k.person_id = $1 AND k.hidden_at IS NOT NULL)) AS unread,
