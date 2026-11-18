@@ -364,6 +364,10 @@ type Server struct {
 	previewAnyPort bool
 	bg             sync.WaitGroup
 	bgActive       atomic.Int64 // work running after its request was answered (reset emails)
+	// groupPushing: group messages' pushes being queued after their send
+	// committed (people_group_messages.go); groupTickRuns: the live
+	// connection's recomputing of a group's ticks (people_group_live.go).
+	groupPushing, groupTickRuns atomic.Int64
 }
 
 // Handler builds the router.

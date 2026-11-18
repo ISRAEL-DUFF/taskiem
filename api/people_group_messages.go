@@ -290,20 +290,48 @@ func (s *Server) groupTicksTx(ctx context.Context, tx pgx.Tx, person, group uuid
 // groupStatusesTx is the ticks of the person's own messages (A6): read
 // when every member now in the group (who was when it was sent) with read
 // ticks on both ways has read it; else delivered when every one of them
-// has it; else sent.
+// has it; else sent. Someone who left sees them as they stood when they
+// left (A5): by the marks kept with their time, made by then, of those in
+// the group then.
 func (s *Server) groupStatusesTx(ctx context.Context, tx pgx.Tx, person, group uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error) {
-	out := map[uuid.UUID]string{}
 	if len(ids) == 0 {
-		return out, nil
+		return map[uuid.UUID]string{}, nil
 	}
 	ticks, err := s.groupTicksTx(ctx, tx, person, group)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT x.id, count(m.person_id), count(m.person_id) FILTER (WHERE m.delivered_upto >= x.created_at),
+	return groupStatusesWithTx(ctx, tx, person, group, ids, ticks)
+}
+
+// groupStatusesWithTx is groupStatusesTx with the members whose read
+// ticks go between them and the person known (groupTicksTx).
+func groupStatusesWithTx(ctx context.Context, tx pgx.Tx, person, group uuid.UUID, ids, ticks []uuid.UUID) (map[uuid.UUID]string, error) {
+	out := map[uuid.UUID]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var left *time.Time
+	if err := tx.QueryRow(ctx, `SELECT left_at FROM group_members WHERE group_id = $1 AND person_id = $2`, group, person).Scan(&left); err != nil {
+		return nil, err
+	}
+	q := `SELECT x.id, count(m.person_id), count(m.person_id) FILTER (WHERE m.delivered_upto >= x.created_at),
 		count(m.person_id) FILTER (WHERE m.person_id = ANY ($3)), count(m.person_id) FILTER (WHERE m.person_id = ANY ($3) AND m.read_upto >= x.created_at)
 		FROM group_messages x LEFT JOIN group_members m ON m.group_id = x.group_id AND m.person_id <> x.sender_id AND m.left_at IS NULL AND m.visible @> x.created_at
-		WHERE x.group_id = $1 AND x.id = ANY ($2) GROUP BY x.id`, group, ids, ticks)
+		WHERE x.group_id = $1 AND x.id = ANY ($2) GROUP BY x.id`
+	args := []any{group, ids, ticks}
+	if left != nil {
+		q = `SELECT x.id, count(m.person_id), count(m.person_id) FILTER (WHERE EXISTS (SELECT 1 FROM group_reads r
+			  WHERE r.group_id = x.group_id AND r.person_id = m.person_id AND r.upto >= x.created_at AND r.at <= $4)),
+			count(m.person_id) FILTER (WHERE m.person_id = ANY ($3)),
+			count(m.person_id) FILTER (WHERE m.person_id = ANY ($3) AND EXISTS (SELECT 1 FROM group_reads r
+			  WHERE r.group_id = x.group_id AND r.person_id = m.person_id AND r.kind = 'read' AND r.upto >= x.created_at AND r.at <= $4))
+			FROM group_messages x LEFT JOIN group_members m ON m.group_id = x.group_id AND m.person_id <> x.sender_id AND m.visible @> x.created_at
+			  AND m.joined_at <= $4 AND (m.left_at IS NULL OR m.left_at > $4)
+			WHERE x.group_id = $1 AND x.id = ANY ($2) GROUP BY x.id`
+		args = append(args, *left)
+	}
+	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -361,10 +389,8 @@ func (s *Server) groupOneMessageTx(ctx context.Context, tx pgx.Tx, person, group
 
 // groupPush is the pushes owed for a group message.
 type groupPush struct {
-	group           uuid.UUID
-	to              []uuid.UUID
-	mentioned       map[uuid.UUID]bool
-	title, from, wd string
+	group, message uuid.UUID
+	title, wd      string
 }
 
 // groupSend keeps the person's message in the group, sealed under its key,
@@ -497,51 +523,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 		if _, err := tx.Exec(ctx, `DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`, g.ID, me); err != nil {
 			return err
 		}
-		// Who is told (§13): members not muting the group, and, while
-		// muted, those mentioned with mention pushes on (A7); never someone
-		// who blocked the sender, nor someone the sender blocked.
-		rows, err := tx.Query(ctx, `SELECT person_id, muted, mentions FROM group_members WHERE group_id = $1 AND left_at IS NULL AND person_id <> $2`, g.ID, me)
-		if err != nil {
-			return err
-		}
-		type rcpt struct {
-			id              uuid.UUID
-			muted, mentions bool
-		}
-		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rcpt, error) {
-			var x rcpt
-			return x, r.Scan(&x.id, &x.muted, &x.mentions)
-		})
-		if err != nil {
-			return err
-		}
-		var others []uuid.UUID
-		for _, x := range list {
-			others = append(others, x.id)
-		}
-		blocked := map[uuid.UUID]bool{}
-		if p := s.people(); p.BlockedSet != nil && len(others) > 0 {
-			if blocked, err = p.BlockedSet(ctx, tx, me, others); err != nil {
-				return err
-			}
-		}
-		p := &groupPush{group: g.ID, mentioned: map[uuid.UUID]bool{}}
-		for _, x := range list {
-			tag := slices.Contains(tagged, x.id)
-			if blocked[x.id] || (x.muted && !(tag && x.mentions)) {
-				continue
-			}
-			p.to = append(p.to, x.id)
-			p.mentioned[x.id] = tag
-		}
-		if len(p.to) > 0 {
-			if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, me).Scan(&p.from); err != nil {
-				return err
-			}
-			p.title = openGroupInfo(key, g.ID, g.sealed).Name
-			p.wd = previewOf(d.kind, attachKind(attach), content)
-			owed = p
-		}
+		// Who is told (§13) is decided after the commit, in one statement
+		// (taskiem_group_push); the words are made here, with the key.
+		owed = &groupPush{group: g.ID, message: id, title: openGroupInfo(key, g.ID, g.sealed).Name, wd: previewOf(d.kind, attachKind(attach), content)}
 		out, err = s.groupOneMessageTx(ctx, tx, me, g.ID, id)
 		return err
 	})
@@ -570,45 +554,76 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 		return out, false, err
 	}
 	if owed != nil {
-		s.pushGroup(ctx, *owed)
+		s.queueGroupPush(ctx, me, *owed)
 	}
 	return out, true, nil
 }
 
-// pushGroup tells the members of a message on their own devices (kind
-// group), as their pushes on You (groups) and each device's preview
-// setting say.
-func (s *Server) pushGroup(ctx context.Context, p groupPush) {
+// groupPushesAtOnce bounds the group pushes being queued after their
+// sends at once; past it one is queued on its request's own goroutine
+// (never dropped).
+const groupPushesAtOnce = 256
+
+// queueGroupPush queues a group message's pushes once its send committed,
+// off the request's way: one transaction, one statement, for up to 255
+// members.
+func (s *Server) queueGroupPush(ctx context.Context, sender uuid.UUID, p groupPush) {
 	if !s.Push.Enabled() {
 		return
 	}
-	for _, to := range p.to {
-		err := db.InPersonTx(ctx, s.Store.Pool, to, func(tx pgx.Tx) error {
-			n, err := notifyTx(ctx, tx, to)
-			if err != nil || !n.Groups {
-				return err
-			}
-			live, err := push.LiveYouTx(ctx, tx, to, s.Push.WebPushOn(), s.Push.FCMOn())
-			if err != nil || !live {
-				return err
-			}
-			body := p.from + ": " + p.wd
-			if p.mentioned[to] {
-				body = p.from + " mentioned you: " + p.wd
-			}
-			if len([]rune(body)) > 120 {
-				body = string([]rune(body)[:120]) + "…"
-			}
-			title := p.title
-			if title == "" {
-				title = "Group"
-			}
-			return push.EnqueueTx(ctx, tx, uuid.Nil, []uuid.UUID{to}, push.Queued{Kind: push.KindGroup, Title: title, Body: body,
-				Link: "/you/groups/" + p.group.String(), Tag: "group:" + p.group.String()})
-		})
-		if err != nil {
-			s.Logger.Warn("groups: push", "err", err)
+	if s.groupPushing.Add(1) > groupPushesAtOnce {
+		defer s.groupPushing.Add(-1)
+		s.pushGroup(ctx, sender, p)
+		return
+	}
+	s.bg.Add(1)
+	go func() {
+		defer s.bg.Done()
+		defer s.groupPushing.Add(-1)
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+		defer cancel()
+		s.pushGroup(ctx, sender, p)
+	}()
+}
+
+// pushGroup tells the members of a message on their own devices (kind
+// group), as their pushes on You (groups) and each device's preview
+// setting say: taskiem_group_push picks who (members now who see it, not
+// muting it or mentioned in it with mention pushes on, neither blocking
+// the sender, with a device that takes it) and queues them for the push
+// sender, in the sender's own transaction.
+func (s *Server) pushGroup(ctx context.Context, sender uuid.UUID, p groupPush) {
+	var kinds []string
+	if s.Push.WebPushOn() {
+		kinds = append(kinds, push.Browser)
+	}
+	if s.Push.FCMOn() {
+		kinds = append(kinds, push.App)
+	}
+	if len(kinds) == 0 {
+		return
+	}
+	cut := func(v string) string {
+		if len([]rune(v)) > 120 {
+			return string([]rune(v)[:120]) + "…"
 		}
+		return v
+	}
+	title := p.title
+	if title == "" {
+		title = "Group"
+	}
+	err := db.InPersonTx(ctx, s.Store.Pool, sender, func(tx pgx.Tx) error {
+		var from string
+		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, sender).Scan(&from); err != nil {
+			return err
+		}
+		var n int
+		return tx.QueryRow(ctx, `SELECT taskiem_group_push($1, $2, $3, $4, $5, $6)`, p.group, p.message, kinds, title,
+			cut(from+": "+p.wd), cut(from+" mentioned you: "+p.wd)).Scan(&n)
+	})
+	if err != nil {
+		s.Logger.Warn("groups: push", "err", err)
 	}
 }
 
@@ -1045,11 +1060,25 @@ func (s *Server) groupMessageInfo(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT x.person_id, x.read_upto >= $3, x.delivered_upto >= $3,
+		q := `SELECT x.person_id, x.read_upto >= $3, x.delivered_upto >= $3,
 			(SELECT min(r.at) FROM group_reads r WHERE r.group_id = x.group_id AND r.person_id = x.person_id AND r.kind = 'read' AND r.upto >= $3),
 			(SELECT min(r.at) FROM group_reads r WHERE r.group_id = x.group_id AND r.person_id = x.person_id AND r.kind = 'delivered' AND r.upto >= $3)
 			FROM group_members x WHERE x.group_id = $1 AND x.person_id <> $2 AND x.visible @> $3::timestamptz
-			  AND (x.left_at IS NULL OR x.delivered_upto >= $3) ORDER BY x.person_id`, g.ID, person, m.createdAt)
+			  AND (x.left_at IS NULL OR x.delivered_upto >= $3) ORDER BY x.person_id`
+		args := []any{g.ID, person, m.createdAt}
+		if g.LeftAt != nil {
+			// Someone who left sees it as it stood when they left (A5):
+			// only the marks kept with their time, made by then; who was
+			// in the group then.
+			q = `SELECT x.person_id, r.read IS NOT NULL, r.had IS NOT NULL, r.read, r.had
+				FROM group_members x
+				CROSS JOIN LATERAL (SELECT min(r.at) FILTER (WHERE r.kind = 'read') AS read, min(r.at) AS had FROM group_reads r
+				  WHERE r.group_id = x.group_id AND r.person_id = x.person_id AND r.upto >= $3 AND r.at <= $4) r
+				WHERE x.group_id = $1 AND x.person_id <> $2 AND x.visible @> $3::timestamptz
+				  AND (r.had IS NOT NULL OR (x.joined_at <= $4 AND (x.left_at IS NULL OR x.left_at > $4))) ORDER BY x.person_id`
+			args = append(args, *g.LeftAt)
+		}
+		rows, err := tx.Query(ctx, q, args...)
 		if err != nil {
 			return err
 		}

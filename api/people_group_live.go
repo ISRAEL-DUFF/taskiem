@@ -45,11 +45,39 @@ type groupLive struct {
 	seen                                   map[string]map[liveSeen]struct{}
 	typing                                 []byte
 	status                                 map[uuid.UUID]string
+	// ticks: per group, the members whose read ticks go between them and
+	// the person (groupTicksTx), kept for groupTicksKept, so a group's
+	// marks moving does not read 256 people's cards each second.
+	ticks map[uuid.UUID]groupTicksAt
+}
+
+// groupTicksAt is a group's ticks as read at a time.
+type groupTicksAt struct {
+	at  time.Time
+	ids []uuid.UUID
+}
+
+// groupTicksKept is how long a connection keeps a group's ticks: a member
+// turning their read ticks on or off shows within it.
+const groupTicksKept = 30 * time.Second
+
+// ticksOf is the group's ticks for this connection (groupTicksTx), read
+// again once older than groupTicksKept.
+func (gl *groupLive) ticksOf(ctx context.Context, s *Server, tx pgx.Tx, person, group uuid.UUID) ([]uuid.UUID, error) {
+	if t, ok := gl.ticks[group]; ok && time.Since(t.at) < groupTicksKept {
+		return t.ids, nil
+	}
+	ids, err := s.groupTicksTx(ctx, tx, person, group)
+	if err != nil {
+		return nil, err
+	}
+	gl.ticks[group] = groupTicksAt{time.Now(), ids}
+	return ids, nil
 }
 
 func newGroupLive(since time.Time) *groupLive {
 	return &groupLive{msgs: liveWindow{since}, groups: liveWindow{since}, receipts: liveWindow{since}, invites: liveWindow{since},
-		marks: liveWindow{since}, seen: map[string]map[liveSeen]struct{}{}, status: map[uuid.UUID]string{}}
+		marks: liveWindow{since}, seen: map[string]map[liveSeen]struct{}{}, status: map[uuid.UUID]string{}, ticks: map[uuid.UUID]groupTicksAt{}}
 }
 
 // fresh says whether this change was not yet sent, and remembers it.
@@ -123,8 +151,12 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 		// Messages, new or changed, and the person's own marks.
 		mrows, err := tx.Query(ctx, `SELECT `+"x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at"+`,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id, x.changed_at
-			FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
-			WHERE x.group_id = ANY ($2) AND x.changed_at > $3 AND k.hidden_at IS NULL ORDER BY x.changed_at, x.id LIMIT `+strconv.Itoa(liveBatch), person, groups, gl.msgs.since)
+			FROM group_messages x JOIN group_members me ON me.group_id = x.group_id AND me.person_id = $1
+			LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
+			WHERE x.group_id = ANY ($2) AND x.changed_at > $3 AND k.hidden_at IS NULL
+			  -- Someone who left: nothing changed after (a reaction, a deletion, a share marked paid; A5).
+			  AND (me.left_at IS NULL OR x.changed_at <= me.left_at)
+			ORDER BY x.changed_at, x.id LIMIT `+strconv.Itoa(liveBatch), person, groups, gl.msgs.since)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -266,9 +298,11 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 
 	if len(current) > 0 {
 		// The ticks of the person's own recent messages, when another
-		// member's marks moved (A6).
-		rrows, err := tx.Query(ctx, `SELECT group_id, max(changed_at) FROM group_members WHERE group_id = ANY ($1) AND person_id <> $2 AND changed_at > $3
-			GROUP BY group_id ORDER BY max(changed_at) LIMIT `+strconv.Itoa(liveBatch), current, person, gl.receipts.since)
+		// member's read or delivered marks, or time in the group, moved
+		// (A6): marks_at, not changed_at, so another member's mute,
+		// archive or mentions wakes no one.
+		rrows, err := tx.Query(ctx, `SELECT group_id, max(marks_at) FROM group_members WHERE group_id = ANY ($1) AND person_id <> $2 AND marks_at > $3
+			GROUP BY group_id ORDER BY max(marks_at) LIMIT `+strconv.Itoa(liveBatch), current, person, gl.receipts.since)
 		if err != nil {
 			return nil, nil, false, err
 		}
@@ -294,11 +328,26 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 			if err != nil {
 				return nil, nil, false, err
 			}
-			ids, err := pgx.CollectRows(mrows, pgx.RowTo[uuid.UUID])
+			latest, err := pgx.CollectRows(mrows, pgx.RowTo[uuid.UUID])
 			if err != nil {
 				return nil, nil, false, err
 			}
-			st, err := s.groupStatusesTx(ctx, tx, person, c.id, ids)
+			// Only those whose ticks may still move: one shown read stays so.
+			var ids []uuid.UUID
+			for _, id := range latest {
+				if gl.status[id] != "read" {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) == 0 {
+				continue
+			}
+			ticks, err := gl.ticksOf(ctx, s, tx, person, c.id)
+			if err != nil {
+				return nil, nil, false, err
+			}
+			s.groupTickRuns.Add(1)
+			st, err := groupStatusesWithTx(ctx, tx, person, c.id, ids, ticks)
 			if err != nil {
 				return nil, nil, false, err
 			}
