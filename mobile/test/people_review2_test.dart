@@ -449,4 +449,98 @@ void main() {
       await drain(t);
     });
   });
+
+  group('9. typing', () {
+    Api typingChat() {
+      final api = adaChat();
+      api.routes['POST /v1/me/people/pc1/typing'] = (_) => answer({}, 204);
+      return api;
+    }
+
+    List<Object?> said(Api api) => [for (final r in api.sent('POST', '/v1/me/people/pc1/typing')) api.body(r)['typing']];
+    Finder box() => find.bySemanticsLabel('Message Ada Obi');
+
+    testWidgets('closed with words in the box: stopped', (t) async {
+      phone(t);
+      final api = typingChat();
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at))));
+      await settle(t);
+      await typeIn(t, box(), 'On my');
+      await settle(t);
+      expect(said(api), [true]);
+      await t.pumpWidget(const SizedBox());
+      await settle(t);
+      expect(said(api), [true, false]);
+    });
+
+    testWidgets('put away with words in the box: stopped; back and typing, said again', (t) async {
+      phone(t);
+      final api = typingChat();
+      var clock = DateTime.utc(2026, 11, 17, 12);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at, clock: () => clock))));
+      await settle(t);
+      await typeIn(t, box(), 'On my');
+      await settle(t);
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+      }
+      await settle(t);
+      expect(said(api), [true, false]);
+      for (final s in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        t.binding.handleAppLifecycleStateChanged(s);
+      }
+      clock = clock.add(const Duration(seconds: 1));
+      await typeIn(t, box(), 'On my way');
+      await settle(t);
+      expect(said(api), [true, false, true]);
+      await drain(t);
+    });
+
+    testWidgets('the beat is about 2.5 seconds', (t) async {
+      expect(typingBeat, const Duration(milliseconds: 2500));
+      phone(t);
+      final api = typingChat();
+      var clock = DateTime.utc(2026, 11, 17, 12);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at, clock: () => clock))));
+      await settle(t);
+      await typeIn(t, box(), 'O');
+      clock = clock.add(const Duration(milliseconds: 2400));
+      await typeIn(t, box(), 'On');
+      clock = clock.add(const Duration(milliseconds: 200));
+      await typeIn(t, box(), 'On ');
+      await settle(t);
+      expect(said(api), [true, true]);
+      await drain(t);
+    });
+
+    testWidgets('words given back after a failed send are not typing; a suspended sender says no typing', (t) async {
+      phone(t);
+      final api = typingChat();
+      var standing = false;
+      api.routes['POST /v1/me/people/pc1/messages'] = (_) => standing
+          ? answer({'error': 'Taskiem’s moderators have stopped your account from messaging people for now. See Your standing in Settings to find out why and to appeal.'}, 403)
+          : answer({'error': 'This message was not sent.'}, 400);
+      var clock = DateTime.utc(2026, 11, 17, 12);
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at, clock: () => clock);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d)));
+      await settle(t);
+      await typeIn(t, box(), 'Hi');
+      await settle(t);
+      await press(t, find.bySemanticsLabel('Send'));
+      expect(find.text('Hi'), findsWidgets, reason: 'the words back in the box');
+      expect(d.toStanding, isFalse);
+      expect(said(api), [true, false], reason: 'the words given back said nothing');
+
+      standing = true;
+      clock = clock.add(const Duration(seconds: 10));
+      await press(t, find.bySemanticsLabel('Send'));
+      expect(d.toStanding, isTrue);
+      expect(said(api), [true, false]);
+      clock = clock.add(const Duration(seconds: 10));
+      await typeIn(t, box(), 'Hi there');
+      await settle(t);
+      expect(said(api), [true, false], reason: 'stopped from messaging: no typing');
+      await drain(t);
+    });
+  });
 }

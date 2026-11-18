@@ -56,9 +56,11 @@ import 'pick_problem.dart';
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
 
-/// How often "typing" is said while the box changes (the server passes it
-/// on at most every 3 seconds).
-const typingBeat = Duration(seconds: 3);
+/// How often "typing" is said while the box changes: a little under the
+/// 3 seconds the server passes it on at most every, so each of its turns
+/// has a fresh one and the other side's "typing…" (kept 6 seconds) does
+/// not lapse while the person types.
+const typingBeat = Duration(milliseconds: 2500);
 
 /// Said over Delete for everyone (§7): what it can't undo.
 const deleteForEveryoneNote = 'Delete for everyone takes it from their chat too. Copies, forwards or screenshots they made before stay.';
@@ -292,12 +294,14 @@ class PeopleChatData extends ChangeNotifier {
     }
   }
 
-  /// You are typing: said at most every 3 seconds while the box changes
+  /// You are typing: said every [typingBeat] at most while the box changes
   /// (the server passes it on no more often), and that you stopped when it
-  /// empties. Never in a request, a blocked or a deleted chat.
+  /// empties. Never in a request, a blocked or a deleted chat, nor while
+  /// your own account is stopped from messaging people ([toStanding]).
   void typing(String text) {
     final c = chat;
     if (c == null || c.request || c.waiting || c.blocked || c.gone || c.suspended == true) return;
+    if (toStanding) return stopTyping();
     final now = _clock();
     if (text.trim().isEmpty) {
       if (_typingAt != null) {
@@ -312,6 +316,14 @@ class PeopleChatData extends ChangeNotifier {
   }
 
   DateTime? _typingAt;
+
+  /// Says you stopped typing, if you were said to be (the chat closed or
+  /// the app put away with words in the box).
+  void stopTyping() {
+    if (_typingAt == null || _disposed) return;
+    _typingAt = null;
+    unawaited(api.typingPeople(id: id, body: const TypingPeopleRequest(typing: false)).catchError((Object _) {}));
+  }
 
   /// Live messages heard before the first page was read: merged with it
   /// when they fit.
@@ -742,10 +754,21 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     if (d.follow) startPolling(_poll, d.poll);
     widget.notify?.show(d.tag, this);
     _back = d.givenBack.listen((w) {
-      if (_text.text.isEmpty) _text.text = w;
+      if (_text.text.isNotEmpty) return;
+      // Words given back after a failed send are not typing.
+      _was = w;
+      _text.text = w;
     });
     _text.addListener(_typed);
+    // Put away with words in the box: they no longer see "typing…".
+    _life = AppLifecycleListener(
+      onStateChange: (s) {
+        if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) d.stopTyping();
+      },
+    );
   }
+
+  AppLifecycleListener? _life;
 
   /// Typing, said to them while the box changes (throttled by the data).
   String _was = '';
@@ -760,6 +783,9 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   void dispose() {
     widget.notify?.unshow(this);
     _back?.cancel();
+    _life?.dispose();
+    // Closed with words in the box: they no longer see "typing…".
+    d.stopTyping();
     _text.dispose();
     d.dispose();
     super.dispose();
