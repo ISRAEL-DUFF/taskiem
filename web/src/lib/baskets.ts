@@ -23,7 +23,16 @@ export interface BasketShare {
   amount_kobo: number;
   paid: boolean;
   paid_at?: string;
+  /** Paid after the order could take it: the business sends it back. */
+  refund_due: boolean;
   card_sent: boolean;
+}
+
+/** Someone in the basket's group or chat now. */
+export interface BasketMember {
+  person_id: string;
+  name: string;
+  you: boolean;
 }
 
 export interface BasketPerson {
@@ -64,6 +73,10 @@ export interface Basket {
   id: string;
   business_id: string;
   business: string;
+  /** The person reading it: compare with placed_by and holder_id. */
+  you_id: string;
+  /** Who is in the group or the chat now (with items or not). */
+  members: BasketMember[];
   where: "group" | "person";
   group_id?: string;
   chat_id?: string;
@@ -121,17 +134,21 @@ export function basketCan(b: Basket) {
   const changeable = b.state === "open" || b.state === "closed";
   const placed = b.state === "placed";
   const me = b.people.find((p) => p.you);
-  const placer = placed && b.people.some((p) => p.you && p.person_id === b.placed_by);
+  // The placer by their own id, whether or not they have items.
+  const placer = placed && !!b.placed_by && b.placed_by === b.you_id;
+  const due = (s?: BasketShare) => !!s && !s.paid && !s.refund_due && s.amount_kobo >= 100;
   return {
     addMine: b.state === "open" && !!b.shop?.open,
     holder: changeable && b.you_hold,
     close: b.state === "open" && b.you_hold && b.people.length > 0,
     reopen: b.state === "closed" && b.you_hold,
     place: b.state === "closed" && b.you_hold,
-    takeOver: changeable && b.holder_gone,
-    payMine: placed && b.payment === "each" && !!me?.share && !me.share.paid && me.share.amount_kobo >= 100 && !!b.order?.payable_now,
+    takeOver: (changeable || b.state === "placing") && b.holder_gone,
+    /** Whom the holder may hand it to: anyone in the group or chat now. */
+    handTo: (b.members ?? []).filter((m) => !m.you),
+    payMine: placed && b.payment === "each" && due(me?.share) && !!b.order?.payable_now,
     payOrder: placer && b.payment === "all" && !!b.order?.payable_now,
-    payFor: placed && b.payment === "each" && placer && !!b.order?.payable_now ? b.people.filter((p) => !p.you && p.share && !p.share.paid && p.share.amount_kobo >= 100) : [],
+    payFor: placed && b.payment === "each" && placer && !!b.order?.payable_now ? b.people.filter((p) => !p.you && due(p.share)) : [],
     shareCards: placer && b.payment === "all" && b.people.some((p) => !p.you && p.share && !p.share.card_sent && p.share.amount_kobo >= 100),
   };
 }

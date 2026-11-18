@@ -111,12 +111,15 @@ function BasketView({
 }) {
   const can = basketCan(b);
   const st = basketStateWords(b);
-  const others = b.people.filter((p) => !p.you);
+  const others = can.handTo;
   const [handTo, setHandTo] = useState("");
-  const pay = (forID?: string) =>
+  // The pay page is a link the person opens (a window opened after the
+  // answer would be blocked as a pop-up), as Orders on You does.
+  const [payURL, setPayURL] = useState<{ url: string; label: string }>();
+  const pay = (forID?: string, label = "Open the pay page") =>
     void run(async () => {
       const out = await get<{ url: string }>(`${base(b.id)}/pay${forID ? `?for=${encodeURIComponent(forID)}` : ""}`);
-      window.open(out.url, "_blank", "noopener");
+      setPayURL({ url: out.url, label });
       return get<Basket>(base(b.id));
     }, false);
   return (
@@ -189,6 +192,13 @@ function BasketView({
                           <Pill tone="lime">Paid</Pill>
                         </>
                       )}
+                      {p.share.refund_due && (
+                        <>
+                          {" "}
+                          <Pill tone="warn">Refund due</Pill>
+                          <span className="sub"> Paid after the order closed: {b.business} sends it back.</span>
+                        </>
+                      )}
                       {p.share.card_sent && " · share card sent"}
                     </span>
                   )}
@@ -225,12 +235,17 @@ function BasketView({
           </button>
         )}
         {can.takeOver && (
-          <button type="button" disabled={busy} onClick={() => void run(() => put(`${base(b.id)}/holder`, { person_id: b.people.find((p) => p.you)?.person_id ?? "" }), "You hold the basket")} data-testid="basket-take">
+          <button type="button" disabled={busy} onClick={() => void run(() => put(`${base(b.id)}/holder`, { person_id: b.you_id }), "You hold the basket")} data-testid="basket-take">
             Take it over
           </button>
         )}
+        {payURL && (
+          <a className="button primary" href={payURL.url} target="_blank" rel="noopener noreferrer" data-testid="basket-pay-open">
+            {payURL.label}
+          </a>
+        )}
         {can.payMine && (
-          <button type="button" className="primary" disabled={busy} onClick={() => pay()} data-testid="basket-pay-mine">
+          <button type="button" className="primary" disabled={busy} onClick={() => pay(undefined, "Open the pay page for my share")} data-testid="basket-pay-mine">
             Pay my share
           </button>
         )}
@@ -240,7 +255,7 @@ function BasketView({
           </button>
         )}
         {can.payFor.map((p) => (
-          <button key={p.person_id} type="button" disabled={busy} onClick={() => pay(p.person_id)} data-testid="basket-pay-for">
+          <button key={p.person_id} type="button" disabled={busy} onClick={() => pay(p.person_id, `Open the pay page for ${p.name}'s share`)} data-testid="basket-pay-for">
             Pay {p.name}'s share
           </button>
         ))}
