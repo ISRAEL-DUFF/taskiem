@@ -58,6 +58,9 @@ const _poll = Duration(seconds: 4);
 /// on at most every 3 seconds).
 const typingBeat = Duration(seconds: 3);
 
+/// Said over Delete for everyone (§7): what it can't undo.
+const deleteForEveryoneNote = 'Delete for everyone takes it from their chat too. Copies, forwards or screenshots they made before stay.';
+
 /// How long a message can be deleted for everyone (§7).
 const deleteForEveryoneWithin = Duration(hours: 24);
 
@@ -912,6 +915,9 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     final choice = await showTkModalChoices(
       context,
       title: 'Delete this message?',
+      // §7: delete for everyone removes their copy, not what they did with
+      // it before.
+      note: everyone ? deleteForEveryoneNote : null,
       choices: [('me', 'Delete for me'), if (everyone) ('everyone', 'Delete for everyone')],
     );
     if (choice == null || !mounted) return;

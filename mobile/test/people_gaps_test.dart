@@ -612,6 +612,26 @@ void main() {
       await drain(t);
     });
   });
+
+  testWidgets('delete for everyone says copies, forwards and screenshots made before stay; delete for me alone does not', (t) async {
+    phone(t);
+    final api = adaChat();
+    await openPeople(t, api);
+    await t.longPress(find.text('Bring the cake'));
+    await settle(t);
+    await press(t, find.text('Delete'));
+    expect(find.text(deleteForEveryoneNote), findsOneWidget);
+    expect(deleteForEveryoneNote, contains('screenshots they made before stay'));
+    expect(find.text('Delete for everyone'), findsOneWidget);
+    t.state<NavigatorState>(find.byType(Navigator)).pop();
+    await settle(t);
+    await t.longPress(find.text('Yes, see you at 6').last);
+    await settle(t);
+    await press(t, find.text('Delete'));
+    expect(find.text('Delete for everyone'), findsNothing, reason: 'theirs: for me only');
+    expect(find.text(deleteForEveryoneNote), findsNothing);
+    await drain(t);
+  });
 }
 
 /// A camera that reads [code] (null: put away).
