@@ -497,6 +497,13 @@ export function groupSearchURL(q: string, group?: string, before?: string): stri
 /** GET /v1/me/groups/starred's address. */
 export const groupStarredURL = (before?: string) => (before ? `/v1/me/groups/starred?before=${encodeURIComponent(before)}` : "/v1/me/groups/starred");
 
+/** Whether a group just made opens at once: when nobody's add needs
+ * saying and its photo, if any, was saved. Otherwise the sheet stays to
+ * say so (a failed photo is never silently lost). */
+export function newGroupOpensAtOnce(added: unknown[], photoFailed: boolean): boolean {
+  return added.length === 0 && !photoFailed;
+}
+
 /** Whether "Delete for everyone" is offered for a message of a group:
  * only to a member now (not after leaving), for their own recent one. */
 export function mayDeleteGroupForEveryone(g: Pick<Group, "left">, m: Parameters<typeof mayDeleteForEveryone>[0], now: number = Date.now()): boolean {

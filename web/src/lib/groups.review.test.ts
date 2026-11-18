@@ -1,7 +1,7 @@
 // Review fixes for groups on the web (docs/spec/people-chatting.md, "As
 // built: stage 5b, groups (web)", "Review fixes").
 import { describe, expect, it } from "vitest";
-import { mayDeleteGroupForEveryone, mentionedIn, shownFound, type FoundRow } from "./groups";
+import { mayDeleteGroupForEveryone, mentionedIn, newGroupOpensAtOnce, shownFound, type FoundRow } from "./groups";
 
 describe("@ mentions with names two members share", () => {
   const ms = [
@@ -16,6 +16,14 @@ describe("@ mentions with names two members share", () => {
   });
   it("whole words only", () => {
     expect(mentionedIn("Hi @Adamu", ms, [{ id: "a1", name: "Ada" }])).toEqual([]);
+  });
+});
+
+describe("a new group's photo", () => {
+  it("a failed photo keeps the sheet open to say so, even when nobody was added", () => {
+    expect(newGroupOpensAtOnce([], false)).toBe(true);
+    expect(newGroupOpensAtOnce([], true)).toBe(false);
+    expect(newGroupOpensAtOnce([{ person_id: "a", state: "added" }], false)).toBe(false);
   });
 });
 

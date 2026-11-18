@@ -14,6 +14,7 @@ import {
   joinWords,
   membersInOrder,
   membersWords,
+  newGroupOpensAtOnce,
   type GroupAdded,
   type Group,
   type GroupInvite,
@@ -121,12 +122,16 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     void act.run(async () => {
       const out = await post<{ group: Group; added: GroupAdded[] }>("/v1/me/groups", { name: name.trim(), description: description.trim() || undefined, person_ids: picked });
+      let photoFailed = false;
       if (photo) {
         const form = new FormData();
         form.append("file", photo);
-        await upload(`/v1/me/groups/${encodeURIComponent(out.group.id)}/photo`, form, "PUT").catch(setPhotoProblem);
+        await upload(`/v1/me/groups/${encodeURIComponent(out.group.id)}/photo`, form, "PUT").catch((err: unknown) => {
+          photoFailed = true;
+          setPhotoProblem(err);
+        });
       }
-      if (!out.added.length) {
+      if (newGroupOpensAtOnce(out.added, photoFailed)) {
         onClose();
         nav(groupPath(out.group.id));
         return;
@@ -140,6 +145,7 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
         <div className="pc-check">
           <p role="status">Your group is made.</p>
           <AddedList added={made.added} names={names} />
+          {photoProblem !== undefined && <p>The photo was not saved. You can add it again in the group’s info.</p>}
           <ErrorBox error={photoProblem} />
           <button type="button" className="primary" onClick={() => (onClose(), nav(groupPath(made.group.id)))} data-testid="group-new-open">
             Open the group
