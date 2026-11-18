@@ -52,7 +52,7 @@ Contents:
 | Assigned → on the way → arrived → working → done | The journey, kept by the engine with a time and a place at each step (§7) | Record |
 | "When X happens to a job, do Y" | Each step starts workflows: the `job` trigger, `jobs@1`, signals for runs that wait (§8) | Platform |
 | Give jobs to people | By hand, in bulk, by suggestion, or by a workflow (§9) | Platform |
-| Know where people are | On duty only: start and end the day in the app; location while on duty; a live map (§10) | Platform |
+| Know where people are | On duty only: start and end the day in the app; location while on duty, on by default, which the business may turn off; a live map (§10) | Platform |
 | Work from the field | The Taskiem app, in a field mode, the only place a field agent works (§11) | App |
 | No signal at the site | Steps, notes, checklists and photos queued on the phone with their own time and place (§12) | App |
 | Parts in the van | Stock held by each agent: issued, used on a job, returned (§13) | Stock, extended |
@@ -79,7 +79,7 @@ Three choices shape everything else, and are decision [0070](../decisions/0070-f
 | Job type | What kind of job: installation, repair, survey. The business's own list |
 | Template | A job type's ready-made description, checklist and expected time |
 | Step | One move in a job's journey: on the way, arrived, started, done |
-| On duty | The time between a field agent's **Start my day** and **End my day**, the only time their location is collected |
+| On duty | The time between a field agent's **Start my day** and **End my day**, the only time their location is collected, when the business collects it |
 | Trail | The places a field agent's phone reported while on duty, in order |
 | Visit window | A time the customer says they are in for a visit |
 | With an agent | Stock issued to a field agent and not yet used or returned: the parts in their van |
@@ -123,6 +123,7 @@ Turning it off hides it and refuses its routes, steps, chat words and app screen
 | Setting | Default | What it does |
 | --- | --- | --- |
 | What we call field agents | "Field agent" | The word in the office's screens and in messages to customers ("technician", "installer") |
+| Collect field agents' location | On | Off collects no location at all: no reports, no place on steps, no map, no customer's map, no nearest suggestions, no location alerts (§10). Changed by the owner only, audited, and every field agent is told |
 | Arrived means within | 300 metres | How close an Arrived step must be to the job's place to count as at the place; farther is allowed and marked (§7) |
 | A photo is needed to finish | Off | Done needs at least one photo |
 | Customer's confirmation to finish | Off | Done needs the customer's OK in the app, in their chat, or a code they read out (§14) |
@@ -183,7 +184,7 @@ new ──assign──▶ assigned ──On my way──▶ on the way ──Arr
 | Step | Who | What is recorded | Rules |
 | --- | --- | --- | --- |
 | Assign | Office, or a workflow | Who, by whom | A job can be assigned to field agents only. Reassigning keeps the earlier agent's steps |
-| On my way | The field agent | Time on the phone and at the server; the phone's place and its accuracy | On duty only. One job at a time on the way or further, per agent: starting another holds nothing, it asks "Finish J-1041 first?" |
+| On my way | The field agent | Time on the phone and at the server; the phone's place and its accuracy, when location is on | On duty only. One job at a time on the way or further, per agent: starting another holds nothing, it asks "Finish J-1041 first?" |
 | Arrived | The field agent | The same; the distance from the job's place | Farther than the setting is allowed and marked **away from the place** |
 | Start | The field agent | The same | May come straight after On my way for a job with no place |
 | Done | The field agent | The same; checklist answers, photos, parts used, the customer's confirmation when asked for | Refused until the checklist's required items, the photo setting and the confirmation setting are met. The app says which |
@@ -247,17 +248,27 @@ The AI builder knows the trigger, the connector and the templates ("tell my cust
 
 **On duty is a field agent's own choice, made in the app.** **Start my day** begins it; **End my day** ends it; ending the last job of the day asks "End your day?". The office sees each agent as **off duty**, **free** (on duty, nothing in progress), or **on a job** (with its step). A day left open is closed at midnight, marked, and the agent told.
 
-**Location is collected only while on duty, and never otherwise.** Starting the day asks for the phone's location permission the first time, saying why: "Your location is shared with Ada Networks while you are on duty, so the office can send you the nearest jobs and customers can see you're on the way. It stops when you end your day."
+**Whether location is collected is the business's choice, and it is on by default** (the setting in §4). When it is on, location is collected **only while on duty**, and never otherwise. Starting the day asks for the phone's location permission the first time, saying why: "Your location is shared with Ada Networks while you are on duty, so the office can send you the nearest jobs and customers can see you're on the way. It stops when you end your day."
+
+**How ISPOps did it** (read in `ispops-mobile` and `ispops-backend`, 18 November 2026), and what changes:
+
+| | ISPOps | Here |
+| --- | --- | --- |
+| When | Per job only: from Depart (`en_route`) through `in_progress` to clock-out (`home_provider.dart`, `_applyJob`); the server drops reports for any other state and refuses a job not the agent's (`location_handler.go`) | While on duty, so the office can see free agents and suggest the nearest (§9); a job's trail is still the stretch from On my way to Done |
+| How | A Dart `Timer` every 30 seconds calling `Geolocator.getCurrentPosition` (high accuracy, 30-second limit) | A position stream (`Geolocator.getPositionStream`, already in the Taskiem app as `geolocator` 14), with a distance filter, so the phone reports when the agent moves rather than on a clock |
+| Which fix | The last known fix when it was up to 120 seconds old and within 200 metres, else a fresh one (`location_service.dart`); sent and stored as if taken then | Each report carries **the fix's own time** and accuracy, and the server stores that time; a cached fix is never presented as a new one |
+| Screen off, app in the background | Not covered: Android declares only `ACCESS_FINE_LOCATION` and `ACCESS_COARSE_LOCATION`, no foreground service and no background location; iPhone asks "when in use" with no background mode. The timer stops when Android suspends the app | Android: a **foreground service of type `location`** started from Start my day while the app is open (geolocator's `foregroundNotificationConfig`), with its notification "Sharing your location with Ada Networks while on duty". A foreground service started from the open app needs only "while using the app" permission, so `ACCESS_BACKGROUND_LOCATION`, and the Play review that comes with it, are not needed; `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are declared. iPhone: "while using the app" with the `location` background mode and its blue indicator; "Always" is never asked for |
+| Offline | Reports skipped when offline, errors swallowed | Reports kept on the phone and sent in batches when back (§12) |
+| Clock-in and clock-out place | A fresh fix, with accuracy, on each | Every step carries its own fix, taken then, with accuracy (§7); a weak fix (over 100 metres) is recorded and marked, never refused |
 
 | | Android | iPhone |
 | --- | --- | --- |
-| While on duty | A foreground service, with its notification "Sharing your location with Ada Networks while on duty", the only honest way to report with the screen off | "While using the app" with background location updates, the blue indicator shown; "Always" is never asked for |
-| How often | The setting: every 30 seconds when moving, 5 minutes when still (the phone's own motion detection) | The same, within what iOS allows; significant-change updates when backgrounded long |
-| When the app is killed | The service stops; the office sees **location stopped** (§16) | The same |
+| How often | The setting: every 30 seconds when moving (a distance filter of about 50 metres), 5 minutes when still | The same, within what iOS allows; significant-change updates when backgrounded long |
+| When the app is killed or the phone restarts | The service stops; the office sees **location stopped** (§16); the app offers to resume on opening | The same |
 
-Each report is a place, its accuracy and the phone's time, sent in batches; reports made offline are kept on the phone and sent later (§12). Every step also carries its own fresh place (§7), taken then, independent of the reports.
+**When the business turns location off**, nothing about place is collected: no reports, no live map, no trails, no place on steps, no Arrived distance, no **away from the place** mark, no customer's map, no nearest suggestions, and no location alerts. On duty, steps, photos and everything else work as before. Turning it back on asks each agent's phone again at their next Start my day. Reports already kept stay until the trail setting deletes them.
 
-**The live map** (web, Field work > Map): each on-duty agent's last place, how old it is, their state and job; each open job's place, coloured by state. A job's page shows its trail from On my way to Done. An agent's page shows their day's trail. Nothing shows an off-duty agent's place, ever.
+**The live map** (web, Field work > Map, when location is on): each on-duty agent's last place, how old it is, their state and job; each open job's place, coloured by state. A job's page shows its trail from On my way to Done. An agent's page shows their day's trail. Nothing shows an off-duty agent's place, ever.
 
 ## 11. The app for people in the field
 
@@ -310,7 +321,7 @@ A job's customer is a customer of the business: a person on Taskiem who chats wi
 **In the customer's conversation, a job card**, the same kind as an order or delivery card:
 
 - what (the job type, in the business's words), the window, who is coming (name and photo, never their number);
-- the state as it moves: assigned, **on the way** (with a live map while on the way: the agent's place, refreshed, and nothing after Arrived), arrived, done;
+- the state as it moves: assigned, **on the way** (with a live map while on the way, when the business collects location: the agent's place, refreshed, and nothing after Arrived), arrived, done;
 - **Confirm the work is done**, when the business asks for it: a tap in the card, or, for a customer without the app, a 4-digit code on the card or in their SMS, read out to the agent;
 - **Rate the visit** (1 to 5 stars and words) after Done; the rating goes on the job and the agent's record.
 
@@ -341,7 +352,7 @@ Alerts, through [alerts](../alerts.md), to the people with `job.manage` (or the 
 | --- | --- |
 | Late | Not arrived by the end of the window plus the setting |
 | Too long on site | Working past the template's time plus the setting |
-| Location stopped | On duty, and no report for 15 minutes (the app killed, the phone off, no permission) |
+| Location stopped | On duty, location on, and no report for 15 minutes (the app killed, the phone off, no permission) |
 | Out of touch | On a job and nothing heard for an hour |
 | Away from the place | Arrived or Done farther than the setting |
 | Not started | A window began and the assigned agent is off duty |
@@ -354,7 +365,7 @@ Alerts, through [alerts](../alerts.md), to the people with `job.manage` (or the 
 
 ## 18. Privacy and safety
 
-- **Field agents' location is their personal data**, collected for a stated purpose, only while on duty, shown only to `job.read`, deleted after the trail setting (default 90 days); steps keep their own place for the job's record. The agent sees their own trail. The [privacy notice](../privacy.md) and the business's own staff notice say so; the app says so when asking.
+- **Field agents' location is their personal data**, collected only when the business has it on (the default), for a stated purpose, only while on duty, shown only to `job.read`, deleted after the trail setting (default 90 days); steps keep their own place for the job's record. The agent sees their own trail. The [privacy notice](../privacy.md) and the business's own staff notice say so; the app says so when asking.
 - **Customers' names, phones and addresses** are sealed and masked as elsewhere. A field agent sees them for their jobs only, from assignment until 24 hours after Done, and then only the job's reference and type.
 - **The customer's map** shows the agent's place only while on the way, from the agent's last report, and never their phone number.
 - **Photos** are scanned and cleaned of their own location and metadata, as all media; the step's place is kept on the step, not in the photo.
@@ -389,7 +400,7 @@ ISPOps is the founder's own code (Go backend, React admin portal, Flutter field 
 | Job templates with checklists | `job_templates` (§6) | Carried over as a list |
 | Job schedules (daily, weekly, monthly, yearly) and their "run due" worker | A schedule workflow calling `jobs.create` (§8) | Replaced |
 | Clock in and out per job with GPS and an idempotent offline sync | Steps with time and place (§7, §12) | Carried over, and finished: ISPOps' app never queued (its outbox was never filled) |
-| Location pings every 30 seconds, in the foreground only | Reports while on duty, in the background (§10) | Carried over and widened |
+| Location every 30 seconds, per job, with the app open only | Reports while on duty, in the background, with the fix's own time; the business may turn location off (§10) | Carried over and widened |
 | Agent status (available, assigned, en route, on site, offline) | On duty, free, on a job (§10) | Carried over |
 | Live agent map, dispatch dashboard | Board and Map (§15) | Carried over |
 | Inventory: items, stock per agent, issue, consume, return, adjust, low stock | Stock with agents (§13) | Carried over onto Stock |
@@ -434,7 +445,7 @@ The implementation details to port are in four private repositories (read them f
 | Push to the app (§11) | app `lib/core/notifications/fcm_service.dart` |
 | Payroll through Payrolla (§17) | backend `internal/service/payroll` |
 
-**Known faults not to carry over** (found when ISPOps was read, 18 November 2026): the app's offline queue is never filled (`SyncDao.enqueue` has no caller), so clocking fails offline; the weak-GPS check in `clock_in_sheet.dart` compares accuracy with a colour's hash; a failed Depart is swallowed silently; the app handles one job at a time and ignores `on_hold` and `closed`; location is sent in the foreground only and dropped when offline.
+**Known faults not to carry over** (found when ISPOps was read, 18 November 2026): the app's offline queue is never filled (`SyncDao.enqueue` has no caller), so clocking fails offline; the weak-GPS check in `clock_in_sheet.dart` compares accuracy with a colour's hash; a failed Depart is swallowed silently; the app handles one job at a time and ignores `on_hold` and `closed`; location is sent only while the app is open (no foreground service or background permission on Android, no background mode on iPhone) and dropped when offline; a report can carry a last-known fix up to 120 seconds old, stored as if taken then.
 
 ## 21. Milestones
 
@@ -444,7 +455,7 @@ The implementation details to port are in four private repositories (read them f
 | F1 | Web: Jobs (list, new, the job's page), Board, Agents; job types and templates as tables | L |
 | F2 | The app's field mode: Today, Job, steps with a place, notes, checklist, photos; push | L |
 | F3 | Working offline: the outbox for steps and everything on a job; the encrypted copy of the day's jobs | M |
-| F4 | On duty and location: Start and End my day, background reports, the Map, trails | L |
+| F4 | On duty and location: Start and End my day, the location setting, background reports (foreground service, position stream), the Map, trails | L |
 | F5 | The `job` trigger, signals, `jobs@1`, the templates, the AI builder | M |
 | F6 | The customer's side: the job card, the live map, confirmation, rating, Book a visit, the public page and updates | M |
 | F7 | Stock with agents | M |
@@ -455,7 +466,7 @@ F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 
 
 ## 22. Testing
 
-- **Go:** the journey (every allowed and refused move, by role; Done refused until its rules are met; idempotent steps sent twice; late steps after a reassignment; times kept both ways); the Field agent role refused every route but its own, as the Gate role's router-walk test; the area off refusing routes, steps, chat words and the app; stock with agents (never below zero, `short`, used on a step that lands late); location reports only while on duty and deleted after the setting; the `job` trigger and signals; `jobs@1` against its contract; audit entries.
+- **Go:** the journey (every allowed and refused move, by role; Done refused until its rules are met; idempotent steps sent twice; late steps after a reassignment; times kept both ways); the Field agent role refused every route but its own, as the Gate role's router-walk test; the area off refusing routes, steps, chat words and the app; stock with agents (never below zero, `short`, used on a step that lands late); location reports only while on duty and deleted after the setting; with location off, no report is taken and steps carry no place; the `job` trigger and signals; `jobs@1` against its contract; audit entries.
 - **Web:** each page, with Field work off and on; the board's drag; the map with no agents on duty; accessibility and plain-words lists.
 - **App:** the field mode only for `job.work`; steps offline then online; a step while the job was cancelled offline; permission refused; the foreground service starting and stopping with the day.
 - **On real phones:** background location on Android (several makers' battery savers) and iPhone, over a working day, with battery measured.
@@ -463,7 +474,7 @@ F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 
 
 ## 23. Risks and open questions
 
-- **Background location on Android** is the hardest part and the one most likely to fail quietly: makers' battery savers kill services. The plan tests on real phones (F4), tells the agent how to exempt the app, and flags **location stopped** rather than trusting it.
+- **Background location on Android** is the hardest part and the one most likely to fail quietly: makers' battery savers kill services, and ISPOps never attempted it (§10), so there is no field experience to lean on. The plan tests on real phones (F4), tells the agent how to exempt the app, and flags **location stopped** rather than trusting it.
 - **App-store review** looks hard at background location. The purpose (staff on duty, stated, stopped with the day) is the accepted kind, but the wording and the store's forms need care.
 - **Staff location and the law.** Employees' location is personal data under the NDPA. The design collects it only on duty, for a stated purpose, with a retention limit; a lawyer should see the staff notice (with PR #198's other legal reviews).
 - **One app for customers and staff.** A field agent's personal chats and their work are in one app. The field mode is the business's; the person's own side is theirs. Is that what businesses want, or will some ask for work phones with nothing else?
