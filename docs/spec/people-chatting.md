@@ -76,6 +76,8 @@ In You → Privacy:
 | Read ticks | On / Off (then I don't see others' either) | On |
 | Profile photo | Everyone / My contacts / Nobody | My contacts |
 
+"Find me from contacts" works within "Find me by my number": a contact match is the number found, so with "My contacts" only people the person added find them by matching, and with "Nobody" no one does.
+
 The person's number is shown to people they chat with only if they choose to (§17 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
 
 ## 6. Encryption and where chats are kept
@@ -287,8 +289,8 @@ Built on branch `stage5a-finding`, on 093b2f44 (stages 1 to 4, decision 0069 acc
 - **Adding a contact** needs proof that the person was found. Every lookup, link and match answer carries an `add_token` (an HMAC of the finder, the person and an expiry a day away), so person ids alone cannot be collected into contacts. Stream A adds `chat` contacts itself (`AddContact`).
 - **Contact matching** (§5.3):
   - The app hashes each number as `SHA-256(key ‖ "taskiem-contacts:" ‖ E.164)`, 64 hex digits, with the week's key (`k{week}`, derived from the platform key `TASKIEM_MESSAGE_HASH_KEY`). Last week's key is still answered for 48 hours after it changes.
-  - The server hashes the verified phones with the same key in one query and answers the people who let themselves be found from contacts, never the asker. It keeps nothing of the request: a test counts every row of every table before and after.
-  - Limits: 500 hashes a request; 5000 hashes and 20 requests a day per person; 30 requests per address an hour.
+  - The server hashes the verified phones with the same key in one query and answers the people who let themselves be found from contacts, never the asker (and, since the review fixes, only those whose "Find me by my number" lets the asker find them). It keeps nothing of the request: a test counts every row of every table before and after.
+  - Limits: 500 hashes a request; 5000 hashes (1000 in an account's first week, since the review fixes) and 20 requests a day per person; 30 requests per address an hour.
   - **The honest limit**, in the words the key comes with: Taskiem holds the key, so this protects a person's contacts if what is sent is seen by someone else, not from Taskiem itself.
   - The server hashes every verified phone for each request (a scan of `user_phones`). A per-week table of hashes is the next step when that grows slow.
 - **Limits on lookups**: 50 numbers a day per person, counted whatever the answer (so retrying does not help); and, in memory per server, 10 at once per person, 30 at once and 300 a day per address.
@@ -486,7 +488,7 @@ Branch `stage5a-joined`: stream B (finding people, 989edad4, on 093b2f44) with s
 **Blocks and chats for finding people.** `taskiem_people_between(others[])` (in `definers.tsv`) answers, for the person in scope (no business in scope) and up to 500 others, whether either blocked the other and whether a chat between them is no longer a request (either copy accepted); nothing else. `taskiem_dispatch` may read `people_blocks (person_id, blocked_id)` and `people_chats.accepted_at` for it. `peoplechats.JoinPeople(p)` sets `People.Blocked` and `People.Chatting` from it (each in the scope of the person the request is for), and a new `People.BlockedSet` reads many at once in the caller's transaction (cards, contact matching), so a list of 200 chats is one query, not 200. B's `NumberShownTo` now asks about the viewer first, so the request is always answered in the viewer's scope. `cmd/taskiem/serve.go` calls `JoinPeople(srv.People)`; the server's keyless fallback is joined too.
 
 **Who may message whom.** `Server.ChatPolicy` (A's `Server.People`, renamed: B's `Server.People` is the `*people.People`) and `Server.PersonLinks` are left nil in `serve.go`; nil means `peopleJoin` over `People` (`api/people_join.go`). Tests may set another policy. `peoplechats.Stub` and `NoLinks` stay for that.
-- `MayMessage`: B's `Decision` as `(Allowed, AsRequest)`. A refusal for a block (`blocked`) is let through as a request: the chats keep the message on the sender's side with one tick and tell them nothing, as A does for blocks; a block is never a 403.
+- `MayMessage`: B's `Decision` as `(Allowed, AsRequest)`. A block is never a 403: the chats keep the message on the sender's side with one tick and tell them nothing, as A does for blocks. (Since the review fixes, the decision is the one the settings make as if there were no block, so nothing else differs either: "Review fixes" below.)
 - `ScreenStranger`: `ok` → Allow, `warn` → Warn (delivered with `warn: true`), `hold` → Refuse (403, "This message was not sent: it looks like a scam…"). B keeps the verdict either way.
 - `NumberShownTo`: B's number, as whether one is shown; the chat still reads it through `taskiem_people_phone`.
 - `ResolvePersonLink`: B's `Resolve`; `ErrLinkReplaced` → 410 `link_replaced`; not found, no such account or a server without the key → 404.
@@ -507,6 +509,51 @@ Branch `stage5a-joined`: stream B (finding people, 989edad4, on 093b2f44) with s
 - The screens (web and app) both streams list; the app's `appPageOf` for `/p/{code}` and `/you/people/*` in its router.
 - A held message is refused, not kept for moderators (§8.4's "held for review"): there is no moderators' queue yet.
 - Typing indicators.
+
+### Review fixes
+
+Branch `stage5a-fix-server`, on c7b0d9ff (stage 5a joined with the web and the app): the server findings of the stage 5a review, each with a Go test. Migration `00477_people_review_fixes.sql`. Where this list differs from the sections above, it holds.
+
+**Two people writing at once.** Each copy was locked by its own owner's transaction, which then updated the other's: two people writing to each other at once deadlocked (half of 30 sends at once failed with 500). Every writer that touches both copies of a conversation (a message, accept, decline, read, a reaction, delete for everyone, mark paid, block, and forward, which sends) now takes the conversation's lock first (`pg_advisory_xact_lock` on the conversation id, in `peopleCopyTx`'s writer path), then its own copy, then the other's. `peopleTx` runs such a transaction again (three times in all) on a deadlock (40P01) or a serialization failure (40001), as a backstop. Test: `TestPeopleSendAtOnce` (15 each at once, none fails, each person's in the order sent; without the lock it fails as the review found).
+
+**One connection a request.** Inside a send's transaction, finding people opened connections of its own (MayMessage, the block and chat checks, ScreenStranger, read ticks, IsContact, NumberShownTo, FindByNumber's block), so a busy pool could starve. Every answer is now read in the caller's transaction: `People.MayMessageTx`, `NumberShownToTx`, `ReadTicksTx`, `TheyAddedTx`, `ScreenStrangerTx`, `people.IsContactTx`, and `People.ChattingTx` and `BlockedSet` (set by `JoinPeople`) under them; the API asks them through `txPolicy` (a test's policy without them is asked outside, as before). The checks' verdict is kept in the send's transaction, so a send that fails keeps none and does not count towards RepeatHold; a held message commits its verdict alone (nothing else is written before the checks) and answers 403 after. Test: `TestPeopleSendOnASmallPool` (20 first messages at once on a pool of 4).
+
+**A block cannot be detected.** `MayMessage` decides by "who can message me" and contacts as if there were no block, and says the block apart (`Decision.Blocked`; `RefusedBlocked` is gone). A blocked sender is answered exactly as anyone: 403 where the settings refuse, `waiting` only where it is a request, the same request limits (a new request is in the ledger whether or not it is delivered, so 429 comes as for anyone). Their message stays on their side with one tick, as before. Test: `TestPeopleBlockNotTold` (Nobody, My contacts not added and added, everyone, added, a held message, and a first week's third request, each for a blocked and an unblocked sender).
+
+**Nothing crosses a block.** Delete for everyone leaves the copy of someone who blocked the person alone, as reactions and read marks do. Test: `TestPeopleDeleteForEveryoneStopsAtABlock`.
+
+**The checks read cards and places.** A stranger's share card (its `what`, and the account it names) and a place's label go past the checks as words do (cards of products, businesses and orders are made by the server and carry no words of the sender's). **Share cards are allowed in requests, and always warned**: a share card naming an account, from someone the recipient has not added to their contacts, is marked on the recipient's copy (`screen = 'transfer'`) and shows `warn` and `warn_transfer`, request or not. Test: `TestPeopleChecksReadCardsAndPlaces` (a held place, a warned share card in a request, a held one asking a fee for a prize, none once added, warned again once removed from contacts).
+
+**Mark as paid** reaches the other's copy only when neither copy is a request and neither blocked the other, so a request's sender learns nothing (and their own mark does not reach the recipient while it waits). Its answer, and a repeated `client_id`'s, hide read ticks as the rest do (`hideRead`). Tests: `TestPeoplePaidOnARequest`, `TestPeopleReadTicksEverywhere` (also: reading a request tells its sender nothing, as the app may now call `/read` on one).
+
+**Forwarding** to one chat at a time applies to a message shown `forwarded_many` (forwarded five times or more on its way to the person), as the mark says: one forwarded four times goes to five chats. Test: `TestPeopleForwards`.
+
+**Limits counted one after the other.** A send that makes a new request or goes past the checks takes a lock on its sender (after the conversation's) before counting, so first messages sent at once stay within the request allowance and RepeatHold. Test: `TestPeopleLimitsAtOnce` (a first week's five at once: two sent, three 429; five warned at once: three sent, two held).
+
+**A friend stays a friend.** Whether the other has written to the person is `people_chats.peer_wrote_at` on the person's copy (set when the other's message arrives, filled from the messages by 00477), not the messages of their copy, which "delete for me" empties. Test: `TestPeopleFriendAfterDeleteForMe`.
+
+**A request whose recipient changed their mind.** While the person's earlier message waits in the other's Requests, `MayMessage` is asked again; refused now ("Nobody", or "My contacts" without them), the message stays on the sender's side with one tick, as a blocked one, and nothing else tells them. If the recipient added the sender meanwhile, it stays a request until accepted. Test: `TestPeopleRequestAfterPrivacyChange`.
+
+**The lists page.** `GET /v1/me/conversations` and `GET /v1/me/people` answer 200 chats a page, newest first (then by id), with `more` and, when there are more, `next`, which `?before=` takes for the page after (opaque; 400 for anything else). `unread` counts every chat of the list (archived or not, as asked), not the page. Test: `TestPeopleListsPage` (205 chats, ties of time, the unread one on the second page).
+
+**A business's photo in the one list.** A business row of `ChatListItem` has `photo: {urls}` (as Orders on You's `OrderPhoto`: its logo by `taskiem_business_photo`'s rule, through the new definer `taskiem_customer_business_photos`), none while the business is not taking the person's messages. Test: `TestPeopleListsEmptyChatsAndPhotos`.
+
+**Empty chats.** A chat opened (`POST /v1/me/people`, from a link or a number) is `empty` until someone writes in it, and the lists leave it out until then (it opens by id as before; requests are never empty). Test: `TestPeopleListsEmptyChatsAndPhotos`.
+
+**A suspended account is not a deleted one.** `taskiem_people_reach` answers hint `suspended` for an account that is not active and not deleted, and a message to it answers 409 "This account can't get messages right now."; `taskiem_people_names` answers its name with `suspended`, and `gone` only once deleted. `PeopleChat` and `ChatListItem` gain `suspended` (the name shown, no card, no number). A deleted account stays "Deleted account". Test: `TestPeopleSuspendedAccount`.
+
+**Contact matching follows "Find me by my number".** A match is a number found, so `taskiem_people_match` answers a person only when their "Find me by my number" lets the asker find them, as well as "Find me from contacts": Nobody matches no one, My contacts (the default) only people they added. An account in its first week sends 1000 hashes a day, not 5000 (`people.MatchHashesFirstWeek`; `GET /v1/me/contacts/key`'s `max_per_day` says which). The words the key comes with say "people whose settings let you find them this way". Tests: `TestMatchContacts`, `TestContactMatching`.
+
+**By id.** `POST /v1/me/people {person_id}` and `GET /v1/people/{id}` take a bare person id with no proof that it was found (unlike adding a contact, which needs an `add_token`); left as is: a chat started so is a request unless the other added the person, and the card shows only what their settings let anyone see.
+
+**Tests.** `api/people_review_test.go` (the tests named above), `TestPeopleForwards` and `TestContactMatching` changed with their fixes; `engine/people` `TestPolicy` (a block beside the decision), `TestMatchContacts` (find by number, the first week's limit); `engine/db` `TestPeopleReviewMigrationUpDownUp`.
+
+**For the web and the app.**
+- `GET /v1/me/conversations` and `GET /v1/me/people`: `?before=` (the last page's `next`), and `more` (always) and `next` (with `more`) in the answer; `unread` is the whole list's.
+- `ChatListItem.photo` (`{urls}`, business rows) and `ChatListItem.suspended`, `PeopleChat.suspended`; a 409 "This account can't get messages right now." on sending to a suspended account.
+- A share card from someone not in the recipient's contacts comes with `warn` and `warn_transfer`.
+- A chat just opened is not in the lists until its first message: keep it open from `POST /v1/me/people`'s answer.
+- "Find me from contacts" works within "Find me by my number" (the privacy screens' words), and `max_per_day` may be 1000.
 
 ## As built: stage 5a, app
 

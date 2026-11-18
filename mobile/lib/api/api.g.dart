@@ -8068,7 +8068,9 @@ class PeoplePrivacy {
 
   final String findByNumber;
   /// People who have the person's number in their phone's contacts find them by
-  /// contact matching.
+  /// contact matching, within `find_by_number`: a match is the number found, so
+  /// My contacts lets only people the person added match them, and Nobody no
+  /// one.
   final bool findFromContacts;
   final String lastSeen;
   final String message;
@@ -8249,6 +8251,7 @@ class ContactsKeyResponse {
   final String key;
   final String keyId;
   final int maxBatch;
+  /// Hashes a day, 5000 (1000 in an account's first week).
   final int maxPerDay;
   final String words;
 

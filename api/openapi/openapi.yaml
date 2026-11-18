@@ -23563,6 +23563,7 @@ paths:
                     type: integer
                   max_per_day:
                     type: integer
+                    description: Hashes a day, 5000 (1000 in an account's first week).
                   words:
                     type: string
         default:
@@ -23574,10 +23575,11 @@ paths:
       - You
       summary: Find people from your contacts
       description: 'Which of the hashes sent (made with the key `key_id` names) are the verified phones of people who let
-        themselves be found from contacts, each as the person may see them with an `add_token`. Nothing of the request
+        themselves be found from contacts and whose "Find me by my number" lets the person find them (My contacts: only
+        people who added the person; Nobody: no one), each as the person may see them with an `add_token`. Nothing of the request
         is kept: the hashes are compared and forgotten; only how many were sent today is counted. The person themself
         is never answered. 409 `{key_changed: true}` for a key no longer answered (fetch it again); 400 for more than
-        500 hashes or one that is not 64 hex digits; 429 past 5000 hashes or 20 requests a day, or too many from one
+        500 hashes or one that is not 64 hex digits; 429 past 5000 hashes (1000 in an account''s first week) or 20 requests a day, or too many from one
         address.'
       security:
       - sessionCookie: []
@@ -41632,7 +41634,7 @@ components:
           $ref: '#/components/schemas/PeopleAudience'
         find_from_contacts:
           type: boolean
-          description: People who have the person's number in their phone's contacts find them by contact matching.
+          description: 'People who have the person''s number in their phone''s contacts find them by contact matching, within `find_by_number`: a match is the number found, so My contacts lets only people the person added match them, and Nobody no one.'
         message:
           $ref: '#/components/schemas/PeopleAudience'
         last_seen:
