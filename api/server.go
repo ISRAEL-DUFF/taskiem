@@ -1179,13 +1179,26 @@ const maxLimiters = 100_000
 
 // limiter is a token bucket per key: one token every interval, up to burst.
 func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limiter {
+	l, _ := s.limiterFor(key, every, burst, true)
+	return l
+}
+
+// ownLimiter is limiter for a key whose bucket must never be shared with
+// other keys: when maxLimiters are in use it answers ok false (no bucket)
+// instead of the kind's shared one, and the caller limits another way
+// (typing marks: people_search.go).
+func (s *Server) ownLimiter(key string, every time.Duration, burst int) (*rate.Limiter, bool) {
+	return s.limiterFor(key, every, burst, false)
+}
+
+func (s *Server) limiterFor(key string, every time.Duration, burst int, share bool) (*rate.Limiter, bool) {
 	ls := &s.limiters
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	now := time.Now()
 	if e, ok := ls.m[key]; ok {
 		e.last = now
-		return e.l
+		return e.l, true
 	}
 	if ls.m == nil {
 		ls.m, ls.shared = map[string]*limiterEntry{}, map[string]*rate.Limiter{}
@@ -1199,17 +1212,20 @@ func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limit
 		ls.swept = now
 	}
 	if len(ls.m) >= maxLimiters {
+		if !share {
+			return nil, false
+		}
 		kind, _, _ := strings.Cut(key, ":")
 		l, ok := ls.shared[kind]
 		if !ok {
 			l = rate.NewLimiter(rate.Every(every), burst)
 			ls.shared[kind] = l
 		}
-		return l
+		return l, true
 	}
 	e := &limiterEntry{l: rate.NewLimiter(rate.Every(every), burst), last: now, full: max(every*time.Duration(burst), time.Minute)}
 	ls.m[key] = e
-	return e.l
+	return e.l, true
 }
 
 // tx runs fn in a transaction scoped to the caller's tenant.

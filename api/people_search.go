@@ -482,8 +482,13 @@ func (s *Server) typingPeople(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if on && !s.limiter("people-typing:"+person.String()+":"+c.ID.String(), peopleTypingEvery, 1).Allow() {
-			return nil
+		// Each person's and chat's own bucket, never one shared by everyone
+		// (which would let one person's typing drop everyone else's); with
+		// the limiters full, the mark's own time limits it below.
+		if on {
+			if l, ok := s.ownLimiter("people-typing:"+person.String()+":"+c.ID.String(), peopleTypingEvery, 1); ok && !l.Allow() {
+				return nil
+			}
 		}
 		if c.Peer == nil || c.RequestAt != nil || c.AcceptedAt == nil || c.HiddenAt != nil || c.Blocked {
 			return nil
@@ -515,7 +520,8 @@ func (s *Server) typingPeople(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO people_typing (person_id, chat_id, conversation_id, until) VALUES ($1, $2, $3, now() + $4::interval)
-			ON CONFLICT (person_id, chat_id) DO UPDATE SET until = EXCLUDED.until`, peer, theirs, c.Conversation, peopleTypingFor.String())
+			ON CONFLICT (person_id, chat_id) DO UPDATE SET until = EXCLUDED.until WHERE people_typing.until <= EXCLUDED.until - $5::interval`,
+			peer, theirs, c.Conversation, peopleTypingFor.String(), peopleTypingEvery.String())
 		return err
 	})
 	if err != nil {

@@ -617,7 +617,7 @@ func TestPeopleAbuseSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, by := range others[:2] {
-		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, consent, messages) VALUES ($1, $2, $3, 'spam', true, '[]')`,
+		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, consent, messages, peer_wrote) VALUES ($1, $2, $3, 'spam', true, '[]', true)`,
 			uuid.New(), by, repID); err != nil {
 			t.Fatal(err)
 		}
@@ -740,11 +740,22 @@ func TestLawfulRequests(t *testing.T) {
 		t.Fatalf("files asked for: %v", withFiles)
 	}
 
-	// The public count.
+	// The public count: only half-years that have ended, so nothing yet;
+	// the three show once theirs has ended.
 	c := (&client{t: t, base: w.base}).must(200, "GET", "/v1/transparency/lawful-requests", nil)
+	if len(c["periods"].([]any)) != 0 || !strings.Contains(c["words"].(string), "once it has ended") {
+		t.Fatalf("the current half-year is shown: %v", c)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE lawful_requests SET received_at = received_at - interval '200 days'`); err != nil {
+		t.Fatal(err)
+	}
+	c = (&client{t: t, base: w.base}).must(200, "GET", "/v1/transparency/lawful-requests", nil)
 	ps := c["periods"].([]any)
 	if len(ps) != 1 || ps[0].(map[string]any)["received"] != float64(3) || ps[0].(map[string]any)["answered"] != float64(2) || ps[0].(map[string]any)["refused"] != float64(1) {
 		t.Fatalf("the count: %v", c)
+	}
+	if _, ok := ps[0].(map[string]any)["pending"]; ok {
+		t.Fatalf("pending is published: %v", c)
 	}
 	_, _ = bola, chidi
 }

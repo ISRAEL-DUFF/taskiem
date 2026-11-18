@@ -602,15 +602,18 @@ func (s *Server) SafetyTick(ctx context.Context) error {
 // people.account.close.failed, and the next tick tries again.
 func (s *Server) closeAccount(ctx context.Context, action, person uuid.UUID) error {
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		var deleted *time.Time
-		if err := tx.QueryRow(ctx, `SELECT deleted_at FROM users WHERE id = $1 FOR UPDATE`, person).Scan(&deleted); err != nil {
-			return err
-		}
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_scope', $1, true)`, db.Scope(ops.PlatformChain)); err != nil {
 			return err
 		}
+		// The closure's lock before the account's: an appeal holds the
+		// closure's lock while its row points at the account (a key share
+		// of it), so the other order would wait on each other.
 		var due bool
 		if err := tx.QueryRow(ctx, `SELECT taskiem_people_closure_due($1)`, action).Scan(&due); err != nil || !due {
+			return err
+		}
+		var deleted *time.Time
+		if err := tx.QueryRow(ctx, `SELECT deleted_at FROM users WHERE id = $1 FOR UPDATE`, person).Scan(&deleted); err != nil {
 			return err
 		}
 		note := "closed"
