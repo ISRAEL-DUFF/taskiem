@@ -48,6 +48,8 @@ import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
 import { usePagedList } from "../lib/usePagedList";
+import { rowsWithChat } from "../lib/peoplelive";
+import { livePoll, usePeopleLive } from "./PeopleLive";
 import { MoreRows } from "./MoreRows";
 
 // A person's chats with businesses, on their own side (You;
@@ -111,10 +113,28 @@ function keepPhoto(business: string, url: string | undefined) {
 export function PersonChatList() {
   const [archived, setArchived] = useState(false);
   const [finding, setFinding] = useState(false);
+  const live = usePeopleLive();
   // A page at a time (200 a page), the first read again every little
-  // while; each list (archived or not) is its own, so a toggle never shows
-  // the other's rows while its own are on their way.
-  const list = usePagedList<ChatList, ChatListItem>(`/v1/me/conversations${archived ? "?archived=1" : ""}`, (r) => r.chats ?? [], rowKey, POLL_MS * 2);
+  // while (slowly while the live connection tells what changes); each list
+  // (archived or not) is its own, so a toggle never shows the other's rows
+  // while its own are on their way.
+  const list = usePagedList<ChatList, ChatListItem>(`/v1/me/conversations${archived ? "?archived=1" : ""}`, (r) => r.chats ?? [], rowKey, livePoll(live.connected, POLL_MS * 2));
+  const { patch, reload } = list;
+  // A people chat's change is put in place at once; the list is read again
+  // a moment later for what is the whole list's (unread, requests).
+  const soon = useRef<number>(undefined);
+  useEffect(
+    () =>
+      live.subscribe((e) => {
+        if (e.type === "chat") patch((rows) => rowsWithChat(rows, e.data, archived));
+        if (e.type === "chat" || e.type === "ready" || (e.type === "gone" && e.data.id === null)) {
+          window.clearTimeout(soon.current);
+          soon.current = window.setTimeout(reload, 500);
+        }
+      }),
+    [live.subscribe, patch, reload, archived],
+  );
+  useEffect(() => () => window.clearTimeout(soon.current), []);
   const data = list.head;
   const chats = list.rows ?? [];
   const requests = data?.requests ?? 0;
@@ -133,6 +153,16 @@ export function PersonChatList() {
           {archived ? "Back to chats" : "Archived"}
         </button>
       </div>
+      {!archived && (
+        <div className="people-list-tools">
+          <Link className="button small" to="/you/people/search" data-testid="people-search-open">
+            <Icon name="search" /> Search messages
+          </Link>
+          <Link className="button small" to="/you/people/starred" data-testid="people-starred-open">
+            <Icon name="star" /> Starred
+          </Link>
+        </div>
+      )}
       <ErrorBox error={list.error} />
       {!archived && requests > 0 && (
         <Link className="people-requests-entry" to="/you/people/requests" data-testid="people-requests-entry">
@@ -155,6 +185,7 @@ export function PersonChatList() {
           {chats.map((c) => {
             const person = c.kind === "person";
             const draft = person ? peopleDraft(c.id) : getDraft(draftKey(c.id));
+            const typing = person && live.typing.has(c.id);
             return (
               <ChatRow
                 key={`${c.kind}:${c.id}`}
@@ -176,7 +207,9 @@ export function PersonChatList() {
                 }
                 time={listTime(c.last_at)}
                 preview={
-                  draft ? (
+                  typing ? (
+                    <span data-testid="people-row-typing">typing…</span>
+                  ) : draft ? (
                     <>
                       <span className="draft">Draft:</span> {draft}
                     </>
@@ -184,6 +217,8 @@ export function PersonChatList() {
                     rowPreview(c)
                   )
                 }
+                typing={typing}
+                trust={person ? undefined : trustWords(c.verified) || undefined}
                 unread={c.unread}
                 muted={c.muted}
                 testid={person ? "people-chat" : "person-chat"}

@@ -38,14 +38,6 @@ export type PeopleLiveEvent =
   /** The connection opened (again): what was missed while it was down is read once. */
   | { type: "ready" };
 
-/** The latest event id heard, kept for a reconnection (`Last-Event-ID`):
- * ids are microseconds, so the larger is the later. */
-export function laterId(cur: string | undefined, next: string | undefined | null): string | undefined {
-  if (!next || !/^\d+$/.test(next)) return cur;
-  if (!cur) return next;
-  return next.length > cur.length || (next.length === cur.length && next > cur) ? next : cur;
-}
-
 /** An open chat's messages after a `message` event for it. Our own message
  * told by the connection before its send was answered takes the place of
  * the copy on its way (same words, still local), so it shows once. */

@@ -13,6 +13,8 @@ import { Discover, DiscoverBusiness } from "./Discover";
 import { PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
 import { BlockedPage, ContactsPage, PayoutPage, PeoplePrivacyPage, PersonLinkPage, RequestsPage, YouPeopleSettings } from "./People";
 import { PeopleChatPage } from "./PeopleChat";
+import { PeopleLiveProvider } from "./PeopleLive";
+import { PeopleSearchPage, PeopleStarredPage } from "./PeopleSearch";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
@@ -38,6 +40,7 @@ export function YouApp() {
   // A conversation fills the window, as the chat does (§9).
   const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname) || inPeopleChat(loc.pathname);
   return (
+    <PeopleLiveProvider on={!!me.user}>
     <div className={`you-shell${inChat ? " you-chat" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
@@ -72,6 +75,8 @@ export function YouApp() {
           <Route path="/you/chats/:id" element={<PersonChatRoute />} />
           <Route path="/you/people/requests" element={<RequestsPage />} />
           <Route path="/you/people/contacts" element={<ContactsPage />} />
+          <Route path="/you/people/search" element={<PeopleSearchPage />} />
+          <Route path="/you/people/starred" element={<PeopleStarredPage />} />
           <Route path="/you/people/requests/:id" element={<PeopleChatRoute />} />
           <Route path="/you/people/:id" element={<PeopleChatRoute />} />
           <Route path="/you/settings/people" element={<PeoplePrivacyPage />} />
@@ -84,6 +89,7 @@ export function YouApp() {
         </Routes>
       </main>
     </div>
+    </PeopleLiveProvider>
   );
 }
 
@@ -95,7 +101,7 @@ function PersonChatRoute() {
 }
 
 /** A chat with a person (or a request) fills the window, as a business's does. */
-export const inPeopleChat = (path: string) => /^\/you\/people\/(requests\/)?(?!requests$|contacts$)[^/]+$/.test(path);
+export const inPeopleChat = (path: string) => /^\/you\/people\/(requests\/)?(?!requests$|contacts$|search$|starred$)[^/]+$/.test(path);
 
 /** A chat with a person, made afresh for each chat. */
 function PeopleChatRoute() {

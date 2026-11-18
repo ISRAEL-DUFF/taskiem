@@ -6,7 +6,6 @@ import {
   checkPlace,
   foundPath,
   foundWords,
-  laterId,
   mapURL,
   placeFigures,
   placeProblem,
@@ -58,14 +57,6 @@ const row = (kind: "person" | "business", id: string, at: string): ChatListItem 
 });
 
 describe("the live connection's events", () => {
-  it("keeps the latest event id, as microseconds", () => {
-    expect(laterId(undefined, "1700000000000001")).toBe("1700000000000001");
-    expect(laterId("1700000000000005", "1700000000000001")).toBe("1700000000000005");
-    expect(laterId("999999", "1000000")).toBe("1000000");
-    expect(laterId("5", null)).toBe("5");
-    expect(laterId("5", "nope")).toBe("5");
-  });
-
   it("adds a message to its open chat and changes one it has", () => {
     const cur = [msg("a", "2026-11-18T10:00:00Z"), msg("b", "2026-11-18T10:01:00Z")];
     const added = threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("c", "2026-11-18T10:02:00Z") });
