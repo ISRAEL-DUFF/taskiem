@@ -933,7 +933,7 @@ Branch `stage5a-gaps-app`, on 4691022d (stage 5a with the server's gaps, chat fe
 **Typing.** While the box changes, `POST /v1/me/people/{id}/typing` at most every 3 seconds (`typingBeat`), `{typing: false}` when it empties; a send ends it. Never from a request, a waiting, blocked, deleted or suspended chat. "typing…" in the chat's head (with the typing bubble) and on the list's row.
 
 **Search and starred** (`lib/chat/people_search.dart`).
-- Search from You's Chats head (Search chats with people) and from a chat's ⋯ (Search this chat, `chat=`). Searched 400 ms after typing rests, only with a word of two letters (`searchable`); 30 a page by `before` (Show more as the end comes into view); each row the chat's name, who wrote it and the `snippet`. The server's refusals said (`searchFailure`).
+- Search from the bar at the top of You's Chats (Search chats with people; not a fourth head button, which large text cut off) and from a chat's ⋯ (Search this chat, `chat=`). Searched 400 ms after typing rests, only with a word of two letters (`searchable`); 30 a page by `before` (Show more as the end comes into view); each row the chat's name, who wrote it and the `snippet`. The server's refusals said (`searchFailure`).
 - Starred messages (`GET /v1/me/people/starred`), from the search screen, read again after one is opened.
 - A hit opens its chat at the message: `PeopleChatData(focus:)` reads older pages until it is there (at most 40), then the thread is placed at it and flashes it (`ThreadView.focus`). Inside a chat, a hit jumps there (`jump`, the thread placed again).
 

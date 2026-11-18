@@ -37,6 +37,7 @@ import '../chat/addresses.dart' show SavedAddressesPage;
 import '../chat/discover.dart' show DiscoverTab;
 import '../chat/my_chat.dart';
 import '../chat/your_orders.dart' show YourOrdersTab;
+import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
 import '../kit/load_more.dart';
@@ -467,8 +468,6 @@ class _YouHomeState extends State<YouHome> with Polling {
           await _load();
         },
         actions: [
-          TkHeadButton(icon: 'b-search', label: 'Search chats with people', onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, now: widget.now))),
-          const SizedBox(width: 6),
           TkHeadButton(icon: 'b-plus', label: 'New chat', onTap: _newChat),
           const SizedBox(width: 6),
           if (businesses.isNotEmpty) ...[TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)), const SizedBox(width: 6)],
@@ -486,6 +485,28 @@ class _YouHomeState extends State<YouHome> with Polling {
                 ),
               ],
             ),
+          // Search across chats with people, and the starred messages.
+          Semantics(
+            button: true,
+            label: 'Search chats with people',
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, now: widget.now)),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(999)),
+                child: Row(
+                  children: [
+                    TkIcon('b-search', size: 18, stroke: 2, color: t.muted),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Search chats with people', maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15, color: t.muted))),
+                  ],
+                ),
+              ),
+            ),
+          ),
           if (_error != null) TkErrorBox(_error!),
           if ((_standing?.unseen ?? 0) > 0) StandingNotice(standing: _standing!, onOpen: _openStanding),
           if (auth.me?.secondProof?.required == true)
