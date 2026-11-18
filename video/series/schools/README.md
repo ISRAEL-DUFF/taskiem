@@ -202,7 +202,6 @@ pages are the second surface.
 
 ## 5. Where it goes in the order
 
-I suggest **fourth**, after Phones and gadgets: it needs the most new work (a
-whole new demo world and a different kind of footage), and the first three can
-reuse the existing chat recordings. If schools are a bigger or nearer sales
-opportunity than gadgets, it can move up.
+**Fourth, after Phones and gadgets** (confirmed 18 November 2026). It needs the
+most new work (a whole new demo world and phone-app footage), and the first
+three series can reuse the existing chat recordings.
