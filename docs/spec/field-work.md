@@ -81,7 +81,7 @@ Three choices shape everything else, and are decision [0070](../decisions/0070-f
 | Job type | What kind of job: installation, repair, survey. The business's own list |
 | Template | A job type's ready-made description, checklist and expected time |
 | Step | One move in a job's journey. The field agent's three are **Start job** (on the way), **Arrived** (on site) and **End job** (done) |
-| In execution | A job that is started and not yet ended: on the way, on site, or on hold. An agent has at most one |
+| In execution | A job that is started and not yet ended: on the way or on site. An agent has at most one. A job on hold is not in execution |
 | Agent's state | Read from their jobs: **available** (holds none), **assigned** (holds some, none started), **on the way**, **on site** |
 | Trail | The places a field agent's phone reported during one job, from Start job to End job, in order |
 | Visit window | A time the customer says they are in for a visit |
@@ -190,21 +190,25 @@ A job reaches a customer the same way whether they are saved or not: in their co
 
 ```
 new ──Assign──▶ assigned ──Start job──▶ on the way ──Arrived──▶ on site ──End job──▶ done ──Close──▶ closed
- ▲   (office)      │        (agent)          │        (agent)       │       (agent)            (office)
- └──Reassign───────┘                          └───── Hold (office) ──┴──▶ on hold ──Resume──▶ where it was
- Cancel (office): from any state before done ──▶ cancelled      on site ──Could not finish──▶ not finished
+     (office)             (agent)                 (agent)             (agent)               (office)
+
+Reassign (office):        new, assigned or on hold ──▶ assigned to someone else
+Hold (office):            any state before done    ──▶ on hold   (frees the agent)
+Resume (office):          on hold                  ──▶ assigned  (the agent starts it again)
+Could not finish (agent): on the way or on site    ──▶ not finished
+Cancel (office):          any state before done    ──▶ cancelled
 ```
 
-The same journey as ISPOps (`draft` → `assigned` → `en_route` → `in_progress` → `completed` → `closed`, with `on_hold` and `cancelled`), with ISPOps' names for the agent's taps changed to the owner's words: **Depart** is **Start job**, **Clock in** is **Arrived**, **Clock out** is **End job**. Two are added: **Could not finish**, and **Resume** for a job on hold (ISPOps has no way out of `on_hold` but Cancel).
+The same journey as ISPOps (`draft` → `assigned` → `en_route` → `in_progress` → `completed` → `closed`, with `on_hold` and `cancelled`), with ISPOps' names for the agent's taps changed to the owner's words: **Depart** is **Start job**, **Clock in** is **Arrived**, **Clock out** is **End job**. Two are added: **Could not finish**, and **Resume** for a job on hold (ISPOps has no way out of `on_hold` but Cancel). One rule changes: in ISPOps a job on hold still counts as the agent's one job in execution, so a held job stops its agent working; here **holding a job frees its agent**.
 
 | Step | Who | What is recorded | Rules |
 | --- | --- | --- | --- |
-| Assign | Office, or a workflow | Who, by whom | To field agents only, and only while the job is new or assigned: once started it cannot be reassigned (ISPOps' `assignable`). An agent may hold any number of assigned jobs; assigning many at once is all or nothing |
-| Start job | The assigned field agent | Time on the phone and at the server; the phone's place and its accuracy (unless location is off) | Only from assigned, and only the job's own agent. **One job in execution per agent**: while another is on the way, on site or on hold, Start job is refused with "End J-1041 first" (ISPOps' `jobs_one_in_execution_per_agent_idx`). Location for the job starts here |
+| Assign | Office, or a workflow | Who, by whom | To field agents only, and only while the job is new, assigned or on hold: once started (on the way or on site) it cannot be reassigned (ISPOps' `assignable`, with on hold added). An agent may hold any number of assigned jobs; assigning many at once is all or nothing |
+| Start job | The assigned field agent | Time on the phone and at the server; the phone's place and its accuracy (unless location is off) | Only from assigned, and only the job's own agent. **One job in execution per agent**: while another is on the way or on site, Start job is refused with "End J-1041 first" (ISPOps' `jobs_one_in_execution_per_agent_idx`, without on hold). Location for the job starts here |
 | Arrived | The field agent | The same; the distance from the job's place | Only from on the way. Farther than the setting is allowed and marked **away from the place**. The work begins: time on site counts from here |
 | End job | The field agent | The same; checklist answers, photos, notes, parts used, the customer's confirmation when asked for; time on site (from Arrived) | Only from on site. Refused until the checklist's required items, the photo setting and the confirmation setting are met; the app says which. Location for the job stops here |
 | Could not finish | The field agent | A reason from a short list (customer not in, no access, parts missing, needs another visit, other) and a note | From on the way or on site. Ends the job's execution, so the agent can start their next; the office then reschedules or cancels it, and a workflow may make the follow-up job |
-| Hold, Resume | Office | Who, why | Hold from any state before done, with a reason, as ISPOps. A job on hold still counts as the agent's job in execution. Resume returns it to the step it was at |
+| Hold, Resume | Office | Who, why | Hold from any state before done, with a reason. **The agent is freed**: the job is no longer in execution, its location stops, and the agent may start another job. A held job stays on its agent's schedule, marked held, and can be reassigned. **Resume** returns it to **assigned** (to whoever holds it then), and the agent taps Start job again when they go back; the steps before the hold stay in its history, and time on the job counts both stretches |
 | Cancel | Office | Who, why | Any state before done. Frees the agent |
 | Close | Office | Who | Only from done, after review. A business may close on End job by a setting; then Close is automatic |
 
@@ -381,6 +385,38 @@ ISPOps' **Create new job** page (`exact-hue-hearth`, `src/routes/_app.jobs.new.t
 
 After saving, the office lands on the job's page, not the list, so a new job's reference and card can be read out or sent to the customer at once.
 
+### 15.2 The office's tools in chat
+
+Customer care, dispatchers and admins can do their Field work from the chat, as a school's bursar and a shop's cashier do. This uses the chat tools that are built ([chat tools](chat-tools.md): the tools panel, sheets, cards, diary lines, alert cards and the briefing), so it needs **chat tools** on for the business. It works in the web chat and in the Taskiem app; on the app, the office's staff are in the chat as anyone is, and only `job.work` opens the field mode (§11).
+
+**Tiles in the tools panel** (`/jobs`, `/new`, `/agents`...), each only for those whose role may open it, with a count or badge:
+
+| Tile | Badge | Opens a sheet with |
+| --- | --- | --- |
+| **Jobs** | "2 new · 1 late" | Chips: New, Today, On the way, On site, Late, Not finished, To review (done, not closed), On hold; search by reference, customer or phone. A job opens its own sheet: its card, history, the agent's route on a small map, photos, checklist, parts, rating, and the office's actions in place: **Assign** (with the suggestions of §9), **Reassign**, **Hold**, **Resume**, **Cancel**, **Close**, **Add a note** |
+| **New job** | | The §15.1 form in a sheet. Opened from a customer's conversation, it starts with that customer filled in |
+| **Agents** | "3 on jobs" | Each field agent's state and job; a small map of agents on jobs; their schedule; **Issue stock** (§13) |
+| **Customers** | | The business's `customers` table (§6.1): search, a customer's jobs, **New job for this customer** |
+
+**Alert cards** at the end of the person's Taskiem conversation, read when they look and gone when dealt with, as chat tools' phase 4:
+
+| Card | Who sees it | Its next step |
+| --- | --- | --- |
+| A job made by a customer or a workflow, not assigned ("NEW JOB · fault repair · Chidi Okafor · today 12 to 3") | `job.manage` | **Assign**: the suggestions, first one ready |
+| Not started: a window began and the job is only assigned | `job.manage` | **Call Musa**; **Reassign** |
+| Late, too long on site, location stopped, away from the place (§16) | `job.manage` | **Call** the agent; **Message** them in the team conversation; for late, **Tell the customer** |
+| Not finished, with the agent's reason | `job.manage` | **Plan a follow-up** (the New job sheet, filled from this one) or **Cancel** |
+| Done, waiting for review | `job.manage` | **Close** (after a look at its sheet) |
+| An agent holding few of a part ("Musa has 1 router left") | `job.manage` with Stock | **Issue more** |
+
+**Cards and diary lines.** A job is a card in the card frame: its reference and type, its state as a pill, the four steps (Assigned, On the way, On site, Done), customer, agent and window, and its next step as the filled button. The office's own actions are diary lines: "Assigned J-1042 to Musa", "Held J-1062: parts missing", "Closed J-1042".
+
+**The briefing** gains a Field work part for those with `job.read`: today's jobs done and to go, new and unassigned, late, agents on jobs now, and yesterday's ratings. Tapping it asks "how did the jobs go yesterday".
+
+**In a customer's conversation**, the office's side has **New job for this customer**, **Save to my customers**, and the customer's jobs to drop in as cards with `#`, the same card the customer sees.
+
+**Customer care and dispatchers can work from chat alone**, as chat tools' phase 5 has cashiers do: everything above, without opening the web pages. The web keeps what a phone screen cannot hold: the full board and map, reports and settings.
+
 **In chat**, `@Taskiem` gains the dispatcher's words, in every language the chat has: "new job: installation for Ada Obi at 12 Allen Avenue tomorrow morning", "assign J-1042 to Musa", "where is Musa", "jobs today", "what's late". Each answers with job cards, and changes need a yes, as other chat changes do.
 
 ## 16. Watching for trouble
@@ -499,7 +535,7 @@ The implementation details to port are in four private repositories (read them f
 | F6 | The customer's side: the job card, the live map, confirmation, rating, Book a visit, the public page and updates | M |
 | F7 | Stock with agents | M |
 | F8 | Watching for trouble: alerts; Reports and CSV; hours and jobs to pay templates | M |
-| F9 | `@Taskiem` words for dispatchers; the guide; the business's starting set when it turns Field work on | S |
+| F9 | The office's tools in chat (§15.2): the tiles and sheets, alert cards, job cards and diary lines, the briefing's part, the customer conversation's actions; `@Taskiem` words for dispatchers; the guide; the business's starting set when it turns Field work on | M |
 
 F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 make it Taskiem's rather than a copy of ISPOps.
 

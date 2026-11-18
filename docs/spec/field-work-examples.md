@@ -8,9 +8,11 @@ Contents:
 
 1. [How each example is written](#1-how-each-example-is-written)
 2. [The cast](#2-the-cast)
-3. [Example 1: a subscriber's complaint becomes a repair, worked partly offline](#3-example-1-a-subscribers-complaint-becomes-a-repair-worked-partly-offline)
-4. [Example 2: the office makes the jobs, one assigned at once and three assigned later in bulk](#4-example-2-the-office-makes-the-jobs-one-assigned-at-once-and-three-assigned-later-in-bulk)
-5. [Examples still to write](#5-examples-still-to-write)
+3. [The three seats](#3-the-three-seats)
+4. [Example 1: a subscriber's complaint becomes a repair, worked partly offline](#4-example-1-a-subscribers-complaint-becomes-a-repair-worked-partly-offline)
+5. [Example 2: the office makes the jobs, one assigned at once and three assigned later in bulk](#5-example-2-the-office-makes-the-jobs-one-assigned-at-once-and-three-assigned-later-in-bulk)
+6. [Example 3: a day at Ada Networks, every seat at once](#6-example-3-a-day-at-ada-networks-every-seat-at-once)
+7. [Examples still to write](#7-examples-still-to-write)
 
 ---
 
@@ -47,13 +49,63 @@ The same business and people appear in every example unless one says otherwise, 
 
 Ada's settings, unless an example says otherwise: location **during jobs**; Arrived within **300 m**; a photo needed to end a job **on**; the customer's confirmation **on**; late after **30 minutes** past the window; a complaint opens a repair job **on**. Templates on: `isp-complaint-to-job`, `job-tell-office`, `job-tell-customer-assigned`, `job-tell-customer-on-the-way`, `job-ask-rating`, `job-late-alert`, `job-follow-up-not-finished`.
 
-## 3. Example 1: a subscriber's complaint becomes a repair, worked partly offline
+## 3. The three seats
+
+The same job looks different from each seat. This is what each person has, and does, around every job; the examples below show them together.
+
+### 3.1 The office: customer care, dispatchers and admins
+
+**Where:** the web's **Field work** (Board, Map, Jobs, Agents, Reports, Settings) and **Customers**; the chat, with Field work's tools ([Field work §15.2](field-work.md#152-the-offices-tools-in-chat)), where customer care and dispatchers can do all of it; the business's conversations with its customers.
+
+| Moment | What they do |
+| --- | --- |
+| Work comes in | A complaint or **Book a visit** from a customer's chat, or a schedule or workflow, makes a **new** job and an alert card, **Assign**. A phone call, an email or a walk-in: **New job** ([§15.1](field-work.md#151-making-a-job-in-the-office)) |
+| Making a job | Customer from the business's own list, or typed with **Save to my customers** ticked; the place and its pin; a template; the window; what to do, and a note for the office; **Create and assign** or **Save without assigning** |
+| Assigning | One job, or many ticked at once; suggestions by state and last known place; **Reassign** while new, assigned or on hold, never once started |
+| Watching | The board's columns; the map of agents on jobs; a notification at each step; alert cards for not started, late, too long on site, away from the place, location stopped |
+| Stepping in | **Hold** (the agent is freed) and **Resume**; **Cancel** with a reason; notes to the agent; the customer's conversation |
+| Finishing | Review a done job (history, times, route, photos, checklist, parts, rating) and **Close**; for a PHP Radius complaint, close it in PHP Radius's dashboard; **Plan a follow-up** for one not finished |
+| Around the jobs | Issue and take back parts; save customers and subscribers; the cashier's invoices and any recharge waiting for PHP Radius; reports, and the pay template |
+| Owners and admins | Settings (location, photo, confirmation, late and too long), roles, job types and templates, the PHP Radius connection |
+
+### 3.2 The customer
+
+**Where:** their conversation with the business in the Taskiem app or the web chat (PR #198); without Taskiem, SMS or WhatsApp with a link to their job's own page.
+
+| Moment | What they see and do |
+| --- | --- |
+| Their internet (a provider on PHP Radius) | **My internet** (plan, expiry, data, online), **Recharge** (paid to the provider's own gateway), **Voucher**, **Usage**, **Invoices and receipts**; recognised by their proved phone, never a password |
+| Asking for a visit | **Book a visit**, or **Report a problem**, and the times they are in; or the office makes the job for them |
+| Assigned | The job card: "Musa will visit Thursday between 9 and 12", his name and photo, never his number |
+| On the way | The card's live map, until he arrives |
+| Arrived | "Musa has arrived" |
+| Done | **Confirm the work is done** (a tap, or a code read to the agent) when the business asks; then **Rate the visit**; an invoice with **Pay** when the job is charged |
+| Any time | Writing to the business in the same conversation |
+
+### 3.3 The field agent
+
+**Where:** the Taskiem app only, in its field mode; their own jobs and stock, nothing else of the business's. No working day: a schedule of jobs, one in execution at a time.
+
+| Moment | What they see and do |
+| --- | --- |
+| A job comes | A push; it joins **Jobs**: the job in execution with its next button, then the schedule, earliest first, held ones marked |
+| Before going | The job: reference, customer (**Call**), the place on a map (**Directions**), the window, what to do, the checklist, their stock |
+| **Start job** | Refused while another is on the way or on site; location for this job starts, with its notice |
+| **Arrived** | Measured against the pin; too far is marked, never refused |
+| The work | Checklist, photos, notes, parts used from their stock; the customer's confirmation when asked for |
+| **End job** | Refused until the checklist, photo and confirmation rules are met; location stops; free for the next |
+| Can't finish | **Could not finish**, with a reason; free for the next |
+| Held by the office | The job goes back on their schedule, marked held; they are free; when resumed it is theirs to start again |
+| No signal | Everything is queued with the phone's own times and sent once when back |
+| Their record | **My stock**, **History**, **Me** (jobs done, time on jobs, rating) |
+
+## 4. Example 1: a subscriber's complaint becomes a repair, worked partly offline
 
 **Setting:** the cast's. Musa holds three jobs today: J-1041 at 9:00, J-1042 (this one) between 10 and 12, J-1043 in the afternoon. The office issued him 3 connectors and 50 m of cable this morning (two `issued` movements: the store's counts down, Musa's up).
 
 **People:** Chidi, Ngozi, Musa.
 
-The job is made by a template from the customer's complaint. Jobs the office makes itself are [Example 2](#4-example-2-the-office-makes-the-jobs-one-assigned-at-once-and-three-assigned-later-in-bulk).
+The job is made by a template from the customer's complaint. Jobs the office makes itself are [Example 2](#5-example-2-the-office-makes-the-jobs-one-assigned-at-once-and-three-assigned-later-in-bulk).
 
 ### Steps
 
@@ -84,7 +136,7 @@ The job is made by a template from the customer's complaint. Jobs the office mak
 **Start job (9:40)**
 
 10. Musa opens J-1042 from his schedule: reference (copy), Chidi's name and phone (**Call**), the place on a small map (**Directions** opens his maps app), the window, what to do, the checklist, his stock. He taps **Start job**.
-11. **Checked:** J-1042 is assigned and his own; he has **no other job in execution** (with J-1041 still on the way, on site or on hold he would be refused, "End J-1041 first").
+11. **Checked:** J-1042 is assigned and his own; he has **no other job in execution** (with J-1041 still on the way or on site he would be refused, "End J-1041 first"; a held job does not count).
 12. **Recorded:** J-1042 **on the way**; the step with the phone's time 9:40, the server's time, his fix and its accuracy; history; Musa's state **on the way**. J-1042 can no longer be reassigned.
 13. **Location for this job starts:** the app starts the foreground service with its notification "Sharing your location with Ada Networks for job J-1042" (the first time ever, it asks for the location permission and says why). Reports come from a position stream as he moves, each with its fix's own time.
 14. **Fires:** `job` `started`; `job-tell-customer-on-the-way` changes Chidi's card to "Musa is on the way", with a live map of Musa's last report, refreshed. On the office's map, Musa appears on his way to the job's pin.
@@ -125,7 +177,7 @@ The job is made by a template from the customer's complaint. Jobs the office mak
 | If | Then | Covered in full by |
 | --- | --- | --- |
 | Chidi is not in | Musa taps **Could not finish**, "customer not in"; the job is **not finished** and Musa can start his next; `job-follow-up-not-finished` makes a new visit for Chidi, which the office schedules | Example (to write): a visit that could not finish |
-| Ngozi puts J-1042 on hold while Musa is on site | It is **on hold**, still Musa's one job in execution; location stops; Resume returns it to on site | Example (to write): held and resumed |
+| Ngozi puts J-1042 on hold while Musa is on site | It is **on hold**; Musa is freed, its location stops, and he may start his next job; **Resume** returns it to **assigned**, and he starts it again | [Example 3](#6-example-3-a-day-at-ada-networks-every-seat-at-once), 10:40 and 16:30 |
 | Bola cancels J-1042 while Musa is offline | Musa's later steps are kept as his record, the job stays **cancelled**, and both are told when he is back | Example (to write): the office cancels a job while the agent is offline |
 | J-1042 is not started by 10:00, or not arrived by 12:30 | `not started`, then `late`: the office is alerted; `job-late-alert` may tell Chidi | — |
 | The app is killed during the job | No report for 15 minutes: **location stopped** alert | — |
@@ -149,7 +201,7 @@ The job is made by a template from the customer's complaint. Jobs the office mak
 4. **An arrival estimate** on the "on the way" card is not in the plan, and would need a routing service.
 5. **More than one agent on a job** (helpers), and an agent marking themselves **not available** (leave, sickness): neither is in ISPOps or the plan ([Field work §23](field-work.md#23-risks-and-open-questions)).
 
-## 4. Example 2: the office makes the jobs, one assigned at once and three assigned later in bulk
+## 5. Example 2: the office makes the jobs, one assigned at once and three assigned later in bulk
 
 Jobs do not only come from customers' complaints and bookings: the office makes them. This follows ISPOps' **Create new job** page and its two buttons, **Create & Assign** and **Save as Draft** (`exact-hue-hearth`, `src/routes/_app.jobs.new.tsx`; the server's `POST /api/v1/jobs` in `ispops-backend`, `internal/httpapi/job_handler.go`), then its bulk **Assign to agent** on the jobs list (`src/routes/_app.jobs.index.tsx`), as [Field work §15.1](field-work.md#151-making-a-job-in-the-office) has them.
 
@@ -200,7 +252,7 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 
 **The work**
 
-22. Musa works J-1050 on Thursday, and Tunde and Musa work the Lekki Plaza jobs on Friday, as in [Example 1](#3-example-1-a-subscribers-complaint-becomes-a-repair-worked-partly-offline) steps 10 to 25: Start job, Arrived, End job, the customer's card or SMS at each step, the rating, and Close.
+22. Musa works J-1050 on Thursday, and Tunde and Musa work the Lekki Plaza jobs on Friday, as in [Example 1](#4-example-1-a-subscribers-complaint-becomes-a-repair-worked-partly-offline) steps 10 to 25: Start job, Arrived, End job, the customer's card or SMS at each step, the rating, and Close.
 23. Things that differ for an installation:
     - The parts used are a radio, a router and 20 m of cable, from Musa's stock.
     - If Ada has `job-invoice-on-done` on for installations, End job makes an invoice for the installation fee, with the parts as lines, and puts it in Kemi's conversation with **Pay**.
@@ -244,15 +296,73 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 4. **ISPOps' availability windows.** In ISPOps a customer declares windows when they are in, and staff link one to an existing job, which emails a confirmation (`src/routes/_app.availability.tsx`). Here a customer gives their window when booking ([§14](field-work.md#14-the-customers-side)). For a job the office makes, nothing yet asks the customer "when are you in?" before assigning. A **Ask the customer for a time** action on the job, sending a card or SMS with choices, would cover it.
 5. ~~A typed address for a known customer~~: settled. The job keeps its own place; the customer's row keeps its address until the business changes it (step 3).
 
-## 5. Examples still to write
+## 6. Example 3: a day at Ada Networks, every seat at once
+
+One Thursday, with the office, four customers and two field agents, to show how the pieces fit: jobs that came from a complaint, a phone call, a bulk assignment and a schedule; one held, one not finished, one worked offline; a recharge with no job at all.
+
+**Setting:** the cast's, with chat tools on. Already made before Thursday: **J-1060**, Kemi's installation, made by Ngozi on Wednesday and assigned to Musa for 9 to 12 ([Example 2](#5-example-2-the-office-makes-the-jobs-one-assigned-at-once-and-three-assigned-later-in-bulk), Part A); **J-1061, J-1062, J-1063**, Lekki Plaza's three maintenance visits, bulk-assigned to Tunde for 10 to 2; **J-1064**, a contract customer's maintenance, made overnight by `job-recurring-visit`, not assigned.
+
+**People:** Ngozi, Bola, Musa, Tunde; Kemi, Chidi, Mrs Bello, Mr Okon of Lekki Plaza.
+
+### The day
+
+| Time | Office | Customers | Field agents | Taskiem records and fires |
+| --- | --- | --- | --- | --- |
+| 7:55 | Bola, in chat, opens **Agents**, **Issue stock**: a radio, a router and 30 m of cable to Musa | | Musa's **My stock** shows them | `issued` movements: store down, Musa up |
+| 8:00 | Bola's Taskiem conversation has an alert card, "NEW JOB · maintenance · J-1064"; **Assign** suggests Musa first (assigned, 1 job today, nearest); Bola taps it | The contract customer gets an SMS: "Musa will visit today between 1 and 4" | Push: J-1064 joins Musa's schedule after J-1060 | `assigned`; diary line "Assigned J-1064 to Musa" |
+| 8:30 | Ngozi and Bola get the alert card "NEW JOB · fault repair · Chidi Okafor · today 12 to 3" | **Chidi** taps **Report a problem**, "No internet", and picks today 12 to 3 | | Complaint #52 in PHP Radius; `isp-complaint-to-job` makes **J-1065**, **new** |
+| 8:40 | Ngozi taps **Assign** on the card and picks Tunde, for after Lekki Plaza | Chidi's job card: "Tunde will visit today between 12 and 3" | Push to Tunde | `assigned` |
+| 8:45 | The map shows Musa heading to Ikoyi | **Kemi**'s card: "Musa is on the way", live map | Musa taps **Start job** on J-1060; location for it starts | J-1060 on the way; Musa on the way |
+| 9:05 | | Kemi's card: "Musa has arrived" | **Arrived**, 90 m from the pin | on site; travel 20 minutes |
+| 9:10 | **Mrs Bello** phones: her router is dead. Ngozi, on the web, **New job**: types her in (**Save to my customers** left ticked), the place, "Router replacement"; nobody is free near her, so **Save without assigning** | | | **J-1066**, **new**; a row in `customers`; alert card "NEW JOB" for the office |
+| 9:30 | Ada's staff make Kemi's account in their PHP Radius dashboard | Mr Okon's SMS: "Tunde is on the way" with the job's link | **Tunde** taps **Start job** on J-1061 | |
+| 10:10 | Notified: J-1060 done; the installation invoice made | Kemi taps **Confirm the work is done**; then the invoice card, **Pay**, paid; **Rate the visit**: 5 stars | Musa: checklist, photos, parts used (radio, router, 20 m of cable), **End job**; location stops | J-1060 **done**; `used` movements from Musa's stock; `job-invoice-on-done`; the payment in Money |
+| 10:15 | Ngozi, in Kemi's conversation: **Save to my subscribers** | Kemi taps **My internet**: linked by her proved phone; her new plan shows | | A row in `subscribers`, `account_ref` her PHP Radius username |
+| 10:20 | | | Musa starts J-1064 early: the window is later, and the customer agreed by phone | |
+| 10:40 | Tunde messages the office: unit 2 needs a mast clamp he does not carry. Bola opens J-1062 and taps **Hold**, "parts missing" | Mr Okon's SMS: "Unit 2's visit is paused: we'll be back with a part" | J-1062 goes back on Tunde's schedule, marked held; **he is free**, and taps **Start job** on J-1063 | J-1062 **on hold**; location for it stops; Tunde's state worked out again |
+| 12:10 | Alert card: "Not started · J-1065 · window began at 12" (Tunde is still at Lekki Plaza); Ngozi taps **Tell the customer** | Chidi: "Tunde is finishing a job nearby and will be with you by 1:30" | | |
+| 12:30 | Alert card "Done, waiting for review · J-1060"; Ngozi opens its sheet (route, photos, parts, rating) and taps **Close** | | | J-1060 **closed**; diary line |
+| 13:15 | | Chidi's card: on the way | Tunde ends J-1063 and starts J-1065 | |
+| 13:40 | | Chidi's card: arrived | Tunde: **Arrived**. No signal in the compound; the app keeps working | Steps queued on the phone |
+| 14:20 | | Chidi confirms in his card (his phone has signal) | Tunde taps **End job**, still offline | Queued |
+| 14:35 | Notified: J-1065 done, marked "offline" | Rate card; Chidi rates 4 stars | Signal back: the queue is sent and lands once | J-1065 **done** at 14:20, phone time |
+| 14:40 | Bola, on the "NEW JOB · J-1066" card: **Assign** suggests Musa (on site at J-1064, ending soon, 2 km away) | Mrs Bello's SMS: "Musa will visit today between 3 and 5" | Musa ends J-1064; push; starts J-1066 | |
+| 15:20 | Alert card "Not finished · J-1066 · customer not in"; Ngozi phones Mrs Bello and agrees tomorrow at 10; **Plan a follow-up** fills a new job from this one | Mrs Bello was out | Musa: **Could not finish**, "customer not in"; free | J-1066 **not finished**; **J-1068** made for tomorrow, assigned to Musa |
+| 16:00 | | Chidi: **Recharge**, his plan, pays Ada's Paystack; PHP Radius confirms; a **Recharged** card | | No job; the money goes straight to Ada's own gateway |
+| 16:30 | Bola issues Tunde the mast clamp, then **Resume**s J-1062: it is **assigned** to Tunde again, for tomorrow at 9 | Mr Okon's SMS: "Tunde will be back tomorrow at 9 for unit 2" | Push; J-1062 on Tunde's schedule, to start again | J-1062 **assigned**; its earlier steps kept |
+| 17:00 | Alert card: "Complaint #52 is still open in PHP Radius" (J-1065 was closed after review); Ngozi closes it in PHP Radius's dashboard and taps **Closed in PHP Radius** | | | |
+| 17:30 | The briefing for tomorrow: 4 jobs, 2 agents, 1 resumed, 1 follow-up | | | |
+| Friday | The pay template sends each agent's jobs done and time on jobs to Payrolla | | | |
+
+### What ties it together
+
+- **The job** is the one thing all three seats share: the office makes and watches it, the agent moves it, the customer sees it.
+- **Each step is a trigger**; templates decide who is told and what follows: the customer's card, the office's alerts, the rating, the invoice, the follow-up.
+- **Holding frees the agent**: Tunde carried on at 10:40, and J-1062 came back to him when the part did.
+- **The business's own lists** (`customers`, `subscribers`) hold whom it chose to save.
+- **PHP Radius** stays where internet accounts live; Taskiem is how subscribers reach it, with no job needed for a recharge.
+
+### What it checks
+
+- Every seat's part of [§3](#3-the-three-seats), together, on one day.
+- Hold freeing the agent and Resume returning the job to assigned ([Field work §7](field-work.md#7-the-journey-of-a-job)).
+- The office working from chat: alert cards, sheets, diary lines, the briefing ([§15.2](field-work.md#152-the-offices-tools-in-chat)).
+- Jobs from a complaint, a phone call, a bulk assignment and a schedule, side by side.
+
+### Open points
+
+1. **Telling the customer about a hold.** Mr Okon's SMS at 10:40 assumes a template on `on_hold` that tells the customer; Field work §8 has none yet.
+2. **Starting a job before its window.** Musa started J-1064 early at 10:20. Nothing stops it today; should the app ask "The window is 1 to 4: start now?"
+3. **Asking the customer for a time** (Example 2, open point 4) came up again at 15:20: Ngozi phoned Mrs Bello.
+
+## 7. Examples still to write
 
 Each is a job, or a few, that tests a different part of the plans. Add one here when it is thought of; move it to its own numbered section when written.
 
 | # | Scenario | Tests mostly |
 | --- | --- | --- |
-| 3 | A new subscriber books an installation in chat (Book a visit): parts issued and used, an invoice on End job, their PHP Radius account linked after | Book a visit, stock, `job-invoice-on-done`, ISP sign-up |
-| 4 | A visit that could not finish (customer not in), and its follow-up visit | Could not finish, `job-follow-up-not-finished` |
-| 5 | Held and resumed: parts missing, the job held, resumed the next day | Hold, Resume, one job in execution |
+| 4 | A new subscriber books an installation in chat (Book a visit): parts issued and used, an invoice on End job, their PHP Radius account linked after | Book a visit, stock, `job-invoice-on-done`, ISP sign-up |
+| 5 | A visit that could not finish (customer not in), and its follow-up visit | Could not finish, `job-follow-up-not-finished` |
 | 6 | The office cancels a job while the agent is offline | Offline conflicts |
 | 7 | A business with location off | Every place-less path |
 | 8 | A customer not on Taskiem from start to finish (Mrs Bello) | Updates by SMS, the job's page, the code |

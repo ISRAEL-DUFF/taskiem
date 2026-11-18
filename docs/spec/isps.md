@@ -207,7 +207,7 @@ The subscription recipes of [business areas §9](business-areas.md#9-a-service-b
 | Dispatcher | **Dispatcher** (Field work's custom role) | `job.read`, `job.manage` |
 | Field agent | **Field agent** (Field work's built-in role) | `job.work` only |
 
-All are changed under custom roles like any other.
+All are changed under custom roles like any other. Customer care, cashiers and dispatchers can work from the chat: Field work's tools ([Field work §15.2](field-work.md#152-the-offices-tools-in-chat)), and for a provider a **Subscribers** tile (the `subscribers` table, §6.6) and alert cards for a recharge paid but not yet confirmed by PHP Radius (the cashier's: **Settle**) and for a complaint still open in PHP Radius after its job was closed (**Closed in PHP Radius**).
 
 ## 9. Signing up as a provider
 
