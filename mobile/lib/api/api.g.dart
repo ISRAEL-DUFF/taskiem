@@ -1336,6 +1336,84 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/appeal', body: body.toJson());
     return AppealGroupResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Order together (`POST /v1/me/baskets`)
+  Future<StartBasketResponse> startBasket({required StartBasketRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/baskets', body: body.toJson());
+    return StartBasketResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A shared basket (`GET /v1/me/baskets/{id}`)
+  Future<Basket> getBasket({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pick-up or delivery (`PUT /v1/me/baskets/{id}`)
+  Future<Basket> putBasket({required PutBasketRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The basket's shop (`GET /v1/me/baskets/{id}/shop`)
+  Future<BasketShopResponse> basketShop({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}/shop');
+    return BasketShopResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your lines in the basket (`PUT /v1/me/baskets/{id}/mine`)
+  Future<Basket> putMyBasketLines({required PutMyBasketLinesRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}/mine', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a line out (`DELETE /v1/me/baskets/{id}/lines/{line}`)
+  Future<Basket> deleteBasketLine({required String id, required String line}) async {
+    final j = await _t.send('DELETE', '/v1/me/baskets/${Uri.encodeComponent(id)}/lines/${Uri.encodeComponent(line)}');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Close the basket (`POST /v1/me/baskets/{id}/close`)
+  Future<Basket> closeBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/close');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Reopen the basket (`POST /v1/me/baskets/{id}/reopen`)
+  Future<Basket> reopenBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/reopen');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Give up the basket (`POST /v1/me/baskets/{id}/cancel`)
+  Future<Basket> cancelBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/cancel');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Hand the basket on (`PUT /v1/me/baskets/{id}/holder`)
+  Future<Basket> handBasket({required HandBasketRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}/holder', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Place the order (`POST /v1/me/baskets/{id}/place`)
+  Future<PlaceBasketResponse> placeBasket({required PlaceBasketRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/place', body: body.toJson());
+    return PlaceBasketResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay your share (`GET /v1/me/baskets/{id}/pay`)
+  Future<PayBasketShareResponse> payBasketShare({required String id, String? for_}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}/pay', query: {'for': ?for_});
+    return PayBasketShareResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send each a "Your share" card (`POST /v1/me/baskets/{id}/share-cards`)
+  Future<SendBasketShareCardsResponse> sendBasketShareCards({required SendBasketShareCardsRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/share-cards', body: body.toJson());
+    return SendBasketShareCardsResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -9826,13 +9904,19 @@ class PeopleMessage {
 /// rider's progress when shared), or a share (amount, what for, the account to
 /// pay to, paid).
 class PeopleCard {
-  const PeopleCard({this.amountKobo, this.area, this.business, this.businessId, this.delivery, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
+  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
 
   final int? amountKobo;
   final String? area;
+  /// A shared basket (5b C): made by the server; GET /v1/me/baskets/{basket_id}
+  /// reads it.
+  final String? basketId;
   final String? business;
   final String? businessId;
   final DeliveryProgress? delivery;
+  final String? for_;
+  /// A share sent from a basket, in a group: who it is for.
+  final String? forId;
   final String? itemId;
   final bool? paid;
   final DateTime? paidAt;
@@ -9848,9 +9932,12 @@ class PeopleCard {
   factory PeopleCard.fromJson(Map<String, dynamic> j) => PeopleCard(
         amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
         area: j['area'] == null ? null : j['area'] as String,
+        basketId: j['basket_id'] == null ? null : j['basket_id'] as String,
         business: j['business'] == null ? null : j['business'] as String,
         businessId: j['business_id'] == null ? null : j['business_id'] as String,
         delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        for_: j['for'] == null ? null : j['for'] as String,
+        forId: j['for_id'] == null ? null : j['for_id'] as String,
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         paid: j['paid'] == null ? null : j['paid'] as bool,
         paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
@@ -9867,9 +9954,12 @@ class PeopleCard {
   Map<String, dynamic> toJson() => {
         'amount_kobo': ?amountKobo,
         'area': ?area,
+        'basket_id': ?basketId,
         'business': ?business,
         'business_id': ?businessId,
         'delivery': ?delivery?.toJson(),
+        'for': ?for_,
+        'for_id': ?forId,
         'item_id': ?itemId,
         'paid': ?paid,
         'paid_at': ?paidAt?.toUtc().toIso8601String(),
@@ -11504,5 +11594,539 @@ class AppealGroupResponse {
   Map<String, dynamic> toJson() => {
         'appeal': appeal.toJson(),
         'said': said,
+      };
+}
+
+class StartBasketRequest {
+  const StartBasketRequest({required this.businessId, this.chatId, this.groupId});
+
+  final String businessId;
+  /// Your own people chat's id (one of group_id and chat_id).
+  final String? chatId;
+  final String? groupId;
+
+  factory StartBasketRequest.fromJson(Map<String, dynamic> j) => StartBasketRequest(
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'group_id': ?groupId,
+      };
+}
+
+class StartBasketResponse {
+  const StartBasketResponse({required this.basket, required this.message});
+
+  final Basket basket;
+  final Map<String, dynamic> message;
+
+  factory StartBasketResponse.fromJson(Map<String, dynamic> j) => StartBasketResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        message: j['message'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'message': message,
+      };
+}
+
+/// A shared basket (people-chatting §10.3, 5b C): ordering together from one
+/// business in a group or a chat between two people.
+class Basket {
+  const Basket({required this.business, required this.businessId, this.chatId, this.closedAt, required this.createdAt, required this.deliveryKobo, this.fulfilment, this.groupId, required this.holder, required this.holderGone, required this.holderId, required this.id, required this.itemsKobo, this.order, this.payment, required this.people, this.placedAt, this.placedBy, required this.problems, this.shop, required this.starterId, required this.state, required this.totalKobo, required this.where, required this.youHold, this.zone});
+
+  final String business;
+  final String businessId;
+  /// Your own copy's id, for a chat between two people.
+  final String? chatId;
+  final DateTime? closedAt;
+  final DateTime createdAt;
+  final int deliveryKobo;
+  final String? fulfilment;
+  final String? groupId;
+  final String holder;
+  /// The holder is no longer in the group or the chat; any member may take it.
+  final bool holderGone;
+  final String holderId;
+  final String id;
+  final int itemsKobo;
+  final BasketOrder? order;
+  final String? payment;
+  final List<BasketPerson> people;
+  final DateTime? placedAt;
+  final String? placedBy;
+  final List<String> problems;
+  final BasketShop? shop;
+  final String starterId;
+  final String state;
+  final int totalKobo;
+  final String where;
+  final bool youHold;
+  final String? zone;
+
+  factory Basket.fromJson(Map<String, dynamic> j) => Basket(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        closedAt: j['closed_at'] == null ? null : DateTime.parse(j['closed_at'] as String),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deliveryKobo: (j['delivery_kobo'] as num).toInt(),
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+        holder: j['holder'] as String,
+        holderGone: j['holder_gone'] as bool,
+        holderId: j['holder_id'] as String,
+        id: j['id'] as String,
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        order: j['order'] == null ? null : BasketOrder.fromJson(j['order'] as Map<String, dynamic>),
+        payment: j['payment'] == null ? null : j['payment'] as String,
+        people: (j['people'] as List).map((e) => BasketPerson.fromJson(e as Map<String, dynamic>)).toList(),
+        placedAt: j['placed_at'] == null ? null : DateTime.parse(j['placed_at'] as String),
+        placedBy: j['placed_by'] == null ? null : j['placed_by'] as String,
+        problems: (j['problems'] as List).map((e) => e as String).toList(),
+        shop: j['shop'] == null ? null : BasketShop.fromJson(j['shop'] as Map<String, dynamic>),
+        starterId: j['starter_id'] as String,
+        state: j['state'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        where: j['where'] as String,
+        youHold: j['you_hold'] as bool,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'closed_at': ?closedAt?.toUtc().toIso8601String(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery_kobo': deliveryKobo,
+        'fulfilment': ?fulfilment,
+        'group_id': ?groupId,
+        'holder': holder,
+        'holder_gone': holderGone,
+        'holder_id': holderId,
+        'id': id,
+        'items_kobo': itemsKobo,
+        'order': ?order?.toJson(),
+        'payment': ?payment,
+        'people': people.map((e) => e.toJson()).toList(),
+        'placed_at': ?placedAt?.toUtc().toIso8601String(),
+        'placed_by': ?placedBy,
+        'problems': problems.map((e) => e).toList(),
+        'shop': ?shop?.toJson(),
+        'starter_id': starterId,
+        'state': state,
+        'total_kobo': totalKobo,
+        'where': where,
+        'you_hold': youHold,
+        'zone': ?zone,
+      };
+}
+
+/// A placed basket's order as its members follow it; never the customer's
+/// details.
+class BasketOrder {
+  const BasketOrder({this.delivery, required this.leftKobo, required this.line, required this.paidKobo, this.payBy, required this.payableNow, required this.paymentState, required this.reference, required this.status, required this.totalKobo});
+
+  final DeliveryProgress? delivery;
+  final int leftKobo;
+  /// The state in words.
+  final String line;
+  final int paidKobo;
+  final DateTime? payBy;
+  final bool payableNow;
+  final String paymentState;
+  final String reference;
+  final String status;
+  final int totalKobo;
+
+  factory BasketOrder.fromJson(Map<String, dynamic> j) => BasketOrder(
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        leftKobo: (j['left_kobo'] as num).toInt(),
+        line: j['line'] as String,
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payBy: j['pay_by'] == null ? null : DateTime.parse(j['pay_by'] as String),
+        payableNow: j['payable_now'] as bool,
+        paymentState: j['payment_state'] as String,
+        reference: j['reference'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivery': ?delivery?.toJson(),
+        'left_kobo': leftKobo,
+        'line': line,
+        'paid_kobo': paidKobo,
+        'pay_by': ?payBy?.toUtc().toIso8601String(),
+        'payable_now': payableNow,
+        'payment_state': paymentState,
+        'reference': reference,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class BasketPerson {
+  const BasketPerson({required this.itemsKobo, required this.lines, required this.name, required this.personId, this.share, required this.you});
+
+  final int itemsKobo;
+  final List<BasketLine> lines;
+  /// "You", the name you gave them in contacts, else theirs; "Deleted account".
+  final String name;
+  final String personId;
+  final BasketShare? share;
+  final bool you;
+
+  factory BasketPerson.fromJson(Map<String, dynamic> j) => BasketPerson(
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        lines: (j['lines'] as List).map((e) => BasketLine.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        share: j['share'] == null ? null : BasketShare.fromJson(j['share'] as Map<String, dynamic>),
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items_kobo': itemsKobo,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'name': name,
+        'person_id': personId,
+        'share': ?share?.toJson(),
+        'you': you,
+      };
+}
+
+/// One line of a member's in a shared basket.
+class BasketLine {
+  const BasketLine({required this.addedPriceKobo, required this.available, this.fewLeft, required this.id, required this.itemId, required this.lineKobo, required this.name, required this.priceChanged, required this.priceKobo, required this.quantity});
+
+  /// The price when the line was added.
+  final int addedPriceKobo;
+  /// In the shop now and not sold out (always true once placed).
+  final bool available;
+  final int? fewLeft;
+  final String id;
+  final String itemId;
+  final int lineKobo;
+  final String name;
+  final bool priceChanged;
+  /// The shop's price now (as placed, once placed).
+  final int priceKobo;
+  final int quantity;
+
+  factory BasketLine.fromJson(Map<String, dynamic> j) => BasketLine(
+        addedPriceKobo: (j['added_price_kobo'] as num).toInt(),
+        available: j['available'] as bool,
+        fewLeft: j['few_left'] == null ? null : (j['few_left'] as num).toInt(),
+        id: j['id'] as String,
+        itemId: j['item_id'] as String,
+        lineKobo: (j['line_kobo'] as num).toInt(),
+        name: j['name'] as String,
+        priceChanged: j['price_changed'] as bool,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_price_kobo': addedPriceKobo,
+        'available': available,
+        'few_left': ?fewLeft,
+        'id': id,
+        'item_id': itemId,
+        'line_kobo': lineKobo,
+        'name': name,
+        'price_changed': priceChanged,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+      };
+}
+
+/// A member's share once placed (C2): their items and an equal part of the
+/// delivery; paid by its own link ("each pays"), or a "Your share" card sent
+/// ("I'll pay all").
+class BasketShare {
+  const BasketShare({required this.amountKobo, required this.cardSent, required this.deliveryKobo, required this.itemsKobo, required this.paid, this.paidAt});
+
+  final int amountKobo;
+  final bool cardSent;
+  final int deliveryKobo;
+  final int itemsKobo;
+  final bool paid;
+  final DateTime? paidAt;
+
+  factory BasketShare.fromJson(Map<String, dynamic> j) => BasketShare(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        cardSent: j['card_sent'] as bool,
+        deliveryKobo: (j['delivery_kobo'] as num).toInt(),
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        paid: j['paid'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'card_sent': cardSent,
+        'delivery_kobo': deliveryKobo,
+        'items_kobo': itemsKobo,
+        'paid': paid,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+      };
+}
+
+class BasketShop {
+  const BasketShop({this.closed, required this.delivery, required this.eachOffered, required this.open, required this.payment, required this.pickup, required this.zones});
+
+  final String? closed;
+  final bool delivery;
+  /// Each member may pay their own share (the business takes payment in the app
+  /// by card).
+  final bool eachOffered;
+  final bool open;
+  final String payment;
+  final bool pickup;
+  final List<BasketZone> zones;
+
+  factory BasketShop.fromJson(Map<String, dynamic> j) => BasketShop(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        delivery: j['delivery'] as bool,
+        eachOffered: j['each_offered'] as bool,
+        open: j['open'] as bool,
+        payment: j['payment'] as String,
+        pickup: j['pickup'] as bool,
+        zones: (j['zones'] as List).map((e) => BasketZone.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'delivery': delivery,
+        'each_offered': eachOffered,
+        'open': open,
+        'payment': payment,
+        'pickup': pickup,
+        'zones': zones.map((e) => e.toJson()).toList(),
+      };
+}
+
+class BasketZone {
+  const BasketZone({required this.feeKobo, required this.name});
+
+  final int feeKobo;
+  final String name;
+
+  factory BasketZone.fromJson(Map<String, dynamic> j) => BasketZone(
+        feeKobo: (j['fee_kobo'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fee_kobo': feeKobo,
+        'name': name,
+      };
+}
+
+class PutBasketRequest {
+  const PutBasketRequest({this.fulfilment, this.zone});
+
+  final String? fulfilment;
+  final String? zone;
+
+  factory PutBasketRequest.fromJson(Map<String, dynamic> j) => PutBasketRequest(
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fulfilment': ?fulfilment,
+        'zone': ?zone,
+      };
+}
+
+class BasketShopResponse {
+  const BasketShopResponse({this.closed, required this.delivery, required this.items, required this.open, required this.payment, required this.pickup, required this.zones});
+
+  final String? closed;
+  final bool delivery;
+  final List<ShopItem> items;
+  final bool open;
+  final String payment;
+  final bool pickup;
+  final List<BasketZone> zones;
+
+  factory BasketShopResponse.fromJson(Map<String, dynamic> j) => BasketShopResponse(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        delivery: j['delivery'] as bool,
+        items: (j['items'] as List).map((e) => ShopItem.fromJson(e as Map<String, dynamic>)).toList(),
+        open: j['open'] as bool,
+        payment: j['payment'] as String,
+        pickup: j['pickup'] as bool,
+        zones: (j['zones'] as List).map((e) => BasketZone.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'delivery': delivery,
+        'items': items.map((e) => e.toJson()).toList(),
+        'open': open,
+        'payment': payment,
+        'pickup': pickup,
+        'zones': zones.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PutMyBasketLinesRequest {
+  const PutMyBasketLinesRequest({required this.lines});
+
+  final List<PutMyBasketLinesRequestLinesItem> lines;
+
+  factory PutMyBasketLinesRequest.fromJson(Map<String, dynamic> j) => PutMyBasketLinesRequest(
+        lines: (j['lines'] as List).map((e) => PutMyBasketLinesRequestLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PutMyBasketLinesRequestLinesItem {
+  const PutMyBasketLinesRequestLinesItem({required this.itemId, required this.quantity});
+
+  final String itemId;
+  final int quantity;
+
+  factory PutMyBasketLinesRequestLinesItem.fromJson(Map<String, dynamic> j) => PutMyBasketLinesRequestLinesItem(
+        itemId: j['item_id'] as String,
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': itemId,
+        'quantity': quantity,
+      };
+}
+
+class HandBasketRequest {
+  const HandBasketRequest({required this.personId});
+
+  final String personId;
+
+  factory HandBasketRequest.fromJson(Map<String, dynamic> j) => HandBasketRequest(
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_id': personId,
+      };
+}
+
+class PlaceBasketRequest {
+  const PlaceBasketRequest({this.address, this.addressId, this.landmark, this.note, required this.payment, this.totalKobo});
+
+  final String? address;
+  final String? addressId;
+  final String? landmark;
+  final String? note;
+  final String payment;
+  /// The total you were shown; 0 or absent to skip the check.
+  final int? totalKobo;
+
+  factory PlaceBasketRequest.fromJson(Map<String, dynamic> j) => PlaceBasketRequest(
+        address: j['address'] == null ? null : j['address'] as String,
+        addressId: j['address_id'] == null ? null : j['address_id'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        payment: j['payment'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'address_id': ?addressId,
+        'landmark': ?landmark,
+        'note': ?note,
+        'payment': payment,
+        'total_kobo': ?totalKobo,
+      };
+}
+
+class PlaceBasketResponse {
+  const PlaceBasketResponse({required this.basket, required this.order});
+
+  final Basket basket;
+  final Map<String, dynamic> order;
+
+  factory PlaceBasketResponse.fromJson(Map<String, dynamic> j) => PlaceBasketResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        order: j['order'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'order': order,
+      };
+}
+
+class PayBasketShareResponse {
+  const PayBasketShareResponse({required this.amountKobo, required this.for_, this.paid, required this.reference, required this.url});
+
+  final int amountKobo;
+  final String for_;
+  final bool? paid;
+  final String reference;
+  final String url;
+
+  factory PayBasketShareResponse.fromJson(Map<String, dynamic> j) => PayBasketShareResponse(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        for_: j['for'] as String,
+        paid: j['paid'] == null ? null : j['paid'] as bool,
+        reference: j['reference'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'for': for_,
+        'paid': ?paid,
+        'reference': reference,
+        'url': url,
+      };
+}
+
+class SendBasketShareCardsRequest {
+  const SendBasketShareCardsRequest({this.payTo});
+
+  final PayoutAccount? payTo;
+
+  factory SendBasketShareCardsRequest.fromJson(Map<String, dynamic> j) => SendBasketShareCardsRequest(
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pay_to': ?payTo?.toJson(),
+      };
+}
+
+class SendBasketShareCardsResponse {
+  const SendBasketShareCardsResponse({required this.basket, required this.failed, required this.sent});
+
+  final Basket basket;
+  final List<Map<String, dynamic>> failed;
+  final List<String> sent;
+
+  factory SendBasketShareCardsResponse.fromJson(Map<String, dynamic> j) => SendBasketShareCardsResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        failed: (j['failed'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        sent: (j['sent'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'failed': failed.map((e) => e).toList(),
+        'sent': sent.map((e) => e).toList(),
       };
 }

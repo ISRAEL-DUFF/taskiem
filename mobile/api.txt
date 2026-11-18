@@ -293,3 +293,18 @@ typingGroup
 groupLinkPreview
 reportGroup
 appealGroup
+
+# Ordering together (people-chatting §10.3, 5b C)
+startBasket
+getBasket
+putBasket
+basketShop
+putMyBasketLines
+deleteBasketLine
+closeBasket
+reopenBasket
+cancelBasket
+handBasket
+placeBasket
+payBasketShare
+sendBasketShareCards
