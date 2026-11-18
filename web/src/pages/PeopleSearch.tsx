@@ -92,7 +92,7 @@ export function PeopleSearchPage() {
   return (
     <>
       <p className="crumbs">
-        <Link to={back} aria-label={chat ? "Back to the chat" : "Back to Chats"}>
+        <Link to={back} aria-label={chat ? `Back to the chat with ${chatName ?? "them"}` : "Back to Chats"}>
           {chat ? (chatName ?? "Chat") : "Chats"}
         </Link>
       </p>
