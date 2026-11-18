@@ -1242,6 +1242,9 @@ class PeopleBubble extends StatelessWidget {
     final deleted = m.deleted == true;
     final c = deleted ? null : m.card;
     final meta = mine && c == null ? t.chatOutMeta : t.muted;
+    // Your own words white on pine in the light (ownWords' ink): read here,
+    // outside the bubble, the theme's own ink would be dark on pine.
+    final ink = mine && TkTheme.of(context).mode != TkMode.dark ? const Color(0xFFFFFFFF) : t.text;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1313,7 +1316,7 @@ class PeopleBubble extends StatelessWidget {
                           children: [
                             TkIcon('pin', size: 16, stroke: 2, color: meta),
                             const SizedBox(width: 6),
-                            Flexible(child: Text((place.label ?? '').isEmpty ? 'A place' : place.label!, style: tkText(size: 15, weight: 600, color: t.text))),
+                            Flexible(child: Text((place.label ?? '').isEmpty ? 'A place' : place.label!, style: tkText(size: 15, weight: 600, color: ink))),
                           ],
                         ),
                         Text('Open in maps', style: tkText(size: 13, weight: 600, color: mine ? t.chatOutMeta : TkLook.of(context).limeInk)),
@@ -1325,8 +1328,8 @@ class PeopleBubble extends StatelessWidget {
                 Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))
               else if (words.isNotEmpty)
                 spans == null
-                    ? Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text))
-                    : Text.rich(spans!(words, tkText(size: 16, lineHeight: 23 / 16, color: t.text))),
+                    ? Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink))
+                    : Text.rich(spans!(words, tkText(size: 16, lineHeight: 23 / 16, color: ink))),
             ],
           );
         },

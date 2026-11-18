@@ -1408,15 +1408,16 @@ class GroupReactionChips extends StatelessWidget {
                 child: GestureDetector(
                   onTap: onReact == null ? null : () => onReact!(r.reaction),
                   onLongPress: onWho,
+                  // As wide as the emoji and its count (an alignment here
+                  // would stretch it across the row).
                   child: Container(
                     constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: r.reaction == mine ? Color.alphaBlend(look.lime.withValues(alpha: 0.22), look.card) : look.card,
                       borderRadius: BorderRadius.circular(999),
                       boxShadow: const [BoxShadow(color: Color(0x26000000), offset: Offset(0, 1), blurRadius: 3)],
                     ),
-                    alignment: Alignment.center,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

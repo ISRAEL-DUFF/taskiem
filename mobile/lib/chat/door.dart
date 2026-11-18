@@ -283,6 +283,9 @@ class DoorBubble extends StatelessWidget {
     final c = card;
     final words = a != null && _fileWords.contains(body) ? '' : (c != null && body == c.title ? '' : body);
     final name = (sender ?? '').isNotEmpty && first ? Text(sender!, style: tkText(size: 12, weight: 600, color: t.tintText)) : null;
+    // Your own words white on pine in the light (ownWords' ink): read here,
+    // outside the bubble, the theme's own ink would be dark on pine.
+    final ink = mine && TkTheme.of(context).mode != TkMode.dark ? const Color(0xFFFFFFFF) : t.text;
     final Widget shown;
     if (c != null && a == null) {
       // A card is its own message, on the card's frame, not a bubble's.
@@ -323,7 +326,7 @@ class DoorBubble extends StatelessWidget {
               if (offer) const OfferMark(),
               if (a != null) AttachmentView(m: doorFileMessage(id: id, mine: mine, a: a, at: at), files: files, other: other, room: room, local: local),
               if (c != null) Padding(padding: const EdgeInsets.only(top: 4), child: DoorCard(card: c, action: cardAction, onAction: onCard)),
-              if (words.isNotEmpty) Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text)),
+              if (words.isNotEmpty) Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: ink)),
             ],
           );
         },
