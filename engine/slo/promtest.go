@@ -310,6 +310,19 @@ func RulesTestYAML() ([]byte, error) {
 					{EvalTime: "50m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{expect("TaskiemRetentionPurgeBehind", map[string]string{"severity": "ticket"})}},
 				},
 			},
+			{
+				Name:     "people chats' storage grows past its line",
+				Interval: "1h",
+				InputSeries: []promSeries{
+					// 60 GiB that grows 1 GiB an hour from the second day on (24 GiB a day).
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x24 64424509440+1073741824x24"},
+					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x48"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "20h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "40h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
 		},
 	}
 	b, err := yaml.Marshal(f)

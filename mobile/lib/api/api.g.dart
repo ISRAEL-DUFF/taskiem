@@ -1061,6 +1061,29 @@ class TaskiemApi {
   Future<void> deletePayoutAccount() async {
     await _t.send('DELETE', '/v1/me/payout-account');
   }
+
+  /// Your standing with Taskiem's moderators (`GET /v1/me/standing`)
+  Future<PersonStanding> getMyStanding() async {
+    final j = await _t.send('GET', '/v1/me/standing');
+    return PersonStanding.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Appeal a moderator's decision (`POST /v1/me/standing/appeals`)
+  Future<AppealMyStandingResponse> appealMyStanding({required AppealMyStandingRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/standing/appeals', body: body.toJson());
+    return AppealMyStandingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark the moderators' notices seen (`POST /v1/me/standing/seen`)
+  Future<void> seenMyStanding() async {
+    await _t.send('POST', '/v1/me/standing/seen');
+  }
+
+  /// How many lawful requests Taskiem received (`GET /v1/transparency/lawful-requests`)
+  Future<GetLawfulRequestCountsResponse> getLawfulRequestCounts() async {
+    final j = await _t.send('GET', '/v1/transparency/lawful-requests');
+    return GetLawfulRequestCountsResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -9760,5 +9783,190 @@ class PayoutAccountAnswer {
         'account': ?account,
         'checked': checked,
         'words': words,
+      };
+}
+
+class PersonStanding {
+  const PersonStanding({required this.actions, required this.appealWords, required this.state, required this.unseen, this.until, required this.words});
+
+  final List<PersonStandingActionsItem> actions;
+  final String appealWords;
+  final String state;
+  final int unseen;
+  final Object? until;
+  final String words;
+
+  factory PersonStanding.fromJson(Map<String, dynamic> j) => PersonStanding(
+        actions: (j['actions'] as List).map((e) => PersonStandingActionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        appealWords: j['appeal_words'] as String,
+        state: j['state'] as String,
+        unseen: (j['unseen'] as num).toInt(),
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': actions.map((e) => e.toJson()).toList(),
+        'appeal_words': appealWords,
+        'state': state,
+        'unseen': unseen,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class PersonStandingActionsItem {
+  const PersonStandingActionsItem({required this.action, this.appeal, required this.at, required this.canAppeal, required this.id, required this.inForce, this.liftedAt, required this.reason, required this.seen, this.until, required this.words});
+
+  final String action;
+  final Object? appeal;
+  final DateTime at;
+  final bool canAppeal;
+  final String id;
+  final bool inForce;
+  final Object? liftedAt;
+  final String reason;
+  final bool seen;
+  final Object? until;
+  final String words;
+
+  factory PersonStandingActionsItem.fromJson(Map<String, dynamic> j) => PersonStandingActionsItem(
+        action: j['action'] as String,
+        appeal: j['appeal'],
+        at: DateTime.parse(j['at'] as String),
+        canAppeal: j['can_appeal'] as bool,
+        id: j['id'] as String,
+        inForce: j['in_force'] as bool,
+        liftedAt: j['lifted_at'],
+        reason: j['reason'] as String,
+        seen: j['seen'] as bool,
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'appeal': ?appeal,
+        'at': at.toUtc().toIso8601String(),
+        'can_appeal': canAppeal,
+        'id': id,
+        'in_force': inForce,
+        'lifted_at': ?liftedAt,
+        'reason': reason,
+        'seen': seen,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class AppealMyStandingRequest {
+  const AppealMyStandingRequest({required this.actionId, required this.text});
+
+  final String actionId;
+  final String text;
+
+  factory AppealMyStandingRequest.fromJson(Map<String, dynamic> j) => AppealMyStandingRequest(
+        actionId: j['action_id'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action_id': actionId,
+        'text': text,
+      };
+}
+
+class AppealMyStandingResponse {
+  const AppealMyStandingResponse({required this.appeal, required this.said});
+
+  final StandingAppeal appeal;
+  final String said;
+
+  factory AppealMyStandingResponse.fromJson(Map<String, dynamic> j) => AppealMyStandingResponse(
+        appeal: StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'appeal': appeal.toJson(),
+        'said': said,
+      };
+}
+
+class StandingAppeal {
+  const StandingAppeal({required this.at, this.decidedAt, required this.id, this.note, required this.state, required this.text});
+
+  final DateTime at;
+  final Object? decidedAt;
+  final String id;
+  final Object? note;
+  final String state;
+  final String text;
+
+  factory StandingAppeal.fromJson(Map<String, dynamic> j) => StandingAppeal(
+        at: DateTime.parse(j['at'] as String),
+        decidedAt: j['decided_at'],
+        id: j['id'] as String,
+        note: j['note'],
+        state: j['state'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'decided_at': ?decidedAt,
+        'id': id,
+        'note': ?note,
+        'state': state,
+        'text': text,
+      };
+}
+
+class GetLawfulRequestCountsResponse {
+  const GetLawfulRequestCountsResponse({required this.periods, required this.words});
+
+  final List<GetLawfulRequestCountsResponsePeriodsItem> periods;
+  final String words;
+
+  factory GetLawfulRequestCountsResponse.fromJson(Map<String, dynamic> j) => GetLawfulRequestCountsResponse(
+        periods: (j['periods'] as List).map((e) => GetLawfulRequestCountsResponsePeriodsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'periods': periods.map((e) => e.toJson()).toList(),
+        'words': words,
+      };
+}
+
+class GetLawfulRequestCountsResponsePeriodsItem {
+  const GetLawfulRequestCountsResponsePeriodsItem({required this.answered, required this.half, required this.label, required this.pending, required this.received, required this.refused, required this.year});
+
+  final int answered;
+  final int half;
+  final String label;
+  final int pending;
+  final int received;
+  final int refused;
+  final int year;
+
+  factory GetLawfulRequestCountsResponsePeriodsItem.fromJson(Map<String, dynamic> j) => GetLawfulRequestCountsResponsePeriodsItem(
+        answered: (j['answered'] as num).toInt(),
+        half: (j['half'] as num).toInt(),
+        label: j['label'] as String,
+        pending: (j['pending'] as num).toInt(),
+        received: (j['received'] as num).toInt(),
+        refused: (j['refused'] as num).toInt(),
+        year: (j['year'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answered': answered,
+        'half': half,
+        'label': label,
+        'pending': pending,
+        'received': received,
+        'refused': refused,
+        'year': year,
       };
 }

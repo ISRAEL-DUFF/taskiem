@@ -737,6 +737,19 @@ groups:
     for: 0m
     labels:
       severity: ticket
+  - alert: TaskiemPeopleStorageLarge
+    annotations:
+      description: 'People chats are kept until the people delete them (decision 0069),
+        so their tables only grow. Together they take over 100 GiB on disk, or grew
+        by over 5 GiB in a day: plan the database''s disk, and whether photos and
+        files leave Postgres for object storage.'
+      runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiempeoplestoragelarge
+      summary: People chats take over 100 GiB, or grew over 5 GiB in a day
+    expr: sum(taskiem_people_storage_bytes) > 107374182400 or (sum(taskiem_people_storage_bytes)
+      - sum(taskiem_people_storage_bytes offset 1d)) > 5368709120
+    for: 1h
+    labels:
+      severity: ticket
   - alert: TaskiemTargetDown
     annotations:
       description: Prometheus cannot scrape a Taskiem pod. If it serves traffic, the

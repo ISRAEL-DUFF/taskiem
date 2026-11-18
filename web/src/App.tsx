@@ -34,6 +34,7 @@ import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
 import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
 import { AccountDeleted } from "./pages/YouAccount";
+import { TransparencyPage } from "./pages/Transparency";
 import { PeopleOnYou, PersonLinkPage } from "./pages/People";
 import { ChatLinkPage } from "./pages/ChatLinkPage";
 import { CustomerChatSettings } from "./pages/CustomerChatSettings";
@@ -269,6 +270,8 @@ function Shell() {
   if (loc.pathname === "/confirm-email") return alone(<ConfirmEmail />);
   // A deleted account (You's settings): said signed in or, after it, out.
   if (loc.pathname === "/account-deleted") return alone(<AccountDeleted />);
+  // The published count of lawful requests (people-chatting §8.5), for anyone.
+  if (loc.pathname === "/transparency") return alone(<TransparencyPage />);
   if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
     return alone(
       <Routes>

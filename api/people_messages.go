@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/peoplesafety"
 	"github.com/israel-duff/taskiem/engine/push"
 )
 
@@ -140,6 +141,10 @@ type peopleDraft struct {
 	replyTo  *uuid.UUID
 	forwards int
 	clientID string
+	// released: a moderator released this message, which the checks held
+	// (people_held): it goes as the sender meant, past the checks and the
+	// limits on sending.
+	released bool
 }
 
 // peoplePush is a push owed to the other person once a message is kept.
@@ -214,6 +219,16 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		if c.Blocked {
 			return errPeopleYouBlocked
 		}
+		// What Taskiem's moderators decided (people_safety.go): a suspended
+		// person writes to no one; a limited one is slowed as in a first
+		// week.
+		st, err := standingTx(ctx, tx, me)
+		if err != nil {
+			return err
+		}
+		if st.Suspended {
+			return errPeopleYouSuspended
+		}
 		newWeek, err := personNewWeek(ctx, tx, me)
 		if err != nil {
 			return err
@@ -223,7 +238,7 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 			me, c.ID).Scan(&n); err != nil {
 			return err
 		}
-		if n >= limitFor(peopleMessagesPerMinute, newWeek) {
+		if n >= limitFor(peopleMessagesPerMinute, newWeek || st.Limited) && !d.released {
 			return customerSendErr{http.StatusTooManyRequests, "You are sending messages very fast. Wait a moment and try again."}
 		}
 		if d.replyTo != nil {
@@ -288,19 +303,26 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		// new chat until the other has written (§8.4); only the verdict is
 		// kept, in this transaction.
 		text := d.screenText()
-		screen := (asRequest || !peerWrote) && text != ""
+		screen := (asRequest || !peerWrote) && text != "" && !d.released
 		if newRequest || screen {
 			if err := lockSenderTx(ctx, tx, me); err != nil {
 				return err
 			}
 		}
-		if newRequest {
-			// The sender's requests: waiting at once, and in a day (§8.2).
-			var waiting, today, acc, refused int
-			if err := tx.QueryRow(ctx, `SELECT waiting, today, accepted, refused FROM taskiem_people_request_counts()`).Scan(&waiting, &today, &acc, &refused); err != nil {
+		if newRequest && !d.released {
+			// The sender's requests: waiting at once, and in a day (§8.2),
+			// by their account's age, what became of their requests, the
+			// reports against them, their device and the moderators'
+			// limit (peoplesafety.Allowance).
+			var waiting, today int
+			if err := tx.QueryRow(ctx, `SELECT waiting, today FROM taskiem_people_request_counts()`).Scan(&waiting, &today); err != nil {
 				return err
 			}
-			maxWaiting, perDay := peoplechats.RequestAllowance(newWeek, acc, refused)
+			sig, err := senderSignalsTx(ctx, tx, me, st)
+			if err != nil {
+				return err
+			}
+			maxWaiting, perDay := peoplesafety.Allowance(sig)
 			if waiting >= maxWaiting || today >= perDay {
 				return customerSendErr{http.StatusTooManyRequests, "You have many messages waiting for people to accept them. Try again once some are answered."}
 			}
@@ -317,9 +339,11 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 				if why == "" {
 					why = "This message was not sent: it looks like spam."
 				}
-				// Nothing else is written yet: commit the verdict alone.
+				// Nothing else is written yet: commit the verdict alone, and
+				// the message, sealed, for moderators to release or confirm
+				// (people_held); the other person gets nothing.
 				held = customerSendErr{http.StatusForbidden, why}
-				return nil
+				return s.holdTx(ctx, tx, me, peer, c.ID, d, v.Reasons)
 			case peoplechats.Warn:
 				warn = "warn"
 			}

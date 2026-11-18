@@ -191,6 +191,16 @@ func Dashboard() ([]byte, error) {
 			{Expr: "sum(increase(taskiem_runs_purged_total[10m]))", LegendFormat: "purged", RefID: "A"},
 			{Expr: "sum(increase(taskiem_retention_purge_failures_total[10m]))", LegendFormat: "failed", RefID: "B"},
 		}, nil)
+	y += 8
+	row("People chats' storage", y)
+	y++
+	add("timeseries", "People chats on disk", "Bytes of the people chats' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 100 GiB, or over 5 GiB more in a day, opens a ticket.", "bytes", gridPos{8, 12, 0, y},
+		[]target{
+			{Expr: "max by (table) (taskiem_people_storage_bytes)", LegendFormat: "{{table}}", RefID: "A"},
+			{Expr: "sum(max by (table) (taskiem_people_storage_bytes))", LegendFormat: "all", RefID: "B"},
+		}, nil)
+	add("timeseries", "People chats' rows", "Rows of the people chats' tables (Postgres's estimate).", "short", gridPos{8, 12, 12, y},
+		[]target{{Expr: "max by (table) (taskiem_people_storage_rows)", LegendFormat: "{{table}}", RefID: "A"}}, nil)
 
 	d := map[string]any{
 		"title": "Taskiem SLOs", "uid": "taskiem-slo", "schemaVersion": 39, "version": 1, "editable": true,

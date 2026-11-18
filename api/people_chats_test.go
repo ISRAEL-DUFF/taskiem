@@ -16,6 +16,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/peoplesafety"
 	"github.com/israel-duff/taskiem/engine/push"
 )
 
@@ -443,8 +444,12 @@ func TestPeopleRequestsAndLimits(t *testing.T) {
 	ada.must(429, "POST", "/v1/me/people/"+chatWith(t, ada, others[3])+"/messages", map[string]any{"text": "Hello"})
 
 	// An older account with many requests accepted has more; one whose
-	// requests are mostly deleted or blocked has fewer.
-	w.older(t, adaID)
+	// requests are mostly deleted or blocked has fewer. Twenty days old:
+	// five waiting at once before what became of them
+	// (peoplesafety.Allowance).
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET created_at = now() - interval '20 days' WHERE id = $1`, adaID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := w.env.DB.Admin.Exec(ctx, `DELETE FROM people_requests WHERE sender_id = $1`, adaID); err != nil {
 		t.Fatal(err)
 	}
@@ -520,11 +525,24 @@ func TestPeopleBlocksAndReports(t *testing.T) {
 	if out["blocked"] != true || out["reported"] != true || out["removed"] != true {
 		t.Fatalf("block and report: %v", out)
 	}
+	// The report's messages are sealed under its own key (00480): read
+	// them as a moderator would, through the box.
 	var msgs []map[string]any
 	var reported uuid.UUID
 	var fromRequest bool
-	var raw []byte
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT reported_id, from_request, messages FROM people_reports WHERE person_id = $1`, bolaID).Scan(&reported, &fromRequest, &raw); err != nil {
+	var repID uuid.UUID
+	var sealed []byte
+	var boxKey, kmsKey string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id, reported_id, from_request, sealed, box_key, kms_key FROM people_reports WHERE person_id = $1`, bolaID).
+		Scan(&repID, &reported, &fromRequest, &sealed, &boxKey, &kmsKey); err != nil {
+		t.Fatal(err)
+	}
+	box, err := peoplesafety.OpenBox(ctx, w.srv.Vault, peoplesafety.ReportPurpose(repID), repID, boxKey, kmsKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := box.Open(peoplesafety.MessagesRow, sealed)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(raw, &msgs); err != nil || len(msgs) != 20 || reported != adaID || !fromRequest || msgs[0]["body"] != "Please answer me now 19" || msgs[19]["body"] != "Please answer me now 0" || msgs[0]["from_reporter"] != false {

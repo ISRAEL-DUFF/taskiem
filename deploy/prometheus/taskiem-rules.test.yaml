@@ -568,3 +568,26 @@ tests:
     values: "0x60"
   interval: 1m
   name: the retention purge falls behind on one scheduler
+- alert_rule_test:
+  - alertname: TaskiemPeopleStorageLarge
+    eval_time: 20h
+    exp_alerts: []
+  - alertname: TaskiemPeopleStorageLarge
+    eval_time: 40h
+    exp_alerts:
+    - exp_annotations:
+        description: 'People chats are kept until the people delete them (decision
+          0069), so their tables only grow. Together they take over 100 GiB on disk,
+          or grew by over 5 GiB in a day: plan the database''s disk, and whether photos
+          and files leave Postgres for object storage.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiempeoplestoragelarge
+        summary: People chats take over 100 GiB, or grew over 5 GiB in a day
+      exp_labels:
+        severity: ticket
+  input_series:
+  - series: taskiem_people_storage_bytes{table="people_files",instance="a"}
+    values: 64424509440x24 64424509440+1073741824x24
+  - series: taskiem_people_storage_bytes{table="people_messages",instance="a"}
+    values: 1073741824x48
+  interval: 1h
+  name: people chats' storage grows past its line

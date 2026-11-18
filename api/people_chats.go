@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/peoplesafety"
 )
 
 // Chats between people, one to one (docs/spec/people-chatting.md §7, §8,
@@ -885,16 +886,24 @@ func (s *Server) startPeopleChat(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('people-start:' || $1::text, 0))`, person); err != nil {
 			return err
 		}
-		newWeek, err := personNewWeek(ctx, tx, person)
+		st, err := standingTx(ctx, tx, person)
 		if err != nil {
 			return err
 		}
+		if st.Suspended {
+			return errPeopleYouSuspended
+		}
+		sig, err := senderSignalsTx(ctx, tx, person, st)
+		if err != nil {
+			return err
+		}
+		slowed := peoplesafety.Slowed(sig)
 		var hour, day int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE created_at > now() - interval '1 hour'), count(*) FILTER (WHERE created_at > now() - interval '1 day')
 			FROM people_chats WHERE person_id = $1 AND started_by_me`, person).Scan(&hour, &day); err != nil {
 			return err
 		}
-		if hour >= limitFor(peopleChatsPerHour, newWeek) || day >= limitFor(peopleChatsPerDay, newWeek) {
+		if hour >= limitFor(peopleChatsPerHour, slowed) || day >= limitFor(peopleChatsPerDay, slowed) {
 			return customerSendErr{http.StatusTooManyRequests, "You have started many new chats today. Try again later."}
 		}
 		id = uuid.Must(uuid.NewV7())
@@ -1192,59 +1201,6 @@ func (in *reportInput) check() error {
 		return customerSendErr{http.StatusBadRequest, "A report sends the last 20 messages to Taskiem's moderators: agree to send them (consent) to report."}
 	}
 	return nil
-}
-
-// reportTx sends the chat's last 20 messages of the person's copy, opened,
-// to Taskiem's moderators (§8.3), with what the photos and files were.
-func (s *Server) reportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy, in reportInput) (uuid.UUID, error) {
-	key, err := s.keys().KeyTx(ctx, tx, person, false)
-	if err != nil && !errors.Is(err, peoplechats.ErrNoKey) {
-		return uuid.Nil, err
-	}
-	rows, err := tx.Query(ctx, `SELECT id, mine, kind, sealed, attachment, card_type, deleted_at IS NOT NULL, created_at FROM people_messages
-		WHERE person_id = $1 AND chat_id = $2 ORDER BY created_at DESC, id DESC LIMIT 20`, person, c.ID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	type sent struct {
-		FromReporter bool            `json:"from_reporter"`
-		Kind         string          `json:"kind"`
-		Body         string          `json:"body"`
-		Card         *peopleCard     `json:"card,omitempty"`
-		Location     *peopleLocation `json:"location,omitempty"`
-		Attachment   map[string]any  `json:"attachment,omitempty"`
-		Deleted      bool            `json:"deleted,omitempty"`
-		At           time.Time       `json:"at"`
-	}
-	msgs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (sent, error) {
-		var m sent
-		var id uuid.UUID
-		var sealed []byte
-		var ct *string
-		if err := r.Scan(&id, &m.FromReporter, &m.Kind, &sealed, &m.Attachment, &ct, &m.Deleted, &m.At); err != nil {
-			return m, err
-		}
-		if key != nil {
-			if v, err := openSealed(key, person, id, sealed); err == nil {
-				m.Body, m.Card, m.Location = v.Body, v.Card, v.Location
-				if m.Attachment != nil && v.Name != "" {
-					m.Attachment["name"] = v.Name
-				}
-			}
-		}
-		return m, nil
-	})
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if msgs == nil {
-		msgs = []sent{}
-	}
-	raw, _ := json.Marshal(msgs)
-	id := uuid.Must(uuid.NewV7())
-	_, err = tx.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, note, consent, messages, from_request) VALUES ($1, $2, $3, $4, $5, true, $6, $7)`,
-		id, person, c.Peer, in.Reason, in.Note, raw, c.RequestAt != nil)
-	return id, err
 }
 
 // reportLimited takes one of the person's reports (shared with reports of

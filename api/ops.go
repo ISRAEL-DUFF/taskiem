@@ -126,6 +126,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Post("/tenants/{id}/{action}", s.opsTenantAction)
 		s.opsFeaturedRoutes(r)                                     // Explore's Featured row (explore_ops.go)
 		r.Post("/discover/{tenant}/{action}", s.opsDiscoverAction) // Discover's listings (discover.go)
+		s.opsPeopleRoutes(r)                                       // people chats' safety and lawful requests (ops_people.go, lawful.go)
 		r.Get("/audit", s.opsAudit)
 		r.Get("/audit/verify", s.opsAuditVerify)
 		r.Get("/audit/export", s.opsAuditExport)

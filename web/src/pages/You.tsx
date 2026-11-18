@@ -16,6 +16,7 @@ import { PeopleChatPage } from "./PeopleChat";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
+import { StandingNotice, YouStandingPage } from "./YouStanding";
 import { DeleteAccountPage, YouNotificationsCard, YouPhoto, YouPrivacyLinks, YouPrivacyPage } from "./YouAccount";
 import { SavedAddresses, YouOrder, YouOrders } from "./YouOrders";
 
@@ -55,6 +56,7 @@ export function YouApp() {
       </header>
       <main className="you-main" id="main" tabIndex={-1}>
         <TermsBanner />
+        <StandingNotice />
         <Routes>
           <Route path="/you" element={<YouHome />} />
           <Route path="/you/orders" element={<YouOrders />} />
@@ -64,6 +66,7 @@ export function YouApp() {
           <Route path="/you/settings" element={<YouSettings />} />
           <Route path="/you/settings/privacy" element={<YouPrivacyPage />} />
           <Route path="/you/settings/delete" element={<DeleteAccountPage />} />
+          <Route path="/you/settings/standing" element={<YouStandingPage />} />
           <Route path="/you/start" element={<StartSomething />} />
           <Route path="/you/chats/new" element={<StartChat />} />
           <Route path="/you/chats/:id" element={<PersonChatRoute />} />

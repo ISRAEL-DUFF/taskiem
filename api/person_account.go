@@ -365,6 +365,11 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		if err != nil {
 			return err
 		}
+		// Their reports stay for moderators, detached from them; held
+		// messages of theirs no one decided go (people_safety.go).
+		if _, err := tx.Exec(ctx, `SELECT taskiem_people_reports_detach($1)`, person); err != nil {
+			return err
+		}
 		// The person's own side.
 		for _, q := range []string{
 			// Their copies of people chats, their blocks, saved payout
