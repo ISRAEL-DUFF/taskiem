@@ -1155,6 +1155,11 @@ class TaskiemApi {
     return JoinGroupByLinkResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Take back a request to join (`DELETE /v1/me/group-links/{code}/join`)
+  Future<void> withdrawGroupJoin({required String code}) async {
+    await _t.send('DELETE', '/v1/me/group-links/${Uri.encodeComponent(code)}/join');
+  }
+
   /// One group (`GET /v1/me/groups/{id}`)
   Future<Group> getGroup({required String id}) async {
     final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}');
@@ -11332,9 +11337,8 @@ class TypingGroupRequest {
 }
 
 class GroupLinkPreviewResponse {
-  const GroupLinkPreviewResponse({required this.approve, required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
+  const GroupLinkPreviewResponse({required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
 
-  final bool approve;
   final String code;
   final bool full;
   final String link;
@@ -11343,7 +11347,6 @@ class GroupLinkPreviewResponse {
   final Object? photo;
 
   factory GroupLinkPreviewResponse.fromJson(Map<String, dynamic> j) => GroupLinkPreviewResponse(
-        approve: j['approve'] as bool,
         code: j['code'] as String,
         full: j['full'] as bool,
         link: j['link'] as String,
@@ -11353,7 +11356,6 @@ class GroupLinkPreviewResponse {
       );
 
   Map<String, dynamic> toJson() => {
-        'approve': approve,
         'code': code,
         'full': full,
         'link': link,

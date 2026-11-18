@@ -476,7 +476,7 @@ func TestGroupsLinks(t *testing.T) {
 	// The preview, for anyone.
 	anon := &client{t: t, base: w.base}
 	p := anon.must(200, "GET", "/v1/group-links/"+code, nil)
-	if p["name"] != "Street party" || p["members"] != float64(1) || p["photo"] != nil || p["approve"] != false {
+	if p["name"] != "Street party" || p["members"] != float64(1) || p["photo"] != nil || p["approve"] != nil {
 		t.Fatalf("preview: %v", p)
 	}
 	// A photo shows in the preview.

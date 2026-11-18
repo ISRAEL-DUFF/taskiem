@@ -83,6 +83,7 @@ func (s *Server) groupRoutes(r chi.Router) {
 	r.Get("/me/groups/starred", s.starredGroups)
 	r.Post("/me/forward", s.forwardMessage)
 	r.Post("/me/group-links/{code}/join", s.joinGroupByLink)
+	r.Delete("/me/group-links/{code}/join", s.withdrawGroupJoin)
 	r.Get("/me/groups/{id}", s.getGroup)
 	r.Put("/me/groups/{id}", s.putGroup)
 	r.Delete("/me/groups/{id}", s.deleteGroupForMe)
@@ -127,7 +128,7 @@ func (s *Server) groupPublicRoutes(r chi.Router) {
 // groupPersonRoutes are the group routes a personal session reaches
 // (personalAllowed).
 var groupPersonRoutes = regexp.MustCompile(`^((GET|POST) /v1/me/groups|GET /v1/me/groups/(invites|search|starred)|POST /v1/me/groups/invites/[^/]+/(accept|decline)|` +
-	`POST /v1/me/forward|POST /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link)|` +
+	`POST /v1/me/forward|(POST|DELETE) /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link)|` +
 	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|files/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
 	`POST /v1/me/groups/[^/]+/members/[^/]+/block|DELETE /v1/me/groups/[^/]+/(invites/[^/]+|link)|POST /v1/me/groups/[^/]+/joins/[^/]+/(approve|decline)|` +
 	`(PUT|DELETE) /v1/me/groups/[^/]+/messages/[^/]+|GET /v1/me/groups/[^/]+/messages/[^/]+/(info|reactions|card)|POST /v1/me/groups/[^/]+/messages/[^/]+/paid)$`)
@@ -924,11 +925,20 @@ func leaveGroupTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, g groupRow) 
 	if err := groupEventTx(ctx, tx, g.ID, person, "left", nil); err != nil {
 		return false, err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`, g.ID, person); err != nil {
-		return false, err
+	// Their typing and any request of theirs to join (an old one would
+	// let an admin bring them back past their settings) go.
+	for _, q := range []string{
+		`DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`,
+		`DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`,
+	} {
+		if _, err := tx.Exec(ctx, q, g.ID, person); err != nil {
+			return false, err
+		}
 	}
-	_, err := tx.Exec(ctx, `UPDATE group_members SET left_at = clock_timestamp(), left_how = 'left', left_sealed = (SELECT sealed FROM people_groups WHERE id = $1),
-		visible = visible - tstzmultirange(tstzrange(clock_timestamp(), NULL)) WHERE group_id = $1 AND person_id = $2`, g.ID, person)
+	// One time for both: they see nothing from when they left.
+	_, err := tx.Exec(ctx, `WITH t AS (SELECT clock_timestamp() AS at)
+		UPDATE group_members SET left_at = t.at, left_how = 'left', left_sealed = (SELECT sealed FROM people_groups WHERE id = $1),
+		visible = visible - tstzmultirange(tstzrange(t.at, NULL)) FROM t WHERE group_id = $1 AND person_id = $2`, g.ID, person)
 	return false, err
 }
 
@@ -1352,21 +1362,44 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 	if err := tx.QueryRow(ctx, `SELECT count(*) FROM group_members WHERE group_id = $1 AND left_at IS NULL`, g.ID).Scan(&count); err != nil {
 		return nil, nil, err
 	}
+	// Who of them is or was in the group, and whom the admin has as a
+	// contact: two queries for up to 256 people.
+	type had struct{ left *time.Time }
+	was := map[uuid.UUID]had{}
+	contacts := map[uuid.UUID]bool{}
+	if len(uniq) > 0 {
+		rows, err := tx.Query(ctx, `SELECT person_id, left_at FROM group_members WHERE group_id = $1 AND person_id = ANY ($2)`, g.ID, uniq)
+		if err != nil {
+			return nil, nil, err
+		}
+		for rows.Next() {
+			var id uuid.UUID
+			var h had
+			if err := rows.Scan(&id, &h.left); err != nil {
+				rows.Close()
+				return nil, nil, err
+			}
+			was[id] = h
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, nil, err
+		}
+		if contacts, err = people.ContactsAmongTx(ctx, tx, admin, uniq); err != nil {
+			return nil, nil, err
+		}
+	}
 	out := []addResult{}
 	var owed []groupInvitePush
+	var added []uuid.UUID
 	for _, id := range uniq {
 		m, ok := got[id]
 		if !ok || !m.active {
 			out = append(out, addResult{id, "unavailable"})
 			continue
 		}
-		var left *time.Time
-		err := tx.QueryRow(ctx, `SELECT left_at FROM group_members WHERE group_id = $1 AND person_id = $2`, g.ID, id).Scan(&left)
-		found := err == nil
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, err
-		}
-		if found && left == nil {
+		h, found := was[id]
+		if found && h.left == nil {
 			out = append(out, addResult{id, "member"})
 			continue
 		}
@@ -1374,11 +1407,7 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 			out = append(out, addResult{id, "full"})
 			continue
 		}
-		contact, err := people.IsContactTx(ctx, tx, admin, id)
-		if err != nil {
-			return nil, nil, err
-		}
-		if m.blocked || !m.allowed || !contact {
+		if m.blocked || !m.allowed || !contacts[id] {
 			// An invite (A3); across a block, one they are never shown (A8):
 			// the admin is told "invited" either way.
 			// An invite kept unseen across a block becomes an ordinary one
@@ -1405,18 +1434,26 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 			VALUES ($1, $2, 'added', $3, tstzmultirange(tstzrange(clock_timestamp(), NULL)))`, g.ID, id, admin); err != nil {
 			return nil, nil, err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM group_invites WHERE group_id = $1 AND person_id = $2`, g.ID, id); err != nil {
-			return nil, nil, err
-		}
-		if _, err := tx.Exec(ctx, `DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`, g.ID, id); err != nil {
-			return nil, nil, err
-		}
 		target := id
 		if err := groupEventTx(ctx, tx, g.ID, admin, "added", &target); err != nil {
 			return nil, nil, err
 		}
 		count++
+		added = append(added, id)
 		out = append(out, addResult{id, "added"})
+	}
+	if len(added) > 0 {
+		// In the group now: their invites, requests to join and being kept
+		// as removed go.
+		for _, q := range []string{
+			`DELETE FROM group_invites WHERE group_id = $1 AND person_id = ANY ($2)`,
+			`DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = ANY ($2)`,
+			`DELETE FROM group_removed WHERE group_id = $1 AND person_id = ANY ($2)`,
+		} {
+			if _, err := tx.Exec(ctx, q, g.ID, added); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	return out, owed, nil
 }
@@ -1568,12 +1605,27 @@ func (s *Server) removeGroupMember(w http.ResponseWriter, r *http.Request) {
 		if err := groupEventTx(ctx, tx, g.ID, person, "removed", &target); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = clock_timestamp(), left_how = 'removed', removed_by = $3,
-			left_sealed = (SELECT sealed FROM people_groups WHERE id = $1), visible = visible - tstzmultirange(tstzrange(clock_timestamp(), NULL)) WHERE group_id = $1 AND person_id = $2`, g.ID, target, person); err != nil {
+		if _, err := tx.Exec(ctx, `WITH t AS (SELECT clock_timestamp() AS at)
+			UPDATE group_members SET left_at = t.at, left_how = 'removed', removed_by = $3,
+			left_sealed = (SELECT sealed FROM people_groups WHERE id = $1), visible = visible - tstzmultirange(tstzrange(t.at, NULL))
+			FROM t WHERE group_id = $1 AND person_id = $2`, g.ID, target, person); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`, g.ID, target)
-		return err
+		// Kept as removed after they delete their copy: a link join of
+		// theirs waits for an admin until an admin lets them back.
+		if _, err := tx.Exec(ctx, `INSERT INTO group_removed (group_id, person_id, removed_by) VALUES ($1, $2, $3)
+			ON CONFLICT (group_id, person_id) DO NOTHING`, g.ID, target, person); err != nil {
+			return err
+		}
+		for _, q := range []string{
+			`DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`,
+			`DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`,
+		} {
+			if _, err := tx.Exec(ctx, q, g.ID, target); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		s.personFail(w, r, err)
@@ -1606,9 +1658,14 @@ func (s *Server) blockGroupMember(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		// Someone the person sees in the group: in it now, or with them.
+		// Someone the person was in the group with: their times in it
+		// overlap (the latest of each, or what each sees). Anyone else is
+		// answered as an unknown id: someone who joined after the person
+		// left is not theirs to know.
 		var one int
-		if err := tx.QueryRow(ctx, `SELECT 1 FROM group_members WHERE group_id = $1 AND person_id = $2`, g.ID, target).Scan(&one); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT 1 FROM group_members t JOIN group_members c ON c.group_id = t.group_id AND c.person_id = $3
+			WHERE t.group_id = $1 AND t.person_id = $2
+			  AND (tstzrange(t.joined_at, t.left_at) && tstzrange(c.joined_at, c.left_at) OR t.visible && c.visible)`, g.ID, target, person).Scan(&one); err != nil {
 			return err
 		}
 		// The block is kept as a one-to-one block is, with the person's own
@@ -2068,12 +2125,10 @@ func (s *Server) groupLinkQR(w http.ResponseWriter, r *http.Request) {
 
 // groupLinkFound is what a group's link names.
 type groupLinkFound struct {
-	group    uuid.UUID
-	replaced bool
-	name     string
-	members  int
-	photoAt  *time.Time
-	approve  bool
+	group   uuid.UUID
+	name    string
+	members int
+	photoAt *time.Time
 }
 
 // findGroupLink reads a group's link (anyone holding it): errDoorNone for
@@ -2087,8 +2142,8 @@ func (s *Server) findGroupLink(ctx context.Context, code string) (groupLinkFound
 	var replaced *time.Time
 	var sealed []byte
 	var keySealed, kmsKey string
-	err := s.Store.Pool.QueryRow(ctx, `SELECT group_id, replaced_at, sealed, key_sealed, kms_key, members, photo_at, approve_joins FROM taskiem_group_link_find($1)`,
-		p.GroupLinkHash(code)).Scan(&out.group, &replaced, &sealed, &keySealed, &kmsKey, &out.members, &out.photoAt, &out.approve)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT group_id, replaced_at, sealed, key_sealed, kms_key, members, photo_at FROM taskiem_group_link_find($1)`,
+		p.GroupLinkHash(code)).Scan(&out.group, &replaced, &sealed, &keySealed, &kmsKey, &out.members, &out.photoAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, errDoorNone
 	}
@@ -2128,7 +2183,8 @@ func (s *Server) groupLinkFail(w http.ResponseWriter, r *http.Request, err error
 
 // groupLinkPreview is GET /v1/group-links/{code}, for anyone holding the
 // link (A4): the group's name, photo and how many are in it; nothing of
-// its members or messages.
+// its members or messages, nor whether joining waits for an admin (that
+// would tell someone an admin blocked, A8: their join waits either way).
 func (s *Server) groupLinkPreview(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter("group-link-ip:"+clientIP(r), time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "Too many links opened. Wait a moment.")
@@ -2144,7 +2200,7 @@ func (s *Server) groupLinkPreview(w http.ResponseWriter, r *http.Request) {
 	if f.photoAt != nil {
 		photo = map[string]any{"url": "/v1/group-links/" + code + "/photo?v=" + strconv.FormatInt(f.photoAt.UnixMilli(), 10), "updated_at": *f.photoAt}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"code": code, "name": f.name, "photo": photo, "members": f.members, "approve": f.approve,
+	writeJSON(w, http.StatusOK, map[string]any{"code": code, "name": f.name, "photo": photo, "members": f.members,
 		"full": f.members >= groupMax, "link": s.people().GroupLinkURL(code)})
 }
 
@@ -2248,6 +2304,41 @@ func (s *Server) joinGroupByLink(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
+// withdrawGroupJoin is DELETE /v1/me/group-links/{code}/join: the person
+// takes back their request to join by this link (waiting for an admin),
+// 204 whether or not one was waiting (the link may since be replaced or
+// turned off); 404 for no such link.
+func (s *Server) withdrawGroupJoin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	p := s.people()
+	if !p.Keyed() {
+		s.personFail(w, r, errGroupNoLinks)
+		return
+	}
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		var group uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT group_id FROM taskiem_group_link_find($1)`, p.GroupLinkHash(chi.URLParam(r, "code"))).Scan(&group)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errDoorNone
+		}
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`, group, person)
+		return err
+	})
+	if err != nil {
+		s.groupLinkFail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- people waiting to join (A4) ---
 
 // groupJoinRequests is GET /v1/me/groups/{id}/joins: who waits for an
@@ -2314,17 +2405,31 @@ func (s *Server) approveGroupJoin(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	wasStale := false
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		wasStale = false
 		g, err := adminGroupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`, g.ID, target)
+		// The request, if it is newer than the person's latest joining or
+		// leaving: an older one (they joined another way since, or left)
+		// is stale and goes without letting them in, so an admin can't
+		// bring back someone who left past "Who can add me to groups".
+		var asked time.Time
+		err = tx.QueryRow(ctx, `DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2 RETURNING created_at`, g.ID, target).Scan(&asked)
 		if err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return errDoorNone
+		var stale bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM group_members WHERE group_id = $1 AND person_id = $2
+			AND (joined_at >= $3 OR left_at >= $3))`, g.ID, target, asked).Scan(&stale); err != nil {
+			return err
+		}
+		if stale {
+			// Gone for good (committed), and said so.
+			wasStale = true
+			return nil
 		}
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM group_members WHERE group_id = $1 AND left_at IS NULL`, g.ID).Scan(&count); err != nil {
@@ -2352,10 +2457,18 @@ func (s *Server) approveGroupJoin(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
+		// Let in by an admin: no longer kept as removed.
+		if _, err := tx.Exec(ctx, `DELETE FROM group_removed WHERE group_id = $1 AND person_id = $2`, g.ID, target); err != nil {
+			return err
+		}
 		return groupEventTx(ctx, tx, g.ID, person, "added", &target)
 	})
 	if err != nil {
 		s.personFail(w, r, err)
+		return
+	}
+	if wasStale {
+		writeErr(w, http.StatusConflict, "This request is no longer waiting: they joined or left the group since asking.")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -2422,14 +2535,12 @@ func leaveAllGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) error {
 			return err
 		}
 	}
-	for _, q := range []string{
-		`DELETE FROM group_members WHERE person_id = $1`,
-		`DELETE FROM group_invites WHERE person_id = $1 AND NOT hidden`,
-		`DELETE FROM group_join_requests WHERE person_id = $1`,
-	} {
-		if _, err := tx.Exec(ctx, q, person); err != nil {
-			return err
-		}
+	if _, err := tx.Exec(ctx, `DELETE FROM group_members WHERE person_id = $1`, person); err != nil {
+		return err
 	}
-	return nil
+	// Every invite to them (the ones they were never shown too), their
+	// requests to join and their being kept as removed: a definer, as the
+	// person may not see the unseen invites (A8).
+	_, err = tx.Exec(ctx, `SELECT taskiem_group_forget()`)
+	return err
 }

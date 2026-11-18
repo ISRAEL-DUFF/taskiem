@@ -22309,7 +22309,7 @@ paths:
       tags:
       - People
       summary: Join a group by its link
-      description: 'Opening a group''s invite link (A4): you join at once (`joined`, with the group), or wait for an admin (`waiting`) when the group approves new members; `member` when you are in it already. 409 when it is full; 429 after many joins (yours, or the group''s in an hour); 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up.'
+      description: 'Opening a group''s invite link (A4): you join at once (`joined`, with the group), or wait for an admin (`waiting`) when the group approves new members (take the request back with DELETE); `member` when you are in it already. 409 when it is full; 429 after many joins (yours, or the group''s in an hour); 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -22336,6 +22336,28 @@ paths:
                     enum: [joined, waiting, member]
                   group:
                     $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: withdrawGroupJoin
+      tags:
+      - People
+      summary: Take back a request to join
+      description: 'Your request to join by this link, waiting for an admin (`waiting`), goes. 204 whether or not one was waiting (the link may since be replaced or turned off); 404 for no such link; 503 where group links are not set up.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No longer waiting
         default:
           $ref: '#/components/responses/Error'
   /v1/me/groups/{id}:
@@ -23013,7 +23035,7 @@ paths:
       tags:
       - People
       summary: Let someone waiting in
-      description: 'Admins: they join from now. 409 when the group is full.'
+      description: 'Admins: they join from now. 409 when the group is full, or when the request is no longer waiting: they joined or left the group since asking (the stale request goes; an old request never brings back someone who left). 404 for no such request.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -23622,7 +23644,7 @@ paths:
       tags:
       - People
       summary: A group's preview, by its link
-      description: 'For anyone holding the link, signed in or not (A4): the group''s name, photo and how many are in it; nothing of its members or messages. `approve`: joining waits for an admin; `full`: 256 already. 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up. Thirty a second per address.'
+      description: 'For anyone holding the link, signed in or not (A4): the group''s name, photo and how many are in it; nothing of its members or messages, nor whether joining waits for an admin (members see `approve_joins` on the group). `full`: 256 already. 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up. Thirty a second per address.'
       security: []
       parameters:
       - name: code
@@ -23638,7 +23660,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [code, link, name, photo, members, approve, full]
+                required: [code, link, name, photo, members, full]
                 properties:
                   code:
                     type: string
@@ -23652,8 +23674,6 @@ paths:
                     - $ref: '#/components/schemas/PersonPhotoRef'
                   members:
                     type: integer
-                  approve:
-                    type: boolean
                   full:
                     type: boolean
         '410':

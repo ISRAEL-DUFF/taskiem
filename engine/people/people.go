@@ -569,6 +569,24 @@ func (p *People) IsContact(ctx context.Context, owner, other uuid.UUID) (bool, e
 	return ok, err
 }
 
+// ContactsAmongTx is which of others owner added to their contacts, in one
+// query, in a transaction in owner's scope.
+func ContactsAmongTx(ctx context.Context, tx pgx.Tx, owner uuid.UUID, others []uuid.UUID) (map[uuid.UUID]bool, error) {
+	out := map[uuid.UUID]bool{}
+	if len(others) == 0 {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx, `SELECT contact_id FROM person_contacts WHERE person_id = $1 AND contact_id = ANY ($2)`, owner, others)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
+}
+
 // IsContactTx is IsContact in a transaction in owner's scope.
 func IsContactTx(ctx context.Context, tx pgx.Tx, owner, other uuid.UUID) (bool, error) {
 	var ok bool
