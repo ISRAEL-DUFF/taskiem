@@ -64,3 +64,57 @@ func TestPeopleBasketsMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00489 (ordering together, review fixes) goes up, down and up again: up,
+// the paid-in-shares flag, a share's refund due and checks, placing_at and
+// the two live definers; down, all is as 00487 left it.
+func TestPeopleBasketsReviewFixesMigrationUpDownUp(t *testing.T) {
+	dsn := emptyDatabase(t)
+	ctx := context.Background()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer func() { _ = sqlDB.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if _, err := p.UpTo(ctx, 487); err != nil {
+		t.Fatal(err)
+	}
+	state := func() (cols, definers int) {
+		t.Helper()
+		if err := conn.QueryRow(ctx, `SELECT
+			(SELECT count(*)::int FROM information_schema.columns WHERE (table_name, column_name) IN
+			   (('storefront_orders', 'paid_in_shares'), ('storefront_order_share_links', 'refund_due_at'), ('storefront_order_share_links', 'checked_at'),
+			    ('storefront_order_share_links', 'checks'), ('people_baskets', 'placing_at'))),
+			(SELECT count(*)::int FROM pg_proc WHERE proname IN ('taskiem_baskets_changed', 'taskiem_baskets_moved'))`).Scan(&cols, &definers); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	for round := 0; round < 2; round++ {
+		if _, err := p.UpTo(ctx, 489); err != nil {
+			t.Fatal(err)
+		}
+		if c, d := state(); c != 5 || d != 2 {
+			t.Fatalf("up: %d columns, %d definers", c, d)
+		}
+		if _, err := p.DownTo(ctx, 487); err != nil {
+			t.Fatal(err)
+		}
+		if c, d := state(); c != 0 || d != 0 {
+			t.Fatalf("down: %d columns, %d definers", c, d)
+		}
+	}
+	if _, err := p.UpTo(ctx, 489); err != nil {
+		t.Fatal(err)
+	}
+}
