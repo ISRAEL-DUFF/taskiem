@@ -210,7 +210,9 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   await expect(person.getByTestId("person-message").filter({ hasText: "Is it ready by noon?" })).toBeVisible();
 
   // The business: one row for the customer, with both lines.
-  await expect.poll(async () => (await chatsOf(biz)).map((c) => c.lines?.length)).toEqual([2]);
+  // Both lines are there as soon as WhatsApp joined, before the app message
+  // is counted; the reply's line follows the newest message, so wait for it.
+  await expect.poll(async () => (await chatsOf(biz)).map((c) => [c.lines?.length, c.reply_line])).toEqual([[2, "app"]]);
   const [thread] = await chatsOf(biz);
   expect(thread?.reply_line).toBe("app");
   await biz.goto("/chat");
