@@ -491,6 +491,14 @@ class _YourOrderPageState extends State<YourOrderPage> with WidgetsBindingObserv
                     Text(d!.delivery!.line, style: tkText(size: 15, weight: 600, color: t.text)),
                     const SizedBox(height: 12),
                     TkSteps(steps: deliverySteps(d.delivery!)),
+                    // A rider has it: how far they have got, shared into a
+                    // chat with a person (people-chatting §10.1).
+                    const SizedBox(height: 12),
+                    CardButton(
+                      label: 'Share the delivery',
+                      semantics: 'Share the delivery of $word ${widget.reference} with someone',
+                      onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'delivery', businessId: widget.business, reference: widget.reference), what: 'The delivery of $word ${widget.reference}'),
+                    ),
                   ],
                 ),
               ),

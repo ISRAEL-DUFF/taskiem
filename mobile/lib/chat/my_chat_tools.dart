@@ -30,6 +30,7 @@ import 'door.dart';
 import 'addresses.dart' show addressLine, maxSavedAddresses, maxSavedLine;
 import 'my_chat.dart';
 import 'order_sheet.dart' show BagBar, QtyStepper;
+import 'people_cards.dart' show shareWithPeople;
 import 'words.dart';
 
 /// The tools button: what a customer can do with the business.
@@ -335,6 +336,18 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
                         style: tkText(size: 13, color: sizes.isEmpty && i.fewLeft != null ? look.orangeInk : t.muted).copyWith(fontFeatures: tkTabular),
                       ),
                       if ((i.description ?? '').isNotEmpty) Text(i.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                      // Shared into a chat with a person (people-chatting
+                      // §10.1): they open it live, at its price then.
+                      if ((d.chat?.business ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: TkSmallButton(
+                            label: 'Share',
+                            icon: 'b-share',
+                            semantics: 'Share ${i.name} with someone',
+                            onPressed: () => shareWithPeople(context, d.auth, SendPeopleMessageRequestCard(type: 'product', businessId: d.chat!.business, itemId: i.id), what: i.name),
+                          ),
+                        ),
                     ],
                   ),
                 ),

@@ -32,6 +32,7 @@ import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardButton, CardPill;
 import 'door.dart' show BusinessFace, photoUrl;
 import 'my_chat.dart';
+import 'people_cards.dart' show shareWithPeople;
 import 'words.dart' show CardTone;
 
 /// The reasons a business is reported for in Discover, in the web's words
@@ -407,6 +408,16 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
                       if (p.hasShop && p.hasBook) const SizedBox(width: 8),
                       if (p.hasBook) Expanded(child: CardButton(label: 'Book', onTap: _busy ? null : () => _chat(tool: 'book'))),
                     ],
+                  ),
+                ],
+                // Shared into a chat with a person (people-chatting §10.1):
+                // their card, opened live; Chat starts their own chat.
+                if (canChat) ...[
+                  const SizedBox(height: 8),
+                  CardButton(
+                    label: 'Share with someone',
+                    semantics: 'Share ${p.name} with someone',
+                    onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'business', businessId: widget.business), what: p.name),
                   ),
                 ],
               ],
