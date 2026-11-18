@@ -22,9 +22,15 @@ Map<String, dynamic> line(String id, String item, String name, int q, int price)
 };
 
 Map<String, dynamic> basketJson({String state = 'open', bool youHold = true, bool each = false, bool mine = true, String? payment, Map<String, dynamic>? order, bool shares = false}) {
-  Map<String, dynamic>? share(int items) => shares ? {'items_kobo': items, 'delivery_kobo': 0, 'amount_kobo': items, 'paid': false, 'card_sent': false} : null;
+  Map<String, dynamic>? share(int items) => shares ? {'items_kobo': items, 'delivery_kobo': 0, 'amount_kobo': items, 'paid': false, 'refund_due': false, 'card_sent': false} : null;
   return {
-    'id': 'b1', 'business_id': 'biz', 'business': 'Mama’s Kitchen', 'where': 'group', 'group_id': 'g1', 'state': state,
+    'id': 'b1', 'business_id': 'biz', 'business': 'Mama’s Kitchen', 'you_id': 'ada',
+    'members': [
+      {'person_id': 'ada', 'name': 'You', 'you': true},
+      {'person_id': 'bola', 'name': 'Bola Ade', 'you': false},
+      {'person_id': 'chidi', 'name': 'Chidi Eze', 'you': false},
+    ],
+    'where': 'group', 'group_id': 'g1', 'state': state,
     'starter_id': 'ada', 'holder_id': youHold ? 'ada' : 'bola', 'holder': youHold ? 'You' : 'Bola Ade', 'you_hold': youHold, 'holder_gone': false,
     'shop': {'open': true, 'pickup': true, 'delivery': false, 'zones': <Object>[], 'payment': each ? 'at_order' : 'none', 'each_offered': each},
     'people': [
@@ -54,7 +60,7 @@ void main() {
     expect(basketHolderWords(basket()), contains('You hold this basket'));
     expect(basketHolderWords(basket(youHold: false)), 'Bola Ade holds this basket: they close it and place the order.');
     expect(basketHolderWords(basket(state: 'placed', order: placedOrder)), '');
-    expect(basketShareWords(BasketShare.fromJson({'items_kobo': 300000, 'delivery_kobo': 33333, 'amount_kobo': 333333, 'paid': false, 'card_sent': false})),
+    expect(basketShareWords(BasketShare.fromJson({'items_kobo': 300000, 'delivery_kobo': 33333, 'amount_kobo': 333333, 'paid': false, 'refund_due': false, 'card_sent': false})),
         '₦3,333.33: items ₦3,000 and delivery ₦333.33');
     expect(basketPayNote(false, 'Mama’s Kitchen'), contains('takes no payment in the app, so you pay for everyone'));
     expect(basketPayNote(true, 'Mama’s Kitchen'), contains('equal part of the delivery'));
@@ -72,6 +78,22 @@ void main() {
     expect(each.payFor.map((p) => p.personId), ['bola']);
     final all = BasketCan(basket(state: 'placed', payment: 'all', order: placedOrder, shares: true));
     expect((all.payOrder, all.shareCards, all.payMine), (true, true, false));
+  });
+
+  test('the placer by their own id; hand on to any member; a refund due is not paid again (review fixes 4, 5)', () {
+    // Ada placed it with no items of her own: still the placer.
+    final j = basketJson(state: 'placed', payment: 'each', order: placedOrder, shares: true, mine: false);
+    (j['people'] as List).add({'person_id': 'ada', 'name': 'You', 'you': true, 'items_kobo': 0, 'lines': <Object>[],
+      'share': {'items_kobo': 0, 'delivery_kobo': 0, 'amount_kobo': 0, 'paid': false, 'refund_due': false, 'card_sent': false}});
+    final placer = BasketCan(Basket.fromJson(j));
+    expect(placer.payMine, false);
+    expect(placer.payFor.map((p) => p.personId), ['bola']);
+    ((j['people'] as List)[0] as Map)['share'] = {'items_kobo': 300000, 'delivery_kobo': 0, 'amount_kobo': 300000, 'paid': false, 'refund_due': true, 'card_sent': false};
+    expect(BasketCan(Basket.fromJson(j)).payFor, isEmpty);
+    // Hand on to anyone in the group, items or not; take over a stuck basket.
+    expect(BasketCan(basket()).handTo.map((m) => m.personId), ['bola', 'chidi']);
+    final stuck = basketJson(state: 'placing', youHold: false)..['holder_gone'] = true;
+    expect(BasketCan(Basket.fromJson(stuck)).takeOver, true);
   });
 
   test('a shop’s sizes are lines of their own', () {

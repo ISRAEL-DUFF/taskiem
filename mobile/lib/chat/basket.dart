@@ -69,19 +69,24 @@ class BasketCan {
       close = b.state == 'open' && b.youHold && b.people.isNotEmpty,
       reopen = b.state == 'closed' && b.youHold,
       place = b.state == 'closed' && b.youHold,
-      takeOver = (b.state == 'open' || b.state == 'closed') && b.holderGone,
-      payMine = _placed(b) && b.payment == 'each' && _mine(b) != null && !_mine(b)!.paid && _mine(b)!.amountKobo >= 100 && (b.order?.payableNow ?? false),
+      takeOver = (b.state == 'open' || b.state == 'closed' || b.state == 'placing') && b.holderGone,
+      handTo = b.members.where((m) => !m.you).toList(),
+      payMine = _placed(b) && b.payment == 'each' && _due(_mine(b)) && (b.order?.payableNow ?? false),
       payOrder = _placer(b) && b.payment == 'all' && (b.order?.payableNow ?? false),
-      payFor = _placer(b) && b.payment == 'each' && (b.order?.payableNow ?? false)
-          ? b.people.where((p) => !p.you && p.share != null && !p.share!.paid && p.share!.amountKobo >= 100).toList()
-          : const [],
+      payFor = _placer(b) && b.payment == 'each' && (b.order?.payableNow ?? false) ? b.people.where((p) => !p.you && _due(p.share)).toList() : const [],
       shareCards = _placer(b) && b.payment == 'all' && b.people.any((p) => !p.you && p.share != null && !p.share!.cardSent && p.share!.amountKobo >= 100);
 
   final bool addMine, holder, close, reopen, place, takeOver, payMine, payOrder, shareCards;
   final List<BasketPerson> payFor;
 
+  /// Whom the holder may hand it to: anyone in the group or chat now,
+  /// with items or not.
+  final List<BasketMember> handTo;
+
   static bool _placed(Basket b) => b.state == 'placed';
-  static bool _placer(Basket b) => _placed(b) && b.people.any((p) => p.you && p.personId == b.placedBy);
+  // The placer by their own id, whether or not they have items.
+  static bool _placer(Basket b) => _placed(b) && b.placedBy != null && b.placedBy == b.youId;
+  static bool _due(BasketShare? s) => s != null && !s.paid && !s.refundDue && s.amountKobo >= 100;
   static BasketShare? _mine(Basket b) {
     for (final p in b.people) {
       if (p.you) return p.share;
@@ -317,7 +322,7 @@ class _BasketSheetState extends State<BasketSheet> {
     final (state, _) = basketStateWords(b);
     final o = b.order;
     final holder = basketHolderWords(b);
-    final others = b.people.where((p) => !p.you).toList();
+    final others = can.handTo;
     final buttons = <Widget>[
       if (can.addMine)
         TkSmallButton(label: b.people.any((p) => p.you) ? 'Change my items' : 'Add my items', primary: true, onPressed: () => setState(() => _step = _Step.shop)),
@@ -327,7 +332,7 @@ class _BasketSheetState extends State<BasketSheet> {
       if (can.takeOver)
         TkSmallButton(
           label: 'Take it over',
-          onPressed: _busy ? null : () => _do(() => _api.handBasket(id: b.id, body: HandBasketRequest(personId: b.people.firstWhere((p) => p.you).personId)), 'You hold the basket'),
+          onPressed: _busy ? null : () => _do(() => _api.handBasket(id: b.id, body: HandBasketRequest(personId: b.youId)), 'You hold the basket'),
         ),
       if (can.payMine) TkSmallButton(label: 'Pay my share', primary: true, onPressed: _busy ? null : _pay),
       if (can.payOrder) TkSmallButton(label: 'Pay for the order', primary: true, onPressed: _busy ? null : _pay),
@@ -386,7 +391,7 @@ class _BasketSheetState extends State<BasketSheet> {
                   sub: [
                     for (final l in p.lines)
                       '${l.quantity} × ${l.name} · ${naira(l.lineKobo)}${l.priceChanged ? ' (was ${naira(l.addedPriceKobo * l.quantity)})' : ''}${l.available ? '' : ' · not available now'}',
-                    if (p.share != null) 'Share: ${basketShareWords(p.share!)}${p.share!.paid ? ' · paid' : ''}${p.share!.cardSent ? ' · share card sent' : ''}',
+                    if (p.share != null) 'Share: ${basketShareWords(p.share!)}${p.share!.paid ? ' · paid' : ''}${p.share!.refundDue ? ' · paid after the order closed: ${b.business} sends it back' : ''}${p.share!.cardSent ? ' · share card sent' : ''}',
                   ].join('\n'),
                   amount: naira(p.share?.amountKobo ?? p.itemsKobo),
                 ),
@@ -417,7 +422,7 @@ class _BasketSheetState extends State<BasketSheet> {
 class _HolderControls extends StatelessWidget {
   const _HolderControls({required this.basket, required this.others, required this.busy, required this.onWay, required this.onHand, required this.onCancel});
   final Basket basket;
-  final List<BasketPerson> others;
+  final List<BasketMember> others;
   final bool busy;
   final void Function(String fulfilment, String? zone) onWay;
   final ValueChanged<String> onHand;

@@ -11666,7 +11666,7 @@ class StartBasketResponse {
 /// A shared basket (people-chatting §10.3, 5b C): ordering together from one
 /// business in a group or a chat between two people.
 class Basket {
-  const Basket({required this.business, required this.businessId, this.chatId, this.closedAt, required this.createdAt, required this.deliveryKobo, this.fulfilment, this.groupId, required this.holder, required this.holderGone, required this.holderId, required this.id, required this.itemsKobo, this.order, this.payment, required this.people, this.placedAt, this.placedBy, required this.problems, this.shop, required this.starterId, required this.state, required this.totalKobo, required this.where, required this.youHold, this.zone});
+  const Basket({required this.business, required this.businessId, this.chatId, this.closedAt, required this.createdAt, required this.deliveryKobo, this.fulfilment, this.groupId, required this.holder, required this.holderGone, required this.holderId, required this.id, required this.itemsKobo, required this.members, this.order, this.payment, required this.people, this.placedAt, this.placedBy, required this.problems, this.shop, required this.starterId, required this.state, required this.totalKobo, required this.where, required this.youHold, required this.youId, this.zone});
 
   final String business;
   final String businessId;
@@ -11683,6 +11683,9 @@ class Basket {
   final String holderId;
   final String id;
   final int itemsKobo;
+  /// Who is in the group or the chat now (empty when you reach it only as its
+  /// placer or one with lines in it, after leaving).
+  final List<BasketMember> members;
   final BasketOrder? order;
   final String? payment;
   final List<BasketPerson> people;
@@ -11695,6 +11698,8 @@ class Basket {
   final int totalKobo;
   final String where;
   final bool youHold;
+  /// The person reading it (to compare with `placed_by` and `holder_id`).
+  final String youId;
   final String? zone;
 
   factory Basket.fromJson(Map<String, dynamic> j) => Basket(
@@ -11711,6 +11716,7 @@ class Basket {
         holderId: j['holder_id'] as String,
         id: j['id'] as String,
         itemsKobo: (j['items_kobo'] as num).toInt(),
+        members: (j['members'] as List).map((e) => BasketMember.fromJson(e as Map<String, dynamic>)).toList(),
         order: j['order'] == null ? null : BasketOrder.fromJson(j['order'] as Map<String, dynamic>),
         payment: j['payment'] == null ? null : j['payment'] as String,
         people: (j['people'] as List).map((e) => BasketPerson.fromJson(e as Map<String, dynamic>)).toList(),
@@ -11723,6 +11729,7 @@ class Basket {
         totalKobo: (j['total_kobo'] as num).toInt(),
         where: j['where'] as String,
         youHold: j['you_hold'] as bool,
+        youId: j['you_id'] as String,
         zone: j['zone'] == null ? null : j['zone'] as String,
       );
 
@@ -11740,6 +11747,7 @@ class Basket {
         'holder_id': holderId,
         'id': id,
         'items_kobo': itemsKobo,
+        'members': members.map((e) => e.toJson()).toList(),
         'order': ?order?.toJson(),
         'payment': ?payment,
         'people': people.map((e) => e.toJson()).toList(),
@@ -11752,7 +11760,30 @@ class Basket {
         'total_kobo': totalKobo,
         'where': where,
         'you_hold': youHold,
+        'you_id': youId,
         'zone': ?zone,
+      };
+}
+
+/// Someone in the basket's group or chat now (the holder hands it to one of
+/// them).
+class BasketMember {
+  const BasketMember({required this.name, required this.personId, required this.you});
+
+  final String name;
+  final String personId;
+  final bool you;
+
+  factory BasketMember.fromJson(Map<String, dynamic> j) => BasketMember(
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'person_id': personId,
+        'you': you,
       };
 }
 
@@ -11876,10 +11907,11 @@ class BasketLine {
 }
 
 /// A member's share once placed (C2): their items and an equal part of the
-/// delivery; paid by its own link ("each pays"), or a "Your share" card sent
+/// delivery (the placer's carries the kobo left over, even with no items of
+/// their own); paid by its own link ("each pays"), or a "Your share" card sent
 /// ("I'll pay all").
 class BasketShare {
-  const BasketShare({required this.amountKobo, required this.cardSent, required this.deliveryKobo, required this.itemsKobo, required this.paid, this.paidAt});
+  const BasketShare({required this.amountKobo, required this.cardSent, required this.deliveryKobo, required this.itemsKobo, required this.paid, this.paidAt, required this.refundDue});
 
   final int amountKobo;
   final bool cardSent;
@@ -11887,6 +11919,9 @@ class BasketShare {
   final int itemsKobo;
   final bool paid;
   final DateTime? paidAt;
+  /// Paid after the order could take it (it lapsed or closed, or had less left
+  /// to pay); never counted, the business sends it back.
+  final bool refundDue;
 
   factory BasketShare.fromJson(Map<String, dynamic> j) => BasketShare(
         amountKobo: (j['amount_kobo'] as num).toInt(),
@@ -11895,6 +11930,7 @@ class BasketShare {
         itemsKobo: (j['items_kobo'] as num).toInt(),
         paid: j['paid'] as bool,
         paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        refundDue: j['refund_due'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -11904,6 +11940,7 @@ class BasketShare {
         'items_kobo': itemsKobo,
         'paid': paid,
         'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'refund_due': refundDue,
       };
 }
 
