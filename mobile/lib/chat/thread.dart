@@ -963,7 +963,7 @@ class BubbleFrame extends StatelessWidget {
                   borderRadius: radius,
                   boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                 ),
-                child: ownWords(context, own && mine, Stack(
+                child: ownWords(context, mine, Stack(
                   children: [
                     Padding(
                       // `padding: 8px 12px 6px`; on the right 11.5, as Chrome

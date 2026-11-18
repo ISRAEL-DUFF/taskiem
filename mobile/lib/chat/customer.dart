@@ -870,6 +870,10 @@ class _CustomerBubble extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final m = x.m;
     final meta = m.mine ? t.chatOutMeta : t.muted;
+    // Your own words white on pine in the light (ownWords' ink): read here,
+    // outside the bubble, the theme's own ink would be dark on pine.
+    final light = m.mine && TkTheme.of(context).mode != TkMode.dark;
+    final ink = light ? const Color(0xFFFFFFFF) : t.text;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -891,8 +895,11 @@ class _CustomerBubble extends StatelessWidget {
       first: first,
       last: last,
       stamp: stamp,
+      // A stamp with its line or a template's words is too long to sit over
+      // the end of the last line: under the words instead.
+      inline: line == null && !(m.mine && m.sentAs == 'template'),
       children: [
-        if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: t.tintText)),
+        if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: light ? const Color(0xFFC8F169) : t.tintText)),
         Text.rich(
           TextSpan(
             children: [
@@ -901,7 +908,7 @@ class _CustomerBubble extends StatelessWidget {
               TextSpan(text: m.body, style: m.kind == 'media' ? const TextStyle(fontStyle: FontStyle.italic) : null),
             ],
           ),
-          style: tkText(size: 16, lineHeight: 23 / 16, color: m.kind == 'media' ? t.muted : t.text),
+          style: tkText(size: 16, lineHeight: 23 / 16, color: m.kind == 'media' ? (light ? const Color(0xB3FFFFFF) : t.muted) : ink),
         ),
         if (m.mine && m.delivery == 'failed')
           Text('Not delivered${(m.failure ?? '').isNotEmpty ? ': ${m.failure}' : '.'}', style: tkText(size: 12, weight: 600, color: t.danger)),
