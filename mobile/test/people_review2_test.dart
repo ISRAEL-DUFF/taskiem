@@ -333,7 +333,7 @@ void main() {
   group('6. Check my contacts daily', () {
     Api privacy() {
       final api = Api();
-      api.routes['GET /v1/me/privacy/people'] = (_) => {'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'read_ticks': true, 'photo': 'contacts', 'show_number': false};
+      api.routes['GET /v1/me/privacy/people'] = (_) => {'find_by_number': 'contacts', 'groups_add': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'read_ticks': true, 'photo': 'contacts', 'show_number': false};
       return api;
     }
 
@@ -403,7 +403,7 @@ void main() {
     testWidgets('You’s Chats: events while a chat covers it read nothing; one read when it is on top', (t) async {
       phone(t);
       final api = adaChat();
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       final live = PeopleLive(api.auth().transport);
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false, live: live)));
@@ -562,7 +562,7 @@ void main() {
         unseen = 0;
         return answer({}, 204);
       };
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       final auth = api.auth();
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: auth, now: () => at, presence: false)));

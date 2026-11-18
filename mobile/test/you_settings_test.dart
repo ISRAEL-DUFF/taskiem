@@ -81,10 +81,10 @@ void main() {
     phone(t);
     final api = you();
     var refuse = false;
-    api.routes['GET /v1/me/notifications'] = (_) => {'messages': true, 'updates': true, 'offers': true, 'people': true, 'requests': true};
+    api.routes['GET /v1/me/notifications'] = (_) => {'messages': true, 'updates': true, 'offers': true, 'people': true, 'requests': true, 'groups': true};
     api.routes['PUT /v1/me/notifications'] = (r) {
       if (refuse) return answer({'error': 'Something went wrong. Try again.'}, 500);
-      return {'messages': true, 'updates': true, 'offers': api.body(r)['offers'] ?? true, 'people': api.body(r)['people'] ?? true, 'requests': true};
+      return {'messages': true, 'updates': true, 'offers': api.body(r)['offers'] ?? true, 'people': api.body(r)['people'] ?? true, 'requests': true, 'groups': true};
     };
     await settings(t, api);
     await press(t, find.text('Notifications'));

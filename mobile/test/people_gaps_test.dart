@@ -265,7 +265,7 @@ void main() {
     Api you() {
       final api = adaChat();
       api.routes['GET /v1/me/conversations'] = (r) => r.url.queryParameters['archived'] == '1'
-          ? {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false}
+          ? {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false}
           : {
               'chats': [
                 {...peopleChat(unread: 0), 'kind': 'person'},
@@ -332,7 +332,7 @@ void main() {
 
     test('MyChats reads again on an event, once for a burst', () async {
       final api = Api();
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       final live = PeopleLive(api.auth().transport);
       final chats = MyChats(api.auth(), live: live);
       hear(live, 'chat', {'id': 'pc1', 'hidden': true});
@@ -594,7 +594,7 @@ void main() {
     testWidgets('You opens: re-checked by itself, the people found offered; not again the same day', (t) async {
       phone(t);
       final api = served();
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       final keys = MemoryKeyStore();
       await keys.write('contacts-checked', '2026-11-16');
@@ -722,7 +722,7 @@ void main() {
         unseen = 0;
         return answer({}, 204);
       };
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
       await settle(t);
@@ -768,7 +768,7 @@ void main() {
       phone(t, 2400);
       final api = Api();
       api.routes['GET /v1/me/privacy/people'] = (_) => {
-        'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'photo': 'contacts', 'show_number': false, 'read_ticks': true,
+        'find_by_number': 'contacts', 'groups_add': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'photo': 'contacts', 'show_number': false, 'read_ticks': true,
       };
       final opened = <Uri>[];
       final was = openInBrowser;

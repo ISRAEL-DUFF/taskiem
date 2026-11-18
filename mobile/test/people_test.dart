@@ -287,7 +287,7 @@ void main() {
     phone(t);
     final api = adaChat();
     api.routes['GET /v1/me/conversations'] = (r) => r.url.queryParameters['archived'] == '1'
-        ? {'chats': <Object>[], 'unread': 0, 'requests': 2, 'more': false}
+        ? {'chats': <Object>[], 'unread': 0, 'requests': 2, 'invites': 0, 'more': false}
         : {
             'chats': [
               {...peopleChat(unread: 1), 'kind': 'person'},
@@ -700,7 +700,7 @@ void main() {
     phone(t);
     final api = Api();
     var refuse = false;
-    final p = <String, dynamic>{'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'read_ticks': true, 'photo': 'contacts', 'show_number': false};
+    final p = <String, dynamic>{'find_by_number': 'contacts', 'groups_add': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'read_ticks': true, 'photo': 'contacts', 'show_number': false};
     api.routes['GET /v1/me/privacy/people'] = (_) => p;
     api.routes['PUT /v1/me/privacy/people'] = (r) {
       if (refuse) return answer({'error': 'Something went wrong. Try again.'}, 500);
@@ -821,7 +821,7 @@ void main() {
   testWidgets('a link to a person’s chat, and to a request, opens it from You (as a push’s does)', (t) async {
     phone(t);
     final api = adaChat(c: peopleChat(request: true));
-    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 1, 'more': false};
+    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 1, 'invites': 0, 'more': false};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     api.routes['GET /v1/me/people/requests'] = (_) => {'more': false, 'requests': [peopleChat(request: true)]};
     final links = StreamController<Uri>();
@@ -851,7 +851,7 @@ void main() {
     phone(t);
     final api = Api();
     api.routes['POST /v1/me/presence'] = (_) => answer({}, 204);
-    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at)));
     await settle(t);

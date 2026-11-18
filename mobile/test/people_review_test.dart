@@ -119,7 +119,7 @@ void main() {
     testWidgets('You’s list: not read again while put away', (t) async {
       phone(t);
       final api = Api();
-      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
       await settle(t);
@@ -372,7 +372,7 @@ void main() {
     testWidgets('Share with someone: the same card to the same chat again goes with the same id', (t) async {
       phone(t);
       final api = Api();
-      api.routes['GET /v1/me/people'] = (_) => {'chats': [peopleChat(id: 'f1', name: 'Friend 1')], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/people'] = (_) => {'chats': [peopleChat(id: 'f1', name: 'Friend 1')], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       var n = 0;
       api.routes['POST /v1/me/people/f1/messages'] = (_) => ++n == 1
           ? answer({'error': 'Unavailable'}, 503)
@@ -409,8 +409,8 @@ void main() {
       phone(t);
       final api = Api();
       api.routes['GET /v1/me/people'] = (r) => r.url.queryParameters['archived'] == '1'
-          ? {'chats': [{...peopleChat(id: 'a1', name: 'Old Friend'), 'archived': true}], 'unread': 0, 'requests': 0, 'more': false}
-          : {'chats': [peopleChat(id: 'f1', name: 'Friend 1'), {...peopleChat(id: 's1', name: 'Sleepy'), 'suspended': true}], 'unread': 0, 'requests': 0, 'more': false};
+          ? {'chats': [{...peopleChat(id: 'a1', name: 'Old Friend'), 'archived': true}], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false}
+          : {'chats': [peopleChat(id: 'f1', name: 'Friend 1'), {...peopleChat(id: 's1', name: 'Sleepy'), 'suspended': true}], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       final auth = api.auth();
       await t.pumpWidget(TaskiemApp(
         mode: TkMode.light,
@@ -428,9 +428,9 @@ void main() {
       final api = Api();
       api.routes['GET /v1/me/people'] = (r) {
         final q = r.url.queryParameters;
-        if (q['archived'] == '1') return {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
-        if (q['before'] == 'n1') return {'chats': [peopleChat(id: 'g1', name: 'Page Two')], 'unread': 0, 'requests': 0, 'more': false};
-        return {'chats': [peopleChat(id: 'f1', name: 'Friend 1')], 'unread': 0, 'requests': 0, 'more': true, 'next': 'n1'};
+        if (q['archived'] == '1') return {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
+        if (q['before'] == 'n1') return {'chats': [peopleChat(id: 'g1', name: 'Page Two')], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
+        return {'chats': [peopleChat(id: 'f1', name: 'Friend 1')], 'unread': 0, 'requests': 0, 'invites': 0, 'more': true, 'next': 'n1'};
       };
       final auth = api.auth();
       await t.pumpWidget(TaskiemApp(
@@ -492,9 +492,9 @@ void main() {
       final api = Api();
       api.routes['GET /v1/me/conversations'] = (r) {
         final q = r.url.queryParameters;
-        if (q['archived'] == '1') return {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
-        if (q['before'] == 'n1') return {'chats': [listRow('pc9', 'Page Two Person')], 'unread': 3, 'requests': 0, 'more': false};
-        return {'chats': [listRow('pc1', 'Ada Obi')], 'unread': 3, 'requests': 0, 'more': true, 'next': 'n1'};
+        if (q['archived'] == '1') return {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
+        if (q['before'] == 'n1') return {'chats': [listRow('pc9', 'Page Two Person')], 'unread': 3, 'requests': 0, 'invites': 0, 'more': false};
+        return {'chats': [listRow('pc1', 'Ada Obi')], 'unread': 3, 'requests': 0, 'invites': 0, 'more': true, 'next': 'n1'};
       };
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
@@ -564,7 +564,7 @@ void main() {
       phone(t);
       final api = Api();
       api.routes['GET /v1/me/privacy/people'] = (_) => {
-        'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'everyone', 'photo': 'everyone', 'show_number': false, 'read_ticks': true,
+        'find_by_number': 'contacts', 'groups_add': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'everyone', 'photo': 'everyone', 'show_number': false, 'read_ticks': true,
       };
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeoplePrivacyPage(auth: api.auth())));
       await settle(t);
