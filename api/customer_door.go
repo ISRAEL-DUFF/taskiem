@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/peoplesafety"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -1216,8 +1217,23 @@ func (s *Server) reportBusiness(w http.ResponseWriter, r *http.Request) {
 			msgs = []sent{}
 		}
 		raw, _ := json.Marshal(msgs)
-		_, err = tx.Exec(ctx, `INSERT INTO customer_reports (id, person_id, tenant_id, reason, note, consent, messages) VALUES ($1, $2, $3, $4, $5, true, $6)`,
-			id, person, c.Business, in.Reason, in.Note, raw)
+		// Sealed under the report's own key, as a people report is; kept
+		// plain only on a server with no key service (none seals then).
+		if s.Vault == nil {
+			_, err = tx.Exec(ctx, `INSERT INTO customer_reports (id, person_id, tenant_id, reason, note, consent, messages) VALUES ($1, $2, $3, $4, $5, true, $6)`,
+				id, person, c.Business, in.Reason, in.Note, raw)
+			return err
+		}
+		box, err := peoplesafety.NewBox(ctx, s.Vault, peoplesafety.CustomerReportPurpose(id), id)
+		if err != nil {
+			return err
+		}
+		sealed, err := box.Seal(peoplesafety.MessagesRow, raw)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO customer_reports (id, person_id, tenant_id, reason, note, consent, messages, sealed, box_key, kms_key, message_count)
+			VALUES ($1, $2, $3, $4, $5, true, '[]', $6, $7, $8, $9)`, id, person, c.Business, in.Reason, in.Note, sealed, box.Sealed, box.KMSKey, len(msgs))
 		return err
 	})
 	if err != nil {

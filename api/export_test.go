@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -54,3 +55,19 @@ var OpenBetween = openBetween
 
 // WarnTransfer says whether words ask for a transfer to a personal account.
 var WarnTransfer = warnTransfer
+
+// LiveConnect and LiveClose open and close one of a person's live
+// connections as GET /v1/me/live does.
+func (s *Server) LiveConnect(ctx context.Context, person, conn uuid.UUID, front bool) error {
+	return s.liveConnect(ctx, person, conn, front)
+}
+
+func (s *Server) LiveClose(person, conn uuid.UUID) { s.liveClose(person, conn) }
+
+// FillLimiters fills the in-memory limiters to their most (memory
+// pressure), with keys of a kind no route uses.
+func (s *Server) FillLimiters() {
+	for i := range maxLimiters {
+		s.limiter("test-fill:"+uuid.NewString()+string(rune(i%10+'0')), time.Hour, 1)
+	}
+}

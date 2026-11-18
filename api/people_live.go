@@ -129,7 +129,9 @@ func (s *Server) liveFront(ctx context.Context, person, conn uuid.UUID, front bo
 }
 
 // liveClose forgets a connection that ended; when it was in front and no
-// other of the person's is, they are away, last seen now.
+// other of the person's is, they are away, last seen now: also when the
+// account was suspended meanwhile (it is shown suspended, not online);
+// not once it is deleted (it has no presence left).
 func (s *Server) liveClose(person, conn uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -139,7 +141,7 @@ func (s *Server) liveClose(person, conn uuid.UUID) {
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT status = 'active' AND deleted_at IS NULL FROM users WHERE id = $1`, person).Scan(&active); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL FROM users WHERE id = $1`, person).Scan(&active); err != nil {
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM person_live WHERE person_id = $1 AND front AND seen_at > now() - $2::interval)`,

@@ -37,6 +37,10 @@ type Box struct {
 // sealed for one report opens for no other.
 func ReportPurpose(id uuid.UUID) string { return "people-report:" + id.String() }
 
+// CustomerReportPurpose names a report of a business's key (a person's
+// report of a business they chat with, sealed as a people report is).
+func CustomerReportPurpose(id uuid.UUID) string { return "customer-report:" + id.String() }
+
 // HeldPurpose is a held message's.
 func HeldPurpose(id uuid.UUID) string { return "people-held:" + id.String() }
 

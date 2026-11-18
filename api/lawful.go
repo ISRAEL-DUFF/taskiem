@@ -391,7 +391,9 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 
 // lawfulCounts is GET /v1/transparency/lawful-requests, for anyone: how
 // many lawful requests Taskiem received, answered and refused, each
-// half-year (decision 0069 point 11).
+// half-year that has ended (decision 0069 point 11). The current half-year
+// is left out until it ends, and nothing says what is still being looked
+// at, so the count never moves when one person's request comes in.
 func (s *Server) lawfulCounts(w http.ResponseWriter, r *http.Request) {
 	type period struct {
 		peoplesafety.Half
@@ -399,16 +401,15 @@ func (s *Server) lawfulCounts(w http.ResponseWriter, r *http.Request) {
 		Received int64  `json:"received"`
 		Answered int64  `json:"answered"`
 		Refused  int64  `json:"refused"`
-		Pending  int64  `json:"pending"`
 	}
-	rows, err := s.Store.Pool.Query(r.Context(), `SELECT year, half, received, answered, refused, pending FROM taskiem_lawful_request_counts()`)
+	rows, err := s.Store.Pool.Query(r.Context(), `SELECT year, half, received, answered, refused FROM taskiem_lawful_request_counts()`)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (period, error) {
 		var p period
-		err := r.Scan(&p.Year, &p.Half.Half, &p.Received, &p.Answered, &p.Refused, &p.Pending)
+		err := r.Scan(&p.Year, &p.Half.Half, &p.Received, &p.Answered, &p.Refused)
 		p.Label = p.Half.Label()
 		return p, err
 	})
@@ -418,5 +419,5 @@ func (s *Server) lawfulCounts(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	writeJSON(w, http.StatusOK, map[string]any{"periods": nonNil(out),
-		"words": "Taskiem answers only proper legal process, gives the least that is asked, and tells the person where the law allows. These are the requests for people's data Taskiem received from authorities, by when they were received."})
+		"words": "Taskiem answers only proper legal process, gives the least that is asked, and tells the person where the law allows. These are the requests for people's data Taskiem received from authorities, by the half-year they were received in. A half-year is shown once it has ended."})
 }

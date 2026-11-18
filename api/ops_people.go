@@ -376,9 +376,11 @@ func (s *Server) opsCustomerReport(w http.ResponseWriter, r *http.Request) {
 		ReviewedAt *time.Time      `json:"reviewed_at"`
 		ReviewNote *string         `json:"review_note"`
 	}
+	var sealed []byte
+	var boxKey, kmsKey *string
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
 		err := tx.QueryRow(ctx, `SELECT * FROM taskiem_ops_customer_report($1)`, id).Scan(&rep.ID, &rep.ReporterID, &rep.TenantID, &rep.Business, &rep.Reason,
-			&rep.Note, &rep.Messages, &rep.Status, &rep.CreatedAt, &rep.ReviewedBy, &rep.ReviewedAt, &rep.ReviewNote)
+			&rep.Note, &rep.Messages, &sealed, &boxKey, &kmsKey, &rep.Status, &rep.CreatedAt, &rep.ReviewedBy, &rep.ReviewedAt, &rep.ReviewNote)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errOpsNotFound
 		}
@@ -394,6 +396,17 @@ func (s *Server) opsCustomerReport(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.opsDBFail(w, r, err)
 		return
+	}
+	if sealed != nil && boxKey != nil && kmsKey != nil {
+		box, err := peoplesafety.OpenBox(ctx, s.Vault, peoplesafety.CustomerReportPurpose(id), id, *boxKey, *kmsKey)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if rep.Messages, err = box.Open(peoplesafety.MessagesRow, sealed); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"report": rep})
 }

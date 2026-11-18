@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/people"
@@ -229,21 +228,56 @@ func theyBlockedTx(ctx context.Context, tx pgx.Tx, peer, person uuid.UUID) (bool
 
 // peopleReachTx puts the other person's copy of c's conversation in reach
 // and answers who they are; errPeopleGone when their account was deleted,
-// errPeopleSuspended while it is suspended.
+// errPeopleSuspended while it is suspended, errPeopleYouSuspended while
+// the caller's own is. None of these aborts the transaction
+// (taskiem_people_reach_try answers instead of raising), so a caller that
+// takes one as "nothing to do on their side" goes on with its own copy.
 func peopleReachTx(ctx context.Context, tx pgx.Tx, chat uuid.UUID) (uuid.UUID, error) {
-	var peer uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT taskiem_people_reach($1)`, chat).Scan(&peer)
-	var pe *pgconn.PgError
-	if errors.As(err, &pe) && pe.Code == "P0002" {
-		switch pe.Hint {
-		case "gone":
-			return uuid.Nil, errPeopleGone
-		case "suspended":
-			return uuid.Nil, errPeopleSuspended
-		}
-		return uuid.Nil, errDoorNone
-	}
+	peer, _, err := reachTryTx(ctx, tx, chat, false)
 	return peer, err
+}
+
+// peopleForgetReachTx is the reach for forgetting (delete for everyone)
+// and accepting a request: past a suspension on either side (a suspension
+// stops messaging, not forgetting), never to a deleted account. reached
+// says whether the other's copy is in reach; err is only a failure.
+func peopleForgetReachTx(ctx context.Context, tx pgx.Tx, chat uuid.UUID) (uuid.UUID, bool, error) {
+	peer, reached, err := reachTryTx(ctx, tx, chat, true)
+	if reached {
+		return peer, true, nil
+	}
+	if peerAway(err) || errors.Is(err, errPeopleYouSuspended) {
+		return uuid.Nil, false, nil
+	}
+	return uuid.Nil, false, err
+}
+
+func reachTryTx(ctx context.Context, tx pgx.Tx, chat uuid.UUID, forget bool) (uuid.UUID, bool, error) {
+	var peer *uuid.UUID
+	var state string
+	var reached bool
+	if err := tx.QueryRow(ctx, `SELECT peer, state, reached FROM taskiem_people_reach_try($1, $2)`, chat, forget).Scan(&peer, &state, &reached); err != nil {
+		return uuid.Nil, false, err
+	}
+	if reached && peer != nil {
+		return *peer, true, nil
+	}
+	switch state {
+	case "gone":
+		return uuid.Nil, false, errPeopleGone
+	case "suspended":
+		return uuid.Nil, false, errPeopleSuspended
+	case "self":
+		return uuid.Nil, false, errPeopleYouSuspended
+	}
+	return uuid.Nil, false, errDoorNone
+}
+
+// reachQuiet is a reach that went nowhere for a reason the caller says
+// nothing of (a read mark, typing, a number): the other is away, or the
+// caller is suspended.
+func reachQuiet(err error) bool {
+	return peerAway(err) || errors.Is(err, errPeopleYouSuspended)
 }
 
 // peopleSealed is what a message's sealed value holds.
@@ -969,7 +1003,7 @@ func (s *Server) getPeopleChat(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if _, err := peopleReachTx(ctx, tx, c.ID); err != nil {
-			if peerAway(err) {
+			if reachQuiet(err) {
 				return nil
 			}
 			return err
@@ -1075,11 +1109,15 @@ func acceptTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy, ti
 		person, c.ID); err != nil {
 		return err
 	}
-	peer, err := peopleReachTx(ctx, tx, c.ID)
-	if peerAway(err) {
-		return nil
+	if c.Peer != nil {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_people_request_mark($1, 'accepted')`, *c.Peer); err != nil {
+			return err
+		}
 	}
-	if err != nil {
+	// The sender's copy shows it accepted even while they are suspended
+	// (they still write to no one); a deleted account has no copy.
+	peer, ok, err := peopleForgetReachTx(ctx, tx, c.ID)
+	if err != nil || !ok {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE people_chats SET waiting_at = NULL, accepted_at = COALESCE(accepted_at, now()) WHERE person_id = $1 AND conversation_id = $2`,
@@ -1093,8 +1131,7 @@ func acceptTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy, ti
 			return err
 		}
 	}
-	_, err = tx.Exec(ctx, `SELECT taskiem_people_request_mark($1, 'accepted')`, peer)
-	return err
+	return nil
 }
 
 // declineTx deletes a request: the person's copy goes. The sender is not
@@ -1130,6 +1167,11 @@ func (s *Server) acceptPeopleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.RequestAt == nil {
 			return customerSendErr{http.StatusConflict, "This chat is not a request."}
+		}
+		// Accepting writes to the sender's copy: not while the person is
+		// suspended.
+		if err := notSuspendedTx(ctx, tx, person); err != nil {
+			return err
 		}
 		ticks, err := s.readTicksTx(ctx, tx, person, c.Peer)
 		if err != nil {
