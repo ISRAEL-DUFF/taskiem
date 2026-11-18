@@ -1695,3 +1695,5 @@ storefront_order_share_links.order_id
 storefront_order_share_links.share_key
 storefront_order_share_links.paid_at
 storefront_order_share_links.created_at
+group_invites_gone.person_id
+group_invites_gone.at

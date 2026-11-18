@@ -347,6 +347,28 @@ func RulesTestYAML() ([]byte, error) {
 					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
 				},
 			},
+			{
+				Name: "two pods report the same tables, counted once",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// Each of two pods reports people chats' files at 80 GiB for
+					// 40h, then 151 GiB; groups' files at 1 GiB growing 25 MiB
+					// every 5 minutes (about 7 GiB a day). Added up across pods
+					// that would be 160 GiB and 14 GiB a day, past both lines
+					// from the start; counted once a table it is under both
+					// until the files pass 150 GiB at 40h.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="b"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "1073741824+26214400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="b"}`, Values: "1073741824+26214400x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "10h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "39h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
 		},
 	}
 	b, err := yaml.Marshal(f)

@@ -194,6 +194,9 @@ export function useMentions(
               ? { kind: p.kind, ref: p.id }
               : { kind: p.kind, item_id: p.id },
       );
+  /** The members picked with "@" (their id with the name picked): a
+   * group's mentions keep the one picked when names collide. */
+  const pickedPeople = () => picked.filter((p) => p.kind === "customer").map((p) => ({ id: p.id, name: p.name }));
   const reset = () => {
     setPicked([]);
     setQ(null);
@@ -210,6 +213,7 @@ export function useMentions(
     onKeyDown,
     update,
     refs,
+    pickedPeople,
     reset,
     close: () => setQ(null),
     box,

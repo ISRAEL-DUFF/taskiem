@@ -22,6 +22,7 @@ import {
   groupInfoPath,
   groupThreadWithLive,
   groupThreadWithReceipts,
+  mayDeleteGroupForEveryone,
   mentionable,
   mentionedIn,
   mentionPieces,
@@ -268,10 +269,10 @@ export function GroupChatPage() {
       .finally(() => (loadingOlder.current = false));
   };
 
-  const send = async (text: string, file?: File, reply?: GroupMessage) => {
+  const send = async (text: string, file?: File, reply?: GroupMessage, picks?: { id: string; name: string }[]) => {
     setProblem(undefined);
     gate.current.sent();
-    const mentions = mentionedIn(text, mentionable(members));
+    const mentions = mentionedIn(text, mentionable(members), picks);
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
     kept.current = undefined;
     const preview = file ? await asDataURL(file) : undefined;
@@ -349,7 +350,7 @@ export function GroupChatPage() {
     },
     onSend: (s) => {
       setSendError(undefined);
-      void send(s.text, s.file, s.reply);
+      void send(s.text, s.file, s.reply, s.picks);
     },
     enabled: !!g?.can_post,
     closes: [!!sheet],
@@ -584,6 +585,7 @@ export function GroupChatPage() {
         <DeleteAsk
           m={sheet.m}
           group
+          mayEveryone={mayDeleteGroupForEveryone(g, sheet.m)}
           onClose={() => setSheet(undefined)}
           onDelete={(forEveryone) =>
             void act.run(async () => {

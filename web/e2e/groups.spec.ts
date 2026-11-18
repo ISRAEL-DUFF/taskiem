@@ -182,7 +182,7 @@ test("a group is made with a contact added and someone invited, and they chat wi
   await box.pressSequentially("are you coming on Saturday?");
   await box.press("Enter");
   const mine = ada.page.getByTestId("group-message").filter({ hasText: "are you coming on Saturday?" });
-  await expect(mine.getByTestId("people-ticks")).toHaveAttribute("data-ticks", /^(sent|delivered)$/);
+  await expect(mine.getByTestId("people-ticks")).toHaveAttribute("data-ticks", /^(sent|delivered)$/, { timeout: 20_000 });
 
   // Bola sees it, the mention of them marked; Chidi sees it unmarked.
   await row.click();

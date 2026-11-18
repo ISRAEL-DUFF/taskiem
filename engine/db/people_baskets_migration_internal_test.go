@@ -11,7 +11,7 @@ import (
 
 // 00486 (ordering together) goes up, down and up again: up, the baskets,
 // their lines and shares, the business's share pay links, the basket card
-// type and the three definers are there; down, all is as 00484 left it
+// type and the three definers are there; down, all is as 00485 left it
 // (a basket card goes with its basket).
 func TestPeopleBasketsMigrationUpDownUp(t *testing.T) {
 	dsn := emptyDatabase(t)
@@ -31,7 +31,7 @@ func TestPeopleBasketsMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	if _, err := p.UpTo(ctx, 484); err != nil {
+	if _, err := p.UpTo(ctx, 485); err != nil {
 		t.Fatal(err)
 	}
 	type st struct{ tables, definers, basketCards int }
@@ -53,7 +53,7 @@ func TestPeopleBasketsMigrationUpDownUp(t *testing.T) {
 		if s := state(); s.tables != 4 || s.definers != 3 || s.basketCards != 2 {
 			t.Fatalf("up: %+v", s)
 		}
-		if _, err := p.DownTo(ctx, 484); err != nil {
+		if _, err := p.DownTo(ctx, 485); err != nil {
 			t.Fatal(err)
 		}
 		if s := state(); s.tables != 0 || s.definers != 0 || s.basketCards != 0 {

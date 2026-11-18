@@ -303,7 +303,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   square: look.teal,
                   onTap: () async => _say(await d.put(archived: !g.archived), g.archived ? 'Brought back to the chats' : 'Archived'),
                 ),
-                if (!g.left) TkListRow(title: 'Report this group', sub: 'The last 20 messages go to Taskiem’s moderators, if you agree', icon: 'b-alert', square: look.red, onTap: () => reportGroupFlow(context, d)),
+                TkListRow(title: 'Report this group', sub: 'The last 20 messages go to Taskiem’s moderators, if you agree', icon: 'b-alert', square: look.red, onTap: () => reportGroupFlow(context, d)),
                 if (!g.left) TkListRow(title: 'Leave this group', icon: 'b-out', square: look.red, onTap: () => leaveGroupFlow(context, d, onClosed: widget.onClosed)),
                 TkListRow(title: 'Delete this group', sub: g.left ? 'For good, on every phone you use' : 'Your copy up to now', icon: 'b-x', square: look.red, onTap: () => deleteGroupFlow(context, d, onClosed: widget.onClosed)),
               ],

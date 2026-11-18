@@ -69,3 +69,12 @@ const (
 	GroupCheckYoung  = 7 * 24 * time.Hour
 	GroupCheckJoined = 24 * time.Hour
 )
+
+// A report of a member from inside a group weighs in the member's
+// ReportedBy only when its reporter's account is past its first week, they
+// had been in the group GroupReportAfter or more when reporting, and the
+// member wrote within what the reporter sees; and then half: a reporter
+// whose reports of the person all came from groups counts half a person
+// (two such reporters make one). One-to-one reports count whole, as
+// before. (5b B, the review's fixes.)
+const GroupReportAfter = 24 * time.Hour

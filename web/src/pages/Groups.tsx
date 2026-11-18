@@ -10,10 +10,12 @@ import {
   GROUP_KEPT_WORDS,
   GROUP_REPORT_CONSENT,
   groupPath,
+  inviteGone,
   invitesWithInvite,
   joinWords,
   membersInOrder,
   membersWords,
+  newGroupOpensAtOnce,
   type GroupAdded,
   type Group,
   type GroupInvite,
@@ -121,12 +123,16 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     void act.run(async () => {
       const out = await post<{ group: Group; added: GroupAdded[] }>("/v1/me/groups", { name: name.trim(), description: description.trim() || undefined, person_ids: picked });
+      let photoFailed = false;
       if (photo) {
         const form = new FormData();
         form.append("file", photo);
-        await upload(`/v1/me/groups/${encodeURIComponent(out.group.id)}/photo`, form, "PUT").catch(setPhotoProblem);
+        await upload(`/v1/me/groups/${encodeURIComponent(out.group.id)}/photo`, form, "PUT").catch((err: unknown) => {
+          photoFailed = true;
+          setPhotoProblem(err);
+        });
       }
-      if (!out.added.length) {
+      if (newGroupOpensAtOnce(out.added, photoFailed)) {
         onClose();
         nav(groupPath(out.group.id));
         return;
@@ -140,6 +146,7 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
         <div className="pc-check">
           <p role="status">Your group is made.</p>
           <AddedList added={made.added} names={names} />
+          {photoProblem !== undefined && <p>The photo was not saved. You can add it again in the group’s info.</p>}
           <ErrorBox error={photoProblem} />
           <button type="button" className="primary" onClick={() => (onClose(), nav(groupPath(made.group.id)))} data-testid="group-new-open">
             Open the group
@@ -946,7 +953,10 @@ export function GroupInvites() {
               data-testid="group-invite-accept"
               onClick={() =>
                 void act.run(async () => {
-                  const g = await post<Group>(`/v1/me/groups/invites/${encodeURIComponent(i.group_id)}/accept`);
+                  const g = await post<Group>(`/v1/me/groups/invites/${encodeURIComponent(i.group_id)}/accept`).catch((err: unknown) => {
+                    if (inviteGone(err)) reload();
+                    throw err;
+                  });
                   nav(groupPath(g.id));
                 }, `You joined ${i.name}`)
               }
@@ -960,7 +970,10 @@ export function GroupInvites() {
               data-testid="group-invite-decline"
               onClick={() =>
                 void act.run(async () => {
-                  await post(`/v1/me/groups/invites/${encodeURIComponent(i.group_id)}/decline`);
+                  await post(`/v1/me/groups/invites/${encodeURIComponent(i.group_id)}/decline`).catch((err: unknown) => {
+                    if (inviteGone(err)) reload();
+                    throw err;
+                  });
                   setRows((cur) => cur?.filter((x) => x.group_id !== i.group_id));
                 }, "Invite declined")
               }

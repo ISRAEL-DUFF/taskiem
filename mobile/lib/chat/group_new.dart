@@ -307,6 +307,8 @@ class _GroupInvitesSectionState extends State<GroupInvitesSection> {
     super.initState();
     _load();
     _events = (widget.live ?? PeopleLive.of(widget.auth))?.groupEvents.listen((e) {
+      // An invite gone (taken back, answered on another device): out at once.
+      if (e is GroupLiveInvite && e.invite == null && mounted) setState(() => _invites = _invites?.where((i) => i.groupId != e.groupId).toList());
       if (e is GroupLiveInvite || (_invites?.any((i) => i.groupId == e.groupId) ?? false)) _soon = soonOnce(_soon, _load);
     });
   }
@@ -339,6 +341,8 @@ class _GroupInvitesSectionState extends State<GroupInvitesSection> {
       unawaited(widget.openGroup(g.id));
     } on Object catch (e) {
       if (mounted) showTkToast(context, sayFailure(e), error: true);
+      // Gone already (taken back, answered on another device): read again.
+      if (e is ApiError && e.status == 404) await _load();
     }
     if (mounted) setState(() => _busy.remove(i.groupId));
   }
@@ -353,6 +357,7 @@ class _GroupInvitesSectionState extends State<GroupInvitesSection> {
       if (mounted) showTkToast(context, 'Declined');
     } on Object catch (e) {
       if (mounted) showTkToast(context, sayFailure(e), error: true);
+      if (e is ApiError && e.status == 404) await _load();
     }
     if (mounted) setState(() => _busy.remove(i.groupId));
   }

@@ -107,12 +107,21 @@ PeopleMessage asPeopleMessage(GroupMessage g) => PeopleMessage(
 /// [m] with another status (its ticks moved on the live connection).
 GroupMessage withStatus(GroupMessage m, String status) => GroupMessage.fromJson({...m.toJson(), 'status': status});
 
+/// A member picked with @: their name as written, and their id (two
+/// members may share a name).
+typedef PickedMention = ({String name, String id});
+
 /// The people mentioned in [text]: the members picked with @ whose name is
-/// still there.
-List<String> mentionedIn(String text, Map<String, String> picked) => [
-  for (final e in picked.entries)
-    if (text.contains('@${e.key}')) e.value,
-];
+/// still there as a whole word ("@Ada" is not in "@Adamu"), each once.
+List<String> mentionedIn(String text, List<PickedMention> picked) {
+  final out = <String>[];
+  for (final p in picked) {
+    if (out.contains(p.id)) continue;
+    final at = RegExp('@${RegExp.escape(p.name)}(?![\\p{L}\\p{N}_])', unicode: true);
+    if (at.hasMatch(text)) out.add(p.id);
+  }
+  return out;
+}
 
 /// What a group shows, read every few seconds while it is seen (its
 /// screen polls: not while the app is put away or another screen covers
@@ -273,9 +282,23 @@ class GroupChatData extends ChangeNotifier {
         }
       case GroupLiveGroup(:final hidden, group: final g):
         if (hidden) {
-          missing = true;
+          // Cleared on another device until a new message: still a member,
+          // so its messages are emptied (gone only once left or closed).
+          final was = group;
+          if (was != null && (was.left || was.closed != null)) {
+            missing = true;
+          } else {
+            messages = [...?messages?.where((l) => l.local)];
+            hasOlder = false;
+            _olderLoaded = false;
+          }
         } else if (g != null) {
           group = g;
+          if (missing) {
+            // Back (a new message after it was cleared): read it afresh.
+            missing = false;
+            unawaited(_pull(first: true));
+          }
         }
         _changed();
       case GroupLiveReceipts(:final statuses):
@@ -454,9 +477,9 @@ class GroupChatData extends ChangeNotifier {
   /// Words, or a file with its caption, answering [reply], mentioning
   /// [mentions] (member ids): shown at once with a clock, then the
   /// server's copy; not sent, the words come back to the box.
-  Future<void> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const []}) async {
+  Future<bool> send(String text, {PickedFile? file, GroupMessage? reply, List<String> mentions = const []}) async {
     final words = text.trim();
-    if (words.isEmpty && file == null) return;
+    if (words.isEmpty && file == null) return false;
     _typingAt = null;
     final what = file == null ? 'text:$words' : 'file:${file.name}:${file.type}:${file.bytes.length}:$words';
     final client = _clientFor(what);
@@ -493,19 +516,22 @@ class GroupChatData extends ChangeNotifier {
       } else {
         sent = await api.sendGroupMessage(id: id, body: SendGroupMessageRequest(text: words, clientId: client, replyTo: reply?.id, mentions: mentions.isEmpty ? null : mentions));
       }
-      if (_disposed) return;
+      if (_disposed) return true;
       messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [GroupLine(sent)]);
       unawaited(_group());
     } on Object catch (e) {
-      if (_disposed) return;
+      if (_disposed) return false;
       messages = messages?.where((m) => m != mine).toList();
       _keepUnsure(e, what, client);
       if (!_back.isClosed && words.isNotEmpty) _back.add(words);
       error = sendFailure(e);
       toStanding = pointsToStanding(e);
       unawaited(_group());
+      _changed();
+      return false;
     }
     _changed();
+    return true;
   }
 
   Future<bool> _sendOne(String what, SendGroupMessageRequest Function(String client) body) async {
@@ -785,7 +811,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   String? _paying;
 
   /// Members picked with @ in the box: their name as written, their id.
-  final _mentions = <String, String>{};
+  final _mentions = <PickedMention>[];
 
   /// The @ being typed before the cursor, while it is one.
   String? _at;
@@ -838,7 +864,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     if (start < 0) return;
     final put = '@${p.name} ';
     final next = text.replaceRange(start, end, put);
-    _mentions[p.name] = p.personId;
+    if (!_mentions.any((m) => m.id == p.personId)) _mentions.add((name: p.name, id: p.personId));
     _text.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: start + put.length));
     setState(() => _at = null);
   }
@@ -894,7 +920,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
             if (ok && !g.archived) _closeGroup();
           },
         ),
-        if (!g.left) ('Report this group', () => reportGroupFlow(context, d)),
+        ('Report this group', () => reportGroupFlow(context, d)),
         if (!g.left) ('Leave this group', () => leaveGroupFlow(context, d, onClosed: _closeGroup)),
         ('Delete this group', () => deleteGroupFlow(context, d, onClosed: _closeGroup)),
       ],
@@ -948,15 +974,22 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     await d.send('', file: f, reply: reply);
   }
 
-  void _send(String text, PickedFile? file) {
+  Future<void> _send(String text, PickedFile? file) async {
     final reply = _reply;
-    final mentions = mentionedIn(text, _mentions);
+    final picked = List.of(_mentions);
+    final mentions = mentionedIn(text, picked);
     setState(() {
       _reply = null;
       _at = null;
     });
     _mentions.clear();
-    d.send(text, file: file, reply: reply, mentions: mentions);
+    final sent = await d.send(text, file: file, reply: reply, mentions: mentions);
+    // Not sent: the words come back to the box, and their picks with them.
+    if (!sent && mounted) {
+      for (final p in picked) {
+        if (!_mentions.any((m) => m.id == p.id)) _mentions.add(p);
+      }
+    }
   }
 
   Future<void> _hold(GroupMessage m, Rect at) async {
@@ -1255,7 +1288,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                       replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '${_reply!.sender}: ') + groupLine(_reply!),
                       onCancelReply: () => setState(() => _reply = null),
                       onTools: _tools,
-                      onSend: _send,
+                      onSend: (t, f) => unawaited(_send(t, f)),
                     )
                   else
                     SizedBox(height: pad.bottom),

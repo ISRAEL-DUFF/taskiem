@@ -27,7 +27,10 @@ import (
 //	                removed, deleted for them): {"id", "hidden", "group"?: Group}
 //	group_receipts  the ticks of their own recent messages in a group moved
 //	                (A6): {"group_id", "messages": [{"id", "status"}]}
-//	group_invite    an invite to a group waiting for them: {"group_id", "invite": GroupInvite}
+//	group_invite    an invite to a group waiting for them: {"group_id", "invite": GroupInvite};
+//	                or one that went (taken back by an admin, accepted or
+//	                declined on another device, the group gone):
+//	                {"group_id", "invite": null}
 //	group_typing    who is typing in their groups now (never themselves):
 //	                {"groups": [{"group_id", "people": [ids]}]}
 //
@@ -42,6 +45,7 @@ type liveSeen struct {
 // groupLive is one connection's place in the person's groups.
 type groupLive struct {
 	msgs, groups, receipts, invites, marks liveWindow
+	invitesGone                            liveWindow
 	seen                                   map[string]map[liveSeen]struct{}
 	typing                                 []byte
 	status                                 map[uuid.UUID]string
@@ -77,7 +81,7 @@ func (gl *groupLive) ticksOf(ctx context.Context, s *Server, tx pgx.Tx, person, 
 
 func newGroupLive(since time.Time) *groupLive {
 	return &groupLive{msgs: liveWindow{since}, groups: liveWindow{since}, receipts: liveWindow{since}, invites: liveWindow{since},
-		marks: liveWindow{since}, seen: map[string]map[liveSeen]struct{}{}, status: map[uuid.UUID]string{}, ticks: map[uuid.UUID]groupTicksAt{}}
+		marks: liveWindow{since}, invitesGone: liveWindow{since}, seen: map[string]map[liveSeen]struct{}{}, status: map[uuid.UUID]string{}, ticks: map[uuid.UUID]groupTicksAt{}}
 }
 
 // fresh says whether this change was not yet sent, and remembers it.
@@ -98,7 +102,7 @@ func (gl *groupLive) fresh(kind string, id uuid.UUID, at time.Time) bool {
 // prune forgets changes older than each window.
 func (gl *groupLive) prune() {
 	for kind, m := range gl.seen {
-		since := map[string]time.Time{"msg": gl.msgs.since, "group": gl.groups.since, "receipt": gl.receipts.since, "invite": gl.invites.since, "mark": gl.marks.since}[kind]
+		since := map[string]time.Time{"msg": gl.msgs.since, "group": gl.groups.since, "receipt": gl.receipts.since, "invite": gl.invites.since, "invite_gone": gl.invitesGone.since, "mark": gl.marks.since}[kind]
 		for k := range m {
 			if time.UnixMicro(k.at).Before(since) {
 				delete(m, k)
@@ -437,6 +441,32 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 		}
 	}
 	if gl.invites.slide(times, liveBatch) {
+		more = true
+	}
+
+	// Invites that went (group_invites_gone, kept an hour): taken back,
+	// answered on another device, the group gone.
+	xrows, err := tx.Query(ctx, `SELECT group_id, at FROM group_invites_gone WHERE person_id = $1 AND at > $2
+		ORDER BY at LIMIT `+strconv.Itoa(liveBatch), person, gl.invitesGone.since)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	xlist, err := pgx.CollectRows(xrows, func(r pgx.CollectableRow) (ichange, error) {
+		var c ichange
+		return c, r.Scan(&c.id, &c.at)
+	})
+	if err != nil {
+		return nil, nil, false, err
+	}
+	times = times[:0]
+	for _, c := range xlist {
+		times = append(times, c.at)
+		if !gl.fresh("invite_gone", c.id, c.at) {
+			continue
+		}
+		out = append(out, liveEvent{c.at.UnixMicro(), "group_invite", mustJSON(map[string]any{"group_id": c.id, "invite": nil})})
+	}
+	if gl.invitesGone.slide(times, liveBatch) {
 		more = true
 	}
 	return out, now, more, nil

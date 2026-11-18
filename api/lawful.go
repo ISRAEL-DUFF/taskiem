@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/ops"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/peoplesafety"
@@ -299,99 +299,31 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 	var chats []lawfulChat
 	var groups []lawfulGroup
 	given, files := 0, 0
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		key, err := s.keys().KeyTx(ctx, tx, person, false)
-		if errors.Is(err, peoplechats.ErrNoKey) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `SELECT id, peer_id FROM people_chats WHERE person_id = $1 AND ($2::uuid IS NULL OR peer_id = $2) ORDER BY created_at`,
-			person, lr.WithPersonID)
-		if err != nil {
-			return err
-		}
-		type ref struct {
-			id   uuid.UUID
-			peer *uuid.UUID
-		}
-		refs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ref, error) {
-			var x ref
-			return x, r.Scan(&x.id, &x.peer)
-		})
-		if err != nil {
-			return err
-		}
-		var peers []uuid.UUID
-		for _, c := range refs {
-			if c.peer != nil {
-				peers = append(peers, *c.peer)
-			}
-		}
-		names, err := peopleNamesTx(ctx, tx, peers)
-		if err != nil {
-			return err
-		}
-		for _, c := range refs {
-			rows, err := tx.Query(ctx, `SELECT m.id, m.mine, m.kind, m.sealed, m.attachment, m.deleted_at IS NOT NULL, m.created_at, f.sealed
-				FROM people_messages m LEFT JOIN people_files f ON $4 AND f.person_id = m.person_id AND f.message_id = m.id
-				WHERE m.person_id = $1 AND m.chat_id = $2 AND m.created_at >= $3 AND m.created_at < $5 ORDER BY m.created_at, m.id`,
-				person, c.id, lr.From, lr.Files, lr.To)
-			if err != nil {
-				return err
-			}
-			msgs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (lawfulMessage, error) {
-				var m lawfulMessage
-				var sealed, file []byte
-				if err := r.Scan(&m.ID, &m.FromPerson, &m.Kind, &sealed, &m.Attachment, &m.Deleted, &m.At, &file); err != nil {
-					return m, err
-				}
-				if v, err := openSealed(key, person, m.ID, sealed); err == nil {
-					m.Body, m.Card, m.Location = v.Body, v.Card, v.Location
-					if m.Attachment != nil && v.Name != "" {
-						m.Attachment["name"] = v.Name
-					}
-				}
-				if file != nil {
-					if data, err := peoplechats.Open(key, person, fileRow(m.ID), file); err == nil {
-						b := base64.StdEncoding.EncodeToString(data)
-						m.File = &b
-						files++
-					}
-				}
-				return m, nil
-			})
-			if err != nil {
-				return err
-			}
-			if len(msgs) == 0 {
-				continue
-			}
-			given += len(msgs)
-			lc := lawfulChat{ChatID: c.id, With: c.peer, Messages: msgs}
-			if c.peer != nil {
-				lc.WithName = names.name[*c.peer]
-				if names.gone[*c.peer] {
-					lc.WithName = peopleGoneName
-				}
-			}
-			chats = append(chats, lc)
-		}
-		return nil
-	})
-	if err == nil && lr.Groups != "none" {
-		var n, f int
-		groups, n, f, err = s.lawfulGroupsExport(ctx, person, lr)
-		given, files = given+n, files+f
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	// Recorded before it is answered: an export that cannot be recorded is
-	// not given.
+	// One transaction: what is read and its record go together (an export
+	// that cannot be recorded is not given, and what is recorded is what
+	// was read). The reads are the person's own (their scope set, as
+	// their own transaction would be); the record is the operator's
+	// (their scope cleared again).
 	err = s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
+		chats, given, files = nil, 0, 0
+		groups = nil
+		if err := personScopeTx(ctx, tx, person); err != nil {
+			return err
+		}
+		var err error
+		if chats, given, files, err = s.lawfulChatsTx(ctx, tx, person, lr); err != nil {
+			return err
+		}
+		if lr.Groups != "none" {
+			var n, f int
+			if groups, n, f, err = s.lawfulGroupsTx(ctx, tx, person, lr); err != nil {
+				return err
+			}
+			given, files = given+n, files+f
+		}
+		if err := personScopeTx(ctx, tx, uuid.Nil); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `SELECT taskiem_ops_lawful_step($1, 'answered', $2, $3, NULL, NULL)`, id, o.Actor(), given); err != nil {
 			return err
 		}
@@ -408,6 +340,104 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"request": lr, "person_id": person, "chats": nonNil(chats), "groups": nonNil(groups), "messages_given": given,
 		"files_given": files,
 		"exported_by": o.Actor(), "exported_at": time.Now().UTC()})
+}
+
+// personScopeTx sets (or, with uuid.Nil, clears) the person whose rows
+// tx reads, as db.InPersonTx does, for the rest of tx.
+func personScopeTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) error {
+	v := ""
+	if person != uuid.Nil {
+		v = person.String()
+	}
+	_, err := tx.Exec(ctx, "SELECT set_config('app.person_scope', $1, true)", v)
+	return err
+}
+
+// lawfulChatsTx reads the person's one-to-one messages within the
+// request's scope, in tx scoped to the person: the chats with messages,
+// how many messages and how many files.
+func (s *Server) lawfulChatsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, lr lawfulRequest) ([]lawfulChat, int, int, error) {
+	var chats []lawfulChat
+	given, files := 0, 0
+	key, err := s.keys().KeyTx(ctx, tx, person, false)
+	if errors.Is(err, peoplechats.ErrNoKey) {
+		return nil, 0, 0, nil
+	}
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, peer_id FROM people_chats WHERE person_id = $1 AND ($2::uuid IS NULL OR peer_id = $2) ORDER BY created_at`,
+		person, lr.WithPersonID)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	type ref struct {
+		id   uuid.UUID
+		peer *uuid.UUID
+	}
+	refs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ref, error) {
+		var x ref
+		return x, r.Scan(&x.id, &x.peer)
+	})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	var peers []uuid.UUID
+	for _, c := range refs {
+		if c.peer != nil {
+			peers = append(peers, *c.peer)
+		}
+	}
+	names, err := peopleNamesTx(ctx, tx, peers)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	for _, c := range refs {
+		rows, err := tx.Query(ctx, `SELECT m.id, m.mine, m.kind, m.sealed, m.attachment, m.deleted_at IS NOT NULL, m.created_at, f.sealed
+			FROM people_messages m LEFT JOIN people_files f ON $4 AND f.person_id = m.person_id AND f.message_id = m.id
+			WHERE m.person_id = $1 AND m.chat_id = $2 AND m.created_at >= $3 AND m.created_at < $5 ORDER BY m.created_at, m.id`,
+			person, c.id, lr.From, lr.Files, lr.To)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		msgs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (lawfulMessage, error) {
+			var m lawfulMessage
+			var sealed, file []byte
+			if err := r.Scan(&m.ID, &m.FromPerson, &m.Kind, &sealed, &m.Attachment, &m.Deleted, &m.At, &file); err != nil {
+				return m, err
+			}
+			if v, err := openSealed(key, person, m.ID, sealed); err == nil {
+				m.Body, m.Card, m.Location = v.Body, v.Card, v.Location
+				if m.Attachment != nil && v.Name != "" {
+					m.Attachment["name"] = v.Name
+				}
+			}
+			if file != nil {
+				if data, err := peoplechats.Open(key, person, fileRow(m.ID), file); err == nil {
+					b := base64.StdEncoding.EncodeToString(data)
+					m.File = &b
+					files++
+				}
+			}
+			return m, nil
+		})
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		if len(msgs) == 0 {
+			continue
+		}
+		given += len(msgs)
+		lc := lawfulChat{ChatID: c.id, With: c.peer, Messages: msgs}
+		if c.peer != nil {
+			lc.WithName = names.name[*c.peer]
+			if names.gone[*c.peer] {
+				lc.WithName = peopleGoneName
+			}
+		}
+		chats = append(chats, lc)
+	}
+	return chats, given, files, nil
 }
 
 // lawfulCounts is GET /v1/transparency/lawful-requests, for anyone: how

@@ -171,7 +171,7 @@ func TestGroupReports(t *testing.T) {
 		t.Fatalf("said: %v", rep)
 	}
 	if n := w.adminCount(t, `SELECT count(*) FROM people_reports WHERE id = $1 AND group_id = $2 AND reported_id = $3 AND messages = '[]' AND sealed IS NOT NULL
-		AND group_sealed IS NOT NULL AND peer_wrote AND position(convert_to('Bola', 'UTF8') in sealed) = 0
+		AND group_sealed IS NOT NULL AND NOT peer_wrote AND position(convert_to('Bola', 'UTF8') in sealed) = 0
 		AND position(convert_to('Market', 'UTF8') in group_sealed) = 0`, repID, gid, bolaID); n != 1 {
 		t.Fatal("the report is not kept sealed, with its group")
 	}
@@ -321,8 +321,8 @@ func TestGroupModeration(t *testing.T) {
 	if e := bola.must(403, "POST", "/v1/me/groups/"+gid+"/messages", map[string]any{"text": "Still here?"}); !strings.Contains(e["error"].(string), "closed this group") {
 		t.Fatalf("a message: %v", e)
 	}
-	ada.must(403, "PUT", "/v1/me/groups/"+gid, map[string]any{"name": "Renamed"})
-	ada.must(403, "POST", "/v1/me/groups/"+gid+"/link", nil)
+	ada.must(409, "PUT", "/v1/me/groups/"+gid, map[string]any{"name": "Renamed"})
+	ada.must(409, "POST", "/v1/me/groups/"+gid+"/link", nil)
 	msgs := gmessages(t, bola, gid)
 	last := msgs[len(msgs)-1]
 	if last["sender"] != "Taskiem" || !strings.Contains(last["body"].(string), "closed this group") || !strings.Contains(last["body"].(string), "will be deleted on") {
