@@ -157,6 +157,13 @@ export function withPresence(cur: PresenceMap, e: LivePresence): PresenceMap {
   return next;
 }
 
+/** No one's presence told. */
+export const NO_PRESENCE: PresenceMap = new Map();
+
+/** The presence the pages are given: only while the connection is open
+ * (one closed tells nothing, and a chat's head reads its own again). */
+export const shownPresence = (connected: boolean, presence: PresenceMap): PresenceMap => (connected ? presence : NO_PRESENCE);
+
 /** A chat with its person as the latest presence says. */
 export function chatWithPresence<C extends Pick<PeopleChat, "person_id" | "person">>(c: C | undefined, presence: PresenceMap): C | undefined {
   const p = c && presence.get(c.person_id);

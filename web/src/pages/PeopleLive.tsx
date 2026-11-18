@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { post } from "../api";
-import { readySays, withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
+import { NO_PRESENCE, readySays, shownPresence, withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
 
 // You's live connection (docs/spec/people-chatting.md, "As built: stage 5a
 // gaps, chat features (server)"): one EventSource to GET /v1/me/live for
@@ -39,7 +39,6 @@ interface PeopleLive {
 }
 
 const EMPTY = new Set<string>();
-const NO_PRESENCE: PresenceMap = new Map();
 const NONE: PeopleLive = { connected: false, typing: EMPTY, presence: NO_PRESENCE, subscribe: () => () => undefined };
 const Ctx = createContext<PeopleLive>(NONE);
 export const usePeopleLive = () => useContext(Ctx);
@@ -175,5 +174,5 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
 
   // Presence is applied only while connected; the open chat's head is read
   // again on `ready`.
-  return <Ctx.Provider value={{ connected, typing, presence: connected ? presence : NO_PRESENCE, subscribe }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ connected, typing, presence: shownPresence(connected, presence), subscribe }}>{children}</Ctx.Provider>;
 }

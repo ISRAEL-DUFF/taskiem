@@ -19,7 +19,9 @@ import {
   threadWithGone,
   chatsPoll,
   hasBusinessRow,
+  NO_PRESENCE,
   readySays,
+  shownPresence,
   atFindState,
   AT_FIND_WORDS,
   typingWords,
@@ -133,6 +135,16 @@ describe("the live connection's events", () => {
     // People chats only: the live connection tells; a slow look as a fallback.
     expect(chatsPoll(true, false, 8000)).toBe(60_000);
     expect(chatsPoll(false, false, 8000)).toBe(8000);
+  });
+
+  it("gives the pages presence only while connected", () => {
+    const p = withPresence(NO_PRESENCE, { people: [{ person_id: "p1", chat_id: "c1", online: true, last_seen_at: null }] });
+    expect(shownPresence(true, p)).toBe(p);
+    expect(shownPresence(false, p).size).toBe(0);
+    // A chat's head is then the server's own again.
+    const c = chat("c1", "2026-11-18T10:00:00Z", { person_id: "p1", person: { online: false, last_seen_at: "2026-11-18T09:00:00Z" } as PeopleChat["person"] });
+    expect(chatWithPresence(c, shownPresence(true, p))?.person?.online).toBe(true);
+    expect(chatWithPresence(c, shownPresence(false, p))?.person?.online).toBe(false);
   });
 
   it("says in front on a reconnection that reused ?away=1, and away on one opened in front", () => {
