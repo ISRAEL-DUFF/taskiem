@@ -586,8 +586,8 @@ tests:
         severity: ticket
   input_series:
   - series: taskiem_people_storage_bytes{table="people_files",instance="a"}
-    values: 64424509440x24 64424509440+1073741824x24
+    values: 64424509440x288 64424509440+104857600x288
   - series: taskiem_people_storage_bytes{table="people_messages",instance="a"}
-    values: 1073741824x48
-  interval: 1h
+    values: 1073741824x600
+  interval: 5m
   name: people chats' storage grows past its line

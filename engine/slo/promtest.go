@@ -312,11 +312,17 @@ func RulesTestYAML() ([]byte, error) {
 			},
 			{
 				Name:     "people chats' storage grows past its line",
-				Interval: "1h",
+				// A sample every 5 minutes: Prometheus counts a sample as current
+				// for 5 minutes only, so hourly samples would leave the rule
+				// without a value for most of each hour and its "for: 1h" would
+				// never be met.
+				Interval: "5m",
 				InputSeries: []promSeries{
-					// 60 GiB that grows 1 GiB an hour from the second day on (24 GiB a day).
-					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x24 64424509440+1073741824x24"},
-					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x48"},
+					// 60 GiB for a day, then growing 100 MiB every 5 minutes
+					// (about 28 GiB a day); with 1 GiB of messages, still under
+					// 100 GiB at 40h, so only the growth sets it off.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x288 64424509440+104857600x288"},
+					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x600"},
 				},
 				AlertRuleTests: []promAlertTest{
 					{EvalTime: "20h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
