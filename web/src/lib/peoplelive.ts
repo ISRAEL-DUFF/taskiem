@@ -117,6 +117,15 @@ export function requestsWithGone(rows: PeopleChat[] | undefined, e: LiveGone): P
   return rows.filter((r) => r.id !== e.chat_id);
 }
 
+/** What a connection's `ready` says of the tab (POST /v1/me/presence
+ * {online}): the server starts a connection away when its address has
+ * `?away=1`, which the browser's own reconnection reuses however the tab is
+ * now. In front or away when that differs from the address; null when the
+ * address already says it. */
+export function readySays(openedAway: boolean, front: boolean): boolean | null {
+  return openedAway === !front ? null : front;
+}
+
 /** Who is online and when last seen, by person, after a `presence` event. */
 export type PresenceMap = ReadonlyMap<string, { online: boolean | null; last_seen_at: string | null }>;
 export function withPresence(cur: PresenceMap, e: LivePresence): PresenceMap {

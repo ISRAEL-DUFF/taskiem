@@ -17,6 +17,7 @@ import {
   snippetParts,
   starredURL,
   threadWithGone,
+  readySays,
   threadWithLive,
   TypingGate,
   withPresence,
@@ -98,6 +99,17 @@ describe("the live connection's events", () => {
     expect(threadWithLive(local, "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x", "local-1"]);
     // An empty chat takes it.
     expect(threadWithLive([], "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x"]);
+  });
+
+  it("says in front on a reconnection that reused ?away=1, and away on one opened in front", () => {
+    // Opened hidden (?away=1), the tab now seen: the browser's reconnection
+    // reused the address, so in front is said.
+    expect(readySays(true, true)).toBe(true);
+    // Opened in front, the tab hidden since: away is said.
+    expect(readySays(false, false)).toBe(false);
+    // The address already says it.
+    expect(readySays(true, false)).toBeNull();
+    expect(readySays(false, true)).toBeNull();
   });
 
   it("takes out a message deleted for the person elsewhere", () => {
