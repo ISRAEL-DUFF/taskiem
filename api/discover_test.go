@@ -202,7 +202,9 @@ func TestDiscover(t *testing.T) {
 		`SELECT count(*) FROM audit_log WHERE detail::text LIKE '%6.587%' OR detail::text LIKE '%6.508%'`,
 		`SELECT count(*) FROM discover_index WHERE lat::text LIKE '6.587%' OR lat::text LIKE '6.508%'`,
 		`SELECT count(*) FROM discover_settings WHERE lat::text LIKE '6.587%' OR lat::text LIKE '6.508%'`,
-		`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%search%'`,
+		// The people chats' own index (people_search, 00479) keeps no
+		// searches, only keyed tokens of a person's own messages.
+		`SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%search%' AND table_name NOT LIKE 'people\_search%'`,
 	} {
 		var n int
 		if err := w.env.DB.Admin.QueryRow(ctx, q).Scan(&n); err != nil || n != 0 {
