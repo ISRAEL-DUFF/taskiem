@@ -33,6 +33,7 @@ import 'my_chat.dart' show sayFailure;
 import 'people.dart';
 import 'people_contacts.dart';
 import 'people_live.dart';
+import 'people_scan.dart';
 import 'words.dart';
 
 /// Opens a chat with a person by its id (over You); [started] is the chat
@@ -154,10 +155,17 @@ class _FoundPersonState extends State<FoundPerson> {
 /// New chat: by a phone number, by a link, from your contacts; and your
 /// own link to share.
 class NewPeopleChatScreen extends StatefulWidget {
-  const NewPeopleChatScreen({super.key, required this.auth, required this.openChat, this.contacts = const DevicePhoneContacts()});
+  const NewPeopleChatScreen({super.key, required this.auth, required this.openChat, this.contacts = const DevicePhoneContacts(), this.scanner = const DeviceQrScanner(), this.onContactsChecked});
   final Auth auth;
   final OpenPeopleChat openChat;
   final PhoneContacts contacts;
+
+  /// The camera for a person's QR code, asked for only on tap (a test's own).
+  final QrScanner scanner;
+
+  /// Told when the person agreed and their contacts were checked (the daily
+  /// re-check's date).
+  final VoidCallback? onContactsChecked;
 
   @override
   State<NewPeopleChatScreen> createState() => _NewPeopleChatScreenState();
@@ -206,6 +214,22 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
       if (mounted) setState(() => _error = personLinkProblem(x));
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  /// A person's QR code scanned in the app: who it is, then the chat.
+  Future<void> _scan() async {
+    final code = await widget.scanner.scan(context);
+    if (code == null || !mounted) return;
+    await tkPush<void>(context, PersonLinkScreen(auth: widget.auth, code: code, openChat: widget.openChat));
+  }
+
+  /// A link copied elsewhere, put in the box and opened.
+  Future<void> _paste() async {
+    final got = (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (got.isEmpty) return setState(() => _error = 'There is no link copied. Copy their link, then tap Paste.');
+    _link.text = got;
+    await _byLink();
   }
 
   Future<void> _invite(PersonFoundInvite i) => stepOut(() => SharePlus.instance.share(ShareParams(text: i.words.contains(i.link) ? i.words : '${i.words} ${i.link}')));
@@ -263,7 +287,7 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
               sub: 'Only if you agree: see how it works first',
               icon: 'b-people',
               square: look.teal,
-              onTap: () => tkPush<void>(context, ContactsMatchScreen(auth: widget.auth, contacts: widget.contacts, onChat: _chat)),
+              onTap: () => tkPush<void>(context, ContactsMatchScreen(auth: widget.auth, contacts: widget.contacts, onChat: _chat, onChecked: widget.onContactsChecked)),
             ),
             TkListRow(
               title: 'Your contacts',
@@ -290,9 +314,17 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TkKitField(label: 'Their link', hint: 'Paste a link someone shared. A QR code opens it with your phone’s camera.', child: TkTextBox(key: const ValueKey('find-link'), controller: _link)),
+                    TkButton(label: 'Scan their QR code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _scan),
+                    const SizedBox(height: 12),
+                    TkKitField(label: 'Or their link', hint: 'Type or paste a link someone shared.', child: TkTextBox(key: const ValueKey('find-link'), controller: _link)),
                     const SizedBox(height: 10),
-                    TkButton(label: 'Open the link', minHeight: 44, enabled: !_busy, onPressed: _byLink),
+                    Row(
+                      children: [
+                        Expanded(child: TkButton(label: 'Paste', minHeight: 44, enabled: !_busy, onPressed: _paste)),
+                        const SizedBox(width: 8),
+                        Expanded(child: TkButton(label: 'Open the link', minHeight: 44, enabled: !_busy, onPressed: _byLink)),
+                      ],
+                    ),
                   ],
                 ),
               ],

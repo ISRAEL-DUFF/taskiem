@@ -23,7 +23,7 @@ import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
 import '../app/presence.dart';
 import '../chat/people_cards.dart' show PayoutAccountPage;
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
-import '../chat/people_contacts.dart' show PeopleContactsScreen, PhoneContacts, DevicePhoneContacts;
+import '../chat/people_contacts.dart' show ContactMatch, ContactsMatchScreen, DevicePhoneContacts, PeopleContactsScreen, PhoneContacts, contactsDay, recheckContacts;
 import '../chat/people_find.dart';
 import '../chat/people_live.dart';
 import '../chat/people_search.dart';
@@ -102,6 +102,10 @@ class _YouHomeState extends State<YouHome> with Polling {
   /// connection is open (only to reconcile).
   final _slow = SlowWhileLive();
 
+  /// Found by the daily re-check of the phone's contacts (§5.3): not in
+  /// the person's contacts yet; kept only while You is open.
+  List<ContactMatch> _fromContacts = const [];
+
   /// Told each time Orders is shown again: it reads itself again.
   final _ordersShown = ValueNotifier<int>(0);
 
@@ -113,6 +117,7 @@ class _YouHomeState extends State<YouHome> with Polling {
     super.initState();
     PeopleLive.hold(widget.auth, _live);
     _load();
+    unawaited(_recheckContacts());
     if (widget.presence) {
       _presence.start();
     } else {
@@ -245,6 +250,25 @@ class _YouHomeState extends State<YouHome> with Polling {
     await _chats.load();
   }
 
+  /// The phone's contacts checked again, at most once a day, only if the
+  /// person agreed before and the phone still allows it (§5.3).
+  Future<void> _recheckContacts() async {
+    final prefs = widget.prefs;
+    if (prefs == null || !prefs.loaded) return;
+    try {
+      final found = await recheckContacts(api: widget.auth.api, contacts: widget.contacts, checked: prefs.contactsChecked, now: widget.now(), remember: prefs.setContactsChecked);
+      if (found != null && mounted) setState(() => _fromContacts = found);
+    } on Object {
+      // Checked again another day.
+    }
+  }
+
+  /// Agreed and checked from New chat: the day kept for the re-check.
+  void _contactsChecked() => unawaited(widget.prefs?.setContactsChecked(contactsDay(widget.now())));
+
+  /// Start a chat with someone found among the contacts.
+  Future<void> _chatWith(String person) => chatWithPerson(context, widget.auth, _openPerson, person: person);
+
   /// A chat with a person opened at one of its messages (a search's hit, a
   /// starred message).
   Future<void> _openPersonAt(String id, String message) async {
@@ -262,7 +286,7 @@ class _YouHomeState extends State<YouHome> with Polling {
 
   /// New chat: finding people (people-chatting §5).
   Future<void> _newChat() async {
-    await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts));
+    await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts, onContactsChecked: _contactsChecked));
     await _chats.load();
   }
 
@@ -472,7 +496,7 @@ class _YouHomeState extends State<YouHome> with Polling {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_chats.error != null && chats == null) TkErrorBox(_chats.error!),
-                  if (chats != null && chats.isEmpty && archived.isEmpty && requests == 0)
+                  if (chats != null && chats.isEmpty && archived.isEmpty && requests == 0 && _fromContacts.isEmpty)
                     const TkPanel(
                       children: [
                         TkEmpty(
@@ -482,7 +506,7 @@ class _YouHomeState extends State<YouHome> with Polling {
                         ),
                       ],
                     ),
-                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty || requests > 0))
+                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty || requests > 0 || _fromContacts.isNotEmpty))
                     TkPanel(
                       inset: 76,
                       children: [
@@ -496,6 +520,16 @@ class _YouHomeState extends State<YouHome> with Polling {
                             onTap: () async {
                               await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: _openPerson, now: widget.now));
                               await _chats.load();
+                            },
+                          ),
+                        if (_fromContacts.isNotEmpty)
+                          TkListRow(
+                            title: _fromContacts.length == 1 ? '1 of your contacts is on Taskiem' : '${_fromContacts.length} of your contacts are on Taskiem',
+                            sub: 'Found from your phone’s contacts today',
+                            icon: 'b-people',
+                            onTap: () async {
+                              await tkPush<void>(context, ContactsMatchScreen(auth: auth, contacts: widget.contacts, onChat: _chatWith, found: _fromContacts));
+                              if (mounted) setState(() => _fromContacts = const []);
                             },
                           ),
                         if (archived.isNotEmpty)

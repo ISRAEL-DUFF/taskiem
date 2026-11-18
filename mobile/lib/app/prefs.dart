@@ -36,6 +36,12 @@ class Prefs extends ChangeNotifier {
   /// ChatTools.tsx recentTools: the last two tools opened, newest first.
   List<String> recentTools = const [];
 
+  /// The day the phone's contacts were last checked for people on Taskiem
+  /// (docs/spec/people-chatting.md §5.3), set only once the person agreed:
+  /// You checks again by itself at most once a day while the phone still
+  /// allows it. Nothing else of the contacts or the answer is kept.
+  String? contactsChecked;
+
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
 
@@ -54,6 +60,7 @@ class Prefs extends ChangeNotifier {
       final secs = int.tryParse(await keys.read('app-lock-after') ?? '');
       lockAfter = secs == null || secs < 0 ? null : Duration(seconds: secs);
       recentTools = (await keys.read('tools-recent') ?? '').split(',').where((k) => k.isNotEmpty).toList();
+      contactsChecked = await keys.read('contacts-checked');
     } on Object {
       // The phone's storage not read: the defaults.
     }
@@ -68,8 +75,9 @@ class Prefs extends ChangeNotifier {
   Future<void> forgetPerson() async {
     taskiemSeen = null;
     lockAfter = null;
+    contactsChecked = null;
     notifyListeners();
-    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after']) {
+    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after', 'contacts-checked']) {
       try {
         await keys.write(k, null);
       } on Object {
@@ -94,6 +102,16 @@ class Prefs extends ChangeNotifier {
     recentTools = [key, ...recentTools.where((k) => k != key)].take(2).toList();
     try {
       await keys.write('tools-recent', recentTools.join(','));
+    } on Object {
+      // Kept only while the app runs.
+    }
+  }
+
+  /// The contacts checked today ([day]: `2026-11-18`).
+  Future<void> setContactsChecked(String day) async {
+    contactsChecked = day;
+    try {
+      await keys.write('contacts-checked', day);
     } on Object {
       // Kept only while the app runs.
     }

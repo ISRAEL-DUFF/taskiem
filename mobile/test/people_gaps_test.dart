@@ -8,17 +8,23 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/app/config.dart' show taskiemUrl;
+import 'package:taskiem/app/prefs.dart';
 import 'package:taskiem/app/presence.dart';
+import 'package:taskiem/app/session.dart' show MemoryKeyStore;
 import 'package:taskiem/chat/my_chat.dart';
 import 'package:taskiem/chat/people_chat.dart';
 import 'package:taskiem/chat/people_find.dart';
+import 'package:taskiem/chat/people_contacts.dart';
 import 'package:taskiem/chat/people_live.dart';
+import 'package:taskiem/chat/people_scan.dart';
 import 'package:taskiem/chat/people_place.dart';
 import 'package:taskiem/chat/people_search.dart';
 import 'package:taskiem/chat/live.dart' show LiveTiming;
@@ -508,6 +514,125 @@ void main() {
       await drain(t);
     });
   });
+
+  group('a person’s QR code, scanned in the app', () {
+    test('only a person’s Taskiem link is taken', () {
+      expect(scannedPersonCode('$taskiemUrl/p/k7m2q9x4pz'), 'k7m2q9x4pz');
+      expect(scannedPersonCode(' $taskiemUrl/p/k7m2q9x4pz '), 'k7m2q9x4pz');
+      expect(scannedPersonCode('https://example.com/p/k7m2q9x4pz'), isNull);
+      expect(scannedPersonCode('WIFI:S:home;;'), isNull);
+      expect(scannedPersonCode(null), isNull);
+    });
+
+    testWidgets('New chat: Scan their QR code opens who it is; put away, nothing; Paste opens a copied link', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/people/links/k7m2q9x4pz'] = (_) => {'found': true, 'person': card(inContacts: false), 'add_token': 'tok'};
+      final scanner = FakeScanner();
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: NewPeopleChatScreen(auth: api.auth(), openChat: (id, {started}) async {}, contacts: FakeContacts(const []), scanner: scanner)));
+      await settle(t);
+      expect(scanner.asked, 0, reason: 'the camera is asked for only on tap');
+      scanner.code = null;
+      await press(t, find.text('Scan their QR code'));
+      expect(scanner.asked, 1);
+      expect(find.text('Chat on Taskiem'), findsNothing, reason: 'put away: nothing opens');
+      scanner.code = 'k7m2q9x4pz';
+      await press(t, find.text('Scan their QR code'));
+      expect(find.text('Chat on Taskiem'), findsOneWidget);
+      expect(find.text('Ada Obi'), findsOneWidget);
+      t.state<NavigatorState>(find.byType(Navigator)).pop();
+      await settle(t);
+
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.getData') return {'text': '$taskiemUrl/p/k7m2q9x4pz'};
+        return null;
+      });
+      addTearDown(() => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await press(t, find.text('Paste'));
+      expect(api.sent('GET', '/v1/people/links/k7m2q9x4pz'), hasLength(2));
+      await drain(t);
+    });
+  });
+
+  group('contacts checked again, at most once a day', () {
+    final ada = contactHash(base64.decode(vectorKey), '+2348031234567');
+    Api served() {
+      final api = Api();
+      api.routes['GET /v1/me/contacts/key'] = (_) => {'key_id': 'k1', 'key': vectorKey, 'expires_at': '2026-11-20T00:00:00Z', 'hash': 'sha256', 'max_batch': 500, 'max_per_day': 5000, 'words': ''};
+      api.routes['POST /v1/me/contacts/match'] = (r) => {
+        'matches': [
+          if ((api.body(r)['hashes'] as List).contains(ada)) {'hash': ada, 'person': card(inContacts: false), 'add_token': 'tok-ada'},
+        ],
+      };
+      return api;
+    }
+
+    test('never agreed, already today, or no longer allowed: not checked; else checked and the day kept', () async {
+      final api = served();
+      final c = GrantedContacts([(name: 'Ada', numbers: ['0803 123 4567'])]);
+      final kept = <String>[];
+      Future<List<ContactMatch>?> run(String? checked, {DateTime? now}) =>
+          recheckContacts(api: api.auth().api, contacts: c, checked: checked, now: now ?? at, remember: (d) async => kept.add(d));
+      expect(await run(null), isNull, reason: 'never agreed');
+      expect(await run(contactsDay(at)), isNull, reason: 'already today');
+      c.granted = false;
+      expect(await run('2026-11-16'), isNull, reason: 'the phone no longer allows it');
+      expect(c.read_, isFalse, reason: 'nothing read in any of those');
+      expect(c.asked, isFalse, reason: 'the phone is never asked by the re-check');
+      c.granted = true;
+      final found = await run('2026-11-16');
+      expect(found?.single.person.name, 'Ada Obi');
+      expect(kept, ['2026-11-17']);
+      expect(contactsDay(DateTime.utc(2026, 11, 17, 23, 30)), '2026-11-18', reason: 'Lagos’s day');
+    });
+
+    testWidgets('You opens: re-checked by itself, the people found offered; not again the same day', (t) async {
+      phone(t);
+      final api = served();
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
+      final keys = MemoryKeyStore();
+      await keys.write('contacts-checked', '2026-11-16');
+      final prefs = Prefs(keys);
+      await prefs.load();
+      final c = GrantedContacts([(name: 'Ada', numbers: ['0803 123 4567'])]);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false, prefs: prefs, contacts: c)));
+      await settle(t);
+      expect(find.text('1 of your contacts is on Taskiem'), findsOneWidget);
+      expect(await keys.read('contacts-checked'), '2026-11-17', reason: 'only the day is kept');
+      await press(t, find.text('1 of your contacts is on Taskiem'));
+      expect(find.text('On Taskiem as Ada Obi'), findsOneWidget, reason: 'the list already found, not checked again');
+      expect(api.sent('POST', '/v1/me/contacts/match'), hasLength(1));
+      await drain(t);
+
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(key: const ValueKey('again'), auth: api.auth(), now: () => at, presence: false, prefs: prefs, contacts: c)));
+      await settle(t);
+      expect(api.sent('POST', '/v1/me/contacts/match'), hasLength(1), reason: 'not twice in a day');
+      expect(find.text('1 of your contacts is on Taskiem'), findsNothing);
+      await drain(t);
+    });
+  });
+}
+
+/// A camera that reads [code] (null: put away).
+class FakeScanner extends QrScanner {
+  String? code = 'k7m2q9x4pz';
+  int asked = 0;
+
+  @override
+  Future<String?> scan(BuildContext context) async {
+    asked++;
+    return code;
+  }
+}
+
+/// The phone's contacts, allowed (or not) without asking.
+class GrantedContacts extends FakeContacts {
+  GrantedContacts(super.list);
+  bool granted = true;
+
+  @override
+  Future<bool> allowed() async => granted;
 }
 
 /// The phone's location, as a test gives it.

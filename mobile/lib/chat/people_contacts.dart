@@ -51,6 +51,9 @@ abstract class PhoneContacts {
 
   /// Every contact with a number.
   Future<List<PhoneContact>> read();
+
+  /// Whether the phone still lets Taskiem read them, without asking.
+  Future<bool> allowed() async => false;
 }
 
 /// The phone's own contacts, through flutter_contacts: read only, names
@@ -62,6 +65,16 @@ class DevicePhoneContacts extends PhoneContacts {
   Future<bool> ask() async {
     final s = await stepOut(() => fc.FlutterContacts.permissions.request(fc.PermissionType.read));
     return s == fc.PermissionStatus.granted || s == fc.PermissionStatus.limited;
+  }
+
+  @override
+  Future<bool> allowed() async {
+    try {
+      final s = await fc.FlutterContacts.permissions.check(fc.PermissionType.read);
+      return s == fc.PermissionStatus.granted || s == fc.PermissionStatus.limited;
+    } on Object {
+      return false;
+    }
   }
 
   @override
@@ -136,17 +149,50 @@ const contactsAskWords = [
   'Taskiem can check which of the people in your phone’s contacts are on Taskiem, so you can chat with them.',
   'Their numbers are not sent to us in readable form. Each number is scrambled on this phone with a key from Taskiem (a keyed hash), and only the scrambled numbers are sent. Taskiem answers which are people whose settings let you find them this way, then forgets what was sent. Nothing of your contacts is kept, on this phone or by Taskiem.',
   'The honest limit: Taskiem holds the key, and phone numbers are few enough to try them all. So this protects your contacts if what is sent is seen by someone else, but not from Taskiem itself.',
+  'Once you agree, Taskiem checks again by itself at most once a day when you open it, while your phone still allows it, and keeps only the day it last checked. Turn it off by not allowing Contacts for Taskiem in your phone’s settings.',
   'Only people who allow it can be found, and you can stop at any time.',
   'When you tap Add, that person and the name you give them are kept in your contacts on Taskiem, which only you see.',
 ];
+
+/// A day as kept for the daily re-check: `2026-11-18`, in Lagos time.
+String contactsDay(DateTime at) {
+  final l = at.toUtc().add(const Duration(hours: 1));
+  return '${l.year.toString().padLeft(4, '0')}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')}';
+}
+
+/// The daily re-check (§5.3), when You opens: only if the person agreed
+/// before ([checked], the last day checked, is kept only then), not already
+/// today, and the phone still allows it without asking. The people found who
+/// are not in their contacts yet, or null when it did not run. Nothing is
+/// kept but the day ([remember]).
+Future<List<ContactMatch>?> recheckContacts({
+  required TaskiemApi api,
+  required PhoneContacts contacts,
+  required String? checked,
+  required DateTime now,
+  required Future<void> Function(String day) remember,
+}) async {
+  final today = contactsDay(now);
+  if (checked == null || checked == today) return null;
+  if (!await contacts.allowed()) return null;
+  final r = await matchPhoneContacts(api, await contacts.read());
+  await remember(today);
+  return [for (final m in r.found) if (!m.person.inContacts) m];
+}
 
 /// Finding friends from the phone's contacts: the explainer first, the
 /// phone's own question only after Agree, then who was found, each with
 /// Chat and Add. Nothing is kept once the screen closes.
 class ContactsMatchScreen extends StatefulWidget {
-  const ContactsMatchScreen({super.key, required this.auth, this.contacts = const DevicePhoneContacts(), required this.onChat});
+  const ContactsMatchScreen({super.key, required this.auth, this.contacts = const DevicePhoneContacts(), required this.onChat, this.found, this.onChecked});
   final Auth auth;
   final PhoneContacts contacts;
+
+  /// Already found by the daily re-check: shown as they are.
+  final List<ContactMatch>? found;
+
+  /// The person agreed and the contacts were checked (the day is kept).
+  final VoidCallback? onChecked;
 
   /// Starts (or opens) a chat with someone found.
   final Future<void> Function(String personId) onChat;
@@ -158,8 +204,8 @@ class ContactsMatchScreen extends StatefulWidget {
 enum _Step { ask, checking, found, refused }
 
 class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
-  _Step _step = _Step.ask;
-  List<ContactMatch> _found = const [];
+  late _Step _step = widget.found == null ? _Step.ask : _Step.found;
+  late List<ContactMatch> _found = widget.found ?? const [];
 
   /// Stopped at the day's limit: how many numbers were checked of how many.
   ({int checked, int total})? _stopped;
@@ -175,6 +221,7 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
       }
       final all = await widget.contacts.read();
       final r = await matchPhoneContacts(widget.auth.api, all);
+      widget.onChecked?.call();
       if (mounted) setState(() => (_found = r.found, _stopped = r.stopped ? (checked: r.checked, total: r.total) : null, _step = _Step.found));
     } on ApiError catch (e) {
       if (mounted) setState(() => (_error = e.status == 429 ? 'You have checked many numbers today. Try again tomorrow.' : e.message, _step = _Step.ask));
@@ -263,7 +310,7 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
                   ),
               ],
             ),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('Nothing of your contacts was kept, on this phone or by Taskiem, except the people you add.', style: tkHint(t))),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('Nothing of your contacts was kept, on this phone or by Taskiem, except the people you add and the day they were last checked.', style: tkHint(t))),
         ],
       },
     );
