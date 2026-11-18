@@ -11332,9 +11332,8 @@ class TypingGroupRequest {
 }
 
 class GroupLinkPreviewResponse {
-  const GroupLinkPreviewResponse({required this.approve, required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
+  const GroupLinkPreviewResponse({required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
 
-  final bool approve;
   final String code;
   final bool full;
   final String link;
@@ -11343,7 +11342,6 @@ class GroupLinkPreviewResponse {
   final Object? photo;
 
   factory GroupLinkPreviewResponse.fromJson(Map<String, dynamic> j) => GroupLinkPreviewResponse(
-        approve: j['approve'] as bool,
         code: j['code'] as String,
         full: j['full'] as bool,
         link: j['link'] as String,
@@ -11353,7 +11351,6 @@ class GroupLinkPreviewResponse {
       );
 
   Map<String, dynamic> toJson() => {
-        'approve': approve,
         'code': code,
         'full': full,
         'link': link,

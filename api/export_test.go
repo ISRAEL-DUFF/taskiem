@@ -20,6 +20,10 @@ var BillOut = billOut
 // WaitBackground waits for work done after answering (reset emails).
 func (s *Server) WaitBackground() { s.bg.Wait() }
 
+// GroupTickRuns is how many times live connections recomputed a group's
+// ticks.
+func (s *Server) GroupTickRuns() int64 { return s.groupTickRuns.Load() }
+
 // SetUSSDStart replaces how the USSD hand-off starts runs (a slow engine).
 func (s *Server) SetUSSDStart(fn func(context.Context, runtime.StartRequest) (runtime.RunRef, bool, error)) {
 	s.ussd.start = fn
