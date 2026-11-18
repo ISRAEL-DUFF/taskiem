@@ -12,6 +12,13 @@
     <!-- Finding friends from the phone's contacts (lib/chat/people_contacts.dart),
          asked only after the person agrees in the app; read, hashed, never kept. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <!-- Sending a place in a chat with a person (lib/chat/people_place.dart),
+         asked only when the person taps Location; read once, never followed. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Scanning a person's QR code in the app (lib/chat/people_scan.dart),
+         asked only when the person taps Scan a QR code. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="Taskiem"
         android:name=".TaskiemApplication"

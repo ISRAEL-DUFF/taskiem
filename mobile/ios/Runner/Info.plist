@@ -7,7 +7,9 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Taskiem uses the camera when you take a photo to send in a chat.</string>
+	<string>Taskiem uses the camera when you take a photo to send in a chat, or scan someone's Taskiem QR code.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Only when you tap Location: Taskiem reads where you are once, to send that place in a chat. It does not follow you.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Taskiem opens your photos when you choose one to send in a chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
