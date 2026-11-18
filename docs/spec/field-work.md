@@ -131,6 +131,7 @@ Turning it off hides it and refuses its routes, steps, chat words and app screen
 | A photo is needed to end a job | Off | End job needs at least one photo, as ISPOps' completion-photo setting |
 | Customer's confirmation to end a job | Off | End job needs the customer's OK in the app, in their chat, or a code they read out (§14) |
 | Late after | 30 minutes past the window | When a job not yet arrived is late (§16) |
+| No time chosen after | 4 hours | When a customer asked for a time and has not answered is an alert (§14.1) |
 | Too long on site after | The template's expected time, plus half | When a job on site is flagged (§16) |
 | Location every | 30 seconds when moving, 5 minutes when still | How often the phone reports during a job (§10) |
 | Keep trails for | 90 days | Then deleted; steps keep their own place (§18) |
@@ -204,11 +205,11 @@ The same journey as ISPOps (`draft` → `assigned` → `en_route` → `in_progre
 | Step | Who | What is recorded | Rules |
 | --- | --- | --- | --- |
 | Assign | Office, or a workflow | Who, by whom | To field agents only, and only while the job is new, assigned or on hold: once started (on the way or on site) it cannot be reassigned (ISPOps' `assignable`, with on hold added). An agent may hold any number of assigned jobs; assigning many at once is all or nothing |
-| Start job | The assigned field agent | Time on the phone and at the server; the phone's place and its accuracy (unless location is off) | Only from assigned, and only the job's own agent. **One job in execution per agent**: while another is on the way or on site, Start job is refused with "End J-1041 first" (ISPOps' `jobs_one_in_execution_per_agent_idx`, without on hold). Location for the job starts here |
+| Start job | The assigned field agent | Time on the phone and at the server; the phone's place and its accuracy (unless location is off) | Only from assigned, and only the job's own agent. **One job in execution per agent**: while another is on the way or on site, Start job is refused with "End J-1041 first" (ISPOps' `jobs_one_in_execution_per_agent_idx`, without on hold). **Before the job's window begins**, the app asks "J-1064's window is 1 to 4. Start now?" with **Start now** and **Not yet**: it never refuses (the customer may have agreed an earlier time by phone), and a job started early is marked **started early** in its history and on the office's board. Location for the job starts here |
 | Arrived | The field agent | The same; the distance from the job's place | Only from on the way. Farther than the setting is allowed and marked **away from the place**. The work begins: time on site counts from here |
 | End job | The field agent | The same; checklist answers, photos, notes, parts used, the customer's confirmation when asked for; time on site (from Arrived) | Only from on site. Refused until the checklist's required items, the photo setting and the confirmation setting are met; the app says which. Location for the job stops here |
 | Could not finish | The field agent | A reason from a short list (customer not in, no access, parts missing, needs another visit, other) and a note | From on the way or on site. Ends the job's execution, so the agent can start their next; the office then reschedules or cancels it, and a workflow may make the follow-up job |
-| Hold, Resume | Office | Who, why | Hold from any state before done, with a reason. **The agent is freed**: the job is no longer in execution, its location stops, and the agent may start another job. A held job stays on its agent's schedule, marked held, and can be reassigned. **Resume** returns it to **assigned** (to whoever holds it then), and the agent taps Start job again when they go back; the steps before the hold stay in its history, and time on the job counts both stretches |
+| Hold, Resume | Office | Who, why; whether the customer was told, and what | Hold from any state before done, with a reason for the office ("no mast clamp in the van") and **Tell the customer**, ticked by default, with the words they will get, filled from the reason's kind and editable ("We need a part for your visit and will come back with it. We'll tell you when."). **The agent is freed**: the job is no longer in execution, its location stops, and the agent may start another job. A held job stays on its agent's schedule, marked held, and can be reassigned. **Resume** returns it to **assigned** (to whoever holds it then), with its window set again or left as it was, and the agent taps Start job again when they go back; the customer is told the new time as on assigning (`job-tell-customer-assigned` on `resumed`); the steps before the hold stay in its history, and time on the job counts both stretches |
 | Cancel | Office | Who, why | Any state before done. Frees the agent |
 | Close | Office | Who | Only from done, after review. A business may close on End job by a setting; then Close is automatic |
 
@@ -227,7 +228,7 @@ The steps are not workflows; what happens **because of** them is.
 { "type": "job", "config": { "on": ["arrived", "ended"], "types": ["installation"] } }
 ```
 
-`on` is one or more of `created`, `assigned`, `started` (on the way), `arrived`, `ended` (done), `not_finished`, `on_hold`, `resumed`, `cancelled`, `closed`, `late`, `too_long`, `rated`. `types` filters by job type. `trigger.body` has the job as its kept copy shows it, the step, and who did it. The customer's personal fields reach a run sealed, as with every trigger.
+`on` is one or more of `created`, `assigned`, `started` (on the way), `arrived`, `ended` (done), `not_finished`, `on_hold`, `resumed`, `cancelled`, `closed`, `late`, `too_long`, `rated`, `time_asked`, `time_chosen` and `no_time_chosen` (§14.1). `types` filters by job type. `trigger.body` has the job as its kept copy shows it, the step, and who did it. The customer's personal fields reach a run sealed, as with every trigger.
 
 **Signals.** A run waiting on a job (a workflow that assigns a job and then waits for it to be done) waits for `job.<step>` with the job's reference as correlation, as dispatch's `storefront.delivered` is waited for.
 
@@ -246,11 +247,12 @@ The steps are not workflows; what happens **because of** them is.
 
 | Template | Trigger | What it does |
 | --- | --- | --- |
-| `job-tell-customer-assigned` | `job` assigned | "Musa will visit on Tuesday between 10 and 12" to the customer, in their conversation or by SMS |
+| `job-tell-customer-assigned` | `job` assigned, resumed | "Musa will visit on Tuesday between 10 and 12" to the customer, in their conversation or by SMS |
 | `job-tell-customer-on-the-way` | `job` started | "Musa is on the way" with the live-map link (§14) |
 | `job-ask-rating` | `job` ended | The rating card, or a link by SMS (ISPOps sent its rating email on every clock-out; here it is a template the business can change) |
 | `job-invoice-on-done` | `job` ended | An invoice for the job type's price, with the parts used as lines (Money on) |
 | `job-late-alert` | `job` late | Tells the dispatcher, and the customer if they chose |
+| `job-tell-customer-held` | `job` on_hold | The words the office approved at Hold (§7), in the customer's conversation or by SMS; nothing when **Tell the customer** was unticked |
 | `job-follow-up-not-finished` | `job` not_finished | A new job for "needs another visit", the same customer and place |
 | `job-recurring-visit` | `schedule` | A job every month (or week, or year) for each row of a table: maintenance contracts |
 | `job-daily-summary` | `schedule` | The day's jobs done, late, not finished, by agent, to the owner |
@@ -353,7 +355,19 @@ A job's customer is whoever the job was made for: saved in the business's `custo
 - **Confirm the work is done**, when the business asks for it: a tap in the card, or, for a customer without the app, a 4-digit code on the card or in their SMS, read out to the agent;
 - **Rate the visit** (1 to 5 stars and words) after End job; the rating goes on the job and the agent's record.
 
-**Booking a visit:** the business's conversation gains **Book a visit** when Field work is on and the business chooses to offer it: the customer picks a job type the business lets customers book, gives the place (a saved address, a pin) and the times they are in (visit windows, as ISPOps' customer app had). That makes a **new** job, unassigned, for the office.
+### 14.1 Choosing a time
+
+A visit needs a time the customer is in. There are three ways to get one, and all of them set the job's **window**:
+
+1. **The customer gives it** when they book (**Book a visit**, below) or report a problem (the ISP area's complaint, [ISP §6.4](isps.md#64-complaints)): they pick from the times the business offers.
+2. **The office types it**, from a phone call, on the New job form (§15.1).
+3. **The office asks for it**: **Ask for a time** on a new, assigned, held or not-finished job, on the web, in the job's sheet in chat, or from the **Plan a follow-up** card. The office picks the choices to offer (up to four windows, such as "Tomorrow 9 to 12", "Tomorrow 1 to 4", "Saturday 9 to 12"), filled from the business's working hours and the assigned agent's schedule when there is one, and taps **Send**.
+
+What the customer gets: in their conversation, a **Choose a time** card with the choices as buttons and **None of these work**; without Taskiem, an SMS with a link to the job's page, which shows the same. A choice sets the job's window at once and fires `time_chosen`: the card says "Thanks, see you tomorrow between 9 and 12", the assigned agent gets a push, and the office a diary line. **None of these work** opens a line for the customer's words ("I'm only in after 5"), sent to the office as a message in the conversation, and fires `no_time_chosen` with them. No answer within the setting (4 hours by default) is an alert card, **No time chosen**, with **Ask again** and **Call**. A time the customer chose can still be changed by the office, which tells them as on assigning.
+
+This replaces ISPOps' availability windows (customers declaring when they are in, and staff linking a window to a job, `src/routes/_app.availability.tsx`): the customer always answers for a particular visit, and the answer lands on the job.
+
+**Booking a visit:** the business's conversation gains **Book a visit** when Field work is on and the business chooses to offer it: the customer picks a job type the business lets customers book, gives the place (a saved address, a pin) and picks a time from the windows the business offers (§14.1). That makes a **new** job, unassigned, for the office.
 
 **Customers not on Taskiem** get the same moments by WhatsApp or SMS through [updates](../updates.md), with a link to a page showing the job and, while on the way, the map. The page needs no sign-in, carries a token for that job alone, and ends with the job.
 
@@ -365,7 +379,7 @@ A job's customer is whoever the job was made for: saved in the business's `custo
 | --- | --- |
 | **Board** | Today: new, assigned, on the way, on site, done, late, not finished; each agent's state; drag a job to an agent |
 | **Map** | §10 |
-| **Jobs** | Filters (state, type, priority, agent, day, customer), search by reference, customer, phone or address; jobs past their time marked; tick new or assigned jobs and **Assign to agent** for many at once (all or nothing); **New job** ([§15.1](#151-making-a-job-in-the-office)); a job's page with its history, map and trail, steps and their times, checklist, photos, notes, parts, rating, and the office's actions: assign or reassign (new or assigned only), hold, resume, cancel with a reason, close (done only), add a note |
+| **Jobs** | Filters (state, type, priority, agent, day, customer), search by reference, customer, phone or address; jobs past their time marked; tick new or assigned jobs and **Assign to agent** for many at once (all or nothing); **New job** ([§15.1](#151-making-a-job-in-the-office)); a job's page with its history, map and trail, steps and their times, checklist, photos, notes, parts, rating, and the office's actions: assign or reassign (new, assigned or on hold), **Ask for a time** (§14.1), hold, resume, cancel with a reason, close (done only), add a note |
 | **Agents** | Each field agent (ISPOps' workforce page): state, their schedule, history, jobs done, time on jobs (travel and on site), average time on site, rating and reviews; stock with them; bank details when a pay list is used |
 | **Reports** | Jobs by type, state and agent over a period; time to arrive, time on site; late and not finished; ratings. CSV, as ISPOps' reports |
 | **Settings** | §4; job types and templates open their tables |
@@ -379,7 +393,7 @@ ISPOps' **Create new job** page (`exact-hue-hearth`, `src/routes/_app.jobs.new.t
 | Customer | Search existing customers by name, phone or email; picking one fills name and phone (not the address) and links the record ("rating will be sent after job completion"); or type name, phone and address | Search the business's **saved customers** (its `customers` table, §6.1) by name, phone or address; picking one fills name, phone, address and pin, and lists the places of their earlier jobs to choose from instead. Or type a name, phone and address, with **Save to my customers** below, **ticked by default**: left ticked, the job's customer becomes a row of the table; unticked, they are on this job only. A typed phone that is already a saved customer's offers that customer instead. Every customer gets the rating (by card or by SMS), saved or not |
 | Site | An optional map pin, by clicking a map or typing coordinates | The same, and a saved address brings its pin. Without a pin, Arrived is not measured, and the form says so |
 | Template | **Start from a template** fills type, priority and description, still editable; the checklist and time estimate are attached by the server, not shown | The same, and the checklist is shown, so the office can add an item for this job |
-| Details | Type, priority, one scheduled date and time, description ("internal notes") | Type, priority, **when**: a visit window (from, to) or a time, or "as soon as possible"; what to do (the agent sees it); a separate **note for the office** (the agent does not) |
+| Details | Type, priority, one scheduled date and time, description ("internal notes") | Type, priority, **when**: a visit window (from, to) or a time, "as soon as possible", or **Ask the customer**, which saves the job and sends **Choose a time** (§14.1); what to do (the agent sees it); a separate **note for the office** (the agent does not) |
 | Assignment | A list of agents whose status is available, and only them | Every field agent with their state and suggestions as in §9: available first, then by jobs held that day, nearest by last known place. Assigning someone already holding jobs adds this to their schedule |
 | Buttons | **Create & Assign** (needs an agent) or **Save as Draft** | **Create and assign** or **Save without assigning** (the job is **new**). Both tell the office (`job-tell-office`); assigning tells the agent and the customer (§8) |
 
@@ -405,7 +419,9 @@ Customer care, dispatchers and admins can do their Field work from the chat, as 
 | A job made by a customer or a workflow, not assigned ("NEW JOB · fault repair · Chidi Okafor · today 12 to 3") | `job.manage` | **Assign**: the suggestions, first one ready |
 | Not started: a window began and the job is only assigned | `job.manage` | **Call Musa**; **Reassign** |
 | Late, too long on site, location stopped, away from the place (§16) | `job.manage` | **Call** the agent; **Message** them in the team conversation; for late, **Tell the customer** |
-| Not finished, with the agent's reason | `job.manage` | **Plan a follow-up** (the New job sheet, filled from this one) or **Cancel** |
+| Not finished, with the agent's reason | `job.manage` | **Plan a follow-up** (the New job sheet, filled from this one, with **Ask the customer** for its time) or **Cancel** |
+| No time chosen: a customer asked for a time has not answered, or answered "none of these" | `job.manage` | **Ask again**; **Call**; for "none of these", the customer's words and **Set a time** |
+| Started early (§7), for a job whose customer was told a later time | `job.manage` | **Tell the customer** ("Musa is on his way earlier than planned") |
 | Done, waiting for review | `job.manage` | **Close** (after a look at its sheet) |
 | An agent holding few of a part ("Musa has 1 router left") | `job.manage` with Stock | **Issue more** |
 

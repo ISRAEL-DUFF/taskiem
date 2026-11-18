@@ -166,7 +166,7 @@ A payment the gateway took but PHP Radius did not confirm (a timeout, PHP Radius
 
 ### 6.4 Complaints
 
-**Report a problem**: a short list ("No internet", "Slow", "Keeps dropping", "Billing", "Other") and the subscriber's words. `open_complaint` records it in PHP Radius; the card shows its number and status, read again from `complaints` when opened. With the setting on, a **fault repair** job is made in Field work for the subscriber's saved address, and its job card follows in the same conversation when assigned.
+**Report a problem**: a short list ("No internet", "Slow", "Keeps dropping", "Billing", "Other") and the subscriber's words. `open_complaint` records it in PHP Radius; the card shows its number and status, read again from `complaints` when opened. With the setting on, the card then asks **When are you in for a technician?** with the windows the provider offers ([Field work §14.1](field-work.md#141-choosing-a-time)), and a **fault repair** job is made in Field work for the subscriber's address with the window they chose; its job card follows in the same conversation when assigned. A subscriber who closes the card without choosing gets the job all the same, with **Ask for a time** left to the office.
 
 ### 6.5 Without PHP Radius
 

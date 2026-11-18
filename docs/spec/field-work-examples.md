@@ -196,7 +196,7 @@ The job is made by a template from the customer's complaint. Jobs the office mak
 ### Open points
 
 1. **Closing the PHP Radius complaint.** The client API opens and reads complaints but cannot close them. Taskiem can remind Ada's staff on Close ("Close complaint #47 in PHP Radius"), but cannot close it itself.
-2. **The visit window on a complaint.** This example has `isp-complaint-to-job` ask Chidi when he is in, as Book a visit does. [ISP §6.4](isps.md#64-complaints) does not yet say so.
+2. ~~The visit window on a complaint~~: settled 18 November 2026. The complaint's card asks **When are you in for a technician?** with the provider's windows ([ISP §6.4](isps.md#64-complaints), [Field work §14.1](field-work.md#141-choosing-a-time)).
 3. **The confirmation code while the agent is offline.** It can only be checked when End job lands. The phone could hold a hashed copy to catch a wrong code at once; [Field work §14](field-work.md#14-the-customers-side) does not yet say.
 4. **An arrival estimate** on the "on the way" card is not in the plan, and would need a routing service.
 5. **More than one agent on a job** (helpers), and an agent marking themselves **not available** (leave, sickness): neither is in ISPOps or the plan ([Field work §23](field-work.md#23-risks-and-open-questions)).
@@ -293,7 +293,7 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 1. ~~Where a business's contacts live~~: settled 18 November 2026. A business keeps its own customer list in its `customers` table, and a customer is on it when the business saves them ([Field work §6.1](field-work.md#61-the-businesss-own-customer-list)).
 2. ~~Duplicate customers~~: settled. A typed phone already on the list offers that customer ([§15.1](field-work.md#151-making-a-job-in-the-office)).
 3. **Many messages from a bulk assignment.** Mr Okon gets one SMS per job. Grouping them ("3 visits on Friday") is a template choice, or a rule for the updates channel. Not yet decided.
-4. **ISPOps' availability windows.** In ISPOps a customer declares windows when they are in, and staff link one to an existing job, which emails a confirmation (`src/routes/_app.availability.tsx`). Here a customer gives their window when booking ([§14](field-work.md#14-the-customers-side)). For a job the office makes, nothing yet asks the customer "when are you in?" before assigning. A **Ask the customer for a time** action on the job, sending a card or SMS with choices, would cover it.
+4. ~~ISPOps' availability windows~~: settled 18 November 2026. **Ask for a time** on a job sends the customer a **Choose a time** card (or SMS and page) with the office's choices; the answer sets the job's window, and no answer is an alert ([Field work §14.1](field-work.md#141-choosing-a-time)). It replaces ISPOps' declared windows.
 5. ~~A typed address for a known customer~~: settled. The job keeps its own place; the customer's row keeps its address until the business changes it (step 3).
 
 ## 6. Example 3: a day at Ada Networks, every seat at once
@@ -318,8 +318,8 @@ One Thursday, with the office, four customers and two field agents, to show how 
 | 9:30 | Ada's staff make Kemi's account in their PHP Radius dashboard | Mr Okon's SMS: "Tunde is on the way" with the job's link | **Tunde** taps **Start job** on J-1061 | |
 | 10:10 | Notified: J-1060 done; the installation invoice made | Kemi taps **Confirm the work is done**; then the invoice card, **Pay**, paid; **Rate the visit**: 5 stars | Musa: checklist, photos, parts used (radio, router, 20 m of cable), **End job**; location stops | J-1060 **done**; `used` movements from Musa's stock; `job-invoice-on-done`; the payment in Money |
 | 10:15 | Ngozi, in Kemi's conversation: **Save to my subscribers** | Kemi taps **My internet**: linked by her proved phone; her new plan shows | | A row in `subscribers`, `account_ref` her PHP Radius username |
-| 10:20 | | | Musa starts J-1064 early: the window is later, and the customer agreed by phone | |
-| 10:40 | Tunde messages the office: unit 2 needs a mast clamp he does not carry. Bola opens J-1062 and taps **Hold**, "parts missing" | Mr Okon's SMS: "Unit 2's visit is paused: we'll be back with a part" | J-1062 goes back on Tunde's schedule, marked held; **he is free**, and taps **Start job** on J-1063 | J-1062 **on hold**; location for it stops; Tunde's state worked out again |
+| 10:20 | | | Musa taps **Start job** on J-1064; the app asks "The window is 1 to 4. Start now?" and he taps **Start now** (the customer agreed by phone) | J-1064 marked **started early** |
+| 10:40 | Tunde messages the office: unit 2 needs a mast clamp he does not carry. Bola opens J-1062 and taps **Hold**, "parts missing", leaving **Tell the customer** ticked | Mr Okon's SMS: "Unit 2's visit is paused: we'll be back with a part" | J-1062 goes back on Tunde's schedule, marked held; **he is free**, and taps **Start job** on J-1063 | J-1062 **on hold**; location for it stops; Tunde's state worked out again |
 | 12:10 | Alert card: "Not started · J-1065 · window began at 12" (Tunde is still at Lekki Plaza); Ngozi taps **Tell the customer** | Chidi: "Tunde is finishing a job nearby and will be with you by 1:30" | | |
 | 12:30 | Alert card "Done, waiting for review · J-1060"; Ngozi opens its sheet (route, photos, parts, rating) and taps **Close** | | | J-1060 **closed**; diary line |
 | 13:15 | | Chidi's card: on the way | Tunde ends J-1063 and starts J-1065 | |
@@ -351,9 +351,9 @@ One Thursday, with the office, four customers and two field agents, to show how 
 
 ### Open points
 
-1. **Telling the customer about a hold.** Mr Okon's SMS at 10:40 assumes a template on `on_hold` that tells the customer; Field work §8 has none yet.
-2. **Starting a job before its window.** Musa started J-1064 early at 10:20. Nothing stops it today; should the app ask "The window is 1 to 4: start now?"
-3. **Asking the customer for a time** (Example 2, open point 4) came up again at 15:20: Ngozi phoned Mrs Bello.
+1. ~~Telling the customer about a hold~~: settled 18 November 2026. **Hold** has **Tell the customer**, ticked by default, with words the office can edit; `job-tell-customer-held` sends them, and Resume tells the new time ([Field work §7](field-work.md#7-the-journey-of-a-job), [§8](field-work.md#8-each-step-is-a-trigger)).
+2. ~~Starting a job before its window~~: settled. The app asks "The window is 1 to 4. Start now?" and never refuses; the job is marked **started early**, and the office gets **Tell the customer** on an alert card ([Field work §7](field-work.md#7-the-journey-of-a-job), [§15.2](field-work.md#152-the-offices-tools-in-chat)).
+3. ~~Asking the customer for a time~~: settled. At 15:20 Ngozi would tap **Plan a follow-up** and **Ask the customer**: Mrs Bello gets the choices by SMS and picks one ([Field work §14.1](field-work.md#141-choosing-a-time)).
 
 ## 7. Examples still to write
 
