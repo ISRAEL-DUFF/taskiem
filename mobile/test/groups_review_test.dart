@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/api/api.g.dart' show GroupFound, PeopleFound;
 import 'package:taskiem/chat/group_chat.dart';
 import 'package:taskiem/chat/group_info.dart';
+import 'package:taskiem/chat/group_new.dart' show GroupInvitesSection;
 import 'package:taskiem/chat/people_live.dart';
 import 'package:taskiem/chat/people_search.dart';
 import 'package:taskiem/main.dart';
@@ -75,6 +76,40 @@ void main() {
     expect(d.messages?.map((l) => l.id), ['m9']);
     d.dispose();
     live.dispose();
+  });
+
+  testWidgets('an invite taken back or answered elsewhere leaves Requests: live, and on a 404 from Accept', (t) async {
+    phone(t);
+    final api = Api();
+    Map<String, dynamic> inv(String id, String name) => {'group_id': id, 'name': name, 'photo': null, 'invited_by': 'p1', 'by': 'Ada Obi', 'at': '2026-11-17T09:00:00Z'};
+    var invites = [inv('g1', 'Book club'), inv('g2', 'Choir')];
+    api.routes['GET /v1/me/groups/invites'] = (_) => {'invites': invites};
+    api.routes['POST /v1/me/groups/invites/g2/accept'] = (_) {
+      invites = [];
+      return answer({'error': 'That invite is no longer there.'}, 404);
+    };
+    final live = PeopleLive(api.auth().transport);
+    final opened = <String>[];
+    await t.pumpWidget(TaskiemApp(
+      mode: TkMode.light,
+      home: SingleChildScrollView(child: GroupInvitesSection(auth: api.auth(), live: live, openGroup: (id, {focus}) async => opened.add(id), now: () => at)),
+    ));
+    await settle(t);
+    expect(find.text('Book club'), findsOneWidget);
+    hearLive(live, 'ready', {'connection': 'c1'});
+    invites = [inv('g2', 'Choir')];
+    hearLive(live, 'group_invite', {'group_id': 'g1', 'invite': null});
+    await t.runAsync(pumpEventQueue);
+    await t.pump();
+    expect(find.text('Book club'), findsNothing, reason: 'out at once');
+    await settle(t);
+    expect(find.text('Choir'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Accept the invite to Choir'));
+    await settle(t);
+    expect(find.text('Choir'), findsNothing, reason: 'read again on the 404');
+    expect(opened, isEmpty);
+    live.dispose();
+    await drain(t);
   });
 
   testWidgets('a former member can still report the group', (t) async {

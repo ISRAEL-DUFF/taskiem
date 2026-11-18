@@ -235,7 +235,7 @@ void main() {
       expect((got[1] as GroupLiveGroup).group?.name, 'Book club');
       expect((got[2] as GroupLiveGroup).hidden, isTrue);
       expect((got[3] as GroupLiveReceipts).statuses, {'m3': 'read'});
-      expect((got[4] as GroupLiveInvite).invite.by, 'Ada Obi');
+      expect((got[4] as GroupLiveInvite).invite?.by, 'Ada Obi');
       expect(live.groupTyping, {'g1': ['p1']});
       live.dispose();
     });
