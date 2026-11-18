@@ -110,6 +110,7 @@ Rules:
   lists for dealers and resellers, offers and counters, credit limits for
   trade buyers, approvals on large supplier payments.
 - **Story:** a dealer wants 20 phones; the shop owner haggles, ships, invoices.
+- **Outline:** [`gadgets/README.md`](gadgets/README.md) (Techline Gadgets, Ikeja).
 - **To check before filming:** which gadget-specific things the app really
   does (serial numbers or IMEI, warranty, instalment sales). I have not
   confirmed these exist. We only show what the app does today.

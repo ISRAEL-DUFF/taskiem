@@ -26,3 +26,22 @@ reference for every voice tool.
 | Rivers Foods | as in English | |
 
 Naira is "NYE-rah". Say prices as words ("forty-three thousand naira").
+
+## Proposed names for the series (to confirm with a native speaker)
+
+| Name | Say it | Series |
+| --- | --- | --- |
+| Nwachukwu | n-WAH-choo-kwoo | Gadgets (Ikenna) |
+| Ikenna | ee-KEN-nah | Gadgets |
+| Maryam Sani | MAR-yam SAH-nee | Gadgets |
+| Gwarzo | GWAR-zoh | Gadgets (Alhaji Ibrahim Gwarzo) |
+| Kehinde | keh-HIN-deh | Gadgets |
+| Alabi | ah-LAH-bee | Gadgets |
+| Zainab Yusuf | ZAY-nab YOO-soof | Fashion |
+| Damilola (Dami) | dah-mee-LOH-lah | Fashion |
+| Nneka | N-NEH-kah | Fashion |
+| Fashola | fah-SHOH-lah | Schools |
+| Chukwudi Ibe | choo-KWOO-dee EE-beh | Schools |
+| Audu | AH-doo | Schools |
+| Danjuma | dan-JOO-mah | Schools |
+| Ikorodu | ee-koh-ROH-doo | Schools (place) |
