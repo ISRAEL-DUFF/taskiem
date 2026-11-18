@@ -106,7 +106,7 @@ export function YouPhoto() {
   );
 }
 
-/** Which pushes the person gets from businesses: three switches. */
+/** Which pushes the person gets from businesses and people: a switch for each kind. */
 export function YouNotificationsCard() {
   const view = useLoad(() => get<YouNotifications>("/v1/me/notifications"), []);
   const [now, setNow] = useState<YouNotifications>();
@@ -123,13 +123,13 @@ export function YouNotificationsCard() {
   return (
     <section className="card" aria-labelledby="you-notify" data-testid="you-notifications">
       <h2 id="you-notify">Notifications</h2>
-      <p className="hint">What businesses may notify you about on your phone.</p>
+      <p className="hint">What businesses and people may notify you about on your phone.</p>
       {!n && !view.error && <Skeleton rows={1} label="Loading your notifications…" />}
       <ErrorBox error={view.error ?? act.error} />
       {n &&
         NOTIFY_KINDS.map((k) => (
           <label key={k.key} className="switch-line you-notify-line">
-            <input type="checkbox" role="switch" checked={n[k.key]} disabled={act.busy} onChange={(e) => turn(k.key, e.target.checked)} data-testid={`you-notify-${k.key}`} />{" "}
+            <input type="checkbox" role="switch" checked={!!n[k.key]} disabled={act.busy} onChange={(e) => turn(k.key, e.target.checked)} data-testid={`you-notify-${k.key}`} />{" "}
             <span>
               {k.label}
               <span className="hint block">{k.hint}</span>

@@ -11,6 +11,8 @@ import { PhoneSetting } from "./ChangeNumber";
 import { ChatLinkPage } from "./ChatLinkPage";
 import { Discover, DiscoverBusiness } from "./Discover";
 import { PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
+import { BlockedPage, ContactsPage, PayoutPage, PeoplePrivacyPage, PersonLinkPage, RequestsPage, YouPeopleSettings } from "./People";
+import { PeopleChatPage } from "./PeopleChat";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
@@ -33,7 +35,7 @@ export function YouApp() {
   if (!me) return null;
   const inBusiness = (me.businesses?.length ?? 0) > 0;
   // A conversation fills the window, as the chat does (§9).
-  const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname);
+  const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname) || inPeopleChat(loc.pathname);
   return (
     <div className={`you-shell${inChat ? " you-chat" : ""}`}>
       <a className="skip-link" href="#main">
@@ -65,7 +67,15 @@ export function YouApp() {
           <Route path="/you/start" element={<StartSomething />} />
           <Route path="/you/chats/new" element={<StartChat />} />
           <Route path="/you/chats/:id" element={<PersonChatRoute />} />
+          <Route path="/you/people/requests" element={<RequestsPage />} />
+          <Route path="/you/people/contacts" element={<ContactsPage />} />
+          <Route path="/you/people/requests/:id" element={<PeopleChatRoute />} />
+          <Route path="/you/people/:id" element={<PeopleChatRoute />} />
+          <Route path="/you/settings/people" element={<PeoplePrivacyPage />} />
+          <Route path="/you/settings/blocked" element={<BlockedPage />} />
+          <Route path="/you/settings/payout" element={<PayoutPage />} />
           <Route path="/m/:code" element={<ChatLinkPage />} />
+          <Route path="/p/:code" element={<PersonLinkPage />} />
           <Route path="/second-proof" element={<SecondProofPage />} />
           <Route path="*" element={<Navigate to="/you" replace />} />
         </Routes>
@@ -79,6 +89,15 @@ export function YouApp() {
 function PersonChatRoute() {
   const { id = "" } = useParams();
   return <PersonChatPage key={id} />;
+}
+
+/** A chat with a person (or a request) fills the window, as a business's does. */
+export const inPeopleChat = (path: string) => /^\/you\/people\/(requests\/)?(?!requests$|contacts$)[^/]+$/.test(path);
+
+/** A chat with a person, made afresh for each chat. */
+function PeopleChatRoute() {
+  const { id = "" } = useParams();
+  return <PeopleChatPage key={id} />;
 }
 
 /** /you/chats/{id} opened in a business's session (a tapped notification
@@ -202,6 +221,7 @@ function YouSettings() {
         </div>
       </section>
       <SavedAddresses />
+      <YouPeopleSettings />
       <YouNotificationsCard />
       <Appearance />
       <section className="card">

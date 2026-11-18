@@ -268,6 +268,18 @@ describe("the service worker's words", () => {
     expect(sw.openLink(p.link, p.business)).toBe(`/you/chats/${chat}`);
     expect(sw.notificationOf(p, "").options.data).toEqual({ link: `/you/chats/${chat}`, business: "" });
   });
+  it("opens a person's message and a message request on You", () => {
+    const chat = "0b6c0a51-35a2-4e6f-9a43-6b1e4b0e8f12";
+    for (const [kind, link] of [
+      ["person", `/you/people/${chat}`],
+      ["request", `/you/people/requests/${chat}`],
+    ]) {
+      const p = sw.parsePayload(() => ({ title: "Kemi", body: "Hi", link, tag: `person:${chat}`, business: "", kind }));
+      expect(p.kind).toBe(kind);
+      expect(p.link).toBe(link);
+      expect(sw.openLink(p.link, p.business)).toBe(link);
+    }
+  });
   it("shows one notification per conversation, with the page's own tag", () => {
     const n = sw.notificationOf(
       sw.parsePayload(() => ({

@@ -166,7 +166,7 @@ test("a new person makes an account with their phone, then starts workflows and 
   await page.getByRole("link", { name: "Chats" }).click();
   await expect(page.getByRole("heading", { name: "Hello, Ngozi" })).toBeVisible();
   await expect(page).toHaveURL(/\/you$/);
-  await expect(page.getByText("Chats with businesses will show here.")).toBeVisible();
+  await expect(page.getByText("Your chats with businesses and people will show here.")).toBeVisible();
   await expect(page.getByTestId("switcher")).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 

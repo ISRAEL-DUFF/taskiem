@@ -344,6 +344,8 @@ function world() {
     const body = r.postData() ? (r.headers()["content-type"]?.includes("json") ? r.postDataJSON() : "form") : undefined;
     if (method !== "GET") calls.push({ method, path, body, key: r.headers()["idempotency-key"] });
     if (path === "/v1/me/chats") return route.fulfill(json({ chats: [chat], unread: 1 }));
+    // You's one Chats list (people-chatting §7): the business chat, marked.
+    if (path === "/v1/me/conversations") return route.fulfill(json({ chats: [{ ...chat, kind: "business", business_id: chat.business }], unread: 1, requests: 0 }));
     if (path === "/v1/me/chats/c1" && method === "GET") return route.fulfill(json(chat));
     if (path === "/v1/me/chats/c1" && method === "PUT") {
       const b = body as { offers?: boolean; offers_asked?: boolean };
@@ -394,7 +396,7 @@ for (const width of [390, 360])
     // No saved addresses: the address is typed at checkout.
     await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
     await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
-    await page.route(/\/v1\/me\/chats(\/|$|\?)/, w.handle);
+    await page.route(/\/v1\/me\/(chats|conversations)(\/|$|\?)/, w.handle);
 
     await page.goto("/you");
     await expect(page.getByTestId("person-chat")).toContainText("Mama's Kitchen");

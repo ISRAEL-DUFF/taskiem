@@ -391,6 +391,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
       // No chats yet, and no orders from shops (stage 2).
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
       await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
       // No saved addresses yet (Settings).
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
@@ -552,6 +553,7 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("discover-report-sheet")).toBeVisible();
       await check("reporting a business");
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
       await page.goto("/you/settings");
       await expect(page.getByTestId("saved-address")).toBeVisible();
       await check("/you/settings with addresses");
@@ -590,6 +592,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: false })));
       await page.route("**/v1/me/privacy", (r) =>
         r.fulfill(
@@ -738,3 +741,142 @@ test.describe("on a phone-sized screen", () => {
     expect(found, found.join("\n\n")).toEqual([]);
   });
 });
+
+// Chats with people on You (people-chatting.md §5, §7, §8, §10.1, §11): the
+// one Chats list with Requests, a chat with ticks, a reply, a forward, a
+// warning, cards and a share card, a request, New chat with someone found,
+// contacts, the privacy settings, blocked people and the bank account; the
+// server's answers stood in for (people.spec.ts goes through them on the
+// real server).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`chats with people pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const card = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: "Kemi Adeyemi", deleted: false, contact_name: null, in_contacts: true, they_added_you: true, photo: null, last_seen_at: now, online: false, read_ticks: true, ...extra });
+      const kemi = card("p1", { contact_name: "Kemi (school)", online: true });
+      const chat = { id: "c1", kind: "person", person_id: "p1", name: "Kemi (school)", gone: false, last: "See you", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, request: false, waiting: false, blocked: false, contact: true, phone: "+2348031234567", person: kemi };
+      const req = { ...chat, id: "r1", person_id: "p2", name: "Tunde Bello", request: true, contact: false, phone: null, person: card("p2", { name: "Tunde Bello", in_contacts: false }) };
+      await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) =>
+        r.fulfill(
+          json({
+            chats: [
+              { kind: "person", id: "c1", name: "Kemi (school)", person_id: "p1", last: "See you", last_mine: false, last_at: now, unread: 2, muted: false, archived: false, blocked: false, person: kemi },
+              { kind: "business", id: "b1c", name: "Mama's Kitchen", business_id: "b1", last: "Your rice is ready", last_mine: false, last_at: now, unread: 0, muted: true, archived: false, blocked: false },
+            ],
+            unread: 2,
+            requests: 1,
+          }),
+        ),
+      );
+      await page.route("**/v1/me/people/c1", (r) => r.fulfill(json(chat)));
+      await page.route("**/v1/me/people/r1", (r) => r.fulfill(json(req)));
+      await page.route(/\/v1\/me\/people\/(c1|r1)\/read$/, (r) => r.fulfill({ status: 204 }));
+      await page.route(/\/v1\/me\/people\/c1\/messages(\?|$)/, (r) =>
+        r.fulfill(
+          json({
+            messages: [
+              { id: "m1", mine: false, kind: "text", body: "Are you coming on Saturday?", read_at: now, created_at: now },
+              { id: "m2", mine: true, kind: "text", body: "Yes, by noon", reply_to: "m1", status: "read", read_at: now, created_at: now, their_reaction: "👍" },
+              { id: "m3", mine: true, kind: "text", body: "On my way", status: "delivered", read_at: null, created_at: now },
+              { id: "m3b", mine: true, kind: "text", body: "Are you there?", status: "sent", read_at: null, created_at: now },
+              { id: "m4", mine: false, kind: "text", body: "Look at this", forwarded: true, forwarded_many: true, read_at: now, created_at: now },
+              { id: "m5", mine: false, kind: "text", body: "Pay into my account 0123456789", warn_transfer: true, read_at: now, created_at: now },
+              { id: "m6", mine: false, kind: "card", body: "", card: { type: "product", title: "Jollof rice", business: "Mama's Kitchen", business_id: "b1", item_id: "1", price_kobo: 450_000 }, read_at: now, created_at: now },
+              { id: "m7", mine: true, kind: "card", body: "", card: { type: "split", title: "Your share", amount_kobo: 300_000, what: "the cake", pay_to: { bank: "GTBank", account_number: "0123456789", account_name: "Ada Obi" }, paid: false }, status: "read", read_at: now, created_at: now },
+              { id: "m8", mine: false, kind: "text", body: "This message was deleted", deleted: true, read_at: now, created_at: now },
+            ],
+            more: false,
+          }),
+        ),
+      );
+      await page.route(/\/v1\/me\/people\/r1\/messages(\?|$)/, (r) =>
+        r.fulfill(json({ messages: [{ id: "q1", mine: false, kind: "text", body: "Hello, we met at the market", warn: true, read_at: null, created_at: now }], more: false })),
+      );
+      await page.route("**/v1/me/people/requests", (r) => r.fulfill(json({ requests: [req] })));
+      await page.route(/\/v1\/me\/people(\?|$)/, (r) => r.fulfill(json({ chats: [chat], unread: 0, requests: 1 })));
+      await page.route("**/v1/me/people/blocked", (r) => r.fulfill(json({ people: [{ person_id: "p3", name: "Dayo Ola", chat_id: "c3", at: now }] })));
+      await page.route("**/v1/me/contacts", (r) =>
+        r.fulfill(json({ contacts: [{ ...kemi, source: "number", added_at: now }, { ...card("p4", { name: "Bola Ade", last_seen_at: null, online: null }), source: "link", added_at: now }] })),
+      );
+      await page.route("**/v1/me/privacy/people", (r) =>
+        r.fulfill(json({ find_by_number: "contacts", find_from_contacts: true, message: "everyone", last_seen: "contacts", read_ticks: true, photo: "contacts", show_number: false })),
+      );
+      await page.route("**/v1/me/payout-account", (r) =>
+        r.fulfill(json({ account: { bank: "GTBank", account_number: "0123456789", account_name: "Ada Obi" }, checked: false, words: "Taskiem does not check this account and moves no money." })),
+      );
+      await page.route("**/v1/people/lookup", (r) => r.fulfill(json({ found: true, person: card("p5", { name: "Chidi Eze", in_contacts: false }), add_token: "t" })));
+      await page.route("**/v1/me/link", (r) => r.fulfill(json({ code: "ab23cd45ef", url: "http://localhost/p/ab23cd45ef", created_at: now, words: "Chat with me", qr: "/brand/seal/mark-512.png" })));
+
+      await page.goto("/you");
+      await expect(page.getByTestId("people-requests-entry")).toBeVisible();
+      await expect(page.getByTestId("people-chat")).toBeVisible();
+      await check("/you with people and businesses");
+      await page.getByTestId("people-new-chat-open").click();
+      await page.getByTestId("people-phone").fill("0803 000 1111");
+      await page.getByTestId("people-find").click();
+      await expect(page.getByTestId("people-found")).toBeVisible();
+      await page.getByTestId("people-show-link").click();
+      await expect(page.getByTestId("people-qr")).toBeVisible();
+      await check("New chat");
+
+      await page.goto("/you/people/c1");
+      await expect(page.getByTestId("people-quote")).toBeVisible();
+      await expect(page.getByTestId("people-forwarded")).toHaveText(/Forwarded many times/);
+      await expect(page.getByTestId("people-transfer-warning")).toBeVisible();
+      await expect(page.getByTestId("people-head-line")).toHaveText("online · +234 803 123 4567");
+      await expect(page.getByTestId("people-ticks").first()).toBeVisible();
+      await check("/you/people/{id}");
+      await page.getByRole("button", { name: "More about this chat" }).click();
+      await page.getByTestId("people-info").click();
+      await expect(page.getByTestId("people-kept")).toContainText("kept by Taskiem");
+      await check("contact info");
+
+      await page.goto("/you/people/requests");
+      await expect(page.getByTestId("people-request")).toBeVisible();
+      await check("/you/people/requests");
+      await page.goto("/you/people/requests/r1");
+      await expect(page.getByTestId("request-bar")).toBeVisible();
+      await expect(page.getByTestId("people-scam-warning")).toBeVisible();
+      await check("/you/people/requests/{id}");
+      await page.getByTestId("request-block").click();
+      await expect(page.getByTestId("people-report-sheet")).toBeVisible();
+      await check("block and report");
+
+      for (const [path, testid] of [
+        ["/you/people/contacts", "people-contact"],
+        ["/you/settings/people", "people-privacy"],
+        ["/you/settings/blocked", "people-blocked"],
+        ["/you/settings/payout", "people-payout"],
+      ] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(testid).first()).toBeVisible();
+        await check(path);
+      }
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// A person's link signed out (people-chatting §5.2): the name, Chat on Taskiem.
+for (const scheme of ["light", "dark"] as const)
+  test(`a person's link passes axe, ${scheme} theme`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    await page.route("**/v1/person-links/ab23cd45ef", (r) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ code: "ab23cd45ef", link: "http://localhost/p/ab23cd45ef", name: "Kemi Adeyemi", photo: null, app: "https://taskiem.test/app" }) }),
+    );
+    await page.goto("/p/ab23cd45ef");
+    await expect(page.getByTestId("person-link-chat")).toBeVisible();
+    const vs = await axe(page);
+    expect(vs, describe("/p/{code}", vs)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  });

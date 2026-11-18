@@ -9,7 +9,6 @@ import { clock, listTime } from "../lib/linkchat";
 import {
   aboutOrderDraft,
   cardsKey,
-  chatPreview,
   clientFor,
   closedNote,
   erasedWords,
@@ -45,6 +44,9 @@ import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
 import { BookSheet, OrdersSheet, PayButton, ShopSheet, ToolsMenu, type PersonTool } from "./PersonTools";
+import { NewChatSheet } from "./People";
+import { peopleDraft } from "./PeopleChat";
+import { photoOf as peoplePhoto, requestsWords, rowPath, rowPreview, type ChatList } from "../lib/people";
 
 // A person's chats with businesses, on their own side (You;
 // docs/spec/taskiem-for-everyone.md §7, §8.3, §9, §15): the list, a
@@ -100,13 +102,17 @@ function keepPhoto(business: string, url: string | undefined) {
   }
 }
 
-/** The person's chats with businesses, latest first (archived ones apart). */
+/** You's one Chats list (people-chatting §7, §17 Q6): chats with
+ * businesses and with people together, latest first, each marked by what
+ * it is (archived ones apart), Requests at the top when some wait, and New
+ * chat to find someone. */
 export function PersonChatList() {
   const [archived, setArchived] = useState(false);
+  const [finding, setFinding] = useState(false);
   // Each answer says which list it is, so a toggle never shows the other's
   // rows while its own are on their way.
   const list = useLoad(
-    () => get<{ chats: PersonChat[]; unread: number }>(`/v1/me/chats${archived ? "?archived=1" : ""}`).then((r) => ({ ...r, archived })),
+    () => get<ChatList>(`/v1/me/conversations${archived ? "?archived=1" : ""}`).then((r) => ({ ...r, archived })),
     [archived],
   );
   const reload = list.reload;
@@ -116,34 +122,62 @@ export function PersonChatList() {
   }, [reload]);
   const data = list.data?.archived === archived ? list.data : undefined;
   const chats = data?.chats ?? [];
+  const requests = data?.requests ?? 0;
   return (
     <section className="card person-chats" aria-labelledby="you-chats">
       <div className="toolbar">
         <h2 id="you-chats" className="grow" style={{ margin: 0 }}>
           {archived ? "Archived chats" : "Chats"}
         </h2>
+        {!archived && (
+          <button type="button" className="small primary" onClick={() => setFinding(true)} data-testid="people-new-chat-open">
+            <Icon name="plus" /> New chat
+          </button>
+        )}
         <button type="button" className="small" aria-pressed={archived} onClick={() => setArchived(!archived)} data-testid="person-archived">
           {archived ? "Back to chats" : "Archived"}
         </button>
       </div>
       <ErrorBox error={list.error} />
+      {!archived && requests > 0 && (
+        <Link className="people-requests-entry" to="/you/people/requests" data-testid="people-requests-entry">
+          <Icon name="inbox" />
+          <span className="grow">Message requests</span>
+          <span className="unread-count">
+            <span aria-hidden="true">{requests}</span>
+            <span className="sr-only">{requestsWords(requests)} waiting</span>
+          </span>
+        </Link>
+      )}
       {!data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
       {data && chats.length === 0 && (
         <EmptyState icon="chat">
-          {archived ? "No archived chats." : "Chats with businesses will show here. Find one in Discover, or open a business's chat link."}
+          {archived ? "No archived chats." : "Your chats with businesses and people will show here. Find a business in Discover, or start a New chat with someone."}
         </EmptyState>
       )}
       {chats.length > 0 && (
         <ul className="chat-rows" aria-label={archived ? "Archived chats" : "Your chats"} data-testid="person-chats">
           {chats.map((c) => {
-            const draft = getDraft(draftKey(c.id));
+            const person = c.kind === "person";
+            const draft = person ? peopleDraft(c.id) : getDraft(draftKey(c.id));
             return (
               <ChatRow
-                key={c.id}
-                to={`/you/chats/${c.id}`}
+                key={`${c.kind}:${c.id}`}
+                to={rowPath(c)}
                 letter={c.name}
-                logo={photoOf(c.business)}
-                title={c.name}
+                logo={person ? peoplePhoto(c.person) : c.business_id ? photoOf(c.business_id) : undefined}
+                title={
+                  <>
+                    {c.name}
+                    {person ? (
+                      <span className="sr-only"> (a person)</span>
+                    ) : (
+                      <span className="chat-kind" data-testid="chat-kind">
+                        Business
+                      </span>
+                    )}
+                  </>
+                }
                 time={listTime(c.last_at)}
                 preview={
                   draft ? (
@@ -151,17 +185,18 @@ export function PersonChatList() {
                       <span className="draft">Draft:</span> {draft}
                     </>
                   ) : (
-                    chatPreview(c)
+                    rowPreview(c)
                   )
                 }
                 unread={c.unread}
                 muted={c.muted}
-                testid="person-chat"
+                testid={person ? "people-chat" : "person-chat"}
               />
             );
           })}
         </ul>
       )}
+      {finding && <NewChatSheet onClose={() => setFinding(false)} />}
     </section>
   );
 }

@@ -12,6 +12,10 @@ export interface YouNotifications {
   messages: boolean;
   updates: boolean;
   offers: boolean;
+  /** A person wrote to them (people-chatting §13). */
+  people: boolean;
+  /** A stranger's first message waits in Requests. */
+  requests: boolean;
 }
 
 /** The three kinds of push, in the order and words the page shows. */
@@ -19,6 +23,8 @@ export const NOTIFY_KINDS: { key: keyof YouNotifications; label: string; hint: s
   { key: "messages", label: "Messages", hint: "Someone at a business writes to you." },
   { key: "updates", label: "Order and booking news", hint: "A business's own updates: your order is on its way, your booking is confirmed." },
   { key: "offers", label: "Offers", hint: "Offers from businesses you said yes to." },
+  { key: "people", label: "Messages from people", hint: "Someone you chat with writes to you." },
+  { key: "requests", label: "Message requests", hint: "Someone new writes to you for the first time." },
 ];
 
 /** What turning a kind off means, under the switches. */
