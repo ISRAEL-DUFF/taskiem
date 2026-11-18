@@ -5,6 +5,9 @@ import {
   actionOperation,
   appealWords,
   bytesWords,
+  currentHalf,
+  currentHalfWords,
+  endedHalves,
   checkReasonLabel,
   heldFileURL,
   isPhoto,
@@ -12,9 +15,9 @@ import {
   periodWords,
   reportFileURL,
   reportReasonLabel,
+  standingNoticeShows,
   standingTitle,
   whyOK,
-  withCurrentHalf,
 } from "./peoplesafety";
 
 describe("the moderators' screens", () => {
@@ -74,18 +77,31 @@ describe("lawful requests", () => {
     expect(lagosDay("2026-11-18", true)).toBe("2026-11-18T23:00:00.000Z");
     expect(lagosDay("18/11/2026")).toBeUndefined();
   });
-  it("puts the current half-year first, at zero", () => {
-    const p = { year: 2026, half: 1 as const, label: "January to June 2026", received: 2, answered: 1, refused: 1, pending: 0 };
-    const out = withCurrentHalf([p], new Date("2026-11-18T10:00:00Z"));
-    expect(out.map((x) => x.label)).toEqual(["July to December 2026", "January to June 2026"]);
-    expect(withCurrentHalf([p], new Date("2026-03-01T00:00:00Z"))).toEqual([p]);
-    // 31 December 23:30 UTC is already January in Lagos.
-    expect(withCurrentHalf([], new Date("2026-12-31T23:30:00Z"))[0]?.label).toBe("January to June 2027");
+  it("shows only half-years that have ended, latest first, and says when the current one shows", () => {
+    const h1 = { year: 2026, half: 1 as const, label: "January to June 2026", received: 2, answered: 1, refused: 1 };
+    const h2 = { year: 2026, half: 2 as const, label: "July to December 2026", received: 1, answered: 0, refused: 0 };
+    const old = { year: 2025, half: 2 as const, label: "July to December 2025", received: 0, answered: 0, refused: 0 };
+    // In November 2026 the second half is not over: left out even when sent.
+    expect(endedHalves([old, h2, h1], new Date("2026-11-18T10:00:00Z")).map((x) => x.label)).toEqual(["January to June 2026", "July to December 2025"]);
+    expect(currentHalfWords(new Date("2026-11-18T10:00:00Z"))).toBe("July to December 2026 shows here once it ends.");
+    // 31 December 23:30 UTC is already January in Lagos: the second half has ended.
+    expect(endedHalves([h2], new Date("2026-12-31T23:30:00Z"))).toEqual([h2]);
+    expect(currentHalf(new Date("2026-12-31T23:30:00Z")).label).toBe("January to June 2027");
+    expect(endedHalves([], new Date("2026-03-01T00:00:00Z"))).toEqual([]);
   });
-  it("says a half-year's figures", () => {
-    expect(periodWords({ year: 2026, half: 2, label: "", received: 0, answered: 0, refused: 0, pending: 0 })).toBe("No requests.");
-    expect(periodWords({ year: 2026, half: 2, label: "", received: 3, answered: 1, refused: 1, pending: 1 })).toBe(
-      "3 received, 1 answered, 1 refused, 1 still being looked at.",
-    );
+  it("says a half-year's figures, with no count still being looked at", () => {
+    expect(periodWords({ received: 0, answered: 0, refused: 0 })).toBe("No requests.");
+    expect(periodWords({ received: 3, answered: 1, refused: 1 })).toBe("3 received, 1 answered, 1 refused.");
+    // A count the server still sends with `pending` is read the same.
+    expect(periodWords({ received: 3, answered: 1, refused: 1, pending: 1 } as { received: number; answered: number; refused: number })).toBe("3 received, 1 answered, 1 refused.");
+  });
+});
+
+describe("the notice of Your standing", () => {
+  it("shows while something is unseen, not on Your standing itself", () => {
+    expect(standingNoticeShows({ unseen: 1 }, "/you")).toBe(true);
+    expect(standingNoticeShows({ unseen: 0 }, "/you")).toBe(false);
+    expect(standingNoticeShows(undefined, "/you")).toBe(false);
+    expect(standingNoticeShows({ unseen: 2 }, "/you/settings/standing")).toBe(false);
   });
 });

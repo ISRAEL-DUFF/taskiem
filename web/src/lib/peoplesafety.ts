@@ -122,6 +122,13 @@ export interface Standing {
   appeal_words: string;
 }
 
+/** Said on the window once Your standing is marked seen, so the notice on
+ * You reads it again and goes. */
+export const STANDING_SEEN = "taskiem:standing-seen";
+
+/** Whether You's notice shows: something unseen, and not on Your standing itself. */
+export const standingNoticeShows = (s: Pick<Standing, "unseen"> | undefined, path: string) => !!s && s.unseen > 0 && path !== "/you/settings/standing";
+
 /** The standing's title, as You shows it. */
 export function standingTitle(s: StandingState): string {
   switch (s) {
@@ -173,15 +180,12 @@ export interface LawfulPeriod {
   received: number;
   answered: number;
   refused: number;
-  pending: number;
 }
 
 /** The sentence under a half-year's figures. */
-export function periodWords(p: LawfulPeriod): string {
+export function periodWords(p: Pick<LawfulPeriod, "received" | "answered" | "refused">): string {
   if (p.received === 0) return "No requests.";
-  const parts = [`${p.received} received`, `${p.answered} answered`, `${p.refused} refused`];
-  if (p.pending > 0) parts.push(`${p.pending} still being looked at`);
-  return parts.join(", ") + ".";
+  return `${p.received} received, ${p.answered} answered, ${p.refused} refused.`;
 }
 
 /** A date input's value (YYYY-MM-DD) as the start of that day in Lagos, RFC 3339. */
@@ -194,13 +198,24 @@ export function lagosDay(day: string, end = false): string | undefined {
   return d.toISOString();
 }
 
-/** The published periods with the current half-year first, at zero when nothing came in it yet. */
-export function withCurrentHalf(periods: LawfulPeriod[], now = new Date()): LawfulPeriod[] {
-  // Counted by Lagos time (UTC+1).
+/** The half-year it is now, by Lagos time (UTC+1), with its name. */
+export function currentHalf(now = new Date()): { year: number; half: 1 | 2; label: string } {
   const lagos = new Date(now.getTime() + 60 * 60 * 1000);
   const year = lagos.getUTCFullYear();
   const half: 1 | 2 = lagos.getUTCMonth() < 6 ? 1 : 2;
-  if (periods.some((p) => p.year === year && p.half === half)) return periods;
-  const label = half === 1 ? `January to June ${year}` : `July to December ${year}`;
-  return [{ year, half, label, received: 0, answered: 0, refused: 0, pending: 0 }, ...periods];
+  return { year, half, label: half === 1 ? `January to June ${year}` : `July to December ${year}` };
+}
+
+/** The published periods that have ended, latest first: a half-year is
+ * counted in public only once it is over (the server sends no other; one
+ * sent all the same is left out). */
+export function endedHalves(periods: LawfulPeriod[], now = new Date()): LawfulPeriod[] {
+  const cur = currentHalf(now);
+  const at = cur.year * 2 + cur.half;
+  return periods.filter((p) => p.year * 2 + p.half < at).sort((a, b) => b.year * 2 + b.half - (a.year * 2 + a.half));
+}
+
+/** The line saying when the half-year now is counted. */
+export function currentHalfWords(now = new Date()): string {
+  return `${currentHalf(now).label} shows here once it ends.`;
 }

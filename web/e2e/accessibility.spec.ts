@@ -1018,14 +1018,16 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
-      await page.route("**/v1/me/standing/seen", (r) => r.fulfill({ status: 204 }));
+      // Seen once Your standing is opened, as the server keeps it.
+      let unseen = 1;
+      await page.route("**/v1/me/standing/seen", (r) => ((unseen = 0), r.fulfill({ status: 204 })));
       await page.route("**/v1/me/standing", (r) =>
         r.fulfill(
           json({
             state: "limited",
             words: "You can send only a few message requests to people you don't know, until Wed 25 Nov 2026.",
             until: later,
-            unseen: 1,
+            unseen,
             appeal_words: "If you think a decision is wrong, tell us why. A different moderator reads your appeal, and we tell you what they decide.",
             actions: [
               { id: "a1", action: "limit", reason: "Many of your requests were deleted.", at: now, until: later, in_force: true, lifted_at: null, seen: false, words: "You can send only a few message requests to people you don't know, until Wed 25 Nov 2026.", can_appeal: true, appeal: null },
@@ -1037,10 +1039,18 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/you");
       await expect(page.getByTestId("standing-notice")).toBeVisible();
       await check("/you with a standing notice");
-      await page.goto("/you/settings/standing");
+      // Opened from the notice (in the page, not a new load): once read, the
+      // notice is gone on You.
+      await page.getByTestId("standing-notice").getByRole("link").click();
+      await expect(page).toHaveURL(/\/you\/settings\/standing$/);
       await expect(page.getByTestId("standing-now")).toContainText("Your message requests are limited");
+      await expect(page.getByTestId("standing-notice")).toHaveCount(0);
       await page.getByTestId("standing-appeal-open").click();
       await check("/you/settings/standing");
+      await expect.poll(() => unseen).toBe(0);
+      await page.getByRole("navigation", { name: "You" }).getByRole("link", { name: "Chats" }).click();
+      await expect(page).toHaveURL(/\/you$/);
+      await expect(page.getByTestId("standing-notice")).toHaveCount(0);
       expect(found, found.join("\n\n")).toEqual([]);
     });
 

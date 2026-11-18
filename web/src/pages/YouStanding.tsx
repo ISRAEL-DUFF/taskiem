@@ -4,9 +4,9 @@
 // You says when there is something new; opening this page marks it seen.
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { get, post } from "../api";
-import { actionName, appealWords, standingTitle, type Standing, type StandingAction } from "../lib/peoplesafety";
+import { actionName, appealWords, STANDING_SEEN, standingNoticeShows, standingTitle, type Standing, type StandingAction } from "../lib/peoplesafety";
 import { ErrorBox, Field, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 
 /** /you/settings/standing. */
@@ -14,7 +14,12 @@ export function YouStandingPage() {
   const view = useLoad(() => get<Standing>("/v1/me/standing"), []);
   const s = view.data;
   useEffect(() => {
-    if (s && s.unseen > 0) void post("/v1/me/standing/seen").catch(() => undefined);
+    if (s && s.unseen > 0)
+      void post("/v1/me/standing/seen").then(
+        // The notice on You reads it again and goes.
+        () => window.dispatchEvent(new Event(STANDING_SEEN)),
+        () => undefined,
+      );
   }, [s]);
   return (
     <>
@@ -94,15 +99,23 @@ function StandingCard({ a, onDone }: { a: StandingAction; onDone: () => void }) 
 export function StandingNotice() {
   // Quietly: a notice that cannot be read is not shown, and never signs
   // the person out (the API client does on a 401).
+  // Read again on each move between You's pages, and once Your standing
+  // is marked seen, so it goes after it is read.
+  const path = useLocation().pathname;
   const view = useLoad(
     () =>
       fetch("/v1/me/standing", { credentials: "same-origin" })
         .then((r) => (r.ok ? (r.json() as Promise<Standing>) : undefined))
         .catch(() => undefined),
-    [],
+    [path],
   );
+  const { reload } = view;
+  useEffect(() => {
+    window.addEventListener(STANDING_SEEN, reload);
+    return () => window.removeEventListener(STANDING_SEEN, reload);
+  }, [reload]);
   const s = view.data;
-  if (!s || s.unseen === 0) return null;
+  if (!standingNoticeShows(s, path) || !s) return null;
   return (
     <div className="warning" role="status" data-testid="standing-notice">
       {s.state === "ok" ? "Taskiem's moderators changed a decision about your account" : standingTitle(s.state)}. <Link to="/you/settings/standing">Read what Taskiem's moderators decided</Link>.

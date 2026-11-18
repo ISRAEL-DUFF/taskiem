@@ -183,12 +183,14 @@ test("a lawful request: recorded by one moderator, approved by a second, exporte
   expect(sql(`SELECT state || ' ' || recorded_by || ' ' || approved_by FROM lawful_requests WHERE id = '${id}'`)).toBe("answered operator:mod1@taskiem.test operator:mod2@taskiem.test");
   expect(sql(`SELECT count(*) FROM audit_log WHERE target = '${id}' AND action IN ('ops.lawful.record', 'ops.lawful.approve', 'ops.lawful.export', 'ops.lawful.told')`)).toBe("4");
 
-  // Signed out: the count per half-year.
+  // Signed out: the count per half-year, only once a half-year has ended:
+  // this one, received now, is not counted in public yet.
   const anon = await browser.newPage({ viewport: { width: 360, height: 800 } });
   await anon.goto(`${base}/transparency`);
-  const half = anon.getByTestId("transparency-period").filter({ hasText: "July to December 2026" });
-  const received = sql(`SELECT count(*) FROM lawful_requests WHERE received_at >= '2026-06-30T23:00:00Z' AND received_at < '2026-12-31T23:00:00Z'`);
-  await expect(half).toHaveAttribute("data-received", received);
-  await expect(half).toContainText(`${received} received`);
+  const lagos = new Date(Date.now() + 60 * 60 * 1000);
+  const now = lagos.getUTCMonth() < 6 ? `January to June ${lagos.getUTCFullYear()}` : `July to December ${lagos.getUTCFullYear()}`;
+  await expect(anon.getByTestId("transparency-current")).toContainText(`${now} shows here once it ends.`);
+  await expect(anon.getByTestId("transparency-period").filter({ hasText: now })).toHaveCount(0);
+  await expect(anon.getByTestId("transparency")).not.toContainText("still being looked at");
   await check(anon, "/transparency", 360);
 });
