@@ -205,10 +205,10 @@ type Order struct {
 	// together, each paying their share; Submission.InShares).
 	PaidInShares bool `json:"paid_in_shares,omitempty"`
 	subject      string
-	storefront  uuid.UUID
-	action      uuid.UUID
-	paymentRef  string
-	customerEnv map[string]any
+	storefront   uuid.UUID
+	action       uuid.UUID
+	paymentRef   string
+	customerEnv  map[string]any
 }
 
 // CustomerID is the order's customer as matching knows customers

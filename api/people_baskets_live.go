@@ -34,10 +34,16 @@ type basketLive struct {
 	// movedSince: placed baskets whose order moved after this are read
 	// again (taskiem_baskets_moved).
 	movedSince time.Time
+	// placed are the placed baskets this connection follows: learnt once
+	// when it starts (those of the last 14 days), then from the baskets it
+	// sends. None: the five-second look is never made (a person with no
+	// placed basket costs the database nothing every five seconds).
+	placed map[uuid.UUID]struct{}
+	learnt bool
 }
 
 func newBasketLive(since time.Time) *basketLive {
-	return &basketLive{win: liveWindow{since}, seen: map[liveSeen]struct{}{}, sent: map[uuid.UUID]string{}, movedSince: since}
+	return &basketLive{win: liveWindow{since}, seen: map[liveSeen]struct{}{}, sent: map[uuid.UUID]string{}, movedSince: since, placed: map[uuid.UUID]struct{}{}}
 }
 
 // idsTx are the baskets to look at again, read in the person's own
@@ -76,7 +82,24 @@ func (bl *basketLive) idsTx(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, bool, 
 			delete(bl.seen, k)
 		}
 	}
-	if time.Since(bl.followAt) >= basketFollowEvery {
+	if !bl.learnt {
+		// Once: the placed baskets to follow (not sent now: the client
+		// reads what it shows).
+		bl.learnt = true
+		rows, err := tx.Query(ctx, `SELECT id FROM taskiem_baskets_moved('-infinity', $1)`, basketFollowMax)
+		if err != nil {
+			return nil, false, err
+		}
+		known, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return nil, false, err
+		}
+		for _, id := range known {
+			bl.placed[id] = struct{}{}
+		}
+		bl.followAt = time.Now()
+	}
+	if len(bl.placed) > 0 && time.Since(bl.followAt) >= basketFollowEvery {
 		// Only placed baskets whose order moved since the last look (a
 		// second's overlap: what was sent is compared before sending).
 		var now time.Time
@@ -118,6 +141,9 @@ func (s *Server) basketEvents(ctx context.Context, person uuid.UUID, bl *basketL
 				s.Logger.Warn("live connection: a basket", "basket", id, "err", err)
 			}
 			continue
+		}
+		if v.State == "placed" {
+			bl.placed[id] = struct{}{}
 		}
 		raw := mustJSON(map[string]any{"basket": v})
 		if bl.sent[id] == string(raw) {
