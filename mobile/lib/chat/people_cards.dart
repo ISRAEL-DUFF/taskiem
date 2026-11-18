@@ -26,6 +26,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardButton, CardPill, CardProgress;
 import 'door.dart' show deliveryStep, yourOrderStatus, doorTone;
+import 'groups.dart' show pickChatsAndGroups;
 import 'my_chat.dart' show OpenMyChat, chatWithBusiness, sayFailure;
 import 'people.dart';
 import 'words.dart';
@@ -424,27 +425,39 @@ final _unsureShares = <String, String>{};
 var _shareN = 0;
 
 /// Shares [card] (a business, one of its products, one of your orders)
-/// into chats with people the person picks (§10.1); says how it went.
+/// into chats with people and groups the person picks (§10.1; 5b "Share
+/// with someone into groups"): only groups they may post in now (not one
+/// they left, closed, or where only admins post and they aren't one); says
+/// how it went.
 Future<void> shareWithPeople(BuildContext context, Auth auth, SendPeopleMessageRequestCard card, {required String what}) async {
-  final to = await pickPeopleChats(context, auth, title: 'Share with', what: what);
-  if (to == null || to.isEmpty || !context.mounted) return;
+  final to = await pickChatsAndGroups(context, auth, title: 'Share with', what: what);
+  if (to == null || (to.chats.isEmpty && to.groups.isEmpty) || !context.mounted) return;
   var sent = 0;
   String? problem;
   final shared = jsonEncode(card.toJson());
-  for (final id in to) {
-    final key = '$id $shared';
+  Future<void> one(String key, Future<void> Function(String client) send) async {
     final client = _unsureShares.remove(key) ?? newClientId(DateTime.now(), ++_shareN);
     try {
-      await auth.api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: client));
+      await send(client);
       sent++;
     } on Object catch (e) {
       if (e is! ApiError || e.status >= 500) _unsureShares[key] = client;
       problem ??= sayFailure(e);
     }
   }
+
+  for (final id in to.chats) {
+    await one('$id $shared', (client) => auth.api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: client)));
+  }
+  for (final id in to.groups) {
+    await one(
+      'group:$id $shared',
+      (client) => auth.api.sendGroupMessage(id: id, body: SendGroupMessageRequest(card: SendGroupMessageRequestCard.fromJson(card.toJson()), clientId: client)),
+    );
+  }
   if (!context.mounted) return;
   if (problem != null) {
-    showTkToast(context, sent == 0 ? problem : 'Shared with $sent. $problem', error: true);
+    showTkToast(context, sent == 0 ? problem! : 'Shared with $sent. $problem', error: true);
   } else {
     showTkToast(context, sent == 1 ? 'Shared' : 'Shared with $sent chats');
   }

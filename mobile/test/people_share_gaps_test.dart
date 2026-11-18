@@ -10,6 +10,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'my_chats_test.dart' show Api, answer, at, chat, conversation, drain, openChat, phone, press, settle;
+import 'groups_test.dart' show gm, grp;
 import 'support.dart' show loadFonts;
 import 'you_stage3_test.dart' show order;
 
@@ -26,6 +27,25 @@ void friend(Api api) {
     'requests': 0,
     'more': false,
   };
+  api.routes['GET /v1/me/conversations'] = (r) => r.url.queryParameters['archived'] == '1'
+      ? {'chats': <Object>[], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false}
+      : {
+          'chats': [
+            {
+              'kind': 'person', 'id': 'f1', 'person_id': 'p1', 'name': 'Friend 1', 'gone': false, 'last': '', 'last_mine': false,
+              'last_at': '2026-11-17T09:10:00Z', 'unread': 0, 'muted': false, 'archived': false, 'blocked': false,
+            },
+            groupRow('g1', 'Book club', grp(id: 'g1', name: 'Book club', role: 'member')),
+            groupRow('g2', 'Announcements', grp(id: 'g2', name: 'Announcements', role: 'member', canPost: false, adminsOnlyPost: true)),
+            groupRow('g3', 'Old street', grp(id: 'g3', name: 'Old street', role: 'member', left: true, leftHow: 'left', canPost: false)),
+            groupRow('g4', 'Closed one', grp(id: 'g4', name: 'Closed one', role: 'member', closed: {'at': '2026-11-17T10:00:00Z', 'words': 'Closed by Taskiem', 'can_appeal': false})),
+          ],
+          'unread': 0,
+          'requests': 0,
+          'invites': 0,
+          'more': false,
+        };
+  api.routes['POST /v1/me/groups/g1/messages'] = (_) => answer(gm('k2', mine: true, kind: 'card', body: ''), 201);
   api.routes['POST /v1/me/people/f1/messages'] = (_) => answer({'id': 'k1', 'mine': true, 'kind': 'card', 'body': '', 'status': 'sent', 'read_at': null, 'created_at': '2026-11-17T10:29:00Z'}, 201);
 }
 
@@ -35,6 +55,12 @@ Future<Map<String, dynamic>> shareTo(WidgetTester t, Api api) async {
   await t.pump(const Duration(seconds: 5));
   return api.body(api.sent('POST', '/v1/me/people/f1/messages').single)['card'] as Map<String, dynamic>;
 }
+
+/// A group as a row of the one Chats list.
+Map<String, dynamic> groupRow(String id, String name, Map<String, dynamic> g) => {
+  'kind': 'group', 'id': id, 'name': name, 'last': '', 'last_mine': false, 'last_at': '2026-11-17T10:10:00Z', 'unread': 0, 'muted': false,
+  'archived': false, 'blocked': false, 'group': g,
+};
 
 void main() {
   setUpAll(loadFonts);
@@ -52,6 +78,16 @@ void main() {
     await settle(t);
     await press(t, find.bySemanticsLabel('Share Mama’s Kitchen with someone'));
     expect(await shareTo(t, api), {'type': 'business', 'business_id': 'b1'});
+    // Into a group too (5b): only those you may post in now.
+    await press(t, find.bySemanticsLabel('Share Mama’s Kitchen with someone'));
+    expect(find.text('Book club'), findsOneWidget);
+    expect(find.text('Announcements'), findsNothing, reason: 'only admins post there');
+    expect(find.text('Old street'), findsNothing, reason: 'left');
+    expect(find.text('Closed one'), findsNothing, reason: 'closed');
+    await press(t, find.text('Book club'));
+    await press(t, find.text('Send'));
+    await t.pump(const Duration(seconds: 5));
+    expect(api.body(api.sent('POST', '/v1/me/groups/g1/messages').single)['card'], {'type': 'business', 'business_id': 'b1'});
     await drain(t);
   });
 

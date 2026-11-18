@@ -372,7 +372,7 @@ void main() {
     testWidgets('Share with someone: the same card to the same chat again goes with the same id', (t) async {
       phone(t);
       final api = Api();
-      api.routes['GET /v1/me/people'] = (_) => {'chats': [peopleChat(id: 'f1', name: 'Friend 1')], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': [{...peopleChat(id: 'f1', name: 'Friend 1'), 'kind': 'person'}], 'unread': 0, 'requests': 0, 'invites': 0, 'more': false};
       var n = 0;
       api.routes['POST /v1/me/people/f1/messages'] = (_) => ++n == 1
           ? answer({'error': 'Unavailable'}, 503)
