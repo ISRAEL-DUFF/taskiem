@@ -22007,7 +22007,7 @@ paths:
       tags:
       - People
       summary: Make a group
-      description: 'A new group (§9, §17 Q7: up to 256 people): its name (up to 80 characters) and description (up to 500), the person its first member and admin. `person_ids` are added as an admin adds them (`POST /v1/me/groups/{id}/members`): each `added` only when you have them as a contact and their "Who can add me to groups" lets you, else `invited` (an invite waits in their Requests). The group''s key is made and sealed for it alone. Kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      description: 'A new group (§9, §17 Q7: up to 256 people): its name (up to 80 characters) and description (up to 500), the person its first member and admin. `person_ids` are added as an admin adds them (`POST /v1/me/groups/{id}/members`): each `added` only when you have them as a contact and their "Who can add me to groups" lets you, else `invited` (an invite waits in their Requests). The group''s key is made and sealed for it alone. 429 past the groups you may make in an hour or a day (two and three in your first week; more as your account ages; fewer while reported or limited), or the people you aren''t contacts with you may invite in a day (ten in your first week). Kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -22309,7 +22309,7 @@ paths:
       tags:
       - People
       summary: Join a group by its link
-      description: 'Opening a group''s invite link (A4): you join at once (`joined`, with the group), or wait for an admin (`waiting`) when the group approves new members (take the request back with DELETE); `member` when you are in it already. 409 when it is full; 429 after many joins (yours, or the group''s in an hour); 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up.'
+      description: 'Opening a group''s invite link (A4): you join at once (`joined`, with the group), or wait for an admin (`waiting`) when the group approves new members (take the request back with DELETE); `member` when you are in it already. 409 when it is full; 429 after many joins (yours in an hour, three in your first week; or the group''s in an hour); 403 for a group Taskiem''s moderators closed; 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -22682,7 +22682,7 @@ paths:
       tags:
       - People
       summary: Add people to a group
-      description: 'An admin adds people (§9). Each is `added` at once only when the admin has them as a contact and their "Who can add me to groups" lets the admin (A3); otherwise `invited`: an invite waits in their Requests. An add across a block either way is answered `invited` too, and they never see it (A8). `member`: in it already; `full`: 256 already; `unavailable`: no such active account.'
+      description: 'An admin adds people (§9). Each is `added` at once only when the admin has them as a contact and their "Who can add me to groups" lets the admin (A3); otherwise `invited`: an invite waits in their Requests. An add across a block either way is answered `invited` too, and they never see it (A8). `member`: in it already; `full`: 256 already; `unavailable`: no such active account. 429 when the invites to people who aren''t your contacts would pass your day''s (ten in your first week): nothing is done. 403 for a group Taskiem''s moderators closed.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -23140,7 +23140,7 @@ paths:
       tags:
       - People
       summary: Send a message to a group
-      description: 'A text (up to 4,000 characters), a place (`location`) or a card (`card`, as in people chats: a business, a product, an order, a delivery, or a share). `mentions`: members it mentions (@name), by id: each is pushed even while they mute the group, unless they turned that off for it (A7). `client_id` makes it safe to retry (200 with the message already sent). 403 once you left, or when only admins post; 429 at 20 a minute (10 in your first week).'
+      description: 'A text (up to 4,000 characters), a place (`location`) or a card (`card`, as in people chats: a business, a product, an order, a delivery, or a share). `mentions`: members it mentions (@name), by id: each is pushed even while they mute the group, unless they turned that off for it (A7). `client_id` makes it safe to retry (200 with the message already sent). 403 once you left, when only admins post, or in a group Taskiem''s moderators closed; 429 at 20 a minute (10 in your first week). In a group younger than a week, or when you joined it by its link in the last day, a message is checked for scams for the members who haven''t added you (only the verdict is kept): one held is refused (403) and no one gets it; one warned is marked `warn` for them.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -23602,6 +23602,113 @@ paths:
       responses:
         '204':
           description: Read
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/report:
+    post:
+      operationId: reportGroup
+      tags:
+      - People
+      summary: Report a group, or one of its members, to Taskiem
+      description: 'Sends the group (or, with `person_id`, one of its members) and the last 20 messages of the group you could see (only within your own time in it, never one you deleted for yourself), with the photos and files in them (up to 50 MB, the newest first), to Taskiem''s moderators, only with `consent: true` (400 without). Someone who left can report what their copy holds. The report is sealed under a key of its own with the group''s name then, and kept after the group, the member or your account is deleted, until a year after a moderator reviewed it. 404 for a person who isn''t in the group; twelve reports in two hours, shared with your other reports (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, consent]
+              properties:
+                reason:
+                  type: string
+                  enum: [spam, scam, abuse, other]
+                note:
+                  type: string
+                  maxLength: 1000
+                consent:
+                  type: boolean
+                  description: The last 20 messages go to Taskiem's moderators only with it.
+                person_id:
+                  type: string
+                  format: uuid
+                  description: A member to report (or someone who was one); without it, the group.
+      responses:
+        '201':
+          description: Reported
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, messages_sent, said]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  messages_sent:
+                    type: boolean
+                  said:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/appeal:
+    post:
+      operationId: appealGroup
+      tags:
+      - People
+      summary: Appeal the closing of a group you run
+      description: 'One of the group''s admins appeals Taskiem''s moderators closing it, once for the group, saying why (up to 2,000 characters; 400 without), before the day it is deleted (`closed.until`). A different moderator decides; the admins are told on their devices, and an overturned closing reopens the group. 403 not an admin; 409 not closed, already appealed, or too late. Five an hour (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '201':
+          description: Appealed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [appeal, said]
+                properties:
+                  appeal:
+                    $ref: '#/components/schemas/StandingAppeal'
+                  said:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/me/groups/{id}/typing:
@@ -43392,8 +43499,36 @@ components:
         join_requests:
           type: integer
           description: 'Admins: people waiting to join by the link.'
+        closed:
+          $ref: '#/components/schemas/GroupClosed'
+        link_stopped:
+          type: boolean
+          description: Taskiem's moderators turned the group's invite link off; no new one can be made for now (403).
         kept:
           type: string
+    GroupClosed:
+      type: object
+      additionalProperties: false
+      required: [at, until, words, can_appeal]
+      description: 'Taskiem''s moderators closed the group (people-chatting §8.3): no one sends in it, joins it or changes it; it is deleted with all its messages on `until` (§14) unless its admins appeal and the decision is overturned. `words` say so in plain words. For admins, the closure to appeal (POST /v1/me/groups/{id}/appeal) with its reason and the appeal.'
+      properties:
+        at:
+          type: string
+          format: date-time
+        until:
+          type: [string, 'null']
+          format: date-time
+        words:
+          type: string
+        action_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        can_appeal:
+          type: boolean
+        appeal:
+          $ref: '#/components/schemas/StandingAppeal'
     GroupMessage:
       type: object
       additionalProperties: false
@@ -43427,7 +43562,8 @@ components:
           properties:
             type:
               type: string
-              enum: [created, added, joined, left, removed, admin, unadmin, info, photo, settings]
+              enum: [created, added, joined, left, removed, admin, unadmin, info, photo, settings, taskiem_closed, taskiem_reopened, taskiem_link_off, taskiem_link_back]
+              description: 'The taskiem_ events are Taskiem''s moderators'' (sender "Taskiem", actor the nil id): the group closed, reopened, its link turned off or allowed again.'
             actor_id:
               type: string
               format: uuid
@@ -43478,6 +43614,9 @@ components:
         warn_transfer:
           type: boolean
           description: It asks for a transfer to an account (words that ask, or a share card from someone you have not added); warn before paying.
+        warn:
+          type: boolean
+          description: 'Taskiem''s checks found it looks like a scam (in a new group, or from someone who joined by its link in the last day, B1), and you haven''t added its sender: show "Never send money to someone you have not met". A share card naming an account from someone you haven''t added warns too.'
         created_at:
           type: string
           format: date-time

@@ -53,6 +53,7 @@ func (s *Server) opsPeopleRoutes(r chi.Router) {
 	r.Get("/people/appeals", s.opsPeopleAppeals)
 	r.Post("/people/appeals/{id}/{decision}", s.opsDecideAppeal)
 	r.Get("/people/storage", s.opsPeopleStorage)
+	s.opsPeopleGroupRoutes(r)
 	s.opsLawfulRoutes(r)
 }
 
@@ -146,6 +147,9 @@ type opsPeopleReportRow struct {
 	ReviewedBy        *string    `json:"reviewed_by"`
 	ReviewedAt        *time.Time `json:"reviewed_at"`
 	ReportsAgainst    int64      `json:"reports_against"`
+	// GroupID: a report of a group (reported_id null) or of a member of
+	// it, from inside the group.
+	GroupID *uuid.UUID `json:"group_id"`
 }
 
 func (s *Server) opsPeopleReports(w http.ResponseWriter, r *http.Request) {
@@ -192,8 +196,9 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 		ReviewedBy   *string    `json:"reviewed_by"`
 		ReviewedAt   *time.Time `json:"reviewed_at"`
 		ReviewNote   *string    `json:"review_note"`
+		GroupID      *uuid.UUID `json:"group_id"`
 	}
-	var plain []byte
+	var plain, groupSealed []byte
 	var sealed []byte
 	var boxKey, kmsKey *string
 	type file struct {
@@ -204,9 +209,9 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 	var files []file
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
 		err := tx.QueryRow(ctx, `SELECT id, reporter_id, reported_id, reported_name, reason, note, from_request, messages, sealed, box_key, kms_key, status,
-			created_at, reviewed_by, reviewed_at, review_note FROM taskiem_ops_people_report($1)`, id).Scan(&rep.ID, &rep.ReporterID, &rep.ReportedID,
-			&rep.ReportedName, &rep.Reason, &rep.Note, &rep.FromRequest, &plain, &sealed, &boxKey, &kmsKey, &rep.Status, &rep.CreatedAt, &rep.ReviewedBy,
-			&rep.ReviewedAt, &rep.ReviewNote)
+			created_at, reviewed_by, reviewed_at, review_note, group_id, group_sealed FROM taskiem_ops_people_report($1)`, id).Scan(&rep.ID, &rep.ReporterID,
+			&rep.ReportedID, &rep.ReportedName, &rep.Reason, &rep.Note, &rep.FromRequest, &plain, &sealed, &boxKey, &kmsKey, &rep.Status, &rep.CreatedAt,
+			&rep.ReviewedBy, &rep.ReviewedAt, &rep.ReviewNote, &rep.GroupID, &groupSealed)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errOpsNotFound
 		}
@@ -220,7 +225,8 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 		if files, err = pgx.CollectRows(rows, pgx.RowToStructByPos[file]); err != nil {
 			return err
 		}
-		return ops.AuditTx(ctx, tx, o.Actor(), "ops.people.report.open", id.String(), map[string]any{"why": why, "reported": rep.ReportedID, "files": len(files)})
+		return ops.AuditTx(ctx, tx, o.Actor(), "ops.people.report.open", id.String(), map[string]any{"why": why, "reported": rep.ReportedID, "files": len(files),
+			"group": rep.GroupID})
 	})
 	if errors.Is(err, errOpsNotFound) {
 		writeErr(w, http.StatusNotFound, "no such report")
@@ -231,6 +237,7 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raw := plain
+	var group *groupReportInfo
 	if sealed != nil {
 		box, err := peoplesafety.OpenBox(ctx, s.Vault, peoplesafety.ReportPurpose(id), id, *boxKey, *kmsKey)
 		if err != nil {
@@ -241,13 +248,25 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
+		if groupSealed != nil {
+			gi, err := box.Open(groupReportRow, groupSealed)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			group = &groupReportInfo{}
+			if err := json.Unmarshal(gi, group); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+		}
 	}
 	var msgs []reportMessage
 	if err := json.Unmarshal(raw, &msgs); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"report": rep, "messages": nonNil(msgs), "files": nonNil(files), "sealed": sealed != nil})
+	writeJSON(w, http.StatusOK, map[string]any{"report": rep, "messages": nonNil(msgs), "files": nonNil(files), "sealed": sealed != nil, "group": group})
 }
 
 var errOpsNotFound = errors.New("not found")
@@ -465,6 +484,8 @@ type opsHeldRow struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	DecidedBy     *string    `json:"decided_by"`
 	DecidedAt     *time.Time `json:"decided_at"`
+	// GroupID: held in a group (one copy: no member got it).
+	GroupID *uuid.UUID `json:"group_id"`
 }
 
 func (s *Server) opsPeopleHeld(w http.ResponseWriter, r *http.Request) {
@@ -488,9 +509,10 @@ func (s *Server) opsPeopleHeld(w http.ResponseWriter, r *http.Request) {
 // heldRow is a held message as kept.
 type heldRow struct {
 	opsHeldRow
-	ChatID          uuid.UUID  `json:"-"`
-	ReplyTo         *uuid.UUID `json:"-"`
-	Forwards        int        `json:"-"`
+	ChatID          *uuid.UUID  `json:"-"`
+	Mentions        []uuid.UUID `json:"-"`
+	ReplyTo         *uuid.UUID  `json:"-"`
+	Forwards        int         `json:"-"`
 	sealed          []byte
 	fileSealed      []byte
 	FileType        *string `json:"file_type"`
@@ -503,10 +525,11 @@ type heldRow struct {
 func heldTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (heldRow, error) {
 	var h heldRow
 	err := tx.QueryRow(ctx, `SELECT id, sender_id, sender_name, recipient_id, recipient_name, chat_id, kind, reply_to, forwards, reasons, sealed, file_sealed,
-		file_type, file_size, box_key, kms_key, state, created_at, decided_by, decided_at, decision_note, released_message FROM taskiem_ops_people_held_one($1)`, id).
+		file_type, file_size, box_key, kms_key, state, created_at, decided_by, decided_at, decision_note, released_message, group_id, mentions
+		FROM taskiem_ops_people_held_one($1)`, id).
 		Scan(&h.ID, &h.SenderID, &h.SenderName, &h.RecipientID, &h.RecipientName, &h.ChatID, &h.Kind, &h.ReplyTo, &h.Forwards, &h.Reasons, &h.sealed,
 			&h.fileSealed, &h.FileType, &h.FileSize, &h.boxKey, &h.kmsKey, &h.State, &h.CreatedAt, &h.DecidedBy, &h.DecidedAt, &h.DecisionNote,
-			&h.ReleasedMessage)
+			&h.ReleasedMessage, &h.GroupID, &h.Mentions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return h, errOpsNotFound
 	}
@@ -682,11 +705,25 @@ func (s *Server) opsDecideHeld(w http.ResponseWriter, r *http.Request) {
 			}
 			d.file = &sentFile{Type: *h.FileType, Name: c.Name, Data: data}
 		}
-		m, _, err := s.peopleSend(ctx, *h.SenderID, h.ChatID.String(), d)
+		var m peopleMessage
+		if h.GroupID != nil {
+			// A group's: sent to the group then, with its mentions, past
+			// the checks and the per-minute limit; the sender must still be
+			// in it.
+			var gm groupMessage
+			gm, _, err = s.groupSend(ctx, *h.SenderID, h.GroupID.String(), d, h.Mentions)
+			m.ID = gm.ID
+		} else if h.ChatID != nil {
+			m, _, err = s.peopleSend(ctx, *h.SenderID, h.ChatID.String(), d)
+		}
 		if err != nil {
 			var se customerSendErr
 			if errors.As(err, &se) {
 				writeErr(w, http.StatusConflict, "The message could not be delivered: "+se.msg)
+				return
+			}
+			if errors.Is(err, errGroupLeft) || errors.Is(err, errDoorNone) {
+				writeErr(w, http.StatusConflict, "The message could not be delivered: the sender is no longer in the group.")
 				return
 			}
 			s.fail(w, r, err)
@@ -716,6 +753,7 @@ func (s *Server) opsPeopleVerdicts(w http.ResponseWriter, r *http.Request) {
 		Verdict    string     `json:"verdict"`
 		Reasons    []string   `json:"reasons"`
 		At         time.Time  `json:"at"`
+		GroupID    *uuid.UUID `json:"group_id"`
 	}
 	var out []verdict
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
@@ -909,19 +947,23 @@ func (s *Server) opsLiftAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := operatorFrom(ctx)
-	var person uuid.UUID
+	var person, group *uuid.UUID
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
-		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_people_lift($1, $2, $3)`, id, o.Actor(), req.Reason).Scan(&person); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT person_id, group_id FROM taskiem_ops_people_lift($1, $2, $3)`, id, o.Actor(), req.Reason).Scan(&person, &group); err != nil {
 			return err
 		}
-		return ops.AuditTx(ctx, tx, o.Actor(), "ops.people.lift", id.String(), map[string]any{"reason": req.Reason, "person": person})
+		return ops.AuditTx(ctx, tx, o.Actor(), "ops.people.lift", id.String(), map[string]any{"reason": req.Reason, "person": person, "group": group})
 	})
 	if err != nil {
 		s.opsDBFail(w, r, err)
 		return
 	}
-	s.tellStanding(ctx, person, "Your account is back to normal", "Taskiem lifted a decision on your account. You can message people as before.")
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "person_id": person, "lifted": true})
+	if group != nil {
+		s.tellGroupAdmins(r, *group, "Taskiem lifted a decision on your group", "Your group is back to normal.")
+	} else if person != nil {
+		s.tellStanding(ctx, *person, "Your account is back to normal", "Taskiem lifted a decision on your account. You can message people as before.")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "person_id": person, "group_id": group, "lifted": true})
 }
 
 func (s *Server) opsPeopleAppeals(w http.ResponseWriter, r *http.Request) {
@@ -941,6 +983,8 @@ func (s *Server) opsPeopleAppeals(w http.ResponseWriter, r *http.Request) {
 		DecidedBy    *string    `json:"decided_by"`
 		DecidedAt    *time.Time `json:"decided_at"`
 		DecisionNote *string    `json:"decision_note"`
+		// GroupID: an appeal of an action on a group, by one of its admins.
+		GroupID *uuid.UUID `json:"group_id"`
 	}
 	var out []appeal
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
@@ -992,29 +1036,36 @@ func (s *Server) opsDecideAppeal(w http.ResponseWriter, r *http.Request) {
 	}
 	o := operatorFrom(ctx)
 	var person uuid.UUID
+	var group *uuid.UUID
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
-		if err := tx.QueryRow(ctx, `SELECT taskiem_ops_people_appeal_decide($1, $2, $3, $4)`, id, state, o.Actor(), req.Note).Scan(&person); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT person_id, group_id FROM taskiem_ops_people_appeal_decide($1, $2, $3, $4)`, id, state, o.Actor(), req.Note).
+			Scan(&person, &group); err != nil {
 			return err
 		}
-		return ops.AuditTx(ctx, tx, o.Actor(), op, id.String(), map[string]any{"note": req.Note, "person": person})
+		return ops.AuditTx(ctx, tx, o.Actor(), op, id.String(), map[string]any{"note": req.Note, "person": person, "group": group})
 	})
 	if err != nil {
 		s.opsDBFail(w, r, err)
 		return
 	}
-	if state == "overturned" {
+	switch {
+	case group != nil && state == "overturned":
+		s.tellGroupAdmins(r, *group, "Your group's appeal was accepted", req.Note+" Your group is open again.")
+	case group != nil:
+		s.tellGroupAdmins(r, *group, "Your group's appeal was turned down", req.Note)
+	case state == "overturned":
 		s.tellStanding(ctx, person, "Your appeal was accepted", req.Note+" The decision is lifted.")
-	} else {
+	default:
 		s.tellStanding(ctx, person, "Your appeal was turned down", req.Note)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "state": state, "person_id": person})
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "state": state, "person_id": person, "group_id": group})
 }
 
 // opsStepUpPeople are the step-up operations of this file and lawful.go.
 var opsStepUpPeople = []string{
 	"ops.people.report.review", "ops.customer_report.review", "ops.people.held.release", "ops.people.held.confirm",
 	"ops.people.warn", "ops.people.limit", "ops.people.suspend", "ops.people.close", "ops.people.lift",
-	"ops.people.appeal.uphold", "ops.people.appeal.overturn",
+	"ops.people.appeal.uphold", "ops.people.appeal.overturn", "ops.people.group.link_off", "ops.people.group.close",
 	"ops.lawful.record", "ops.lawful.approve", "ops.lawful.export", "ops.lawful.refuse", "ops.lawful.told",
 }
 

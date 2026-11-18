@@ -117,6 +117,8 @@ func (s *Server) groupRoutes(r chi.Router) {
 	r.Post("/me/groups/{id}/messages/{message}/paid", s.markGroupSplitPaid)
 	r.Post("/me/groups/{id}/read", s.readGroup)
 	r.Post("/me/groups/{id}/typing", s.typingGroup)
+	r.Post("/me/groups/{id}/report", s.reportGroup)
+	r.Post("/me/groups/{id}/appeal", s.appealGroup)
 }
 
 // groupPublicRoutes are for anyone holding a group's link: its preview.
@@ -128,7 +130,7 @@ func (s *Server) groupPublicRoutes(r chi.Router) {
 // groupPersonRoutes are the group routes a personal session reaches
 // (personalAllowed).
 var groupPersonRoutes = regexp.MustCompile(`^((GET|POST) /v1/me/groups|GET /v1/me/groups/(invites|search|starred)|POST /v1/me/groups/invites/[^/]+/(accept|decline)|` +
-	`POST /v1/me/forward|(POST|DELETE) /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link)|` +
+	`POST /v1/me/forward|(POST|DELETE) /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link|report|appeal)|` +
 	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|files/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
 	`POST /v1/me/groups/[^/]+/members/[^/]+/block|DELETE /v1/me/groups/[^/]+/(invites/[^/]+|link)|POST /v1/me/groups/[^/]+/joins/[^/]+/(approve|decline)|` +
 	`(PUT|DELETE) /v1/me/groups/[^/]+/messages/[^/]+|GET /v1/me/groups/[^/]+/messages/[^/]+/(info|reactions|card)|POST /v1/me/groups/[^/]+/messages/[^/]+/paid)$`)
@@ -175,6 +177,8 @@ type groupRow struct {
 	ReadUpto, DeliveredUpto                      time.Time
 	// leftSealed: the name and description when the person left.
 	leftSealed []byte
+	// standing: what Taskiem's moderators put in force on the group.
+	standing groupStanding
 	// From the lists: the last message the person sees, how many current
 	// members, the unread count and whether one mentions them.
 	Members, Unread int
@@ -186,12 +190,15 @@ func (g groupRow) current() bool { return g.LeftAt == nil }
 func (g groupRow) admin() bool   { return g.current() && g.Role == "admin" }
 
 const groupRowCols = `g.id, g.sealed, g.admins_only_post, g.admins_only_edit, g.approve_joins, g.photo_at, g.created_at,
-	m.role, m.how, m.joined_at, m.left_at, m.left_how, m.muted, m.archived, m.mentions, m.hidden_at, m.read_upto, m.delivered_upto, m.left_sealed`
+	m.role, m.how, m.joined_at, m.left_at, m.left_how, m.muted, m.archived, m.mentions, m.hidden_at, m.read_upto, m.delivered_upto, m.left_sealed,
+	(SELECT s.closed_at FROM group_standing s WHERE s.group_id = g.id) AS s_closed, (SELECT s.close_until FROM group_standing s WHERE s.group_id = g.id) AS s_until,
+	(SELECT s.close_action FROM group_standing s WHERE s.group_id = g.id) AS s_action, (SELECT s.link_stopped_at FROM group_standing s WHERE s.group_id = g.id) AS s_link`
 
 func scanGroupRow(r pgx.Row, extra ...any) (groupRow, error) {
 	var g groupRow
 	dest := append([]any{&g.ID, &g.sealed, &g.AdminsOnlyPost, &g.AdminsOnlyEdit, &g.ApproveJoins, &g.PhotoAt, &g.CreatedAt,
-		&g.Role, &g.How, &g.JoinedAt, &g.LeftAt, &g.LeftHow, &g.Muted, &g.Archived, &g.Mentions, &g.HiddenAt, &g.ReadUpto, &g.DeliveredUpto, &g.leftSealed}, extra...)
+		&g.Role, &g.How, &g.JoinedAt, &g.LeftAt, &g.LeftHow, &g.Muted, &g.Archived, &g.Mentions, &g.HiddenAt, &g.ReadUpto, &g.DeliveredUpto, &g.leftSealed,
+		&g.standing.ClosedAt, &g.standing.CloseUntil, &g.standing.CloseAction, &g.standing.LinkStoppedAt}, extra...)
 	err := r.Scan(dest...)
 	return g, err
 }
@@ -245,6 +252,9 @@ type groupEvent struct {
 	Type   string     `json:"type"`
 	Actor  uuid.UUID  `json:"actor"`
 	Target *uuid.UUID `json:"target,omitempty"`
+	// Until: when a group Taskiem's moderators closed is deleted
+	// (taskiem_closed).
+	Until *time.Time `json:"until,omitempty"`
 }
 
 // groupEventTx keeps an event in the group, sent by the person in scope
@@ -300,6 +310,13 @@ type groupView struct {
 	JoinedAt   time.Time `json:"joined_at"`
 	// JoinRequests: people waiting for an admin to let them in (admins).
 	JoinRequests int `json:"join_requests,omitempty"`
+	// Closed: Taskiem's moderators closed the group (no one writes in it;
+	// it is deleted at closed.until unless its admins' appeal wins), in
+	// words; for its admins with the closure to appeal.
+	Closed *groupClosedView `json:"closed,omitempty"`
+	// LinkStopped: Taskiem's moderators turned its invite link off; no new
+	// one can be made for now.
+	LinkStopped bool `json:"link_stopped,omitempty"`
 	// Kept says how groups are kept (one group, and on making one).
 	Kept string `json:"kept,omitempty"`
 }
@@ -355,6 +372,9 @@ func (s *Server) groupNamesTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, 
 
 // eventWords says an event as the person reads it.
 func eventWords(ev groupEvent, names map[uuid.UUID]string) string {
+	if w := taskiemEventWords(ev); w != "" {
+		return w
+	}
 	a := names[ev.Actor]
 	if a == "" {
 		a = peopleGoneName
@@ -403,7 +423,7 @@ func (s *Server) groupViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 			if g.last.sender != nil {
 				ids = append(ids, *g.last.sender)
 			}
-			if g.last.ev != nil {
+			if g.last.ev != nil && !taskiemEvent(g.last.ev) {
 				ids = append(ids, g.last.ev.Actor)
 				if g.last.ev.Target != nil {
 					ids = append(ids, *g.last.ev.Target)
@@ -437,8 +457,12 @@ func (s *Server) groupViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 		if !g.current() {
 			v.Photo, v.Members = nil, 0
 		}
-		v.CanPost = g.current() && (!g.AdminsOnlyPost || g.Role == "admin")
-		v.CanEdit = g.current() && (!g.AdminsOnlyEdit || g.Role == "admin")
+		v.CanPost = g.current() && (!g.AdminsOnlyPost || g.Role == "admin") && g.standing.ClosedAt == nil
+		v.CanEdit = g.current() && (!g.AdminsOnlyEdit || g.Role == "admin") && g.standing.ClosedAt == nil
+		if g.current() && g.standing.ClosedAt != nil {
+			v.Closed = &groupClosedView{At: *g.standing.ClosedAt, Until: g.standing.CloseUntil, Words: groupClosedWords(g.standing.CloseUntil)}
+		}
+		v.LinkStopped = g.current() && g.standing.LinkStoppedAt != nil
 		if l := g.last; l != nil {
 			v.LastAt = l.createdAt
 			v.LastMine = l.sender != nil && *l.sender == person
@@ -545,6 +569,11 @@ func (s *Server) groupOneTx(ctx context.Context, tx pgx.Tx, person, id uuid.UUID
 	if g.admin() {
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM group_join_requests WHERE group_id = $1`, id).Scan(&v.JoinRequests); err != nil {
 			return v, err
+		}
+		if v.Closed != nil {
+			if v.Closed, err = groupClosedTx(ctx, tx, g); err != nil {
+				return v, err
+			}
 		}
 	}
 	return v, nil
@@ -707,6 +736,11 @@ func (s *Server) createGroup(w http.ResponseWriter, r *http.Request) {
 		if err := notSuspendedTx(ctx, tx, person); err != nil {
 			return err
 		}
+		// Groups made an hour and a day (§8.2), by the account's age and
+		// signals.
+		if err := s.groupMakeAllowedTx(ctx, tx, person, id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `SELECT taskiem_group_create($1, $2, $3, $4)`, id, sealed, keySealed, kmsKey); err != nil {
 			return err
 		}
@@ -793,6 +827,9 @@ func (s *Server) putGroup(w http.ResponseWriter, r *http.Request) {
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
+			return err
+		}
+		if err := g.open(); err != nil {
 			return err
 		}
 		if settings && !g.admin() {
@@ -1090,6 +1127,9 @@ func (s *Server) putGroupPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		if err := g.open(); err != nil {
+			return err
+		}
 		if g.AdminsOnlyEdit && !g.admin() {
 			return errGroupNoEdit
 		}
@@ -1136,6 +1176,9 @@ func (s *Server) deleteGroupPhoto(w http.ResponseWriter, r *http.Request) {
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
+			return err
+		}
+		if err := g.open(); err != nil {
 			return err
 		}
 		if g.AdminsOnlyEdit && !g.admin() {
@@ -1325,6 +1368,9 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 	if !g.admin() {
 		return nil, nil, errGroupNotAdmin
 	}
+	if err := g.open(); err != nil {
+		return nil, nil, err
+	}
 	if err := notSuspendedTx(ctx, tx, admin); err != nil {
 		return nil, nil, err
 	}
@@ -1389,6 +1435,31 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 			return nil, nil, err
 		}
 	}
+	// People who aren't the admin's contacts get an invite (§9); how many
+	// an admin may invite in a day is limited (§8.2): those not yet in the
+	// group or invited to it count.
+	var strangers []uuid.UUID
+	for _, id := range uniq {
+		if m, ok := got[id]; ok && m.active && !contacts[id] {
+			if h, found := was[id]; !found || h.left != nil {
+				strangers = append(strangers, id)
+			}
+		}
+	}
+	if len(strangers) > 0 {
+		rows, err := tx.Query(ctx, `SELECT person_id FROM group_invites WHERE group_id = $1 AND person_id = ANY ($2)`, g.ID, strangers)
+		if err != nil {
+			return nil, nil, err
+		}
+		invited, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := s.groupInvitesAllowedTx(ctx, tx, admin, len(strangers)-len(invited)); err != nil {
+			return nil, nil, err
+		}
+	}
+	newStrangers := 0
 	out := []addResult{}
 	var owed []groupInvitePush
 	var added []uuid.UUID
@@ -1421,6 +1492,9 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 			if tag.RowsAffected() == 1 && !m.blocked {
 				owed = append(owed, groupInvitePush{to: id, group: g.ID, by: admin})
 			}
+			if tag.RowsAffected() == 1 && !contacts[id] {
+				newStrangers++
+			}
 			out = append(out, addResult{id, "invited"})
 			continue
 		}
@@ -1441,6 +1515,9 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 		count++
 		added = append(added, id)
 		out = append(out, addResult{id, "added"})
+	}
+	if err := groupLedgerAddTx(ctx, tx, admin, "invite", g.ID, newStrangers); err != nil {
+		return nil, nil, err
 	}
 	if len(added) > 0 {
 		// In the group now: their invites, requests to join and being kept
@@ -1804,6 +1881,11 @@ func (s *Server) acceptGroupInvite(w http.ResponseWriter, r *http.Request) {
 		case "full":
 			return errGroupFull
 		case "joined":
+			// The definer holds the group's row: a group its moderators
+			// closed takes no one in.
+			if err := groupOpenNowTx(ctx, tx, id); err != nil {
+				return err
+			}
 			if err := groupEventTx(ctx, tx, id, person, "joined", nil); err != nil {
 				return err
 			}
@@ -2013,6 +2095,12 @@ func (s *Server) newGroupLink(w http.ResponseWriter, r *http.Request) {
 		g, err := adminGroupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
+		}
+		if err := g.open(); err != nil {
+			return err
+		}
+		if g.standing.LinkStoppedAt != nil {
+			return errGroupLinkStopped
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM group_links WHERE group_id = $1 AND replaced_at < now() - $2::interval`, g.ID, people.LinkKeptFor.String()); err != nil {
 			return err
@@ -2281,6 +2369,19 @@ func (s *Server) joinGroupByLink(w http.ResponseWriter, r *http.Request) {
 			return errGroupFull
 		case "busy":
 			return customerSendErr{http.StatusTooManyRequests, "Many people are joining this group right now. Try again later."}
+		}
+		if state == "waiting" || state == "joined" {
+			// The definer holds the group's row: a closed group takes no
+			// one; then the person's link joins an hour (§8.2), by their
+			// account's age and signals.
+			if err := groupOpenNowTx(ctx, tx, *group); err != nil {
+				return err
+			}
+			if err := s.groupJoinAllowedTx(ctx, tx, person, *group); err != nil {
+				return err
+			}
+		}
+		switch state {
 		case "waiting":
 			return nil
 		case "joined":
@@ -2410,6 +2511,9 @@ func (s *Server) approveGroupJoin(w http.ResponseWriter, r *http.Request) {
 		wasStale = false
 		g, err := adminGroupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
+			return err
+		}
+		if err := g.open(); err != nil {
 			return err
 		}
 		// The request, if it is newer than the person's latest joining or

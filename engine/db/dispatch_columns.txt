@@ -1679,3 +1679,5 @@ push_subscriptions.device_id
 push_subscriptions.unreached_since
 person_notify.person_id
 person_notify.groups
+group_ledger.person_id
+group_ledger.at

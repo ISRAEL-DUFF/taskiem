@@ -270,6 +270,8 @@ export interface OpsPeopleReportRow {
   reviewed_by: string | null;
   reviewed_at: string | null;
   reports_against: number;
+  /** A report from inside a group: of the group (reported_id null) or of a member. */
+  group_id: string | null;
 }
 
 export interface OpsCustomerReportRow {
@@ -291,6 +293,9 @@ export interface OpsCustomerReportRow {
 export interface OpsReportMessage {
   id?: string;
   from_reporter: boolean;
+  /** Who sent it, in a group's report (their own name). */
+  sender_id?: string;
+  sender?: string;
   kind: string;
   body: string;
   card?: Record<string, unknown>;
@@ -316,10 +321,13 @@ export interface OpsPeopleReport {
     reviewed_by: string | null;
     reviewed_at: string | null;
     review_note: string | null;
+    group_id: string | null;
   };
   messages: OpsReportMessage[];
   files: { message_id: string; type: string; size: number }[];
   sealed: boolean;
+  /** A group's report: the group as the reporter saw it then. */
+  group: { name: string; description: string; members: number; left?: boolean } | null;
 }
 
 export interface OpsCustomerReport {
@@ -352,6 +360,8 @@ export interface OpsHeldRow {
   created_at: string;
   decided_by: string | null;
   decided_at: string | null;
+  /** Held in a group: no member got it. */
+  group_id: string | null;
 }
 
 export interface OpsHeld {
@@ -367,6 +377,7 @@ export interface OpsVerdict {
   verdict: string;
   reasons: string[];
   at: string;
+  group_id: string | null;
 }
 
 export interface OpsPersonAction {
@@ -412,7 +423,7 @@ export interface OpsAppeal {
   action_id: string;
   person_id: string;
   name: string;
-  action: "warn" | "limit" | "suspend" | "close";
+  action: "warn" | "limit" | "suspend" | "close" | "group_link_off" | "group_close";
   action_reason: string;
   operator: string;
   until: string | null;
@@ -422,6 +433,46 @@ export interface OpsAppeal {
   decided_by: string | null;
   decided_at: string | null;
   decision_note: string | null;
+  /** An appeal of a group's closing, by one of its admins. */
+  group_id: string | null;
+}
+
+/** What moderators did to a group (api/ops_people_groups.go). */
+export interface OpsGroupAction extends Omit<OpsPersonAction, "action"> {
+  action: "group_link_off" | "group_close";
+}
+
+/** GET /v1/ops/people/groups/{id}?why=: a group for moderators; never its name or messages. */
+export interface OpsGroup {
+  group: {
+    id: string;
+    created_at: string;
+    created_by: string | null;
+    creator_name: string;
+    members: number;
+    admins: number;
+    link_on: boolean;
+    last_message_at: string;
+    closed_at: string | null;
+    close_until: string | null;
+    link_stopped_at: string | null;
+    reports: number;
+    held: number;
+  } | null;
+  gone: boolean;
+  members: {
+    person_id: string;
+    name: string;
+    role: "admin" | "member";
+    how: string;
+    joined_at: string;
+    left_at: string | null;
+    left_how: string | null;
+    deleted: boolean;
+    suspended: boolean;
+  }[];
+  reports: { id: string; reporter_id: string | null; reported_id: string | null; reported_name: string; reason: string; status: "open" | "reviewed"; created_at: string }[];
+  actions: OpsGroupAction[];
 }
 
 export interface OpsLawfulRequest {
@@ -448,4 +499,6 @@ export interface OpsLawfulRequest {
   refused_reason: string | null;
   told_at: string | null;
   not_told_reason: string | null;
+  /** Group messages asked for: none, sent (their own) or seen (every one they could see). */
+  groups: "none" | "sent" | "seen";
 }

@@ -12,7 +12,7 @@ import { opsEnrol, opsGet, opsPasskeySignIn, opsPost, type OpsMe } from "./clien
 import { Queue, Submission } from "./Review";
 import { Agents } from "./Agents";
 import { Featured } from "./Featured";
-import { Appeals, CustomerReport, HeldMessage, HeldQueue, PeopleReport, PeopleReports, PeopleSafety, PersonStanding } from "./People";
+import { Appeals, CustomerReport, HeldMessage, HeldQueue, PeopleReport, PeopleReports, PeopleSafety, PersonStanding, GroupSafety } from "./People";
 import { LawfulRequest, LawfulRequests } from "./Lawful";
 import { Reports, StorefrontReview, StorefrontReviews } from "./Trust";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
@@ -210,6 +210,7 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
           <Route path="/ops/people/held" element={<HeldQueue />} />
           <Route path="/ops/people/held/:id" element={<HeldMessage />} />
           <Route path="/ops/people/persons/:id" element={<PersonStanding />} />
+          <Route path="/ops/people/groups/:id" element={<GroupSafety />} />
           <Route path="/ops/people/appeals" element={<Appeals />} />
           <Route path="/ops/lawful" element={<LawfulRequests />} />
           <Route path="/ops/lawful/:id" element={<LawfulRequest me={me} />} />

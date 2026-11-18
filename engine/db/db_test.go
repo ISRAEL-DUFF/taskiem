@@ -496,6 +496,21 @@ func TestDispatchRoleCannotReadPayloads(t *testing.T) {
 		"DELETE FROM people_report_files",
 		"DELETE FROM people_held",
 		"INSERT INTO people_moderation (id, person_id, action, reason, operator) VALUES (gen_random_uuid(), gen_random_uuid(), 'warn', 'x', 'x')",
+		// Safety in groups (00484): a group report's sealed info, held group
+		// messages, a group's actions and standing, lawful requests' group
+		// scope; and nothing of a group is deleted or closed by it.
+		"SELECT group_sealed FROM people_reports",
+		"SELECT group_id FROM people_reports",
+		"SELECT mentions FROM people_held",
+		"SELECT group_id FROM people_moderation",
+		"SELECT scope_groups FROM lawful_requests",
+		"SELECT group_id FROM people_screen_verdicts",
+		"SELECT closed_at FROM group_standing",
+		"INSERT INTO group_standing (group_id, closed_at) VALUES (gen_random_uuid(), now())",
+		"UPDATE group_standing SET closed_at = NULL",
+		"DELETE FROM people_groups",
+		"SELECT kind FROM group_ledger",
+		"INSERT INTO group_ledger (person_id, kind) VALUES (gen_random_uuid(), 'create')",
 	} {
 		_, err := d.Dispatch.Exec(ctx, q)
 		if sqlState(err) != "42501" {

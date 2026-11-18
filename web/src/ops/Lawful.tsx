@@ -52,8 +52,15 @@ export function LawfulRequests() {
   );
 }
 
+/** What a request asks of the person's group messages (api/lawful_groups.go). */
+const LAWFUL_GROUPS = {
+  none: "None",
+  sent: "Their own messages in groups",
+  seen: "Every group message they could see",
+} as const;
+
 function RecordLawful({ onDone }: { onDone: () => void }) {
-  const [f, setF] = useState({ authority: "", reference: "", legal_basis: "", person_id: "", with_person_id: "", from: "", to: "", received: "", files: false, scope_note: "" });
+  const [f, setF] = useState({ authority: "", reference: "", legal_basis: "", person_id: "", with_person_id: "", from: "", to: "", received: "", files: false, scope_note: "", groups: "none" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const act = useAction();
   // Account ids are checked here, before the passkey is asked for.
@@ -86,6 +93,7 @@ function RecordLawful({ onDone }: { onDone: () => void }) {
             received_at: lagosDay(f.received),
             files: f.files,
             scope_note: f.scope_note.trim(),
+            groups: f.groups,
           };
           if (f.with_person_id.trim()) body.with_person_id = f.with_person_id.trim();
           await withStepUp("ops.lawful.record", f.person_id.trim(), "/lawful-requests", body);
@@ -142,6 +150,15 @@ function RecordLawful({ onDone }: { onDone: () => void }) {
         <input type="checkbox" checked={f.files} onChange={(e) => setF({ ...f, files: e.target.checked })} />
         The request asks for photos and files too
       </label>
+      <Field label="Group messages" hint="Only within the person's own time in each group, as their copy holds it.">
+        <select value={f.groups} onChange={set("groups")} data-testid="ops-lawful-groups">
+          {(Object.keys(LAWFUL_GROUPS) as (keyof typeof LAWFUL_GROUPS)[]).map((g) => (
+            <option key={g} value={g}>
+              {LAWFUL_GROUPS[g]}
+            </option>
+          ))}
+        </select>
+      </Field>
       <Field label="Anything else about the scope">
         <textarea value={f.scope_note} onChange={set("scope_note")} maxLength={1000} rows={2} />
       </Field>
@@ -215,6 +232,7 @@ export function LawfulRequest({ me }: { me: OpsMe }) {
             {l.with_person_id ? ", only with one other person" : ", in every chat"}
             {l.files ? ", with photos and files" : ", without photos and files"}
           </li>
+          <li>Groups: {LAWFUL_GROUPS[l.groups ?? "none"]}</li>
           {l.scope_note && <li>Scope: {l.scope_note}</li>}
           <li>Received {fmtTime(l.received_at)}</li>
           <li>

@@ -11,8 +11,8 @@ import (
 
 // PeopleStorageCollector reports how much the kept people chats take
 // (decision 0069, Consequences; people-chatting §16): rows and bytes of
-// people_messages, people_files and the reports' and held messages'
-// copies, from Postgres's catalogue and statistics (no scan), read when
+// people_messages, people_files, the reports' and held messages' copies
+// and groups' messages and files, from Postgres's catalogue and statistics (no scan), read when
 // Prometheus scrapes.
 type PeopleStorageCollector struct{ Pool *pgxpool.Pool }
 
@@ -53,9 +53,10 @@ type StorageRow struct {
 }
 
 // PeopleStorageTables are the people chats' tables that grow with every kept
-// chat (decision 0069, Consequences): the copies' messages and files, and
-// the reports' and held messages' copies.
-var PeopleStorageTables = []string{"people_messages", "people_files", "people_report_files", "people_held"}
+// chat (decision 0069, Consequences): the copies' messages and files, the
+// reports' and held messages' copies, and groups' one copy of their
+// messages and files (5b).
+var PeopleStorageTables = []string{"people_messages", "people_files", "people_report_files", "people_held", "group_messages", "group_files"}
 
 // Querier is a pool or a transaction.
 type Querier interface {

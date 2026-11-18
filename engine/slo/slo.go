@@ -175,9 +175,9 @@ var Alerts = []Alert{
 	},
 	{
 		Name: "TaskiemPeopleStorageLarge", Severity: "ticket", For: "1h",
-		Summary:     "People chats take over 100 GiB, or grew over 5 GiB in a day",
-		Description: "People chats are kept until the people delete them (decision 0069), so their tables only grow. Together they take over 100 GiB on disk, or grew by over 5 GiB in a day: plan the database's disk, and whether photos and files leave Postgres for object storage.",
-		Expr:        `sum(taskiem_people_storage_bytes) > 107374182400 or (sum(taskiem_people_storage_bytes) - sum(taskiem_people_storage_bytes offset 1d)) > 5368709120`,
+		Summary:     "People chats and groups take over 150 GiB, or grew over 8 GiB in a day",
+		Description: "People chats and groups are kept until the people delete them (decision 0069), so their tables only grow; a group keeps one copy of its messages and files (5b). Together they take over 150 GiB on disk, or grew by over 8 GiB in a day: plan the database's disk, and whether photos and files leave Postgres for object storage.",
+		Expr:        `sum(taskiem_people_storage_bytes) > 161061273600 or (sum(taskiem_people_storage_bytes) - sum(taskiem_people_storage_bytes offset 1d)) > 8589934592`,
 	},
 	{
 		Name: "TaskiemTargetDown", Severity: "ticket", For: "10m",

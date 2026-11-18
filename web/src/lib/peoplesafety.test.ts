@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   accountIDProblem,
+  actionName,
+  anyActionLabel,
+  GROUP_ACTION_LABELS,
+  groupActionHelp,
+  groupActionOperation,
+  groupActionRequest,
   actionHelp,
   actionIsGrave,
   actionOperation,
@@ -114,5 +120,17 @@ describe("the notice of Your standing", () => {
     expect(standingNoticeShows({ unseen: 0 }, "/you")).toBe(false);
     expect(standingNoticeShows(undefined, "/you")).toBe(false);
     expect(standingNoticeShows({ unseen: 2 }, "/you/settings/standing")).toBe(false);
+  });
+});
+
+describe("groups", () => {
+  it("names a group's actions and binds them to their step-up", () => {
+    expect(GROUP_ACTION_LABELS.group_close).toBe("Close the group");
+    expect(groupActionOperation("group_link_off")).toBe("ops.people.group.link_off");
+    expect(groupActionRequest("group_close")).toBe("close");
+    expect(anyActionLabel("group_link_off")).toBe("Turn off its invite link");
+    expect(anyActionLabel("suspend")).toBe("Suspend");
+    expect(actionName("group_close")).toBe("Group closure");
+    expect(groupActionHelp("group_close")).toContain("appeal");
   });
 });

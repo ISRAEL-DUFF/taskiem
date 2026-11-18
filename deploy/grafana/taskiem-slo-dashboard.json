@@ -1188,7 +1188,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Bytes of the people chats' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 100 GiB, or over 5 GiB more in a day, opens a ticket.",
+      "description": "Bytes of the people chats' and groups' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 150 GiB, or over 8 GiB more in a day, opens a ticket.",
       "fieldConfig": {
         "defaults": {
           "unit": "bytes"
@@ -1197,7 +1197,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 69
       },
@@ -1214,7 +1214,7 @@
           "refId": "B"
         }
       ],
-      "title": "People chats on disk",
+      "title": "People chats and groups on disk",
       "type": "timeseries"
     },
     {
@@ -1222,7 +1222,41 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Rows of the people chats' tables (Postgres's estimate).",
+      "description": "Bytes of groups' one copy of their messages and files (5b), and their growth over a day.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 69
+      },
+      "id": 38,
+      "targets": [
+        {
+          "expr": "max by (table) (taskiem_people_storage_bytes{table=~\"group_.*\"})",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(max by (table) (taskiem_people_storage_bytes{table=~\"group_.*\"})) - sum(max by (table) (taskiem_people_storage_bytes{table=~\"group_.*\"} offset 1d))",
+          "legendFormat": "grew in a day",
+          "refId": "B"
+        }
+      ],
+      "title": "Groups on disk",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rows of the people chats' and groups' tables (Postgres's estimate).",
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -1231,11 +1265,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 16,
         "y": 69
       },
-      "id": 38,
+      "id": 39,
       "targets": [
         {
           "expr": "max by (table) (taskiem_people_storage_rows)",
@@ -1243,7 +1277,7 @@
           "refId": "A"
         }
       ],
-      "title": "People chats' rows",
+      "title": "People chats' and groups' rows",
       "type": "timeseries"
     }
   ],

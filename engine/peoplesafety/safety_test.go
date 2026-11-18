@@ -105,3 +105,27 @@ func TestHalfLabel(t *testing.T) {
 		t.Fatal("labels")
 	}
 }
+
+// TestGroupAllowance: group limits are lower in the first week and grow
+// with age; reports, a shared first-week device and a moderator's limit
+// lower them.
+func TestGroupAllowance(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		s    Signals
+		want GroupLimits
+	}{
+		{"first week", Signals{Age: day}, GroupLimits{2, 3, 10, 3}},
+		{"a week", Signals{Age: 8 * day}, GroupLimits{3, 6, 30, 5}},
+		{"a month", Signals{Age: 31 * day}, GroupLimits{5, 10, 60, 8}},
+		{"three months", Signals{Age: 91 * day}, GroupLimits{5, 20, 100, 10}},
+		{"reported by two", Signals{Age: 91 * day, ReportedBy: 2}, GroupLimits{1, 6, 33, 3}},
+		{"reported by five", Signals{Age: 91 * day, ReportedBy: 5}, GroupLimits{1, 1, 2, 1}},
+		{"first week, shared device", Signals{Age: day, DeviceAccounts: 3}, GroupLimits{1, 1, 3, 1}},
+		{"limited", Signals{Age: 91 * day, Limited: true}, GroupLimits{1, 1, 2, 2}},
+	} {
+		if got := GroupAllowance(c.s); got != c.want {
+			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}

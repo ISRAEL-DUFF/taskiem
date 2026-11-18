@@ -1247,3 +1247,94 @@ Beside 5a's events, read in the person's own transaction (so only what they see)
 - A member's reactions go when they delete their copy after leaving, or their account.
 - Someone who left sees their own messages' ticks from the marks kept with their time (`group_reads`): a member whose read ticks are off and who read without their app having had the message shows as not having it, and marks older than 31 days are pruned, so such ticks can fall back to sent. By SQL (not the API) someone who left can still read the current rows of the group's memberships.
 - A live connection that showed a message read does not take it back if a member then turns read ticks on.
+
+## As built: stage 5b, group safety (server)
+
+Branch `stage5b-group-safety`, on 8763bffa (stage 5a, groups slice 1 and its review fixes): the server's part of [the 5b checklist](people-chatting-5b.md) B (§8.2 to §8.5, §14, the founder's B1; decision 0069 points 3 and 11), with the operator console's screens. Migration `00484_people_group_safety.sql`; code in `api/people_group_safety.go` (limits, reports, the admins' appeal, the scam checks), `api/ops_people_groups.go` (moderators and groups, the closure carried out), `api/lawful_groups.go`, `engine/peoplesafety/groups.go` (`GroupAllowance`), `engine/people/screen.go` (`ScreenGroupTx`), `engine/telemetry`, `engine/slo`. Not in this slice: the load test before 5b ships (B), and the app's and the web's group screens (report, the closed notice, the appeal).
+
+**Groups stay kept by Taskiem, sealed at rest and readable by its servers; not end-to-end encrypted.**
+
+### Data (00484)
+
+- **`group_ledger`** (person, kind `create`, `invite` or `link_join`, group, when): what a person did with groups, counted for their limits; they read and add to their own rows only (never delete them), `taskiem_people_sweep` prunes rows past two days and `taskiem_group_forget` takes them with the account.
+- **Reports of a group or a member**: `people_reports.group_id` (no foreign key: kept after the group goes) and `group_sealed` (the group's name, description and members then, sealed under the report's own key, row `g`); `reported_id` is the member, or NULL for the group. A person reports a group only if they are or were in it (the insert policy).
+- **Held group messages**: `people_held.group_id` and `mentions`; `chat_id` is NULL for them (a check says one of the two). **Verdicts**: `people_screen_verdicts.group_id` (one verdict for the group's one copy, `to_person` NULL). **Warned messages**: `group_messages.screen` (`warn`).
+- **Moderators' actions on a group**: `people_moderation.group_id` with the actions `group_link_off` and `group_close` (`person_id` NULL for them, and only for them; a closure has `until`). A group's admins read its actions (`group_admin_read`) and may take a closure's lock (`group_admin_lock`, `WITH CHECK (false)`: they change nothing); `people_appeals`' insert policy lets one of the group's admins appeal its action, and its admins read the appeal.
+- **`group_standing`** (closed, until, the closure, link stopped): what is in force, written only by `taskiem_safety`'s definers through `taskiem_group_standing_sync` (from the actions; a closure stops the link too; it turns the live link off and keeps an event from Taskiem when the standing changes), read by members and anyone invited.
+- **`lawful_requests.scope_groups`** (`none`, `sent`, `seen`).
+- **Definers**, each owned by `taskiem_safety` with `taskiem_moderator_check`: `taskiem_ops_group_moderate`, `taskiem_group_closures_due`, `taskiem_group_close_carry`, `taskiem_ops_group`, `taskiem_ops_group_members`, `taskiem_ops_group_actions`, `taskiem_ops_group_reports`; `taskiem_ops_people_lift` and `taskiem_ops_people_appeal_decide` now answer `(person_id, group_id)` and sync a group's standing; the reports' list (with `group_id` and, for a group report, its reporters counted once), one report (`group_id`, `group_sealed`), held (`group_id`, `mentions`), verdicts, appeals (`group_id`) and lawful requests (`scope_groups`) gained columns. `taskiem_safety` may delete a group, insert Taskiem's event messages (`kind = 'event'`, no sender) and turn links off; nothing else of groups.
+- **Locks.** A moderator's action takes the group's row first, as every writer does; a lift, an appeal's decision and the closure's carrying out take the action's lock, then the group's; an admin's appeal takes only the action's lock, so it never waits on a group writer that waits on it.
+
+### Limits (§8.2)
+
+`peoplesafety.GroupAllowance(Signals)` (the same signals as requests: age, reports, a shared first-week device, a moderator's limit):
+
+| | groups an hour | a day | people who aren't contacts invited a day | link joins an hour |
+| --- | --- | --- | --- | --- |
+| first week | 2 | 3 | 10 | 3 |
+| to 30 days | 3 | 6 | 30 | 5 |
+| to 90 days | 5 | 10 | 60 | 8 |
+| then | 5 | 20 | 100 | 10 |
+
+A third of each (at least one) when two to four people reported them in 30 days; 1, 1, 2, 1 from five; 1, 1, at most 3, 1 for a first-week shared device; 1, 1, at most 2, at most 2 while a moderator's limit is in force. Counted from the ledger in the person's transaction under their sender lock (the group's row first where there is one): 429 "You have made several groups in the last hour. Try again later." / "You have made many groups today. Try again tomorrow." / "You have invited many people you haven't added to your contacts today. Add them to your contacts first, or try again tomorrow." (nothing of the add is done; people already invited don't count again) / "You have joined many groups by a link in the last hour. Try again later." (a join that waits for an admin counts). The in-memory limits stay as a first gate; a group's 60 joins an hour is unchanged.
+
+### Reports (§8.3)
+
+`POST /v1/me/groups/{id}/report {reason, note?, consent, person_id?}` (400 without consent; 404 for a person never in the group; 12 in two hours with the person's other reports): the last 20 messages of the group the reporter sees (row-level security: only their own time in it; never an event or one they deleted for themselves), opened, with who sent each by their own name, and the photos and files in them copied from the group's key to the report's (50 MB, newest first), sealed at report time as 5a's. `peer_wrote` is whether the member reported wrote any of them (so their request allowance weighs it, as 5a's). The report survives the reporter's deletion (detached), the member's and the group's, and is purged a year after review with 5a's.
+
+### Moderators (operator console; not in the public OpenAPI)
+
+| Call | Step-up operation (target) |
+| --- | --- |
+| `GET /v1/ops/people/reports` rows have `group_id`; `GET /people/reports/{id}?why=` adds `group` `{name, description, members, left?}` and each message's `sender_id`, `sender` (audited `ops.people.report.open` with the group) | — |
+| `GET /people/groups/{id}?why=` `{group: {id, created_at, created_by, creator_name, members, admins, link_on, last_message_at, closed_at, close_until, link_stopped_at, reports, held} \| null, gone, members, reports, actions}`: never the name or messages; 400 without why; audited `ops.people.group.open` in the reading transaction | — |
+| `POST /people/groups/{id}/actions` `{action: link_off\|close, reason, report_id?}`: 409 when it is in force already | `ops.people.group.link_off\|close` (group) |
+| `POST /people/actions/{id}/lift` lifts a group's action too (`{person_id, group_id}`) | `ops.people.lift` |
+| `GET /people/held` rows have `group_id`; releasing a group's sends it to the group then (its mentions, past the checks and the per-minute limit, once by `client_id`), 409 if the sender left or the group is closed | as before |
+| `GET /people/appeals` rows have `group_id`; deciding answers `group_id` | as before |
+
+**Members told.** Turning the link off, closing, reopening and letting the link back each keep an event in the group from Taskiem (`sender: "Taskiem"`, `sender_id` null, `event.type` `taskiem_link_off`, `taskiem_closed`, `taskiem_reopened`, `taskiem_link_back`) with its words ("Taskiem's moderators closed this group. No one can send messages in it, and it will be deleted on Fri 18 Dec 2026 unless its admins appeal."). The group's current admins get a push of kind `you` (link `/you/groups/{id}`) for each action, lift and appeal decision.
+
+**A closed group.** No one sends, adds, edits its info or photo, makes a link, lets people in, joins by a link or accepts an invite (403 "Taskiem's moderators closed this group, so no one can send messages in it or join it. Its admins can appeal from the group's info."); members still read it, leave and delete it for themselves. `Group.closed` `{at, until, words, can_appeal}` for members, with `action_id`, `reason` and `appeal` for admins; `can_post` and `can_edit` are false. `Group.link_stopped` while the link is off (403 to a new link).
+
+**The admins' appeal.** `POST /v1/me/groups/{id}/appeal {text}`: one of its current admins, once for the closure, before its day (`201 {appeal, said}`; 403 not an admin; 409 not closed, already appealed, or "The time to appeal the closing of this group has ended."; five an hour). Audited `people.group.appeal`. Decided by a different moderator, as 5a's; overturned, the group reopens.
+
+**Carried out.** The safety job (`SafetyTick`, every 10 minutes) takes the group closures due with no appeal open, each in its own transaction (`taskiem_group_close_carry` locks the closure and checks it again after the lock), deletes the group and all of it (§14: messages, files, members, marks, keys; reports keep their own copies) and audits `people.group.close` with the outcome (`deleted`, or `gone` if the group had closed itself). The group's page still answers its decisions (`gone: true`).
+
+### Scam checks in groups (B1)
+
+In `groupSend`, for a text, caption, card or place (`screenText`) not released by a moderator: only when the group is younger than a week (`GroupCheckYoung`) or the sender joined it by its link in the last day (`GroupCheckJoined`), and only when a member now in it hasn't added the sender (`TheyAddedYou` of the sender's cards). `People.ScreenGroupTx` keeps one verdict (group, no recipient), counted with the sender's 5a verdicts for the repeat hold. **Hold:** refused with 5a's words (403) and nothing else is written: no member gets it; it is kept in `people_held` with the group and mentions. **Warn:** delivered once, with `screen = 'warn'`; `GroupMessage.warn` is shown only to members who haven't added the sender (never to the sender). A share card with `pay_to` from someone the member hasn't added shows `warn` and `warn_transfer`, as 5a's.
+
+### Lawful requests (§8.5)
+
+Recording takes `groups` (`none` by default, `sent`, `seen`; 422 otherwise); the request shows `groups`. The export adds `groups: [{group_id, name, messages: [{id, sender_id, sender, from_person, kind, body, card?, location?, attachment?, file?, deleted?, at}]}]`, read in the person's own transaction, so only within their own time in each group and never what they deleted for themselves: `sent` their own messages, `seen` every message they could see (with `with_person_id`, only theirs and that person's); files only with `files`; within the dates. `messages_given` and `files_given` count them; the audit `ops.lawful.export` has `groups` and `group_count`.
+
+### Storage watched
+
+`group_messages` and `group_files` join `PeopleStorageTables` (`taskiem_people_storage_rows|bytes{table}`; the console's figure: "People chats and groups take …"). `TaskiemPeopleStorageLarge` now fires over 150 GiB together or over 8 GiB more in a day (was 100 and 5); the dashboard's row has "People chats and groups on disk", "Groups on disk" (groups' tables and their day's growth) and the rows; the rule tests sample every 5 minutes, with a case where groups' files carry it past the line; `docs/reliability.md`'s runbook names the group tables and a query for the groups growing fastest.
+
+### Deleting an account
+
+As before, and: their ledger goes (`taskiem_group_forget`); their undecided held group messages go and their reports of groups stay, detached (`taskiem_people_reports_detach`); an appeal they made for a group stays with the closure.
+
+### For the web and the app
+
+- Group info: "Report group" and, on a member, "Report" (`POST /v1/me/groups/{id}/report`, with the consent words "The last 20 messages you can see, with their photos and files, go to Taskiem's moderators"), then offer to leave or block.
+- A closed group: `closed.words` in place of the composer; for admins, "Appeal" while `closed.can_appeal`, then the appeal's state. `link_stopped`: say Taskiem turned the link off instead of offering a new one. Events with `sender: "Taskiem"` as centred lines.
+- `GroupMessage.warn`: the 5a warning ("Never send money to someone you have not met") on the bubble.
+- The 429s' and 403s' words as they come.
+
+### Web (operator console)
+
+`/ops/people/groups/:id` (asked why first; standing, members linking to their pages, reports, decisions with Lift; turn the link off or close the group with the passkey, closing asked again), reached from a group's report ("The group: its members and actions") and from a group's appeal; the reports list says "The whole group" or "A member, from a group"; a report shows the group's name and each sender; held messages and verdicts say "to a group"; the storage hint names groups and the new lines; a lawful request records and shows its group scope. `src/lib/peoplesafety.ts` has the group actions' labels, help and step-up (tested); `e2e/accessibility.spec.ts` covers the group page in both themes at 390 and 360 px.
+
+### Tests
+
+`api/people_group_safety_test.go`: `TestGroupLimits` (a first week's two an hour and three a day with their words; five an hour later on; ten strangers a day, none invited past it, contacts and those already invited not counted; three link joins an hour; the sweep and the deletion take the ledger), `TestGroupReports` (consent; only the reporter's own time; 20 messages with who sent each; sealed with the group's name; listed without words; opened and the photo opened only with why, recorded; kept detached after the reporter's deletion and the group's closing), `TestGroupModeration` (the page with why, recorded; the link off: 410 to join, 403 to a new link, the members told, lifted; closed: 403 to send and edit, the members told with the day, the admins' view; a member warned; the appeal by an admin only, once, recorded; held by the open appeal past its day; the deciding moderator refused, overturned by another, reopened; closed again and deleted by the safety job with every row, recorded; the report kept; the page `gone`), `TestGroupScamChecks` (warn only for those who haven't added the sender; a share card warned; held: no one gets it, sealed with group and mentions, one verdict a message, listed without words, released once with its mention, confirmed never delivered; no checks when all added the sender or in an old group; checked for a link joiner of the last day; holds gone with the sender's account), `TestLawfulGroupExport` (none unless asked, `sent`, `seen` within the person's time, with one other person, files, counts, audited), `TestGroupStorageWatched`; `TestPeopleStorageWatched` counts six tables; `TestGroupsBlocking` and `TestGroupsInTheOneList` make their groups as accounts past their first week. `engine/peoplesafety`: `TestGroupAllowance`. `engine/db`: `TestPeopleGroupSafetyMigrationUpDownUp`; definers, dispatch columns (`group_ledger.person_id`, `at`) and `TestDispatchRoleCannotReadPayloads` (group report info, held group messages, group actions, standing, the ledger, lawful scope, deleting a group). `engine/slo`: the rule test.
+
+### Left over
+
+- The load test before 5b ships (§13, B).
+- The app's and the web's group screens for reporting, the closed notice and the appeal (the calls are generated in `api.g.dart`).
+- A closure deletes the group; nothing stops its admins making a new one beyond their limits and standing.
+- Someone in a group past the checks' window is no longer checked even if no one there added them (B1 as settled).
