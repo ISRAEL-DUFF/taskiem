@@ -6,7 +6,7 @@ import { axe, describe } from "./a11y";
 
 // People chats' safety in the operator console, on the real server
 // (docs/spec/people-chatting.md "As built: stage 5a gaps, safety and
-// moderation"; docs/moderators.md): a moderator opens a report only saying
+// moderation"; docs/runbooks/people-moderators.md): a moderator opens a report only saying
 // why (recorded in the platform audit with their name and reason), marks it
 // reviewed with the passkey, warns and suspends the person reported (the
 // suspended state set), overturns their appeal (lifted); a lawful request

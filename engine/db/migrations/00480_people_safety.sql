@@ -685,7 +685,7 @@ $$;
 
 -- Retention (people-chatting §14): reviewed reports a year after review
 -- (with their files), held messages 90 days after they were held or
--- decided. Answers what went.
+-- decided, and the checks' verdicts 90 days after. Answers what went.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_people_safety_purge(p_reports interval, p_held interval)
 RETURNS TABLE (what text, n bigint)
@@ -694,6 +694,7 @@ DECLARE
   a bigint;
   b bigint;
   c bigint;
+  d bigint;
 BEGIN
   PERFORM taskiem_moderator_check();
   DELETE FROM people_reports WHERE status = 'reviewed' AND reviewed_at < now() - p_reports;
@@ -702,7 +703,10 @@ BEGIN
   GET DIAGNOSTICS b = ROW_COUNT;
   DELETE FROM people_held WHERE COALESCE(decided_at, created_at) < now() - p_held;
   GET DIAGNOSTICS c = ROW_COUNT;
-  RETURN QUERY VALUES ('people_reports', a), ('customer_reports', b), ('people_held', c);
+  -- The checks' verdicts (no words) as long as held messages.
+  DELETE FROM people_screen_verdicts WHERE at < now() - p_held;
+  GET DIAGNOSTICS d = ROW_COUNT;
+  RETURN QUERY VALUES ('people_reports', a), ('customer_reports', b), ('people_held', c), ('people_screen_verdicts', d);
 END
 $$;
 -- +goose StatementEnd

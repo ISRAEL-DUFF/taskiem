@@ -1,5 +1,5 @@
 // People chats' safety for moderators (docs/spec/people-chatting.md §8,
-// "As built: stage 5a gaps, safety and moderation"; docs/moderators.md):
+// "As built: stage 5a gaps, safety and moderation"; docs/runbooks/people-moderators.md):
 // people's reports of people and of businesses, the messages the checks
 // held and their verdicts, a person's standing with the moderators'
 // actions, and appeals. No one at Taskiem reads a people chat except to

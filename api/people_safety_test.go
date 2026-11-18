@@ -15,6 +15,7 @@ import (
 
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ops"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 	"github.com/israel-duff/taskiem/engine/webauthn"
 	"github.com/israel-duff/taskiem/engine/webauthn/webauthntest"
@@ -375,9 +376,13 @@ func TestPeopleHeldForReview(t *testing.T) {
 		t.Fatalf("all held: %v", l)
 	}
 
-	// Purged 90 days after they were decided; an undecided one goes with
-	// the sender's account.
+	// Purged 90 days after they were decided, as are the checks'
+	// verdicts; an undecided one goes with the sender's account.
+	verdicts0 := w.adminCount(t, `SELECT count(*) FROM people_screen_verdicts`)
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_held SET decided_at = now() - interval '91 days'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_screen_verdicts SET at = now() - interval '91 days' WHERE ctid = (SELECT ctid FROM people_screen_verdicts LIMIT 1)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.srv.SafetyTick(ctx); err != nil {
@@ -385,6 +390,9 @@ func TestPeopleHeldForReview(t *testing.T) {
 	}
 	if n := w.adminCount(t, `SELECT count(*) FROM people_held`); n != 0 {
 		t.Fatalf("%d held messages outlived 90 days", n)
+	}
+	if n := w.adminCount(t, `SELECT count(*) FROM people_screen_verdicts`); verdicts0 == 0 || n != verdicts0-1 {
+		t.Fatalf("verdicts: %d before, %d after the purge", verdicts0, n)
 	}
 	dayo.must(403, "POST", "/v1/me/people/"+chat+"/messages", map[string]any{"text": "Tell me your OTP now"})
 	w.deleteAccount(t, dayo, "+2348031130102")
@@ -766,5 +774,36 @@ func TestPeopleStorageWatched(t *testing.T) {
 	}
 	if s := mod.must(200, "GET", "/v1/ops/people/storage", nil); len(s["tables"].([]any)) != 4 {
 		t.Fatalf("storage: %v", s)
+	}
+}
+
+// The person is told a moderator's decision on their devices (a push on
+// You opening Your standing), in plain words with the reason.
+func TestPeopleStandingPush(t *testing.T) {
+	w := safetyWorld(t)
+	w.srv.Push = pushSender(t)
+	w.srv.Push.Validate = func(string) error { return nil }
+	svc := newPushService(t)
+	bola, bolaID := w.person(t, "+2348031130701", "Bola Ade")
+	br := newPushBrowser(t)
+	bola.must(200, "PUT", "/v1/me/push", map[string]any{"endpoint": svc.srv.URL + "/bola", "keys": map[string]any{"p256dh": br.p256dh, "auth": br.au}})
+	mod := newModerator(t, w, "mod@taskiem.test")
+	target := bolaID.String()
+	mod.write(201, "ops.people.suspend", target, "/v1/ops/people/persons/"+target+"/actions", map[string]any{"action": "suspend", "reason": "Scam messages.", "days": 3})
+	pushSettle(t, w.srv)
+	if svc.count("/bola") != 1 {
+		t.Fatalf("pushes: %d", svc.count("/bola"))
+	}
+	p := br.decrypt(t, svc.bodies["/bola"][0])
+	if p.Kind != push.KindYou || p.Title != "Your account can't message people for now" || !strings.HasPrefix(p.Body, "Scam messages. Your account can't message people") ||
+		p.Link != "/you/settings/standing" {
+		t.Fatalf("the decision's push: %+v", p)
+	}
+	if s := bola.must(200, "GET", "/v1/me/standing", nil); s["unseen"] != float64(1) {
+		t.Fatalf("the notice: %v", s)
+	}
+	bola.must(204, "POST", "/v1/me/standing/seen", nil)
+	if s := bola.must(200, "GET", "/v1/me/standing", nil); s["unseen"] != float64(0) {
+		t.Fatalf("seen: %v", s)
 	}
 }

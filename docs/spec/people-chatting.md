@@ -766,3 +766,91 @@ Branch `stage5a-fix-web`, on 304d2445: the web findings of the stage 5a review, 
 **Tests.** `web/src/lib/people.test.ts`: the kept and transfer words, read ticks off, rows of deleted and suspended accounts, the head's words, the pages (append, a poll over later pages, the `before` address), Your share's floor and what for, a product's price then and now and few left, `from=shared`, forwards said, pickers without suspended accounts. `web/e2e/people.spec.ts`: the honest words on the privacy page and Contact info; the waiting line at once; "Message request" in a request's head; a shared product opened with its price then and now and Order from their shop starting a chat `from: shared`, a business card's Chat with them; a new test where Your share needs at least ₦1 and what for, a share held for a prize fee is said and not toasted Sent, a stranger's share card carries the people's transfer warning and Copy number and no Mark as paid on a request, and a forward to two chats with one failing keeps only that one picked.
 
 **Left over.** Opening a chat still reads it by id rather than from `POST /v1/me/people`'s answer (the same chat, one more request). A suspended account's chat in the lists has no photo or last seen, as the server sends none.
+
+## As built: stage 5a gaps, safety and moderation
+
+Branch `stage5a-gaps-safety`, on ffa3743c (stage 5a with the school and the chats' redesign merged): what §6.3, §8, §14 and §16 and decision 0069's points 3, 5 and 11 and its Consequences still needed, for the server, the operator console and the web; the app's screens for Your standing are left over (below). Migration `00480_people_safety.sql`; packages `engine/peoplesafety` and `engine/telemetry` (`people.go`); `api/people_safety.go` (the person's side and the safety job), `api/ops_people.go` (moderators), `api/lawful.go` (lawful requests). Where this differs from the sections above, it holds.
+
+**People chats are kept by Taskiem, sealed at rest and readable by its servers. They are not end-to-end encrypted, and nothing built here says they are.**
+
+### Data (00480)
+
+- **Reports keep their evidence.** At report time the last 20 messages of the reporter's copy, opened, are sealed under the report's own data key (32 random bytes, kept sealed by the platform key for `people-report:{id}` alone: `box_key`, `kms_key`), in `people_reports.sealed`; `messages` stays `'[]'`. The photos and files in them are copied, opened from the reporter's copy and sealed again under the report's key, into `people_report_files` (newest first, up to 50 MB a report, `peoplesafety.ReportFilesMax`; a message whose file did not fit says `file_left_out`). Reports made before 00480 are sealed by the safety job. `people_reports.person_id` and `customer_reports.person_id` are now `ON DELETE SET NULL`: deleting an account runs `taskiem_people_reports_detach` in its transaction, which sets them NULL with `detached_at`, so a report outlives its reporter. Reviewed reports carry `reviewed_by`, `reviewed_at`, `review_note`.
+- **Held messages kept for review.** A message the checks hold (§8.4) is still refused to the sender with the same words and nothing reaches the recipient, but is now kept in `people_held`: the message as the sender meant it (words, card, place, file name; and the file) sealed under its own key (`people-held:{id}`), with the chat, reply, forwards and the checks' `reasons`, and its `state` `held`, `released` or `confirmed` with who and when.
+- **Moderators' actions and appeals.** `people_moderation` (`warn`, `limit`, `suspend`, `close`; reason, operator, report, `until`, lifted or closed, `seen_at`) and `people_appeals` (one per action; `open`, `upheld`, `overturned`, with the decision's note). `person_profiles.suspended` is set while a suspension or closure is in force (`taskiem_people_standing_sync`) and keeps `active` false whatever `users.status` says, so 00477's and 00478's suspended state (`suspended` in the lists and chats, 409 "This account can't get messages right now." to writers) is what moderators set. The profile trigger keeps it when the user row changes.
+- **Lawful requests** in `lawful_requests` (authority, reference, legal basis, the person, the dates, one other person or all, files or not, a note, received; recorded by, approved by, a second operator by a check constraint; answered, refused, messages given; told or why not). The app role reaches none of it; only `taskiem_lawful_request_counts()` leaves the console.
+- **Every moderator's function** (`taskiem_ops_people_*`, `taskiem_ops_customer_*`, `taskiem_ops_report_review`, `taskiem_ops_lawful_*`, the safety job's) is a definer owned by `taskiem_dispatch` that refuses unless the platform chain is in scope (`taskiem_moderator_check`, the operator console's transaction, as Discover's moderation). They answer no words in lists.
+- **Retention** (`taskiem_people_safety_purge`, from the safety job): reviewed reports (people and business) a year after review with their files (`peoplesafety.ReportsKept`); held messages 90 days after they were held or decided (`HeldKept`); the checks' verdicts 90 days after (they were kept until the account went). Each purge that removes something is audited `people.safety.purge`.
+
+### The safety job
+
+`Server.RunSafety` (every 10 minutes, in `serve`'s API role) runs `SafetyTick`: seals old plain reports, ends suspensions whose time ran out, closes accounts whose closure came (30 days, `AppealWindow`) with no open appeal (deleting the account as the person would, then `taskiem_people_closure_done`, audited `people.account.close` with the outcome), and purges by the retention above.
+
+### Every human access is logged
+
+Opening a report (`GET /v1/ops/people/reports/{id}?why=`), a file in it (`…/files/{message}?why=`), a report of a business (`GET /v1/ops/customer-reports/{id}?why=`), a held message (`GET /v1/ops/people/held/{id}?why=`) or its file (`…/file?why=`) needs a reason of 3 to 500 characters (400 `{why: true}` without) and is written to the platform audit chain, in the same transaction that reads it, as `ops.people.report.open`, `ops.people.report.file`, `ops.customer.report.open`, `ops.people.held.open`, `ops.people.held.file` with the operator (`operator:{email}`), the target, `why` and the time; nothing is shown if it cannot be written. A lawful export is audited `ops.lawful.export` with the reference, scope and counts before it is answered. Every decision below is audited under its step-up operation name. Files are answered `no-store`, `nosniff`, sandboxed, and downloaded unless they are photos. Tests prove each path writes its entry.
+
+### The person's side (client API: the app and web must use these)
+
+| Call | What |
+| --- | --- |
+| `GET /v1/me/standing` | `PersonStanding` `{state: ok\|warned\|limited\|suspended\|closing, words, until, unseen, appeal_words, actions: [{id, action, reason, at, until, in_force, lifted_at, seen, words, can_appeal, appeal: StandingAppeal\|null}]}`: what moderators decided, newest first (50). `state` is the strongest in force (a warning counts 30 days); `words` say it plainly; `unseen` counts decisions not yet seen. Personal sessions only |
+| `POST /v1/me/standing/appeals` `{action_id, text}` | Appeals one decision once (text 1 to 2,000; 400 without). 201 `{appeal: StandingAppeal, said}`; 404 not theirs; 409 already appealed or no longer in force; 429 after five an hour. Audited `people.appeal` in the platform chain |
+| `POST /v1/me/standing/seen` | 204: the notices are seen (`unseen` 0) |
+| `GET /v1/transparency/lawful-requests` | For anyone: `{periods: [{year, half: 1\|2, label, received, answered, refused, pending}], words}` by half-year (Lagos time), newest first; only half-years with a request |
+
+`StandingAppeal` is `{id, text, state: open|upheld|overturned, at, decided_at, note}`. **Telling the person:** each action, lift and appeal decision sends a push of kind `you` (title such as "Your account can't message people for now", the reason and its words, link `/you/settings/standing`, tag `standing`) when the person has push on You; the notice itself is the standing (`unseen > 0`), which You shows until `seen`. Operation ids: `getMyStanding`, `appealMyStanding`, `seenMyStanding`, `getLawfulRequestCounts` (`mobile/lib/api/api.g.dart`). A suspended person's own send or new chat answers 403 "Taskiem's moderators have stopped your account from messaging people for now. See Your standing in Settings to find out why and to appeal."
+
+### Moderators' API (operator console; not in the public OpenAPI)
+
+All under `/v1/ops`, with the operator's session; every write carries `step_up` (a passkey assertion for the operation and target), 403 `{step_up: "passkey"}` without.
+
+| Call | Step-up operation (target) |
+| --- | --- |
+| `GET /people/overview`: open counts and storage | — |
+| `GET /people/reports?status=open\|reviewed\|all`, `GET /customer-reports?status=` (no words) | — |
+| `GET /people/reports/{id}?why=` `{report, messages, files, sealed}`; `GET …/files/{message}?why=` | — (audited) |
+| `GET /customer-reports/{id}?why=` | — (audited) |
+| `POST /people/reports/{id}/review`, `POST /customer-reports/{id}/review` `{note}` | `ops.people.report.review`, `ops.customer_report.review` (report) |
+| `GET /people/held?state=held\|released\|confirmed\|all`; `GET /people/held/{id}?why=`; `GET …/file?why=` | — (opening audited) |
+| `POST /people/held/{id}/release\|confirm` `{note}`: release sends it then as the sender meant, past the checks and limits | `ops.people.held.release\|confirm` (held id) |
+| `GET /people/verdicts` (no words) | — |
+| `GET /people/persons/{id}`: name, state, signals, actions with appeals; never chats | — |
+| `POST /people/persons/{id}/actions` `{action, reason, days?, report_id?}`: a limit 7 days by default, a suspension for days or until lifted (0), a closure 30 days on | `ops.people.warn\|limit\|suspend\|close` (person) |
+| `POST /people/actions/{id}/lift` `{reason}` | `ops.people.lift` (action) |
+| `GET /people/appeals?state=`; `POST /people/appeals/{id}/uphold\|overturn` `{note}` (required; the person is told it). The moderator who decided is refused (403) | `ops.people.appeal.uphold\|overturn` (appeal) |
+| `GET /people/storage` | — |
+| `GET /lawful-requests`, `GET /lawful-requests/{id}`; `POST /lawful-requests` (record); `POST …/{id}/approve` (a second operator: the recorder gets 403), `…/refuse {reason}`, `…/told {told_at}\|{reason}`, `…/export` (once approved: the scope asked, JSON, marks it answered) | `ops.lawful.record` (person), `ops.lawful.approve\|refuse\|told\|export` (request) |
+
+### Abuse signals (§8.2, §8.4)
+
+`peoplesafety.Allowance(Signals)` replaces `peoplechats.RequestAllowance` for new requests: waiting at once and sent in a day are 2 and 3 in the first week, 5 and 10 to 30 days, 8 and 15 to 90 days, then 10 and 20; plus half the accepted (up to 15) and the accepted (up to 40); a third (at least one) when three or more were refused and they are most of them; a third when two to four people reported the sender in 30 days, and one and one from five; one and one for a first-week account on a device three or more accounts signed in on (`sessions.device_id`, `taskiem_people_device_accounts`); one waiting and at most two a day while a moderator's limit is in force. `Slowed` (a first week, two or more reports, or a limit) gives the first week's new-chat and per-minute limits. A suspended person cannot start a chat or send.
+
+### Storage watched (Consequences, §16)
+
+`taskiem_people_storage_rows{table}` and `taskiem_people_storage_bytes{table}` (from the catalogue and statistics at scrape: no scan) for `people_messages`, `people_files`, `people_report_files` and `people_held`; a "People chats' storage" row in the Grafana dashboard; `TaskiemPeopleStorageLarge` (ticket: over 100 GiB together, or over 5 GiB more in a day) with its runbook in `docs/reliability.md`; and the figure on the console's People safety page.
+
+**Should `people_files` leave Postgres?** Not for stage 5a. Files are sealed per person in `bytea`, at most 25 MB each, and deleting a chat or an account deletes them in the same transaction as the messages, which keeps "kept until the people delete them" exact and needs no second store's credentials or lifecycle. The cost is that every photo is in the database's backups, WAL and replicas: past roughly 100 GB of `people_files` (when the alert fires), or if the 5b load test shows backup, restore or replication lag growing with it, move the sealed blobs to object storage (the business chats' media store), keeping their keys, sizes and the per-person key in Postgres and deleting the blob when its row goes (a delete queue, as runs' archive does).
+
+### Web
+
+- **Operator console** (`web/src/ops/People.tsx`, `Lawful.tsx`; nav People safety and Lawful requests): `/ops/people` (what waits, storage), `/ops/people/reports` (people, or `?kind=business`; open, reviewed, all), `/ops/people/reports/:id` and `/ops/customer-reports/:id` (asked why first; messages oldest first; a photo shown only on Show the photo, a file downloaded, each opening recorded; Mark reviewed), `/ops/people/held` and `/ops/people/held/:id` (release or confirm; the latest verdicts), `/ops/people/persons/:id` (signals; warn, limit, suspend and close, asked again for suspend and close; lift), `/ops/people/appeals` (uphold or overturn with a note), `/ops/lawful` and `/ops/lawful/:id` (record; approve, disabled for its recorder; refuse; export as a file; told or why not). Every decision asks for the passkey.
+- **You**: `/you/settings/standing` (Your standing: the state in words, each decision with its reason and appeal; opening it marks them seen), a notice at the top of You while `unseen > 0`, a Your standing row in Settings' Chats with people, and a Chats with people section on Privacy with the kept words and a link to `/transparency`.
+- **`/transparency`**, signed out or in: the half-years with received, answered and refused.
+
+### Docs
+
+`docs/runbooks/people-moderators.md` (the moderators' runbook), `docs/runbooks/lawful-requests.md` (draft for counsel), `docs/legal/privacy-notice-people-chats-draft.md` and `docs/legal/terms-people-chats-draft.md` (marked drafts for the lawyer), and `docs/needs-people.md` PC1 to PC7 (the privacy notice and terms with a lawyer and what they must cover, legal review of the in-app words, the lawful-request process, an outside security review, app-store privacy labels, the moderation policy, moderators named).
+
+### Tests
+
+- `api/people_safety_test.go`: `TestPeopleReportsKeepEvidence` (sealed messages and photo, listed without words, opened only with a reason and audited, the file audited, surviving the chat's and the reporter's deletion detached, reviewed with a passkey once, purged a year after review, an old plain report sealed, business reports listed, opened, audited, reviewed and surviving their reporter, no tenant credential); `TestPeopleHeldForReview` (held and refused, kept sealed with reasons, listed and verdicts without words, opened and audited, released and delivered with its photo, confirmed, purged at 90 days with verdicts, gone with the sender's account); `TestPeopleModeration` (each action with its passkey, plain words, the suspended state seen by others as 409, the person's own sends refused, appeal once, the deciding moderator refused, overturned by another, a limit, lift, a closure held by an open appeal, upheld, closed by the job); `TestPeopleStandingPush` (a push of kind `you` with the reason and the standing link; `unseen`, then seen); `TestPeopleAbuseSignals`; `TestLawfulRequests` (record, the recorder refused approval, exactly the scope exported, audited, told or why not, the public counts); `TestPeopleStorageWatched`.
+- `engine/peoplesafety`: `TestAllowance`, `TestBoxIsBoundToItsOwnerAndRow`, `TestHalfLabel`. `engine/db`: `TestPeopleSafetyMigrationUpDownUp`; definers and dispatch columns cover 00480. `engine/slo`: the alert, its rule test and the dashboard row regenerated.
+- Web: `src/lib/peoplesafety.test.ts`; `e2e/ops-people.spec.ts` on the real server (a report opened with a reason and audited, reviewed, the person warned and suspended, the appeal refused to the deciding moderator and overturned by the other; a lawful request recorded, approved by a second moderator, exported, not-told recorded, counted on `/transparency`); `e2e/accessibility.spec.ts` (every new ops page, Your standing with its notice, and `/transparency`, at 390 and 360 px in both themes).
+
+### Left over
+
+- **The app**: Your standing (`/you/settings/standing` in its router, from the push's link), the notice on You, the appeal sheet, and a link to the published count, using the calls above (generated in `api.g.dart`).
+- The people items PC1 to PC7 in `docs/needs-people.md`; the moderation policy (PC6) replaces the runbook's interim rules.
+- Held messages are seeded only by the server (they are sealed), so the real-server e2e covers reports, actions, appeals and lawful requests; held messages are covered by the Go test and the stood-in accessibility test.
+- A closure deletes the account as the person would; there is no separate ban on signing up again with the same number beyond the abuse signals.
