@@ -114,7 +114,8 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
   const [made, setMade] = useState<{ group: Group; added: GroupAdded[] }>();
   const [photoProblem, setPhotoProblem] = useState<unknown>();
   const act = useAction();
-  const p = usePickable(useMemo(() => new Set<string>(), []));
+  const none = useMemo(() => new Set<string>(), []);
+  const p = usePickable(none);
   const names = new Map(p.people.map((x) => [x.id, x.name]));
   const make = (e: FormEvent) => {
     e.preventDefault();
@@ -155,7 +156,7 @@ export function NewGroupSheet({ onClose }: { onClose: () => void }) {
           <KitField label="Photo" hint="Optional">
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhoto(e.target.files?.[0])} data-testid="group-new-photo" />
           </KitField>
-          <PeoplePicker picked={picked} setPicked={setPicked} skip={useMemo(() => new Set<string>(), [])} />
+          <PeoplePicker picked={picked} setPicked={setPicked} skip={none} />
           <p className="hint">People you added to your contacts are added at once when their settings let you; anyone else gets an invite in their Requests.</p>
           <ErrorBox error={act.error} />
           <button type="submit" className="primary" disabled={!name.trim() || act.busy} data-testid="group-new-make">
