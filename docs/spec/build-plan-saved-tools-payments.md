@@ -163,8 +163,8 @@ Within a stage, phases that do not need each other may be built at once by separ
 - Done when: a customer picks from **menu**, fills the form, says **yes** and gets the answer.
 
 **D2. Scan and signature** (the app as a node D2). Needs: D1.
-- Scanning a code and signing on the screen; if the founder agrees, a scan from the home screen and tools on the home screen as ways in.
-- Done when: a stock count by scanning works in the app, and a customer signs for a delivery on the rider's phone.
+- Scanning a code and signing on the screen; a scan from the phone's home screen that starts a workflow, and tools on the home screen (settled by the founder, 19 November 2026).
+- Done when: a stock count by scanning works in the app; a customer signs for a delivery on the rider's phone; a code scanned from the home screen, with no workflow open, offers the workflow that takes it.
 
 **G2 and G3. Pages with tools, and in the chat** (pages G2, G3). Needs: G1, M2 (G3 also M1).
 - Buttons, row actions, tools feeding a page, **Pin as a page**; the tile, `/name`, and the short form on WhatsApp, Telegram and Slack.

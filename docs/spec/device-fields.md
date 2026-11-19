@@ -1,6 +1,6 @@
 # The app as a node: a device's senses in a workflow
 
-Status: **plan; not built** (19 November 2026). Taken from the founder's discussion recorded in pull request #211, where it was §13 of the made tools plan, and made a plan of its own because it is about the form step and needs little from made tools. Two points were settled by the founder there (§12, 1 and 2); one is still to decide (§12, 3). Three things were added on review (§11). Its phases are D0 to D2 in [the build plan](build-plan-saved-tools-payments.md).
+Status: **plan; not built** (19 November 2026). Taken from the founder's discussion recorded in pull request #211, where it was §13 of the made tools plan, and made a plan of its own because it is about the form step and needs little from made tools. Two points were settled by the founder there (§12, 1 and 2), and the third on the same day (§12, 3). Three things were added on review (§11). Its phases are D0 to D2 in [the build plan](build-plan-saved-tools-payments.md).
 
 Builds on: [forms](../forms.md) (the form step, files), [made tools](made-tools.md) (a tool's inputs, `to: "starter"`), [dispatch](dispatch.md) and [riders in the chat](chat-riders.md) (the delivery to be proved), [offline](offline.md), [privacy](../privacy.md).
 
@@ -105,8 +105,8 @@ The other direction, a workflow started by something the device does, is the sma
 
 | Trigger | What | In this plan |
 | --- | --- | --- |
-| **A scan from the home screen** | The app's scanner, outside any workflow, finds a code; a workflow with a `device` trigger of `kind: scan` whose `formats` match is offered, with the code as `trigger.body.scan` | **Proposed, D2** (§12, 3). It is a tap: the person chose to scan |
-| **A tool from a shortcut** | The app puts a made tool on the phone's home screen or in a widget | **Proposed, D2**, as a way to call a tool |
+| **A scan from the home screen** | The app's scanner, outside any workflow, finds a code; a workflow with a `device` trigger of `kind: scan` whose `formats` match is offered, with the code as `trigger.body.scan` | **Yes, D2** (settled, §12, 3). It is a tap: the person chose to scan |
+| **A tool from a shortcut** | The app puts a made tool on the phone's home screen or in a widget | **Yes, D2** (settled), as a way to call a tool |
 | **Entering or leaving a place**, **moving**, **the app opened** | The device reports without a tap | **No.** Each is background sensing, with the stores' rules, battery and consent at stake. Its own decision when there is a case for it |
 
 ## 8. Limits, and what the validator refuses
@@ -141,7 +141,7 @@ A `to` that names no person (an empty role, a link with no one working the conve
 | --- | --- | --- | --- |
 | D0 | The four field types and their options in the forms schema and `wd/v1`; `to` as a person on the form step; the validator's rows (§8); `device` and `source` on every answer; the sealing and masking of a location | Nothing | A form step with a `location` field validates; a location in a run's history is sealed and masked |
 | D1 | `location` and `photo` in the phone app (offline too), on the web and on WhatsApp and Telegram, in form steps and in tools' inputs; `to` as `member`, `role`, `link` and `"starter"`; `require_source`; the delivery fixture (§6) | D0; M4 for `"starter"`; M1 for tools' inputs | A rider on WhatsApp and a rider on the app each prove a delivery; the Confirm card shows the pin and the photo and says which was read by the phone and which was sent |
-| D2 | `scan` and `signature`; if agreed, the scan from the home screen and tools on the home screen (§7) | D1 | A stock count by scanning works in the app; a customer signs for a delivery on the rider's phone |
+| D2 | `scan` and `signature`; the scan from the home screen, with the `device` trigger of `kind: scan`; tools on the phone's home screen (§7) | D1; M1 for tools on the home screen | A stock count by scanning works in the app; a customer signs for a delivery on the rider's phone; a code scanned from the home screen, with no workflow open, offers the workflow that takes it |
 
 The phone app's parts are built with its screens guide and picture tests, in light and dark, as every screen is. The stores' forms are updated before D1 ships: location "while using the app" only, the camera, each with its reason in plain words.
 
@@ -160,7 +160,7 @@ The phone app's parts are built with its screens guide and picture tests, in lig
 | --- | --- | --- |
 | 1 | Does a device ever answer without the person's tap (background location, the app opened, entering a place)? | **No, asked only.** Settled by the founder on 19 November 2026: "ask for now". Background sensing is its own later decision |
 | 2 | Who holds the device: a member, a rider, a customer, the author alone? | **Any person.** The question goes to a person and reaches them wherever they are; the channel decides which fields it can answer. Settled by the founder on 19 November 2026 |
-| 3 | A scan from the home screen, and a tool on the phone's home screen, as ways in (§7)? | **To decide.** Recommended: yes, in D2. Both are a tap by the person; neither senses anything on its own |
+| 3 | A scan from the home screen, and a tool on the phone's home screen, as ways in (§7)? | **Yes, in D2.** Settled by the founder on 19 November 2026. Both are a tap by the person; neither senses anything on its own |
 
 ## 13. Tests, when built
 
