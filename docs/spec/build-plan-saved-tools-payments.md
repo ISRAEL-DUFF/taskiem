@@ -146,7 +146,7 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 
 ### Later, each as its own plan
 
-- **M7.** Made tools for linked businesses (made tools T7).
+- **M7.** Made tools for linked businesses (made tools T7): [its plan](made-tools-linked.md) is written and marked for later, not to be started before M5 is in use.
 - **Payments flow, later parts** (statements, several bills at once), as the founder agrees them.
 - **Paying from a person's own side** (You, with no business): not planned; saved accounts on You are shared and copied only.
 - **Schools** ([schools in the chat](schools-in-the-chat.md)) and the rest of the automation list: planned beside this, sharing its parts (saved objects for schools, made tools for school routines).

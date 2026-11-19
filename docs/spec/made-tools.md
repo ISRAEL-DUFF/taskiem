@@ -245,7 +245,7 @@ A workflow that starts by itself is not a tool, but it should be able to lead to
 - **New: the answer.** A customer now gets the tool's answer, where today they get only a reference. This closes an item in WhatsApp's "Not yet".
 - A customer's answer shows only outputs the workflow marks `public: true`. Anything else is left out, so a workflow written for staff does not leak when someone later opens it to customers.
 
-**Linked businesses** (`for: "linked"`). A tool appears in the other business's side of the conversation ([business chat tools](business-chat-tools.md) §3), under "Their tools". The run is the offering business's, started by `link:<business>` with no roles, inputs by form, always **yes**, answer from `public` outputs only. This is the last phase, and it needs its own look at what a linked business may be shown.
+**Linked businesses** (`for: "linked"`). A tool appears in the other business's side of the conversation ([business chat tools](business-chat-tools.md) §3), under "Their tools". The run is the offering business's, started by `link:<business>` with no roles, inputs by form, always **yes**, answer from `public` outputs only. This is the last phase, and it has [its own plan](made-tools-linked.md), written 19 November 2026 and marked for later.
 
 ## 12. What the validator refuses
 
@@ -316,7 +316,7 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | T4 | `to: "starter"` on the form step | A run asks "Which branch?" in the chat it was started from and goes on with the answer |
 | T5 | Customers: the public menu carried over, answers for customers, `public` outputs | A customer picks from **menu**, fills the form, says **yes** and gets the answer |
 | T6 | The eight recipes, and the AI builder drafting `tool` | "Describe it" produces a working tool from one sentence |
-| T7 | Linked businesses | Its own plan |
+| T7 | Linked businesses | [Its own plan](made-tools-linked.md), for later |
 
 T1 is the first thing worth showing. T2 and T3 can go side by side after it.
 
