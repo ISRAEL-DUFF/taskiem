@@ -322,7 +322,7 @@ T1 is the first thing worth showing. T2 and T3 can go side by side after it.
 
 ## 16. What this is not
 
-- **Not pages.** A screen made of blocks for a workflow (a list, a board, figures) is a separate plan, discussed with the founder and not written. It should reuse this plan's shapes: a tool is an action block, a `list` answer is a list block.
+- **Not pages.** A screen made of blocks (a list, a board, figures) is a separate plan: [pages](pages.md), written 19 November 2026, built after this. It reuses this plan's shapes: a tool is an action, a `list` answer is a list block, a `card` a detail.
 - **Not the built-in tools rewritten.** Products, Stock, Orders, Money and the rest stay as built. They hold rules a wiring of steps must not be able to break.
 - **Not code in the chat.** A tool cannot bring its own drawing, script or frame. The shapes are Taskiem's, which is what lets the web, the phone app and WhatsApp all draw them and keeps the phone app's picture test meaningful.
 - **Not a bot.** There is no free conversation with a tool: it is called, it may ask through a form step, it answers.

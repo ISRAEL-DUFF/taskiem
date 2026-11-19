@@ -146,6 +146,7 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 
 ### Later, each as its own plan
 
+- **Pages** ([its plan](pages.md), phases G0 to G5): a business's own screens, made of blocks fed by its tables and its read-only tools. Written and ready; built after made tools. G1 needs only data tables, so it may be built beside M1 and M2; G2 onward needs M2.
 - **M7.** Made tools for linked businesses (made tools T7): [its plan](made-tools-linked.md) is written and marked for later, not to be started before M5 is in use.
 - **Payments flow, later parts** (statements, several bills at once), as the founder agrees them.
 - **Paying from a person's own side** (You, with no business): not planned; saved accounts on You are shared and copied only.
