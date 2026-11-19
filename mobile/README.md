@@ -121,3 +121,9 @@ Signing). The upload key never goes in git (`key.properties`, `*.jks` and
    `TASKIEM_ANDROID_APP` ([operations](../docs/operations.md)), beside the
    upload key's, so the server's links open the app and passkeys made in it
    sign in.
+
+**The store listing** (its words, the Data safety answers and the pictures)
+is in [docs/store/google-play](../docs/store/google-play/listing.md). The
+screenshots are the app's own screens, taken by the screenshot tests at a
+phone's sharpness with `STORE_DIR` set, then framed by
+`docs/store/google-play/make.mjs` (its first lines say how).
