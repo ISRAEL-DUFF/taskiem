@@ -93,7 +93,7 @@ func salesDays(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, last time.Time,
 	}
 	if f.orders {
 		if err := add(`SELECT to_char(decided_at AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD'), sum(total_kobo)::bigint FROM storefront_orders
-			WHERE tenant_id = $1 AND kind IN ('order', 'chat', 'trade') AND decided_at >= $2 AND decided_at < $3
+			WHERE tenant_id = $1 AND kind IN ('order', 'chat', 'app', 'trade') AND decided_at >= $2 AND decided_at < $3
 			  AND status NOT IN ('declined', 'cancelled', 'expired', 'refunded', 'refund_due', 'proposed', 'changed', 'price_changed', 'received')
 			GROUP BY 1`); err != nil {
 			return nil, err
@@ -438,7 +438,7 @@ func (s *Server) handoverOf(ctx context.Context, p *Principal) (handover, error)
 			// And the storefront's own customers' orders not done yet, those
 			// confirmed from their WhatsApp messages too.
 			var shop int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'chat')
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'chat', 'app')
 				AND status IN ('received', 'awaiting_payment', 'paid', 'accepted')`, p.TenantID).Scan(&shop); err != nil {
 				return err
 			}

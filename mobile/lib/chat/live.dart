@@ -49,8 +49,9 @@ typedef SseEvent = ({String event, String data, String? id});
 
 /// Reads server-sent events from a body as it comes (the EventSource
 /// format: `event:`, `data:` (lines joined), `id:`, a blank line ending
-/// each; comments start with a colon).
-Stream<SseEvent> readSse(Stream<List<int>> body) async* {
+/// each; comments start with a colon). [onRetry] is told the server's
+/// `retry:` (how long to wait before reconnecting after an error).
+Stream<SseEvent> readSse(Stream<List<int>> body, {void Function(Duration retry)? onRetry}) async* {
   var event = 'message';
   final data = <String>[];
   String? id;
@@ -73,6 +74,9 @@ Stream<SseEvent> readSse(Stream<List<int>> body) async* {
         data.add(value);
       case 'id':
         id = value;
+      case 'retry':
+        final ms = int.tryParse(value);
+        if (ms != null && ms >= 0) onRetry?.call(Duration(milliseconds: ms));
     }
   }
 }

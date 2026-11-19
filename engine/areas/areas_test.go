@@ -67,3 +67,21 @@ func TestCatalogueAndDefaults(t *testing.T) {
 		t.Error("billing is not an area")
 	}
 }
+
+// A tenant with every area off is a workflows workspace; any area on makes
+// it a business (taskiem-for-everyone §18.2).
+func TestTenantKind(t *testing.T) {
+	none, err := areas.FromKinds([]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !none.None() || areas.TenantKind(none) != areas.TenantWorkflows {
+		t.Errorf("no kinds: %v %s", none, areas.TenantKind(none))
+	}
+	if areas.TenantKind(state(areas.Schools)) != areas.TenantBusiness || state(areas.Links).None() {
+		t.Error("one area on is a business")
+	}
+	if areas.TenantKind(state()) != areas.TenantWorkflows {
+		t.Error("an empty state is workflows")
+	}
+}

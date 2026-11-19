@@ -6,6 +6,7 @@ import {
   useState,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Icon } from "../icons";
 import { toast } from "../toast";
@@ -100,6 +101,8 @@ export type Sending<R> = {
   file?: File;
   reply?: R;
   mentions?: ReturnType<Mentions["refs"]>;
+  /** People picked with "@" (a group's members), their id with the name. */
+  picks?: { id: string; name: string }[];
   /** A voice note held and let go: it goes at once, and the box is left. */
   held: boolean;
 };
@@ -243,6 +246,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       file: f,
       reply,
       mentions: f ? undefined : mentions.refs(),
+      picks: mentions.pickedPeople(),
       held: !!held,
     };
     if (!held) {
@@ -399,6 +403,7 @@ export function ComposerView<R>({
   prefix,
   textId,
   textLabel,
+  lead,
 }: {
   c: ReturnType<typeof useComposer<R>>;
   busy: boolean;
@@ -406,6 +411,8 @@ export function ComposerView<R>({
   prefix: string;
   textId: string;
   textLabel: string;
+  /** Before the box: a conversation's own tools button (a customer's). */
+  lead?: ReactNode;
 }) {
   const { voice, file, text, reply } = c;
   const toolsP = usePresence(c.toolsShown);
@@ -587,6 +594,7 @@ export function ComposerView<R>({
               <Icon name="grid" />
             </button>
           )}
+          {lead}
           <div className="composer-pill">
             {/* The designs have no emoji button: keyboards have emoji. */}
             {!c.o.tools && (

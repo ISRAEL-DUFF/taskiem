@@ -29,6 +29,16 @@ class TaskiemApplication : Application() {
             "orders" to "Orders and money",
             "approvals" to "Approvals",
             "alerts" to "Alerts",
+            // A business answering the person's own chat (You).
+            "you" to "Chats with businesses",
+            // Chats with people (people-chatting §13): a person's message,
+            // and a first message from someone new.
+            "person" to "Chats with people",
+            "request" to "Message requests",
+            // Groups (people-chatting §9, §13): a group's message (and a
+            // mention), and an invite to a group.
+            "group" to "Groups",
+            "group_invite" to "Invites to groups",
         )
 
         fun makeChannels(context: Context) {

@@ -106,12 +106,15 @@ type Image map[string]string
 // Model is what a published snapshot holds: everything the page shows
 // but the catalogue's rows, which are read from the copy.
 type Model struct {
-	Version    int    `json:"version"`
-	Slug       string `json:"slug"`
-	Card       Card   `json:"card"`
-	Logo       Image  `json:"logo,omitempty"`
-	MapLink    string `json:"map_link,omitempty"`
-	WhatsLink  string `json:"whatsapp_link,omitempty"`
+	Version   int    `json:"version"`
+	Slug      string `json:"slug"`
+	Card      Card   `json:"card"`
+	Logo      Image  `json:"logo,omitempty"`
+	MapLink   string `json:"map_link,omitempty"`
+	WhatsLink string `json:"whatsapp_link,omitempty"`
+	// ChatLink is the business's Taskiem chat link, for "Chat with us"
+	// (docs/spec/taskiem-for-everyone.md §8.2), when the owner offers it.
+	ChatLink   string `json:"chat_link,omitempty"`
 	HasCatalog bool   `json:"has_catalogue"`
 	// HasServices: the page lists services to book.
 	HasServices bool `json:"has_services,omitempty"`
@@ -318,6 +321,21 @@ func Save(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, slug string, card Ca
 // going live: a first publish the checks or the business's verification
 // send to the review queue (docs/moderation.md).
 func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string, hold bool) (Storefront, error) {
+	return PublishWith(ctx, tx, tenant, previewDomain, actor, hold, Chat{})
+}
+
+// Chat is how a published page offers to chat with the business (§8.2 of
+// docs/spec/taskiem-for-everyone.md): its Taskiem chat link, and whether
+// the WhatsApp button stays beside it, gives way to it, or is alone.
+type Chat struct {
+	// Link is the business's chat link; "" offers none.
+	Link string
+	// Button is whatsapp, taskiem or both ("" is both).
+	Button string
+}
+
+// PublishWith is Publish, with the page's chat button.
+func PublishWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, actor string, hold bool, chat Chat) (Storefront, error) {
 	s, err := Get(ctx, tx, tenant)
 	if err != nil {
 		return Storefront{}, err
@@ -334,6 +352,7 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 	}
 	m := Model{Version: s.PublishedVersion + 1, Slug: s.Slug, Card: card, MapLink: card.MapLink(), WhatsLink: card.WhatsAppLink(),
 		HasCatalog: s.CatalogueTable != nil, HasServices: s.ServicesTable != nil, PublishedAt: time.Now().UTC()}
+	m.applyChat(card, chat)
 	if card.Logo != "" {
 		img, err := mediaImage(ctx, tx, tenant, card.Logo)
 		if err != nil {
@@ -368,6 +387,76 @@ func Publish(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain, ac
 	return scan(tx.QueryRow(ctx, `UPDATE storefronts SET status = CASE WHEN $3 THEN 'in_review' WHEN status = 'closed' THEN 'closed' ELSE 'published' END,
 		review_note = NULL, published_version = $2, published_slug = slug, published_at = now(), updated_at = now() WHERE tenant_id = $1 RETURNING `+cols,
 		tenant, m.Version, hold))
+}
+
+// applyChat sets a model's chat button and WhatsApp link: WhatsApp's from
+// the card, beside the chat link, given way to it, or alone.
+func (m *Model) applyChat(card Card, chat Chat) {
+	m.WhatsLink, m.ChatLink = card.WhatsAppLink(), ""
+	switch chat.Button {
+	case "whatsapp":
+	case "taskiem":
+		// Chat with us instead of WhatsApp, when there is a link to offer.
+		if chat.Link != "" {
+			m.ChatLink, m.WhatsLink = chat.Link, ""
+		}
+	default:
+		m.ChatLink = chat.Link
+	}
+}
+
+// RepublishChat publishes the page as it is published now, with only its
+// chat button changed (a new chat link, the owner's button, chats turned
+// on or off): a copy of the published snapshot as the next version, never
+// the owner's draft, which stays unpublished, and with nothing for the
+// moderators to look at again. It does nothing to a page that is not
+// published (ErrNotFound before the first publish), or whose button is
+// already chat's.
+func RepublishChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor string, chat Chat) (bool, error) {
+	s, err := Get(ctx, tx, tenant)
+	if err != nil {
+		return false, err
+	}
+	if s.PublishedVersion == 0 || s.Status != "published" {
+		return false, nil
+	}
+	m, err := PublishedModel(ctx, tx, tenant)
+	if err != nil {
+		return false, err
+	}
+	before := m
+	m.applyChat(m.Card, chat)
+	if m.ChatLink == before.ChatLink && m.WhatsLink == before.WhatsLink {
+		return false, nil
+	}
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(version), 0) + 1 FROM storefront_snapshots WHERE storefront_id = $1`, s.ID).Scan(&m.Version); err != nil {
+		return false, err
+	}
+	raw, _ := json.Marshal(m)
+	sum := sha256.Sum256(raw)
+	if _, err := tx.Exec(ctx, `INSERT INTO storefront_snapshots (storefront_id, version, tenant_id, model, hash, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
+		s.ID, m.Version, tenant, raw, sum[:], actor); err != nil {
+		return false, err
+	}
+	// The page's own published time and status stay: only its version moves.
+	_, err = tx.Exec(ctx, `UPDATE storefronts SET published_version = $2, updated_at = now() WHERE tenant_id = $1 AND status = 'published'`, tenant, m.Version)
+	return err == nil, err
+}
+
+// PublishedModel is the published page's snapshot; ErrNotFound before
+// the first publish.
+func PublishedModel(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Model, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `SELECT snap.model FROM storefronts s JOIN storefront_snapshots snap ON snap.storefront_id = s.id AND snap.version = s.published_version
+		WHERE s.tenant_id = $1`, tenant).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Model{}, ErrNotFound
+	}
+	if err != nil {
+		return Model{}, err
+	}
+	var m Model
+	return m, json.Unmarshal(raw, &m)
 }
 
 // DefaultClosedMessage is what a page closed without a message says.

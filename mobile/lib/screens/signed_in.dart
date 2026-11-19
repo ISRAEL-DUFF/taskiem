@@ -2,6 +2,8 @@
 // phones (§5.2). Until the chat comes (M3) this is the screen the app opens
 // on; then it moves behind the chat's menu.
 
+import '../chat/chat_link_page.dart' show ChatLinkPage;
+import '../chat/discover_settings.dart' show DiscoverSettingsPage;
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -21,6 +23,7 @@ import '../kit/mobile.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'settings_more.dart';
+import 'switcher.dart' show lockWords, showSwitcher;
 
 class SignedInScreen extends StatefulWidget {
   const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
@@ -39,7 +42,7 @@ class SignedInScreen extends StatefulWidget {
 
 class _SignedInScreenState extends State<SignedInScreen> {
   List<Phone>? _phones;
-  List<ListBusinessesResponseBusinessesItem> _businesses = const [];
+  List<BusinessEntry> _businesses = const [];
   String? _error;
   // Each read on its own; one the server has off, or that failed, is not shown.
   WhatsAppBinding? _wa;
@@ -108,12 +111,12 @@ class _SignedInScreenState extends State<SignedInScreen> {
     }
   }
 
-  Future<void> _switch(ListBusinessesResponseBusinessesItem b) =>
-      _try(() async {
-        await widget.auth.switchTo(b.id);
-        await _load();
-      });
-
+  /// Into a business through the switcher, which asks first for what a
+  /// locked one needs (taskiem-for-everyone §5.4, §6); back, read again.
+  Future<void> _switch(BusinessEntry? b) async {
+    await showSwitcher(context, widget.auth, open: b);
+    if (mounted) await _load();
+  }
 
   /// The lock's switch: on locks at once, off turns it off; a phone
   /// without a lock of its own is told.
@@ -153,7 +156,9 @@ class _SignedInScreenState extends State<SignedInScreen> {
       children: [
         YouCard(auth: widget.auth),
         if (_error != null) TkErrorBox(_error!),
-        if (_businesses.length > 1)
+        // Every business and workflows workspace, a locked one with what it
+        // needs; then You or any of them through the switcher.
+        if (_businesses.isNotEmpty)
           TkSection(
             title: 'Your businesses',
             inset: 56,
@@ -161,11 +166,14 @@ class _SignedInScreenState extends State<SignedInScreen> {
               for (final b in _businesses)
                 TkListRow(
                   title: b.name,
-                  sub: b.current == true ? 'Here now' : '',
-                  icon: 'b-store',
+                  sub: b.current == true
+                      ? (b.kind == 'workflows' ? 'Workflows · here now' : 'Here now')
+                      : (b.locked ? lockWords(b.lock) : (b.kind == 'workflows' ? 'Workflows' : '')),
+                  icon: b.kind == 'workflows' ? 'b-flow' : 'b-store',
                   square: b.current == true ? look.lime : look.violet,
                   trailing: b.current == true ? null : TkSmallButton(label: 'Switch', semantics: 'Switch to ${b.name}', onPressed: () => _switch(b)),
                 ),
+              TkListRow(title: 'Switch to You or a business', icon: 'loop', square: look.teal, onTap: () => _switch(null)),
             ],
           ),
         TkSection(
@@ -248,6 +256,32 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   square: const Color(0xFF611F69),
                   trailing: slack.linked ? quiet('Linked') : null,
                   onTap: () => _open(SettingsPage(title: 'Slack', children: [SlackCard(auth: widget.auth)])),
+                ),
+            ],
+          ),
+        // Customers chatting in the app (taskiem-for-everyone §8.2): the chat
+        // link, its QR code and the chat settings, on a page of their own.
+        if (widget.auth.can('storefront.manage|order.handle'))
+          TkSection(
+            title: 'Customers',
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'Customer chats',
+                sub: 'Your chat link, its QR code and how you answer',
+                icon: 'b-chat',
+                square: look.teal,
+                onTap: () => _open(ChatLinkPage(auth: widget.auth)),
+              ),
+              // Discover (taskiem-for-everyone §10): found by the public in
+              // the Taskiem app, apart from Explore.
+              if (widget.auth.can('storefront.manage'))
+                TkListRow(
+                  title: 'Discover',
+                  sub: 'Found by the public in the Taskiem app',
+                  icon: 'b-search',
+                  square: look.blue,
+                  onTap: () => _open(DiscoverSettingsPage(auth: widget.auth)),
                 ),
             ],
           ),
@@ -457,7 +491,7 @@ class NotificationsCard extends StatelessWidget {
             else ...[
               TkSwitchRow(
                 label: 'Notify me on this phone',
-                hint: 'Messages, orders and what needs you, even when Taskiem is closed.',
+                hint: n.personal ? 'When a business you buy from answers you, even when Taskiem is closed.' : 'Messages, orders and what needs you, even when Taskiem is closed.',
                 on: n.isOn,
                 onChanged: n.busy ? null : (v) => v ? n.turnOn() : n.turnOff(),
               ),
@@ -492,37 +526,80 @@ class NotificationsCard extends StatelessWidget {
                     ),
                 ],
               ],
-              if (others.isNotEmpty) ...[
+              // From a business: the person's own chats with businesses
+              // (You's), on this phone too.
+              if (!n.personal) ...[
                 const SizedBox(height: 16),
-                Text('Your other devices', style: tkText(size: 14, weight: 600, color: t.text)),
-                for (final d in others)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(d.label, style: tkText(size: 14, weight: 500, color: t.text)),
-                              Text(
-                                d.kind == 'fcm' ? (d.platform == 'ios' ? 'Taskiem app on an iPhone' : 'Taskiem app on Android') : 'Browser',
-                                style: tkHint(t),
-                              ),
-                            ],
-                          ),
-                        ),
-                        TkButton(label: 'Remove', onPressed: n.busy ? null : () => n.remove(d.id)),
-                      ],
-                    ),
-                  ),
+                TkSwitchRow(
+                  label: kindWords[youKind]!.$1,
+                  hint: 'When a business you buy from answers you, on You. They come here while you work in a business too.',
+                  on: n.youOn,
+                  onChanged: n.busy ? null : n.setYou,
+                ),
               ],
+              _Devices(
+                title: n.personal ? 'Your other devices' : 'Your other devices here',
+                devices: others,
+                busy: n.busy,
+                onRemove: n.remove,
+              ),
+              if (!n.personal)
+                _Devices(
+                  title: 'Your devices for You',
+                  devices: (n.youView?.devices ?? const <PushDevice>[]).where((d) => d.id != n.youMine?.id).toList(),
+                  busy: n.busy,
+                  onRemove: n.removeYou,
+                ),
             ],
           ],
         ),
       );
     },
   );
+}
+
+/// A list of the person's other devices that are notified, each with
+/// Remove.
+class _Devices extends StatelessWidget {
+  const _Devices({required this.title, required this.devices, required this.busy, required this.onRemove});
+  final String title;
+  final List<PushDevice> devices;
+  final bool busy;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    if (devices.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text(title, style: tkText(size: 14, weight: 600, color: t.text)),
+        for (final d in devices)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(d.label, style: tkText(size: 14, weight: 500, color: t.text)),
+                      Text(
+                        d.kind == 'fcm' ? (d.platform == 'ios' ? 'Taskiem app on an iPhone' : 'Taskiem app on Android') : 'Browser',
+                        style: tkHint(t),
+                      ),
+                    ],
+                  ),
+                ),
+                TkSmallButton(label: 'Remove', semantics: 'Remove ${d.label}', onPressed: busy ? null : () => onRemove(d.id)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Passkeys (docs/spec/mobile-app-m4.md N6; the web's Account, Passkeys):

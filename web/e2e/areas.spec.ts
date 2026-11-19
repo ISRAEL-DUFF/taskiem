@@ -85,21 +85,20 @@ test("Chat still opens, and the shop's tabs follow, when parts are off", async (
   await expect(tabs.getByRole("link", { name: "Price lists" })).toHaveCount(0);
 });
 
-test("signup asks what the business does, and starts with those parts", async ({ page }) => {
+test("starting a business asks what it does, and starts with those parts", async ({ page }) => {
   const stamp = letters();
-  await page.goto("/login");
-  await page.getByRole("link", { name: "Create an account" }).click();
+  // An owner starts another business (Start something, taskiem-for-everyone §18.1).
+  await signUp(page, `Areas First ${stamp}`);
+  await page.goto("/start-something");
+  await page.getByTestId("start-business").click();
   await expect(page.getByTestId("signup-kind")).toContainText("What does your business do?");
-  await axeBoth(page, "Signup");
-  await page.getByLabel("Business or organisation name").fill(`Fibre ${stamp}`);
-  await page.getByLabel("Your name").fill("Tunde");
-  await page.getByLabel("Email").fill(`isp-${stamp}-${Math.random().toString(36).slice(2, 6)}@areas.test`);
-  await page.getByLabel("Password").fill("correct horse battery");
-  // The question is asked, not guessed: signup waits for an answer.
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("heading", { name: "Start with Taskiem" })).toBeVisible();
+  await axeBoth(page, "Start something");
+  await page.getByLabel("Business name").fill(`Fibre ${stamp}`);
+  // The question is asked, not guessed: starting waits for an answer.
+  await page.getByRole("button", { name: "Start the business" }).click();
+  await expect(page.getByRole("heading", { name: "Start something" })).toBeVisible();
   await page.getByLabel("I bill customers for a service").check();
-  await page.getByRole("button", { name: "Create account" }).click();
+  await page.getByRole("button", { name: "Start the business" }).click();
 
   // Money is there; the shop's Orders is not; the checklist has no shop page.
   await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();

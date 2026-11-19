@@ -147,6 +147,10 @@ func (o *Orders) statusLinkFor(ctx context.Context, tenant uuid.UUID, ord Order)
 
 // refundByHandNote is what a refund_due order paid by transfer says.
 func refundByHandNote(ord Order) string {
+	if ord.PaidInShares || ord.PaidAt == nil {
+		return "Paid in parts (" + FormatNaira(ord.RefundKobo()) + ") before it closed: send each part back to whoever paid it from your bank " +
+			"(the money log has each payment), then mark it refunded."
+	}
 	how := "by bank transfer"
 	if ord.PaidBy != "transfer" {
 		how = "with money matched to it, not through its card page"

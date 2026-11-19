@@ -151,20 +151,23 @@ func TestSlackSignup(t *testing.T) {
 	if b := buttons(ask[len(ask)-1]); len(b) != 1 || b[0] != "su:suggest" {
 		t.Fatalf("the business's name: %v", ask[len(ask)-1])
 	}
-	// The workspace's name, offered; the person's name is Slack's.
+	// A workspace's name, never a business's.
+	if q, _ := ask[len(ask)-1]["text"].(string); !strings.Contains(q, "this workspace") || strings.Contains(q, "business") {
+		t.Fatalf("the workspace's name asked as: %q", q)
+	}
+	// The workspace's name, offered; the person's name is Slack's. A Slack
+	// workspace starts as workflows (taskiem-for-everyone §18.3): nothing
+	// about selling is asked.
 	n := len(w.fake.to("U0ADA"))
 	w.click(t, "U0ADA", "taskiem.reply.0", "su:suggest", slackSecret)
-	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "sell") {
-		t.Fatalf("after the name: %v", s)
-	}
-	w.event(t, dm("Ev2", "U0ADA", "1"), slackSecret)
-	n = len(w.fake.to("U0ADA"))
-	w.event(t, dm("Ev3", "U0ADA", "2"), slackSecret)
-	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "Acme Foods") {
+	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "Acme Foods") || !strings.Contains(s[0], "Leave requests") || strings.Contains(s[0], "sell") {
 		t.Fatalf("done: %v", s)
 	}
 
 	tenant := w.scalar(t, `SELECT tenant_id::text FROM tenant_onboarding WHERE source = 'slack'`)
+	if v := w.scalar(t, `SELECT t.kind || '|' || (SELECT count(*) FROM business_areas b WHERE b.tenant_id = t.id AND NOT b.enabled) FROM tenants t WHERE t.id = $1`, tenant); v != "workflows|5" {
+		t.Errorf("the workspace's kind and areas: %v", v)
+	}
 	if v := w.scalar(t, `SELECT u.email || '|' || u.name || '|' || (u.email_verified_at IS NULL) FROM users u JOIN memberships m ON m.user_id = u.id AND m.role = 'owner' WHERE m.tenant_id = $1`, tenant); v != "ada@acme.test|Ada Obi|true" {
 		t.Errorf("the owner: %v", v)
 	}
@@ -189,10 +192,8 @@ func TestSlackSignup(t *testing.T) {
 	}
 	// Another business from Slack has the workspace's Slack too.
 	w.event(t, dm("Ev5", "U0ADA", "new business"), slackSecret)
-	w.event(t, dm("Ev6", "U0ADA", "Acme Drinks"), slackSecret)
-	w.event(t, dm("Ev7", "U0ADA", "1"), slackSecret)
 	n = len(w.fake.to("U0ADA"))
-	w.event(t, dm("Ev8", "U0ADA", "2"), slackSecret)
+	w.event(t, dm("Ev6", "U0ADA", "Acme Drinks"), slackSecret)
 	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "Acme Drinks") {
 		t.Fatalf("another business: %v", s)
 	}
@@ -213,8 +214,6 @@ func TestSlackSignupKnownWorkspace(t *testing.T) {
 	w.install(t)
 	w.event(t, dm("Ev1", "U0ADA", "yes"), slackSecret)
 	w.event(t, dm("Ev2", "U0ADA", "Acme Foods"), slackSecret)
-	w.event(t, dm("Ev3", "U0ADA", "1"), slackSecret)
-	w.event(t, dm("Ev4", "U0ADA", "2"), slackSecret)
 	tenant := w.scalar(t, `SELECT tenant_id::text FROM tenant_onboarding WHERE source = 'slack'`)
 	// Slack took the token back (the app was removed), then Ben adds it
 	// again: the connection takes the new install's token.
@@ -265,8 +264,6 @@ func TestSlackSignupEmailTaken(t *testing.T) {
 	w.click(t, "U0ADA", "taskiem.reply.0", "su:start", slackSecret)
 	w.event(t, dm("Ev1", "U0ADA", "yes"), slackSecret)
 	w.event(t, dm("Ev2", "U0ADA", "Acme Foods"), slackSecret)
-	w.event(t, dm("Ev3", "U0ADA", "1"), slackSecret)
-	w.event(t, dm("Ev4", "U0ADA", "2"), slackSecret)
 	// A Slack-only account: the web account is not touched.
 	if v := w.scalar(t, `SELECT u.email FROM users u JOIN memberships m ON m.user_id = u.id AND m.role = 'owner' JOIN tenants t ON t.id = m.tenant_id AND t.name = 'Acme Foods'`); !strings.HasSuffix(v.(string), "@slack.taskiem.invalid") {
 		t.Errorf("the Slack owner's email: %v", v)

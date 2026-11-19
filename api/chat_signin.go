@@ -14,6 +14,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,9 +66,8 @@ func (s *Server) chatSigninStart(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	number, err := whatsapp.Normalise(req.Phone, s.defaultCountry())
-	if err != nil {
-		s.fail(w, r, fmt.Errorf("%w: give the phone number of your WhatsApp or Telegram", errBadRequest))
+	number, ok := phoneNumber(w, req.Phone)
+	if !ok {
 		return
 	}
 	if !s.limiter("chat-signin-number:"+number, time.Hour, 5).Allow() {
@@ -102,10 +102,17 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip, agent string) e
 		return nil
 	}
 	tenants, err := s.userTenants(ctx, user)
-	if err != nil || len(tenants) == 0 {
+	if err != nil {
 		return err
 	}
-	if ok, err := s.passwordUsable(ctx, user); err != nil || !ok {
+	// Someone in no business signs in to their own side
+	// (docs/spec/taskiem-for-everyone.md §5.2): the code is counted
+	// against no business.
+	home := uuid.Nil
+	if len(tenants) > 0 {
+		home = tenants[0]
+	}
+	if ok, err := s.passwordUsable(ctx, user); err != nil || (!ok && len(tenants) > 0) {
 		return err // single sign-on everywhere: a code would be no use
 	}
 	if _, err := s.passwordSigninTenant(ctx, user, uuid.Nil); err != nil {
@@ -148,15 +155,21 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip, agent string) e
 	// Telegram a message, which is kept in no history.
 	switch channel {
 	case "whatsapp":
-		if _, err := s.WhatsApp.SendTemplate(ctx, tenants[0], number, whatsapp.TplOTP, map[string]string{"code": code}, nil); err != nil {
+		if _, err := s.WhatsApp.SendTemplate(ctx, home, number, whatsapp.TplOTP, map[string]string{"code": code}, nil); err != nil {
 			return err
 		}
 	case "telegram":
 		addr := fmt.Sprintf("tg:%d", *tg)
-		l := s.chooseLang(ctx, tenants[0], addr, "").Tag
+		l := lang.EN
+		if home != uuid.Nil {
+			l = s.chooseLang(ctx, home, addr, "").Tag
+		}
 		if _, err := s.Telegram.Client.SendMessage(ctx, *tg, tr(l, "chat.signin.code", "code", code), nil); err != nil {
 			return err
 		}
+	}
+	if len(tenants) == 0 {
+		return nil
 	}
 	return db.InTenantTx(ctx, s.Store.Pool, tenants, func(tx pgx.Tx) error {
 		for _, t := range tenants {
@@ -194,9 +207,8 @@ func (s *Server) chatSigninVerify(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	number, err := whatsapp.Normalise(req.Phone, s.defaultCountry())
-	if err != nil {
-		writeErr(w, http.StatusUnauthorized, chatCodeWrong)
+	number, ok := phoneNumber(w, req.Phone)
+	if !ok {
 		return
 	}
 	if !s.loginLimiter("chat-verify-number:" + number).Allow() {
@@ -317,6 +329,18 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 		writeErr(w, http.StatusUnauthorized, "this chat was linked to the account less than 24 hours ago, so it cannot sign in yet; sign in the way you usually do")
 		return
 	}
+	// A WhatsApp number changed away from signs no one in: the binding may
+	// be someone else's number now (docs/spec/taskiem-for-everyone.md §5.5).
+	var current bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_chat_number_current($1, $2)`, user, channel).Scan(&current); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !current {
+		refused("number_changed")
+		writeErr(w, http.StatusUnauthorized, "this chat's number is no longer this account's phone: sign in with your phone number")
+		return
+	}
 	want, err := s.passwordSigninTenant(ctx, user, want)
 	if errors.Is(err, errPasskeyRequired) {
 		refused("passkey_required")
@@ -327,6 +351,35 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 		s.fail(w, r, err)
 		return
 	}
+	// A code to a chat proves only that someone holds the number today
+	// (§5.4): on a device with no second proof, a person in a business who
+	// could give one signs in to their own side, proves, then switches.
+	// Someone with no way to give one enters as before, recorded.
+	tenants, err := s.userTenants(ctx, user)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	noneProof := false
+	if len(tenants) > 0 {
+		var proved bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_device_signin($1, $2, false)`, user, s.signinDeviceKey(w, r, bearer)).Scan(&proved); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if !proved {
+			ways, err := s.secondProofsOf(ctx, user)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if ways.any() {
+				s.chatSigninPersonal(w, r, user, channel, how, bearer, ways)
+				return
+			}
+			noneProof = true
+		}
+	}
 	sess, err := s.createSession(r, user, want, "chat")
 	switch {
 	case errors.Is(err, errSSORequired):
@@ -336,16 +389,32 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	case errors.Is(err, errPhoneBusy):
 		writeErr(w, http.StatusConflict, err.Error())
 		return
-	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
+	case errors.Is(err, errNoMembership):
+		// In no business: their own side (docs/spec/taskiem-for-everyone.md §5.2).
+		out := map[string]any{}
+		if perr := s.startPersonalSession(w, r, user, "chat", bearer, out); errors.Is(perr, errPhoneBusy) {
+			writeErr(w, http.StatusConflict, perr.Error())
+			return
+		} else if perr != nil {
+			s.fail(w, r, perr)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	case errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
 		return
 	case err != nil:
 		s.fail(w, r, err)
 		return
 	}
+	detail := map[string]any{"channel": channel, "how": how, "ip": clientIP(r)}
+	if noneProof {
+		detail["second_proof"] = "none_possible"
+	}
+	raw, _ := json.Marshal(detail)
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{sess.tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.chat_signin', $3, jsonb_build_object('channel', $4::text, 'how', $5::text, 'ip', $6::text))`,
-			sess.tenant, user.String(), user.String(), channel, how, clientIP(r))
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.chat_signin', $3, $4)`, sess.tenant, user.String(), user.String(), raw)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -356,6 +425,26 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	s.background(ctx, "chat sign-in told", func(ctx context.Context) { s.tellChatSignin(ctx, user, tenant, device) })
 	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user}
 	s.deliverSession(w, bearer, sess.token, out)
+	writeJSON(w, http.StatusOK, out)
+}
+
+// chatSigninPersonal signs a person in by their chat to their own side,
+// on a device with no second proof: {personal: true, second_proof_required:
+// true, ways}, as the phone way in answers. Recorded in each business.
+func (s *Server) chatSigninPersonal(w http.ResponseWriter, r *http.Request, user uuid.UUID, channel, how string, bearer bool, ways secondProofWays) {
+	ctx := r.Context()
+	out := map[string]any{"second_proof_required": true, "ways": ways}
+	if err := s.startPersonalSession(w, r, user, "chat", bearer, out); errors.Is(err, errPhoneBusy) {
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	} else if errors.Is(err, errAccountOff) {
+		writeErr(w, http.StatusUnauthorized, err.Error())
+		return
+	} else if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	_ = s.auditEverywhere(ctx, user, "auth.chat_signin", map[string]any{"channel": channel, "how": how, "ip": clientIP(r), "personal": true, "second_proof": "required"})
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -597,6 +686,11 @@ func (s *Server) waSignOutEverywhere(ctx context.Context, c *chat) error {
 			return err
 		}
 		n = tag.RowsAffected()
+		// Their own side's sessions too, which no business scope reaches
+		// (not counted: the count is of their businesses' sessions).
+		if _, err := tx.Exec(ctx, `SELECT taskiem_auth_revoke_sessions($1, NULL)`, c.p.UserID); err != nil {
+			return err
+		}
 		return waAudit(ctx, tx, c.ch.Name(), c.p, "auth.signout_everywhere", c.p.UserID.String(), map[string]any{"sessions": n})
 	}); err != nil {
 		return err

@@ -442,6 +442,24 @@ img.tk-live-tile { object-fit: cover; }
 .customer-note { margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
 .customer-note.stop { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
 .chat-pane .bubble.media-note .text { color: var(--muted); }
+/* One customer on both lines (taskiem-for-everyone §11): each line's state
+ * in words, and where the reply goes, chosen as two pills. */
+.customer-line-states { list-style: none; margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-soft); color: var(--text); }
+.customer-line-states li + li { margin-top: 2px; }
+.line-chooser { margin: 0 12px 8px; padding: 0; border: 0; min-width: 0; }
+.line-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.line-label { font-size: 13px; color: var(--muted); }
+@media (max-width: 480px) { .line-label { flex-basis: 100%; } }
+.pc-wa-here { display: block; font-size: 12px; line-height: 1.3; color: var(--muted); white-space: normal; }
+.line-choice { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; background: var(--tk-soft); color: var(--text); font-size: 13px; cursor: pointer; }
+.line-choice.on { background: var(--primary); color: var(--primary-text); font-weight: 600; }
+.line-choice.off { cursor: not-allowed; color: var(--muted); }
+.line-choice input { margin: 0; accent-color: var(--primary-text); }
+.line-choice:focus-within { box-shadow: var(--ring); }
+.line-why { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+/* Where a message went, quietly, above its words. */
+.bubble .line-of { display: block; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+.bubble.mine .line-of { color: var(--chat-out-meta); }
 .chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }
 .customer-failed { display: block; margin-top: 4px; font-size: 12px; color: var(--danger); }
 /* Orders from customers' messages (phase 2): the card above the reply box. */
@@ -527,3 +545,151 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
    second line rather than squeezing ("Op / en"). */
 .tk-ref-foot .tk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; white-space: nowrap; flex: none; }
 .tk-refs { display: flex; flex-direction: column; }
+
+/* --- A person's chats with businesses (taskiem-for-everyone §8.3, §9) --- */
+.you-shell.you-chat { height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.you-chat .you-main { flex: 1; min-height: 0; width: 100%; max-width: 960px; padding: 0; display: flex; flex-direction: column; }
+.you-chat .person-pane { flex: 1; min-height: 0; height: 100%; border: 0; border-radius: 0; background: var(--chat-pattern), var(--chat-wallpaper); }
+.you-chat .person-pane .chat-back { display: inline-flex; }
+.you-chat .person-pane .chat-stream { max-height: none; min-height: 0; background: none; gap: 2px; padding: 8px 10px; }
+.you-chat .person-pane .chat-head { position: relative; z-index: 3; }
+@media (max-width: 860px) {
+  /* A conversation takes the whole screen on a phone; Back returns. */
+  .you-chat .you-top { display: none; }
+}
+.pc-notice { display: flex; align-items: center; gap: 10px; margin: 8px 10px 0; }
+.pc-notice .grow { flex: 1; min-width: 0; }
+.pc-offer-mark { display: block; margin-bottom: 4px; }
+.pc-stop-offers { display: block; margin-top: 4px; font-size: 13px; }
+.pc-app-line { margin: 0; padding: 4px 16px 10px; text-align: center; font-size: 13px; color: var(--muted); background: var(--tk-soft); }
+.pc-app-line a { color: var(--muted); }
+.pc-offers { margin: 8px auto; max-width: 420px; }
+.pc-tiles, .pc-items, .pc-orders, .pc-lines { list-style: none; margin: 0; padding: 0; }
+.pc-tile { width: 100%; text-align: left; background: none; border: 0; box-shadow: none; cursor: pointer; font: inherit; }
+.pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
+.pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.pc-item:last-child { border-bottom: 0; }
+.pc-item-share { align-self: flex-start; padding: 2px 0; font-size: 13px; }
+.pc-item-photo { flex: none; width: 52px; height: 52px; border-radius: 14px; object-fit: cover; }
+.pc-size { margin-top: 6px; max-width: 100%; }
+.pc-check { display: flex; flex-direction: column; gap: 12px; }
+.pc-lines li { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.pc-lines li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pc-lines .pc-total { font-weight: 700; border-bottom: 0; }
+.pc-choice { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pc-choice legend { font-weight: 600; margin-bottom: 4px; }
+.pc-done { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.pc-days, .pc-times { padding: 0 0 10px; flex-wrap: wrap; overflow-x: visible; }
+.pc-order { display: flex; flex-direction: column; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+.pc-order-top { display: flex; align-items: flex-start; gap: 10px; }
+.pc-consent { align-items: flex-start; }
+.person-chats .toolbar { margin-bottom: 8px; }
+.app-card .app-card-figure { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+.app-card .tk-ref-foot { flex-wrap: wrap; }
+/* A delivery card's progress: four steps, those done in the accent colour. */
+.app-card-steps { display: flex; gap: 4px; margin: 10px 0 0; }
+.app-card-steps span { flex: 1; height: 4px; border-radius: 999px; background: var(--border-strong); }
+.app-card-steps span.done { background: var(--accent); }
+.pc-order-delivery { display: flex; flex-direction: column; gap: 2px; }
+.pc-order-delivery .app-card-steps { margin-top: 4px; }
+/* Under a business's message asking for a transfer to an account. */
+.pc-transfer-warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 2px; padding: 8px 10px; border-radius: 10px; background: var(--tint-warn); color: var(--tint-warn-text); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.pc-transfer-warn svg { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+/* The header's line of what the business has proved. */
+.pc-trust { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-push-line { margin: 0; padding: 4px 12px 6px; font-size: 13px; color: var(--muted); text-align: center; }
+.pc-push-line .link { font-size: 13px; }
+.pc-offers .tk-alert-acts .link { font-size: 13px; }
+.line-mark { font-weight: 400; color: var(--muted); font-size: 13px; }
+.line-mark .off { color: var(--danger); font-weight: 600; }
+.customer-offer-line { margin: 0; padding: 6px 12px 0; font-size: 13px; }
+
+/* The chat link's page, /m/{code}. */
+.chat-link-who { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.chat-link-who h1 { margin: 0; overflow-wrap: anywhere; }
+.chat-link-who .way-in-line, .chat-link-who .hint { margin: 2px 0 0; }
+.chat-link-avatar { flex: none; width: 64px; height: 64px; font-size: 22px; }
+.chat-link-hours { margin: 4px 0 14px; }
+.chat-link-hours ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+.chat-link-page > .primary, .chat-link-page > .button { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+
+/* Your chat link, for the business: the QR code stays dark on white to scan. */
+.chat-link-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.chat-link-box > .grow { flex: 1 1 260px; min-width: 0; }
+.chat-link-qr { flex: none; width: 160px; height: 160px; background: var(--qr-ground); border-radius: 12px; padding: 8px; border: 1px solid var(--border); }
+.chat-link-url { margin: 0 0 10px; overflow-wrap: anywhere; font-weight: 600; }
+.pc-done-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; }
+.pc-done-tick { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--brand); color: var(--brand-dark); }
+
+/* Chats with people (docs/spec/people-chatting.md): the one list's marks and
+   Requests, a request's bar, finding people, a person's link and QR code. */
+.chat-row-trust { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.chat-kind { flex: none; font-size: 12px; font-weight: 500; color: var(--muted); }
+.more-rows { display: flex; justify-content: center; padding: 8px 0; }
+.people-requests-entry { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 8px; border-radius: 12px; background: var(--tk-soft); color: var(--text); text-decoration: none; font-weight: 600; }
+.people-requests-entry .grow { flex: 1; min-width: 0; }
+.people-requests-entry svg { width: 20px; height: 20px; flex: none; }
+.people-request-bar { padding: 10px 12px 12px; border-top: 1px solid var(--border); background: var(--panel); }
+.people-request-bar p { margin: 0 0 8px; font-size: 14px; }
+.people-request-bar .row-actions { flex-wrap: wrap; }
+.bubble .people-deleted { display: inline-flex; align-items: center; gap: 6px; font-style: italic; color: var(--muted); }
+.bubble .people-deleted svg { width: 14px; height: 14px; }
+.bubble .forwarded svg { width: 12px; height: 12px; vertical-align: -1px; }
+.people-split-note { display: block; padding: 0 12px 8px; font-size: 12px; }
+.people-found { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.people-found-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.people-found-who .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.people-found .row-actions { flex-wrap: wrap; }
+.people-link { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.people-link .row-actions { flex-wrap: wrap; }
+.people-link code { overflow-wrap: anywhere; }
+.people-qr { width: 168px; height: 168px; background: var(--qr-ground); border-radius: 12px; padding: 8px; border: 1px solid var(--border); }
+.people-info { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.people-info h2 { margin: 4px 0 0; overflow-wrap: anywhere; }
+.people-info p { margin: 0; }
+.people-info .people-kept { margin-top: 12px; font-size: 13px; }
+.people-kept svg { width: 14px; height: 14px; vertical-align: -2px; }
+.people-setting { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.people-setting:last-of-type { border-bottom: 0; }
+
+/* People chats, stage 5a gaps: search, starred, places, this browser's notifications. */
+.people-list-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.people-list-tools svg { width: 16px; height: 16px; vertical-align: -3px; }
+.people-search-form input { width: 100%; }
+.bubble .people-place .people-place-words, .people-place-preview .people-place-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bubble .people-place .name { overflow-wrap: anywhere; }
+.people-place-sub { font-size: 12px; color: var(--muted); }
+.bubble .people-place .people-place-sub { text-decoration: underline; }
+.people-place-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px; border-radius: 12px; background: var(--panel-2); }
+.people-place-preview > svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
+.people-place-preview .name { font-weight: 600; overflow-wrap: anywhere; }
+.people-place-preview a { flex-basis: 100%; }
+.you-browser-push { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.you-browser-push h3 { margin: 0 0 4px; }
+
+/* People groups (docs/spec/people-chatting.md §9, stage 5b): events as
+   centred lines, each sender's name and photo, mentions, reaction counts,
+   "Read by", the info page's lists. */
+.group-event { align-self: center; display: flex; align-items: center; gap: 6px; max-width: min(90%, 520px); margin: 6px 0; padding: 4px 12px; border-radius: 10px; background: var(--panel); color: var(--muted); font-size: 12.5px; text-align: center; box-shadow: 0 1px 0.5px var(--chat-shadow); overflow-wrap: anywhere; }
+.group-event.taskiem { color: var(--text); border: 1px solid var(--border-strong); }
+.group-event svg { width: 14px; height: 14px; flex: none; }
+.bubble .group-sender { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.bubble .group-sender-photo { width: 20px; height: 20px; font-size: 10px; flex: none; }
+.bubble .group-mentioned { display: block; font-size: 12px; font-weight: 600; color: var(--tint-text); }
+.bubble.mentions-me { box-shadow: 0 1px 0.5px var(--chat-shadow), inset 3px 0 0 var(--accent); }
+.bubble .group-mention { background: var(--tint); color: var(--tint-text); border-radius: 4px; padding: 0 2px; font-weight: 600; }
+.bubble .group-reactions { padding: 0; background: none; border: 0; cursor: pointer; min-height: 0; }
+.bubble .group-reactions .reaction-chip.mine { background: var(--tint); }
+.group-head-link { color: inherit; text-decoration: none; }
+.group-head-link:hover { text-decoration: underline; }
+.group-closed { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.group-closed p { margin: 0; }
+.group-readers { list-style: none; margin: 0; padding: 0; }
+.group-readers li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.group-readers li:last-child { border-bottom: 0; }
+.group-readers time { color: var(--muted); font-size: 13px; flex: none; }
+.group-readers .grow { flex: 1; min-width: 0; }
+.group-added { margin: 0; padding-left: 18px; }
+.group-added li { margin: 4px 0; overflow-wrap: anywhere; }
+.group-row-at { color: var(--accent); font-weight: 700; }
+.group-info .people-info .row-actions { flex-wrap: wrap; justify-content: center; }

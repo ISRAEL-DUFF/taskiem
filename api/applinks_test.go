@@ -67,7 +67,9 @@ func TestWellKnownAppFiles(t *testing.T) {
 	}
 	code, apple := get("/.well-known/apple-app-site-association")
 	body, _ = json.Marshal(apple)
-	if code != 200 || !strings.Contains(string(body), `"appIDs":["ABCDE12345.app.taskiem.chat"]`) || !strings.Contains(string(body), `"webcredentials":{"apps":["ABCDE12345.app.taskiem.chat"]}`) || !strings.Contains(string(body), `{"/":"/chat"}`) {
+	if code != 200 || !strings.Contains(string(body), `"appIDs":["ABCDE12345.app.taskiem.chat"]`) || !strings.Contains(string(body), `"webcredentials":{"apps":["ABCDE12345.app.taskiem.chat"]}`) || !strings.Contains(string(body), `{"/":"/chat"}`) ||
+		!strings.Contains(string(body), `{"/":"/you/chats/*"}`) || !strings.Contains(string(body), `{"/":"/you/orders/*"}`) ||
+		!strings.Contains(string(body), `{"/":"/you/discover/*"}`) || !strings.Contains(string(body), `{"/":"/you/people/*"}`) || strings.Contains(string(body), `/you/settings`) {
 		t.Errorf("apple: %d %s", code, body)
 	}
 }

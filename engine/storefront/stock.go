@@ -55,7 +55,7 @@ type Returner interface {
 // stock was kept by movements) is not put back.
 func (o *Orders) returnStockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord Order) error {
 	r, ok := o.Moves.(Returner)
-	if !ok || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat") {
+	if !ok || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat" && ord.Kind != "app") {
 		return nil
 	}
 	return r.ReturnOrderTx(ctx, tx, tenant, ord.ID, ord.Reference)
@@ -296,7 +296,7 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 		}
 		ord.Basket = mine
 	}
-	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat") || len(ord.Basket) == 0 {
+	if o.Stock == nil || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat" && ord.Kind != "app") || len(ord.Basket) == 0 {
 		return short, nil
 	}
 	var rec map[string]stockStep
@@ -455,4 +455,10 @@ func perItem(basket []Line) []Line {
 		out = append(out, Line{ID: l.ID, Name: l.Name, Quantity: l.Quantity})
 	}
 	return out
+}
+
+// PhoneIndexer writes an order's phone to the phone index, in the order's
+// transaction (engine/phoneindex.Index).
+type PhoneIndexer interface {
+	WriteTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, phone string) error
 }

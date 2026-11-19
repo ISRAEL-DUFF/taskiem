@@ -69,6 +69,12 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   // Where the reader was at the last scroll: at the very end.
   const atEnd = useRef(false);
   const placed = useRef(false);
+  // The message the thread was opened or jumped at (not the first unread,
+  // which is placed once, as the app does), kept where it was put as the
+  // thread's size and content settle (the composer arriving under it, a
+  // card above it filling in), until the reader moves the thread or new
+  // messages are followed.
+  const pin = useRef<{ sel: string; block: "start" | "center" } | null>(null);
   const anchor = useRef<{ h: number; top: number } | null>(null);
   const prevNewest = useRef<string>(undefined);
   const jumpTo = useRef<string>(undefined);
@@ -79,6 +85,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   /** The messages are about to be replaced (another conversation, or a jump): place the view afresh, at `id` if given. */
   const reset = useCallback((id?: string) => {
     placed.current = false;
+    pin.current = null;
     prevNewest.current = undefined;
     jumpTo.current = id;
     setNewCount(0);
@@ -94,11 +101,13 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     const target = el?.querySelector(`[data-msg="${id}"]`);
     if (!el || !target) return false;
     scrollWithin(el, target, "center");
+    pin.current = { sel: `[data-msg="${id}"]`, block: "center" };
     setFlashId(id);
     return true;
   }, []);
   const toBottom = useCallback(() => {
     const el = stream.current;
+    pin.current = null;
     if (el) el.scrollTo({ top: el.scrollHeight });
     setNewCount(0);
   }, []);
@@ -120,7 +129,9 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
         ? el.querySelector(`[data-msg="${id}"]`)
         : el.querySelector("[data-unread]");
       if (target) {
-        scrollWithin(el, target, id ? "center" : "start");
+        const block = id ? "center" : "start";
+        scrollWithin(el, target, block);
+        if (id) pin.current = { sel: `[data-msg="${id}"]`, block };
         if (id) setFlashId(id);
       } else el.scrollTop = el.scrollHeight;
       stick.current = atNewestOf(el);
@@ -132,6 +143,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     }
     const f = followNew(prevNewest.current, items, stick.current, isMine);
     if (f.kind === "bottom") {
+      pin.current = null;
       // The newest message in view, not what follows it (the Taskiem
       // conversation's alert cards): an answer is never left out of sight.
       toNewest(el);
@@ -181,14 +193,24 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     const el = stream.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const keep = () => {
-      if (placed.current && hold.current && atEnd.current && !anchor.current)
-        el.scrollTop = el.scrollHeight;
+      if (!placed.current || anchor.current) return;
+      const target = pin.current && el.querySelector(pin.current.sel);
+      if (pin.current && target) scrollWithin(el, target, pin.current.block);
+      else if (hold.current && atEnd.current) el.scrollTop = el.scrollHeight;
     };
     const sizes = new ResizeObserver(keep);
     const watch = () => {
       sizes.disconnect();
+      // The thread itself too: it is shorter once the composer is in.
+      sizes.observe(el);
       for (const c of Array.from(el.children)) sizes.observe(c);
     };
+    // The reader moving the thread lets go of the message it was opened at.
+    const letGo = () => {
+      pin.current = null;
+    };
+    const reader = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    for (const e of reader) el.addEventListener(e, letGo, { passive: true });
     watch();
     const kids =
       typeof MutationObserver === "undefined"
@@ -198,6 +220,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     return () => {
       sizes.disconnect();
       kids?.disconnect();
+      for (const e of reader) el.removeEventListener(e, letGo);
     };
   }, []);
 

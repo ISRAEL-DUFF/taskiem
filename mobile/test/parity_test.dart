@@ -39,7 +39,7 @@ import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/chat/thread.dart';
 import 'package:taskiem/screens/sign_in.dart';
-import 'package:taskiem/screens/sign_up.dart';
+import 'package:taskiem/screens/welcome.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
@@ -101,10 +101,10 @@ Future<void> _tapLogo(WidgetTester t) async {
 
 /// The app's screens by the web half's names.
 final screens = <String, Screen>{
-  'sign-in': (build: () => SignInScreen(auth: fakeAuth()), drive: _none),
-  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth()), drive: (t) => _tapLogo(t)),
+  'sign-in': (build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}), drive: _none),
+  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}), drive: (t) => _tapLogo(t)),
   'sign-in-chat-code': (
-    build: () => SignInScreen(auth: fakeAuth()),
+    build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}),
     drive: (t) async {
       await _tapLogo(t);
       await t.enterText(find.byType(TextField).first, '08031234567');
@@ -112,7 +112,7 @@ final screens = <String, Screen>{
     },
   ),
   'sign-in-wrong': (
-    build: () => SignInScreen(auth: fakeAuth()),
+    build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}),
     drive: (t) async {
       await t.enterText(find.byType(TextField).at(0), 'ada@parity.test');
       await t.enterText(find.byType(TextField).at(1), 'not the password');
@@ -497,9 +497,8 @@ final screens = <String, Screen>{
     },
   ),
   'sign-up': (
-    build: () => SignUpScreen(auth: fakeAuth()),
+    build: () => WelcomeScreen(auth: fakeAuth(), onEmail: () {}),
     drive: (t) async {
-      await _tap(t, 'I bill for a service');
       FocusManager.instance.primaryFocus?.unfocus();
       await t.pumpAndSettle();
     },

@@ -46,6 +46,9 @@ type ChatOrder struct {
 	Pay          string
 	Note         string
 	By           string // who confirmed it
+	// PersonID: confirmed in a person's app conversation, whose order it
+	// is (told there, and listed on their side).
+	PersonID *uuid.UUID
 }
 
 // ErrNoPage is a chat order to be paid on a page the business does not
@@ -145,10 +148,10 @@ func (o *Orders) PlaceChatTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, i
 	for try := 0; ; try++ {
 		ref = NewReference(slug)
 		tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
-			total_kobo, fulfilment, payment, expires_at, status_key, note, zone, delivery_kobo, decided_by, decided_at)
-			VALUES ($1, $2, $3, 'chat', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now())
+			total_kobo, fulfilment, payment, expires_at, status_key, note, zone, delivery_kobo, decided_by, decided_at, person_id)
+			VALUES ($1, $2, $3, 'chat', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now(), $19)
 			ON CONFLICT (reference) DO NOTHING`,
-			id, tenant, sf, ref, hash, status, customer, subject, basket, total, in.Fulfilment, payment, expires, sealedKey, note, zone, delivery, in.By)
+			id, tenant, sf, ref, hash, status, customer, subject, basket, total, in.Fulfilment, payment, expires, sealedKey, note, zone, delivery, in.By, in.PersonID)
 		if err != nil {
 			return Order{}, err
 		}
@@ -157,6 +160,11 @@ func (o *Orders) PlaceChatTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, i
 		}
 		if try == 4 {
 			return Order{}, errors.New("storefront: no free reference for the order")
+		}
+	}
+	if o.PhoneIndex != nil {
+		if err := o.PhoneIndex.WriteTx(ctx, tx, tenant, id, in.Customer.Phone); err != nil {
+			return Order{}, err
 		}
 	}
 	if err := audit(ctx, tx, tenant, "storefront.order_confirmed", ref, map[string]any{"kind": "chat", "by": in.By, "pay": in.Pay}); err != nil {

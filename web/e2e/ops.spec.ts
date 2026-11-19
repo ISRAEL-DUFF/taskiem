@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
@@ -54,4 +55,49 @@ test("an operator signs in with a passkey and approves a catalogue submission", 
   await page.getByRole("link", { name: "Platform audit" }).click();
   await expect(page.getByRole("cell", { name: "catalogue.approve" })).toBeVisible();
   await expect(page.getByText("Chain intact")).toBeVisible();
+
+  // A report on a business's listing in Discover (taskiem-for-everyone §10):
+  // the listing is taken out, with a reason and the passkey, and put back.
+  const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
+  sql(
+    `INSERT INTO page_reports (id, tenant_id, kind, site_id, reason, message, ip_hash) VALUES (gen_random_uuid(), '${tenant}', 'discover', '${tenant}', 'prohibited', 'Selling medicines', decode(repeat('ab', 32), 'hex'))`,
+  );
+  await page.goto(`${base}/ops/reports`);
+  const report = page.getByRole("row").filter({ hasText: "Selling medicines" });
+  await expect(report).toContainText("Discover listing");
+  // Decided with Remove or Restore only: the report's own buttons answer 409.
+  await expect(report.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+  await expect(report.getByRole("button", { name: "Mark acted on" })).toHaveCount(0);
+  await report.getByRole("button", { name: /Remove or restore/ }).click();
+  const panel = page.getByTestId("ops-discover-action");
+  await expect(panel.getByRole("button", { name: "Remove from Discover with passkey" })).toBeDisabled();
+  await panel.getByLabel(/Reason/).fill("Selling medicines without a licence");
+  // "No" to the question: nothing is done, and nothing says it was.
+  const removals: string[] = [];
+  page.on("request", (r) => r.url().includes("/discover/") && r.method() === "POST" && removals.push(r.url()));
+  page.once("dialog", (d) => void d.dismiss());
+  await panel.getByRole("button", { name: "Remove from Discover with passkey" }).click();
+  await page.waitForTimeout(300);
+  expect(removals).toEqual([]);
+  await expect(page.getByText("Listing removed")).toHaveCount(0);
+  expect(sql(`SELECT count(*) FROM discover_settings WHERE tenant_id = '${tenant}' AND removed_at IS NOT NULL`)).toBe("0");
+  page.once("dialog", (d) => void d.accept());
+  await panel.getByRole("button", { name: "Remove from Discover with passkey" }).click();
+  await expect(page.getByTestId("ops-reports-decided")).toHaveText(/^E2E is taken out of Discover, and its open reports are acted on\./);
+  expect(sql(`SELECT removed_note FROM discover_settings WHERE tenant_id = '${tenant}'`)).toBe("Selling medicines without a licence");
+  // The list is read again: the report is no longer open, it was acted on.
+  await expect(page.getByRole("row").filter({ hasText: "Selling medicines" })).toHaveCount(0);
+  await page.getByRole("group", { name: "Show reports" }).getByRole("button", { name: "Acted on" }).click();
+  const acted = page.getByRole("row").filter({ hasText: "Selling medicines" });
+  await expect(acted).toContainText("Acted on");
+  await acted.getByRole("button", { name: /Remove or restore/ }).click();
+  await page.getByTestId("ops-discover-action").getByRole("button", { name: "Restore with passkey" }).click();
+  await expect(page.getByTestId("ops-reports-decided")).toHaveText(/^E2E: its open reports are dismissed\./);
+  expect(sql(`SELECT removed_at IS NULL FROM discover_settings WHERE tenant_id = '${tenant}'`)).toBe("t");
 });
+
+function sql(text: string): string {
+  const db = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!db) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  return execFileSync("psql", [db.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
+}

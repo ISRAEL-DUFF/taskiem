@@ -477,6 +477,11 @@ func (s *Server) addEmail(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "emails belong to people, not API keys")
 		return
 	}
+	// An email is a second proof's way (personal.go): an unproved code
+	// session does not set one.
+	if s.refuseUnproved(w, r) {
+		return
+	}
 	var req struct {
 		Email string `json:"email"`
 	}

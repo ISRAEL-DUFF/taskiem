@@ -148,7 +148,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           return Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: [for (final k in signupKinds) SizedBox(width: w, child: _KindTile(kind: k, on: _kind == k.id, onTap: () => setState(() => _kind = k.id)))],
+                            children: [for (final k in signupKinds) SizedBox(width: w, child: KindTile(kind: k, on: _kind == k.id, onTap: () => setState(() => _kind = k.id)))],
                           );
                         },
                       ),
@@ -201,8 +201,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
 }
 
 /// A kind of business as a tile (as drawn): pine when chosen.
-class _KindTile extends StatelessWidget {
-  const _KindTile({required this.kind, required this.on, required this.onTap});
+/// A kind of business as a tile (as drawn): its icon and short words.
+class KindTile extends StatelessWidget {
+  const KindTile({super.key, required this.kind, required this.on, required this.onTap});
   final ({String id, String label, String short, String icon}) kind;
   final bool on;
   final VoidCallback onTap;

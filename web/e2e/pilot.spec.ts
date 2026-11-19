@@ -31,7 +31,7 @@ function people(): People {
 }
 
 async function signIn(page: Page, p: Person) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(p.email);
   await page.getByLabel("Password").fill(p.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -146,7 +146,7 @@ test("the pilot path through the demo school on a phone", async ({ page, browser
 
   // The gate, as the gate user: one screen, a cleared child, no amount.
   const gate = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
-  await gate.goto("/login");
+  await gate.goto("/login?with=email");
   await gate.getByLabel("Email").fill(who.gate.email);
   await gate.getByLabel("Password").fill(who.gate.password);
   await gate.getByRole("button", { name: "Sign in", exact: true }).click();

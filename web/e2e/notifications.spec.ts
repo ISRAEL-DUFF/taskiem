@@ -12,7 +12,7 @@ const H = { "X-Taskiem-Request": "1" };
 const PASSWORD = "correct horse battery";
 
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

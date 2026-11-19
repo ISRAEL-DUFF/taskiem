@@ -620,6 +620,18 @@ final List<Tool> tools = [
     more: 'Open money',
     add: 'Add cash or expense',
   ),
+  // Customers chatting in the app (taskiem-for-everyone §8.2): your chat
+  // link and offers to those who said yes, in a sheet of their own.
+  Tool(
+    key: 'customers',
+    title: 'Customers',
+    icon: 'chat',
+    perm: 'storefront.manage|order.handle',
+    url: '/v1/customers/chat-link',
+    rows: (data) => data is Map<String, dynamic> && _str(data['url']).isNotEmpty ? [ToolRow(id: 'link', name: _str(data['url']), sub: '', tags: const [], data: data)] : const [],
+    line: (_) => 'Your chat link, offers',
+    more: 'Open customer chats',
+  ),
 ];
 
 /// "Free", "Busy till 15:30", "Busy, 2 deliveries", "Off today".

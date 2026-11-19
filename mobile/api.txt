@@ -18,6 +18,26 @@ listDevices
 removeDevice
 listBusinesses
 switchBusiness
+# Start a business or workflows (taskiem-for-everyone §18)
+startSomething
+
+# Personal accounts: the phone way in, second proofs, changing a phone
+# (docs/spec/taskiem-for-everyone.md §5, stage 1)
+phoneStart
+phoneVerify
+phoneCreate
+secondProofEmailStart
+secondProofEmailVerify
+secondProofPin
+secondProofPassword
+secondProofPasskeyOptions
+secondProofPasskey
+phoneChangeStart
+phoneChangeVerify
+# Invitations waiting on You (taskiem-for-everyone §7)
+myInvitations
+acceptInvitation
+declineInvitation
 
 # The chats list (M3)
 listLinkChats
@@ -46,6 +66,47 @@ listCustomerMessages
 readCustomerChat
 putCustomerChat
 replyCustomer
+
+# Customers in the app, the business's side (taskiem-for-everyone §8, stage 2)
+openAppCustomerChat
+blockCustomer
+unblockCustomer
+customerChatTyping
+broadcastOffer
+getCustomerChatSettings
+putCustomerChatSettings
+
+# You: a person's chats with businesses, through the customer door
+# (taskiem-for-everyone §7, §8, stage 2). Files go as multipart forms and
+# come as bytes, outside the generated client, as linked businesses' do.
+listMyChats
+startMyChat
+getMyChat
+putMyChat
+listMyChatMessages
+sendMyChatMessage
+readMyChat
+typingInMyChat
+blockBusiness
+unblockBusiness
+reportBusiness
+myChatShop
+myChatServices
+myChatServiceTimes
+myChatOrders
+placeMyChatOrder
+bookInMyChat
+payMyChatOrder
+
+# Discover: the public finding businesses, and a business's listing
+# (taskiem-for-everyone §10, stage 3). Chat from a profile is startMyChat
+# with from: "discover".
+discoverSearch
+discoverCategories
+discoverProfile
+discoverReport
+getDiscoverSettings
+putDiscoverSettings
 
 # The message menu (M3)
 reactLinkMessage
@@ -104,3 +165,147 @@ putPush
 patchPush
 deletePush
 deletePushEndpoint
+
+# Chat links and a customer's storefront orders (taskiem-for-everyone §8.2, §13, stage 2)
+getChatLinkCard
+getChatLink
+newChatLink
+putChatSettings
+myStorefrontOrders
+confirmStorefrontOrders
+
+# Orders on You and saved addresses (taskiem-for-everyone §13, stage 3)
+myOrders
+myOrder
+payMyOrder
+myAddresses
+addMyAddress
+editMyAddress
+deleteMyAddress
+
+# You's settings: deleting the account, the photo (its upload and its bytes are
+# the app's own multipart and image calls, as a chat's files are), pushes,
+# privacy (taskiem-for-everyone §7, §14, stage 3 review fixes)
+deleteAccountStart
+deleteAccountPasskeyOptions
+deleteAccount
+deleteMyPhoto
+myNotifications
+putMyNotifications
+myPrivacy
+
+# Finding people (people-chatting §5, stage 5a): privacy towards people,
+# contacts, looking up a number, a person's link, contact matching and
+# presence. Photos and the QR code are the app's own image calls.
+myPeoplePrivacy
+putMyPeoplePrivacy
+myContacts
+addContact
+renameContact
+removeContact
+contactsKey
+matchContacts
+myPersonLink
+newPersonLink
+myPresence
+lookupPerson
+personByLink
+getPerson
+getPersonLinkCard
+
+# Chats between people and You's one Chats list (people-chatting, stage 5a).
+# Files go as multipart forms and come back as bytes: the app's own calls,
+# as a business chat's files are.
+listAllMyChats
+listPeopleChats
+startPeopleChat
+listPeopleRequests
+listPeopleBlocked
+forwardPeopleMessage
+getPeopleChat
+putPeopleChat
+deletePeopleChat
+acceptPeopleRequest
+declinePeopleRequest
+blockPerson
+unblockPerson
+reportPerson
+readPeopleChat
+peopleMessages
+sendPeopleMessage
+markPeopleMessage
+deletePeopleMessage
+markSplitPaid
+openPeopleCard
+# Stage 5a gaps: typing, search and starred across people chats (the live
+# connection, GET /v1/me/live, is read as a stream: lib/chat/people_live.dart).
+typingPeople
+searchPeople
+starredPeople
+getPayoutAccount
+putPayoutAccount
+deletePayoutAccount
+getMyStanding
+appealMyStanding
+seenMyStanding
+getLawfulRequestCounts
+# Groups (people-chatting §9, stage 5b): files go as multipart forms and
+# come back as bytes, the app's own calls (groupPhoto, putGroupPhoto,
+# sendGroupFile, groupFile, groupLinkQR, groupLinkPhoto), as people chats'.
+listGroups
+createGroup
+listGroupInvites
+acceptGroupInvite
+declineGroupInvite
+searchGroups
+starredGroups
+forwardMessage
+joinGroupByLink
+withdrawGroupJoin
+getGroup
+putGroup
+deleteGroupForMe
+putMyGroup
+leaveGroup
+deleteGroupPhoto
+groupMembers
+addGroupMembers
+setGroupAdmin
+removeGroupMember
+blockGroupMember
+cancelGroupInvite
+groupLink
+newGroupLink
+groupLinkOff
+groupJoinRequests
+approveGroupJoin
+declineGroupJoin
+groupMessages
+groupMedia
+sendGroupMessage
+markGroupMessage
+deleteGroupMessage
+groupMessageInfo
+groupMessageReactions
+openGroupCard
+markGroupSplitPaid
+readGroup
+typingGroup
+groupLinkPreview
+reportGroup
+appealGroup
+
+# Ordering together (people-chatting §10.3, 5b C)
+startBasket
+getBasket
+putBasket
+basketShop
+putMyBasketLines
+deleteBasketLine
+closeBasket
+reopenBasket
+cancelBasket
+handBasket
+placeBasket
+payBasketShare
+sendBasketShareCards

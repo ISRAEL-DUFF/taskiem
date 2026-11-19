@@ -711,6 +711,17 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
+	// The business's copies of the files they sent or were sent in the
+	// app, which are not sealed but kept in its storage, go with them.
+	if err := s.eraseChatFiles(r.Context(), p.TenantID, erased); err != nil {
+		s.Logger.Warn("erasure: the customer's chat files", "tenant", p.TenantID, "err", err)
+	}
+	// A customer's app and WhatsApp lines are parted: each keeps its own
+	// erasure, and nothing more crosses between them (§11).
+	if err := s.partErasedLines(r.Context(), p.TenantID, erased); err != nil {
+		s.Logger.Warn("erasure: the customer's lines", "tenant", p.TenantID, "err", err)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased})
 }
 

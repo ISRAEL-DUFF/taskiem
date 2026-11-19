@@ -12,7 +12,7 @@ test("add a passkey and sign in with it", async ({ page }) => {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
   });
 
-  await page.goto(`${base}/login`);
+  await page.goto(`${base}/login?with=email`);
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -26,6 +26,7 @@ test("add a passkey and sign in with it", async ({ page }) => {
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
+  await page.getByRole("link", { name: "Sign in with email" }).click();
   await page.getByRole("button", { name: "Sign in with a passkey" }).click();
   // Back where the member signed out.
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();

@@ -15,13 +15,15 @@ export function Agents() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [added, setAdded] = useState("");
   const act = useAction();
-  const run = (a: OpsAgent, action: Action) =>
-    act.run(async () => {
-      if (action === "retire" && !confirm(`Retire ${a.name} (${a.code})? A retired agent stays retired.`)) return;
+  const run = (a: OpsAgent, action: Action) => {
+    // Asked first: a "no" does nothing, and says nothing was done.
+    if (action === "retire" && !confirm(`Retire ${a.name} (${a.code})? A retired agent stays retired.`)) return;
+    return act.run(async () => {
       await withStepUp(`ops.agent.${action}`, a.id, `/agents/${a.id}/${action}`, { note: (notes[a.id] ?? "").trim() });
       setNotes({ ...notes, [a.id]: "" });
       reload();
     }, "Agent updated");
+  };
   return (
     <>
       <div className="toolbar">

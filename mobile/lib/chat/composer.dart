@@ -27,6 +27,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'tools_panel.dart';
+import 'pick_problem.dart';
 
 /// Where a file to send comes from: the phone's gallery, camera and files.
 class Pickers {
@@ -183,6 +184,7 @@ class Composer extends StatefulWidget {
     this.replying,
     this.onCancelReply,
     this.tools,
+    this.onTools,
   });
 
   final TextEditingController text;
@@ -193,6 +195,9 @@ class Composer extends StatefulWidget {
 
   /// The tools panel this composer's button opens (with chat tools).
   final ToolsController? tools;
+
+  /// The tools button opens a sheet of its own (a customer's tools on You).
+  final VoidCallback? onTools;
 
   /// Sends the words, with the file waiting for its caption if there is one.
   final void Function(String text, PickedFile? file) onSend;
@@ -271,12 +276,16 @@ class ComposerState extends State<Composer> {
         'document' => widget.pickers.document(),
         _ => widget.pickers.camera(),
       });
-    } on PlatformException catch (e) {
-      setState(
-        () => _error = e.code.contains('denied') || e.code.contains('access')
-            ? 'Taskiem may not use your ${what == 'camera' ? 'camera' : 'photos'}: allow it in your phone’s settings.'
-            : 'That could not be opened. Try again.',
-      );
+    } on Object catch (e) {
+      if (!mounted) return;
+      // The camera or photos refused (Android asks before every photo
+      // taken, CAMERA being declared): plain words and the phone's
+      // settings.
+      if (what == 'document') {
+        setState(() => _error = 'That could not be opened. Try again.');
+      } else {
+        sayPickProblem(context, e, camera: what == 'camera');
+      }
     }
   }
 
@@ -420,7 +429,7 @@ class ComposerState extends State<Composer> {
                 label: widget.tools == null ? 'Chat tools' : (open ? 'Close tools' : 'Open tools'),
                 child: TkPress(
                   // Without chat tools, the tools are not here yet.
-                  onTap: widget.tools?.toggle ?? () => showComingSoon(context),
+                  onTap: widget.tools?.toggle ?? widget.onTools ?? () => showComingSoon(context),
                   child: Container(
                     width: 46,
                     height: 46,

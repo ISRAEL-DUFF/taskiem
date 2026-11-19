@@ -402,7 +402,7 @@ func (d *Dispatch) HeldTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUI
 // online, and not yet with a rider.
 func ReadyReason(o storefront.Order) string {
 	switch {
-	case o.Kind != "order" && o.Kind != "trade" && o.Kind != "chat":
+	case o.Kind != "order" && o.Kind != "trade" && o.Kind != "chat" && o.Kind != "app":
 		return "only orders are delivered"
 	case o.Fulfilment != "delivery":
 		return "it is for pickup"

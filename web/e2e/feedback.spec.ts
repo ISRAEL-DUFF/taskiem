@@ -15,7 +15,7 @@ const failing = {
 // it went, an unexpected error carries a reference, and a failed run is in
 // the bell with nothing set up.
 test("actions say how they went, and the bell tells what happened", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

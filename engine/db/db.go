@@ -172,6 +172,21 @@ func InTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 	return nil
 }
 
+// InPersonTx runs fn in a transaction scoped to one person and no tenant
+// (taskiem_person_scope, migration 00448): what a personal session reaches,
+// their own users row, and nothing of any business.
+func InPersonTx(ctx context.Context, pool *pgxpool.Pool, person uuid.UUID, fn func(pgx.Tx) error) error {
+	if person == uuid.Nil {
+		return fmt.Errorf("db: empty person scope")
+	}
+	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "SELECT set_config('app.person_scope', $1, true)", person.String()); err != nil {
+			return err
+		}
+		return fn(tx)
+	})
+}
+
 // hookTx is the transaction InTenantTx hands out: a transaction that also
 // holds what to do once its commit has succeeded.
 type hookTx struct {

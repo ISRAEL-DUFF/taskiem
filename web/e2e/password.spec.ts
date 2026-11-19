@@ -44,7 +44,7 @@ test.beforeAll(async () => {
 test.afterAll(() => new Promise<void>((resolve) => smtp.close(() => resolve())));
 
 async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -61,7 +61,7 @@ test("forgot password, reset it from the email, then change it", async ({ page }
   expect(added.status()).toBe(201);
   await page.context().clearCookies();
 
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByRole("link", { name: "Forgot password?" }).click();
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
   await page.getByLabel("Email").fill(email);

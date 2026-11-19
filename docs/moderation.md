@@ -40,6 +40,8 @@ Every page's footer has **Report this page**: a reason (a scam, pretending to be
 
 When **three different people** have open reports on a page in the last 30 days, it is **suspended pending review** within a few minutes, and the owner is told.
 
+**Listings in Discover** ([taskiem-for-everyone §10](spec/taskiem-for-everyone.md#10-discover-finding-businesses)) are reported the same way, by people signed in to the Taskiem app (`POST /v1/discover/{business}/report`): a report of the kind `discover` in the same list, three a day from one person for one listing. Three different people with open reports in 30 days hide the listing until a moderator looks; dismissing the reports shows it again. Operators take a listing out of Discover, with a reason the owner is told, and put it back (`POST /v1/ops/discover/{tenant}/{remove,restore}`); a listing taken out stays out whatever the business's switch says.
+
 ## Suspension
 
 A suspended page answers "This page is unavailable" on every address, and its forms take nothing. The owner is told on WhatsApp or Telegram, and **appeals** by replying `APPEAL` and their message (or `POST /v1/storefront/appeal`). A suspended page cannot be published, closed or reopened until it is restored.
@@ -77,6 +79,7 @@ A decision can also reject single photos (`reject_photos`). Operators suspend an
 | `GET /v1/ops/storefront-reviews`, `GET /v1/ops/storefront-reviews/{id}`, `GET /v1/ops/storefront-reviews/{id}/image?src=`, `POST /v1/ops/storefront-reviews/{id}/{approve,reject}` | The review queue (the image route shows the business's own stored photos to the console) |
 | `GET /v1/ops/reports`, `POST /v1/ops/reports/{id}/{dismiss,action,contact}` | Reports |
 | `POST /v1/ops/storefronts/{tenant}/{suspend,restore}` | Suspension by hand |
+| `POST /v1/ops/discover/{tenant}/{remove,restore}` | A listing in Discover taken out or put back |
 
 ## Plans
 

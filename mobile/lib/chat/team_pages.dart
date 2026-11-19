@@ -31,6 +31,7 @@ import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../theme/look.dart';
 import 'storefront_orders_page.dart' show groupedPhone, whatsappLink;
+import 'pick_problem.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -1153,7 +1154,15 @@ class _TasksPageState extends State<TasksPage> with Polling {
 
   Future<void> _done(Map<String, dynamic> t) async {
     if (t['photo'] != true) return _run(() => _auth.transport.send('POST', _path(t, '/done'), body: const {}), 'Done. Thank you.');
-    final photo = await pickTaskPhoto();
+    final ({List<int> bytes, String name})? picked;
+    try {
+      picked = await pickTaskPhoto();
+    } on Object catch (e) {
+      // The camera refused or not there: said, and the task stays to do.
+      if (mounted) sayPickProblem(context, e);
+      return;
+    }
+    final photo = picked;
     if (photo == null || !mounted) return;
     await _run(
       () => _auth.transport.upload(

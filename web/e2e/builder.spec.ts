@@ -15,7 +15,7 @@ const shot = async (page: Page, name: string) => {
 test.use({ bypassCSP: true });
 
 const signIn = async (page: Page) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -96,7 +96,7 @@ test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("the steps are a list, each opens full screen", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/login?with=email");
     await page.getByLabel("Email").fill("owner@e2e.test");
     await page.getByLabel("Password").fill("correct horse battery");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

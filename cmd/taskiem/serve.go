@@ -43,6 +43,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/byok"
 	"github.com/israel-duff/taskiem/engine/canary"
 	"github.com/israel-duff/taskiem/engine/catalogue"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -59,6 +60,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -100,6 +103,13 @@ type config struct {
 	SecureCookies, TrustProxy, Signup bool
 	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
 	AppMinVersion string
+	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
+	// a chat link's page and the shared number's answer to a customer.
+	AppGetURL string
+	// UpdateChatTemplate says Meta approved taskiem_update_chat
+	// (TASKIEM_WA_UPDATE_CHAT_TEMPLATE): updates outside WhatsApp's 24 hours
+	// then carry the business's chat link too.
+	UpdateChatTemplate bool
 	// PublicURL is where people reach the web app; passkeys are bound to it.
 	PublicURL, PasskeyRPID string
 	RequireAdminPasskeys   bool
@@ -471,31 +481,33 @@ func loadConfig() (config, error) {
 	var bad []error
 	flag := envBools(&bad)
 	c := config{
-		DSN:              os.Getenv("TASKIEM_DATABASE_URL"),
-		DBRole:           env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
-		Listen:           env("TASKIEM_LISTEN", ":8080"),
-		EdgeListen:       env("TASKIEM_EDGE_LISTEN", ":8081"),
-		MetricsListen:    env("TASKIEM_METRICS_LISTEN", ":9090"),
-		KMS:              env("TASKIEM_KMS", "local"),
-		LocalKey:         os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
-		AllowLocalKMS:    flag("TASKIEM_ALLOW_LOCAL_KMS", false),
-		OpenBaoAddr:      os.Getenv("TASKIEM_OPENBAO_ADDR"),
-		OpenBaoToken:     os.Getenv("TASKIEM_OPENBAO_TOKEN"),
-		KMSKey:           env("TASKIEM_KMS_KEY", "taskiem"),
-		PublicURL:        strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
-		PasskeyRPID:      os.Getenv("TASKIEM_PASSKEY_RP_ID"),
-		HooksURL:         strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
-		AnchorKey:        os.Getenv("TASKIEM_ANCHOR_KEY"),
-		AnchorDir:        os.Getenv("TASKIEM_ANCHOR_DIR"),
-		AnchorPublicKeys: os.Getenv("TASKIEM_ANCHOR_PUBLIC_KEYS"),
-		SMTPURL:          os.Getenv("TASKIEM_SMTP_URL"),
-		AlertFrom:        os.Getenv("TASKIEM_ALERT_FROM"),
-		WebDir:           os.Getenv("TASKIEM_WEB_DIR"),
-		SecureCookies:    flag("TASKIEM_SECURE_COOKIES", true),
-		TrustProxy:       flag("TASKIEM_TRUST_PROXY", false),
-		Signup:           flag("TASKIEM_ALLOW_SIGNUP", false),
-		AppMinVersion:    os.Getenv("TASKIEM_APP_MIN_VERSION"),
-		Queues:           strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
+		DSN:                os.Getenv("TASKIEM_DATABASE_URL"),
+		DBRole:             env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
+		Listen:             env("TASKIEM_LISTEN", ":8080"),
+		EdgeListen:         env("TASKIEM_EDGE_LISTEN", ":8081"),
+		MetricsListen:      env("TASKIEM_METRICS_LISTEN", ":9090"),
+		KMS:                env("TASKIEM_KMS", "local"),
+		LocalKey:           os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS:      flag("TASKIEM_ALLOW_LOCAL_KMS", false),
+		OpenBaoAddr:        os.Getenv("TASKIEM_OPENBAO_ADDR"),
+		OpenBaoToken:       os.Getenv("TASKIEM_OPENBAO_TOKEN"),
+		KMSKey:             env("TASKIEM_KMS_KEY", "taskiem"),
+		PublicURL:          strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
+		PasskeyRPID:        os.Getenv("TASKIEM_PASSKEY_RP_ID"),
+		HooksURL:           strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
+		AnchorKey:          os.Getenv("TASKIEM_ANCHOR_KEY"),
+		AnchorDir:          os.Getenv("TASKIEM_ANCHOR_DIR"),
+		AnchorPublicKeys:   os.Getenv("TASKIEM_ANCHOR_PUBLIC_KEYS"),
+		SMTPURL:            os.Getenv("TASKIEM_SMTP_URL"),
+		AlertFrom:          os.Getenv("TASKIEM_ALERT_FROM"),
+		WebDir:             os.Getenv("TASKIEM_WEB_DIR"),
+		SecureCookies:      flag("TASKIEM_SECURE_COOKIES", true),
+		TrustProxy:         flag("TASKIEM_TRUST_PROXY", false),
+		Signup:             flag("TASKIEM_ALLOW_SIGNUP", false),
+		AppMinVersion:      os.Getenv("TASKIEM_APP_MIN_VERSION"),
+		AppGetURL:          os.Getenv("TASKIEM_APP_GET_URL"),
+		UpdateChatTemplate: flag("TASKIEM_WA_UPDATE_CHAT_TEMPLATE", false),
+		Queues:             strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
@@ -1363,7 +1375,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		e.linkOps.Set(srv)
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices, srv.RunCustomerChats, srv.RunDiscover, srv.RunSafety)
 		if e.wa != nil {
 			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
 			tasks = append(tasks, func(ctx context.Context) error { e.wa.RunTemplatePolls(ctx, time.Hour); return nil })
@@ -1561,6 +1573,7 @@ func serve(ctx context.Context, args []string) error {
 	}
 	_ = prometheus.Register(telemetry.QueueCollector{Pool: e.pool}) // already registered when serve runs twice in one process (tests)
 	_ = prometheus.Register(telemetry.PoolCollector{Pool: e.pool})
+	_ = prometheus.Register(telemetry.PeopleStorageCollector{Pool: e.pool})
 	// Every role serves metrics and a liveness check (/healthz) here, so
 	// roles without the API can be probed too.
 	metrics := http.NewServeMux()
@@ -1828,6 +1841,32 @@ func (e *engine) chat(srv *api.Server) {
 	// Updates for people outside a tenant (N11): links they send back,
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
+	// Chat links, the phone index and the browser chat's SMS
+	// (docs/spec/taskiem-for-everyone.md §8.2, §9, §13).
+	if len(e.cfg.Messages.HashKey) == 32 {
+		srv.ChatLinks = &chatlinks.Links{Pool: e.pool, Key: e.cfg.Messages.HashKey, Base: e.cfg.PublicURL}
+		srv.PhoneIndex = newPhoneIndex(e.cfg, e)
+		// A business message on You: pushed to the person's own devices,
+		// else (a person's reply only) the SMS.
+		srv.Answered = &chatlinks.Tell{Pool: e.pool, Links: srv.ChatLinks, Messages: e.messages, Push: srv.PersonPusher()}
+	}
+	// Finding people (docs/spec/people-chatting.md §5): links, contact
+	// matching and adding contacts need the same key. Joined with the
+	// people chats: their blocks and accepted chats answer Blocked and
+	// Chatting, and the chats ask People who may message whom and resolve
+	// a person's link through it (srv.ChatPolicy and srv.PersonLinks left
+	// nil: api's peopleJoin).
+	srv.People = &people.People{Pool: e.pool, Base: e.cfg.PublicURL}
+	if len(e.cfg.Messages.HashKey) == 32 {
+		srv.People.Key = e.cfg.Messages.HashKey
+	}
+	peoplechats.JoinPeople(srv.People)
+	srv.AppGetURL, srv.UpdateChatTemplate = e.cfg.AppGetURL, e.cfg.UpdateChatTemplate
+	// A person's own sign-in code by SMS, through the same providers: no
+	// tenant, no outbox (docs/spec/taskiem-for-everyone.md §5.1).
+	if sms := e.cfg.Messages.smsProviders(e.log); len(sms) > 0 {
+		srv.CodeSMS = &sender.CodeSender{Providers: sms, Countries: e.cfg.Messages.Countries}
+	}
 	srv.Riders, srv.Dispatch = e.riders, e.dispatch
 	srv.Stock = e.stock
 	if e.purchases != nil {

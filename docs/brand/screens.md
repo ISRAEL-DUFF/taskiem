@@ -221,7 +221,7 @@ The rules of the [no-technical-steps plan](../spec/no-technical-steps.md) apply 
 
 ## Icons
 
-Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `pin`, `mute`, `image`, `star`, `dashboard`, `catalogue`, `policies`, `box`, `grid`, `store`, `tag`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
+Use the line icons in `web/src/icons.tsx` by name: `home`, `money`, `invoices`, `orders`, `storefront`, `workflows`, `runs`, `activity`, `approvals`, `forms`, `tables`, `schools`, `members`, `keys`, `lock`, `bell`, `alerts`, `clock`, `start`, `refund`, `connections`, `settings`, `billing`, `reports`, `audit`, `inbox`, `templates`, `search`, `plus`, `close`, `chevron`, `info`, `sparkle`, `bolt`, `back`, `more`, `menu`, `tick`, `tick-double`, `emoji`, `send`, `down`, `pin`, `place`, `mute`, `image`, `star`, `dashboard`, `catalogue`, `policies`, `box`, `grid`, `store`, `tag`. One icon per row; the same thing always has the same icon. Add a new icon to `icons.tsx` in the same 24-unit line style rather than using an emoji or another set.
 
 ## The new kit
 

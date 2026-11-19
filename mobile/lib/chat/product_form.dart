@@ -34,6 +34,7 @@ import 'sizes_forms.dart';
 import 'tags.dart' show quantity;
 import 'tools.dart' show tileLetters;
 import 'words.dart' show naira, toneOf;
+import 'pick_problem.dart';
 
 /// PhotoStrip.tsx MAX_GALLERY: a product's photos past its main one.
 const maxGallery = 5;
@@ -277,8 +278,9 @@ class _PhotoAddState extends State<PhotoAdd> {
     final List<PickedFile> fs;
     try {
       fs = await pick();
-    } on Object {
-      widget.onError?.call('Taskiem could not open your ${camera ? 'camera' : 'photos'}. Allow it in your phone’s settings, then try again.');
+    } on Object catch (e) {
+      // Plain words, and the phone's settings when refused.
+      if (mounted) sayPickProblem(context, e, camera: camera);
       return;
     }
     // photos.ts sendProblem: said before the upload, not after it.
