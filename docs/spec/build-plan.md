@@ -276,7 +276,7 @@ The founder's order: **saved objects in full, then payments in full, then the re
 
 | Stage | What is built | Spec |
 | --- | --- | --- |
-| 1 | Saved objects: the store for saved accounts (S0); all kinds, the picker, cards and sharing (S1) | [Saved objects](saved-objects.md) |
+| 1 | Saved objects: the store for saved accounts, with the step to open a Taskiem wallet or connect a provider (S0); all kinds, the picker, cards and sharing (S1) | [Saved objects](saved-objects.md) |
 | 2 | Saved objects in actions and words (S2), and in workflows (S3) | Saved objects |
 | 3 | Being paid by transfer in the chat (F1); paying one person (P1) | [The payments flow](chat-payments-flow.md), [paying people](chat-pay-people.md) |
 | 4 | Paying from a message (P2), several people (P3), payroll and the chat apps (P4) | Paying people |
