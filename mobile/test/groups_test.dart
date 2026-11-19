@@ -38,6 +38,7 @@ import 'package:taskiem/screens/you_account.dart' show YouNotificationsPage;
 import 'package:taskiem/screens/you_links.dart' show openYouPage;
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'people_test.dart';
 import 'support.dart' show loadFonts;
 
@@ -327,6 +328,7 @@ void main() {
       phone(t);
       final api = groupApi();
       await openGroup(t, api);
+      await looks(t, 'group-chat');
       expect(find.text('Book club'), findsOneWidget);
       expect(find.text('3 members'), findsOneWidget);
       expect(find.bySemanticsLabel('Search this group'), findsOneWidget, reason: 'Search as a round button in the head');

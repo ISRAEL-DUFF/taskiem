@@ -14,6 +14,7 @@ import 'package:taskiem/chat/team_pages.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -216,6 +217,7 @@ void main() {
 
   testWidgets('staff: who is in, who is late; someone added with their own role; an invitation sent again', (t) async {
     final sent = await open(t, (c) => StaffPage(auth: c.auth));
+    await looks(t, 'team');
     expect(find.textContaining('in since 08:25'), findsOneWidget);
     expect(find.text('Chidi is late'), findsOneWidget);
     expect(find.text('Ada Obi (you)'), findsOneWidget);

@@ -15,6 +15,7 @@ import 'package:taskiem/app/links.dart' show pickContact;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -191,6 +192,7 @@ void main() {
 
   testWidgets('the list: each invoice, a filter asked of the server', (t) async {
     final sent = await open(t, (c) => InvoicesPage(auth: c.auth));
+    await looks(t, 'invoices');
     expect(sent.first, 'LIST ');
     expect(find.text('Bisi Ade'), findsOneWidget);
     expect(find.text('INV-0007 · ₦22,000 still due'), findsOneWidget);

@@ -13,6 +13,7 @@ import 'package:taskiem/chat/riders_page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -145,6 +146,7 @@ void main() {
 
   testWidgets('riders: each with their state; one added with their areas; one retired', (t) async {
     final sent = await open(t, (c) => RidersPage(auth: c.auth));
+    await looks(t, 'riders');
     expect(find.text('Busy till 15:00'), findsOneWidget);
     expect(find.bySemanticsLabel('Share the link for riders'), findsOneWidget);
     // A rider pressed: what can be done to them.

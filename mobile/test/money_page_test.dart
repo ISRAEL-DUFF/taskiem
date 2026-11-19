@@ -15,6 +15,7 @@ import 'package:taskiem/chat/money_page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -217,6 +218,7 @@ void main() {
     handOffFile = (Uint8List bytes, String name, String type, Rect? from) async => shared.add('$name $type ${utf8.decode(bytes)}');
     addTearDown(() => handOffFile = was);
     final sent = await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
+    await looks(t, 'money');
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).first, 'GET /v1/money/summary from=2026-11-12&to=2026-11-12');
     expect(find.text('₦50,000'), findsWidgets);
     expect(find.text('₦1,000 more coming in'), findsOneWidget);
