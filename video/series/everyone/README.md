@@ -1,7 +1,11 @@
 # Series: Taskiem for you (customers and everyone)
 
-A series for people who are not running a business: how to use Taskiem as a
-customer, with friends and family. Based on decision 0068 and the specs
+A series for people who are not running a business: how to **deal with
+businesses on Taskiem** as a customer (find, ask, order, pay, follow), and how
+to order together with family and colleagues. **Taskiem is not a replacement
+for WhatsApp or Telegram**; it automates businesses alongside their
+conversations, so the focus is the business matter, never chatting for its own
+sake. See `../README.md` section 0. Based on decision 0068 and the specs
 (`docs/spec/taskiem-for-everyone.md`, `people-chatting*.md`). **Draft outline
 for discussion, 19 November 2026; not yet approved.** Same pattern as the
 other series (Episode 0, recap, bridge, Next card, 9:16 and 16:9, English and
@@ -28,8 +32,8 @@ calls (planned), downloads from the stores (not yet).
 4. **Order and pay** (cards for the order and the payment, in the chat).
 5. **Follow your orders** (Your orders, in one place; delivery updates).
 6. **Book a service** (free times, a booking card).
-7. **Chat with people** (find a friend by phone or link; a stranger's message waits as a request; reporting and blocking).
-8. **Groups** (start a group, share a business or an order into it).
+7. **Share a business with someone** (send a business or an order to a friend or family member; a stranger's first message waits as a request). Kept short: people chat is a supporting feature.
+8. **Groups for a purpose** (a family or office group set up to order and plan together).
 9. **Order together** (a family or office lunch: everyone picks, one person pays or each pays a share).
 10. **Keep it safe** (what Taskiem stores and does not read, mute, block, delete your account; honest about encryption).
 

@@ -106,10 +106,14 @@ product's audience: decision **0068, "Taskiem for everyone"** (accepted
 16 November). Source: `docs/spec/taskiem-for-everyone.md`,
 `people-chatting.md`, `people-chatting-5b.md`.
 
-**What it is.** The Taskiem app becomes **a chat app anyone can use**, like
-WhatsApp or Telegram. A person signs up with a phone number, with no business
-needed, and chats with businesses (ask, order, book, pay), and now with other
-people. Running a business is something a person *does in* Taskiem. A person
+**What it is.** Anyone can now use the Taskiem app, with no business needed: a
+person signs up with a phone number and deals with businesses (ask, order,
+book, pay) in one conversation each, and can also chat with people. **This is not
+a rival to WhatsApp or Telegram** (founder, 19 November): Taskiem is there to
+automate businesses alongside their conversations, in the most natural and easy
+way. WhatsApp and Telegram stay; Taskiem works with them (a business can even
+run on its own WhatsApp number). People-to-people chat is a supporting part, not
+the point. Running a business is something a person *does in* Taskiem. A person
 with no business can also start workflows alone (Start something).
 
 | Stage | What | State (per the specs' "As built" sections) |
@@ -128,8 +132,8 @@ audience is real, but **a public launch is not ready**.
 
 ### What this means for the videos
 
-1. **A new audience and a new series.** Customers and ordinary people are now
-   users. They need their own series ("Taskiem for you": sign up, find a
+1. **A new audience and a new series.** Customers are now users too, so they get
+   a series about **dealing with businesses on Taskiem** (not a messenger tour) ("Taskiem for you": sign up, find a
    business, chat, order, pay, track, group chats, order together). Outline:
    `series/everyone/README.md`.
 2. **Every business series gains a chapter.** Chapter 3 ("Take orders") now has a

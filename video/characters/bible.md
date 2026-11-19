@@ -38,7 +38,7 @@ settings used, so a result can be reproduced or moved to another tool.
 **The world.** Lagos, Nigeria, now. Small food and trade businesses: a kitchen
 in Yaba, a rice mill, a staff canteen on the Island, a bakery, a cold-chain
 van. Warm, busy, real: Lagos light, not a postcard. Phones are always in hand
-(the product is a chat app). WhatsApp-green and pine-green UI glows on faces.
+(the product is the way a business runs its work alongside its conversations). WhatsApp-green and pine-green UI glows on faces.
 
 **Look (the "house style"). [decide]** Stylised, warm, semi-realistic
 character illustration with soft 3D-like shading, in the spirit of a modern

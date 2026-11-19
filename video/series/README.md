@@ -5,6 +5,22 @@ Taskiem from first day to full day, then the same for food, for phones and
 gadgets, and so on. A viewer should watch their series and think "that is my
 shop". Written 17 November 2026.
 
+## 0. How we talk about Taskiem (every video, every language)
+
+Taskiem is **not** a replacement for WhatsApp, Telegram or any chat app, and it
+is not trying to be one. It is here to **automate a business, alongside its
+conversations, in the most natural and easy way**. The chat is how a person
+talks to the business's tools; WhatsApp and Telegram stay where customers and
+staff already are, and Taskiem works **with** them.
+
+- Say: "alongside your chats", "works with WhatsApp", "your orders, stock and
+  money, taken care of in the conversation", "the chat runs the work with you".
+- Never say: "the new WhatsApp", "replace WhatsApp", "switch from WhatsApp",
+  "a better chat app", or anything that makes chatting the product.
+- The story is always the **work that gets done** (orders taken, money
+  matched, stock reordered, staff tasked), with the conversation as the way in.
+- When a video shows two people chatting, it should be about a business matter.
+
 ## 1. The pattern
 
 Every series has the **same spine** (the chapters a business goes through) and
