@@ -229,7 +229,7 @@ The founder took each recommendation:
 | --- | --- | --- |
 | 1 | Marks | Saved objects come up under **`@`**, in their own Saved group beside businesses and people. `/` stays for documents (`/order`, `/invoice`) and [made tools](made-tools.md)' commands; `/` with a word that is neither searches saved objects, so `/mum` still finds Mum |
 | 2 | Who owns by default | **Mine** when saving on You; **the business's** when saving inside a business, with "Keep it to myself" one tap away |
-| 3 | Paying a person's own object from a business | Allowed for **owners** (narrowed from "those who may pay" by the review of 19 November 2026: §7.3), recorded as **personal** (owner's drawings) in the business's books. On You, with no business, objects are shared and copied, not paid |
+| 3 | Paying a person's own object from a business | Allowed for **owners** (narrowed from "those who may pay" by the review of 19 November 2026, and confirmed by the founder the same day: §7.3), recorded as **personal** (owner's drawings) in the business's books. On You, with no business, objects are shared and copied, not paid |
 | 4 | Shared cards | **A copy**: changing an object never changes what someone was already sent |
 | 5 | Made-up kinds | In the **first phase**, for people and businesses, with starters to copy |
 | 6 | Limits | **500** for a person; **2,000** for a business on the lowest plan, more on higher plans |
