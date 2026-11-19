@@ -1,6 +1,8 @@
 # Made tools and pages: a workflow as a tool in the chat, and as a screen
 
-Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§24 says what that changed) and again on 19 November, when pages and the app as a node were brought into it from two discussions with the founder (§25). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §16 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
+Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§24 says what that changed) and again on 19 November, when pages and the app as a node were brought into it from two discussions with the founder (§25). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat.
+
+**What Taskiem is for** (founder, 19 November 2026; [0068, amendment](../decisions/0068-taskiem-for-everyone.md#amendment-2026-11-19-what-taskiem-is-for)): Taskiem automates businesses, alongside their conversations, in the way that is most natural and easiest to use; it does not replace WhatsApp, Telegram or any other chat app. Everything in this plan is weighed by that measure: a tool, a page or a device field earns its place when it makes a business's work run with less effort from its owner, staff and customers, never because a chat app or a form tool has it. §16 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
 
 ## 1. Summary
 
@@ -12,12 +14,12 @@ Nothing about how a workflow runs changes. A tool starts a run the way `run <wor
 
 Some work is not a message. An owner with twelve deliveries to confirm wants them on one screen with a button each, not twelve cards to scroll. So the same plan lets **a workflow declare its screens** (§12): named pages made of blocks Taskiem already draws (a figure, a list, a record, a table, a form, a row of actions), filled from the business's own tables and the run's outputs, placed under an area or in the tools panel, and drawn by the web, the phone app and, in a reduced form, WhatsApp. A tool's answer and a page's blocks are the same shapes (§7), so the two halves share one vocabulary and one renderer, and the built-in pages Taskiem hand-draws today (the deliveries page, the riders' Confirm) are what a workflow could have declared.
 
-The app is also **a node a workflow can draw from** (§13). The phone in a person's hand knows where it is, has a camera, can scan a code and take a signature. A workflow asks for these the way it asks any question: a form step to a person, with fields the device fills in when the person taps, on whatever they are using (the app, the web, WhatsApp, Telegram). Nothing is taken silently.
+The app is also **a node a workflow can draw from** (§13), because a business's work happens where its people are: at the door with a parcel, in the store with a barcode, on site with a meter. The phone in a person's hand knows where it is, has a camera, can scan a code and take a signature. A workflow asks for these the way it asks any question: a form step to a person, with fields the device fills in when the person taps, on whatever they are using (the app, the web, WhatsApp, Telegram). Nothing is taken silently.
 
 It serves both kinds of user:
 
 - **A trader** types "fuel 4,500" and it is logged, or taps **Leave** and asks for three days off.
-- **A builder** who uses Taskiem with every business part off types `/restart staging`, or gets "Disk at 90%" with a **Clean up** button.
+- **A builder** in a workflows workspace (decision 0068, that plan's §18: a tenant with every business area off) types `/restart staging`, or gets "Disk at 90%" with a **Clean up** button.
 
 ## 2. Words used here
 
@@ -31,7 +33,7 @@ It serves both kinds of user:
 | **Shape** | One of the things Taskiem can draw from data: text, a card, a list, a figure, a record, a table, a form, a row of actions. The answer of a tool is a shape; a page is a stack of them (§7, §12) |
 | **Page**, or **view** in the definition | A screen a workflow declares, made of shapes, placed somewhere in the app (§12) |
 | **Device field** | A field of a question that the person's device answers at their tap: a location, a live photo, a scanned code, a signature (§13) |
-| **A person** | Since decision 0068 every account is a person's. A question is addressed to a person, who may be the starter, a member of a business, a linked business's member such as a rider, a customer, or the author alone in their own workspace; it reaches them wherever they are |
+| **A person** | Since decision 0068 every account is a person's. A question is addressed to a person, who may be the starter, a member of a business or of a workflows workspace, a linked business's member such as a rider, or a customer; it reaches them wherever they are |
 
 Owners never see "made tool" or "view". On their screens it is **Your tools** and **Your pages**; making one is **Use it from chat** and **Show it as a page**.
 
@@ -353,7 +355,7 @@ A page is read when it is opened and when the person pulls to refresh. A page wh
 
 A page is never put in the sidebar as if it were Taskiem's own area (§16, 11). The line between what Taskiem guarantees and what a workflow promises stays visible.
 
-Who sees a page: a member who may see its area (the area switch, the role's areas), with the page's `roles` on top, and for a page placed as a tile the chat tools switch. The person's own side (**You**, decision 0068) sees the pages of workflows made with `for: "me"` (§16, 10). Customers and linked businesses see no pages in this plan.
+Who sees a page: a member who may see its area (the area switch, the role's areas), with the page's `roles` on top, and for a page placed as a tile the chat tools switch. A workflows workspace (decision 0068, §18 of that plan) is a tenant, so its members see its pages as a business's do. A person's own side (**You**) has no pages: it is where a person deals with businesses, not where workflows live (§16, 10). Customers and linked businesses see no pages in this plan.
 
 ### 12.6 How each surface draws a page
 
@@ -439,7 +441,7 @@ Since decision 0068 every account is a person's, and a person is reached whereve
 | `{ "member": "<id>" }`, `{ "role": "<role>" }` | A member of the business, or everyone with a role | The app or the web first (a form request, with a push), then WhatsApp or Telegram if they are linked |
 | `{ "link": "<business>" }` | The person on the other side of a link who is working the conversation: a rider, a supplier's clerk | In their side of the conversation, through the door the rider steps already use |
 | `{ "phone": "=..." }`, `{ "email": "=..." }` | Anyone, by a one-time link, as today | SMS or email, then WhatsApp or Telegram where the number is on Taskiem |
-| `"me"` | The author alone, in their own workspace (that plan's §18) | Their app or web, as a member |
+| `{ "member": ... }` in a workflows workspace | The author alone, or their team, in a workspace with every area off (decision 0068, that plan's §18): a tenant, so nothing special | As a member |
 
 The channel decides which device fields can be answered (§13.3). A question with a device field that the channel cannot answer offers the nearest thing (type the code; attach a photo) or, where there is none, says so and the field is `unavailable` in the answer.
 
@@ -590,7 +592,7 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | 7 | Decision number | **0070.** 0067, 0068 and 0069 merged between 12 and 17 November; 0063 and 0064 are absent from the log |
 | 8 | A tool's `roles`: a rule for who may start the workflow on every path, or only who sees the tile? | **A rule on every path**, enforced where a person starts a run. Nothing limits who may start one workflow today, so this is new, and without it `run <workflow>` walks round a tool's roles. It is also useful with no tool at all, so it is **built first, as its own small change before T0**, and T1's diff stays about tools |
 | 9 | Does a tool's run count against the day's and month's run limits? | **Yes**, as any run. A look-up is cheap but not free (it is a run, with its history and its retention). Watch the first businesses' counts before changing the limits; if look-ups dominate, a cheaper retention class for them is the fix, not an exemption |
-| 10 | Tools and pages for a person's own side (**You**, decision 0068)? | **Yes, `for: "me"`**, in T1: a personal session has its own tools and pages, with no business. "Start something" on You (that plan's §19) is this. It costs little designed in now and much to retrofit |
+| 10 | Tools and pages for a person's own side (**You**, decision 0068)? | **No.** A person who wants their own workflows gets a workflows workspace (0068, that plan's §18): a tenant with every area off, where `members` covers them with nothing new. **You** is where a person deals with businesses, which the 19 November amendment to 0068 makes the point of personal accounts; it gets no tools or pages of its own, and "Start something" on You leads to a workspace. An earlier draft of this row proposed `for: "me"`; it was withdrawn for this reason |
 | 11 | May an owner put a made page in the sidebar as if it were a Taskiem area? | **No, not in this plan.** Pages live under **Your pages**, under an area as a tab, in the tools panel, or as a card or alert kind. The line between what Taskiem guarantees and what a workflow promises stays visible. A setting to promote a page is a later question |
 | 12 | One spec and one decision for tools and pages, or two? | **One** (this document, decision 0070). The shapes are shared, and two documents would hold two copies of them. The build still goes tools first (§17) |
 | 13 | Do pages ship on the web and the phone app together, as the app's rule is? | **Together**, from P1. A page drawn on one and not the other is the thing the parity test exists to stop |
@@ -628,7 +630,7 @@ T1 is the first thing worth showing. T2 and T3 can go side by side after it. P0 
 - **Not code in the chat, or on a page.** A tool or a page cannot bring its own drawing, script or frame. The shapes are Taskiem's, which is what lets the web, the phone app and WhatsApp all draw them and keeps the phone app's picture test meaningful.
 - **Not a bot.** There is no free conversation with a tool: it is called, it may ask through a form step, it answers.
 - **Not a new way to run.** No new step type, and nothing new in `decide()`: outputs are already worked out and kept when a run completes. One addition to an existing step (`to: "starter"` on the form step) and one to a connector (`buttons` on `notify.tell`). A page's signal and approval actions send what the run's own buttons send today.
-- **Not in people's groups.** A tool or a page is a business's (or, with `for: "me"`, a person's own). Whether one can be called inside a group of people (decision 0069) is a later question, and nothing here assumes it.
+- **Not in people's groups.** A tool or a page is a business's or a workflows workspace's, never a person's own side's. Whether one can be called inside a group of people (decision 0069) is a later question, and nothing here assumes it.
 - **Not tracking.** A device answers a question at the person's tap (§13.10); nothing here reads a phone on its own.
 - **Not for embedded builders.** A partner's sub-tenants do not get made tools in this plan; what an embedded app's end user may call needs its own look ([embedding](../embedding.md)).
 
@@ -728,7 +730,7 @@ The chat apps reach the same functions through the conversation engine, not thes
 | Pages: the schema and validator | Each row of §12.9 refused with a plain sentence; the deliveries fixture validates |
 | Pages: the deliveries fixture | A workflow declaring the deliveries page draws, on the web and the app, what the hand-built page draws for the same data, including **Confirm**; compared in the browser tests and the parity test |
 | Pages: data | A read within the spec; one past its bounds refused; a dropped column makes the page say so and still open; a change notice refreshes an open page on both surfaces |
-| Pages: who sees it | An area off hides its tab; a member outside `roles` is refused at the address too; a personal session sees only `for: "me"` pages; a customer sees none |
+| Pages: who sees it | An area off hides its tab; a member outside `roles` is refused at the address too; a personal session (**You**) sees none, a workflows workspace's member sees its own; a customer sees none |
 | Pages: actions | A tool action opens the form with its care; a signal to a run that moved on says so; a signal to another workflow's run is refused; an approval opens the approval sheet |
 | Pages: the chat | `/pages` lists them; a one-list page goes as a list message with its two row buttons; **See all** links to the page |
 | Pages: plain words and axe | Every shape in both themes, added to `e2e/accessibility.spec.ts` and `src/lib/plainwords.test.ts`, and the app's large-text and touch-target checks |
@@ -784,7 +786,8 @@ The plan was read again on 19 November, against the code after decisions 0067 to
 | Three answer shapes under `tool.answer` | One named `shapes/v1` inside `wd/v1`, referenced by `tool.answer` and by every block of a page, so there is one definition of each shape |
 | Whether the `whatsapp` trigger type is used: open | Checked: no code reads it. This plan ignores it (§3) |
 | Decision number: the next free one | 0070 (§16, 7) |
-| Audiences `members`, `customers`, `linked` | Plus `for: "me"` for a person's own side, now that personal accounts exist (§16, 10) |
+| Audiences `members`, `customers`, `linked` | Unchanged. A person's own workflows live in a workflows workspace, a tenant, so `members` covers them; a `for: "me"` audience was proposed on 19 November and withdrawn the same day after 0068's amendment on what Taskiem is for (§16, 10) |
+| No statement of the measure for new work | The plan opens with 0068's amendment of 19 November: Taskiem automates businesses alongside their conversations; every part of this plan is weighed by the effort it saves a business, not by what a chat app has |
 | Code steps count as reads | A code step is a read only when its declared host functions are reads; unknown counts as a write (§8) |
 | The echo line | Carries every value the reader filled in; the owner's **always ask** switch ships in T1 (§8, §16, 2) |
 | Roles on every path: a decision inside T0 | Built first, as its own small change (§16, 8) |
