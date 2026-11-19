@@ -6,4 +6,4 @@ const taskiemUrl = String.fromEnvironment('TASKIEM_URL', defaultValue: 'https://
 
 /// The app's version, which the server's lowest served version is checked
 /// against (GET /v1/app/config).
-const appVersion = String.fromEnvironment('TASKIEM_APP_VERSION', defaultValue: '0.1.0');
+const appVersion = String.fromEnvironment('TASKIEM_APP_VERSION', defaultValue: '1.0.0');
