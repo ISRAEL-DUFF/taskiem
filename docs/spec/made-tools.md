@@ -122,7 +122,7 @@ Rules:
 
 ## 7. The answer
 
-A tool's answer is built from the workflow's `outputs`, which already exist with names and types and are already kept when a run completes. `answer.type` chooses the shape.
+A tool's answer is built from the workflow's `outputs`, which already exist with names and types and are already kept when a run completes. `answer.type` chooses the shape. The shapes are one named part of the schema, `shapes/v1`, which [pages](pages.md) use too, so each has one definition and one renderer.
 
 **Where the answer's expressions run.** Not in the run. The API works them out when it draws the answer, over two names only: `outputs` (what the completed run recorded) and, in a list, `item`. They cannot read steps, the trigger, secrets or the environment, so an answer can show nothing the workflow did not choose to give back, and `decide()` is not touched.
 
@@ -182,7 +182,7 @@ Rules:
 - **Outside WhatsApp's 24-hour window** an answer cannot be free text or carry buttons: it goes as the run-outcome template with **Open**, as outcomes do now.
 - **An answer is not a record.** It is drawn from the run's outputs when the run ends and kept as a message. It does not update itself afterwards, so a list can be stale by the time a row's button is pressed: the workflow behind the button must check the state itself.
 - **An answer that comes when the app is closed** is not announced on the phone: [chat push](chat-push.md) covers messages from linked businesses and leaves Taskiem's own conversation out (its decision 4). People with WhatsApp, Telegram or Slack linked get it there. Push for answers is its own small plan.
-- **Not in this plan:** files and photos as inputs or as answers (a receipt, a report as a PDF), and dates picked from a calendar. A date is typed, and the reader may propose it from "Monday".
+- **Not in this plan:** files as answers (a receipt, a report as a PDF), and dates picked from a calendar. A photo, a location, a scanned code and a signature as **inputs** are [device fields](device-fields.md), their own plan. A date is typed, and the reader may propose it from "Monday".
 
 ## 8. Care: what a tool asks before it runs
 
@@ -194,7 +194,7 @@ Today every start from chat needs an explicit **yes** after a summary. That is r
 
 | Care | When | What the person sees |
 | --- | --- | --- |
-| **Answers at once** | Every step that reaches outside is a `read`: connector actions of class `read`, `http` steps that are `GET` or `HEAD`, code steps (whose `host.fetch` allows only those), `ai` steps (within the AI budget). No step that writes a table, sends a message, asks a person (a form or approval step), runs a container, or starts another workflow | An echo of what was understood ("Leave left for: Musa"), then the answer |
+| **Answers at once** | Every step that reaches outside is a `read`: connector actions of class `read`, `http` steps that are `GET` or `HEAD`, code steps **only when every host function they declare is a read** (`host.fetch` allows only `GET` and `HEAD`; a code step that declares any other, or none that can be checked, counts as a write), `ai` steps (within the AI budget). No step that writes a table, sends a message, asks a person (a form or approval step), runs a container, or starts another workflow | An echo of what was understood ("Leave left for: Musa"), then the answer |
 | **Yes** | Anything else | The summary of exactly what will run, then **yes**, as now |
 | **Step-up** | The business's policies ask for it for this workflow or a step in it; **or a step moves money out of the business** (a payout or transfer action of a payments connector, such as `pay_bank`), whatever the policies say | **Yes**, then the PIN or the hand-off link, as an approval does now |
 
@@ -202,7 +202,7 @@ Today every start from chat needs an explicit **yes** after a summary. That is r
 - A `GET` that changes something at the far end (a badly made API) would pass as a read. The owner's switch below is the answer to that, and the publishing screen says a tool will answer without asking.
 - An owner may make a tool **more** careful in its settings (always ask **yes**), never less.
 - An approval step inside the workflow is separate and unchanged: care is about starting the run, approval is about a step in it.
-- **The echo line matters.** With no **yes**, the person must still see what the reader understood, so a wrong reading is noticed.
+- **The echo line matters.** With no **yes**, the person must still see what the reader understood, so a wrong reading is noticed. It carries **every value** the reader filled in, not a summary. An owner may switch a tool to **always ask**, which gives it **yes** whatever its care; the switch ships with T1.
 - This changes one row of [WhatsApp's security model](../whatsapp.md#security-model) ("every start needs an explicit yes"). It is a decision (§14, 2). The reason to allow it is that such a tool changes nothing, not that it shows only what the person could already see: it may show more (above).
 
 ## 9. A question inside a run
@@ -431,6 +431,7 @@ The plan was read against the code on the day it was written. What that found:
 | `roles` on a tool, with nothing behind it | Nothing limits who may start one workflow today, so `run <workflow>` walked round it. Now a rule on every path, and a decision (§5, §14, 8) |
 | `/command` on every app | Slack keeps `/` for itself, and Telegram offers only registered commands (§6), both to be checked |
 | A tool with a payout step was plain **yes**, so it could pay on a word typed in WhatsApp (found 19 November 2026, with [the build plan](build-plan-saved-tools-payments.md)) | A step that moves money makes care step-up, always; on WhatsApp, Telegram and Slack it is confirmed by the hand-off link, never by a typed yes; refused for customers' and linked tools (§8, §12). A workflow that pays a saved account uses `payments@1 prepare` ([paying people](chat-pay-people.md)) |
+| A code step always counted as a read; the echo line was a summary; roles were decided inside T0 (taken from pull request #211, 19 November 2026) | A code step is a read only when its declared host functions are; the echo carries every value and the owner has **always ask** (§8); the roles rule is built first, as its own small change before the rest of T0 ([the build plan](build-plan-saved-tools-payments.md), M0) |
 | Nothing on where an answer's expressions run | The API, over `outputs` and `item` only (§7) |
 | Nothing on a run started twice, or a button pressed by two people | A key from the conversation; `once: true` (§6, §10) |
 | Nothing on a run that waits, is queued, or hits a quota | §7, and a decision on counting (§14, 9) |

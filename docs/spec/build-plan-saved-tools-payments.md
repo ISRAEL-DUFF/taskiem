@@ -6,6 +6,8 @@ Status: **plan** (19 November 2026), written with the founder; reviewed against 
 | --- | --- | --- |
 | [Saved objects](saved-objects.md) (settled) | Things a person or a business saves and calls up by `@name`: accounts, people, places, texts, files, kinds of their own | 1 to 4 |
 | [Made tools](made-tools.md) | Any workflow started by hand becomes a tool in the chat: a tile, a `/command`, a form, an answer | T0 to T7 |
+| [Pages](pages.md) | A business's own screens, made of blocks fed by its tables, Taskiem's records and its read-only tools | G0 to G5 |
+| [The app as a node](device-fields.md) | A form step asks a person's device: a location, a photo, a scanned code, a signature, at their tap | D0 to D2 |
 | [Paying people from the chat](chat-pay-people.md) | Pay one person, from a message, several people, payroll; payees, limits and step-up | 1 to 4 |
 | [The payments flow](chat-payments-flow.md) | Paying a bill by transfer, in the chat (part 1); later parts as agreed | Part 1 |
 
@@ -117,9 +119,13 @@ Within a stage, phases that do not need each other may be built at once by separ
 
 ### Stage 5: the first tools
 
-**M0. Made tools: the declaration** (made tools T0). Needs: D1 (D3 is settled). Its money rule relies on P1's `payments@1 prepare`, which by then is built.
+**M0. Made tools: the declaration** (made tools T0). Needs: D1 (D3 is settled). Its money rule relies on P1's `payments@1 prepare`, which by then is built. **The roles rule is its first pull request, on its own**: it changes who may start any workflow, with or without a tool, and is reviewed apart from the rest.
 - The decision record; `tool` and `answer` in the schema and the contract; the validator's rules, with the money rule (a step that moves money makes care step-up; refused for customers' and linked tools); care worked out and stored; a tool's `roles` held on every way to start a workflow.
 - Done when: a definition with `tool` validates or is refused for the right reason; a tool with a payout step is marked step-up; and a member outside a workflow's roles cannot start it by any path.
+
+**D0. Device fields: the declaration** ([the app as a node](device-fields.md) D0). Needs: nothing.
+- The four field types (location, photo, scan, signature) and their options in the forms schema; `to` as a person on the form step; `source`, `device` and the server's time on every answer; a location sealed and masked.
+- Done when: a form step with a `location` field validates, and a location in a run's history is sealed and masked.
 
 **M1. Your tools** (made tools T1). Needs: M0.
 - The index of deployed tools; **Your tools** in the panel and on `/`; commands on WhatsApp, Telegram and Slack; the form; care; the `text` answer; **Use it from chat** in the builder; the SDK.
@@ -140,6 +146,10 @@ Within a stage, phases that do not need each other may be built at once by separ
 - `to: "starter"` on the form step: a run asks in the chat it was started from, and goes on.
 - Done when: a run asks "Which branch?" in the chat and goes on with the answer (a saved place offered among the choices).
 
+**D1. Location and photo, everywhere** (the app as a node D1). Needs: D0; M4 for `to: "starter"`; M1 for tools' inputs.
+- Location and photo in the phone app (offline too), on the web, and on WhatsApp and Telegram by their own location and photo messages; asked only at the person's tap, after the field's `why`; `require_source` for a workflow that needs a reading, not a claim.
+- Done when: a rider on WhatsApp and a rider on the app each prove a delivery, and the Confirm card shows the pin and the photo and says which was read by the phone and which was sent.
+
 **G0 and G1. Pages: the format, and pages from tables** ([pages](pages.md) G0, G1). Needs: nothing but data tables; started once M2 is under way.
 - The decision record and `page/v1`; figures, grouped lists, tables, details and filters; the Pages area, pinning, roles, draft and publish; **Show as a page**.
 - Done when: an owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone.
@@ -149,6 +159,10 @@ Within a stage, phases that do not need each other may be built at once by separ
 **M5. Customers' tools** (made tools T5). Needs: M2.
 - The public menu carried over; answers for customers with `public` outputs only; in the app, customers' tools in a business's customer chat (Taskiem for everyone's customer door rules apply).
 - Done when: a customer picks from **menu**, fills the form, says **yes** and gets the answer.
+
+**D2. Scan and signature** (the app as a node D2). Needs: D1.
+- Scanning a code and signing on the screen; if the founder agrees, a scan from the home screen and tools on the home screen as ways in.
+- Done when: a stock count by scanning works in the app, and a customer signs for a delivery on the rider's phone.
 
 **G2 and G3. Pages with tools, and in the chat** (pages G2, G3). Needs: G1, M2 (G3 also M1).
 - Buttons, row actions, tools feeding a page, **Pin as a page**; the tile, `/name`, and the short form on WhatsApp, Telegram and Slack.
@@ -172,15 +186,15 @@ Within a stage, phases that do not need each other may be built at once by separ
 
 ## 5. Order at a glance
 
-| Stage | Saved objects | Payments | Made tools | Pages |
+| Stage | Saved objects | Payments | Made tools | Pages and the app as a node |
 | --- | --- | --- | --- | --- |
 | 1 | S0 saved accounts; S1 objects and the picker | | | |
 | 2 | S2 objects in actions; S3 objects in workflows | | | |
 | 3 | | F1 pay a bill by transfer; P1 pay one person | | |
 | 4 | | P2 from a message; P3 several people; P4 payroll and chat apps | | |
-| 5 | | | M0 the declaration; M1 your tools | |
-| 6 | | | M2 cards and buttons; M3 the reader; M4 asking back | G0, G1 pages from tables |
-| 7 | | | M5 customers | G2 with tools; G3 in the chat |
+| 5 | | | M0 the declaration; M1 your tools | D0 device fields declared |
+| 6 | | | M2 cards and buttons; M3 the reader; M4 asking back | G0, G1 pages from tables; D1 location and photo |
+| 7 | | | M5 customers | G2 with tools; G3 in the chat; D2 scan and signature |
 | 8 | | | M6 recipes and the builder | G4 board and chart; G5 starters |
 
 All of saved objects is done at the end of stage 2, and all of payments at the end of stage 4. F1 needs neither saved objects nor P1, so where there are hands for it, it may be built beside stages 1 and 2. The payments flow's later parts (statements, several bills on one number) are not planned yet and are not in these stages.
@@ -193,9 +207,9 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 - [ ] S2 · [ ] S3
 - [ ] F1 · [ ] P1
 - [ ] P2 · [ ] P3 · [ ] P4
-- [ ] M0 · [ ] M1
-- [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1
-- [ ] M5 · [ ] G2 · [ ] G3
+- [ ] M0 · [ ] M1 · [ ] D0
+- [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
+- [ ] M5 · [ ] G2 · [ ] G3 · [ ] D2
 - [ ] M6 · [ ] G4 · [ ] G5
 
 ## 7. Risks
@@ -231,4 +245,5 @@ The plan was read against the four plans and the code on 19 November 2026. What 
 | M1, M4, M3 and S3 used phases they did not list; `pay-person` was said to use M0's roles rule | Needs corrected |
 | "One list, not two" for payees | Staff's and riders' bank details stay on their own records; the Pay sheet picks from both |
 | Nothing on switching a phase on, payout fees, or sizes | D4 and D8, both settled; D9 |
+| Pages specified twice, and the app as a node inside made tools (pull request #211) | One pages plan, with #211's sums, record views, signals, alerts and change notices taken in; the app as a node as its own plan, with `source` and the server's time added; its phases D0 to D2 in stages 5 to 7 |
 | Three tracks side by side, payments ending in stage 5 | One after another, by the founder's order of 19 November 2026: saved objects in full (stages 1 and 2), payments in full (3 and 4), then made tools and pages. The reader's order is therefore fixed in S2, and the workflow that pays a saved account moves from S3 to P1 |

@@ -50,11 +50,12 @@ A fixed set. Each is drawn by Taskiem on the web and in the app, light and dark,
 | Block | Shows | Fed by | Phase |
 | --- | --- | --- | --- |
 | **Heading** | A title and a line of plain words | Nothing | G1 |
-| **Figure** | One number with a label, and a tone (plain, good, warn, bad); it may show its change on the period before ("up 12% on last week"). Up to four sit in a row | A table's count under a filter; or one output of a tool | G1 (count), G2 (tool) |
+| **Figure** | One number with a label, and a tone (plain, good, warn, bad); an amount in kobo is drawn as naira. It may show its change on the period before ("up 12% on last week"). Up to four sit in a row; one may be marked as the page's lead and is drawn large | A table's or a record view's count or sum under a filter; or one output of a tool | G1 (count, sum), G2 (tool) |
 | **List** | Rows, each a title, a line under it and a state; a press opens the row's detail. May be **grouped** by a choice column, as headed sections (Open, Doing, Done) | A table; or a tool's output of type `list` | G1, G2 |
 | **Table** | Rows in columns the owner picks, sortable by a press on a column | A table | G1 |
 | **Detail** | One row as a card: a title, up to twelve labelled lines, its actions. Opens as a sheet from a row | The row pressed | G1 |
-| **Buttons** | Up to three actions for the whole page (**New ticket**) | Made tools | G2 |
+| **Buttons** | Up to three actions for the whole page (**New ticket**) | Made tools, signals, approvals (§7) | G2 |
+| **Status** | A run's state in plain words: queued, working, waiting for whom, done, failed | A run named by the row or by the page's address | G2 |
 | **Board** | A list in columns by a choice (Open, Doing, Done); a card moved to another column runs a tool | A table or a tool, with a tool for the move | G4 |
 | **Chart** | Bars or a line: one measure over time or by a group | A tool's output of type `list` with a label and a number | G4 |
 
@@ -66,7 +67,9 @@ The list block's `item`, its `state` and its row buttons, and the detail's `line
 
 ## 5. Sources
 
-**A data table.** The block names the table, the columns it shows, a filter and an order. Taskiem reads the rows as the table's own page does. Fast, and counts no run.
+**A data table.** The block names the table, the columns it shows, a filter and an order, or one **count** or **sum**. It is read through the checked query of decision 0060 (point 7): names and types checked against the business's tables at publish and at each read, operators from a fixed list. A count is one read. A sum is read in pages of 1,000 rows, up to 5,000, since the data API has no sum; a figure says so when it stopped there. Fast, and counts no run.
+
+**Taskiem's own records, read only.** `records`: orders, invoices, deliveries, customers or staff, each a view Taskiem defines with a fixed list of the columns a page may show, filtered and ordered as a table is. An area the business has off is refused. A page can list today's deliveries; it cannot change one except through an action (§7), so the rules those screens hold are kept.
 
 **A made tool that only reads.** The block names the tool and gives its inputs (fixed values, or the page's filters). Taskiem starts it and draws its outputs. This is how a page shows anything a workflow can work out: a sum, rows joined from two tables, figures from a connected app.
 
@@ -77,7 +80,7 @@ The list block's `item`, its `state` and its row buttons, and the detail's `line
 
 **Saved objects of one kind** (G5, with saved objects S1): the business's objects of a made-up kind as a list ("Generators"), with dates coming up.
 
-**Not a source:** Taskiem's own records (orders, stock, money). Those have their own screens, with rules a page must not be able to walk round (made tools §16).
+**Not a source:** anything of Taskiem's own beyond those views (money, stock levels, costs), and other systems. A workflow that calls a web address puts what it needs in a table or an output first, so every page is masked and bounded the same way.
 
 **Expressions** on a page run in the API when it draws the page, over three names only: `row` (a table's row), `outputs` and `item` (a tool's), and `filters`. They cannot read steps, secrets or the environment (made tools §7).
 
@@ -89,7 +92,17 @@ A filter narrows every block that says it uses it: a table source by its column,
 
 ## 7. Actions
 
-An action is a made tool, on the page's **Buttons**, on a row, or on a detail. Pressing it opens that tool's form in a sheet, filled in from the row (`"inputs": { "ref": "=row.ref" }`), exactly as a button in the chat does (made tools §10):
+An action is on the page's **Buttons**, on a row, or on a detail, and is one of three things:
+
+| Action | What happens |
+| --- | --- |
+| **Call a tool** (`tool`, `inputs`) | The tool's form opens filled in, with its care. The rest of this section |
+| **Signal a run** (`signal: { run, name, input }`) | The named signal is sent to that run, as a run's own buttons send them today (a delivery's **Confirm** is one). Only a signal the run's workflow declares as one a page may send; it asks **Yes** first |
+| **Approve** (`approve: { run, step }`) | The approval sheet, with its PIN and rules, unchanged |
+
+`when` on an action hides it when false (`"when": "=row.status == 'delivered'"`). A signal to a run that has moved on says so.
+
+For a tool: pressing it opens that tool's form in a sheet, filled in from the row (`"inputs": { "ref": "=row.ref" }`), exactly as a button in the chat does (made tools §10):
 
 - the tool's care applies: **yes**, or step-up where it moves money or the business's policies ask;
 - it runs as the person who pressed, with their roles; someone who may not use the tool sees the button greyed with why;
@@ -109,11 +122,15 @@ An action is a made tool, on the page's **Buttons**, on a row, or on a detail. P
 
 ## 9. Where a page shows
 
-- **Pages**, an area on the web and in the app: the business's pages as tiles. Up to five may be **pinned** to the navigation.
+- **Pages**, an area on the web and in the app: the business's pages as tiles. Up to five may be **pinned** to the navigation (settled by the founder, 19 November 2026; pull request #211 had proposed none). A pinned page is drawn under a **Your pages** heading, apart from Taskiem's own areas, so what Taskiem built and what the business made are never confused.
+- **As a tab under an area** (`"place": { "area": "orders" }`): after Taskiem's own tabs on that area's page, while the area is on.
+- **As an alert** (`"alert": true` on a figure that counts): when the count is above zero the alerts list shows the page's name and the count, and opens it, as the hand-built Confirm alert does.
 - **In the tools panel** of the Taskiem chat, a pinned page is a tile; pressing it opens the page as a sheet over the chat.
 - **`/` and its name** in the Taskiem chat: `/tickets` opens the page (a page's name can never be a word of Taskiem's own or a tool's command; the same reserved list).
 - **On WhatsApp, Telegram and Slack** a page cannot be drawn. Its name answers with a **short form**: its figures on a line each, the first five rows of its first list, and a link to open it. "tickets" answers "Open 7 · Waiting 2 · Closed this week 14", five rows, **Open the page**. Actions are reached as tools there, by their own commands.
 - **From a notification:** `notify.tell` may carry a button that opens a page with filters set ("Disk alerts" filtered to db-2).
+
+**Kept up to date.** A page is read when it is opened and on pull to refresh. A block over a table, a record view or a run is also told when they change, through the change notices the chat tools already use (`api/chat_changes.go`), so a **Confirm** pressed on the web shows on the phone without a reload. Tool sources are not: they show when they were worked out, and **Refresh**.
 
 ## 10. Making a page
 
@@ -151,7 +168,9 @@ A page is a JSON document, `page/v1`, kept and versioned like a workflow's defin
     { "id": "new", "type": "buttons", "actions": [ { "label": "New ticket", "tool": "new-ticket" } ] } ] }
 ```
 
-**The validator refuses:** a block kind it does not know; a source naming a table, column or tool that does not exist; a tool source whose care is not "answers at once"; an action naming a tool that does not exist (a warning at draft, refused at publish); an expression reading anything but `row`, `outputs`, `item`, `filters`; more than the limits; a name that is a reserved word or another page's or tool's.
+**The shapes are defined once.** The list's `item`, the detail's `lines`, `state`, buttons and the card are one named part of the schema, `shapes/v1`, used by a made tool's answer and by every block here, with one renderer on the web and one in the app.
+
+**The validator refuses:** a record view for an area that is off; a signal the run's workflow does not declare for pages; a block kind it does not know; a source naming a table, column or tool that does not exist; a tool source whose care is not "answers at once"; an action naming a tool that does not exist (a warning at draft, refused at publish); an expression reading anything but `row`, `outputs`, `item`, `filters`; more than the limits; a name that is a reserved word or another page's or tool's.
 
 **When what it stands on changes.** A table column dropped, or a tool unpublished, leaves a page with a block that cannot be drawn. That block shows "This part needs fixing" to those who may edit the page and is left out for others; the owner is told, and dropping a column or unpublishing a tool first lists the pages that use it.
 
@@ -183,8 +202,8 @@ A page is a JSON document, `page/v1`, kept and versioned like a workflow's defin
 | Phase | What | Needs | Done when |
 | --- | --- | --- | --- |
 | G0 | The decision record; `page/v1`, its schema, contract and validator; storage; the API without drawing | The founder's answers (§16) | A page document validates or is refused for the right reason |
-| G1 | Pages from tables: heading, figure (count), list, table, detail, filters; the Pages area, pinning, roles, draft and publish; **Show as a page**; web and app | G0 | An owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone |
-| G2 | Tools on pages: buttons, row actions, tools as sources, figures from a tool, changing a row in place, **Pin as a page** | G1, M2 | "Tickets" has **New ticket** and **Assign to me**, and "Expenses this month" shows a total a workflow worked out |
+| G1 | Pages from tables and record views: heading, figure (count, sum), list (grouped too), table, detail, filters; the change notices; the Pages area, pinning, a tab under an area, roles, draft and publish; **Show as a page**; web and app | G0 | An owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone |
+| G2 | Actions: tools, signals and approvals on the page and on rows; tools as sources, figures from a tool, the status block, a page as an alert, changing a row in place, **Pin as a page**; the deliveries fixture | G1, M2 | "Tickets" has **New ticket** and **Assign to me**; "Expenses this month" shows a total a workflow worked out; **Confirm** on the fixture page moves a delivery from a phone and shows on the web without a reload |
 | G3 | The chat: the tile, `/name`, the short form on WhatsApp, Telegram and Slack, a page opened from a notification | G2, M1 | "tickets" on WhatsApp answers with the figures, five rows and a link |
 | G4 | Board and chart | G2 | A ticket dragged from Open to Doing runs its tool; expenses show by week |
 | G5 | Starters, **Describe it**, saved objects of a kind as a source | G2, M6, S1 | "Describe it" makes a working page from one sentence |
@@ -200,6 +219,10 @@ G1 stands on tables alone, but is started only once made tools' cards and button
 - **Not Taskiem's own screens rebuilt.** Orders, Stock and Money stay as built.
 - **Not a report writer.** A chart shows one measure. Reports with many are for an export or a connected tool.
 - **Not for embedded builders** in this plan.
+
+## 15a. Taken from pull request #211
+
+That pull request specified pages as a `views` block inside a workflow. The founder settled on a page as its own document (§16, 1), so its structure was not taken. These parts were, on 19 November 2026: sums through the checked query (§5); Taskiem's own records as read-only views (§5); signals and approvals as actions, and `when` (§7); a page as a tab under an area and as an alert (§9); the change notices (§9); one definition of the shapes (§11); the status block (§4); the deliveries page as the acceptance fixture (§17). On the one disagreement, pinning to the navigation, the founder chose to allow it.
 
 ## 16. For the founder to decide
 
@@ -218,6 +241,7 @@ G1 stands on tables alone, but is started only once made tools' cards and button
 ## 17. Tests, when built
 
 - **Go:** the validator's refusals; a tool that writes refused as a source; expressions limited to their four names; masking of personal columns with and without `table.read`; a page's roles; an action refused for someone outside the tool's roles; the cache kept and cleared; a dropped column marking the block; limits; another tenant's page, table or tool never reached (isolation test); migrations down and up.
+- **The acceptance fixture:** a page declared to equal the hand-built deliveries page (today's deliveries from the record view, the amount owed to riders as a sum, **Confirm** as a signal on each row) is compared with that page in the browser tests and the app's picture tests. The hand-built page is not replaced; the fixture proves the blocks are enough.
 - **Web end-to-end and app:** making a page from a table; each block at 360 and 390 px in both themes with axe; filters; a row's detail; an action's sheet through to its answer and the page read again; **Move up / Move down** by keyboard; the app's picture test for each block.
 - **Chat:** the short form on WhatsApp; a reserved word refused as a page's name.
 - **Plain words:** no "block", "source", "schema" or "query" on the owner's path: "part", "what it shows", "from".
