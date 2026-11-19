@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -43,6 +44,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -62,6 +66,28 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// ChatCodes finds the business a chat link's code names
+	// (taskiem-for-everyone §8.2; stream B's customer_chat_codes); nil
+	// knows no code (customer_app.go).
+	ChatCodes ChatCodeResolver
+	// ChatPolicy answers who may message whom, contacts, shown numbers,
+	// read ticks and the stranger checks for chats between people
+	// (people-chatting §5.4, §8.4); nil is finding people's own (People,
+	// through peopleJoin, people_join.go). Tests set another.
+	ChatPolicy peoplechats.Policy
+	// PersonLinks finds the person a person's link names (§5.2); nil is
+	// People's links (peopleJoin).
+	PersonLinks peoplechats.LinkResolver
+	// peopleKeys seal each person's copy of their people chats.
+	peopleKeysOnce sync.Once
+	peopleKeys     *peoplechats.Keys
+	// CustomerAnswered hears when a business writes to a person in the app
+	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
+	// nil tells no one.
+	CustomerAnswered CustomerAnswerHook
+	// closedReplyFault, when set, fails the closed reply after it is
+	// claimed (tests: a failure keeps the customer's message).
+	closedReplyFault func() error
 	// OrderReadInline reads a customer's message for an order before the
 	// webhook answers, not in the background (tests).
 	OrderReadInline bool
@@ -78,6 +104,9 @@ type Server struct {
 	diary         diaryQueue
 	// chatGate caps the open Chat page streams (chat_stream.go).
 	chatGate chatStreamGate
+	// liveGate caps the open live connections of You (people_live.go), per
+	// person and per server.
+	liveGate chatStreamGate
 	// ChatStreamPing is how often an open chat stream says something when it
 	// has nothing to say (zero: ten seconds).
 	ChatStreamPing time.Duration
@@ -241,6 +270,37 @@ type Server struct {
 	ReachKeys *forms.Keys
 	ReachHost string
 	Messages  *sender.Queue
+	// CodeSMS texts a person their own sign-in code (phone_signin.go), with
+	// no tenant and no outbox; nil when no SMS provider is configured, and
+	// codes then go by WhatsApp only.
+	CodeSMS interface {
+		SendCode(ctx context.Context, number, text string) error
+	}
+	// ChatLinks are businesses' chat links (customer_links.go,
+	// engine/chatlinks); nil or without a key: none.
+	ChatLinks *chatlinks.Links
+	// PhoneIndex finds a person's storefront orders by their verified
+	// phone (engine/phoneindex); nil: none are found.
+	PhoneIndex *phoneindex.Index
+	// People is finding people and what each may see of another
+	// (people.go, engine/people); nil: one with no key (no links, contact
+	// matching or adding contacts).
+	People *people.People
+	// peopleDefault is finding people without a key, when People is nil.
+	peopleOnce    sync.Once
+	peopleDefault *people.People
+	// Answered tells a person in the browser chat that a business answered
+	// them (engine/chatlinks.Tell); nil tells no one.
+	Answered chatlinks.Teller
+	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
+	// the chat link's page and the shared number point there; "" leaves
+	// it out.
+	AppGetURL string
+	// UpdateChatTemplate: the taskiem_update_chat template, which carries
+	// "Reply in the Taskiem app" outside WhatsApp's 24 hours, is approved
+	// (TASKIEM_WA_UPDATE_CHAT_TEMPLATE); until then the link goes only in
+	// messages inside the window (docs/spec/taskiem-for-everyone.md §12).
+	UpdateChatTemplate bool
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
 	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
@@ -304,6 +364,10 @@ type Server struct {
 	previewAnyPort bool
 	bg             sync.WaitGroup
 	bgActive       atomic.Int64 // work running after its request was answered (reset emails)
+	// groupPushing: group messages' pushes being queued after their send
+	// committed (people_group_messages.go); groupTickRuns: the live
+	// connection's recomputing of a group's ticks (people_group_live.go).
+	groupPushing, groupTickRuns atomic.Int64
 }
 
 // Handler builds the router.
@@ -351,6 +415,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/password/reset", s.resetPassword)
 		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
 		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/auth/phone/start", s.phoneStart) // the phone way in (phone_signin.go)
+		r.Post("/auth/phone/verify", s.phoneVerify)
+		r.Post("/auth/phone/create", s.phoneCreate)
 		r.Post("/signup/app/code", s.appSignupCode) // signing up in the app as on WhatsApp (app_signup.go)
 		r.Post("/signup/app/verify", s.appSignupVerify)
 		r.Post("/signup/app/turn", s.appSignupTurn)
@@ -377,7 +444,11 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
-		r.Get("/app/config", s.appConfig) // the phone app's config (app_config.go)
+		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
+		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
+		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
+		s.groupPublicRoutes(r)                                 // a group's preview at its link (people_groups.go)
+		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -416,6 +487,27 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
 			r.Get("/me/businesses", s.listBusinesses) // the switcher (switch.go)
 			r.Post("/me/switch", s.switchBusiness)
+			r.Post("/me/phone/start", s.phoneChangeStart) // changing your phone (phone_signin.go)
+			r.Post("/me/phone/verify", s.phoneChangeVerify)
+			r.Post("/auth/second-proof/email/start", s.secondProofEmailStart) // second proofs (second_proof.go)
+			r.Post("/auth/second-proof/email/verify", s.secondProofEmailVerify)
+			r.Post("/auth/second-proof/pin", s.secondProofPin)
+			r.Post("/auth/second-proof/password", s.secondProofPassword)
+			r.Post("/auth/second-proof/passkey/options", s.secondProofPasskeyOptions)
+			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
+			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
+			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			s.discoverRoutes(r)                                  // the public finding businesses (discover.go)
+			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
+			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
+			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
+			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
+			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
+			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
+			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
+			s.groupRoutes(r)                    // groups of people (people_groups.go)
+			s.basketRoutes(r)                   // ordering together (people_baskets.go)
+			s.peopleSafetyRoutes(r)             // the person's standing and appeals (people_safety.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
@@ -445,6 +537,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
+			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
+			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)
+			r.With(s.need(PermOrders)).Get("/customers/chat-link/qr", s.chatLinkQR)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/customers/chat-link", s.newChatLink)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/customers/chat-settings", s.putChatSettings)
+			// Discover's listing (discover.go, docs/spec/taskiem-for-everyone.md §10).
+			r.With(s.need(PermStorefrontManage)).Get("/settings/discover", s.getDiscoverSettings)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/discover", s.putDiscoverSettings)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Delete("/reach/contacts/{id}", s.removeReachContact)
 			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
@@ -551,6 +651,7 @@ func (s *Server) Handler() http.Handler {
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
 			s.linkBookingRoutes(r)  // booking their services from it (link_bookings.go)
 			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.customerAppRoutes(r)  // customers in the app: blocks, files, offers (customer_app.go)
 			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
 			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
 			s.priceListRoutes(r)    // price lists and item links (price_lists.go)
@@ -808,6 +909,12 @@ func (s *Server) Handler() http.Handler {
 	})
 	if s.Static != nil {
 		r.Handle("/*", s.Static)
+	} else {
+		// A chat link's page, where no web app is served here to show it
+		// (customer_links.go).
+		r.Get("/m/{code}", s.chatLinkHTML)
+		// A person's link's page (people.go).
+		r.Get("/p/{code}", s.personLinkHTML)
 	}
 	return r
 }
@@ -1079,13 +1186,26 @@ const maxLimiters = 100_000
 
 // limiter is a token bucket per key: one token every interval, up to burst.
 func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limiter {
+	l, _ := s.limiterFor(key, every, burst, true)
+	return l
+}
+
+// ownLimiter is limiter for a key whose bucket must never be shared with
+// other keys: when maxLimiters are in use it answers ok false (no bucket)
+// instead of the kind's shared one, and the caller limits another way
+// (typing marks: people_search.go).
+func (s *Server) ownLimiter(key string, every time.Duration, burst int) (*rate.Limiter, bool) {
+	return s.limiterFor(key, every, burst, false)
+}
+
+func (s *Server) limiterFor(key string, every time.Duration, burst int, share bool) (*rate.Limiter, bool) {
 	ls := &s.limiters
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	now := time.Now()
 	if e, ok := ls.m[key]; ok {
 		e.last = now
-		return e.l
+		return e.l, true
 	}
 	if ls.m == nil {
 		ls.m, ls.shared = map[string]*limiterEntry{}, map[string]*rate.Limiter{}
@@ -1099,17 +1219,20 @@ func (s *Server) limiter(key string, every time.Duration, burst int) *rate.Limit
 		ls.swept = now
 	}
 	if len(ls.m) >= maxLimiters {
+		if !share {
+			return nil, false
+		}
 		kind, _, _ := strings.Cut(key, ":")
 		l, ok := ls.shared[kind]
 		if !ok {
 			l = rate.NewLimiter(rate.Every(every), burst)
 			ls.shared[kind] = l
 		}
-		return l
+		return l, true
 	}
 	e := &limiterEntry{l: rate.NewLimiter(rate.Every(every), burst), last: now, full: max(every*time.Duration(burst), time.Minute)}
 	ls.m[key] = e
-	return e.l
+	return e.l, true
 }
 
 // tx runs fn in a transaction scoped to the caller's tenant.

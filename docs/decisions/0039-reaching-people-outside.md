@@ -46,3 +46,10 @@ So when an owner asked for a leave-request workflow that tells the employee the 
 - Staff and customers who never tap a link still hear by SMS, as before.
 - WhatsApp for outsiders needs the Business account, the platform number's `TASKIEM_WHATSAPP_DISPLAY_NUMBER` (links point at it), and the `taskiem_update` template's approval; until then it falls back to SMS.
 - A person stopping one business does not stop others; blocking the bot stops all of them on Telegram.
+
+## Amendment — 2026-11-16, people in the Taskiem app are not outsiders (decision 0068)
+
+This decision's rules stand for outsiders on Taskiem's shared WhatsApp number and Telegram bot: opting in to a business's updates with a link, STOP and START, and one answer to anything else. Two things change:
+- **A person with a Taskiem account is not an outsider.** Anyone may now make a personal account with a phone number and chat with businesses in the Taskiem app or the browser ([0068](0068-taskiem-for-everyone.md), [plan](../spec/taskiem-for-everyone.md)). There they are a customer with their own side, not a phone number reached by updates.
+- **What outsiders are told points to the app.** Updates may end with a link to chat with the business in the app or the browser, once the `taskiem_update` template's new words are approved; an outsider who replies to an update is given that link in place of the fixed answer, at most once per business per day ([plan §12](../spec/taskiem-for-everyone.md#12-the-shared-whatsapp-number-and-telegram-bot)).
+

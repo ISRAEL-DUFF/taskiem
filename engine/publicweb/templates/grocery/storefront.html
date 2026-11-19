@@ -16,7 +16,7 @@
   <div><p class="gx-tag">{{if .OpenKnown}}{{if .OpenNow}}Open now{{else}}Closed now{{end}}{{else}}Welcome{{end}}</p>
   <h1>{{.M.Card.Name}}</h1>
   {{with .M.Card.About}}<p>{{.}}</p>{{end}}
-  <p class="gx-cta">{{if .HasItems}}<a class="btn btn-light" href="#shop">Shop now</a>{{end}}{{with .M.WhatsLink}}<a class="btn btn-ghost" href="{{.}}" rel="noopener">WhatsApp</a>{{end}}</p></div>
+  <p class="gx-cta">{{if .HasItems}}<a class="btn btn-light" href="#shop">Shop now</a>{{end}}{{with .M.ChatLink}}<a class="btn btn-ghost" href="{{.}}" rel="noopener">Chat with us</a>{{end}}{{with .M.WhatsLink}}<a class="btn btn-ghost" href="{{.}}" rel="noopener">WhatsApp</a>{{end}}</p></div>
   {{with .Brand.Cover}}<img class="gx-promo-img" src="{{.}}" srcset="{{.}} 800w, {{$.Brand.CoverLarge}} 2000w" sizes="(min-width: 900px) 30vw, 0px" alt="">{{end}}
 </section>{{end}}
 {{if .Services}}<section aria-labelledby="services-h"><h2 id="services-h">Services</h2>

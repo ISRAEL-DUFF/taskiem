@@ -1539,7 +1539,8 @@ export function LinkCodeSignedOut() {
         </Link>
       </p>
       <p className="hint">
-        Not on Taskiem yet? <Link to="/signup">Sign up your business</Link>,
+        Not on Taskiem yet?{" "}
+        <Link to="/signup?start=business">Start your business on Taskiem</Link>,
         then open the link again.
       </p>
     </div>

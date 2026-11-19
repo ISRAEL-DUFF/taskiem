@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/app/applinks.dart';
+import 'package:taskiem/app/route.dart';
 
 void main() {
   const server = 'https://taskiem.example';
@@ -32,6 +33,34 @@ void main() {
     ]) {
       expect(page(no), isNull, reason: no);
     }
+  });
+
+  test('You’s pages open the app: the chats, a chat, Orders, an order, Discover, a profile', () {
+    expect(page('https://taskiem.example/you'), '/you');
+    expect(page('https://taskiem.example/you/chats/c-123'), '/you/chats/c-123');
+    expect(page('https://taskiem.example/you/orders'), '/you/orders');
+    expect(page('https://taskiem.example/you/orders/b1/MK-1042/'), '/you/orders/b1/MK-1042');
+    expect(page('https://taskiem.example/you/discover'), '/you/discover');
+    expect(page('https://taskiem.example/you/discover/b1'), '/you/discover/b1');
+    expect(page('https://taskiem.example/you/chats/new?business=b1&from=discover&tool=shop'), '/you/chats/new?business=b1&tool=shop');
+    expect(page('https://taskiem.example/you/chats/new?business=b1&ref=MK-1042&tool=x'), '/you/chats/new?business=b1&ref=MK-1042');
+    expect(page('https://taskiem.example/you/chats/new?business=../x'), '/you');
+    for (final no in ['https://taskiem.example/you/settings', 'https://taskiem.example/you/orders/b1', 'https://taskiem.example/you/discover/b1/x']) {
+      expect(page(no), isNull, reason: 'You’s settings and other pages stay on the web: $no');
+    }
+
+    expect(youRouteOf('/you'), (page: YouPage.chats, id: '', ref: '', tool: null));
+    expect(youRouteOf('/you/chats/c1'), (page: YouPage.chat, id: 'c1', ref: '', tool: null));
+    expect(youRouteOf('/you/chats/new?business=b1&tool=book'), (page: YouPage.newChat, id: 'b1', ref: '', tool: 'book'));
+    expect(youRouteOf('/you/orders/b1/MK-1042'), (page: YouPage.order, id: 'b1', ref: 'MK-1042', tool: null));
+    expect(youRouteOf('/you/discover/b1'), (page: YouPage.business, id: 'b1', ref: '', tool: null));
+    expect(youRouteOf('/chat'), isNull);
+
+    // In a business's session: over the chats.
+    expect(routeOf('/you/chats/c1'), (tab: tabChats, screen: RouteScreen.you, id: 'c1'));
+    expect(routeOf('/you/orders/b1/MK-1042'), (tab: tabChats, screen: RouteScreen.youPage, id: '/you/orders/b1/MK-1042'));
+    expect(routeOf('/you/chats/new?business=b1'), (tab: tabChats, screen: RouteScreen.youPage, id: '/you/chats/new?business=b1'));
+    expect(routeOf('/you'), (tab: tabChats, screen: RouteScreen.none, id: ''));
   });
 
   test('a password reset’s link: its token, from the fragment no server sees', () async {

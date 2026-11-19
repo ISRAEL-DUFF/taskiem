@@ -159,7 +159,7 @@ test.afterAll(
 
 test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   const email = `wa-${Date.now()}@e2e.test`;
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -180,7 +180,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   });
   await page.context().clearCookies();
 
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -230,7 +230,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
 test("the own number's templates: submit, hear from Meta, check now", async ({
   page,
 }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -255,7 +255,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
   // cannot go out until then.
   const tpls = section.getByTestId("whatsapp-templates");
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
-    "0 of 24 templates approved",
+    "0 of 25 templates approved",
   );
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
     "taskiem_invoice",
@@ -305,7 +305,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
       .getByTestId("status"),
   ).toHaveText("Approved");
   await expect(section.getByTestId("whatsapp-templates-summary")).toContainText(
-    "1 of 24 templates approved",
+    "1 of 25 templates approved",
   );
 
   // Check now asks Meta: a rejection comes with its reason.

@@ -338,6 +338,12 @@ function AlertCard({
           words: "Open the order",
           go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
         };
+      case "customer_waiting":
+        // A customer in the app waiting for an answer (taskiem-for-everyone §8.6).
+        return {
+          words: "Answer them",
+          go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
+        };
       case "school_approval":
         // A school's cash or discount for a second person: decided on the
         // school's Payments page, as the web decides it.

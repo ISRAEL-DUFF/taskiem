@@ -20,7 +20,10 @@ import (
 // the tenant's admins see and cancel what is pending. A person with an
 // account but no membership anywhere signs in to an invitee session: it
 // reaches their invitations and nothing else, and becomes an ordinary
-// session in the tenant whose invitation they accept.
+// session in the tenant whose invitation they accept. Sign-ins no longer
+// start invitee sessions: someone in no business gets a personal session
+// (personal.go), which reaches their invitations too. Invitee sessions
+// already given are still read until they expire.
 
 type pendingInvitation struct {
 	UserID    uuid.UUID `json:"user_id"`
@@ -114,22 +117,6 @@ var inviteeRoutes = regexp.MustCompile(`^(GET /v1/me|GET /v1/me/invitations|POST
 
 func inviteeAllowed(method, path string) bool {
 	return inviteeRoutes.MatchString(method + " " + strings.TrimSuffix(path, "/"))
-}
-
-// startInviteeSession signs in a person who belongs to no tenant but is
-// invited by one, to answer their invitations. It reports false when they
-// are invited by none (the caller refuses the sign-in as before).
-func (s *Server) startInviteeSession(w http.ResponseWriter, r *http.Request, user uuid.UUID, method string, bearer bool) (bool, error) {
-	tok := newToken()
-	var ok bool
-	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_auth_invitee_start($1, $2, $3, $4::interval, $5)`,
-		hashToken(tok), user, method, sessionTTL.String(), clientIP(r)).Scan(&ok); err != nil || !ok {
-		return false, err
-	}
-	out := map[string]any{"user_id": user, "tenants": []uuid.UUID{}, "invitations_only": true}
-	s.deliverSession(w, bearer, tok, out)
-	writeJSON(w, http.StatusOK, out)
-	return true, nil
 }
 
 // requestToken is the session or key token the request carries.

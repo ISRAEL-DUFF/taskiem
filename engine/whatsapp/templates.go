@@ -168,6 +168,18 @@ var (
 		Examples: []string{"Ada Stores", "your leave request", "Your leave is approved."},
 		Purpose:  "A workflow's message to someone outside the business who asked for updates (notify@1 message): about says what they asked about.",
 	}
+	// TplUpdateChat is TplUpdate with a button to chat with the business in
+	// the Taskiem app or the browser (docs/spec/taskiem-for-everyone.md §12):
+	// sent in its place outside the 24 hours only once the deployment says
+	// it is approved (TASKIEM_WA_UPDATE_CHAT_TEMPLATE).
+	TplUpdateChat = Template{
+		Name: "taskiem_update_chat", Category: "UTILITY",
+		Body:     "[{{1}}] Update on {{2}}: {{3}} Reply in the Taskiem app.",
+		Vars:     []string{"tenant", "about", "message"},
+		Examples: []string{"Ada Stores", "your order", "Your order is on its way."},
+		Buttons:  []TemplateButton{{Type: "url", Text: "Reply in Taskiem", Host: HostApp, Path: "/m/{{1}}", Var: "chat", Example: "k7m2p9q4wx"}},
+		Purpose:  "An update to someone outside the business, as taskiem_update, from a business that offers its chat link in updates: the button opens its chat link.",
+	}
 
 	// Money and schools (docs/invoices.md, docs/schools.md): what goes to
 	// customers, families and owners outside the window once approved.
@@ -291,7 +303,7 @@ var (
 )
 
 // AllTemplates lists the library, for documentation, submission and tests.
-var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage, TplCustomerReply,
+var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplUpdateChat, TplLinkMessage, TplCustomerReply,
 	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite, TplStaffTask}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)

@@ -251,6 +251,48 @@ describe("the service worker's words", () => {
     expect(r.tag).toHaveLength(200);
     expect(r.unread).toBe(-1); // not said: the badge is left as it is
   });
+  it("opens a business's answer in the person's own chat, with no business to move to", () => {
+    const chat = "0b6c0a51-35a2-4e6f-9a43-6b1e4b0e8f11";
+    const p = sw.parsePayload(() => ({
+      title: "Mama's Kitchen",
+      body: "Your rice is ready",
+      link: `/you/chats/${chat}`,
+      tag: `you:${chat}`,
+      business: "",
+      kind: "you",
+    }));
+    expect(p.kind).toBe("you");
+    expect(p.business).toBe("");
+    expect(p.link).toBe(`/you/chats/${chat}`);
+    // A tap opens the chat as it is: no ?business= to switch to.
+    expect(sw.openLink(p.link, p.business)).toBe(`/you/chats/${chat}`);
+    expect(sw.notificationOf(p, "").options.data).toEqual({ link: `/you/chats/${chat}`, business: "" });
+  });
+  it("opens a person's message and a message request on You", () => {
+    const chat = "0b6c0a51-35a2-4e6f-9a43-6b1e4b0e8f12";
+    for (const [kind, link] of [
+      ["person", `/you/people/${chat}`],
+      ["request", `/you/people/requests/${chat}`],
+    ]) {
+      const p = sw.parsePayload(() => ({ title: "Kemi", body: "Hi", link, tag: `person:${chat}`, business: "", kind }));
+      expect(p.kind).toBe(kind);
+      expect(p.link).toBe(link);
+      expect(sw.openLink(p.link, p.business)).toBe(link);
+    }
+  });
+  it("opens a group's message and an invite to a group on You", () => {
+    const group = "0b6c0a51-35a2-4e6f-9a43-6b1e4b0e8f13";
+    for (const [kind, link] of [
+      ["group", `/you/groups/${group}`],
+      ["group_invite", "/you/groups/invites"],
+    ]) {
+      const p = sw.parsePayload(() => ({ title: "Yaba friends", body: "Ada Obi: Hi", link, tag: `group:${group}`, business: "", kind }));
+      expect(p.kind).toBe(kind);
+      expect(p.link).toBe(link);
+      expect(p.tag).toBe(`group:${group}`);
+      expect(sw.openLink(p.link, p.business)).toBe(link);
+    }
+  });
   it("shows one notification per conversation, with the page's own tag", () => {
     const n = sw.notificationOf(
       sw.parsePayload(() => ({

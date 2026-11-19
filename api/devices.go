@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 	"slices"
@@ -75,10 +76,10 @@ func deviceOf(ctx context.Context) *deviceReq {
 // they belong to: signing in again on a phone replaces its session wherever
 // the earlier one was (a copied token does not outlive a fresh sign-in).
 func (s *Server) endPhone(ctx context.Context, user, device uuid.UUID) error {
-	return s.inPersonsTenants(ctx, user, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE device_id = $1 AND user_id = $2 AND revoked_at IS NULL`, device, user)
-		return err
-	})
+	// Their own side's session on it too, which no business's scope reaches
+	// (taskiem_auth_device_end, 00448).
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_device_end($1, $2)`, user, device)
+	return err
 }
 
 // errPhoneBusy is two sign-ins on one phone at once: the second loses
@@ -157,6 +158,11 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			ph.This = ph.ID == this
+			// Listed by a stand-in, never the app's own id: that id is
+			// chosen by the app and is not a secret, and a person who learnt
+			// it could present it when signing in (taskiem-for-everyone
+			// §5.4). Removing a phone takes the stand-in.
+			ph.ID = deviceListID(p.UserID, ph.ID)
 			out = append(out, ph)
 		}
 		return rows.Err()
@@ -177,19 +183,43 @@ func (s *Server) removeDevice(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "only a person has phones")
 		return
 	}
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	listed, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such phone")
 		return
 	}
 	ctx := r.Context()
-	var ended int64
-	err = s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL`, p.UserID, id)
+	id := uuid.Nil
+	if err := s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT device_id FROM sessions WHERE user_id = $1 AND device_id IS NOT NULL`, p.UserID)
 		if err != nil {
 			return err
 		}
-		ended = tag.RowsAffected()
+		defer rows.Close()
+		for rows.Next() {
+			var d uuid.UUID
+			if err := rows.Scan(&d); err != nil {
+				return err
+			}
+			if deviceListID(p.UserID, d) == listed {
+				id = d
+			}
+		}
+		return rows.Err()
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if id == uuid.Nil {
+		writeErr(w, http.StatusNotFound, "no such phone")
+		return
+	}
+	var ended int64
+	err = s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
+		// In every business and on their own side (taskiem_auth_device_end).
+		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_device_end($1, $2)`, p.UserID, id).Scan(&ended); err != nil {
+			return err
+		}
 		if ended == 0 {
 			return errNoPhone
 		}
@@ -221,4 +251,15 @@ func (s *Server) inPersonsTenants(ctx context.Context, user uuid.UUID, fn func(p
 		return errNoMembership
 	}
 	return db.InTenantTx(ctx, s.Store.Pool, tenants, fn)
+}
+
+// deviceListID is how Your phones names a phone: a stand-in made from the
+// person and the app's device id, the same each time, from which the
+// device id cannot be read back.
+func deviceListID(user, device uuid.UUID) uuid.UUID {
+	h := sha256.Sum256([]byte("taskiem-device-list:" + user.String() + ":" + device.String()))
+	id, _ := uuid.FromBytes(h[:16])
+	id[6] = (id[6] & 0x0f) | 0x40 // a version 4 uuid, as a client expects
+	id[8] = (id[8] & 0x3f) | 0x80
+	return id
 }

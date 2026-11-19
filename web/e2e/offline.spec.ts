@@ -10,7 +10,7 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true, viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
 
 async function workerInControl(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.evaluate(() => navigator.serviceWorker.ready);
   // The first page was loaded before the worker: it controls the next one.
   await page.reload();
@@ -54,7 +54,7 @@ test("offline, a page of the app says so in plain words, and opens again once ba
   await expect(page.locator("#root")).not.toBeEmpty();
   // Try again while still offline: the same page again, never the browser's error.
   await context.setOffline(true);
-  await page.goto("/login").catch(() => null);
+  await page.goto("/login?with=email").catch(() => null);
   await expect(page.getByRole("heading", { name: "You’re offline" })).toBeVisible();
   await page.evaluate(() => ((window as unknown as { marked: boolean }).marked = true));
   await page.getByRole("link", { name: "Try again" }).click();
@@ -64,7 +64,7 @@ test("offline, a page of the app says so in plain words, and opens again once ba
     .poll(() => page.evaluate(() => (window as unknown as { marked?: boolean }).marked ?? false).catch(() => "loading"))
     .toBe(false);
   await expect(page.getByRole("heading", { name: "You’re offline" })).toBeVisible();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?with=email$/);
   await context.setOffline(false);
   await expect(page.locator("#root")).not.toBeEmpty();
 });

@@ -700,7 +700,10 @@ class TkMiniBars extends StatelessWidget {
 /// next (payments to match, the order that has waited longest, the next
 /// bill), a leading tile, two lines, and its button.
 class TkCallout extends StatelessWidget {
-  const TkCallout({super.key, required this.leading, required this.title, this.sub, required this.color, this.button, this.semantics, this.onPressed});
+  const TkCallout({super.key, required this.leading, required this.title, this.sub, required this.color, this.button, this.semantics, this.onPressed, this.subLines = 2});
+
+  /// How many lines [sub] may take (a reason that must be read whole).
+  final int subLines;
   final Widget leading;
   final String title;
   final String? sub;
@@ -724,7 +727,7 @@ class TkCallout extends StatelessWidget {
             children: [
               Text(title, maxLines: large ? 4 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
               if (sub != null && sub!.isNotEmpty)
-                Text(sub!, maxLines: large ? 6 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
+                Text(sub!, maxLines: large ? subLines * 3 : subLines, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
             ],
           ),
         ),

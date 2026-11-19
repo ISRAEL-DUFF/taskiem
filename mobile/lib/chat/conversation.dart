@@ -24,6 +24,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
@@ -904,6 +905,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
           },
         ),
       );
+      return;
+    }
+    // Customers: your chat link and an offer, in a sheet of their own.
+    if (tool.key == 'customers') {
+      unawaited(showCustomersSheet(context, widget.data.chats.auth));
       return;
     }
     if (tool.key == 'sell') {

@@ -9,6 +9,7 @@ const shot = async (page: Page, name: string) => {
 test("sign in, build, publish, run, and verify the audit chain", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
+  await page.getByRole("link", { name: "Sign in with email" }).click();
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

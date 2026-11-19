@@ -12,7 +12,7 @@ function callback(request: APIRequestContext, url: string) {
 }
 
 test("connect a USSD channel, rotate its token, restrict and remove it", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

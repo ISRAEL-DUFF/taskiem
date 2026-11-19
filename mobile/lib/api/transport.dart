@@ -291,9 +291,10 @@ class Transport {
   }
 
   /// Sends a file as a multipart form (`file`, and the [fields] beside it)
-  /// and answers the JSON, as [send] does.
-  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file'}) async {
-    final req = http.MultipartRequest('POST', _uri(path))
+  /// and answers the JSON, as [send] does; [method] PUT where a file takes
+  /// another's place (the person's photo).
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file', String method = 'POST'}) async {
+    final req = http.MultipartRequest(method, _uri(path))
       ..headers['Accept'] = 'application/json'
       ..fields.addAll(fields)
       ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: MediaType.parse(type)));
@@ -372,9 +373,16 @@ class Transport {
       }
     }
     if (status >= 200 && status < 300) return json;
-    if (status == 401 && sentWith != null && token == sentWith) onSessionEnded?.call();
+    if (status == 401 && sentWith != null && token == sentWith && !(json is Map && stillSignedIn.any(json.containsKey))) onSessionEnded?.call();
     throw ApiError(status, json is Map<String, dynamic> ? json : {'error': 'The server answered $status.'});
   }
+
+  /// A 401 that asks for another step while the session goes on: a
+  /// business's sign-in rules on switching, a wrong chat PIN as a second
+  /// proof, a wrong or expired code while changing the number. It signs
+  /// nobody out (docs/spec/taskiem-for-everyone.md §5.4, §5.5); any other
+  /// 401 to the session does, as on the web (web/src/api.ts keepsSession).
+  static const stillSignedIn = {'code_wrong', 'ticket_expired', 'tries_left', 'sso_required', 'passkey_required', 'second_proof_required'};
 
   // Plain http only to a server on this machine or the emulator's host,
   // for development.

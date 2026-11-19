@@ -50,7 +50,7 @@ const SCREENS: {
 }[] = [
   {
     name: "sign-in",
-    path: "/login",
+    path: "/login?with=email",
     ready: async (p) => {
       await expect(p.getByRole("heading", { name: "Sign in to Taskiem" })).toBeVisible();
       await expect(p.getByLabel("Email")).toBeFocused();
@@ -59,7 +59,7 @@ const SCREENS: {
   {
     // Signing in with the chat: the phone number.
     name: "sign-in-chat",
-    path: "/login",
+    path: "/login?with=email",
     ready: async (p) => {
       await p.getByRole("button", { name: "Sign in with WhatsApp or Telegram" }).click();
       await expect(p.getByLabel("Phone number")).toBeFocused();
@@ -68,7 +68,7 @@ const SCREENS: {
   {
     // The code, after the server's answer (the same for any number).
     name: "sign-in-chat-code",
-    path: "/login",
+    path: "/login?with=email",
     ready: async (p) => {
       // The server's answer, word for word (api/chat_signin.go), stood in
       // for: codes are limited per address, and every browser test asks
@@ -89,7 +89,7 @@ const SCREENS: {
   {
     // A wrong password: the server's words in the error box.
     name: "sign-in-wrong",
-    path: "/login",
+    path: "/login?with=email",
     ready: async (p) => {
       await p.getByLabel("Email").fill("ada@parity.test");
       await p.getByLabel("Password").fill("not the password");
@@ -99,12 +99,11 @@ const SCREENS: {
     },
   },
   {
-    // Signing up: a business type chosen.
+    // The way in: one screen for signing in and signing up (taskiem-for-everyone §5.1).
     name: "sign-up",
     path: "/signup",
     ready: async (p) => {
-      await expect(p.getByRole("heading", { name: "Start with Taskiem" })).toBeVisible();
-      await p.getByText("I bill customers for a service").click();
+      await expect(p.getByRole("heading", { name: "Welcome to Taskiem" })).toBeVisible();
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },

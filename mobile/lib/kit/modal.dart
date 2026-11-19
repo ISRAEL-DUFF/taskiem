@@ -373,7 +373,7 @@ void showComingSoon(BuildContext context) => showTkToast(context, 'This is comin
 
 /// A choice among a few (a `<select>`'s list), in a modal: the one chosen,
 /// or null when put away.
-Future<String?> showTkModalChoices(BuildContext context, {required String title, required List<(String, String)> choices, String? value}) =>
+Future<String?> showTkModalChoices(BuildContext context, {required String title, required List<(String, String)> choices, String? value, String? note}) =>
     showTkModal<String>(
       context,
       title: title,
@@ -383,6 +383,8 @@ Future<String?> showTkModalChoices(BuildContext context, {required String title,
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // What the choices mean, said before them.
+            if (note != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(note, style: tkText(size: 14, lineHeight: 1.45, color: t.muted))),
             for (final (id, words) in choices)
               Semantics(
                 button: true,

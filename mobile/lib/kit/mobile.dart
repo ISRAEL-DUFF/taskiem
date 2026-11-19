@@ -275,7 +275,11 @@ class TkHeadButton extends StatelessWidget {
 
 /// Chips across, scrolling sideways: one on (a period, a filter).
 class TkChips<T> extends StatelessWidget {
-  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10)});
+  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10), this.off = const {}});
+
+  /// Choices that cannot be picked now, with why (a line a customer
+  /// stopped): drawn quiet, said as not enabled with the reason as a hint.
+  final Map<T, String> off;
 
   /// Round the switch: the page's edge; none inside a card.
   final EdgeInsets padding;
@@ -317,11 +321,13 @@ class TkChips<T> extends StatelessWidget {
                         child: Semantics(
                           button: true,
                           selected: v == on,
+                          enabled: !off.containsKey(v),
                           label: words,
+                          hint: off[v],
                           excludeSemantics: true,
-                          onTap: () => onPick(v),
+                          onTap: off.containsKey(v) ? null : () => onPick(v),
                           child: TkPress(
-                            onTap: () => onPick(v),
+                            onTap: off.containsKey(v) ? null : () => onPick(v),
                             scale: 0.95,
                             child: AnimatedContainer(
                               duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
@@ -334,7 +340,7 @@ class TkChips<T> extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: v == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
                               ),
-                              child: Text(words, style: tkText(size: 13, weight: 600, color: t.text)),
+                              child: Text(words, style: tkText(size: 13, weight: 600, color: off.containsKey(v) ? t.muted : t.text)),
                             ),
                           ),
                         ),
@@ -610,13 +616,23 @@ class TkListRow extends StatelessWidget {
     this.level,
     this.levelColor,
     this.trailing,
+    this.face,
+    this.chevron = true,
     this.leading,
     this.subLines = 2,
     this.titleLines,
   });
 
+  /// A tile of its own, 40 px round (a business's photo), in place of the
+  /// letters or the icon.
+  final Widget? face;
+
   /// How many lines the title may take (one; two beside a switch).
   final int? titleLines;
+
+  /// Whether a row that opens has its chevron: not a choice, which is
+  /// ticked instead.
+  final bool chevron;
 
   /// In place of the tile: a tick box when rows are chosen (as drawn), no
   /// chevron after.
@@ -668,7 +684,9 @@ class TkListRow extends StatelessWidget {
     // an icon on a soft round tile; or the letters on a face's gradient
     // (warm or red when the row warns).
     final Widget face;
-    if (small) {
+    if (this.face != null) {
+      face = SizedBox(width: size, height: size, child: this.face);
+    } else if (small) {
       face = Container(
         width: size,
         height: size,
@@ -829,7 +847,7 @@ class TkListRow extends StatelessWidget {
                 ],
                 if (trailing != null) ...[const SizedBox(width: 10), trailing!],
                 // A row that opens has its chevron, after its amount too (as drawn).
-                if (onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
+                if (chevron && onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],

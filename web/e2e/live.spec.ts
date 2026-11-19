@@ -7,7 +7,7 @@ test("the run canvas lights up as the run goes", async ({ page }) => {
   // outlasted 60 s (CI timed out on it five times, at a different step
   // each time). It gets 120 s, as the other long tests have.
   test.setTimeout(120_000);
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

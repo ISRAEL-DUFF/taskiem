@@ -11,7 +11,7 @@ for (const scheme of ["light", "dark"] as const)
     test(`show and hide the password at ${width} px, ${scheme} theme`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-      for (const path of ["/signup", "/login"]) {
+      for (const path of ["/login?with=email"]) {
         await page.goto(path);
         const box = page.getByLabel("Password", { exact: true });
         await expect(box).toHaveAttribute("type", "password");
@@ -30,7 +30,7 @@ for (const scheme of ["light", "dark"] as const)
     });
 
 test("a shown password is hidden again when the form is sent", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("nobody@e2e.test");
   await page.getByLabel("Password").fill("not the password at all");
   await page.getByRole("button", { name: "Show", exact: true }).click();

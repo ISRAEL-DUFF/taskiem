@@ -80,13 +80,19 @@ func (g *chatStreamGate) lastCap() string {
 }
 
 func (g *chatStreamGate) acquire(t uuid.UUID) (release func(), ok bool) {
+	return g.acquireN(t, chatStreamsPerTenant, "business")
+}
+
+// acquireN takes one of the streams t may hold (per at once; who names
+// that cap when it refuses), and one of the server's.
+func (g *chatStreamGate) acquireN(t uuid.UUID, per int, who string) (release func(), ok bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.tenant == nil {
 		g.tenant = map[uuid.UUID]int{}
 	}
-	if g.tenant[t] >= chatStreamsPerTenant {
-		g.refused = "business"
+	if g.tenant[t] >= per {
+		g.refused = who
 		return nil, false
 	}
 	if g.total >= chatStreamsTotal {

@@ -320,7 +320,9 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
 
 - You at the top: your face, name, email, and your role in the business. An
   account made in a chat adds its email there.
-- Your businesses, with Switch, when there is more than one.
+- Your businesses, each with Switch (through the switcher, which asks first
+  for what a locked one needs; a locked one says what), then **Switch to You
+  or a business**.
 - This phone:
   - notifications on or off, and whether they show what the message says,
     as switches;

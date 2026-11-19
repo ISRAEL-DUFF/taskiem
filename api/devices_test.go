@@ -83,8 +83,17 @@ func TestDeviceSessions(t *testing.T) {
 		t.Fatalf("Your phones: %v", devices)
 	}
 	this := 0
+	listedIPhone := ""
 	for _, d := range devices {
-		if m := d.(map[string]any); m["this"] == true {
+		m := d.(map[string]any)
+		// Listed by a stand-in, never the app's own device id (§5.4).
+		if m["id"] == iphone["id"] || m["id"] == phone["id"] {
+			t.Fatalf("a phone listed by its own device id: %v", m)
+		}
+		if m["name"] == "Ada's iPhone" {
+			listedIPhone, _ = m["id"].(string)
+		}
+		if m["this"] == true {
 			this++
 			if m["name"] != "Ada's Tecno" || m["platform"] != "android" {
 				t.Fatalf("this phone: %v", m)
@@ -99,11 +108,12 @@ func TestDeviceSessions(t *testing.T) {
 	}
 
 	// Signed out from anywhere: the iPhone, from the Tecno.
-	again.must(204, "DELETE", "/v1/me/devices/"+iphone["id"].(string), nil)
+	again.must(404, "DELETE", "/v1/me/devices/"+iphone["id"].(string), nil) // its own id names nothing
+	again.must(204, "DELETE", "/v1/me/devices/"+listedIPhone, nil)
 	if st, _ := other.do("GET", "/v1/me", nil); st != 401 {
 		t.Fatalf("a phone signed out still works: %d", st)
 	}
-	again.must(404, "DELETE", "/v1/me/devices/"+iphone["id"].(string), nil)
+	again.must(404, "DELETE", "/v1/me/devices/"+listedIPhone, nil)
 	var audited int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'auth.device_removed'`).Scan(&audited); err != nil || audited != 1 {
 		t.Fatalf("audited %d (%v)", audited, err)

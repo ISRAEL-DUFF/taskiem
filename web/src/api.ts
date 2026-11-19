@@ -106,8 +106,8 @@ export async function api<T = unknown>(
 }
 
 /** POSTs a multipart form (file uploads); the browser sets its boundary. */
-export function upload<T = unknown>(path: string, form: FormData): Promise<T> {
-  return request<T>("POST", path, form, {});
+export function upload<T = unknown>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
+  return request<T>(method, path, form, {});
 }
 
 /** POSTs a file as the raw request body, with its own Content-Type (storefront photos). */
@@ -120,6 +120,11 @@ export function uploadFile<T = unknown>(path: string, file: Blob): Promise<T> {
 /** POSTs a multipart form (a photo with a step); the browser sets the boundary. */
 export function postForm<T = unknown>(path: string, form: FormData): Promise<T> {
   return request<T>("POST", path, form, {});
+}
+
+/** PUTs a multipart form (the person's photo); the browser sets the boundary. */
+export function putForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("PUT", path, form, {});
 }
 
 /** GETs a binary response (an image) with the session, as a Blob. */
@@ -175,13 +180,11 @@ async function request<T>(
     data = { error: text };
   }
   if (!res.ok) {
-    // Moving to another business refused (it signs in with single sign-on)
-    // is not this session ending.
-    if (
-      res.status === 401 &&
-      !path.startsWith("/v1/auth/") &&
-      !(path === "/v1/me/switch" && data.sso_required)
-    )
+    // A 401 that asks for another step is not this session ending: a
+    // business's own sign-in first (single sign-on, a passkey, a second
+    // proof), or a code or PIN that was wrong or ran out. Any other 401
+    // outside signing in is (changing the phone number included).
+    if (res.status === 401 && !path.startsWith("/v1/auth/") && !keepsSession(data, path))
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
     throw new ApiError(
@@ -198,6 +201,21 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+/** A 401 that asks for a step while the session goes on (§5.4, §5.5). */
+export function keepsSession(body: Record<string, unknown>, path = ""): boolean {
+  if (switchStep(body) || body.code_wrong || body.ticket_expired || body.tries_left !== undefined || body.password_wrong) return true;
+  // A passkey refused while deleting the account (its proof, not the session).
+  return path === "/v1/me/delete" && /passkey/i.test(String(body.error ?? ""));
+}
+
+/** What a business asks for before a switch into it (POST /v1/me/switch). */
+export function switchStep(body: Record<string, unknown>): Lock | null {
+  if (body.sso_required) return "sso_required";
+  if (body.passkey_required) return "passkey_required";
+  if (body.second_proof_required) return "second_proof_required";
+  return null;
 }
 
 /** A part of Taskiem the business turned off answers 404 with area_off.
@@ -278,9 +296,41 @@ export interface TermsAsked {
   privacy_version: string;
 }
 
+/** What a business asks of this session before it opens (§5.4). */
+export type Lock = "sso_required" | "passkey_required" | "second_proof_required";
+
+/** The ways this person can prove a new device is theirs. */
+export interface ProofWays {
+  passkey: boolean;
+  email: boolean;
+  pin: boolean;
+  /** The account's password (POST /v1/auth/second-proof/password). */
+  password?: boolean;
+}
+
+/** One of the person's businesses, for the switcher. */
+export interface Business {
+  id: string;
+  name: string;
+  /** A business, or a workflows workspace. */
+  kind?: "business" | "workflows";
+  /** The session is in it. */
+  current?: boolean;
+  locked?: boolean;
+  lock?: Lock | null;
+}
+
 export interface Me {
-  /** Null for a person with no membership answering invitations. */
+  /** Null on the person's own side (You): a personal session. */
   tenant_id: string | null;
+  /** A personal session: the person's own side, in no business. */
+  personal?: boolean;
+  /** The person's businesses, each with what it asks first (the switcher). */
+  businesses?: Business[];
+  /** Whether this device must prove itself before a business opens. */
+  second_proof?: { required: boolean; device_proved: boolean; ways: ProofWays };
+  /** A business, or a workflows workspace (taskiem-for-everyone §18.2). */
+  tenant_kind?: "business" | "workflows";
   /** Signed in only to answer invitations: no organisation yet. */
   invitations_only?: boolean;
   roles: string[];
@@ -295,11 +345,15 @@ export interface Me {
     chat_signin?: boolean;
     /** Whether the person signs in only with their passkey. */
     passkey_only?: boolean;
+    /** The account's phone, as +234…; null when it has none. */
+    phone?: string | null;
+    /** The person's own photo (GET /v1/me/photo), shown on their own side only. */
+    photo?: { url: string; updated_at: string } | null;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
-  auth_method?: "password" | "passkey" | "sso" | "chat";
+  auth_method?: "password" | "passkey" | "sso" | "chat" | "phone";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
   /** Why the person is held to passkeys here: personal, deployment or business. */
@@ -332,6 +386,17 @@ export interface Invitation {
   tenant: string;
   roles: string[];
   invited_at: string;
+}
+
+/** POST /v1/me/invitations/{tenant}/accept. From a personal session the
+ * session moves into the business, unless its rules ask for a step first
+ * (sign_in, with the ways a second proof can be given). */
+export interface InvitationAccepted {
+  tenant_id: string;
+  roles: string[];
+  personal?: boolean;
+  sign_in?: Lock | "session_ended";
+  ways?: ProofWays;
 }
 
 export interface WorkflowSummary {

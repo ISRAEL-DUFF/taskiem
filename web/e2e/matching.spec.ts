@@ -24,7 +24,7 @@ function sql(text: string): string {
 }
 
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -213,14 +213,12 @@ test("money is matched to storefront orders from To match, and undone on the ord
   test.setTimeout(120_000);
   // A business of its own: the E2E business's storefront belongs to storefront.spec.ts, which expects it without orders.
   const name = `Ada Shop ${Date.now()}`;
-  await page.goto("/login");
-  await page.getByRole("link", { name: "Create an account" }).click();
-  await page.getByLabel("I sell things").check();
-  await page.getByLabel("Business or organisation name").fill(name);
-  await page.getByLabel("Your name").fill("Ada Obi");
-  await page.getByLabel("Email").fill(`shop-${Date.now()}@stores.test`);
-  await page.getByLabel("Password").fill("correct horse battery");
-  await page.getByRole("button", { name: "Create account" }).click();
+  const up = await page.request.post("/v1/signup", {
+    headers: { "X-Taskiem-Request": "1" },
+    data: { tenant: name, name: "Ada Obi", email: `shop-${Date.now()}@stores.test`, password: "correct horse battery", kinds: ["shop"], accept_terms: true },
+  });
+  expect(up.status(), await up.text()).toBe(201);
+  await page.goto("/start");
   await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
   const tenant = sql(`SELECT id FROM tenants WHERE name = '${name}'`);
   const [suggested, byHand] = [storefrontOrder(tenant), storefrontOrder(tenant)];

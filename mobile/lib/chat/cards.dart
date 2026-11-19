@@ -432,13 +432,13 @@ Widget viewButton(LinkDocCard card, CardActs acts) {
       : card.doc == 'order' || card.doc == 'purchase'
       ? 'View order'
       : 'View invoice';
-  return _ViewRow(label: label, semantics: '$label ${card.reference}', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card));
+  return CardViewRow(label: label, semantics: '$label ${card.reference}', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card));
 }
 
 /// A card's way to its document, at its foot: a hairline, the words, a
 /// chevron at the end.
-class _ViewRow extends StatelessWidget {
-  const _ViewRow({required this.label, required this.semantics, this.onTap});
+class CardViewRow extends StatelessWidget {
+  const CardViewRow({super.key, required this.label, required this.semantics, this.onTap});
   final String label;
   final String semantics;
   final VoidCallback? onTap;

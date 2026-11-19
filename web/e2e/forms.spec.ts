@@ -11,7 +11,7 @@ const shot = async (page: Page, name: string) => {
 test.use({ bypassCSP: true });
 
 test("an owner builds a members form in the canvas, finds it on Forms and fills it in", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

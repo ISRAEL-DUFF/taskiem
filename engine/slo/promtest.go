@@ -310,6 +310,65 @@ func RulesTestYAML() ([]byte, error) {
 					{EvalTime: "50m", Alertname: "TaskiemRetentionPurgeBehind", ExpAlerts: []promAlert{expect("TaskiemRetentionPurgeBehind", map[string]string{"severity": "ticket"})}},
 				},
 			},
+			{
+				Name: "people chats' storage grows past its line",
+				// A sample every 5 minutes: Prometheus counts a sample as current
+				// for 5 minutes only, so hourly samples would leave the rule
+				// without a value for most of each hour and its "for: 1h" would
+				// never be met.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// 60 GiB for a day, then growing 100 MiB every 5 minutes
+					// (about 28 GiB a day); with 1 GiB of messages, still under
+					// 150 GiB at 40h, so only the growth sets it off.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "64424509440x288 64424509440+104857600x288"},
+					{Series: `taskiem_people_storage_bytes{table="people_messages",instance="a"}`, Values: "1073741824x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "20h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "40h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "groups' storage counts with people chats'",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// People chats steady at 100 GiB, groups' files steady at
+					// 40 GiB: 140 GiB, under the line and not growing. From 30h
+					// groups' files grow 50 MiB every 5 minutes (about 14 GiB
+					// a day): past 150 GiB within the day, and over 8 GiB more.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "107374182400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "42949672960x360 42949672960+52428800x240"},
+					{Series: `taskiem_people_storage_bytes{table="group_messages",instance="a"}`, Values: "1073741824x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "29h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
+			{
+				Name: "two pods report the same tables, counted once",
+				// Every 5 minutes, as above, so "for: 1h" holds.
+				Interval: "5m",
+				InputSeries: []promSeries{
+					// Each of two pods reports people chats' files at 80 GiB for
+					// 40h, then 151 GiB; groups' files at 1 GiB growing 25 MiB
+					// every 5 minutes (about 7 GiB a day). Added up across pods
+					// that would be 160 GiB and 14 GiB a day, past both lines
+					// from the start; counted once a table it is under both
+					// until the files pass 150 GiB at 40h.
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="a"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="people_files",instance="b"}`, Values: "85899345920x480 162134446080x120"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="a"}`, Values: "1073741824+26214400x600"},
+					{Series: `taskiem_people_storage_bytes{table="group_files",instance="b"}`, Values: "1073741824+26214400x600"},
+				},
+				AlertRuleTests: []promAlertTest{
+					{EvalTime: "10h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "39h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{}},
+					{EvalTime: "49h", Alertname: "TaskiemPeopleStorageLarge", ExpAlerts: []promAlert{expect("TaskiemPeopleStorageLarge", map[string]string{"severity": "ticket"})}},
+				},
+			},
 		},
 	}
 	b, err := yaml.Marshal(f)

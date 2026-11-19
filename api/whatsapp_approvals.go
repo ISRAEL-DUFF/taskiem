@@ -424,7 +424,7 @@ func (s *Server) waSendApprovalItem(ctx context.Context, it whatsapp.OutboxItem)
 		return err
 	}
 	t := approvalTarget{run: *it.Run, step: *it.Step, level: *it.Level, user: it.User, channel: it.Channel, addr: addr}
-	return s.waSendApproval(ctx, tenantRef{it.Tenant, name}, t, false)
+	return s.waSendApproval(ctx, tenantRef{ID: it.Tenant, Name: name}, t, false)
 }
 
 // waSendRunOutcome tells the person who started a run from WhatsApp how it

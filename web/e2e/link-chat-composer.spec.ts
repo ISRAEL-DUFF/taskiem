@@ -701,7 +701,7 @@ test("signing out forgets what was half written", async ({ browser }) => {
   ).toHaveLength(1);
   await buyer.getByRole("button", { name: "Sign out" }).click();
   await expect(
-    buyer.getByRole("heading", { name: "Sign in to Taskiem" }),
+    buyer.getByRole("heading", { name: "Welcome to Taskiem" }),
   ).toBeVisible();
   expect(
     await buyer.evaluate(() =>

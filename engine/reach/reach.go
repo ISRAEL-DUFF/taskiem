@@ -308,6 +308,21 @@ func (b *Book) Businesses(ctx context.Context, channel, addr string) ([]string, 
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
+// Reacher is a business reaching a chat address.
+type Reacher struct {
+	Tenant uuid.UUID
+	Name   string
+}
+
+// BusinessList is Businesses with each business's id, most recent first.
+func (b *Book) BusinessList(ctx context.Context, channel, addr string) ([]Reacher, error) {
+	rows, err := b.Pool.Query(ctx, `SELECT tenant_id, business FROM taskiem_reach_business_list($1, $2)`, channel, b.AddressHash(channel, addr))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[Reacher])
+}
+
 // --- link codes ---
 
 // CodeRe is a link code: 24 random bytes, base64url.
