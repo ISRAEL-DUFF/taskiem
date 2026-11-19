@@ -11,7 +11,7 @@ Status: **plan** (19 November 2026), written with the founder; reviewed against 
 
 Each phase below is one pull request (or a few, by server, web and app, merged together), ships on its own, and names which plan it builds. A phase is done when its **done when** holds on the web, in the phone app (Android and iPhone) and, where it says, on WhatsApp, Telegram and Slack.
 
-The order puts first what makes a business's work run with less effort: being paid, paying people, and its own tools. What people keep for themselves comes with it, not before it.
+The order puts payments first: being paid and paying people, all of it, before made tools, the rest of saved objects, and [pages](pages.md) (§4).
 
 ## 1. How the four fit together
 
@@ -58,9 +58,11 @@ And as for every screen: built on the web first and matched in the app's own loo
 
 ## 4. The phases
 
-Three tracks run side by side where nothing joins them: **S** (saved objects), **M** (made tools), **P** and **F** (payments). The order below is the order to start them; a phase may start once what it **needs** is merged. Where a phase says **uses, when merged**, it does not wait: that part is added by whichever of the two lands second.
+**Payments come first** (the founder, 19 November 2026: payments must all be in place). Stages 1 and 2 build every payments phase that is planned: being paid by transfer, saved accounts, paying one person, paying from a message, paying several, payroll and the chat apps. Made tools, the rest of saved objects, and pages follow from stage 3. No payments phase needs made tools or pages.
 
-### Stage 1: foundations that stand alone
+Within a stage, phases that do not need each other may be built at once by separate people or sessions. A phase may start once what it **needs** is merged. Where a phase says **uses, when merged**, it does not wait: that part is added by whichever of the two lands second.
+
+### Stage 1: being paid, and paying one person
 
 **F1. Pay a bill by transfer, in the chat** (the payments flow, part 1). Needs: nothing (D5 is settled).
 - Pay on a bill card gives the buyer a one-time account number for that bill, with the amount, a countdown and Copy; both cards turn to Paid when it lands; part paid, expired, late; "Pay the next one"; "I need longer"; "pay INV-0001" on WhatsApp and Telegram.
@@ -73,30 +75,44 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 - No picker group, cards, sharing or other kinds yet: those are S1.
 - Done when: an owner saves a supplier's account as `@bayo`, the bank's name for it is checked and shown, staff see it masked, and changing the number asks for a passkey and is in the audit.
 
-**M0. Made tools: the declaration** (made tools T0). Needs: D1 (D3 is settled).
-- The decision record; `tool` and `answer` in the schema and the contract; the validator's rules, with the money rule (a step that moves money makes care step-up; refused for customers' and linked tools); care worked out and stored; a tool's `roles` held on every way to start a workflow.
-- Done when: a definition with `tool` validates or is refused for the right reason; a tool with a payout step is marked step-up; and a member outside a workflow's roles cannot start it by any path.
-
-**S1. Saved objects and the picker** (the rest of saved objects phase 1). Needs: S0.
-- The other kinds Taskiem knows, made-up kinds with starters, the full Saved page, the `@` Saved group in every chat (Taskiem chat, business chats, customer chats, people chats and groups), `/` falling back to objects, cards with Copy and **Save this**, text objects into the box, sharing with the sensitive check, saving from a message (the details reader), the picker and words; saved addresses moved over (`/v1/me/addresses` unchanged); limits.
-- **On WhatsApp, Telegram and Slack:** there is no picker, so `@name` typed in a message to Taskiem is matched on the server. A card shared with a customer who is on WhatsApp reaches them as plain lines (the title, then each detail on its own line, easy to copy), under the same sensitive check.
-- It is several pull requests. Suggested split: kinds, the Saved page and the picker; cards and sharing; saving from a message and in words; made-up kinds; the address move.
-- Done when: a business's staff drop `@bank-details` into a customer chat, and a customer on WhatsApp gets it as lines they can copy; a person saves `@mum` from a message in under 15 seconds and shares it as a card; checkout still offers saved addresses.
-
-### Stage 2: the first things people use every day
-
 **P1. Pay one person, safely** (paying people phase 1, with saved objects phase 3). Needs: S0, D6; D7 before launch.
 - `payments`, `pay_limits`, `money.pay`; payees as bank account objects; the `pay-person` workflow; the `payments@1 prepare` action for workflows; the Pay tile and sheet, shown with the step to connect (**Open a Taskiem wallet** first, or an account the business already has); the balance and **Add money**; "what for"; the fee shown before confirming; the passkey on confirm, with the PIN as the fallback; bank transfers, and Taskiem wallet to wallet where both have one; the card in the conversation for the person paid; the account-changed and first-payment warnings; limits and the owner's OK; diary lines, the receipt, the money log; the first-payment warning on payroll and supplier approvals.
 - **The reader's order is fixed here**, and it learns `@name` for saved accounts: "send 20k to @bayo for rice" in the web chat and the app opens the sheet filled in.
 - **Paying a saved account:** the Pay sheet's "who" is a saved account (or a new one, saved at the end). An **owner** may pay their own saved account (`@mum`) from the business, recorded as personal (owner's drawings); the payment keeps a sealed copy of the account, since the business cannot read the person's own object. Staff pay the business's saved accounts only.
 - Done when: an owner pays a rider ₦45,000 from Tools in under 30 seconds, recorded as a delivery; "send 20k to @bayo" opens the filled-in sheet and pays on a passkey; a changed account for a past payee is stopped for the owner's OK; a staff member's own saved account is not offered as a payee.
 
+### Stage 2: the rest of payments
+
+**P2. Pay from a message** (paying people phase 2). Needs: P1. Uses, when merged: S1.
+- The details reader gains the NUBAN check and candidate banks; the **Pay this account** chip on web chat and business-chat messages and photo text; a chip already paid says so; **Save as…** beside it (a saved account now; any kind once S1 is merged); Pay on staff, riders and refunds (their bank details read from their own records, with the same checks); the reader takes "transfer 45k to 0123456789 gtbank".
+- Done when: account details in a WhatsApp message that reached the web chat become a checked, filled-in payment in one tap, and can be saved as `@driver` on the way.
+
+**P3. Pay several people** (paying people phase 3). Needs: P2.
+- Batches: picking (saved accounts as a list), collecting from messages, pasting and photographing a list, last time's again; a check per row, held-out rows, one confirmation, results per person, paying the failed ones again.
+- Done when: 12 riders are paid in one batch, a bad account is held out before anything moves, and the others are paid.
+
+**P4. Payroll and the chat apps** (paying people phase 4). Needs: P3.
+- The Payroll tile over `run-payroll`; adjustments; its approval card in the chat; payslips to each person's chat; payslips with the full breakdown; the WhatsApp, Telegram and Slack words with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
+- Done when: this month's payroll is reviewed, adjusted, approved and paid from the chat, and a payment prepared on WhatsApp is confirmed in the app.
+
+### Stage 3: saved objects and the first tools
+
+**S1. Saved objects and the picker** (the rest of saved objects phase 1). Needs: S0. May be built beside stage 2 where there are hands for it; no payments phase waits for it.
+- The other kinds Taskiem knows, made-up kinds with starters, the full Saved page, the `@` Saved group in every chat (Taskiem chat, business chats, customer chats, people chats and groups), `/` falling back to objects, cards with Copy and **Save this**, text objects into the box, sharing with the sensitive check, saving from a message (the details reader), the picker and words; saved addresses moved over (`/v1/me/addresses` unchanged); limits.
+- **On WhatsApp, Telegram and Slack:** there is no picker, so `@name` typed in a message to Taskiem is matched on the server. A card shared with a customer who is on WhatsApp reaches them as plain lines (the title, then each detail on its own line, easy to copy), under the same sensitive check.
+- It is several pull requests. Suggested split: kinds, the Saved page and the picker; cards and sharing; saving from a message and in words; made-up kinds; the address move.
+- Done when: a business's staff drop `@bank-details` into a customer chat, and a customer on WhatsApp gets it as lines they can copy; a person saves `@mum` from a message in under 15 seconds and shares it as a card; checkout still offers saved addresses.
+
+**M0. Made tools: the declaration** (made tools T0). Needs: D1 (D3 is settled). Its money rule relies on P1's `payments@1 prepare`, which by then is built.
+- The decision record; `tool` and `answer` in the schema and the contract; the validator's rules, with the money rule (a step that moves money makes care step-up; refused for customers' and linked tools); care worked out and stored; a tool's `roles` held on every way to start a workflow.
+- Done when: a definition with `tool` validates or is refused for the right reason; a tool with a payout step is marked step-up; and a member outside a workflow's roles cannot start it by any path.
+
 **M1. Your tools** (made tools T1). Needs: M0. Uses, when merged: S1.
 - The index of deployed tools; **Your tools** in the panel and on `/`; commands on WhatsApp, Telegram and Slack; the form; care; the `text` answer; **Use it from chat** in the builder; the SDK.
 - With S1: a tool's input of a type a saved kind has (a place, a person, a bank account, a phone, a date) offers the person's and the business's **Saved** objects of that kind in its form.
 - Done when: a person makes "Log an expense" without Advanced and uses it from the web, the phone app and WhatsApp.
 
-### Stage 3: words, actions and answers
+### Stage 4: words, cards and the first pages
 
 **S2. Saved objects in actions** (saved objects phase 2). Needs: S1.
 - Delivery, invoices, orders and forms take a saved place, person or account ("deliver to @warehouse", "invoice @acme 250k"); date fields remind ("remind me when @car insurance is due"); questions about an object's details answered in the chat; the reader learns `@name` for every kind (names and kinds only).
@@ -111,42 +127,40 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 - Tools given to the reader after Taskiem's commands and saved objects' names, in the order P1 fixed; proposed values, including `@objects` as inputs; the numbered pick; evaluation cases in English and Pidgin.
 - Done when: "spent 4,500 on diesel" opens the expense tool filled in; "send 20k to @bayo" still reaches payments; no built-in command is taken by a tool.
 
-**P2. Pay from a message** (paying people phase 2). Needs: P1, S1.
-- The details reader gains the NUBAN check and candidate banks; the **Pay this account** chip on web chat and business-chat messages and photo text; a chip already paid says so; **Save as…** beside it; Pay on staff, riders and refunds (their bank details read from their own records, with the same checks); the reader takes "transfer 45k to 0123456789 gtbank".
-- Done when: account details in a WhatsApp message that reached the web chat become a checked, filled-in payment in one tap, and can be saved as `@driver` on the way.
-
-### Stage 4: many at once, and asking back
-
-**P3. Pay several people** (paying people phase 3). Needs: P2.
-- Batches: picking (saved accounts as a list), collecting from messages, pasting and photographing a list, last time's again; a check per row, held-out rows, one confirmation, results per person, paying the failed ones again.
-- Done when: 12 riders are paid in one batch, a bad account is held out before anything moves, and the others are paid.
-
 **M4. A question inside a run** (made tools T4). Needs: M1. Uses, when merged: S1.
 - `to: "starter"` on the form step: a run asks in the chat it was started from, and goes on.
 - Done when: a run asks "Which branch?" in the chat and goes on with the answer (with S1, a saved place offered among the choices).
+
+**G0 and G1. Pages: the format, and pages from tables** ([pages](pages.md) G0, G1). Needs: nothing but data tables; started once M2 is under way.
+- The decision record and `page/v1`; figures, grouped lists, tables, details and filters; the Pages area, pinning, roles, draft and publish; **Show as a page**.
+- Done when: an owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone.
+
+### Stage 5: workflows, customers and pages with buttons
 
 **S3. Saved objects in workflows** (saved objects phase 4). Needs: S2, P1.
 - A business's objects as workflow inputs (the builder's picker; read when the run starts); the import from a file; "save this?" suggestions after repeated actions.
 - A workflow that pays uses P1's `payments@1 prepare`: the run makes the payment and waits; a person who may pay confirms it with a passkey.
 - Done when: a workflow "pay `@landlord` on the 1st" runs, its payment waits for the owner's passkey, and a changed landlord account is stopped as any payee's is.
 
-### Stage 5: payroll, customers and the builder
-
-**P4. Payroll and the chat apps** (paying people phase 4). Needs: P3.
-- The Payroll tile over `run-payroll`; adjustments; its approval card in the chat; payslips to each person's chat; payslips with the full breakdown; the WhatsApp, Telegram and Slack words with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
-- Done when: this month's payroll is reviewed, adjusted, approved and paid from the chat, and a payment prepared on WhatsApp is confirmed in the app.
-
 **M5. Customers' tools** (made tools T5). Needs: M2.
 - The public menu carried over; answers for customers with `public` outputs only; in the app, customers' tools in a business's customer chat (Taskiem for everyone's customer door rules apply).
 - Done when: a customer picks from **menu**, fills the form, says **yes** and gets the answer.
+
+**G2 and G3. Pages with tools, and in the chat** (pages G2, G3). Needs: G1, M2 (G3 also M1).
+- Buttons, row actions, tools feeding a page, **Pin as a page**; the tile, `/name`, and the short form on WhatsApp, Telegram and Slack.
+- Done when: "Tickets" has **New ticket** and **Assign to me**, and "tickets" on WhatsApp answers with the figures, five rows and a link.
+
+### Stage 6: the builder, boards and charts
 
 **M6. Recipes and the AI builder** (made tools T6). Needs: M3, S3.
 - The eight recipes; "Describe it" drafts the workflow, its inputs and outputs and the `tool` block, using the business's saved objects by name ("every Friday send `@price-list` to last week's customers").
 - Done when: "Describe it" produces a working tool from one sentence, naming a saved object.
 
+**G4 and G5. Boards, charts, starters and Describe it** (pages G4, G5). Needs: G2; G5 also M6 and S1.
+- Done when: a ticket dragged from Open to Doing runs its tool, and "Describe it" makes a working page from one sentence.
+
 ### Later, each as its own plan
 
-- **Pages** ([its plan](pages.md), phases G0 to G5): a business's own screens, made of blocks fed by its tables and its read-only tools. Written and ready; built after made tools. G1 needs only data tables, so it may be built beside M1 and M2; G2 onward needs M2.
 - **M7.** Made tools for linked businesses (made tools T7): [its plan](made-tools-linked.md) is written and marked for later, not to be started before M5 is in use.
 - **Payments flow, later parts** (statements, several bills at once), as the founder agrees them.
 - **Paying from a person's own side** (You, with no business): not planned; saved accounts on You are shared and copied only.
@@ -154,25 +168,27 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 
 ## 5. Order at a glance
 
-| Stage | Saved objects | Made tools | Payments |
-| --- | --- | --- | --- |
-| 1 | S0 saved accounts; S1 objects and the picker | M0 the declaration | F1 pay a bill by transfer |
-| 2 | | M1 your tools | P1 pay one person (pays saved accounts) |
-| 3 | S2 objects in actions | M2 cards and buttons; M3 the reader | P2 pay from a message |
-| 4 | S3 objects in workflows | M4 asking back | P3 several people |
-| 5 | | M5 customers; M6 recipes and the builder | P4 payroll and chat apps |
+| Stage | Payments | Saved objects | Made tools | Pages |
+| --- | --- | --- | --- | --- |
+| 1 | F1 pay a bill by transfer; P1 pay one person | S0 saved accounts | | |
+| 2 | P2 from a message; P3 several people; P4 payroll and chat apps | | | |
+| 3 | | S1 objects and the picker | M0 the declaration; M1 your tools | |
+| 4 | | S2 objects in actions | M2 cards and buttons; M3 the reader; M4 asking back | G0, G1 pages from tables |
+| 5 | | S3 objects in workflows | M5 customers | G2 with tools; G3 in the chat |
+| 6 | | | M6 recipes and the builder | G4 board and chart; G5 starters |
 
-Within a stage the three tracks can be built at once by separate people or sessions; across stages, each phase waits only for what it **needs**. P1 waits for S0, not for S1, so paying people is not held up by the picker and the cards.
+All of payments is done at the end of stage 2. What payments still gains later, from other tracks: any saved kind beside **Save as…** (S1), a workflow that pays a saved account (S3), and a made tool that pays (M0). The payments flow's later parts (statements, several bills on one number) are not planned yet and are not in these stages.
 
 ## 6. For each phase, as built
 
 Each phase adds an **As built** section to its own plan (saved objects, made tools, paying people, the payments flow), as Taskiem for everyone's stages did: the migrations, the API, what changed from the plan and why, the tests, and a review's fixes. This plan is updated with a tick against each phase as it merges:
 
-- [ ] F1 · [ ] S0 · [ ] M0 · [ ] S1
-- [ ] P1 · [ ] M1
-- [ ] S2 · [ ] M2 · [ ] M3 · [ ] P2
-- [ ] P3 · [ ] M4 · [ ] S3
-- [ ] P4 · [ ] M5 · [ ] M6
+- [ ] F1 · [ ] S0 · [ ] P1
+- [ ] P2 · [ ] P3 · [ ] P4
+- [ ] S1 · [ ] M0 · [ ] M1
+- [ ] S2 · [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1
+- [ ] S3 · [ ] M5 · [ ] G2 · [ ] G3
+- [ ] M6 · [ ] G4 · [ ] G5
 
 ## 7. Risks
 
@@ -186,6 +202,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 | Saved objects used as a database | Limits, and the Saved page pointing a large made-up kind to tables |
 | A made tool or a workflow that pays | The validator marks a tool with a step that moves money as step-up, whatever the business's policies, and refuses it for customers and linked businesses (M0). On WhatsApp, Telegram and Slack such a tool is confirmed by link in the app, never by a typed yes. A workflow that pays a saved account does it through `payments@1 prepare`, so P1's checks and a person's passkey always stand between the run and the money |
 | A phase held up by a larger one beside it | P1 needs only S0; "uses, when merged" marks what does not wait |
+| Payments built before the tools and workflows that will use them | `payments@1 prepare` is built in P1, so a made tool or a workflow that pays (M0, S3) meets P1's checks from its first day |
 
 ## 8. What a review of this plan changed
 
@@ -206,3 +223,4 @@ The plan was read against the four plans and the code on 19 November 2026. What 
 | M1, M4, M3 and S3 used phases they did not list; `pay-person` was said to use M0's roles rule | Needs corrected; "uses, when merged" for what does not wait |
 | "One list, not two" for payees | Staff's and riders' bank details stay on their own records; the Pay sheet picks from both |
 | Nothing on switching a phase on, payout fees, or sizes | D4 and D8, both settled; D9 |
+| Three tracks side by side, payments ending in stage 5 | Payments first, all done by the end of stage 2 (the founder, 19 November 2026); pages added from stage 4 |

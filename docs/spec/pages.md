@@ -1,6 +1,6 @@
 # Pages: a business's own screens
 
-Status: **plan, for build after made tools** (written 19 November 2026 with the founder). Nothing here is built. The founder chose to build [made tools](made-tools.md) first and to have this written now so it is ready ([made tools](made-tools.md) §14, 6). §16 lists what the founder has to decide, each with a recommendation. Its phases are G0 to G5 in [the build plan](build-plan-saved-tools-payments.md).
+Status: **plan, settled, for build after made tools** (written 19 November 2026 with the founder, who took every recommendation in §16 the same day). Nothing here is built. The founder chose to build [made tools](made-tools.md) first and to have this written now so it is ready ([made tools](made-tools.md) §14, 6). §16 lists what the founder decided. Its phases are G0 to G5 in [the build plan](build-plan-saved-tools-payments.md).
 
 Builds on: [made tools](made-tools.md) (the answer's shapes, buttons, care), [data tables](../data-tables.md), [forms](../forms.md), [chat tools](chat-tools.md), [no technical steps](no-technical-steps.md), [saved objects](saved-objects.md).
 
@@ -50,8 +50,8 @@ A fixed set. Each is drawn by Taskiem on the web and in the app, light and dark,
 | Block | Shows | Fed by | Phase |
 | --- | --- | --- | --- |
 | **Heading** | A title and a line of plain words | Nothing | G1 |
-| **Figure** | One number with a label, and a tone (plain, good, warn, bad). Up to four sit in a row | A table's count under a filter; or one output of a tool | G1 (count), G2 (tool) |
-| **List** | Rows, each a title, a line under it and a state; a press opens the row's detail | A table; or a tool's output of type `list` | G1, G2 |
+| **Figure** | One number with a label, and a tone (plain, good, warn, bad); it may show its change on the period before ("up 12% on last week"). Up to four sit in a row | A table's count under a filter; or one output of a tool | G1 (count), G2 (tool) |
+| **List** | Rows, each a title, a line under it and a state; a press opens the row's detail. May be **grouped** by a choice column, as headed sections (Open, Doing, Done) | A table; or a tool's output of type `list` | G1, G2 |
 | **Table** | Rows in columns the owner picks, sortable by a press on a column | A table | G1 |
 | **Detail** | One row as a card: a title, up to twelve labelled lines, its actions. Opens as a sheet from a row | The row pressed | G1 |
 | **Buttons** | Up to three actions for the whole page (**New ticket**) | Made tools | G2 |
@@ -163,7 +163,7 @@ A page is a JSON document, `page/v1`, kept and versioned like a workflow's defin
 - The web and the app both draw from `view`: neither reads a table or starts a tool for a page itself, so the rules of §8 are held in one place.
 - **Permissions:** `page.edit` and `page.publish` (owners, admins, and roles given them); opening needs the page's roles.
 - OpenAPI, the app's generated client and the SDK as always. Export and import of a page as a file, with the workflow export.
-- **Plan limit:** `max_pages` (proposed 10 on the lowest plan), beside `max_data_tables`.
+- **Plan limit:** `max_pages`: 10 on the lowest plan, 50 on the middle, none above, beside `max_data_tables`. Drafts count. A business over the limit after moving to a lower plan keeps its pages and cannot add more.
 
 ## 13. Security and abuse
 
@@ -189,7 +189,7 @@ A page is a JSON document, `page/v1`, kept and versioned like a workflow's defin
 | G4 | Board and chart | G2 | A ticket dragged from Open to Doing runs its tool; expenses show by week |
 | G5 | Starters, **Describe it**, saved objects of a kind as a source | G2, M6, S1 | "Describe it" makes a working page from one sentence |
 
-G1 stands on tables alone, so it can be built beside made tools. G2 onward waits for made tools' cards and buttons (M2).
+G1 stands on tables alone, but is started only once made tools' cards and buttons (M2) are under way (§16, 7). G2 onward needs M2.
 
 ## 15. What this is not
 
@@ -203,6 +203,8 @@ G1 stands on tables alone, so it can be built beside made tools. G2 onward waits
 
 ## 16. For the founder to decide
 
+**Settled 19 November 2026.** The founder took each recommendation below, with these changes: grouped lists and figures that show a change are in the first release in place of a board and a chart (5); the limit is 10 pages on the lowest plan, 50 on the middle and none above, drafts counted, and pages never switched off by a move to a lower plan (6); pages start from the build plan's stage 4, after made tools' cards and buttons, not beside M1 (7).
+
 | # | Question | Recommendation |
 | --- | --- | --- |
 | 1 | Is a page its own document (`page/v1`), or a part of a workflow? | **Its own.** A page draws from many tables and tools and runs nothing; tying it to one workflow would be wrong for most pages |
@@ -211,7 +213,7 @@ G1 stands on tables alone, so it can be built beside made tools. G2 onward waits
 | 4 | Pages for customers or linked businesses? | **No**, not in this plan |
 | 5 | Board and chart: in the first release or later? | **Later** (G4). Figures, lists and buttons cover most needs; a board and a chart are the two costliest to draw well in the app |
 | 6 | The limit on the lowest plan | **10 pages**, 12 blocks each |
-| 7 | When is it built? | **G1 beside made tools' M1 and M2** if there are hands for it, since it needs only tables; otherwise after M2 |
+| 7 | When is it built? | **After made tools:** G0 and G1 once M2 is under way, G2 and G3 after, G4 and G5 last ([the build plan](build-plan-saved-tools-payments.md) §4) |
 
 ## 17. Tests, when built
 
