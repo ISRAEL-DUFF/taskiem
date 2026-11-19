@@ -12,6 +12,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -106,6 +107,7 @@ void main() {
 
   testWidgets('the list: left to pay, then paid', (t) async {
     final sent = await open(t, (c) => BillsPage(auth: c.auth));
+    await looks(t, 'bills');
     expect(sent, containsAll(['LIST ', 'LIST status=paid']));
     expect(find.text('₦100,000'), findsWidgets);
     expect(find.text('1 bill'), findsOneWidget);

@@ -21,6 +21,7 @@ import 'package:taskiem/school/school_words.dart';
 import 'package:taskiem/school/students_page.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'school_fixture.dart';
 import 'support.dart';
 
@@ -61,12 +62,14 @@ void main() {
 
   testWidgets('the School tab: the term, what came in, what is owed, where to go', (t) async {
     await open(t, (c) => SchoolTab(auth: c.auth));
+    await looks(t, 'school');
     expect(find.text('FIRST TERM · 2026/2027'), findsOneWidget);
     expect(find.text('₦18,420,000'), findsOneWidget);
     expect(find.text('Tolu Adeyemi'), findsOneWidget, reason: 'owing the most');
     expect(find.text('Debtors and reminders'), findsOneWidget);
     await t.tap(find.text('Debtors and reminders'));
     await settle(t);
+    await looks(t, 'school-debtors');
     expect(find.text('Debtors'), findsWidgets);
     expect(find.text('Kemi Bello'), findsOneWidget);
   });

@@ -13,6 +13,7 @@ import 'package:taskiem/kit/modal.dart' show TkModal;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'support.dart';
 
 void main() {
@@ -143,6 +144,7 @@ void main() {
 
   testWidgets('what the page shows', (t) async {
     await open(t);
+    await looks(t, 'stock');
     expect(find.text('₦19,000'), findsNWidgets(2), reason: 'today’s sales, and the sale');
     expect(find.text('1 sale'), findsOneWidget);
     expect(find.text('Cash ₦19,000'), findsOneWidget);
