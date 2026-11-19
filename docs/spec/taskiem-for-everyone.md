@@ -4,6 +4,8 @@ Status: **draft for review** (2026-11-16; its first questions settled the same d
 
 Decision [**0068**](../decisions/0068-taskiem-for-everyone.md) is **accepted** (16 November 2026), amending [0039](../decisions/0039-reaching-people-outside.md) and [0066](../decisions/0066-a-flutter-phone-app.md). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
+**What Taskiem is for (founder, 19 November 2026; [0068, amendment](../decisions/0068-taskiem-for-everyone.md#amendment-2026-11-19-what-taskiem-is-for)):** Taskiem is not here to replace WhatsApp, Telegram or any other chat app. It is here to automate businesses, alongside their conversations, in the way that is most natural and easiest to use. Where this plan says "a chat app for everyone", read it so: people are in the app to deal with businesses there.
+
 ## 1. Summary
 
 The Taskiem app becomes **a chat app anyone can use**, like WhatsApp and Telegram. A person signs up with their phone number and chats:
