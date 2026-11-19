@@ -54,7 +54,7 @@ A Pay sheet over the chat, reached three ways, always ending with the bank's nam
 2. **How much.** Naira, with "45k" and "45,000" both understood; the balance after shown under it, and the fee where the provider quotes one before paying (otherwise it shows on the result).
 3. **What for.** A choice, prefilled where Taskiem can tell: a bill (settles it), wages, a delivery, a refund, stock bought, or other with a word. This is what lands in the money log.
 4. **A note** for the person, sent with the transfer where the provider allows it.
-5. **Pay ₦45,000.** Then a passkey or code tap (Safety), then either sent, or "Sent for Ada's OK" when it is over this person's limit.
+5. **Pay ₦45,000.** Then a passkey, or the PIN (Safety), then either sent, or "Sent for Ada's OK" when it is over this person's limit.
 
 **When the bank isn't known** (only "0123456789", a bank the app can't read, or someone typing from scratch):
 
@@ -129,10 +129,10 @@ Easy paying from a message is also easy paying of a scammer's message, so these 
 | "We've changed our bank details", from a supplier or staff member, or someone pretending to be them | A payee paid before to a different account gets a red warning: "Not the account you paid Bayo Rice Mills before (GTBank ••6789). Call them on a number you know before paying." The new account needs the owner's OK, whoever pays |
 | A first payment to an account | The existing "First payment to this account" warning, on every Pay sheet |
 | The name on the message isn't the account holder | The bank's name shown large; a mismatch with the message or the payee's saved name in amber |
-| Someone using a signed-in phone, or a stolen session | A passkey (or one-time code) for every payment and every batch; being signed in is not enough |
+| Someone using a signed-in phone, or a stolen session | A passkey, or the person's PIN with a lower limit, for every payment and every batch; being signed in is not enough |
 | A staff member paying too much or too often | Per-role limits on one payment and a day's total, set by the owner; staff start at ₦0. Over a limit goes to the owner's OK, like a deal under the lowest price |
 | Paying twice: a double tap, a retry, a message sent again | Each payment has one key from the moment it is made; the provider is asked once and a retry reuses the key. A chip already paid says "Paid ₦45,000 on 8 Nov" |
-| A payment started from WhatsApp, Telegram or Slack text | Prepared there, confirmed only in the app or with a one-time code |
+| A payment started from WhatsApp, Telegram or Slack text | Prepared there, confirmed only in the app, or by the PIN in WhatsApp's secure form within the PIN's limit |
 | A batch hiding a wrong row | Rows failing any check are held out; the confirmation names how many rows go and their total |
 | Something goes wrong later | Every payment is in the money log and the audit log with who prepared, who approved and who confirmed it, and why |
 
@@ -172,7 +172,7 @@ Most account details arrive on WhatsApp, so a payment can be prepared there; it 
 
 - **Forward or reply "pay" to a message with account details** in the Taskiem chat on WhatsApp: Taskiem checks the name and answers "Pay Chidi Okeke (GTBank ••6789) how much, and for what?"
 - **Or say it:** "send chidi 45k for delivery" (a known payee), "transfer 45k to 0123456789 gtbank". "Pay" and "pay now" alone already pay the Taskiem subscription, so "pay" starts a transfer only when a person or an account follows it.
-- **Confirm:** a link that opens the Pay sheet filled in, for a passkey tap; or, for a business that allows it, a one-time code sent by text, typed back. Nothing pays on a plain "yes".
+- **Confirm:** a link that opens the Pay sheet filled in, for a passkey tap; or the person's PIN in WhatsApp's secure form, within the PIN's limit. Nothing pays on a plain "yes".
 - **Results** come back in the same chat: "Paid Chidi Okeke ₦45,000. Received by the bank."
 - **Payroll's approval card** reaches the approver on their chat app with an Approve link, as approvals do today.
 - **Bulk from chat apps:** a pasted list is read and answered with "12 people, ₦386,000. Open to check and pay" and a link; a batch is never confirmed in text.
@@ -200,14 +200,16 @@ Money tests run against the providers' fakes the repo already uses (iswallet, th
 - **Plain words:** "Pay", "Send money", "What it's for"; "Beneficiary", the word bank apps use; no "payout" or "NUBAN" on owners' screens.
 - **The recording:** a new act: a rider's account details in a message, the chip, the check, the passkey, paid.
 
-## Open questions
+## Settled (19 November 2026)
 
-The plan assumes the answer in brackets.
+The founder answered the open questions. Where the text above says otherwise, this holds.
 
-- [ ] Who may pay at all: owners only at first, or staff with limits from day one? (Owners and roles the owner chooses, staff starting at ₦0.)
-- [ ] A business with no payments provider connected: offer to connect one from the Pay tile, or hide Pay? (Show it, with the step to connect one.)
-- [ ] One-time code by text as an alternative to a passkey, for owners without one: allowed? (Yes, to the owner's own number.) It is not built: step-up today takes a passkey or an authenticator code, so a yes here adds work to phase 1.
-- [ ] Who bears a payout's fee: the business paying, or taken from what the payee receives? (The business paying; the fee shown on the sheet before the passkey.)
-- [ ] Payslips: amount and period only, or the full breakdown? (The breakdown.)
-- [ ] Should a person paid through a business chat (a supplier) see the payment as a card in that chat? (Yes, as bill payments do today.)
-- [ ] Mobile money and wallets (`pay_wallet`, `pay_mobile_money`): in scope, or banks only? (Banks only; wallets later.)
+| # | Question | Settled |
+| --- | --- | --- |
+| 1 | Who may pay at all | **Owners, and roles the owner chooses**, from the first release. Every staff role starts at a limit of ₦0, so nothing changes until the owner gives a role the right to pay and sets its limit. Staff pay the business's saved accounts only ([saved objects](saved-objects.md) §7.3) |
+| 2 | A business with no payments provider | **Pay is shown, with the step to connect.** The step offers two paths. First, **Open a Taskiem wallet**: a business with no account at any provider is given **iswallet**, Taskiem's own wallet, which covers its payment needs (being paid and paying). It asks for an email and the director's BVN, in plain words and with why. Second, **I already have an account with…** Paystack, Flutterwave, Moniepoint or Anchor. On owners' screens the wallet is "your Taskiem wallet", never "iswallet". Only the owner sees the step; staff see "Ask the owner to set up payments". After it, the person lands back on the Pay sheet with what they typed. Money leaves from the wallet's balance, so the sheet shows the balance and **Add money** (the wallet's own account number). Saved accounts work without a provider; only paying waits |
+| 3 | A fallback for owners with no passkey | **A PIN, not a code by text.** A passkey first, a six-digit PIN as the fallback. It is the PIN people already set for approvals on WhatsApp (`api/whatsapp_pin.go`): one PIN for a person, called "your PIN", never a business's. A lower limit when a payment is confirmed by PIN (proposed ₦100,000 a payment, and a day's total). **Passkey only** for changing a saved account's number and for the owner's OK on a changed account. Locked after 5 wrong tries. Asked for only in the app's own pad or WhatsApp's secure form, never in a message ("Taskiem will never ask for your PIN in a message"). A first PIN may be set at sign-up, once the phone is verified (today setting one needs a passkey or an authenticator). **No reset by text:** a forgotten PIN is reset with a passkey, or by signing in again and waiting 24 hours before the new PIN can pay |
+| 4 | Who bears a payout's fee | **The business paying.** The payee receives the full amount. The sheet shows the fee and the balance after, before the passkey or PIN ("₦45,000 + ₦25 fee"). The fee is its own line in the money log, as bank charges. The balance check includes it. A batch shows the total of fees. Limits apply to the amount, not the fee. Taskiem adds nothing on top in this plan |
+| 5 | Payslips | **The full breakdown:** basic pay, allowances, deductions and the net. Private to the person's own chat; a notification says only "Your payslip for November is ready". On WhatsApp it is a short message with a link, opened after the person proves who they are. It can be saved as a PDF with the business's name |
+| 6 | Does the person paid see it in the chat? | **Yes**, as a card in the conversation, as bill payments do. Posted only when the provider confirms; a failed or reversed payment updates the same card. It shows the amount, what for, the date and the last four digits of their own account; not who approved, the payer's balance or the fee. Not for wages, an owner paying their own saved account, or refunds to customers. **Tell them in the chat** is a tick on the Pay sheet, on by default. A payee not on Taskiem gets nothing unless the payer picks **Send them a receipt** |
+| 7 | Banks only, or wallets too? | **Banks, and Taskiem wallet to Taskiem wallet** where both sides have one: at once, with no bank between. Taskiem chooses the route and the sheet says so ("Taskiem wallet · arrives at once"); it falls back to the bank otherwise. The same checks apply. OPay, PalmPay and Moniepoint accounts are paid as banks, by their account numbers. Mobile money by phone number comes later |

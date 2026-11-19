@@ -149,7 +149,7 @@ A **bank account object is a payee** in that plan's sense: the account number se
 
 1. Taskiem reads the command: an amount (₦20,000), a payee (`@mum`, a bank account), what it is for ("birthday present").
 2. It opens the plan's **Pay sheet**, filled in: Mum · GTBank · ••6789 with the bank's name for the account checked again and shown large; ₦20,000 with the balance after; "What for: Other, birthday present".
-3. The person confirms with a passkey or code, as every payment does; over their limit it waits for the owner's OK.
+3. The person confirms with a passkey, or their PIN within its limit, as every payment does; over their limit it waits for the owner's OK.
 4. The plan's checks all run: the name check, an account changed since it was saved (red, stopped for the owner), a duplicate within 24 hours ("Pay again?").
 
 Taskiem never pays from words alone: the sheet and the confirmation are always shown.
