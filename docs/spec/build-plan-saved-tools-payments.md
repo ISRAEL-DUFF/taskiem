@@ -50,10 +50,10 @@ And as for every screen: built on the web first and matched in the app's own loo
 | D2 | **A decision record for saved objects** (the next free number; 0071 as of today). Objects as a core part, their owners, sealing, and payees being objects ([saved objects](saved-objects.md) §5, §8, §15) | Founder accepts; written in S0 |
 | D3 | **Made tools' nine choices** (§14 there): each has a recommendation. With them, the review's rule that a tool which moves money always asks for step-up (§8 there) | Founder, before M0 |
 | D4 | **Paying people's open questions** (its last section): each has an answer in brackets. Two matter most: the one-time code by text (not built today), and who bears a payout's fee | Founder, before P1 |
-| D5 | **The payments flow's five open questions** (fees, default way to pay, several bills, customers, how long a number is good for) | Founder, before F1 |
+| D5 | **The payments flow's five open questions.** **Settled 19 November 2026** ([its last section](chat-payments-flow.md#settled-19-november-2026)): the seller bears the fee; transfer first, the last choice remembered; one bill at a time with "Pay the next one"; customers in part 1; 60 minutes with "I need longer" | Done |
 | D6 | **A payments provider in test mode** with payouts (Moniepoint and Anchor have `pay_bank` and `resolve_account` today; Paystack needs its transfer statuses confirmed) for the end-to-end tests, as the fakes allow for the rest. The provider questions left open by the system audit (Paystack's transfer statuses, Flutterwave's second transfer) are closed for the provider chosen | Founders |
-| D7 | **A security review** of S0 and P1 together before either ships to anyone: step-up on every confirm, change and reveal; sealed numbers; nothing paid from text; a business never reaching a person's own objects. S1's sharing of sensitive details is reviewed the same way before it ships | Someone not on the build |
-| D8 | **How each phase is switched on:** for every business at once, or by a switch per business and by plan (as chat tools are) | Founder, before S0 |
+| D7 | **A security review** of S0 and P1 together before launch (a check, not a switch): step-up on every confirm, change and reveal; sealed numbers; nothing paid from text; a business never reaching a person's own objects. S1's sharing of sensitive details is reviewed the same way before it ships | Someone not on the build |
+| D8 | **How each phase is switched on.** **Settled 19 November 2026: on for every business, with no new switch and no release flag** (there is no production yet). Plan limits, a connected payments provider, `money.pay` and staff starting at ₦0 are the gates. Made tools' panel follows the chat tools switch; their commands work wherever `run` does | Done |
 | D9 | **Sizes.** No phase is sized here. Each is sized when it is started; S1 is the largest and is expected to be several pull requests | Whoever builds it |
 
 ## 4. The phases
@@ -62,12 +62,13 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 
 ### Stage 1: foundations that stand alone
 
-**F1. Pay a bill by transfer, in the chat** (the payments flow, part 1). Needs: D5.
-- Pay on a bill card gives the buyer a one-time account number for that bill, with the amount, a countdown and Copy; both cards turn to Paid when it lands; part paid, expired, late; "pay INV-0001" on WhatsApp and Telegram.
+**F1. Pay a bill by transfer, in the chat** (the payments flow, part 1). Needs: nothing (D5 is settled).
+- Pay on a bill card gives the buyer a one-time account number for that bill, with the amount, a countdown and Copy; both cards turn to Paid when it lands; part paid, expired, late; "Pay the next one"; "I need longer"; "pay INV-0001" on WhatsApp and Telegram.
+- For linked businesses and for **customers**: a customer's invoice card pays the same way, and a customer on WhatsApp gets the number as plain lines.
 - Built on what exists (one-time numbers, matching, the bill mirror), so it ships early and alone.
-- Done when: a linked buyer pays a bill by transfer from the chat and both sides see it paid without a reload.
+- Done when: a linked buyer pays a bill by transfer from the chat and both sides see it paid without a reload; a customer on WhatsApp is sent the number, pays, and is told it landed.
 
-**S0. Saved accounts: the store** (the part of saved objects phase 1 that payments needs). Needs: D2, D8.
+**S0. Saved accounts: the store** (the part of saved objects phase 1 that payments needs). Needs: D2.
 - `saved_objects` with both owners (a person's own, a business's) and its row-level security; the kind **bank account** only; the account number sealed and masked; changing it, and showing it in full, by step-up; the audit of each; the bank list and the name check; a plain Saved list (add, change, remove) on the web and in the app; `@name` resolved on the server.
 - No picker group, cards, sharing or other kinds yet: those are S1.
 - Done when: an owner saves a supplier's account as `@bayo`, the bank's name for it is checked and shown, staff see it masked, and changing the number asks for a passkey and is in the audit.
