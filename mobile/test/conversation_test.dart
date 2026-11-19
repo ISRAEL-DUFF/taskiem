@@ -16,6 +16,7 @@ import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'support.dart';
 
 const _link = '3af349e2-b776-4306-bdb8-10df59687c55';
@@ -28,10 +29,15 @@ void main() {
         home: Builder(
           builder: (context) => ChatsScreen(
             data: chats,
-            onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-              transitionDuration: Duration.zero,
-              pageBuilder: (_, _, _) => ConversationScreen(data: ConversationData(chats, c, follow: false)),
-            )),
+            // The conversation's data made once, as the app's route does: a
+            // route built again (the theme switched) keeps what it read.
+            onOpen: (c) {
+              final data = ConversationData(chats, c, follow: false);
+              Navigator.of(context).push(PageRouteBuilder<void>(
+                transitionDuration: Duration.zero,
+                pageBuilder: (_, _, _) => ConversationScreen(data: data),
+              ));
+            },
           ),
         ),
       );
@@ -75,6 +81,7 @@ void main() {
     );
     await t.pumpWidget(app(chats));
     await settle(t);
+    await looks(t, 'chats');
     await t.tap(find.text("Mama Tunde's Market"));
     await settle(t);
     expect(find.text('2 unread messages'), findsOneWidget);
@@ -96,6 +103,7 @@ void main() {
     expect(find.bySemanticsLabel('Sending'), findsNothing);
     expect(find.textContaining('Thank you!', findRichText: true), findsOneWidget);
     expect(find.bySemanticsLabel('Delivered'), findsNWidgets(2));
+    await looks(t, 'conversation');
   });
 
   testWidgets('a message that could not be sent is tried again with the same client id', (t) async {

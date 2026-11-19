@@ -16,6 +16,7 @@ import 'package:taskiem/chat/today_tab.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -203,6 +204,7 @@ void main() {
     };
     addTearDown(() => openInBrowser = was);
     final asked = await open(t);
+    await looks(t, 'today');
     expect(asked, contains('GET /v1/money/summary?from=2026-11-12&to=2026-11-12'));
     for (final d in ['2026-11-05', '2026-10-29', '2026-10-22', '2026-10-15']) {
       expect(asked, contains('GET /v1/money/summary?from=$d&to=$d'), reason: 'a usual Thursday: the last four');
