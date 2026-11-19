@@ -30,7 +30,7 @@ Wholesale and distribution, Services.
 | --- | --- | --- | --- |
 | 1 | **Open your shop** | Sign up, set the business, pick categories, be findable | Sign-up, Explore profile (how-to 15 for the Explore part) |
 | 2 | **Put your goods in** | Add products with photos, categories and (where it fits) sizes and colours | Products and stock (how-to 10), categories and variants |
-| 3 | **Take orders** | Sell at the counter; turn a customer's WhatsApp message into an order | Sell (9), customer order from WhatsApp (4) |
+| 3 | **Take orders** | Sell at the counter; turn a customer's WhatsApp message into an order; **customers chat with you in the app or a browser through your chat link** | Sell (9), customer order from WhatsApp (4) |
 | 4 | **Get paid** | Invoice, match a transfer, handle a bill | Invoices and payments (11), bills (3) |
 | 5 | **Deliver** | Send with a rider, see where it is | Riders and deliveries (8) |
 | 6 | **Your team** | Add staff, give tasks, clock in, hand over a shift | Staff (5), tasks (6), handover (9) |
@@ -121,6 +121,11 @@ invoices, debtors, clearance and a gate screen), mostly on the web's admin
 pages, and a school is not a shop. It follows the same Episode 0 and
 continuity pattern with its own ten chapters. Outline in
 [`schools/README.md`](schools/README.md).
+
+### Taskiem for you (customers and people), new, not yet ordered
+Added 19 November after main's "Taskiem for everyone" work: the app is now for
+anyone, not only businesses. Draft outline in
+[`everyone/README.md`](everyone/README.md). Placement to decide.
 
 ### Later series
 In rough order of reach and fit: Beauty and personal care; Building

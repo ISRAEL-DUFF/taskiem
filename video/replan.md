@@ -98,3 +98,54 @@ now. Two ways to fix it:
 Go, Postgres 16 and psql are installed in this environment, so the demo world
 (`bash web/e2e/demo/serve-demo.sh`, `seed.ts`) should run here and I can record.
 I have not started it yet.
+
+## 8. Update, 19 November 2026: "Taskiem for everyone"
+
+Merged main again (393 commits). The biggest change is not a feature but the
+product's audience: decision **0068, "Taskiem for everyone"** (accepted
+16 November). Source: `docs/spec/taskiem-for-everyone.md`,
+`people-chatting.md`, `people-chatting-5b.md`.
+
+**What it is.** The Taskiem app becomes **a chat app anyone can use**, like
+WhatsApp or Telegram. A person signs up with a phone number, with no business
+needed, and chats with businesses (ask, order, book, pay), and now with other
+people. Running a business is something a person *does in* Taskiem. A person
+with no business can also start workflows alone (Start something).
+
+| Stage | What | State (per the specs' "As built" sections) |
+| --- | --- | --- |
+| 1 Personal accounts | Sign up with a phone; **You** tab; switch between businesses | Built |
+| 2 Customers chat with businesses | In the app **or in the phone's browser with nothing to install** (a business's chat link, `/m/{code}`); orders, bookings and payments as cards; no 24-hour window | Built |
+| 3 Discover and Orders | Customers find businesses in **Discover**; **Your orders** in one place | Built |
+| 4 One customer across the app and WhatsApp | The business sees one customer, whichever line they use | Built |
+| 5a People chat with people | Find people by phone or link; one-to-one chats; a stranger's first message waits as a request | Built |
+| 5b Groups and **ordering together** | Groups; a family or an office picks together from one business, one person pays or each pays their share | Built (web and app) |
+| 5c Calls | Voice and video calls | **Planned, not built** |
+
+**Held back:** the legal drafts (privacy notice, terms for people chats) are
+"for counsel"; the store listings and the app's release are pending. So the
+audience is real, but **a public launch is not ready**.
+
+### What this means for the videos
+
+1. **A new audience and a new series.** Customers and ordinary people are now
+   users. They need their own series ("Taskiem for you": sign up, find a
+   business, chat, order, pay, track, group chats, order together). Outline:
+   `series/everyone/README.md`.
+2. **Every business series gains a chapter.** Chapter 3 ("Take orders") now has a
+   second door: customers chat with the business in the app or in a browser
+   through its **chat link**. Businesses put that link on Instagram and the
+   storefront. The shop owner's view: one customer, two lines.
+3. **Explore versus Discover.** Explore is businesses finding businesses.
+   Discover is the public finding businesses. The earlier Explore refresh is
+   still right but the two must not be confused in narration.
+4. **The characters change role.** Chioma, Nneka, Kehinde and others are now
+   possibly *Taskiem users themselves*, not only names in a shop's chat.
+5. **Claims to avoid.** People chats are **not end-to-end encrypted** and the
+   app says so; never say or imply it. No calls yet. No "download now" until
+   the stores. Group and ordering-together features are built but new: film
+   them only against the real app.
+6. **Surfaces.** The new screens (You, Discover, Your orders, groups, baskets)
+   are the phone app's own look, so they need a screen recording of the real
+   app, as in section 3. The customer's browser chat (`/m/{code}`) can be
+   recorded from the web.
