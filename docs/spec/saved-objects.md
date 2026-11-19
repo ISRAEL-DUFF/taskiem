@@ -85,15 +85,15 @@ When saving, the person chooses where it goes. Proposed default: **Mine** on You
 | --- | --- |
 | Everyone in the business | Use its objects in messages and commands (call up `@bank-details`, deliver to `@warehouse`) |
 | Owners, admins, and a role given **Manage saved things** (`saved.manage`) | Add, change and remove them |
-| Those who may pay (`money.pay`, from the payments plan) | Pay a bank account object; its account number shown in full only to them, on a fresh unlock |
+| Those who may pay (`money.pay`, from the payments plan) | Pay one of the business's bank account objects; its account number shown in full only to them, on a fresh unlock |
 
 Each change is in the business's audit chain (who, what, before and after, with sensitive values masked).
 
 ### 5.3 Mine, used inside a business
 
-A person's own object can be used in a business chat or command (an owner sends 20k to `@mum` from the business's money). What the business keeps is a **copy of what was needed** at that moment (the payee on the payment, the address on the order), as #198 does with saved addresses. The object itself, and the rest of the person's list, never become the business's.
+A person's own object can be used in a business chat or command (a place on an order, a text in a message; for an owner, sending 20k to `@mum` from the business's money). What the business keeps is a **copy of what was needed** at that moment (the payee on the payment, the address on the order), as #198 does with saved addresses. The object itself, and the rest of the person's list, never become the business's.
 
-A payment to a person's own object from a business's account is recorded as **personal** in the business's books (§7.3).
+A payment to a person's own object from a business's account is for **owners only**, and is recorded as **personal** in the business's books (§7.3).
 
 ## 6. Using an object
 
@@ -111,6 +111,7 @@ Calling up an object in a message **shares** it: the message carries it as a car
 - **Text** objects drop their words into the box instead, to change before sending; nothing is shared but the words.
 - **Before sharing anything sensitive** (an account number, a phone, an ID number), the sender confirms: "Share Mum's account details with Bola Stores?". A field marked **never share** stays out of every card.
 - **A copy, not a link:** the receiver gets the details as they were when sent. Changing the object later does not change what was shared (proposed; §15).
+- **A receiver on WhatsApp, Telegram or Slack** (most customers) gets the card as plain lines: the title, then each detail on its own line, easy to copy. The same sensitive check runs first.
 - In a business's chat with a customer, the card follows that chat's rules (#198): a business sharing `@bank-details` with a customer shows the transfer warning only where it is a personal account.
 
 ### 6.3 In a command to Taskiem
@@ -127,6 +128,8 @@ In the Taskiem chat (and over WhatsApp, Telegram and Slack), an object stands fo
 | "share @bank-details with Ada" | The card, into Ada's chat |
 | "save this as @driver" (replying to a message with account details) | A new object, read from the message (§9) |
 
+On WhatsApp, Telegram and Slack there is no picker: `@name` typed in a message to Taskiem is matched on the server, and two things with one name are asked as a numbered pick. Commands that pay work there only from the payments plan's last phase, by link or code.
+
 Taskiem reads what kind an object is to know which of its details a command needs; a command that cannot use an object's kind says so ("@warehouse is a place: who should the money go to?").
 
 ### 6.4 In forms, orders and workflows
@@ -140,7 +143,7 @@ This joins [paying people from the chat](chat-pay-people.md) and depends on its 
 
 ### 7.1 One store
 
-A **bank account object is a payee** in that plan's sense: the account number sealed, the bank's checked name kept, a passkey to change the account, the account-changed and first-payment warnings. There is one list, not two: the plan's payees are the business's bank account objects, and paying someone new offers **Save as…** at the end.
+A **bank account object is a payee** in that plan's sense: the account number sealed, the bank's checked name kept, a passkey to change the account, the account-changed and first-payment warnings. There is one list of saved payees, not two: the plan's payees are the business's bank account objects, and paying someone new offers **Save as…** at the end. Staff's and riders' bank details stay on their own records (§11); the Pay sheet picks from those too, with the same checks.
 
 ### 7.2 "send 20k to @mum for her birthday present"
 
@@ -153,11 +156,11 @@ Taskiem never pays from words alone: the sheet and the confirmation are always s
 
 ### 7.3 From which money
 
-Money leaves only from a business's own payments account, as the plan says. Paying the person's own `@mum` from a business is allowed only to those who may pay, recorded in the business's books as **personal** (owner's drawings), and shown so in its money log. On You, with no business, there is nothing to pay from: `@mum` can be shared or copied but not paid (proposed; §15).
+Money leaves only from a business's own payments account, as the plan says. Paying the person's own `@mum` from a business is allowed only to an **owner**, recorded in the business's books as **personal** (owner's drawings), and shown so in its money log. Staff, whatever their limits, are offered the business's saved accounts only: money to a staff member's own private account, booked as the owner's, would be wrong in the books and a quiet way to pay oneself. On You, with no business, there is nothing to pay from: `@mum` can be shared or copied but not paid (proposed; §15).
 
 ## 8. Safety and privacy
 
-- **Sensitive details** (an account number, an ID or BVN-like number, a phone or email where the owner marks it, any field marked sensitive) are **sealed** at rest, under the person's own key for Mine and the business's for its own, as phones and orders are under #198. Lists show them masked (••6789); the full value needs a fresh unlock (the phone's lock or a passkey).
+- **Sensitive details** (an account number, an ID or BVN-like number, a phone or email where the owner marks it, any field marked sensitive) are **sealed** at rest, under the person's own key for Mine and the business's for its own, as phones and orders are under #198. Lists show them masked (••6789); the full value needs a fresh step-up proof on the server (a passkey, which the phone's lock releases in the app, or an authenticator code).
 - **The AI never sees sensitive values.** It sees an object's name, title and kind ("@mum, a bank account"), as data tables' personal columns are kept from it today. Commands are read by the model with names; the values are filled in by the server.
 - **Changing a bank account** on an object needs a passkey and is recorded; the next payment to it shows the red "not the account you paid before" warning until the owner confirms (the payments plan's fraud check).
 - **Sharing** sensitive details asks first (§6.2); **never share** fields never leave.
@@ -169,7 +172,7 @@ Money leaves only from a business's own payments account, as the plan says. Payi
 
 Saving should take seconds, from wherever the details already are:
 
-1. **From a message** (any chat): hold it, **Save as…**; Taskiem reads what is in it (an account number and bank, using the payments plan's reader; an address; a phone; an email) and offers the kind and the fields filled in.
+1. **From a message** (any chat): hold it, **Save as…**; Taskiem reads what is in it (an account number and bank; an address; a phone; an email) and offers the kind and the fields filled in.
 2. **From the picker:** **Save "mum"…** when nothing matches.
 3. **After an action:** after paying someone new ("Save Chidi as @driver?"), after a delivery to a new address, after a new customer's first order.
 4. **In words:** "save mum: GTBank 0123456789" or "save @warehouse: 12 Herbert Macaulay Way, Yaba, opposite the filling station"; Taskiem shows the object it understood, with the bank's name check for an account, and saves it on **Save**.
@@ -198,7 +201,7 @@ A bank account is checked with the bank as it is saved; a name that does not mat
 - **`saved_kinds`**: an owner's made-up kinds: `id`, the owner (`person_id` or `tenant_id`, one of them), `name`, `fields` (an ordered list: key, label, type, required, sensitive, never_share, options for a choice), timestamps. Taskiem's own kinds (§4.1) are fixed in code, not rows.
 - **`saved_objects`**: `id`, the owner (`person_id` or `tenant_id`), `name` (unique per owner, lowercase), `title`, `kind` (a known kind or a made-up kind's id), `details` (the fields that are not sensitive), `sealed` (the sensitive ones, sealed), `hint` (what lists show, masked), a photo, `points_to` (a contact, a linked business, a customer, when it is one), `created_by`, `updated_by`, timestamps, `archived_at`.
 - **Row-level security:** Mine through the person's own scope (`taskiem_person_scope()`, as `person_addresses`); a business's under tenant isolation, with `saved.manage` for changes.
-- **Payees:** the payments plan's `payees` table becomes `saved_objects` of kind bank account for the business, with the plan's `payments.payee` pointing to it (§7.1). The plan is updated to say so before its first phase is built.
+- **Payees:** the payments plan's `payees` table becomes `saved_objects` of kind bank account for the business, with the plan's `payments.payee` pointing to it (§7.1). A payment to an owner's own object keeps a sealed copy of the account on the payment instead, since the business cannot read the object; the changed-account check compares with the copies on that owner's earlier payments. The plan is updated to say so before its first phase is built.
 - **Saved addresses:** `person_addresses` rows become Mine **place** objects; `/v1/me/addresses` stays as it is, reading and writing them, so the app and checkout need no change.
 - **Tags:** `links.Mention` gains the `saved` kind (the object's id on the sender's copy; the shared card's details on the receiver's), checked by `checkMentions` and its people-chat and customer-chat equivalents: the sender may use it, it is not archived, sensitive sharing was confirmed.
 - **API:** `/v1/me/saved` and `/v1/saved` (list, search, get, add, change, delete, reveal with a fresh proof), `/v1/me/saved-kinds` and `/v1/saved-kinds`, `/v1/saved/resolve?name=` (for the picker and commands; both owners when inside a business), and the import. OpenAPI, the app's generated client and the SDK as always.
@@ -206,7 +209,7 @@ A bank account is checked with the bank as it is saved; a name that does not mat
 
 ## 13. Phases
 
-1. **Objects and the picker.** Known kinds (person, place, text, file, account with a provider, bank account shown and shared but not yet paid), made-up kinds, Mine and the business's, the Saved page, `@` in every chat, cards with Copy and Save this, text objects into the box, sharing with confirmation, saving from a message, the picker and words; saved addresses moved over; sealing, limits and audit.
+1. **Objects and the picker.** Built in two parts in the build plan: the store for saved accounts first (S0), so payments need not wait, then the rest (S1). Known kinds (person, place, text, file, account with a provider, bank account shown and shared but not yet paid), made-up kinds, Mine and the business's, the Saved page, `@` in every chat, cards with Copy and Save this, text objects into the box, sharing with confirmation, saving from a message, the picker and words; saved addresses moved over; sealing, limits and audit.
    - Done when: a person saves `@mum` (a bank account) from a message in under 15 seconds, shares it with a friend as a card they can copy, and a business's staff drop `@bank-details` into a customer chat.
 2. **Objects in actions.** Delivery, invoices, orders and forms take a saved place, person or account; date fields remind; questions about an object's details answered in the chat.
 3. **Paying a saved account.** With the payments plan's first phase: bank account objects as payees, "send 20k to @mum", the personal tag in the books, the change and first-payment warnings.
@@ -226,7 +229,7 @@ The founder took each recommendation:
 | --- | --- | --- |
 | 1 | Marks | Saved objects come up under **`@`**, in their own Saved group beside businesses and people. `/` stays for documents (`/order`, `/invoice`) and [made tools](made-tools.md)' commands; `/` with a word that is neither searches saved objects, so `/mum` still finds Mum |
 | 2 | Who owns by default | **Mine** when saving on You; **the business's** when saving inside a business, with "Keep it to myself" one tap away |
-| 3 | Paying a person's own object from a business | Allowed for those who may pay (`money.pay`), recorded as **personal** (owner's drawings) in the business's books. On You, with no business, objects are shared and copied, not paid |
+| 3 | Paying a person's own object from a business | Allowed for **owners** (narrowed from "those who may pay" by the review of 19 November 2026: §7.3), recorded as **personal** (owner's drawings) in the business's books. On You, with no business, objects are shared and copied, not paid |
 | 4 | Shared cards | **A copy**: changing an object never changes what someone was already sent |
 | 5 | Made-up kinds | In the **first phase**, for people and businesses, with starters to copy |
 | 6 | Limits | **500** for a person; **2,000** for a business on the lowest plan, more on higher plans |

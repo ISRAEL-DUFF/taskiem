@@ -196,7 +196,7 @@ Today every start from chat needs an explicit **yes** after a summary. That is r
 | --- | --- | --- |
 | **Answers at once** | Every step that reaches outside is a `read`: connector actions of class `read`, `http` steps that are `GET` or `HEAD`, code steps (whose `host.fetch` allows only those), `ai` steps (within the AI budget). No step that writes a table, sends a message, asks a person (a form or approval step), runs a container, or starts another workflow | An echo of what was understood ("Leave left for: Musa"), then the answer |
 | **Yes** | Anything else | The summary of exactly what will run, then **yes**, as now |
-| **Step-up** | The business's policies ask for it for this workflow or a step in it | **Yes**, then the PIN or the hand-off link, as an approval does now |
+| **Step-up** | The business's policies ask for it for this workflow or a step in it; **or a step moves money out of the business** (a payout or transfer action of a payments connector, such as `pay_bank`), whatever the policies say | **Yes**, then the PIN or the hand-off link, as an approval does now |
 
 - `wdcheck` works this out when a version is published and stores it with the tool. A step whose class is not known counts as a write. A template step is judged by the steps it expands into. A subflow step counts as a write: its child is a run of its own, and its version may change after this one is published.
 - A `GET` that changes something at the far end (a badly made API) would pass as a read. The owner's switch below is the answer to that, and the publishing screen says a tool will answer without asking.
@@ -261,6 +261,7 @@ When a version with `tool` is validated (`wdcheck`), and again when it is deploy
 | A button whose `inputs` name a field its tool does not have | Checked at deploy against the tool then deployed; a button to a tool that does not exist is a warning, and the button says "This is not available" if pressed |
 | `for: "customers"` with inputs a form cannot carry (nested, more than ten) | Customers are never asked in chat |
 | `for: "customers"` or `"linked"` with an `answer` that reads an output not marked `public` | §11 |
+| `for: "customers"` or `"linked"` with a step that moves money out of the business | Only a member, with step-up, may start a run that pays (§8) |
 
 **A word reserved later.** A language turned on after a tool was deployed, or a new command of Taskiem's, can take a word a tool already uses. Taskiem's command wins from then on; the tool stays reachable by its tile, its `says` and `run`, and the owner is told to choose another command.
 
@@ -427,6 +428,7 @@ The plan was read against the code on the day it was written. What that found:
 | A read-only tool "shows data the person may already see" | Wrong: a workflow reads with the business's connections. Who may see an answer is now its own point (§8, §14, §19) |
 | `roles` on a tool, with nothing behind it | Nothing limits who may start one workflow today, so `run <workflow>` walked round it. Now a rule on every path, and a decision (§5, §14, 8) |
 | `/command` on every app | Slack keeps `/` for itself, and Telegram offers only registered commands (§6), both to be checked |
+| A tool with a payout step was plain **yes**, so it could pay on a word typed in WhatsApp (found 19 November 2026, with [the build plan](build-plan-saved-tools-payments.md)) | A step that moves money makes care step-up, always; on WhatsApp, Telegram and Slack it is confirmed by the hand-off link, never by a typed yes; refused for customers' and linked tools (§8, §12). A workflow that pays a saved account uses `payments@1 prepare` ([paying people](chat-pay-people.md)) |
 | Nothing on where an answer's expressions run | The API, over `outputs` and `item` only (§7) |
 | Nothing on a run started twice, or a button pressed by two people | A key from the conversation; `once: true` (§6, §10) |
 | Nothing on a run that waits, is queued, or hits a quota | §7, and a decision on counting (§14, 9) |

@@ -156,13 +156,14 @@ A payment is a record first and a workflow run second: the chat creates the reco
 - **Paying:** one managed workflow per business, from a `pay-person` template like `pay-linked-bill`: `resolve_account`, approval when over a limit or the account changed, `pay_bank` with seed `payment:<id>`, `await_settlement`, then `payments@1 finish`. A batch runs the same steps in a loop (seed per payment, 5 at a time) and fixes `pay-a-list`'s missing name check.
 - **Money log:** each finished payment is recorded with its "what for"; a bill payment closes the bill as today, wages and deliveries post to their accounts.
 - **Approvals:** subjects for payroll and supplier payments carry the account number, so the first-payment warning shows on them too.
+- **Preparing from a workflow:** the action `payments@1 prepare` makes a payment record from a run (a payee, an amount, what for) and stops there, in "prepared": a person who may pay confirms it with a passkey, as any payment. It never sends. It is how a business's own workflow or made tool pays a saved account ([the build plan](build-plan-saved-tools-payments.md), P1 and S3).
 - **Permission:** `money.pay`, given to owners and to roles the owner chooses, always with `pay_limits`.
 
 **API:**
 
 - `POST /v1/payments` prepares; `POST /v1/payments/{id}/confirm` (passkey proof) sends; `GET /v1/payments`, `/v1/payments/{id}`.
 - `POST /v1/payments/read` returns what `ReadAccount` found in a message: the number, the bank if named, otherwise the candidate banks. GET /v1/banks lists the banks the connected account pays to (candidates first for a given number); POST /v1/name-check checks one bank, or up to three at once.
-- `/v1/payees` list, add, change account (step-up); `/v1/payment-batches` prepare, confirm, list; `/v1/pay-limits`.
+- Payees are read and changed through saved objects' API (`/v1/saved`, kind bank account; change of account by step-up), not a `/v1/payees` of their own; `/v1/payment-batches` prepare, confirm, list; `/v1/pay-limits`.
 - Payroll: `POST /v1/payroll/preview` builds this month's batch from the staff table; confirm goes through the batch.
 
 ## WhatsApp, Telegram and Slack
@@ -180,7 +181,7 @@ Most account details arrive on WhatsApp, so a payment can be prepared there; it 
 
 Four phases, each a PR that ships on its own. Safety is in the first one, because the first payment is the one that matters.
 
-1. **Pay one person, safely.** `payees`, `payments`, `pay_limits`, `money.pay`; the `pay-person` workflow; the Pay tile and sheet; the bank list with candidate banks first and a fallback list; the name check on one or three banks; saving a beneficiary; "what for"; the passkey on confirm; account-changed and first-payment warnings; limits and the owner's OK; diary lines, the receipt, money log; the first-payment warning on payroll and supplier approvals.
+1. **Pay one person, safely.** Payees as bank account objects (their store is the build plan's S0), `payments`, `payments@1 prepare`, `pay_limits`, `money.pay`; the `pay-person` workflow; the Pay tile and sheet; the bank list with candidate banks first and a fallback list; the name check on one or three banks; saving a beneficiary; "what for"; the passkey on confirm; account-changed and first-payment warnings; limits and the owner's OK; diary lines, the receipt, money log; the first-payment warning on payroll and supplier approvals.
    - Done when: an owner pays a rider ₦45,000 from Tools in under 30 seconds, it is recorded as a delivery, and a changed account for a past payee is stopped for the owner's OK.
 2. **From a message.** `ReadAccount` on web chat and business-chat messages and photo text; the "Pay this account" chip; a chip already paid says so; Pay on staff, riders and refunds.
    - Done when: account details in a WhatsApp message that reached the web chat become a checked, filled-in payment in one tap.
@@ -205,7 +206,8 @@ The plan assumes the answer in brackets.
 
 - [ ] Who may pay at all: owners only at first, or staff with limits from day one? (Owners and roles the owner chooses, staff starting at ₦0.)
 - [ ] A business with no payments provider connected: offer to connect one from the Pay tile, or hide Pay? (Show it, with the step to connect one.)
-- [ ] One-time code by text as an alternative to a passkey, for owners without one: allowed? (Yes, to the owner's own number.)
+- [ ] One-time code by text as an alternative to a passkey, for owners without one: allowed? (Yes, to the owner's own number.) It is not built: step-up today takes a passkey or an authenticator code, so a yes here adds work to phase 1.
+- [ ] Who bears a payout's fee: the business paying, or taken from what the payee receives? (The business paying; the fee shown on the sheet before the passkey.)
 - [ ] Payslips: amount and period only, or the full breakdown? (The breakdown.)
 - [ ] Should a person paid through a business chat (a supplier) see the payment as a card in that chat? (Yes, as bill payments do today.)
 - [ ] Mobile money and wallets (`pay_wallet`, `pay_mobile_money`): in scope, or banks only? (Banks only; wallets later.)
