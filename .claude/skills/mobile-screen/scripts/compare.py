@@ -36,7 +36,7 @@ def main():
             pairs.append((n, x, y))
             continue
         diff = ImageChops.difference(x, y).convert("L").point(lambda v: 255 if v > 24 else 0)
-        share = 100 * sum(1 for v in diff.getdata() if v) / (x.width * x.height)
+        share = 100 * diff.histogram()[255] / (x.width * x.height)
         if share >= a.min:
             print(f"{n}: {share:.2f}% differs")
             pairs.append((n, x, y))
