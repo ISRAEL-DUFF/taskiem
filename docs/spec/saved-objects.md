@@ -1,6 +1,6 @@
 # Saved objects: things a person or a business keeps, and calls up by name
 
-Status: **draft for review** (19 November 2026), written with the founder. Nothing here is built. The questions in §15 are open; where this draft proposes an answer it says so.
+Status: **plan, settled** (19 November 2026), written with the founder. Nothing here is built. The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
 
 Builds on: [chat tools](chat-tools.md) (tags), [paying people from the chat](chat-pay-people.md) (a plan, not built: its payees), [Taskiem for everyone](taskiem-for-everyone.md) (You, the person's own scope, saved addresses), [people chatting with people](people-chatting.md), [data tables](../data-tables.md), [Schools in the chat](schools-in-the-chat.md).
 
@@ -218,12 +218,16 @@ A bank account is checked with the bank as it is saved; a name that does not mat
 - **Web end-to-end and app:** saving from a message; the picker with Saved and two of one name; a card folding and opening, Copy, Save this; a text object into the box; the Saved page and a made-up kind; axe in both themes; 360 px.
 - **Payments (phase 3):** the payments plan's tests, with the payee being an object.
 
-## 15. Questions
+## 15. Settled (19 November 2026)
 
-1. **Marks.** Proposed: saved objects come up under **`@`**, with businesses and people, in their own Saved group, since most of them are "who" and "where". Do you want **`/`** too, as you wrote ("/mum")? Today `/` is for documents (`/order`, `/invoice`); `/mum` could search saved objects when no document kind matches.
-2. **Who owns by default.** Proposed: Mine on You; the business's when saving inside a business, with "Keep it to myself" one tap away. Agreed?
-3. **Paying from a business for a person's own object** (§7.3): allowed for those who may pay, recorded as personal (owner's drawings)? And on You, sharing and copying only, no paying, until there is a way to pay from a person's own side?
-4. **Shared cards: a copy or a live link?** Proposed: a copy, so changing an object never changes what someone was already sent.
-5. **Made-up kinds in the first phase,** for people as well as businesses?
-6. **Limits** (§8): 500 for a person, 2,000 for a business on the lowest plan: about right?
-7. **The name in the product.** "Saved", "Saved things", or another word your users would use?
+The founder took each recommendation:
+
+| # | Question | Settled |
+| --- | --- | --- |
+| 1 | Marks | Saved objects come up under **`@`**, in their own Saved group beside businesses and people. `/` stays for documents (`/order`, `/invoice`) and [made tools](made-tools.md)' commands; `/` with a word that is neither searches saved objects, so `/mum` still finds Mum |
+| 2 | Who owns by default | **Mine** when saving on You; **the business's** when saving inside a business, with "Keep it to myself" one tap away |
+| 3 | Paying a person's own object from a business | Allowed for those who may pay (`money.pay`), recorded as **personal** (owner's drawings) in the business's books. On You, with no business, objects are shared and copied, not paid |
+| 4 | Shared cards | **A copy**: changing an object never changes what someone was already sent |
+| 5 | Made-up kinds | In the **first phase**, for people and businesses, with starters to copy |
+| 6 | Limits | **500** for a person; **2,000** for a business on the lowest plan, more on higher plans |
+| 7 | The name in the product | **Saved**: the page is "Saved", one is "a saved …" ("a saved account", "a saved place") |

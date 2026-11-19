@@ -144,7 +144,7 @@ A payment is a record first and a workflow run second: the chat creates the reco
 
 | Table | Holds |
 | --- | --- |
-| `payees` | A person or business paid before: name, bank code, account number (sealed, like riders' bank), the bank's checked name, kind (staff, rider, supplier, other) and a link to them where one exists. Changing the account needs the owner and a passkey |
+| `payees` | **Settled 19 November 2026: payees are [saved objects](saved-objects.md) of the kind bank account** (one list; `payments.payee` points to the object), with everything below. A person or business paid before: name, bank code, account number (sealed, like riders' bank), the bank's checked name, kind (staff, rider, supplier, other) and a link to them where one exists. Changing the account needs the owner and a passkey |
 | `payments` | One payment: payee, amount, what for (bill, wages, delivery, refund, stock, other + a word), note, who prepared, who approved, who confirmed, status (prepared, waiting for OK, sending, paid, failed, reversed), fee, provider's payout id, the run, and where it started (a message, a card, Tools) |
 | `payment_batches` | A batch: its payments, total, kind (list, riders, payroll + period), status |
 | `pay_limits` | Per role: one payment, a day's total; set by the owner |
