@@ -73,6 +73,24 @@ function tappedOnce(key: string, business: string): Promise<boolean> {
   return p;
 }
 
+/**
+ * A tap while a window is open: the worker says where to go. Used by the
+ * business's app and by You (where a push for the person's own chat opens
+ * /you/chats/{id}).
+ */
+export function useWorkerGo() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const go = (e: MessageEvent) => {
+      const d = e.data as { type?: string; link?: unknown } | null;
+      if (d?.type === "taskiem-go" && appLink(d.link)) navigate(d.link);
+    };
+    navigator.serviceWorker.addEventListener("message", go);
+    return () => navigator.serviceWorker.removeEventListener("message", go);
+  }, [navigate]);
+}
+
 /** What the page says about a business in its address. */
 export interface PushOpen {
   /** Why the switch could not be done. */
@@ -169,16 +187,7 @@ export function useOpenFromPush(): PushOpen {
     };
   }, [pathname, search, here, navigate, doSwitch]);
 
-  // A tap while a window is open: the worker says where to go.
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    const go = (e: MessageEvent) => {
-      const d = e.data as { type?: string; link?: unknown } | null;
-      if (d?.type === "taskiem-go" && appLink(d.link)) navigate(d.link);
-    };
-    navigator.serviceWorker.addEventListener("message", go);
-    return () => navigator.serviceWorker.removeEventListener("message", go);
-  }, [navigate]);
+  useWorkerGo();
 
   return {
     problem,

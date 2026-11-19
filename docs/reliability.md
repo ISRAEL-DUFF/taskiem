@@ -95,6 +95,7 @@ Planned maintenance spends budget like any outage. During the G4 window a spent 
 | `TaskiemLeaseExpiries` | ticket | Over 10 leases expired in 15 min | [runbook](#runbook-taskiemleaseexpiries) |
 | `TaskiemRetentionPurgeBehind` | ticket | A run past retention has waited over 6 h to be purged | [runbook](#runbook-taskiemretentionpurgebehind) |
 | `TaskiemFormUnderAttack` | ticket | A form went over its own submission limit | [runbook](#runbook-taskiemformunderattack) |
+| `TaskiemPeopleStorageLarge` | ticket | People chats and groups take over 150 GiB, or grew over 8 GiB in a day | [runbook](#runbook-taskiempeoplestoragelarge) |
 | `TaskiemTargetDown` | ticket | A pod's metrics cannot be scraped for 10 min | [runbook](#runbook-taskiemtargetdown) |
 
 Every alert carries `severity` and a `runbook_url` to its section below. Route `severity="page"` to the paging tool and `severity="ticket"` to the team's tracker or channel in Alertmanager:
@@ -388,6 +389,14 @@ A form host turned away submissions because one form went over its own limit, ev
 1. Which form: the public host logs `form host: a form's hourly submission limit tripped` with the tenant and the form's endpoint; `SELECT tenant_id, id, public_id, guarded_since, guarded_until FROM form_endpoints WHERE guarded_until > now()` lists every form guarded now.
 2. A campaign the business expected (a launch, a school's admission day): nothing to do; the guard lapses an hour after the last trip.
 3. A flood: the per-address limit and the phone code hold it; if it keeps on, or the form is abusive, suspend the form from the [operator console](operator-console.md).
+
+### Runbook: TaskiemPeopleStorageLarge
+
+People chats are kept until the people delete them or their account ([decision 0069](decisions/0069-people-chatting-with-people.md)), so `people_messages`, `people_files`, `people_report_files`, `people_held` and groups' one copy, `group_messages` and `group_files` (stage 5b), only grow (`taskiem_people_storage_bytes` and `taskiem_people_storage_rows`, read from Postgres's catalogue when Prometheus scrapes; the operator console's People safety page shows the same figure). This fires when they take over 150 GiB together, or grew over 8 GiB in a day (the lines were 100 and 5 GiB before groups).
+
+1. Which table: the "People chats' storage" row of the dashboard (its "Groups on disk" panel shows groups' tables and their day's growth). `people_files` and `group_files` are photos and files kept as `bytea`; they are expected to lead. A group's file is one copy for all its members, so one busy group can grow `group_files` fast: `SELECT f.group_id, count(*), sum(f.size) FROM group_files f JOIN group_messages m ON m.group_id = f.group_id AND m.id = f.message_id WHERE m.created_at > now() - interval '1 day' GROUP BY 1 ORDER BY 3 DESC LIMIT 10` as the admin role.
+2. A sudden day's growth: look for one person sending many large files (`SELECT person_id, count(*), sum(size) FROM people_files WHERE created_at > now() - interval '1 day' GROUP BY 1 ORDER BY 3 DESC LIMIT 10` as the admin role); the per-chat limits on messages and the 25 MB file cap apply, and moderators can limit or suspend an account.
+3. Steady growth: plan the database's disk and backups with infra. Past a few hundred GiB, move `people_files` out of Postgres to object storage, as the As built of people chats notes ([people chatting](spec/people-chatting.md)); that is a planned change, not an incident.
 
 ### Runbook: TaskiemTargetDown
 

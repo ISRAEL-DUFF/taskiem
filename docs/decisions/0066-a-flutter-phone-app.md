@@ -46,3 +46,8 @@ The founder asked, on 11 November 2026, for a native app in Flutter, and settled
 ## Provenance
 
 The founder's request of 11 November 2026, after chat push (#173) and offline. Nothing here copies another product's code or design; the app follows Taskiem's own [screens guide](../brand/screens.md).
+
+## Amendment — 2026-11-16, the app is for everyone (decision 0068)
+
+The app is no longer only for owners and their staff. Under [0068](0068-taskiem-for-everyone.md) it is a chat app anyone can use: a person signs up with a phone number and chats with businesses (and, in a later stage, with other people), and running or working in a business is something a person does in it. So "it does not replace WhatsApp, Telegram or Slack" no longer describes it. What this decision settled about how the app is built holds unchanged: Flutter, the web chat as the design, the server owning behaviour, the parity test, device sessions, notifications through Firebase, Android and iPhone together. The app gains a person's own side (**You**), the switcher, customer conversations, Discover and a person's own orders, each built on the web first ([plan](../spec/taskiem-for-everyone.md)).
+

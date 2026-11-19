@@ -67,6 +67,9 @@ void main() {
     final inbox = LinkInbox(links: arriving.stream, first: () async => null);
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: auth, links: inbox));
     await settle(t);
+    // Signed out, the app opens on the phone way in; email is a link away.
+    await t.tap(find.bySemanticsLabel('Sign in with email'));
+    await settle(t);
 
     await t.enterText(find.byType(EditableText).first, 'ada@adaskitchen.ng');
     await t.tap(find.bySemanticsLabel('Forgot password?'));

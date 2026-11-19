@@ -7,7 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 const H = { "X-Taskiem-Request": "1" };
 
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -42,14 +42,19 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   await page.request.post("/v1/auth/logout", { headers: H });
   await page.context().clearCookies();
 
-  // Carol's invitation is gone: with no organisation she cannot sign in.
+  // Carol's invitation is gone: with no organisation she signs in to her
+  // own side (You), with nothing waiting (taskiem-for-everyone §17).
   await signIn(page, carol);
-  await expect(page.getByRole("alert")).toContainText("no active membership");
+  await expect(page.getByText("Your chats with businesses and people will show here.")).toBeVisible();
+  await expect(page.getByTestId("my-invitations")).toHaveCount(0);
+  await page.request.post("/v1/auth/logout", { headers: H });
+  await page.context().clearCookies();
 
   // Bob signs in to his invitations only.
   await signIn(page, bob);
   const mine = page.getByTestId("my-invitations");
-  await expect(page.getByText("You do not belong to an organisation on Taskiem yet")).toBeVisible();
+  // On their own side (You), the invitations waiting at the top.
+  await expect(page.getByText("Your chats with businesses and people will show here.")).toBeVisible();
   await expect(mine.getByTestId("my-invitation").filter({ hasText: "E2E" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   expect((await page.request.get("/v1/workflows")).status()).toBe(403);

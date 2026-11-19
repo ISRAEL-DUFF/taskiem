@@ -18,7 +18,10 @@ import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/customer.dart';
 import 'package:taskiem/chat/invoices_page.dart';
+import 'package:taskiem/chat/people_chat.dart' show PeopleChatScreen;
+import 'package:taskiem/chat/discover.dart' show DiscoverTab;
 import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/chat/your_orders.dart' show YourOrderPage;
 import 'package:taskiem/main.dart';
 
 import 'lock_test.dart' show FakeUnlocker;
@@ -103,6 +106,102 @@ void main() {
       await settle(t);
       expect(find.byType(CustomerScreen), findsOneWidget);
       await links.close();
+    });
+
+    testWidgets('a customer opened by their WhatsApp line’s id holds back notifications by their own id', (t) async {
+      // One customer on both lines (§11): the pair's id is the app thread's,
+      // the tag the server's notifications carry (`c-{id}`).
+      const wa = 'b0b0b0b0-0000-4000-8000-00000000000a', app = 'a0a0a0a0-0000-4000-8000-00000000000a';
+      Map<String, dynamic> l(String line, String id) => {'line': line, 'id': id, 'phone': '+2348031230000', 'window_open': true, 'stopped': false, 'blocked': false, 'last_in_at': null};
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/customer-chats/$wa') {
+          return _json({
+            'id': app, 'name': 'Tolu Ade', 'phone': '+2348031230000', 'line': 'app', 'stopped': false, 'blocked': false, 'window_open': true, 'archived': false,
+            'last': 'Hi', 'last_at': '2026-11-16T10:00:00Z', 'last_mine': false, 'unread': 0, 'lines': [l('app', app), l('whatsapp', wa)], 'reply_line': 'app',
+          });
+        }
+        if (req.url.path == '/v1/customer-chats/$wa/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: FakeFirebase());
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=c-$wa'));
+      await settle(t);
+      expect(find.byType(CustomerScreen), findsOneWidget);
+      expect(notify.showing, 'c-$app');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+
+    testWidgets('in a business, a link to the person’s own order or Discover opens over the business', (t) async {
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      await open(t, links: inbox, also: (r) async {
+        if (r.url.path == '/v1/me/orders/b1/MK-1042') {
+          return _json({
+            'business_id': 'b1', 'business': 'Mama’s Kitchen', 'reference': 'MK-1042', 'kind': 'order', 'state': 'accepted', 'summary': '1 × Jollof rice',
+            'total_kobo': 250000, 'due_kobo': 0, 'pay': false, 'made_at': '2026-11-15T10:00:00Z', 'chat_id': null, 'lines': <Object>[], 'paid_kobo': 0,
+          });
+        }
+        if (r.url.path == '/v1/discover/search') return _json({'results': <Object>[], 'more': false});
+        if (r.url.path == '/v1/discover/categories') return _json({'categories': <Object>[]});
+        return null;
+      });
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/orders/b1/MK-1042'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsOneWidget);
+      expect(find.text('Order MK-1042'), findsOneWidget);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/discover'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsNothing);
+      expect(find.byType(DiscoverTab), findsOneWidget);
+      await links.close();
+    });
+
+    testWidgets('in a business, a person’s chat opens over it with the business chats’ opener and this phone’s notifications', (t) async {
+      final fb = FakeFirebase();
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/app/config') {
+          return _json({'min_version': '0.1.0', 'passkeys': false, 'signup': false,
+            'push': {'fcm': {'api_key': 'k', 'app_id_android': '1:1:android:a', 'project_id': 'p', 'sender_id': '1'}}});
+        }
+        if (req.url.path == '/v1/me/push') return _json({'devices': [], 'max': 10, 'kinds': pushKinds, 'browsers': true, 'phones': true});
+        if (req.url.path == '/v1/me/people/pc1') {
+          return _json({'id': 'pc1', 'kind': 'person', 'person_id': 'p1', 'name': 'Ada Obi', 'gone': false, 'last': 'Hi', 'last_mine': false, 'last_at': '2026-11-17T09:10:00Z',
+            'unread': 0, 'muted': false, 'archived': false, 'request': false, 'waiting': false, 'blocked': false});
+        }
+        if (req.url.path == '/v1/me/people/pc1/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: fb);
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      await t.tap(find.text('Not now'));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/people/pc1'));
+      await settle(t);
+      final chat = t.widget<PeopleChatScreen>(find.byType(PeopleChatScreen));
+      expect(chat.openBusiness, isNotNull, reason: 'a shared card’s Chat opens the person’s chat with that business');
+      expect(identical(chat.notify, notify), isTrue, reason: 'no push of its own while it is on the screen');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
     });
 
     testWidgets('asked once after signing in; with the app open a notification is a toast with Open', (t) async {

@@ -20,6 +20,7 @@ import '../api/transport.dart';
 import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/tap_area.dart';
 import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'words.dart';
@@ -94,8 +95,12 @@ class ChatFile {
 /// again, they are fetched again); a file that could not be fetched is not
 /// asked for again on every redraw, only after a minute or when pressed.
 class ChatFiles extends ChangeNotifier {
-  ChatFiles(this.transport, {DateTime Function()? now, this.limit = 50 << 20}) : now = now ?? DateTime.now;
+  ChatFiles(this.transport, {DateTime Function()? now, this.limit = 50 << 20, String Function(LinkMessage m)? pathOf}) : now = now ?? DateTime.now, _pathOf = pathOf ?? path;
   final Transport transport;
+
+  /// Where a message's file is (a linked business's, by default; a
+  /// customer conversation's on either side).
+  final String Function(LinkMessage m) _pathOf;
   final DateTime Function() now;
   final int limit;
 
@@ -163,9 +168,10 @@ class ChatFiles extends ChangeNotifier {
     try {
       // Kept on the phone (a message's file never changes): at once, and
       // offline too; else from the server, then kept.
-      final kept = await keptMedia(path(m));
-      final b = kept ?? Uint8List.fromList(await transport.bytes(path(m)));
-      if (kept == null) unawaited(keepMediaBytes(path(m), b));
+      final at = _pathOf(m);
+      final kept = await keptMedia(at);
+      final b = kept ?? Uint8List.fromList(await transport.bytes(at));
+      if (kept == null) unawaited(keepMediaBytes(at, b));
       Size? size;
       if (m.attachment?.kind == 'photo') {
         final codec = await ui.instantiateImageCodec(b);
@@ -376,7 +382,7 @@ class AttachmentView extends StatelessWidget {
                 final box = context.findRenderObject() as RenderBox?;
                 onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
               };
-        return Semantics(
+        return TapArea(child: Semantics(
           button: true,
           label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
           onTap: open,
@@ -400,7 +406,7 @@ class AttachmentView extends StatelessWidget {
               ),
             ),
           ),
-        );
+        ));
       },
     ),
   );

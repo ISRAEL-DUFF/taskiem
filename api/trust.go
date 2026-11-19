@@ -174,6 +174,11 @@ func (s *Server) appeal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, messag
 // WhatsApp and Telegram (inside the conversation window as text, outside
 // as the alert template), linking to the storefront page in the app.
 func (s *Server) tellOwners(ctx context.Context, tenant uuid.UUID, title, body string) {
+	s.tellOwnersAt(ctx, tenant, title, body, "/storefront")
+}
+
+// tellOwnersAt is tellOwners linking to another page of the app (path).
+func (s *Server) tellOwnersAt(ctx context.Context, tenant uuid.UUID, title, body, path string) {
 	var name string
 	var users []uuid.UUID
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -193,7 +198,7 @@ func (s *Server) tellOwners(ctx context.Context, tenant uuid.UUID, title, body s
 	}
 	link := ""
 	if s.PublicURL != "" {
-		link = strings.TrimRight(s.PublicURL, "/") + "/storefront"
+		link = strings.TrimRight(s.PublicURL, "/") + path
 	}
 	msg := whatsapp.AlertMessage(name, "storefront", title, body, link, nil)
 	if s.WhatsApp != nil {
@@ -289,9 +294,9 @@ func (s *Server) pauseOrders(ctx context.Context) error {
 		err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.Tenant}, func(tx pgx.Tx) error {
 			var month, monthBookings, today int64
 			if err := tx.QueryRow(ctx, `SELECT
-				count(*) FILTER (WHERE kind = 'order' AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
+				count(*) FILTER (WHERE kind IN ('order', 'app') AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
 				count(*) FILTER (WHERE kind = 'booking' AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
-				count(*) FILTER (WHERE kind IN ('order', 'booking') AND created_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos')
+				count(*) FILTER (WHERE kind IN ('order', 'app', 'booking') AND created_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos')
 				FROM storefront_orders WHERE tenant_id = $1 AND created_at >= now() - interval '32 days'`, p.Tenant).Scan(&month, &monthBookings, &today); err != nil {
 				return err
 			}
@@ -665,12 +670,21 @@ func (s *Server) opsReportAction(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.report."+action, id.String()) {
+	var tenant uuid.UUID
+	var kind string
+	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id, kind FROM taskiem_ops_page_reports('all') WHERE id = $1`, id).Scan(&tenant, &kind); err != nil {
+		s.opsDBFail(w, r, err)
 		return
 	}
-	var tenant uuid.UUID
-	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id FROM taskiem_ops_page_reports('all') WHERE id = $1`, id).Scan(&tenant); err != nil {
-		s.opsDBFail(w, r, err)
+	// A report on a listing in Discover is decided on the listing: taking
+	// it out acts on its reports, putting it back (or leaving it) dismisses
+	// them, so a listing hidden for reports is never shown again by a
+	// report's own button.
+	if kind == "discover" && action != "contact" {
+		writeErr(w, http.StatusConflict, fmt.Sprintf("This report is on a listing in Discover. POST /v1/ops/discover/%[1]s/remove takes the listing out and acts on its reports; POST /v1/ops/discover/%[1]s/restore dismisses them.", tenant))
+		return
+	}
+	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.report."+action, id.String()) {
 		return
 	}
 	o := operatorFrom(r.Context())

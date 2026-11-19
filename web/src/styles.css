@@ -48,6 +48,8 @@
   /* Money in and out in charts: told apart by colour-blind readers too (checked on both grounds). */
   --chart-in: #1f8060;
   --chart-out: #c9822f;
+  /* Behind a QR code: white in both themes, so a camera can read it. */
+  --qr-ground: #ffffff;
   --radius: 16px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(14, 15, 12, 0.04);
@@ -497,7 +499,7 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
 .topbar, .nav .nav-close, .tabbar { display: none; }
 
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .nav:not(.drawer) { flex-direction: row; flex-wrap: wrap; position: static; height: auto; gap: 2px; }
   .nav:not(.drawer) .brand { width: 100%; padding-bottom: 8px; }
   .nav:not(.drawer) .section, .nav:not(.drawer) .spacer, .nav:not(.drawer) .who { display: none; }
@@ -2279,6 +2281,9 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .info-media-all .chat-photo img { width: 100%; height: 96px; object-fit: cover; border-radius: 6px; }
 .info-media-all .chat-voice { width: 100%; }
 .info-media-all .chat-file { margin: 0; flex-wrap: wrap; }
+.card.group-media { padding: 0 0 4px; overflow: hidden; }
+.group-media .info-media-all .chat-file .hint { font-size: 12px; }
+.group-media-more { margin: 0 16px 12px; }
 .info-list { overflow-y: auto; flex: 1; min-height: 0; }
 .info-list ul { list-style: none; margin: 0; padding: 0; }
 .info-starred { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; color: var(--text); border-bottom: 1px solid var(--border); }
@@ -2331,3 +2336,118 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
   .explore-list > .explore-card:nth-child(3) { animation-delay: 80ms; }
 }
 @media (prefers-reduced-motion: reduce) { .carousel-track { scroll-behavior: auto; } }
+
+/* The way in (pages/WayIn.tsx): the phone screen, its code and a new account. */
+.way-in .way-in-line { margin: -12px 0 18px; color: var(--muted); }
+.way-in .way-in-again { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: -6px 0 14px; }
+.way-in .way-in-other { text-align: center; margin: 14px 0 0; }
+.way-in .way-in-check { align-items: flex-start; margin: 4px 0 10px; }
+.way-in .way-in-check > * { flex: 0 0 auto; }
+.way-in .way-in-check > span { flex: 1 1 auto; white-space: normal; }
+
+/* The switcher (pages/Switch.tsx): what is open, and the list of You and the businesses. */
+.switcher { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; min-height: 36px; padding: 0 10px; margin-left: -10px; border: none; box-shadow: none; background: none; color: inherit; font: inherit; font-weight: 600; border-radius: 8px; }
+.switcher:hover:not(:disabled) { background: var(--nav-hover, var(--panel-2)); }
+.switcher .switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switcher svg { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.brand-name .switcher { font-size: 13.5px; min-height: 28px; }
+.switch-list { list-style: none; margin: 0 0 12px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+.switch-list > li + li { border-top: 1px solid var(--border); }
+.switch-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; min-height: 64px; border: none; border-radius: 0; box-shadow: none; background: none; color: var(--text); text-align: left; font: inherit; }
+.switch-row:hover:not(:disabled) { background: var(--panel-2); }
+.switch-row[aria-current] { cursor: default; }
+.switch-row .grow { display: flex; flex-direction: column; min-width: 0; }
+.switch-row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switch-row .sub { font-size: 13px; color: var(--muted); }
+.switch-row .list-icon { font-weight: 600; }
+.list-icon.muted { background: var(--panel-2); color: var(--muted); }
+.switch-row .switch-here { color: var(--accent); width: 20px; height: 20px; flex: none; }
+.switch-row .switch-lock { color: var(--muted); width: 18px; height: 18px; flex: none; }
+
+/* A setting with its value under its name and its button at the end (Settings on You). */
+.setting-line { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
+.card > h2 + .setting-line { border-top: none; padding-top: 4px; }
+.setting-line .grow { flex: 1 1 auto; min-width: 0; }
+.setting-line .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.setting-line > button { flex: none; }
+
+/* You (pages/You.tsx): the person's own side, one column. */
+.you-shell { min-height: 100vh; background: var(--bg); }
+.you-top { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: calc(8px + env(safe-area-inset-top)) 16px 8px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); color: var(--text); }
+.you-top .switcher, .you-top .you-name { font-size: 15px; flex: 1 1 auto; justify-content: flex-start; }
+.you-top .you-name { font-weight: 600; }
+.you-top .switcher { flex: 0 1 auto; margin-right: auto; }
+.you-tabs { margin: 0; }
+.you-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+.you-main:focus { outline: none; }
+
+/* You's own settings (pages/YouAccount.tsx): the photo, notifications,
+   privacy and deleting the account. */
+.you-photo-line { align-items: flex-start; }
+.you-photo-line .row-actions { margin-top: 8px; }
+.you-photo-pick { cursor: pointer; }
+.you-photo-pick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.you-notify-line { align-items: flex-start; padding: 8px 0; }
+.you-notify-line .hint.block { display: block; margin: 0; }
+.you-danger-link { color: var(--danger); }
+.you-delete-list, .you-delete-steps { margin: 0 0 12px; padding-left: 20px; }
+.you-delete-list li, .you-delete-steps li { margin-bottom: 6px; }
+
+/* Start something (pages/StartSomething.tsx): two choices as large rows. */
+.start-choice, .start-kinds { border: none; margin: 0 0 12px; padding: 0; min-width: 0; }
+.start-choice legend, .start-kinds legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.start-option { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; background: var(--panel); }
+.start-option.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.start-option .grow { display: flex; flex-direction: column; min-width: 0; }
+.start-option .sub { font-size: 13px; color: var(--muted); }
+.start-option input { flex: none; }
+.start-kinds .row { align-items: center; }
+.start-kinds .row > * { flex: 0 0 auto; }
+.start-kinds .row > span { flex: 1 1 auto; white-space: normal; }
+.brand-name .switcher .switcher-name { font-size: 13.5px; color: inherit; }
+.brand-name .nav-name-phone { display: none; }
+@media (max-width: 860px) {
+  .brand-name .nav-switcher { display: none; }
+  .brand-name .nav-name-phone { display: block; }
+}
+
+/* Discover on You (pages/Discover.tsx): Explore's search pill and chips,
+   an area and Near me, then the businesses as rows; a business's profile.
+   Settings > Discover (pages/DiscoverSettings.tsx). Orders on You and the
+   saved addresses (pages/YouOrders.tsx). */
+.discover .tk-x-search { margin: 0 0 12px; }
+.discover-where { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
+.discover-where .tk-field { flex: 1 1 auto; min-width: 0; margin: 0; }
+.discover-where .discover-near { flex: none; min-height: 44px; }
+.discover-where .discover-near svg { width: 16px; height: 16px; }
+.discover .tk-x-chip:disabled { opacity: 0.6; }
+.discover-count { margin: 4px 2px 10px; font-size: 15px; }
+.discover-name { color: inherit; font-weight: 600; }
+.discover-name:hover { text-decoration: underline; }
+.discover-more { display: block; width: 100%; margin-top: 12px; }
+.discover-who { display: flex; align-items: flex-start; gap: 14px; }
+.discover-who .grow { min-width: 0; }
+.discover-who h1 { margin: 0 0 2px; font-size: 22px; overflow-wrap: anywhere; }
+.discover-who p { margin: 2px 0; }
+.discover-tagline { color: var(--text); }
+.discover-open { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.discover-acts { margin-top: 14px; }
+.discover-acts svg { width: 16px; height: 16px; vertical-align: -3px; }
+.discover-photos { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; margin: 0; padding: 0 0 6px; }
+.discover-photos li { position: relative; flex: none; width: min(78%, 320px); scroll-snap-align: start; }
+.discover-photos img { display: block; width: 100%; height: 200px; object-fit: cover; border-radius: 16px; background: var(--panel-2); }
+.discover-caption { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.discover-hours { list-style: none; margin: 0 0 8px; padding: 0; }
+.discover-hours li { padding: 4px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.discover-hours li:last-child { border-bottom: 0; }
+.discover-report { margin: 8px 2px 0; }
+.discover-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.discover-preview-who { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.discover-preview-who .chat-avatar { width: 28px; height: 28px; font-size: 12px; flex: none; }
+.discover-type-place { margin-top: 12px; }
+.you-order-name { color: inherit; font-weight: 600; }
+.you-order-name:hover { text-decoration: underline; }
+.you-order-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
+.address-form .switch-line { margin: 4px 0 12px; }
+.you-tabs { max-width: 100%; }
+.you-order-actions { margin: 12px 0; }

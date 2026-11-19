@@ -41,6 +41,11 @@ psql "$dsn" -v ON_ERROR_STOP=1 -q \
 # to enrol a passkey (bin/ is not committed).
 TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add ops@taskiem.test --name Ops | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-enrol.txt"
 "$taskiem" catalogue reviewers add ops@taskiem.test >/dev/null
+# Two moderators for ops-people.spec.ts: a lawful request is approved by a
+# second operator, never the one who recorded it.
+for m in mod1 mod2; do
+  TASKIEM_PUBLIC_URL=http://localhost:18080 "$taskiem" operators add "$m@taskiem.test" --name "$m" | grep -o 'http://.*/ops/enrol#.*' >"$root/bin/e2e-ops-$m-enrol.txt"
+done
 export TASKIEM_LISTEN=127.0.0.1:18080 TASKIEM_METRICS_LISTEN=127.0.0.1:19090 TASKIEM_WEB_DIR="$root/web/dist" TASKIEM_SECURE_COOKIES=false
 # Passkeys need a host name: the passkey test browses http://localhost:18080.
 export TASKIEM_PUBLIC_URL=http://localhost:18080 TASKIEM_REQUIRE_ADMIN_PASSKEYS=false

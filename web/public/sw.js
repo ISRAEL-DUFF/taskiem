@@ -32,7 +32,14 @@ function openLink(link, business) {
   return l + (l.indexOf("?") < 0 ? "?" : "&") + "business=" + b;
 }
 
-var KINDS = ["business", "customers", "orders", "approvals", "alerts"];
+// `you`: a business's answer in the person's own chat (taskiem-for-everyone
+// §9). Its push names no business, so a tap opens /you/chats/{id} as it is.
+// `person` and `request`: a person wrote, or a stranger's first message waits
+// (people-chatting §13); they open /you/people/{id} and
+// /you/people/requests/{id} as they are. `group` and `group_invite`: a
+// message in one of their groups, an invite to one (stage 5b); they open
+// /you/groups/{id} and /you/groups/invites (Requests) as they are.
+var KINDS = ["business", "customers", "orders", "approvals", "alerts", "you", "person", "request", "group", "group_invite"];
 
 /** The sender's logo, a path inside the app the worker may fetch with the person's own session (nothing else is fetched). */
 var ICON_PATH = /^\/v1\/links\/[0-9a-f-]{36}\/logo(\?size=(320|800|2000))?$/;

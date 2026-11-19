@@ -5,6 +5,8 @@
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
+import 'package:taskiem/chat/pick_problem.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
@@ -353,6 +355,30 @@ void main() {
       ),
       drive: settle,
     );
+  });
+
+  testWidgets('a task done with a photo, the camera refused: said with Open settings, and the task stays to do', (t) async {
+    final was = pickTaskPhoto;
+    pickTaskPhoto = () async => throw PlatformException(code: 'camera_access_denied');
+    addTearDown(() => pickTaskPhoto = was);
+    final settingsWas = openPhoneSettings;
+    var opened = 0;
+    openPhoneSettings = () async => opened++;
+    addTearDown(() => openPhoneSettings = settingsWas);
+    final sent = await open(t, (c) => TasksPage(auth: c.auth, now: () => _now));
+    await t.tap(find.bySemanticsLabel('I’ll do it: Sweep the shop'));
+    await settle(t);
+    await t.tap(find.text('Sweep the shop'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Done, with a photo'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('POST /v1/staff/tasks/T2/done')), isEmpty, reason: 'not done without its photo');
+    expect(find.textContaining('Taskiem isn’t allowed to use your camera'), findsOneWidget);
+    await t.tap(find.text('Open settings'));
+    await t.pump();
+    expect(opened, 1);
+    await t.pumpWidget(const SizedBox());
+    await t.pump(const Duration(seconds: 5));
   });
 }
 

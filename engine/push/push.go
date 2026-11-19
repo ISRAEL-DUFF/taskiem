@@ -150,6 +150,58 @@ const (
 // Kinds is every kind, in the order a settings page shows them.
 var Kinds = []string{KindBusiness, KindCustomers, KindOrders, KindApprovals, KindAlerts}
 
+// KindYou is the one kind a person's own device takes (no business,
+// taskiem-for-everyone §9): a business's message in their chat with it on
+// You, and its order updates there. YouKinds is the list of it.
+const KindYou = "you"
+
+// YouKinds are the kinds a person's own device may take.
+var YouKinds = []string{KindYou}
+
+// The kinds of push of chats between people (people-chatting §13): a
+// person's message, and a request (a stranger's first message). They go
+// to a person's own devices, which take them as they take KindYou.
+const (
+	KindPerson  = "person"
+	KindRequest = "request"
+	// A group's message, and an invite to a group waiting in Requests
+	// (stage 5b).
+	KindGroup       = "group"
+	KindGroupInvite = "group_invite"
+)
+
+// youSide is whether a push kind is one of a person's own side.
+func youSide(kind string) bool {
+	return kind == KindYou || kind == KindPerson || kind == KindRequest || kind == KindGroup || kind == KindGroupInvite
+}
+
+// KindsFor are the kinds a device may take: a business's (tenant set) or
+// the person's own (uuid.Nil).
+func KindsFor(tenant uuid.UUID) []string {
+	if tenant == uuid.Nil {
+		return YouKinds
+	}
+	return Kinds
+}
+
+// scope is the condition naming a device's (or a push's) side, with the
+// tenant as $1: a business's, or the person's own (no business), whose
+// argument is then NULL (tenantArg).
+func scope(tenant uuid.UUID) string {
+	if tenant == uuid.Nil {
+		return `tenant_id IS NULL AND $1::uuid IS NULL`
+	}
+	return `tenant_id = $1`
+}
+
+// tenantArg is $1 of scope.
+func tenantArg(tenant uuid.UUID) any {
+	if tenant == uuid.Nil {
+		return nil
+	}
+	return tenant
+}
+
 // DefaultKinds is what a new device takes: everything for those who run the
 // business (owners and admins), everything but alerts for the others.
 func DefaultKinds(runsIt bool) []string {
@@ -160,9 +212,11 @@ func DefaultKinds(runsIt bool) []string {
 }
 
 // CleanKinds keeps the known kinds, once each, in Kinds' order.
-func CleanKinds(in []string) ([]string, error) {
+func CleanKinds(in []string) ([]string, error) { return cleanKindsOf(Kinds, in) }
+
+func cleanKindsOf(kinds, in []string) ([]string, error) {
 	out := []string{}
-	for _, k := range Kinds {
+	for _, k := range kinds {
 		for _, x := range in {
 			if x == k {
 				out = append(out, k)
@@ -172,7 +226,7 @@ func CleanKinds(in []string) ([]string, error) {
 	}
 	for _, x := range in {
 		known := false
-		for _, k := range Kinds {
+		for _, k := range kinds {
 			known = known || x == k
 		}
 		if !known {
@@ -281,6 +335,8 @@ func cleanLabel(s, kind string) string {
 // address with Sender.Check, an app's token with ValidToken; the same device
 // again is updated, not doubled); a device past MaxDevices replaces the
 // oldest. defaults are the kinds a new device takes when none are sent.
+// With tenant uuid.Nil the device is the person's own (no business, in the
+// person's scope), and takes only KindYou.
 func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscription, defaults []string) (Device, error) {
 	switch s.Kind {
 	case "", Browser:
@@ -300,11 +356,14 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	}
 	var kinds *[]string
 	if s.Kinds != nil {
-		k, err := CleanKinds(*s.Kinds)
+		k, err := cleanKindsOf(KindsFor(tenant), *s.Kinds)
 		if err != nil {
 			return Device{}, err
 		}
 		kinds = &k
+	}
+	if tenant == uuid.Nil {
+		defaults = YouKinds
 	}
 	// One at a time per member, so two devices cannot both take the last place.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('push:' || $1::text || $2::text, 0))`, tenant, user); err != nil {
@@ -312,8 +371,8 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	}
 	if s.Known {
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND endpoint_hash = $3`,
-			tenant, user, hashOf(s.address())).Scan(&n); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2 AND endpoint_hash = $3`,
+			tenantArg(tenant), user, hashOf(s.address())).Scan(&n); err != nil {
 			return Device{}, err
 		}
 		if n == 0 {
@@ -328,8 +387,8 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	if s.Replaces != "" && s.Replaces != s.address() {
 		var l string
 		var p bool
-		err := tx.QueryRow(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND endpoint_hash = $3
-			RETURNING label, preview, kinds`, tenant, user, hashOf(s.Replaces)).Scan(&l, &p, &kept)
+		err := tx.QueryRow(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2 AND endpoint_hash = $3
+			RETURNING label, preview, kinds`, tenantArg(tenant), user, hashOf(s.Replaces)).Scan(&l, &p, &kept)
 		switch {
 		case err == nil:
 			label, preview = &l, &p
@@ -361,30 +420,37 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	}
 	var d Device
 	addr := s.address()
+	// A business's device is one per business, person and address; a
+	// person's own, one per person and address.
+	conflict := `(tenant_id, user_id, endpoint_hash)`
+	if tenant == uuid.Nil {
+		conflict = `(user_id, endpoint_hash) WHERE tenant_id IS NULL`
+	}
 	err := scanDevice(tx.QueryRow(ctx, `INSERT INTO push_subscriptions (id, tenant_id, user_id, kind, platform, endpoint, endpoint_hash, p256dh, auth, label, preview, kinds, device_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::boolean, true), COALESCE($12::text[], $13::text[]), $15)
-		ON CONFLICT (tenant_id, user_id, endpoint_hash) DO UPDATE
+		ON CONFLICT `+conflict+` DO UPDATE
 		   SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, platform = EXCLUDED.platform,
 		       device_id = COALESCE(EXCLUDED.device_id, push_subscriptions.device_id),
 		       label = CASE WHEN $14::boolean THEN EXCLUDED.label ELSE push_subscriptions.label END,
 		       preview = COALESCE($11::boolean, push_subscriptions.preview),
 		       kinds = COALESCE($12::text[], push_subscriptions.kinds), failed_since = NULL
 		RETURNING `+deviceCols,
-		uuid.Must(uuid.NewV7()), tenant, user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults, strings.TrimSpace(s.Label) != "" || label != nil, device), &d)
+		uuid.Must(uuid.NewV7()), tenantArg(tenant), user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults, strings.TrimSpace(s.Label) != "" || label != nil, device), &d)
 	if err != nil {
 		return Device{}, err
 	}
-	_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND id IN
-		(SELECT id FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2
+	_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2 AND id IN
+		(SELECT id FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2
 		  -- The least used goes, not the oldest: a phone in daily use stays.
-		  ORDER BY COALESCE(last_ok_at, created_at) DESC, created_at DESC, id DESC OFFSET $3)`, tenant, user, MaxDevices)
+		  ORDER BY COALESCE(last_ok_at, created_at) DESC, created_at DESC, id DESC OFFSET $3)`, tenantArg(tenant), user, MaxDevices)
 	return d, err
 }
 
-// ListTx is a member's browsers, the oldest first.
+// ListTx is a member's browsers, the oldest first (tenant uuid.Nil: the
+// person's own devices).
 func ListTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) ([]Device, error) {
 	rows, err := tx.Query(ctx, `SELECT `+deviceCols+` FROM push_subscriptions
-		WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at, id`, tenant, user)
+		WHERE `+scope(tenant)+` AND user_id = $2 ORDER BY created_at, id`, tenantArg(tenant), user)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +476,7 @@ func UpdateTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID, label 
 	}
 	var k *[]string
 	if kinds != nil {
-		c, err := CleanKinds(*kinds)
+		c, err := cleanKindsOf(KindsFor(tenant), *kinds)
 		if err != nil {
 			return d, err
 		}
@@ -418,8 +484,8 @@ func UpdateTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID, label 
 	}
 	err := scanDevice(tx.QueryRow(ctx, `UPDATE push_subscriptions SET label = COALESCE($4, label), preview = COALESCE($5, preview),
 		kinds = COALESCE($6::text[], kinds)
-		WHERE tenant_id = $1 AND user_id = $2 AND id = $3
-		RETURNING `+deviceCols, tenant, user, id, l, preview, k), &d)
+		WHERE `+scope(tenant)+` AND user_id = $2 AND id = $3
+		RETURNING `+deviceCols, tenantArg(tenant), user, id, l, preview, k), &d)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -428,7 +494,7 @@ func UpdateTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID, label 
 
 // RemoveTx takes a member's browser off.
 func RemoveTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID) error {
-	tag, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND id = $3`, tenant, user, id)
+	tag, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2 AND id = $3`, tenantArg(tenant), user, id)
 	if err != nil {
 		return err
 	}
@@ -441,16 +507,18 @@ func RemoveTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID) error 
 // RemoveEndpointTx takes the browser with this address off (it took itself
 // off: the switch, or signing out). Nothing there is not an error.
 func RemoveEndpointTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, endpoint string) error {
-	_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND endpoint_hash = $3`, tenant, user, hashOf(endpoint))
+	_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = $2 AND endpoint_hash = $3`, tenantArg(tenant), user, hashOf(endpoint))
 	return err
 }
 
 // DropOrphansTx takes off the browsers of a person who has no role left in
 // the business in scope (the business is scoped by the transaction): nobody to
 // write to, so nothing to push (a push is also checked against the role at
-// send time).
+// send time). The person's own devices (no business) are theirs whatever
+// businesses they are in, and stay.
 func DropOrphansTx(ctx context.Context, tx pgx.Tx, user uuid.UUID) error {
-	_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE user_id = $1 AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)`, user)
+	_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE user_id = $1 AND tenant_id IS NOT NULL
+		AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)`, user)
 	return err
 }
 
@@ -472,6 +540,9 @@ type Target struct {
 
 // Takes reports whether the device takes this kind of push.
 func (t Target) Takes(kind string) bool {
+	if kind == KindPerson || kind == KindRequest || kind == KindGroup || kind == KindGroupInvite {
+		kind = KindYou
+	}
 	for _, k := range t.Kinds {
 		if k == kind {
 			return true
@@ -480,16 +551,17 @@ func (t Target) Takes(kind string) bool {
 	return false
 }
 
-// TargetsTx is the devices of these members in the business.
+// TargetsTx is the devices of these members in the business (tenant
+// uuid.Nil: these people's own devices, in the person's scope).
 func TargetsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID) ([]Target, error) {
 	if len(users) == 0 {
 		return nil, nil
 	}
 	rows, err := tx.Query(ctx, `SELECT id, user_id, kind, endpoint, COALESCE(p256dh, ''), COALESCE(auth, ''), preview, COALESCE(platform, ''), kinds
-		FROM push_subscriptions WHERE tenant_id = $1 AND user_id = ANY ($2)
+		FROM push_subscriptions WHERE `+scope(tenant)+` AND user_id = ANY ($2)
 		  -- A phone signed out (from Your phones, or its session ended) is not notified.
 		  AND (device_id IS NULL OR taskiem_push_device_live(user_id, device_id))
-		ORDER BY created_at, id`, tenant, users)
+		ORDER BY created_at, id`, tenantArg(tenant), users)
 	if err != nil {
 		return nil, err
 	}
@@ -497,6 +569,29 @@ func TargetsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UU
 		var t Target
 		return t, r.Scan(&t.ID, &t.User, &t.Kind, &t.Endpoint, &t.P256dh, &t.Auth, &t.Preview, &t.Platform, &t.Kinds)
 	})
+}
+
+// LiveYouTx reports whether the person in scope has a device of their own
+// that a push for You can reach now: it takes KindYou, a phone's install is
+// signed in, it is not failing, and this server can send to its kind
+// (browsers with the VAPID keys, phones with Firebase). None: the person is
+// told some other way (the browser chat's SMS, taskiem-for-everyone §9).
+func LiveYouTx(ctx context.Context, tx pgx.Tx, user uuid.UUID, browsers, phones bool) (bool, error) {
+	var kinds []string
+	if browsers {
+		kinds = append(kinds, Browser)
+	}
+	if phones {
+		kinds = append(kinds, App)
+	}
+	if len(kinds) == 0 {
+		return false, nil
+	}
+	var live bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM push_subscriptions WHERE tenant_id IS NULL AND user_id = $1
+		AND $2 = ANY (kinds) AND kind = ANY ($3) AND failed_since IS NULL AND unreached_since IS NULL
+		AND (device_id IS NULL OR taskiem_push_device_live(user_id, device_id)))`, user, KindYou, kinds).Scan(&live)
+	return live, err
 }
 
 // Outcome is how a push went, for the record of the browser.
@@ -527,24 +622,24 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, o Outcome) e
 	case Later:
 		// The service's trouble, not the device's: but a week of nothing
 		// (an address that no longer resolves) and the device goes.
-		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET unreached_since = COALESCE(unreached_since, now()) WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET unreached_since = COALESCE(unreached_since, now()) WHERE `+scope(tenant)+` AND id = $2`, tenantArg(tenant), id)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2 AND unreached_since < now() - make_interval(secs => $3)`, tenant, id, UnreachedAfter.Seconds())
+		_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND id = $2 AND unreached_since < now() - make_interval(secs => $3)`, tenantArg(tenant), id, UnreachedAfter.Seconds())
 		return err
 	case Gone:
-		_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND id = $2`, tenantArg(tenant), id)
 		return err
 	case Sent:
-		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), last_ok_at = now(), failed_since = NULL, unreached_since = NULL WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), last_ok_at = now(), failed_since = NULL, unreached_since = NULL WHERE `+scope(tenant)+` AND id = $2`, tenantArg(tenant), id)
 		return err
 	default:
-		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), failed_since = COALESCE(failed_since, now()) WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), failed_since = COALESCE(failed_since, now()) WHERE `+scope(tenant)+` AND id = $2`, tenantArg(tenant), id)
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2 AND failed_since < now() - make_interval(secs => $3)`, tenant, id, DropAfter.Seconds()) // seconds as a number
+		_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE `+scope(tenant)+` AND id = $2 AND failed_since < now() - make_interval(secs => $3)`, tenantArg(tenant), id, DropAfter.Seconds()) // seconds as a number
 		return err
 	}
 }
@@ -565,7 +660,8 @@ type Payload struct {
 	// the person's own session (/v1/links/<business>/logo); empty without one.
 	Icon string `json:"icon,omitempty"`
 	// Business is the receiving business (a tenant id): a person in two is
-	// taken to the right one (N3).
+	// taken to the right one (N3). Empty for a push on the person's own
+	// side (kind you): it opens on You.
 	Business string `json:"business,omitempty"`
 	// Kind is the kind of push (KindBusiness...): the app's channel.
 	Kind string `json:"kind,omitempty"`
@@ -607,6 +703,19 @@ func (p Payload) For(t Target) Payload {
 		case KindCustomers:
 			// A customer's name, or their number, is theirs: not on a locked screen.
 			p.Title, p.Body = "Taskiem", "A customer wrote"
+		case KindYou:
+			// Which businesses a person deals with is theirs too.
+			p.Title, p.Body = "Taskiem", "A business wrote to you"
+		case KindPerson:
+			// And whom they chat with.
+			p.Title, p.Body = "Taskiem", "Someone wrote to you"
+		case KindRequest:
+			p.Title, p.Body = "Taskiem", "You have a new message request"
+		case KindGroup:
+			// Which groups a person is in is theirs too.
+			p.Title, p.Body = "Taskiem", "New message in a group"
+		case KindGroupInvite:
+			p.Title, p.Body = "Taskiem", "You were invited to a group"
 		default:
 			p.Title, p.Body = "Taskiem", "Something needs you"
 		}
@@ -633,7 +742,8 @@ type Queued struct {
 
 // EnqueueTx queues a push for these members of the business in scope, in the
 // caller's transaction: it is sent once that commits, and survives a restart.
-// Members with no device are skipped.
+// Members with no device are skipped. With tenant uuid.Nil it is a push for
+// these people's own devices (kind you, in the person's scope).
 func EnqueueTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UUID, q Queued) error {
 	if len(users) == 0 {
 		return nil
@@ -644,19 +754,33 @@ func EnqueueTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UU
 	}
 	// A newer push for the same person and conversation takes the place of
 	// one still waiting: retried later, the older would replace it.
-	if _, err := tx.Exec(ctx, `DELETE FROM push_outbox WHERE tenant_id = $1 AND user_id = ANY ($2) AND tag = left($3, 200)`, tenant, users, q.Tag); err != nil {
+	if tenant == uuid.Nil && !youSide(q.Kind) {
+		q.Kind = KindYou
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM push_outbox WHERE `+scope(tenant)+` AND user_id = ANY ($2) AND tag = left($3, 200)`, tenantArg(tenant), users, q.Tag); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, `INSERT INTO push_outbox (id, tenant_id, user_id, kind, title, body, link, tag, icon)
 		SELECT gen_random_uuid(), $1, u, $3, left($4, 200), left($5, 1000), $6, left($7, 200), $8
 		  FROM unnest($2::uuid[]) AS u
-		 WHERE EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.tenant_id = $1 AND s.user_id = u)`,
-		tenant, users, q.Kind, cut(q.Title, 200), q.Body, q.Link, q.Tag, icon)
+		 WHERE EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.user_id = u
+		   AND (s.tenant_id = $1 OR ($1::uuid IS NULL AND s.tenant_id IS NULL)))`,
+		tenantArg(tenant), users, q.Kind, cut(q.Title, 200), q.Body, q.Link, q.Tag, icon)
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
 	_, err = tx.Exec(ctx, `SELECT pg_notify('push_outbox', '')`)
 	return err
+}
+
+// DuePeopleTx is the people with pushes of their own due (kind you; a
+// narrow definer: each is drained in the person's own scope).
+func DuePeopleTx(ctx context.Context, tx pgx.Tx, limit int) ([]uuid.UUID, error) {
+	rows, err := tx.Query(ctx, `SELECT taskiem_push_due_people($1)`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
 }
 
 // DueTenantsTx is the businesses with pushes due (a narrow definer: the queue

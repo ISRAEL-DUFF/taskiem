@@ -14,6 +14,7 @@ import { BriefingCard, ChartCard } from "./ChatStaff";
 import { useAuth } from "../auth";
 import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
 import { TasksSheet } from "./Tasks";
+import { CustomersSheet } from "./CustomerChatSettings";
 
 /** A chart message's numbers, or undefined when they cannot be read. */
 function parseChart(text: string): SalesChart | undefined {
@@ -172,6 +173,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   );
   const act = useAction();
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [customersOpen, setCustomersOpen] = useState(false);
   const chatTools = useChatTools();
   const { can, me } = useAuth();
   // The business's own categories: "@sneakers" offers its Sneakers, to
@@ -239,6 +241,10 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             : []),
           // Tasks, given and done (phase 3, step 4).
           { key: "tasks", title: "Tasks", icon: "check", line: "To do, and given", onPick: () => setTasksOpen(true) },
+          // Customers: your chat link and offers (taskiem-for-everyone §8.2).
+          ...(can("order.handle") || can("storefront.manage")
+            ? [{ key: "customers", title: "Customers", icon: "members", line: "Your chat link", onPick: () => setCustomersOpen(true) }]
+            : []),
           // Clocking in and out, as "in" and "out" are said (phase 3): for
           // staff; owners and admins say "in" when they keep hours too.
           ...(can("member.manage")
@@ -718,6 +724,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         textLabel="Message to Taskiem"
       />
       {tasksOpen && <TasksSheet onClose={() => setTasksOpen(false)} />}
+      {customersOpen && <CustomersSheet onClose={() => setCustomersOpen(false)} />}
     </section>
   );
 }

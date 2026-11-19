@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
@@ -30,7 +31,18 @@ import { Staff } from "./pages/Staff";
 import { StaffPerson } from "./pages/StaffPerson";
 import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
-import { Account, Invitations, Passkeys } from "./pages/Account";
+import { Account, Passkeys } from "./pages/Account";
+import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
+import { AccountDeleted } from "./pages/YouAccount";
+import { TransparencyPage } from "./pages/Transparency";
+import { PeopleOnYou, PersonLinkPage } from "./pages/People";
+import { GroupLinkPage } from "./pages/Groups";
+import { ChatLinkPage } from "./pages/ChatLinkPage";
+import { CustomerChatSettings } from "./pages/CustomerChatSettings";
+import { DiscoverSettings } from "./pages/DiscoverSettings";
+import { signedInTo } from "./pages/WayIn";
+import { StartSomething } from "./pages/StartSomething";
+import { Switcher } from "./pages/Switch";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import {
@@ -214,25 +226,6 @@ function EnrolPasskey() {
   );
 }
 
-/** Someone with an account but no organisation, signed in to answer the
- * invitations waiting for them; nothing else is open to them. */
-function InviteeHome() {
-  const { me, logout, refresh } = useAuth();
-  return (
-    <div className="login card" style={{ maxWidth: 720 }}>
-      <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
-      <p>
-        You do not belong to an organisation on Taskiem yet. Accept an
-        invitation to join one.
-      </p>
-      <Invitations always onJoined={() => void refresh()} />
-      <p>
-        <button onClick={() => void logout()}>Sign out</button>
-      </p>
-    </div>
-  );
-}
-
 function Shell() {
   const { me } = useAuth();
   const loc = useLocation();
@@ -252,12 +245,12 @@ function Shell() {
           />
         </div>
         <p className="auth-line">
-          Orders, payments and approvals for your business, in one place.
+          Chat with the businesses you buy from, and run your own.
         </p>
         <ul className="auth-points">
-          <li>Send invoices and see when they are paid</li>
-          <li>Take orders and bookings on your own page</li>
-          <li>Approve payments from your phone</li>
+          <li>Order, book and pay businesses in a chat</li>
+          <li>Run your own business: orders, invoices, approvals</li>
+          <li>Automate work with workflows</li>
         </ul>
       </aside>
       <main className="auth-main">{page}</main>
@@ -276,6 +269,10 @@ function Shell() {
   if (loc.pathname === "/slack/added") return alone(<SlackAdded />);
   // An email added from chat, confirmed signed in or not.
   if (loc.pathname === "/confirm-email") return alone(<ConfirmEmail />);
+  // A deleted account (You's settings): said signed in or, after it, out.
+  if (loc.pathname === "/account-deleted") return alone(<AccountDeleted />);
+  // The published count of lawful requests (people-chatting §8.5), for anyone.
+  if (loc.pathname === "/transparency") return alone(<TransparencyPage />);
   if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
     return alone(
       <Routes>
@@ -283,8 +280,35 @@ function Shell() {
       </Routes>,
     );
   if (me === undefined) return alone(<Skeleton rows={3} />);
+  // A business's chat link (taskiem-for-everyone §8.2, §9): its card,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/m\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/m/:code" element={<ChatLinkPage />} />
+      </Routes>,
+    );
+  // A person's link (people-chatting §5.2): their card, signed out or in a
+  // business; on You it is You's own page.
+  if (/^\/p\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/p/:code" element={<PersonLinkPage />} />
+      </Routes>,
+    );
+  // A group's link (people-chatting §9, A4): its name, photo and count,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/g\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/g/:code" element={<GroupLinkPage />} />
+      </Routes>,
+    );
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
+    // A second proof's link opened where nobody is signed in: it proves
+    // only the browser that asked for it. Its token goes no further.
+    if (loc.pathname === "/second-proof") return alone(<SecondProofElsewhere />);
     // A business's link code (business links): sign in, or sign up first.
     if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname))
       return alone(<LinkCodeSignedOut />);
@@ -297,7 +321,13 @@ function Shell() {
       />
     );
   }
-  if (me.invitations_only) return alone(<InviteeHome />);
+  // The person's own side (You): a session in no business, invitations
+  // waiting or not (taskiem-for-everyone §7).
+  if (me.personal || (me.tenant_id === null && !me.gate_only)) {
+    if (loc.pathname === "/login" || loc.pathname === "/signup")
+      return <Navigate to={signedInTo(loc.search, "/you")} replace />;
+    return <YouApp />;
+  }
   // An enrol-only session may confirm its email: until then its password
   // adds no passkey.
   if (me.enrol_passkey)
@@ -306,12 +336,14 @@ function Shell() {
     );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
+  // Where this business or workspace starts (taskiem-for-everyone §18.2).
+  const opens = me.tenant_kind === "workflows" ? "/workflows" : "/home";
   if (loc.pathname === "/login")
     return (
       <Navigate
         to={safeNext(
           new URLSearchParams(loc.search).get("next"),
-          me.field_agent ? "/agent" : "/home",
+          me.field_agent ? "/agent" : opens,
         )}
         replace
       />
@@ -325,7 +357,17 @@ function Shell() {
       loc.pathname === "/workflows")
   )
     return <Navigate to="/agent" replace />;
-  if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
+  if (loc.pathname === "/signup")
+    return (
+      <Navigate
+        to={signedInTo(
+          loc.search,
+          me.tenant_kind === "workflows" ? "/workflows" : "/start",
+          false,
+        )}
+        replace
+      />
+    );
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
   if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/"))
@@ -340,6 +382,7 @@ function Shell() {
 
 function SignedIn() {
   const { me, can, logout } = useAuth();
+  const navigate = useNavigate();
   const onboarding = useOnboarding().data;
   // The drawer (narrow screens): closes on navigation and on Escape, keeps
   // Tab inside while open, and gives focus back to the menu button.
@@ -510,7 +553,7 @@ function SignedIn() {
     ],
     [
       "/settings/areas",
-      "What your business uses",
+      me.tenant_kind === "workflows" ? "What you use" : "What your business uses",
       "settings",
       me.roles.includes("owner"),
     ],
@@ -559,6 +602,10 @@ function SignedIn() {
   ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
+  // The switcher: a person (not an API key or a field agent's business)
+  // moves between You and their businesses (taskiem-for-everyone §6).
+  const switcher = !!me.user && Array.isArray(me.businesses);
+  const startSomething = () => navigate("/start-something");
   // The workflow builder fills the window: the menu shrinks to a rail of
   // icons on a computer, and the top and tab bars give way on a phone.
   const building =
@@ -592,7 +639,11 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span>{business}</span>
+            {switcher ? (
+              <Switcher testid="switcher-top" onStart={startSomething} />
+            ) : (
+              <span>{business}</span>
+            )}
           </span>
           {me.user && <Bell count={bell} onChange={bell.reload} />}
         </header>
@@ -618,10 +669,21 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span className="brand-name">
-              <strong>{business}</strong>
-              <span>Taskiem</span>
-            </span>
+            {switcher ? (
+              <span className="brand-name">
+                {/* On a phone the top bar has the switcher; the drawer keeps the name. */}
+                <span className="nav-switcher">
+                  <Switcher testid="switcher" onStart={startSomething} />
+                </span>
+                <strong className="nav-name-phone">{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            ) : (
+              <span className="brand-name">
+                <strong>{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            )}
             {me.user && (
               <span className="nav-bell">
                 <Bell count={bell} onChange={bell.reload} />
@@ -713,8 +775,37 @@ function SignedIn() {
                 <AreaOff area={off} owner={me.roles.includes("owner")} />
               ) : (
                 <Routes>
-                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  <Route
+                    path="/"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/home" element={<Home />} />
+                  <Route
+                    path="/start-something"
+                    element={<StartSomething />}
+                  />
+                  <Route path="/second-proof" element={<SecondProofPage />} />
+                  <Route path="/you/chats/:id" element={<ChatOnYou />} />
+                  <Route path="/you/people/*" element={<PeopleOnYou />} />
+                  <Route path="/you/groups/*" element={<PeopleOnYou />} />
+                  <Route
+                    path="/you"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/workflows" element={<Workflows />} />
                   <Route path="/workflows/new" element={<NewWorkflow />} />
                   <Route path="/workflows/:id" element={<Editor />} />
@@ -889,6 +980,14 @@ function SignedIn() {
                   <Route path="/catalogue" element={<Catalogue />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/billing" element={<Billing />} />
+                  <Route
+                    path="/settings/customers"
+                    element={<CustomerChatSettings />}
+                  />
+                  <Route
+                    path="/settings/discover"
+                    element={<DiscoverSettings />}
+                  />
                   <Route path="/settings/areas" element={<Areas />} />
                   <Route
                     path="/settings/payments"

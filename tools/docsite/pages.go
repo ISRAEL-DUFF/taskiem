@@ -66,6 +66,7 @@ var internal = []struct{ pattern, why string }{
 	{"moderation", "storefront trust and safety is built but idle until Phase 5 ships; publish it with storefronts"},
 	{"agents", "field agents are built but idle until Phase 5 ships; publish them with storefronts"},
 	{"runbooks/*", "Taskiem's own runbooks for its environments, for the team"},
+	{"legal/*", "drafts of the privacy notice's and terms' sections, for counsel to review; not yet in force"},
 	{"brand", "Taskiem's logo files and colour rules, for the team and its designers"},
 	{"brand/screens", "how the web app's screens use the brand, for the team and coding agents"},
 	{"atlas", "the engineering atlas's maintainer guide; the atlas itself is docs/atlas/site/index.html"},

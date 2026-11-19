@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"sync"
@@ -334,8 +335,27 @@ func TestAccessChatPasswordFollowsChatSignin(t *testing.T) {
 	if m == nil {
 		t.Fatal("no sign-in link")
 	}
-	out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
-	web := &client{t: t, base: w.base, token: out["token"].(string)}
+	// A sign-in by a chat link starts on Bisi's own side, unproved even on
+	// a phone proved before (§5.4, migration 00451); once the phone gives
+	// its second proof (here as an email link would record it), Bisi
+	// switches into the business.
+	const dev = "0192f000-0000-7000-8000-0000000c0772"
+	devHash := sha256.Sum256([]byte("app:" + dev))
+	out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true, "device": appDevice(dev)})
+	own := &client{t: t, base: w.base, token: out["token"].(string)}
+	if out["personal"] != true {
+		t.Fatalf("a chat link on a new sign-in should start on the person's own side: %v", out)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE user_devices d SET proved_at = now(), proved_by = 'email'
+		FROM whatsapp_bindings b WHERE b.number = $1 AND d.user_id = b.user_id AND d.device_hash = $2`, bisi, devHash[:]); err != nil {
+		t.Fatal(err)
+	}
+	tenants, _ := out["tenants"].([]any)
+	if len(tenants) != 1 {
+		t.Fatalf("tenants: %v", out)
+	}
+	in := own.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": tenants[0]})
+	web := &client{t: t, base: w.base, token: in["token"].(string)}
 	w.srv.WaitBackground()
 	web.must(200, "PUT", "/v1/me/chat-signin", map[string]any{"on": false})
 

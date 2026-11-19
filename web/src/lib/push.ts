@@ -1,4 +1,4 @@
-import { del, get, put } from "../api";
+import { del, get, patch, put } from "../api";
 
 // Chat push on this device (docs/spec/chat-push.md §6): the service worker,
 // the browser's own subscription, and telling the server about it. Every
@@ -249,6 +249,105 @@ export async function enablePush(
   }
 }
 
+const YOU_KEY = "taskiem-push-you";
+
+/** Whether this browser was registered on the person's own side (You). */
+export function youPushOn(): boolean {
+  try {
+    return !!localStorage.getItem(YOU_KEY);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * "Tell me when they answer" (taskiem-for-everyone §9): this browser is
+ * registered as the person's own device, on their side whatever business
+ * the session is in (`?side=you`), taking only the kind `you`. While it is,
+ * a business's answer is pushed here and not texted.
+ */
+export async function enableYouPush(preview?: boolean): Promise<
+  { ok: true } | { ok: false; why: PushWhy }
+> {
+  if (pushSupport(browserEnv()) !== "yes")
+    return { ok: false, why: "unsupported" };
+  const key = await serverKey();
+  if (!key) return { ok: false, why: "off" };
+  try {
+    if (Notification.permission === "default")
+      await Notification.requestPermission();
+    if (Notification.permission !== "granted")
+      return { ok: false, why: "denied" };
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const reg = await navigator.serviceWorker.ready;
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes(key) as BufferSource,
+      }));
+    const json = sub.toJSON();
+    const view = await put<PushView>("/v1/me/push?side=you", {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      label: deviceLabel(navigator.userAgent),
+      kinds: ["you"],
+      ...(preview === undefined ? {} : { preview }),
+    });
+    try {
+      localStorage.setItem(YOU_KEY, view.added ?? "on");
+    } catch {
+      // Not kept: the button is offered again, and the same device is updated.
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, why: "failed" };
+  }
+}
+
+/**
+ * This browser as the person's own device (You), with its preview choice:
+ * found by the server from its address (never added here), or undefined
+ * when this browser is not one of theirs.
+ */
+export async function findYouDevice(): Promise<PushDevice | undefined> {
+  const sub = await thisSubscription();
+  if (!sub) return undefined;
+  const json = sub.toJSON();
+  try {
+    const view = await put<PushView>("/v1/me/push?side=you", {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      known: true,
+    });
+    const id = view.added;
+    if (!id) return undefined;
+    try {
+      localStorage.setItem(YOU_KEY, id);
+    } catch {
+      // Not kept: found again next time.
+    }
+    return view.devices.find((d) => d.id === id);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether this browser, as the person's own device, shows what a message
+ * says (PATCH /v1/me/push/{id} {preview}); the device as it now is. */
+export async function setYouPreview(id: string, preview: boolean): Promise<PushDevice | undefined> {
+  const view = await patch<PushView>(`/v1/me/push/${encodeURIComponent(id)}?side=you`, { preview });
+  return view.devices.find((d) => d.id === id);
+}
+
+/** What a notification of a message says, by the preview choice (the
+ * server's words when it is off). */
+export function previewWords(preview: boolean): string {
+  return preview
+    ? "On: a notification shows who wrote and the start of the message."
+    : "Off: a notification says only \u201cSomeone wrote to you\u201d, with no name or words.";
+}
+
 /**
  * Which device of the list is this browser, when the page lost it (the
  * worker renewed the subscription, or storage was cleared): the server finds
@@ -282,12 +381,25 @@ export async function disablePush(
 ): Promise<PushView | undefined> {
   const sub = await thisSubscription();
   keepDevice(null);
+  if (signingOut) {
+    try {
+      localStorage.removeItem(YOU_KEY);
+    } catch {
+      // Storage blocked: nothing was kept.
+    }
+  }
   if (!sub) return undefined;
   let view: PushView | undefined;
   try {
     view = await del<PushView>("/v1/me/push", { endpoint: sub.endpoint });
   } catch {
     // Signed out already, or offline: the server drops it when the push service says it is gone.
+  }
+  if (signingOut) {
+    // The person's own side too (You): signing out ends it on this browser.
+    await del("/v1/me/push?side=you", { endpoint: sub.endpoint }).catch(
+      () => undefined,
+    );
   }
   if (signingOut) await sub.unsubscribe().catch(() => false);
   return view;

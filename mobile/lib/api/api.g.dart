@@ -95,6 +95,95 @@ class TaskiemApi {
     return Session.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Start a business or workflows (`POST /v1/me/start`)
+  Future<StartSomethingResponse> startSomething({required StartSomethingRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/start', body: body.toJson());
+    return StartSomethingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Ask for a code to your phone (the phone way in) (`POST /v1/auth/phone/start`)
+  Future<PhoneStartResponse> phoneStart({required PhoneStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/start', body: body.toJson());
+    return PhoneStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Sign in with the code sent to your phone (`POST /v1/auth/phone/verify`)
+  Future<PhoneSignin> phoneVerify({required PhoneVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/verify', body: body.toJson());
+    return PhoneSignin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a personal account on a new number (`POST /v1/auth/phone/create`)
+  Future<PhoneSignin> phoneCreate({required PhoneCreateRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/create', body: body.toJson());
+    return PhoneSignin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you by email (`POST /v1/auth/second-proof/email/start`)
+  Future<SecondProofEmailStartResponse> secondProofEmailStart() async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/email/start');
+    return SecondProofEmailStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open the second-proof link (`POST /v1/auth/second-proof/email/verify`)
+  Future<DeviceProved> secondProofEmailVerify({required SecondProofEmailVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/email/verify', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you with your chat PIN (`POST /v1/auth/second-proof/pin`)
+  Future<DeviceProved> secondProofPin({required SecondProofPinRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/pin', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you with your password (`POST /v1/auth/second-proof/password`)
+  Future<DeviceProved> secondProofPassword({required SecondProofPasswordRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/password', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A challenge for proving it is you with your passkey (`POST /v1/auth/second-proof/passkey/options`)
+  Future<SecondProofPasskeyOptionsResponse> secondProofPasskeyOptions() async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/passkey/options');
+    return SecondProofPasskeyOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you with your passkey (`POST /v1/auth/second-proof/passkey`)
+  Future<DeviceProved> secondProofPasskey({required SecondProofPasskeyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/passkey', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change your phone number (`POST /v1/me/phone/start`)
+  Future<PhoneChangeStartResponse> phoneChangeStart({required PhoneChangeStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/phone/start', body: body.toJson());
+    return PhoneChangeStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Confirm your new phone number (`POST /v1/me/phone/verify`)
+  Future<PhoneChangeVerifyResponse> phoneChangeVerify({required PhoneChangeVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/phone/verify', body: body.toJson());
+    return PhoneChangeVerifyResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// List the caller's invitations (`GET /v1/me/invitations`)
+  Future<InvitationList> myInvitations() async {
+    final j = await _t.send('GET', '/v1/me/invitations');
+    return InvitationList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Accept an invitation (`POST /v1/me/invitations/{tenant}/accept`)
+  Future<InvitationAccepted> acceptInvitation({required String tenant}) async {
+    final j = await _t.send('POST', '/v1/me/invitations/${Uri.encodeComponent(tenant)}/accept');
+    return InvitationAccepted.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Decline an invitation (`POST /v1/me/invitations/{tenant}/decline`)
+  Future<void> declineInvitation({required String tenant}) async {
+    await _t.send('POST', '/v1/me/invitations/${Uri.encodeComponent(tenant)}/decline');
+  }
+
   /// Conversations with linked businesses (`GET /v1/link-chats`)
   Future<ListLinkChatsResponse> listLinkChats() async {
     final j = await _t.send('GET', '/v1/link-chats');
@@ -210,6 +299,187 @@ class TaskiemApi {
   Future<CustomerMessage> replyCustomer({required ReplyCustomerRequest body, required String id}) async {
     final j = await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/messages', body: body.toJson());
     return CustomerMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Write first to a customer who ordered in the app (`POST /v1/customer-chats/app`)
+  Future<CustomerChat> openAppCustomerChat({required OpenAppCustomerChatRequest body}) async {
+    final j = await _t.send('POST', '/v1/customer-chats/app', body: body.toJson());
+    return CustomerChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Block a customer in the app (`POST /v1/customer-chats/{id}/block`)
+  Future<void> blockCustomer({required String id}) async {
+    await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/block');
+  }
+
+  /// Unblock a customer in the app (`DELETE /v1/customer-chats/{id}/block`)
+  Future<void> unblockCustomer({required String id}) async {
+    await _t.send('DELETE', '/v1/customer-chats/${Uri.encodeComponent(id)}/block');
+  }
+
+  /// Say someone is typing to a customer in the app (`POST /v1/customer-chats/{id}/typing`)
+  Future<void> customerChatTyping({required String id}) async {
+    await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/typing');
+  }
+
+  /// Send an offer to customers who agreed to offers (`POST /v1/customer-chats/offers`)
+  Future<BroadcastOfferResponse> broadcastOffer({required BroadcastOfferRequest body}) async {
+    final j = await _t.send('POST', '/v1/customer-chats/offers', body: body.toJson());
+    return BroadcastOfferResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// When nobody answers customers (`GET /v1/settings/customer-chats`)
+  Future<CustomerChatSettings> getCustomerChatSettings() async {
+    final j = await _t.send('GET', '/v1/settings/customer-chats');
+    return CustomerChatSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change what happens when nobody answers (`PUT /v1/settings/customer-chats`)
+  Future<CustomerChatSettings> putCustomerChatSettings({required PutCustomerChatSettingsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/customer-chats', body: body.toJson());
+    return CustomerChatSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your chats with businesses (`GET /v1/me/chats`)
+  Future<ListMyChatsResponse> listMyChats({String? archived}) async {
+    final j = await _t.send('GET', '/v1/me/chats', query: {'archived': ?archived});
+    return ListMyChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start a chat with a business (`POST /v1/me/chats`)
+  Future<PersonChat> startMyChat({required StartMyChatRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/chats', body: body.toJson());
+    return PersonChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of your chats (`GET /v1/me/chats/{id}`)
+  Future<PersonChat> getMyChat({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}');
+    return PersonChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mute, archive, or answer offers (`PUT /v1/me/chats/{id}`)
+  Future<PersonChat> putMyChat({required PutMyChatRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/chats/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PersonChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your chat's messages (`GET /v1/me/chats/{id}/messages`)
+  Future<ListMyChatMessagesResponse> listMyChatMessages({required String id, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/messages', query: {'before': ?before});
+    return ListMyChatMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Write to the business (`POST /v1/me/chats/{id}/messages`)
+  Future<PersonMessage> sendMyChatMessage({required SendMyChatMessageRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return PersonMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark the business's messages read (`POST /v1/me/chats/{id}/read`)
+  Future<void> readMyChat({required String id}) async {
+    await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Say you are typing (`POST /v1/me/chats/{id}/typing`)
+  Future<void> typingInMyChat({required String id}) async {
+    await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/typing');
+  }
+
+  /// Block the business (`POST /v1/me/chats/{id}/block`)
+  Future<PersonChat> blockBusiness({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/block');
+    return PersonChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unblock the business (`DELETE /v1/me/chats/{id}/block`)
+  Future<PersonChat> unblockBusiness({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/chats/${Uri.encodeComponent(id)}/block');
+    return PersonChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report the chat to Taskiem (`POST /v1/me/chats/{id}/report`)
+  Future<ReportBusinessResponse> reportBusiness({required ReportBusinessRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/report', body: body.toJson());
+    return ReportBusinessResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Their shop (`GET /v1/me/chats/{id}/shop`)
+  Future<MyChatShopResponse> myChatShop({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/shop');
+    return MyChatShopResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Book (`GET /v1/me/chats/{id}/services`)
+  Future<MyChatServicesResponse> myChatServices({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/services');
+    return MyChatServicesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Free times for one of their services (`GET /v1/me/chats/{id}/services/{service}/times`)
+  Future<MyChatServiceTimesResponse> myChatServiceTimes({required String id, required String service, String? day}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/services/${Uri.encodeComponent(service)}/times', query: {'day': ?day});
+    return MyChatServiceTimesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your orders with them (`GET /v1/me/chats/{id}/orders`)
+  Future<MyChatOrdersResponse> myChatOrders({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/orders');
+    return MyChatOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Place an order (`POST /v1/me/chats/{id}/orders`)
+  Future<PlaceMyChatOrderResponse> placeMyChatOrder({required PlaceMyChatOrderRequest body, required String id, required String idempotencyKey}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/orders', body: body.toJson(), headers: {'Idempotency-Key': idempotencyKey});
+    return PlaceMyChatOrderResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Book one of their services (`POST /v1/me/chats/{id}/bookings`)
+  Future<BookInMyChatResponse> bookInMyChat({required BookInMyChatRequest body, required String id, required String idempotencyKey}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/bookings', body: body.toJson(), headers: {'Idempotency-Key': idempotencyKey});
+    return BookInMyChatResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay for an order (`GET /v1/me/chats/{id}/orders/{reference}/pay`)
+  Future<PayMyChatOrderResponse> payMyChatOrder({required String id, required String reference}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/orders/${Uri.encodeComponent(reference)}/pay');
+    return PayMyChatOrderResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Search Discover (`POST /v1/discover/search`)
+  Future<DiscoverSearchResponse> discoverSearch({required DiscoverSearchRequest body}) async {
+    final j = await _t.send('POST', '/v1/discover/search', body: body.toJson());
+    return DiscoverSearchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Discover's categories (`GET /v1/discover/categories`)
+  Future<DiscoverCategoriesResponse> discoverCategories() async {
+    final j = await _t.send('GET', '/v1/discover/categories');
+    return DiscoverCategoriesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A business's profile in Discover (`GET /v1/discover/{business}`)
+  Future<DiscoverProfile> discoverProfile({required String business}) async {
+    final j = await _t.send('GET', '/v1/discover/${Uri.encodeComponent(business)}');
+    return DiscoverProfile.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report a business in Discover (`POST /v1/discover/{business}/report`)
+  Future<DiscoverReportResponse> discoverReport({required DiscoverReportRequest body, required String business}) async {
+    final j = await _t.send('POST', '/v1/discover/${Uri.encodeComponent(business)}/report', body: body.toJson());
+    return DiscoverReportResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's listing in Discover (`GET /v1/settings/discover`)
+  Future<DiscoverSettings> getDiscoverSettings() async {
+    final j = await _t.send('GET', '/v1/settings/discover');
+    return DiscoverSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change the business's listing in Discover (`PUT /v1/settings/discover`)
+  Future<DiscoverSettings> putDiscoverSettings({required PutDiscoverSettingsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/discover', body: body.toJson());
+    return DiscoverSettings.fromJson(j as Map<String, dynamic>);
   }
 
   /// React to a message (`PUT /v1/link-chats/{link}/messages/{id}/reaction`)
@@ -418,33 +688,737 @@ class TaskiemApi {
   }
 
   /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
-  Future<PushDevices> listPush() async {
-    final j = await _t.send('GET', '/v1/me/push');
+  Future<PushDevices> listPush({String? side}) async {
+    final j = await _t.send('GET', '/v1/me/push', query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Allow this browser or phone to be notified (`PUT /v1/me/push`)
-  Future<PushDevices> putPush({required PutPushRequest body}) async {
-    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson());
+  Future<PushDevices> putPush({required PutPushRequest body, String? side}) async {
+    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Rename a device, switch its preview, or set the kinds of notification it takes (`PATCH /v1/me/push/{id}`)
-  Future<PushDevices> patchPush({required PatchPushRequest body, required String id}) async {
-    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson());
+  Future<PushDevices> patchPush({required PatchPushRequest body, String? side, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Take a browser off (`DELETE /v1/me/push/{id}`)
-  Future<PushDevices> deletePush({required String id}) async {
-    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}');
+  Future<PushDevices> deletePush({String? side, required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}', query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// This browser or phone takes itself off (`DELETE /v1/me/push`)
-  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body}) async {
-    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson());
+  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body, String? side}) async {
+    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A business's card, by its chat link (`GET /v1/chat-links/{code}`)
+  Future<ChatLinkCard> getChatLinkCard({required String code}) async {
+    final j = await _t.send('GET', '/v1/chat-links/${Uri.encodeComponent(code)}');
+    return ChatLinkCard.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's chat link (`GET /v1/customers/chat-link`)
+  Future<ChatLink> getChatLink() async {
+    final j = await _t.send('GET', '/v1/customers/chat-link');
+    return ChatLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a new chat link (`POST /v1/customers/chat-link`)
+  Future<ChatLink> newChatLink() async {
+    final j = await _t.send('POST', '/v1/customers/chat-link');
+    return ChatLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change the chat link's settings (`PUT /v1/customers/chat-settings`)
+  Future<ChatSettings> putChatSettings({required PutChatSettingsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/customers/chat-settings', body: body.toJson());
+    return ChatSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your storefront orders, found by your phone (`GET /v1/me/storefront-orders`)
+  Future<MyStorefrontOrdersResponse> myStorefrontOrders({String? business, String? limit}) async {
+    final j = await _t.send('GET', '/v1/me/storefront-orders', query: {'business': ?business, 'limit': ?limit});
+    return MyStorefrontOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// These are mine (`POST /v1/me/storefront-orders/confirm`)
+  Future<ConfirmStorefrontOrdersResponse> confirmStorefrontOrders() async {
+    final j = await _t.send('POST', '/v1/me/storefront-orders/confirm');
+    return ConfirmStorefrontOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your orders (`GET /v1/me/orders`)
+  Future<MyOrdersResponse> myOrders({String? before, String? limit}) async {
+    final j = await _t.send('GET', '/v1/me/orders', query: {'before': ?before, 'limit': ?limit});
+    return MyOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of your orders (`GET /v1/me/orders/{business}/{reference}`)
+  Future<PersonOrderDetail> myOrder({required String business, required String reference}) async {
+    final j = await _t.send('GET', '/v1/me/orders/${Uri.encodeComponent(business)}/${Uri.encodeComponent(reference)}');
+    return PersonOrderDetail.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay for one of your orders (`GET /v1/me/orders/{business}/{reference}/pay`)
+  Future<PayMyOrderResponse> payMyOrder({required String business, required String reference}) async {
+    final j = await _t.send('GET', '/v1/me/orders/${Uri.encodeComponent(business)}/${Uri.encodeComponent(reference)}/pay');
+    return PayMyOrderResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your saved addresses (`GET /v1/me/addresses`)
+  Future<MyAddressesResponse> myAddresses() async {
+    final j = await _t.send('GET', '/v1/me/addresses');
+    return MyAddressesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save an address (`POST /v1/me/addresses`)
+  Future<SavedAddress> addMyAddress({required SavedAddressIn body}) async {
+    final j = await _t.send('POST', '/v1/me/addresses', body: body.toJson());
+    return SavedAddress.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a saved address (`PUT /v1/me/addresses/{id}`)
+  Future<SavedAddress> editMyAddress({required SavedAddressIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/addresses/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedAddress.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a saved address (`DELETE /v1/me/addresses/{id}`)
+  Future<void> deleteMyAddress({required String id}) async {
+    await _t.send('DELETE', '/v1/me/addresses/${Uri.encodeComponent(id)}');
+  }
+
+  /// Ask for a code to delete your account (`POST /v1/me/delete/start`)
+  Future<DeleteAccountStartResponse> deleteAccountStart({required DeleteAccountStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/delete/start', body: body.toJson());
+    return DeleteAccountStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A passkey challenge for deleting your account (`POST /v1/me/delete/passkey/options`)
+  Future<DeleteAccountPasskeyOptionsResponse> deleteAccountPasskeyOptions() async {
+    final j = await _t.send('POST', '/v1/me/delete/passkey/options');
+    return DeleteAccountPasskeyOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete your account (`POST /v1/me/delete`)
+  Future<DeleteAccountResponse> deleteAccount({required DeleteAccountRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/delete', body: body.toJson());
+    return DeleteAccountResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove your photo (`DELETE /v1/me/photo`)
+  Future<void> deleteMyPhoto() async {
+    await _t.send('DELETE', '/v1/me/photo');
+  }
+
+  /// Which pushes you get on You (`GET /v1/me/notifications`)
+  Future<YouNotifications> myNotifications() async {
+    final j = await _t.send('GET', '/v1/me/notifications');
+    return YouNotifications.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change which pushes you get on You (`PUT /v1/me/notifications`)
+  Future<YouNotifications> putMyNotifications({required PutMyNotificationsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/notifications', body: body.toJson());
+    return YouNotifications.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your privacy page (`GET /v1/me/privacy`)
+  Future<MyPrivacyResponse> myPrivacy() async {
+    final j = await _t.send('GET', '/v1/me/privacy');
+    return MyPrivacyResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your privacy towards people (`GET /v1/me/privacy/people`)
+  Future<PeoplePrivacy> myPeoplePrivacy() async {
+    final j = await _t.send('GET', '/v1/me/privacy/people');
+    return PeoplePrivacy.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change your privacy towards people (`PUT /v1/me/privacy/people`)
+  Future<PeoplePrivacy> putMyPeoplePrivacy({required PutMyPeoplePrivacyRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/privacy/people', body: body.toJson());
+    return PeoplePrivacy.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your contacts on Taskiem (`GET /v1/me/contacts`)
+  Future<MyContactsResponse> myContacts() async {
+    final j = await _t.send('GET', '/v1/me/contacts');
+    return MyContactsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add someone to your contacts (`POST /v1/me/contacts`)
+  Future<PersonContact> addContact({required AddContactRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/contacts', body: body.toJson());
+    return PersonContact.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Rename a contact (`PUT /v1/me/contacts/{person}`)
+  Future<PersonContact> renameContact({required RenameContactRequest body, required String person}) async {
+    final j = await _t.send('PUT', '/v1/me/contacts/${Uri.encodeComponent(person)}', body: body.toJson());
+    return PersonContact.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a contact (`DELETE /v1/me/contacts/{person}`)
+  Future<void> removeContact({required String person}) async {
+    await _t.send('DELETE', '/v1/me/contacts/${Uri.encodeComponent(person)}');
+  }
+
+  /// The key to hash your contacts with (`GET /v1/me/contacts/key`)
+  Future<ContactsKeyResponse> contactsKey() async {
+    final j = await _t.send('GET', '/v1/me/contacts/key');
+    return ContactsKeyResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Find people from your contacts (`POST /v1/me/contacts/match`)
+  Future<MatchContactsResponse> matchContacts({required MatchContactsRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/contacts/match', body: body.toJson());
+    return MatchContactsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your link (`GET /v1/me/link`)
+  Future<PersonLink> myPersonLink() async {
+    final j = await _t.send('GET', '/v1/me/link');
+    return PersonLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a new link (`POST /v1/me/link`)
+  Future<PersonLink> newPersonLink() async {
+    final j = await _t.send('POST', '/v1/me/link');
+    return PersonLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say you are here, or away (`POST /v1/me/presence`)
+  Future<void> myPresence({required MyPresenceRequest body}) async {
+    await _t.send('POST', '/v1/me/presence', body: body.toJson());
+  }
+
+  /// Find someone by their number (`POST /v1/people/lookup`)
+  Future<PersonFound> lookupPerson({required LookupPersonRequest body}) async {
+    final j = await _t.send('POST', '/v1/people/lookup', body: body.toJson());
+    return PersonFound.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The person a link names (`GET /v1/people/links/{code}`)
+  Future<PersonFound> personByLink({required String code}) async {
+    final j = await _t.send('GET', '/v1/people/links/${Uri.encodeComponent(code)}');
+    return PersonFound.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Someone, as you may see them (`GET /v1/people/{id}`)
+  Future<PersonView> getPerson({required String id}) async {
+    final j = await _t.send('GET', '/v1/people/${Uri.encodeComponent(id)}');
+    return PersonView.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A person's card, by their link (`GET /v1/person-links/{code}`)
+  Future<GetPersonLinkCardResponse> getPersonLinkCard({required String code}) async {
+    final j = await _t.send('GET', '/v1/person-links/${Uri.encodeComponent(code)}');
+    return GetPersonLinkCardResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// You's Chats, businesses, people and groups together (`GET /v1/me/conversations`)
+  Future<ListAllMyChatsResponse> listAllMyChats({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/conversations', query: {'archived': ?archived, 'before': ?before});
+    return ListAllMyChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your chats with people (`GET /v1/me/people`)
+  Future<ListPeopleChatsResponse> listPeopleChats({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people', query: {'archived': ?archived, 'before': ?before});
+    return ListPeopleChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start a chat with a person (`POST /v1/me/people`)
+  Future<PeopleChat> startPeopleChat({required StartPeopleChatRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/people', body: body.toJson());
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Message requests (`GET /v1/me/people/requests`)
+  Future<ListPeopleRequestsResponse> listPeopleRequests({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/requests', query: {'before': ?before});
+    return ListPeopleRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// People you blocked (`GET /v1/me/people/blocked`)
+  Future<ListPeopleBlockedResponse> listPeopleBlocked() async {
+    final j = await _t.send('GET', '/v1/me/people/blocked');
+    return ListPeopleBlockedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forward a message (`POST /v1/me/people/forward`)
+  Future<ForwardPeopleMessageResponse> forwardPeopleMessage({required ForwardPeopleMessageRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/people/forward', body: body.toJson());
+    return ForwardPeopleMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One chat with a person (`GET /v1/me/people/{id}`)
+  Future<PeopleChat> getPeopleChat({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}');
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mute or archive a chat (`PUT /v1/me/people/{id}`)
+  Future<PeopleChat> putPeopleChat({required PutPeopleChatRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/people/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a chat for you (`DELETE /v1/me/people/{id}`)
+  Future<void> deletePeopleChat({required String id}) async {
+    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}');
+  }
+
+  /// Accept a request (`POST /v1/me/people/{id}/accept`)
+  Future<PeopleChat> acceptPeopleRequest({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/accept');
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a request (`POST /v1/me/people/{id}/decline`)
+  Future<void> declinePeopleRequest({required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/decline');
+  }
+
+  /// Block a person (`POST /v1/me/people/{id}/block`)
+  Future<BlockPersonResponse> blockPerson({required BlockPersonRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/block', body: body.toJson());
+    return BlockPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unblock a person (`DELETE /v1/me/people/{id}/block`)
+  Future<UnblockPersonResponse> unblockPerson({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/block');
+    return UnblockPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report a person or chat to Taskiem (`POST /v1/me/people/{id}/report`)
+  Future<ReportPersonResponse> reportPerson({required PeopleReport body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/report', body: body.toJson());
+    return ReportPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a chat read (`POST /v1/me/people/{id}/read`)
+  Future<void> readPeopleChat({required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Messages of a chat with a person (`GET /v1/me/people/{id}/messages`)
+  Future<PeopleMessagesResponse> peopleMessages({required String id, String? before, String? starred}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}/messages', query: {'before': ?before, 'starred': ?starred});
+    return PeopleMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Write to a person (`POST /v1/me/people/{id}/messages`)
+  Future<PeopleMessage> sendPeopleMessage({required SendPeopleMessageRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Star or react to a message (`PUT /v1/me/people/{id}/messages/{message}`)
+  Future<PeopleMessage> markPeopleMessage({required MarkPeopleMessageRequest body, required String id, required String message}) async {
+    final j = await _t.send('PUT', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a message (`DELETE /v1/me/people/{id}/messages/{message}`)
+  Future<void> deletePeopleMessage({required String id, required String message, String? for_}) async {
+    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for_});
+  }
+
+  /// Mark a share paid (`POST /v1/me/people/{id}/messages/{message}/paid`)
+  Future<PeopleMessage> markSplitPaid({required MarkSplitPaidRequest body, required String id, required String message}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/paid', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open a shared card (`GET /v1/me/people/{id}/messages/{message}/card`)
+  Future<OpenPeopleCardResponse> openPeopleCard({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/card');
+    return OpenPeopleCardResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say you are typing, or stopped (`POST /v1/me/people/{id}/typing`)
+  Future<void> typingPeople({required TypingPeopleRequest body, required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/typing', body: body.toJson());
+  }
+
+  /// Search your people chats (`GET /v1/me/people/search`)
+  Future<SearchPeopleResponse> searchPeople({String? q, String? chat, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/search', query: {'q': ?q, 'chat': ?chat, 'before': ?before});
+    return SearchPeopleResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your starred messages across your people chats (`GET /v1/me/people/starred`)
+  Future<StarredPeopleResponse> starredPeople({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/starred', query: {'before': ?before});
+    return StarredPeopleResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your bank account for being paid back (`GET /v1/me/payout-account`)
+  Future<PayoutAccountAnswer> getPayoutAccount() async {
+    final j = await _t.send('GET', '/v1/me/payout-account');
+    return PayoutAccountAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save your bank account for being paid back (`PUT /v1/me/payout-account`)
+  Future<PayoutAccountAnswer> putPayoutAccount({required PayoutAccount body}) async {
+    final j = await _t.send('PUT', '/v1/me/payout-account', body: body.toJson());
+    return PayoutAccountAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove your saved bank account (`DELETE /v1/me/payout-account`)
+  Future<void> deletePayoutAccount() async {
+    await _t.send('DELETE', '/v1/me/payout-account');
+  }
+
+  /// Your standing with Taskiem's moderators (`GET /v1/me/standing`)
+  Future<PersonStanding> getMyStanding() async {
+    final j = await _t.send('GET', '/v1/me/standing');
+    return PersonStanding.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Appeal a moderator's decision (`POST /v1/me/standing/appeals`)
+  Future<AppealMyStandingResponse> appealMyStanding({required AppealMyStandingRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/standing/appeals', body: body.toJson());
+    return AppealMyStandingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark the moderators' notices seen (`POST /v1/me/standing/seen`)
+  Future<void> seenMyStanding() async {
+    await _t.send('POST', '/v1/me/standing/seen');
+  }
+
+  /// How many lawful requests Taskiem received (`GET /v1/transparency/lawful-requests`)
+  Future<GetLawfulRequestCountsResponse> getLawfulRequestCounts() async {
+    final j = await _t.send('GET', '/v1/transparency/lawful-requests');
+    return GetLawfulRequestCountsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your groups (`GET /v1/me/groups`)
+  Future<ListGroupsResponse> listGroups({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups', query: {'archived': ?archived, 'before': ?before});
+    return ListGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a group (`POST /v1/me/groups`)
+  Future<CreateGroupResponse> createGroup({required CreateGroupRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/groups', body: body.toJson());
+    return CreateGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Invites to groups waiting for you (`GET /v1/me/groups/invites`)
+  Future<ListGroupInvitesResponse> listGroupInvites() async {
+    final j = await _t.send('GET', '/v1/me/groups/invites');
+    return ListGroupInvitesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Accept an invite to a group (`POST /v1/me/groups/invites/{id}/accept`)
+  Future<Group> acceptGroupInvite({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/invites/${Uri.encodeComponent(id)}/accept');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Decline an invite to a group (`POST /v1/me/groups/invites/{id}/decline`)
+  Future<void> declineGroupInvite({required String id}) async {
+    await _t.send('POST', '/v1/me/groups/invites/${Uri.encodeComponent(id)}/decline');
+  }
+
+  /// Search your groups (`GET /v1/me/groups/search`)
+  Future<SearchGroupsResponse> searchGroups({String? q, String? group, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/search', query: {'q': ?q, 'group': ?group, 'before': ?before});
+    return SearchGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your starred messages in groups (`GET /v1/me/groups/starred`)
+  Future<StarredGroupsResponse> starredGroups({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/starred', query: {'before': ?before});
+    return StarredGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forward a message to people and groups (`POST /v1/me/forward`)
+  Future<ForwardMessageResponse> forwardMessage({required ForwardMessageRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/forward', body: body.toJson());
+    return ForwardMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Join a group by its link (`POST /v1/me/group-links/{code}/join`)
+  Future<JoinGroupByLinkResponse> joinGroupByLink({required String code}) async {
+    final j = await _t.send('POST', '/v1/me/group-links/${Uri.encodeComponent(code)}/join');
+    return JoinGroupByLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take back a request to join (`DELETE /v1/me/group-links/{code}/join`)
+  Future<void> withdrawGroupJoin({required String code}) async {
+    await _t.send('DELETE', '/v1/me/group-links/${Uri.encodeComponent(code)}/join');
+  }
+
+  /// One group (`GET /v1/me/groups/{id}`)
+  Future<Group> getGroup({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a group's info or settings (`PUT /v1/me/groups/{id}`)
+  Future<Group> putGroup({required PutGroupRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}', body: body.toJson());
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a group for you (`DELETE /v1/me/groups/{id}`)
+  Future<void> deleteGroupForMe({required String id}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}');
+  }
+
+  /// Your own settings for a group (`PUT /v1/me/groups/{id}/me`)
+  Future<Group> putMyGroup({required PutMyGroupRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/me', body: body.toJson());
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Leave a group (`POST /v1/me/groups/{id}/leave`)
+  Future<LeaveGroupResponse> leaveGroup({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/leave');
+    return LeaveGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a group's photo (`DELETE /v1/me/groups/{id}/photo`)
+  Future<Group> deleteGroupPhoto({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/photo');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A group's members (`GET /v1/me/groups/{id}/members`)
+  Future<GroupMembersResponse> groupMembers({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/members');
+    return GroupMembersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add people to a group (`POST /v1/me/groups/{id}/members`)
+  Future<AddGroupMembersResponse> addGroupMembers({required AddGroupMembersRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/members', body: body.toJson());
+    return AddGroupMembersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a member an admin, or not (`PUT /v1/me/groups/{id}/members/{person}`)
+  Future<SetGroupAdminResponse> setGroupAdmin({required SetGroupAdminRequest body, required String id, required String person}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}', body: body.toJson());
+    return SetGroupAdminResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a member (`DELETE /v1/me/groups/{id}/members/{person}`)
+  Future<void> removeGroupMember({required String id, required String person}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}');
+  }
+
+  /// Block a member of a group (`POST /v1/me/groups/{id}/members/{person}/block`)
+  Future<BlockGroupMemberResponse> blockGroupMember({required String id, required String person}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}/block');
+    return BlockGroupMemberResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take an invite back (`DELETE /v1/me/groups/{id}/invites/{person}`)
+  Future<void> cancelGroupInvite({required String id, required String person}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/invites/${Uri.encodeComponent(person)}');
+  }
+
+  /// A group's invite link (`GET /v1/me/groups/{id}/link`)
+  Future<GroupLink> groupLink({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+    return GroupLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn a group's link on, or replace it (`POST /v1/me/groups/{id}/link`)
+  Future<GroupLink> newGroupLink({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+    return GroupLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn a group's link off (`DELETE /v1/me/groups/{id}/link`)
+  Future<void> groupLinkOff({required String id}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+  }
+
+  /// People waiting to join a group (`GET /v1/me/groups/{id}/joins`)
+  Future<GroupJoinRequestsResponse> groupJoinRequests({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/joins');
+    return GroupJoinRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Let someone waiting in (`POST /v1/me/groups/{id}/joins/{person}/approve`)
+  Future<void> approveGroupJoin({required String id, required String person}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/joins/${Uri.encodeComponent(person)}/approve');
+  }
+
+  /// Turn someone waiting away (`POST /v1/me/groups/{id}/joins/{person}/decline`)
+  Future<void> declineGroupJoin({required String id, required String person}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/joins/${Uri.encodeComponent(person)}/decline');
+  }
+
+  /// A group's messages (`GET /v1/me/groups/{id}/messages`)
+  Future<GroupMessagesResponse> groupMessages({required String id, String? before, String? starred}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages', query: {'before': ?before, 'starred': ?starred});
+    return GroupMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A group's media and files (`GET /v1/me/groups/{id}/media`)
+  Future<GroupMediaResponse> groupMedia({required String id, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/media', query: {'before': ?before});
+    return GroupMediaResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a message to a group (`POST /v1/me/groups/{id}/messages`)
+  Future<GroupMessage> sendGroupMessage({required SendGroupMessageRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Star or react to a group message (`PUT /v1/me/groups/{id}/messages/{message}`)
+  Future<GroupMessage> markGroupMessage({required MarkGroupMessageRequest body, required String id, required String message}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a group message (`DELETE /v1/me/groups/{id}/messages/{message}`)
+  Future<void> deleteGroupMessage({required String id, required String message, String? for_}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for_});
+  }
+
+  /// Who read your group message (`GET /v1/me/groups/{id}/messages/{message}/info`)
+  Future<GroupMessageInfoResponse> groupMessageInfo({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/info');
+    return GroupMessageInfoResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Who reacted to a group message (`GET /v1/me/groups/{id}/messages/{message}/reactions`)
+  Future<GroupMessageReactionsResponse> groupMessageReactions({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/reactions');
+    return GroupMessageReactionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open a card shared in a group (`GET /v1/me/groups/{id}/messages/{message}/card`)
+  Future<OpenGroupCardResponse> openGroupCard({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/card');
+    return OpenGroupCardResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a share card in a group paid (`POST /v1/me/groups/{id}/messages/{message}/paid`)
+  Future<GroupMessage> markGroupSplitPaid({required MarkGroupSplitPaidRequest body, required String id, required String message}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/paid', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a group read (`POST /v1/me/groups/{id}/read`)
+  Future<void> readGroup({required String id}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Say you are typing in a group, or stopped (`POST /v1/me/groups/{id}/typing`)
+  Future<void> typingGroup({required TypingGroupRequest body, required String id}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/typing', body: body.toJson());
+  }
+
+  /// A group's preview, by its link (`GET /v1/group-links/{code}`)
+  Future<GroupLinkPreviewResponse> groupLinkPreview({required String code}) async {
+    final j = await _t.send('GET', '/v1/group-links/${Uri.encodeComponent(code)}');
+    return GroupLinkPreviewResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report a group, or one of its members, to Taskiem (`POST /v1/me/groups/{id}/report`)
+  Future<ReportGroupResponse> reportGroup({required ReportGroupRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/report', body: body.toJson());
+    return ReportGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Appeal the closing of a group you run (`POST /v1/me/groups/{id}/appeal`)
+  Future<AppealGroupResponse> appealGroup({required AppealGroupRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/appeal', body: body.toJson());
+    return AppealGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Order together (`POST /v1/me/baskets`)
+  Future<StartBasketResponse> startBasket({required StartBasketRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/baskets', body: body.toJson());
+    return StartBasketResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A shared basket (`GET /v1/me/baskets/{id}`)
+  Future<Basket> getBasket({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pick-up or delivery (`PUT /v1/me/baskets/{id}`)
+  Future<Basket> putBasket({required PutBasketRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The basket's shop (`GET /v1/me/baskets/{id}/shop`)
+  Future<BasketShopResponse> basketShop({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}/shop');
+    return BasketShopResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your lines in the basket (`PUT /v1/me/baskets/{id}/mine`)
+  Future<Basket> putMyBasketLines({required PutMyBasketLinesRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}/mine', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a line out (`DELETE /v1/me/baskets/{id}/lines/{line}`)
+  Future<Basket> deleteBasketLine({required String id, required String line}) async {
+    final j = await _t.send('DELETE', '/v1/me/baskets/${Uri.encodeComponent(id)}/lines/${Uri.encodeComponent(line)}');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Close the basket (`POST /v1/me/baskets/{id}/close`)
+  Future<Basket> closeBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/close');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Reopen the basket (`POST /v1/me/baskets/{id}/reopen`)
+  Future<Basket> reopenBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/reopen');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Give up the basket (`POST /v1/me/baskets/{id}/cancel`)
+  Future<Basket> cancelBasket({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/cancel');
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Hand the basket on (`PUT /v1/me/baskets/{id}/holder`)
+  Future<Basket> handBasket({required HandBasketRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/baskets/${Uri.encodeComponent(id)}/holder', body: body.toJson());
+    return Basket.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Place the order (`POST /v1/me/baskets/{id}/place`)
+  Future<PlaceBasketResponse> placeBasket({required PlaceBasketRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/place', body: body.toJson());
+    return PlaceBasketResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay your share (`GET /v1/me/baskets/{id}/pay`)
+  Future<PayBasketShareResponse> payBasketShare({required String id, String? for_}) async {
+    final j = await _t.send('GET', '/v1/me/baskets/${Uri.encodeComponent(id)}/pay', query: {'for': ?for_});
+    return PayBasketShareResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send each a "Your share" card (`POST /v1/me/baskets/{id}/share-cards`)
+  Future<SendBasketShareCardsResponse> sendBasketShareCards({required SendBasketShareCardsRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/share-cards', body: body.toJson());
+    return SendBasketShareCardsResponse.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -583,8 +1557,11 @@ class DeviceRequest {
 }
 
 class Session {
-  const Session({this.tenantId, this.tenants, this.token, this.userId});
+  const Session({this.personal, this.tenantId, this.tenants, this.token, this.userId});
 
+  /// A personal session, on the person's own side with no business
+  /// (docs/spec/taskiem-for-everyone.md §5.2).
+  final bool? personal;
   final Object? tenantId;
   /// The organisations the person can sign in to.
   final Object? tenants;
@@ -594,6 +1571,7 @@ class Session {
   final String? userId;
 
   factory Session.fromJson(Map<String, dynamic> j) => Session(
+        personal: j['personal'] == null ? null : j['personal'] as bool,
         tenantId: j['tenant_id'],
         tenants: j['tenants'],
         token: j['token'] == null ? null : j['token'] as String,
@@ -601,6 +1579,7 @@ class Session {
       );
 
   Map<String, dynamic> toJson() => {
+        'personal': ?personal,
         'tenant_id': ?tenantId,
         'tenants': ?tenants,
         'token': ?token,
@@ -933,7 +1912,7 @@ class SignupResult {
 }
 
 class Me {
-  const Me({this.advanced, this.areas, required this.authMethod, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.roles, this.schools, this.tenantId, this.tenantName, this.terms, this.totp, this.user});
+  const Me({this.advanced, this.areas, required this.authMethod, this.businesses, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.personal, this.roles, this.schools, this.secondProof, this.tenantId, this.tenantKind, this.tenantName, this.terms, this.totp, this.user});
 
   /// Whether the business sees the web app's technical parts (the Advanced
   /// switch).
@@ -943,9 +1922,12 @@ class Me {
   /// (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain
   /// words.
   final Map<String, dynamic>? areas;
-  /// How the session signed in (`password`, `passkey`, `sso`); empty for an API
-  /// key.
+  /// How the session signed in (`password`, `passkey`, `sso`, `chat`, `phone`);
+  /// empty for an API key.
   final String authMethod;
+  /// The person's businesses, for the switcher, each with what locks it for
+  /// this session.
+  final List<BusinessEntry>? businesses;
   /// The business delivers for other businesses (a rider), so its chat has the
   /// Availability tool
   final bool? delivers;
@@ -960,13 +1942,25 @@ class Me {
   /// A gate session: the gate role's school.gate and nothing else. Every route
   /// but GET /v1/me and sign-out answers 403 with gate_only.
   final bool? gateOnly;
-  /// Someone in no organisation, answering invitations.
+  /// Someone in no organisation, with invitations waiting.
   final bool? invitationsOnly;
   final List<String> permissions;
+  /// A personal session, on the person's own side (tenant_id null, no roles);
+  /// false for a business session.
+  final bool? personal;
   final Object? roles;
   /// Whether the business has the Schools area on (docs/schools.md).
   final bool? schools;
+  /// Second proofs (docs/spec/taskiem-for-everyone.md §5.4): whether one is
+  /// needed to enter the person's businesses from this device, whether the
+  /// device has one, and which the person could give.
+  final MeSecondProof? secondProof;
   final Object? tenantId;
+  /// What the tenant is (taskiem-for-everyone §18.2). A workflows workspace
+  /// has every area off and is never listed for other businesses to find;
+  /// turning any area on makes it a business, and turning every area off makes
+  /// a business workflows again.
+  final String? tenantKind;
   /// The business's name, as the web app's sidebar shows it.
   final String? tenantName;
   /// Terms the person has not answered yet; answer with POST /v1/me/terms.
@@ -979,6 +1973,7 @@ class Me {
         advanced: j['advanced'] == null ? null : j['advanced'] as bool,
         areas: j['areas'] == null ? null : j['areas'] as Map<String, dynamic>,
         authMethod: j['auth_method'] as String,
+        businesses: j['businesses'] == null ? null : (j['businesses'] as List).map((e) => BusinessEntry.fromJson(e as Map<String, dynamic>)).toList(),
         delivers: j['delivers'] == null ? null : j['delivers'] as bool,
         enrolPasskey: j['enrol_passkey'] == null ? null : j['enrol_passkey'] as bool,
         factors: j['factors'],
@@ -986,9 +1981,12 @@ class Me {
         gateOnly: j['gate_only'] == null ? null : j['gate_only'] as bool,
         invitationsOnly: j['invitations_only'] == null ? null : j['invitations_only'] as bool,
         permissions: (j['permissions'] as List).map((e) => e as String).toList(),
+        personal: j['personal'] == null ? null : j['personal'] as bool,
         roles: j['roles'],
         schools: j['schools'] == null ? null : j['schools'] as bool,
+        secondProof: j['second_proof'] == null ? null : MeSecondProof.fromJson(j['second_proof'] as Map<String, dynamic>),
         tenantId: j['tenant_id'],
+        tenantKind: j['tenant_kind'] == null ? null : j['tenant_kind'] as String,
         tenantName: j['tenant_name'] == null ? null : j['tenant_name'] as String,
         terms: j['terms'] == null ? null : TermsAsked.fromJson(j['terms'] as Map<String, dynamic>),
         totp: j['totp'] == null ? null : j['totp'] as bool,
@@ -999,6 +1997,7 @@ class Me {
         'advanced': ?advanced,
         'areas': ?areas,
         'auth_method': authMethod,
+        'businesses': ?businesses?.map((e) => e.toJson()).toList(),
         'delivers': ?delivers,
         'enrol_passkey': ?enrolPasskey,
         'factors': ?factors,
@@ -1006,9 +2005,12 @@ class Me {
         'gate_only': ?gateOnly,
         'invitations_only': ?invitationsOnly,
         'permissions': permissions.map((e) => e).toList(),
+        'personal': ?personal,
         'roles': ?roles,
         'schools': ?schools,
+        'second_proof': ?secondProof?.toJson(),
         'tenant_id': ?tenantId,
+        'tenant_kind': ?tenantKind,
         'tenant_name': ?tenantName,
         'terms': ?terms?.toJson(),
         'totp': ?totp,
@@ -1016,8 +2018,89 @@ class Me {
       };
 }
 
+/// One of the person's businesses in the switcher.
+class BusinessEntry {
+  const BusinessEntry({this.current, required this.id, this.kind, this.lock, required this.locked, required this.name});
+
+  /// This session is in it.
+  final bool? current;
+  final String id;
+  /// A business, or a workflows workspace.
+  final String? kind;
+  /// What this session must do first to enter it.
+  final Object? lock;
+  final bool locked;
+  final String name;
+
+  factory BusinessEntry.fromJson(Map<String, dynamic> j) => BusinessEntry(
+        current: j['current'] == null ? null : j['current'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        lock: j['lock'],
+        locked: j['locked'] as bool,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'current': ?current,
+        'id': id,
+        'kind': ?kind,
+        'lock': ?lock,
+        'locked': locked,
+        'name': name,
+      };
+}
+
+/// Second proofs (docs/spec/taskiem-for-everyone.md §5.4): whether one is
+/// needed to enter the person's businesses from this device, whether the device
+/// has one, and which the person could give.
+class MeSecondProof {
+  const MeSecondProof({this.deviceProved, this.required, this.ways});
+
+  final bool? deviceProved;
+  final bool? required;
+  /// As SecondProofWays.
+  final MeSecondProofWays? ways;
+
+  factory MeSecondProof.fromJson(Map<String, dynamic> j) => MeSecondProof(
+        deviceProved: j['device_proved'] == null ? null : j['device_proved'] as bool,
+        required: j['required'] == null ? null : j['required'] as bool,
+        ways: j['ways'] == null ? null : MeSecondProofWays.fromJson(j['ways'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device_proved': ?deviceProved,
+        'required': ?required,
+        'ways': ?ways?.toJson(),
+      };
+}
+
+/// As SecondProofWays.
+class MeSecondProofWays {
+  const MeSecondProofWays({this.email, this.passkey, this.password, this.pin});
+
+  final bool? email;
+  final bool? passkey;
+  final bool? password;
+  final bool? pin;
+
+  factory MeSecondProofWays.fromJson(Map<String, dynamic> j) => MeSecondProofWays(
+        email: j['email'] == null ? null : j['email'] as bool,
+        passkey: j['passkey'] == null ? null : j['passkey'] as bool,
+        password: j['password'] == null ? null : j['password'] as bool,
+        pin: j['pin'] == null ? null : j['pin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': ?email,
+        'passkey': ?passkey,
+        'password': ?password,
+        'pin': ?pin,
+      };
+}
+
 class MeUser {
-  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name});
+  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.phone, this.photo});
 
   final String? email;
   /// The sign-in name receives no mail (an account made in chat); the web app
@@ -1026,6 +2109,11 @@ class MeUser {
   final bool? emailVerified;
   final String? id;
   final String? name;
+  /// The person's own phone number (E.164), or null.
+  final Object? phone;
+  /// The person's own photo (GET /v1/me/photo), or null. Shown on their own
+  /// side only; businesses are not shown it.
+  final Object? photo;
 
   factory MeUser.fromJson(Map<String, dynamic> j) => MeUser(
         email: j['email'] == null ? null : j['email'] as String,
@@ -1033,6 +2121,8 @@ class MeUser {
         emailVerified: j['email_verified'] == null ? null : j['email_verified'] as bool,
         id: j['id'] == null ? null : j['id'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        phone: j['phone'],
+        photo: j['photo'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -1041,6 +2131,8 @@ class MeUser {
         'email_verified': ?emailVerified,
         'id': ?id,
         'name': ?name,
+        'phone': ?phone,
+        'photo': ?photo,
       };
 }
 
@@ -1089,50 +2181,517 @@ class Phone {
 }
 
 class ListBusinessesResponse {
-  const ListBusinessesResponse({required this.businesses});
+  const ListBusinessesResponse({required this.businesses, this.personal});
 
-  final List<ListBusinessesResponseBusinessesItem> businesses;
+  final List<BusinessEntry> businesses;
+  /// This session is the person's own side.
+  final bool? personal;
 
   factory ListBusinessesResponse.fromJson(Map<String, dynamic> j) => ListBusinessesResponse(
-        businesses: (j['businesses'] as List).map((e) => ListBusinessesResponseBusinessesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        businesses: (j['businesses'] as List).map((e) => BusinessEntry.fromJson(e as Map<String, dynamic>)).toList(),
+        personal: j['personal'] == null ? null : j['personal'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'businesses': businesses.map((e) => e.toJson()).toList(),
+        'personal': ?personal,
       };
 }
 
-class ListBusinessesResponseBusinessesItem {
-  const ListBusinessesResponseBusinessesItem({this.current, required this.id, required this.name});
+/// A business's `tenant_id`; for the person's own side, `tenant_id` null or
+/// `personal` true.
+class SwitchBusinessRequest {
+  const SwitchBusinessRequest({this.personal, this.tenantId});
 
-  final bool? current;
-  final String id;
-  final String name;
+  /// True for the person's own side (with no tenant_id).
+  final bool? personal;
+  /// The business, or null for the person's own side.
+  final Object? tenantId;
 
-  factory ListBusinessesResponseBusinessesItem.fromJson(Map<String, dynamic> j) => ListBusinessesResponseBusinessesItem(
-        current: j['current'] == null ? null : j['current'] as bool,
-        id: j['id'] as String,
-        name: j['name'] as String,
+  factory SwitchBusinessRequest.fromJson(Map<String, dynamic> j) => SwitchBusinessRequest(
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        tenantId: j['tenant_id'],
       );
 
   Map<String, dynamic> toJson() => {
-        'current': ?current,
-        'id': id,
-        'name': name,
+        'personal': ?personal,
+        'tenant_id': ?tenantId,
       };
 }
 
-class SwitchBusinessRequest {
-  const SwitchBusinessRequest({required this.tenantId});
+class StartSomethingRequest {
+  const StartSomethingRequest({required this.kind, this.kinds, this.name});
 
+  final String kind;
+  final List<String>? kinds;
+  final String? name;
+
+  factory StartSomethingRequest.fromJson(Map<String, dynamic> j) => StartSomethingRequest(
+        kind: j['kind'] as String,
+        kinds: j['kinds'] == null ? null : (j['kinds'] as List).map((e) => e as String).toList(),
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'kinds': ?kinds?.map((e) => e).toList(),
+        'name': ?name,
+      };
+}
+
+class StartSomethingResponse {
+  const StartSomethingResponse({required this.kind, required this.name, required this.tenantId, this.tenants, this.token, required this.userId});
+
+  final String kind;
+  /// Its name, as given or as made for a workflows workspace.
+  final String name;
+  /// What was started, which this session is now in.
+  final String tenantId;
+  /// The tenants the person can sign in to, the new one among them.
+  final List<String>? tenants;
+  /// The new session token, only for a bearer session; otherwise the session is
+  /// the `taskiem_session` cookie.
+  final String? token;
+  final String userId;
+
+  factory StartSomethingResponse.fromJson(Map<String, dynamic> j) => StartSomethingResponse(
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        tenantId: j['tenant_id'] as String,
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        token: j['token'] == null ? null : j['token'] as String,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'name': name,
+        'tenant_id': tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'token': ?token,
+        'user_id': userId,
+      };
+}
+
+class PhoneStartRequest {
+  const PhoneStartRequest({this.chatCode, required this.phone, this.via});
+
+  /// The chat link the person came through (taskiem-for-everyone §8.2), when
+  /// they did. The code is then counted against that business's plan (§15),
+  /// and recorded with it; a link that names no business counts against no one.
+  final String? chatCode;
+  /// The number, in any usual form; the deployment's default country when it
+  /// has none.
+  final String phone;
+  final String? via;
+
+  factory PhoneStartRequest.fromJson(Map<String, dynamic> j) => PhoneStartRequest(
+        chatCode: j['chat_code'] == null ? null : j['chat_code'] as String,
+        phone: j['phone'] as String,
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_code': ?chatCode,
+        'phone': phone,
+        'via': ?via,
+      };
+}
+
+class PhoneStartResponse {
+  const PhoneStartResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory PhoneStartResponse.fromJson(Map<String, dynamic> j) => PhoneStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class PhoneVerifyRequest {
+  const PhoneVerifyRequest({this.bearer, required this.code, this.device, required this.phone});
+
+  final bool? bearer;
+  final String code;
+  final DeviceRequest? device;
+  final String phone;
+
+  factory PhoneVerifyRequest.fromJson(Map<String, dynamic> j) => PhoneVerifyRequest(
+        bearer: j['bearer'] == null ? null : j['bearer'] as bool,
+        code: j['code'] as String,
+        device: j['device'] == null ? null : DeviceRequest.fromJson(j['device'] as Map<String, dynamic>),
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bearer': ?bearer,
+        'code': code,
+        'device': ?device?.toJson(),
+        'phone': phone,
+      };
+}
+
+/// What the phone way in answers: `signed_in` or `created` with a personal
+/// session (as Session), or `new` with a ticket for POST /v1/auth/phone/create.
+class PhoneSignin {
+  const PhoneSignin({this.expiresIn, this.invitationsOnly, this.personal, required this.status, this.tenantId, this.tenants, this.ticket, this.token, this.userId});
+
+  final int? expiresIn;
+  final bool? invitationsOnly;
+  final bool? personal;
+  final String status;
+  final Object? tenantId;
+  final List<String>? tenants;
+  final String? ticket;
+  final String? token;
+  final String? userId;
+
+  factory PhoneSignin.fromJson(Map<String, dynamic> j) => PhoneSignin(
+        expiresIn: j['expires_in'] == null ? null : (j['expires_in'] as num).toInt(),
+        invitationsOnly: j['invitations_only'] == null ? null : j['invitations_only'] as bool,
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        status: j['status'] as String,
+        tenantId: j['tenant_id'],
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        ticket: j['ticket'] == null ? null : j['ticket'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+        userId: j['user_id'] == null ? null : j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': ?expiresIn,
+        'invitations_only': ?invitationsOnly,
+        'personal': ?personal,
+        'status': status,
+        'tenant_id': ?tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'ticket': ?ticket,
+        'token': ?token,
+        'user_id': ?userId,
+      };
+}
+
+class PhoneCreateRequest {
+  const PhoneCreateRequest({required this.adult, this.bearer, this.device, required this.name, required this.terms, required this.ticket});
+
+  final bool adult;
+  final bool? bearer;
+  final DeviceRequest? device;
+  final String name;
+  final bool terms;
+  final String ticket;
+
+  factory PhoneCreateRequest.fromJson(Map<String, dynamic> j) => PhoneCreateRequest(
+        adult: j['adult'] as bool,
+        bearer: j['bearer'] == null ? null : j['bearer'] as bool,
+        device: j['device'] == null ? null : DeviceRequest.fromJson(j['device'] as Map<String, dynamic>),
+        name: j['name'] as String,
+        terms: j['terms'] as bool,
+        ticket: j['ticket'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'adult': adult,
+        'bearer': ?bearer,
+        'device': ?device?.toJson(),
+        'name': name,
+        'terms': terms,
+        'ticket': ticket,
+      };
+}
+
+class SecondProofEmailStartResponse {
+  const SecondProofEmailStartResponse({required this.expiresIn, required this.sentTo});
+
+  final int expiresIn;
+  /// The address, masked.
+  final String sentTo;
+
+  factory SecondProofEmailStartResponse.fromJson(Map<String, dynamic> j) => SecondProofEmailStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_to': sentTo,
+      };
+}
+
+class SecondProofEmailVerifyRequest {
+  const SecondProofEmailVerifyRequest({required this.token});
+
+  final String token;
+
+  factory SecondProofEmailVerifyRequest.fromJson(Map<String, dynamic> j) => SecondProofEmailVerifyRequest(
+        token: j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'token': token,
+      };
+}
+
+class DeviceProved {
+  const DeviceProved({required this.deviceProved});
+
+  final bool deviceProved;
+
+  factory DeviceProved.fromJson(Map<String, dynamic> j) => DeviceProved(
+        deviceProved: j['device_proved'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device_proved': deviceProved,
+      };
+}
+
+class SecondProofPinRequest {
+  const SecondProofPinRequest({required this.pin});
+
+  final String pin;
+
+  factory SecondProofPinRequest.fromJson(Map<String, dynamic> j) => SecondProofPinRequest(
+        pin: j['pin'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pin': pin,
+      };
+}
+
+class SecondProofPasswordRequest {
+  const SecondProofPasswordRequest({required this.password});
+
+  final String password;
+
+  factory SecondProofPasswordRequest.fromJson(Map<String, dynamic> j) => SecondProofPasswordRequest(
+        password: j['password'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'password': password,
+      };
+}
+
+class SecondProofPasskeyOptionsResponse {
+  const SecondProofPasskeyOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory SecondProofPasskeyOptionsResponse.fromJson(Map<String, dynamic> j) => SecondProofPasskeyOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class SecondProofPasskeyRequest {
+  const SecondProofPasskeyRequest({required this.credential});
+
+  final PasskeyCredential credential;
+
+  factory SecondProofPasskeyRequest.fromJson(Map<String, dynamic> j) => SecondProofPasskeyRequest(
+        credential: PasskeyCredential.fromJson(j['credential'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'credential': credential.toJson(),
+      };
+}
+
+class PhoneChangeStartRequest {
+  const PhoneChangeStartRequest({this.confirmOld, required this.phone, this.via});
+
+  final bool? confirmOld;
+  final String phone;
+  final String? via;
+
+  factory PhoneChangeStartRequest.fromJson(Map<String, dynamic> j) => PhoneChangeStartRequest(
+        confirmOld: j['confirm_old'] == null ? null : j['confirm_old'] as bool,
+        phone: j['phone'] as String,
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm_old': ?confirmOld,
+        'phone': phone,
+        'via': ?via,
+      };
+}
+
+class PhoneChangeStartResponse {
+  const PhoneChangeStartResponse({required this.expiresIn, required this.needsOldCode, this.oldSentVia, required this.sentVia});
+
+  final int expiresIn;
+  final bool needsOldCode;
+  final String? oldSentVia;
+  final String sentVia;
+
+  factory PhoneChangeStartResponse.fromJson(Map<String, dynamic> j) => PhoneChangeStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        needsOldCode: j['needs_old_code'] as bool,
+        oldSentVia: j['old_sent_via'] == null ? null : j['old_sent_via'] as String,
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'needs_old_code': needsOldCode,
+        'old_sent_via': ?oldSentVia,
+        'sent_via': sentVia,
+      };
+}
+
+class PhoneChangeVerifyRequest {
+  const PhoneChangeVerifyRequest({required this.code, this.oldCode, this.phone});
+
+  final String code;
+  final String? oldCode;
+  final String? phone;
+
+  factory PhoneChangeVerifyRequest.fromJson(Map<String, dynamic> j) => PhoneChangeVerifyRequest(
+        code: j['code'] as String,
+        oldCode: j['old_code'] == null ? null : j['old_code'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'old_code': ?oldCode,
+        'phone': ?phone,
+      };
+}
+
+class PhoneChangeVerifyResponse {
+  const PhoneChangeVerifyResponse({required this.phone});
+
+  final String phone;
+
+  factory PhoneChangeVerifyResponse.fromJson(Map<String, dynamic> j) => PhoneChangeVerifyResponse(
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'phone': phone,
+      };
+}
+
+class InvitationList {
+  const InvitationList({required this.invitations});
+
+  final List<Invitation> invitations;
+
+  factory InvitationList.fromJson(Map<String, dynamic> j) => InvitationList(
+        invitations: (j['invitations'] as List).map((e) => Invitation.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invitations': invitations.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Invitation {
+  const Invitation({required this.invitedAt, required this.roles, required this.tenant, required this.tenantId});
+
+  final DateTime invitedAt;
+  final List<String> roles;
+  /// The organisation's name.
+  final String tenant;
   final String tenantId;
 
-  factory SwitchBusinessRequest.fromJson(Map<String, dynamic> j) => SwitchBusinessRequest(
+  factory Invitation.fromJson(Map<String, dynamic> j) => Invitation(
+        invitedAt: DateTime.parse(j['invited_at'] as String),
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        tenant: j['tenant'] as String,
         tenantId: j['tenant_id'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'invited_at': invitedAt.toUtc().toIso8601String(),
+        'roles': roles.map((e) => e).toList(),
+        'tenant': tenant,
         'tenant_id': tenantId,
+      };
+}
+
+class InvitationAccepted {
+  const InvitationAccepted({this.personal, required this.roles, this.signIn, required this.tenantId, this.tenants, this.token, this.ways});
+
+  /// False when a personal session moved into the organisation.
+  final bool? personal;
+  /// The roles now held, including those single sign-on provisioning gives.
+  final List<String> roles;
+  /// The organisation needs another sign-in first: its single sign-on, (a
+  /// personal session) the person's passkey, or a second proof for a session
+  /// made by a code to the phone or chat on a device without one (`ways` says
+  /// which the person could give: they prove, then switch). The invitation is
+  /// accepted either way; a personal session stays on the person's own side.
+  final String? signIn;
+  final String tenantId;
+  /// An invitee or personal session became a member's session; the
+  /// organisations it can switch to.
+  final List<String>? tenants;
+  /// The new session token, when the invitee or personal session was a bearer
+  /// token.
+  final String? token;
+  final SecondProofWays? ways;
+
+  factory InvitationAccepted.fromJson(Map<String, dynamic> j) => InvitationAccepted(
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        signIn: j['sign_in'] == null ? null : j['sign_in'] as String,
+        tenantId: j['tenant_id'] as String,
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        token: j['token'] == null ? null : j['token'] as String,
+        ways: j['ways'] == null ? null : SecondProofWays.fromJson(j['ways'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'personal': ?personal,
+        'roles': roles.map((e) => e).toList(),
+        'sign_in': ?signIn,
+        'tenant_id': tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'token': ?token,
+        'ways': ?ways?.toJson(),
+      };
+}
+
+/// The second proofs a person could give (docs/spec/taskiem-for-everyone.md
+/// §5.4): `passkey` (POST /v1/auth/second-proof/passkey), `email` (a link to
+/// their real email, confirmed or not), `pin` (the chat PIN), and `password`
+/// (POST /v1/auth/second-proof/password: set, usable in a business of theirs,
+/// on a confirmed email where this server sends email).
+class SecondProofWays {
+  const SecondProofWays({required this.email, required this.passkey, required this.password, required this.pin});
+
+  final bool email;
+  final bool passkey;
+  final bool password;
+  final bool pin;
+
+  factory SecondProofWays.fromJson(Map<String, dynamic> j) => SecondProofWays(
+        email: j['email'] as bool,
+        passkey: j['passkey'] as bool,
+        password: j['password'] as bool,
+        pin: j['pin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': email,
+        'passkey': passkey,
+        'password': password,
+        'pin': pin,
       };
 }
 
@@ -1542,24 +3101,55 @@ class ListCustomerChatsResponse {
 }
 
 class CustomerChat {
-  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, this.muted, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
+  const CustomerChat({required this.archived, this.blocked, required this.id, required this.last, required this.lastAt, required this.lastMine, this.line, this.lines, this.muted, required this.name, this.notice, this.offers, this.openInvoices, this.owesKobo, required this.phone, this.replyLine, required this.stopped, this.typing, required this.unread, required this.windowOpen, this.windowUntil});
 
   final bool archived;
+  /// The business blocked this customer (app).
+  final bool? blocked;
+  /// The thread's id. For a customer with both lines (§11) it is always the
+  /// app thread's, the pair's canonical id, whichever line's id opened it (the
+  /// list, search, one thread, `POST /v1/customer-chats/app`): key anything
+  /// kept per thread on the client (a draft, a scroll position) by this id.
   final String id;
   final String last;
   final DateTime lastAt;
   final bool lastMine;
+  /// Where the conversation runs: the business's own WhatsApp number, or the
+  /// Taskiem app (or the browser chat). An app thread has no 24-hour window and
+  /// no template; `stopped` there is the customer's Block.
+  final String? line;
+  /// The customer's lines in this thread (taskiem-for-everyone §11): one, or
+  /// both once the person in the app and the business's WhatsApp thread of
+  /// their verified phone are one customer. Then `id` and `line` are the app
+  /// thread's (either line's id opens the thread), the list shows one row for
+  /// the customer (the latest message and unread count of both lines), and
+  /// `window_open`, `window_until`, `stopped`, `blocked` and `notice` are those
+  /// of `reply_line`.
+  final List<CustomerThreadLine>? lines;
   /// Nobody is told of its messages (no bell item, no push).
   final bool? muted;
   /// The customer's name in the business's book, or their number.
   final String name;
+  /// "This customer has stopped messages" (app).
+  final String? notice;
+  /// One app thread only, the customer's answer to offers.
+  final String? offers;
   final int? openInvoices;
   /// One thread only, what the customer owes on open invoices.
   final int? owesKobo;
   /// Empty when the customer's details were erased.
   final String phone;
+  /// Where a reply goes unless another line is chosen (`line` on the reply):
+  /// the line the customer last wrote on, or the other when that one cannot
+  /// take messages (STOP, a block, left) and the other can. WhatsApp past its
+  /// 24 hours while the reply template is not approved is not chosen when the
+  /// app line is open (the app is); with WhatsApp the only line open it stays
+  /// WhatsApp, and a reply is refused (409) until the template is approved.
+  final String? replyLine;
   /// The customer sent STOP; nothing is sent until START.
   final bool stopped;
+  /// One app thread only, the customer is typing.
+  final bool? typing;
   final int unread;
   /// A reply goes as words (within 24 hours of the customer's last message, and
   /// not stopped).
@@ -1568,16 +3158,23 @@ class CustomerChat {
 
   factory CustomerChat.fromJson(Map<String, dynamic> j) => CustomerChat(
         archived: j['archived'] as bool,
+        blocked: j['blocked'] == null ? null : j['blocked'] as bool,
         id: j['id'] as String,
         last: j['last'] as String,
         lastAt: DateTime.parse(j['last_at'] as String),
         lastMine: j['last_mine'] as bool,
+        line: j['line'] == null ? null : j['line'] as String,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => CustomerThreadLine.fromJson(e as Map<String, dynamic>)).toList(),
         muted: j['muted'] == null ? null : j['muted'] as bool,
         name: j['name'] as String,
+        notice: j['notice'] == null ? null : j['notice'] as String,
+        offers: j['offers'] == null ? null : j['offers'] as String,
         openInvoices: j['open_invoices'] == null ? null : (j['open_invoices'] as num).toInt(),
         owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
         phone: j['phone'] as String,
+        replyLine: j['reply_line'] == null ? null : j['reply_line'] as String,
         stopped: j['stopped'] as bool,
+        typing: j['typing'] == null ? null : j['typing'] as bool,
         unread: (j['unread'] as num).toInt(),
         windowOpen: j['window_open'] as bool,
         windowUntil: j['window_until'],
@@ -1585,17 +3182,76 @@ class CustomerChat {
 
   Map<String, dynamic> toJson() => {
         'archived': archived,
+        'blocked': ?blocked,
         'id': id,
         'last': last,
         'last_at': lastAt.toUtc().toIso8601String(),
         'last_mine': lastMine,
+        'line': ?line,
+        'lines': ?lines?.map((e) => e.toJson()).toList(),
         'muted': ?muted,
         'name': name,
+        'notice': ?notice,
+        'offers': ?offers,
         'open_invoices': ?openInvoices,
         'owes_kobo': ?owesKobo,
         'phone': phone,
+        'reply_line': ?replyLine,
         'stopped': stopped,
+        'typing': ?typing,
         'unread': unread,
+        'window_open': windowOpen,
+        'window_until': ?windowUntil,
+      };
+}
+
+/// One of a customer's lines in a thread (§11), with what stops it. Each keeps
+/// its own meaning: on WhatsApp `stopped` is STOP; in the app it is the
+/// customer's Block (or their having left Taskiem) and `blocked` is the
+/// business's.
+class CustomerThreadLine {
+  const CustomerThreadLine({required this.blocked, required this.id, this.lastInAt, required this.line, this.notice, required this.phone, required this.stopped, required this.windowOpen, this.windowUntil});
+
+  final bool blocked;
+  /// The line's own thread.
+  final String id;
+  /// When the customer last wrote on this line.
+  final Object? lastInAt;
+  final String line;
+  /// "This customer sent STOP on WhatsApp", "This customer has stopped
+  /// messages", "You blocked this customer in the app", "This customer changed
+  /// their number" (a WhatsApp thread whose customer moved their app line to
+  /// another number), "This customer left Taskiem".
+  final String? notice;
+  /// The number on the line; empty once erased.
+  final String phone;
+  final bool stopped;
+  /// A reply goes as words now: on WhatsApp within 24 hours of the customer's
+  /// last message there (after them, the approved template), in the app always
+  /// unless blocked.
+  final bool windowOpen;
+  final Object? windowUntil;
+
+  factory CustomerThreadLine.fromJson(Map<String, dynamic> j) => CustomerThreadLine(
+        blocked: j['blocked'] as bool,
+        id: j['id'] as String,
+        lastInAt: j['last_in_at'],
+        line: j['line'] as String,
+        notice: j['notice'] == null ? null : j['notice'] as String,
+        phone: j['phone'] as String,
+        stopped: j['stopped'] as bool,
+        windowOpen: j['window_open'] as bool,
+        windowUntil: j['window_until'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'id': id,
+        'last_in_at': ?lastInAt,
+        'line': line,
+        'notice': ?notice,
+        'phone': phone,
+        'stopped': stopped,
         'window_open': windowOpen,
         'window_until': ?windowUntil,
       };
@@ -2658,9 +4314,11 @@ class ListCustomerMessagesResponse {
 }
 
 class CustomerMessage {
-  const CustomerMessage({required this.body, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, required this.mine, this.readAt, this.senderName, this.sentAs});
+  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.sentAs});
 
+  final ChatAttachment? attachment;
   final String body;
+  final CustomerCard? card;
   final DateTime createdAt;
   /// A reply's way to the customer, as WhatsApp reports it.
   final String? delivery;
@@ -2668,36 +4326,157 @@ class CustomerMessage {
   final String? failure;
   final String id;
   final String kind;
+  /// Where the message went: on WhatsApp (the business's own number) or in the
+  /// app; a thread with both lines holds both, in time order (§11).
+  final String? line;
   /// From the business.
   final bool mine;
+  /// An offer to a customer who agreed to offers (app, §15).
+  final bool? offer;
   final Object? readAt;
   final String? senderName;
   final String? sentAs;
 
   factory CustomerMessage.fromJson(Map<String, dynamic> j) => CustomerMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
         body: j['body'] as String,
+        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
         createdAt: DateTime.parse(j['created_at'] as String),
         delivery: j['delivery'] == null ? null : j['delivery'] as String,
         failure: j['failure'] == null ? null : j['failure'] as String,
         id: j['id'] as String,
         kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
         mine: j['mine'] as bool,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
         readAt: j['read_at'],
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
         sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
         'body': body,
+        'card': ?card?.toJson(),
         'created_at': createdAt.toUtc().toIso8601String(),
         'delivery': ?delivery,
         'failure': ?failure,
         'id': id,
         'kind': kind,
+        'line': ?line,
         'mine': mine,
+        'offer': ?offer,
         'read_at': ?readAt,
         'sender_name': ?senderName,
         'sent_as': ?sentAs,
+      };
+}
+
+class ChatAttachment {
+  const ChatAttachment({required this.kind, this.name, required this.size, required this.type});
+
+  final String kind;
+  final String? name;
+  final int size;
+  final String type;
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> j) => ChatAttachment(
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        size: (j['size'] as num).toInt(),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'name': ?name,
+        'size': size,
+        'type': type,
+      };
+}
+
+/// A card in an app conversation: an order (what, total, its state), a pay link
+/// (`url`), a booking (or a booking offer, by service), a product, an invoice
+/// (`invoice_id`, its number in `reference`, what is due in `total_kobo`, its
+/// pay page in `url` while something is due), or a delivery (the rider's
+/// progress in `delivery`, as it was when sent).
+class CustomerCard {
+  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
+
+  final DeliveryProgress? delivery;
+  final String? invoiceId;
+  final String? itemId;
+  final String? line;
+  final int? minutes;
+  final String? reference;
+  final String? serviceId;
+  final String? status;
+  final String title;
+  final int? totalKobo;
+  final String type;
+  final String? url;
+
+  factory CustomerCard.fromJson(Map<String, dynamic> j) => CustomerCard(
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        title: j['title'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+        type: j['type'] as String,
+        url: j['url'] == null ? null : j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivery': ?delivery?.toJson(),
+        'invoice_id': ?invoiceId,
+        'item_id': ?itemId,
+        'line': ?line,
+        'minutes': ?minutes,
+        'reference': ?reference,
+        'service_id': ?serviceId,
+        'status': ?status,
+        'title': title,
+        'total_kobo': ?totalKobo,
+        'type': type,
+        'url': ?url,
+      };
+}
+
+/// A delivery as its customer follows it, once a rider holds it; nothing of the
+/// rider is shown.
+class DeliveryProgress {
+  const DeliveryProgress({this.acceptedAt, this.arrivedAt, this.deliveredAt, required this.line, this.pickedUpAt, required this.status});
+
+  final DateTime? acceptedAt;
+  final DateTime? arrivedAt;
+  final DateTime? deliveredAt;
+  /// "A rider is going to collect it", "On its way to you", "The rider is at
+  /// your address", "Delivered"
+  final String line;
+  final DateTime? pickedUpAt;
+  final String status;
+
+  factory DeliveryProgress.fromJson(Map<String, dynamic> j) => DeliveryProgress(
+        acceptedAt: j['accepted_at'] == null ? null : DateTime.parse(j['accepted_at'] as String),
+        arrivedAt: j['arrived_at'] == null ? null : DateTime.parse(j['arrived_at'] as String),
+        deliveredAt: j['delivered_at'] == null ? null : DateTime.parse(j['delivered_at'] as String),
+        line: j['line'] as String,
+        pickedUpAt: j['picked_up_at'] == null ? null : DateTime.parse(j['picked_up_at'] as String),
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'accepted_at': ?acceptedAt?.toUtc().toIso8601String(),
+        'arrived_at': ?arrivedAt?.toUtc().toIso8601String(),
+        'delivered_at': ?deliveredAt?.toUtc().toIso8601String(),
+        'line': line,
+        'picked_up_at': ?pickedUpAt?.toUtc().toIso8601String(),
+        'status': status,
       };
 }
 
@@ -2719,12 +4498,85 @@ class PutCustomerChatRequest {
 }
 
 class ReplyCustomerRequest {
-  const ReplyCustomerRequest({this.clientId, required this.text});
+  const ReplyCustomerRequest({this.card, this.clientId, this.line, this.offer, this.text});
+
+  final ReplyCustomerRequestCard? card;
+  final String? clientId;
+  /// For a customer with both lines (taskiem-for-everyone §11; the thread's
+  /// `lines`): the line the reply goes on. Left out, `reply_line` (the line the
+  /// customer last wrote on). Cards, offers and files go in the app whatever it
+  /// says. 409 when the customer has no such line.
+  final String? line;
+  final bool? offer;
+  final String? text;
+
+  factory ReplyCustomerRequest.fromJson(Map<String, dynamic> j) => ReplyCustomerRequest(
+        card: j['card'] == null ? null : ReplyCustomerRequestCard.fromJson(j['card'] as Map<String, dynamic>),
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
+        'client_id': ?clientId,
+        'line': ?line,
+        'offer': ?offer,
+        'text': ?text,
+      };
+}
+
+class ReplyCustomerRequestCard {
+  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.serviceId, required this.type});
+
+  final String? invoiceId;
+  final String? itemId;
+  final String? reference;
+  final String? serviceId;
+  /// invoice: one of this customer's sent invoices (`invoice_id`); delivery:
+  /// the rider's progress on this customer's order (`reference`), once a rider
+  /// holds it.
+  final String type;
+
+  factory ReplyCustomerRequestCard.fromJson(Map<String, dynamic> j) => ReplyCustomerRequestCard(
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invoice_id': ?invoiceId,
+        'item_id': ?itemId,
+        'reference': ?reference,
+        'service_id': ?serviceId,
+        'type': type,
+      };
+}
+
+class OpenAppCustomerChatRequest {
+  const OpenAppCustomerChatRequest({required this.reference});
+
+  final String reference;
+
+  factory OpenAppCustomerChatRequest.fromJson(Map<String, dynamic> j) => OpenAppCustomerChatRequest(
+        reference: j['reference'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reference': reference,
+      };
+}
+
+class BroadcastOfferRequest {
+  const BroadcastOfferRequest({this.clientId, required this.text});
 
   final String? clientId;
   final String text;
 
-  factory ReplyCustomerRequest.fromJson(Map<String, dynamic> j) => ReplyCustomerRequest(
+  factory BroadcastOfferRequest.fromJson(Map<String, dynamic> j) => BroadcastOfferRequest(
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
         text: j['text'] as String,
       );
@@ -2732,6 +4584,1276 @@ class ReplyCustomerRequest {
   Map<String, dynamic> toJson() => {
         'client_id': ?clientId,
         'text': text,
+      };
+}
+
+class BroadcastOfferResponse {
+  const BroadcastOfferResponse({required this.sent, required this.skipped});
+
+  final int sent;
+  final int skipped;
+
+  factory BroadcastOfferResponse.fromJson(Map<String, dynamic> j) => BroadcastOfferResponse(
+        sent: (j['sent'] as num).toInt(),
+        skipped: (j['skipped'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'sent': sent,
+        'skipped': skipped,
+      };
+}
+
+class CustomerChatSettings {
+  const CustomerChatSettings({required this.closedReply, required this.closedWords, required this.needsYou, required this.tellOwner});
+
+  final bool closedReply;
+  /// The business's own words for the closed reply; empty for Taskiem's.
+  final String closedWords;
+  final bool needsYou;
+  final bool tellOwner;
+
+  factory CustomerChatSettings.fromJson(Map<String, dynamic> j) => CustomerChatSettings(
+        closedReply: j['closed_reply'] as bool,
+        closedWords: j['closed_words'] as String,
+        needsYou: j['needs_you'] as bool,
+        tellOwner: j['tell_owner'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed_reply': closedReply,
+        'closed_words': closedWords,
+        'needs_you': needsYou,
+        'tell_owner': tellOwner,
+      };
+}
+
+class PutCustomerChatSettingsRequest {
+  const PutCustomerChatSettingsRequest({this.closedReply, this.closedWords, this.needsYou, this.tellOwner});
+
+  final bool? closedReply;
+  final String? closedWords;
+  final bool? needsYou;
+  final bool? tellOwner;
+
+  factory PutCustomerChatSettingsRequest.fromJson(Map<String, dynamic> j) => PutCustomerChatSettingsRequest(
+        closedReply: j['closed_reply'] == null ? null : j['closed_reply'] as bool,
+        closedWords: j['closed_words'] == null ? null : j['closed_words'] as String,
+        needsYou: j['needs_you'] == null ? null : j['needs_you'] as bool,
+        tellOwner: j['tell_owner'] == null ? null : j['tell_owner'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed_reply': ?closedReply,
+        'closed_words': ?closedWords,
+        'needs_you': ?needsYou,
+        'tell_owner': ?tellOwner,
+      };
+}
+
+class ListMyChatsResponse {
+  const ListMyChatsResponse({required this.chats, required this.unread});
+
+  final List<PersonChat> chats;
+  final int unread;
+
+  factory ListMyChatsResponse.fromJson(Map<String, dynamic> j) => ListMyChatsResponse(
+        chats: (j['chats'] as List).map((e) => PersonChat.fromJson(e as Map<String, dynamic>)).toList(),
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'unread': unread,
+      };
+}
+
+/// One of a person's chats with a business, as their own side shows it
+/// (taskiem-for-everyone §7, §8).
+class PersonChat {
+  const PersonChat({required this.archived, required this.askOffers, required this.blocked, required this.blockedYou, required this.business, this.hours, required this.id, required this.last, required this.lastAt, required this.lastMine, this.lines, required this.muted, required this.name, this.notice, required this.offers, this.offersRefused, this.photo, this.typing, required this.unread, this.verified});
+
+  final bool archived;
+  /// Ask it now (once, at the first chat or order). False once answered, once
+  /// shown and passed over (`PUT {offers_asked: true}`), and while either side
+  /// blocked the other.
+  final bool askOffers;
+  /// You blocked the business.
+  final bool blocked;
+  /// The business is not taking your messages.
+  final bool blockedYou;
+  final String business;
+  /// One chat only, when the business keeps hours.
+  final PersonChatHours? hours;
+  final String id;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  /// Where this chat runs: the app, and WhatsApp once your messages with the
+  /// business on its own WhatsApp number, from the phone on your account, are
+  /// shown here too, marked on WhatsApp (§11).
+  final List<String>? lines;
+  final bool muted;
+  /// The business's name.
+  final String name;
+  /// On starting, what the business sees of you, and that Taskiem may read
+  /// business conversations to help with orders.
+  final String? notice;
+  /// Your answer to "Get offers from {business}?"
+  final String offers;
+  /// On a PUT: the answer to offers was not taken, since the business is not
+  /// taking messages from you; the rest of the change was.
+  final bool? offersRefused;
+  /// One chat only, the business's photo (its logo; sizes by width in `urls`).
+  final PersonChatPhoto? photo;
+  /// One chat only, the business is typing.
+  final bool? typing;
+  final int unread;
+  /// One chat only: what the business has proved, for the header (§15): its
+  /// phone, a check of the business, a payment provider connected (it is paid
+  /// through Taskiem's pay links), and whole months on Taskiem.
+  final PersonChatVerified? verified;
+
+  factory PersonChat.fromJson(Map<String, dynamic> j) => PersonChat(
+        archived: j['archived'] as bool,
+        askOffers: j['ask_offers'] as bool,
+        blocked: j['blocked'] as bool,
+        blockedYou: j['blocked_you'] as bool,
+        business: j['business'] as String,
+        hours: j['hours'] == null ? null : PersonChatHours.fromJson(j['hours'] as Map<String, dynamic>),
+        id: j['id'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => e as String).toList(),
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        notice: j['notice'] == null ? null : j['notice'] as String,
+        offers: j['offers'] as String,
+        offersRefused: j['offers_refused'] == null ? null : j['offers_refused'] as bool,
+        photo: j['photo'] == null ? null : PersonChatPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+        unread: (j['unread'] as num).toInt(),
+        verified: j['verified'] == null ? null : PersonChatVerified.fromJson(j['verified'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'ask_offers': askOffers,
+        'blocked': blocked,
+        'blocked_you': blockedYou,
+        'business': business,
+        'hours': ?hours?.toJson(),
+        'id': id,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'lines': ?lines?.map((e) => e).toList(),
+        'muted': muted,
+        'name': name,
+        'notice': ?notice,
+        'offers': offers,
+        'offers_refused': ?offersRefused,
+        'photo': ?photo?.toJson(),
+        'typing': ?typing,
+        'unread': unread,
+        'verified': ?verified?.toJson(),
+      };
+}
+
+/// One chat only, when the business keeps hours.
+class PersonChatHours {
+  const PersonChatHours({required this.line, required this.open});
+
+  /// "Open now, closes at 18:00", "Closed now. Opens tomorrow at 09:00"
+  final String line;
+  final bool open;
+
+  factory PersonChatHours.fromJson(Map<String, dynamic> j) => PersonChatHours(
+        line: j['line'] as String,
+        open: j['open'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'open': open,
+      };
+}
+
+/// One chat only, the business's photo (its logo; sizes by width in `urls`).
+class PersonChatPhoto {
+  const PersonChatPhoto({this.height, this.id, this.moderation, this.urls, this.width});
+
+  final int? height;
+  final String? id;
+  final String? moderation;
+  final Map<String, dynamic>? urls;
+  final int? width;
+
+  factory PersonChatPhoto.fromJson(Map<String, dynamic> j) => PersonChatPhoto(
+        height: j['height'] == null ? null : (j['height'] as num).toInt(),
+        id: j['id'] == null ? null : j['id'] as String,
+        moderation: j['moderation'] == null ? null : j['moderation'] as String,
+        urls: j['urls'] == null ? null : j['urls'] as Map<String, dynamic>,
+        width: j['width'] == null ? null : (j['width'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'height': ?height,
+        'id': ?id,
+        'moderation': ?moderation,
+        'urls': ?urls,
+        'width': ?width,
+      };
+}
+
+/// One chat only: what the business has proved, for the header (§15): its
+/// phone, a check of the business, a payment provider connected (it is paid
+/// through Taskiem's pay links), and whole months on Taskiem.
+class PersonChatVerified {
+  const PersonChatVerified({required this.business, required this.months, required this.payments, required this.phone});
+
+  final bool business;
+  final int months;
+  final bool payments;
+  final bool phone;
+
+  factory PersonChatVerified.fromJson(Map<String, dynamic> j) => PersonChatVerified(
+        business: j['business'] as bool,
+        months: (j['months'] as num).toInt(),
+        payments: j['payments'] as bool,
+        phone: j['phone'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'months': months,
+        'payments': payments,
+        'phone': phone,
+      };
+}
+
+class StartMyChatRequest {
+  const StartMyChatRequest({this.businessId, this.code, this.from});
+
+  final String? businessId;
+  final String? code;
+  /// Where the person came from; `shared`: a card shared with them in a chat
+  /// with a person (people-chatting §10.2).
+  final String? from;
+
+  factory StartMyChatRequest.fromJson(Map<String, dynamic> j) => StartMyChatRequest(
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        code: j['code'] == null ? null : j['code'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business_id': ?businessId,
+        'code': ?code,
+        'from': ?from,
+      };
+}
+
+class PutMyChatRequest {
+  const PutMyChatRequest({this.archived, this.muted, this.offers, this.offersAsked});
+
+  final bool? archived;
+  final bool? muted;
+  final bool? offers;
+  /// "Get offers from {business}?" was shown and passed over: it is not asked
+  /// again (`ask_offers` false). Answering it does the same.
+  final bool? offersAsked;
+
+  factory PutMyChatRequest.fromJson(Map<String, dynamic> j) => PutMyChatRequest(
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
+        offers: j['offers'] == null ? null : j['offers'] as bool,
+        offersAsked: j['offers_asked'] == null ? null : j['offers_asked'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': ?archived,
+        'muted': ?muted,
+        'offers': ?offers,
+        'offers_asked': ?offersAsked,
+      };
+}
+
+class ListMyChatMessagesResponse {
+  const ListMyChatMessagesResponse({required this.messages, required this.more});
+
+  final List<PersonMessage> messages;
+  final bool more;
+
+  factory ListMyChatMessagesResponse.fromJson(Map<String, dynamic> j) => ListMyChatMessagesResponse(
+        messages: (j['messages'] as List).map((e) => PersonMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class PersonMessage {
+  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  final String body;
+  final CustomerCard? card;
+  final DateTime createdAt;
+  /// The message, the same id on the business's copy.
+  final String id;
+  final String kind;
+  /// In the app, or on WhatsApp: a message between you and the business on its
+  /// own WhatsApp number, shown here since it was yours (§11). Show it marked
+  /// "on WhatsApp"; it cannot be answered there from here. A business's reply
+  /// that went as WhatsApp's template shows the template's words, as WhatsApp
+  /// delivered them; replies WhatsApp never took are not shown.
+  final String? line;
+  /// You sent it.
+  final bool mine;
+  /// An offer (marked Offer, with Stop offers under it).
+  final bool? offer;
+  final Object? readAt;
+  /// Who wrote it on the business's side (a first name), when someone did.
+  final String? senderName;
+  /// The business's message asks for a transfer to an account (ten digits
+  /// standing alone with a banking word): warn that paying is only ever through
+  /// Taskiem's pay links (§15).
+  final bool? warnTransfer;
+
+  factory PersonMessage.fromJson(Map<String, dynamic> j) => PersonMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : CustomerCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        mine: j['mine'] as bool,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
+        readAt: j['read_at'],
+        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'id': id,
+        'kind': kind,
+        'line': ?line,
+        'mine': mine,
+        'offer': ?offer,
+        'read_at': ?readAt,
+        'sender_name': ?senderName,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+class SendMyChatMessageRequest {
+  const SendMyChatMessageRequest({this.clientId, required this.text});
+
+  final String? clientId;
+  final String text;
+
+  factory SendMyChatMessageRequest.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequest(
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'client_id': ?clientId,
+        'text': text,
+      };
+}
+
+class ReportBusinessRequest {
+  const ReportBusinessRequest({required this.consent, this.note, required this.reason});
+
+  final bool consent;
+  final String? note;
+  final String reason;
+
+  factory ReportBusinessRequest.fromJson(Map<String, dynamic> j) => ReportBusinessRequest(
+        consent: j['consent'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'consent': consent,
+        'note': ?note,
+        'reason': reason,
+      };
+}
+
+class ReportBusinessResponse {
+  const ReportBusinessResponse({required this.id, required this.messagesSent, required this.said});
+
+  final String id;
+  final bool messagesSent;
+  final String said;
+
+  factory ReportBusinessResponse.fromJson(Map<String, dynamic> j) => ReportBusinessResponse(
+        id: j['id'] as String,
+        messagesSent: j['messages_sent'] as bool,
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'messages_sent': messagesSent,
+        'said': said,
+      };
+}
+
+class MyChatShopResponse {
+  const MyChatShopResponse({this.closed, required this.delivery, required this.items, required this.open, required this.payment, required this.pickup, required this.zones});
+
+  final String? closed;
+  final bool delivery;
+  final List<ShopItem> items;
+  final bool open;
+  final String payment;
+  final bool pickup;
+  final List<MyChatShopResponseZonesItem> zones;
+
+  factory MyChatShopResponse.fromJson(Map<String, dynamic> j) => MyChatShopResponse(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        delivery: j['delivery'] as bool,
+        items: (j['items'] as List).map((e) => ShopItem.fromJson(e as Map<String, dynamic>)).toList(),
+        open: j['open'] as bool,
+        payment: j['payment'] as String,
+        pickup: j['pickup'] as bool,
+        zones: (j['zones'] as List).map((e) => MyChatShopResponseZonesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'delivery': delivery,
+        'items': items.map((e) => e.toJson()).toList(),
+        'open': open,
+        'payment': payment,
+        'pickup': pickup,
+        'zones': zones.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ShopItem {
+  const ShopItem({required this.available, this.category, this.description, this.fewLeft, required this.id, required this.name, this.photo, this.priceKobo, this.sizes});
+
+  final bool available;
+  final String? category;
+  final String? description;
+  /// How many are left, when 5 or fewer (as the page says).
+  final int? fewLeft;
+  final String id;
+  final String name;
+  final String? photo;
+  final int? priceKobo;
+  final List<ShopItemSizesItem>? sizes;
+
+  factory ShopItem.fromJson(Map<String, dynamic> j) => ShopItem(
+        available: j['available'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        fewLeft: j['few_left'] == null ? null : (j['few_left'] as num).toInt(),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        photo: j['photo'] == null ? null : j['photo'] as String,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        sizes: j['sizes'] == null ? null : (j['sizes'] as List).map((e) => ShopItemSizesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'category': ?category,
+        'description': ?description,
+        'few_left': ?fewLeft,
+        'id': id,
+        'name': name,
+        'photo': ?photo,
+        'price_kobo': ?priceKobo,
+        'sizes': ?sizes?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ShopItemSizesItem {
+  const ShopItemSizesItem({required this.available, this.fewLeft, required this.id, this.priceKobo, required this.variant});
+
+  final bool available;
+  final int? fewLeft;
+  final String id;
+  final int? priceKobo;
+  final Map<String, dynamic> variant;
+
+  factory ShopItemSizesItem.fromJson(Map<String, dynamic> j) => ShopItemSizesItem(
+        available: j['available'] as bool,
+        fewLeft: j['few_left'] == null ? null : (j['few_left'] as num).toInt(),
+        id: j['id'] as String,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        variant: j['variant'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'few_left': ?fewLeft,
+        'id': id,
+        'price_kobo': ?priceKobo,
+        'variant': variant,
+      };
+}
+
+class MyChatShopResponseZonesItem {
+  const MyChatShopResponseZonesItem({required this.feeKobo, required this.name});
+
+  final int feeKobo;
+  final String name;
+
+  factory MyChatShopResponseZonesItem.fromJson(Map<String, dynamic> j) => MyChatShopResponseZonesItem(
+        feeKobo: (j['fee_kobo'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fee_kobo': feeKobo,
+        'name': name,
+      };
+}
+
+class MyChatServicesResponse {
+  const MyChatServicesResponse({this.closed, required this.open, required this.services});
+
+  final String? closed;
+  final bool open;
+  final List<LinkService> services;
+
+  factory MyChatServicesResponse.fromJson(Map<String, dynamic> j) => MyChatServicesResponse(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        open: j['open'] as bool,
+        services: (j['services'] as List).map((e) => LinkService.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'open': open,
+        'services': services.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// One of a linked business's services, as its storefront shows it
+class LinkService {
+  const LinkService({this.category, this.description, required this.id, required this.minutes, required this.name, this.priceKobo});
+
+  final String? category;
+  final String? description;
+  final String id;
+  /// How long it takes
+  final int minutes;
+  final String name;
+  /// Its storefront price; none when paid on the day
+  final int? priceKobo;
+
+  factory LinkService.fromJson(Map<String, dynamic> j) => LinkService(
+        category: j['category'] == null ? null : j['category'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        id: j['id'] as String,
+        minutes: (j['minutes'] as num).toInt(),
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'category': ?category,
+        'description': ?description,
+        'id': id,
+        'minutes': minutes,
+        'name': name,
+        'price_kobo': ?priceKobo,
+      };
+}
+
+class MyChatServiceTimesResponse {
+  const MyChatServiceTimesResponse({this.day, required this.days, required this.service, required this.times});
+
+  final String? day;
+  final List<String> days;
+  final LinkService service;
+  final List<DateTime> times;
+
+  factory MyChatServiceTimesResponse.fromJson(Map<String, dynamic> j) => MyChatServiceTimesResponse(
+        day: j['day'] == null ? null : j['day'] as String,
+        days: (j['days'] as List).map((e) => e as String).toList(),
+        service: LinkService.fromJson(j['service'] as Map<String, dynamic>),
+        times: (j['times'] as List).map((e) => DateTime.parse(e as String)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day': ?day,
+        'days': days.map((e) => e).toList(),
+        'service': service.toJson(),
+        'times': times.map((e) => e.toUtc().toIso8601String()).toList(),
+      };
+}
+
+class MyChatOrdersResponse {
+  const MyChatOrdersResponse({required this.orders});
+
+  final List<DoorOrder> orders;
+
+  factory MyChatOrdersResponse.fromJson(Map<String, dynamic> j) => MyChatOrdersResponse(
+        orders: (j['orders'] as List).map((e) => DoorOrder.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'orders': orders.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// One of a person's orders or bookings with a business.
+class DoorOrder {
+  const DoorOrder({required this.createdAt, this.delivery, required this.dueKobo, required this.kind, required this.pay, required this.reference, this.serviceName, this.startsAt, required this.status, required this.summary, required this.totalKobo});
+
+  final DateTime createdAt;
+  final DeliveryProgress? delivery;
+  final int dueKobo;
+  final String kind;
+  /// Something is due now; its pay link is GET
+  /// /v1/me/chats/{id}/orders/{reference}/pay.
+  final bool pay;
+  final String reference;
+  final String? serviceName;
+  final DateTime? startsAt;
+  /// The order's state; `sent` for one just placed, not yet taken in.
+  final String status;
+  final String summary;
+  final int totalKobo;
+
+  factory DoorOrder.fromJson(Map<String, dynamic> j) => DoorOrder(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        kind: j['kind'] as String,
+        pay: j['pay'] as bool,
+        reference: j['reference'] as String,
+        serviceName: j['service_name'] == null ? null : j['service_name'] as String,
+        startsAt: j['starts_at'] == null ? null : DateTime.parse(j['starts_at'] as String),
+        status: j['status'] as String,
+        summary: j['summary'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery': ?delivery?.toJson(),
+        'due_kobo': dueKobo,
+        'kind': kind,
+        'pay': pay,
+        'reference': reference,
+        'service_name': ?serviceName,
+        'starts_at': ?startsAt?.toUtc().toIso8601String(),
+        'status': status,
+        'summary': summary,
+        'total_kobo': totalKobo,
+      };
+}
+
+class PlaceMyChatOrderRequest {
+  const PlaceMyChatOrderRequest({this.address, this.addressId, this.fulfilment, this.landmark, required this.lines, this.note, this.zone});
+
+  final String? address;
+  /// One of the person's saved addresses (GET /v1/me/addresses): copied into
+  /// the order in place of `address` and `landmark` (its area after the street;
+  /// its landmark, and its phone for the rider, as the landmark). The business
+  /// sees only that copy, never the saved list. 404 when it is not one of
+  /// theirs.
+  final String? addressId;
+  final String? fulfilment;
+  final String? landmark;
+  final List<PlaceMyChatOrderRequestLinesItem> lines;
+  final String? note;
+  final String? zone;
+
+  factory PlaceMyChatOrderRequest.fromJson(Map<String, dynamic> j) => PlaceMyChatOrderRequest(
+        address: j['address'] == null ? null : j['address'] as String,
+        addressId: j['address_id'] == null ? null : j['address_id'] as String,
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        lines: (j['lines'] as List).map((e) => PlaceMyChatOrderRequestLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        note: j['note'] == null ? null : j['note'] as String,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'address_id': ?addressId,
+        'fulfilment': ?fulfilment,
+        'landmark': ?landmark,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'note': ?note,
+        'zone': ?zone,
+      };
+}
+
+class PlaceMyChatOrderRequestLinesItem {
+  const PlaceMyChatOrderRequestLinesItem({required this.itemId, required this.quantity});
+
+  /// An item, or one of a product's sizes and colours (its own id).
+  final String itemId;
+  final int quantity;
+
+  factory PlaceMyChatOrderRequestLinesItem.fromJson(Map<String, dynamic> j) => PlaceMyChatOrderRequestLinesItem(
+        itemId: j['item_id'] as String,
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': itemId,
+        'quantity': quantity,
+      };
+}
+
+class PlaceMyChatOrderResponse {
+  const PlaceMyChatOrderResponse({required this.order});
+
+  final DoorOrder order;
+
+  factory PlaceMyChatOrderResponse.fromJson(Map<String, dynamic> j) => PlaceMyChatOrderResponse(
+        order: DoorOrder.fromJson(j['order'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'order': order.toJson(),
+      };
+}
+
+class BookInMyChatRequest {
+  const BookInMyChatRequest({this.note, required this.serviceId, required this.start});
+
+  final String? note;
+  final String serviceId;
+  final DateTime start;
+
+  factory BookInMyChatRequest.fromJson(Map<String, dynamic> j) => BookInMyChatRequest(
+        note: j['note'] == null ? null : j['note'] as String,
+        serviceId: j['service_id'] as String,
+        start: DateTime.parse(j['start'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'note': ?note,
+        'service_id': serviceId,
+        'start': start.toUtc().toIso8601String(),
+      };
+}
+
+class BookInMyChatResponse {
+  const BookInMyChatResponse({required this.booking});
+
+  final LinkBooking booking;
+
+  factory BookInMyChatResponse.fromJson(Map<String, dynamic> j) => BookInMyChatResponse(
+        booking: LinkBooking.fromJson(j['booking'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'booking': booking.toJson(),
+      };
+}
+
+/// A booking made with a linked business from the conversation
+class LinkBooking {
+  const LinkBooking({required this.endsAt, this.priceKobo, required this.reference, required this.serviceId, required this.serviceName, required this.startsAt});
+
+  final DateTime endsAt;
+  final int? priceKobo;
+  final String reference;
+  final String serviceId;
+  final String serviceName;
+  final DateTime startsAt;
+
+  factory LinkBooking.fromJson(Map<String, dynamic> j) => LinkBooking(
+        endsAt: DateTime.parse(j['ends_at'] as String),
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        serviceId: j['service_id'] as String,
+        serviceName: j['service_name'] as String,
+        startsAt: DateTime.parse(j['starts_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ends_at': endsAt.toUtc().toIso8601String(),
+        'price_kobo': ?priceKobo,
+        'reference': reference,
+        'service_id': serviceId,
+        'service_name': serviceName,
+        'starts_at': startsAt.toUtc().toIso8601String(),
+      };
+}
+
+class PayMyChatOrderResponse {
+  const PayMyChatOrderResponse({required this.dueKobo, required this.reference, required this.url});
+
+  final int dueKobo;
+  final String reference;
+  final String url;
+
+  factory PayMyChatOrderResponse.fromJson(Map<String, dynamic> j) => PayMyChatOrderResponse(
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'due_kobo': dueKobo,
+        'reference': reference,
+        'url': url,
+      };
+}
+
+class DiscoverSearchRequest {
+  const DiscoverSearchRequest({this.area, this.category, this.near, this.offset, this.q});
+
+  final String? area;
+  final String? category;
+  final DiscoverSearchRequestNear? near;
+  final int? offset;
+  final String? q;
+
+  factory DiscoverSearchRequest.fromJson(Map<String, dynamic> j) => DiscoverSearchRequest(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        near: j['near'] == null ? null : DiscoverSearchRequestNear.fromJson(j['near'] as Map<String, dynamic>),
+        offset: j['offset'] == null ? null : (j['offset'] as num).toInt(),
+        q: j['q'] == null ? null : j['q'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'near': ?near?.toJson(),
+        'offset': ?offset,
+        'q': ?q,
+      };
+}
+
+class DiscoverSearchRequestNear {
+  const DiscoverSearchRequestNear({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+
+  factory DiscoverSearchRequestNear.fromJson(Map<String, dynamic> j) => DiscoverSearchRequestNear(
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class DiscoverSearchResponse {
+  const DiscoverSearchResponse({required this.more, required this.results});
+
+  final bool more;
+  final List<DiscoverResult> results;
+
+  factory DiscoverSearchResponse.fromJson(Map<String, dynamic> j) => DiscoverSearchResponse(
+        more: j['more'] as bool,
+        results: (j['results'] as List).map((e) => DiscoverResult.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A business a search in Discover found.
+class DiscoverResult {
+  const DiscoverResult({required this.area, required this.business, required this.canChat, required this.category, required this.categoryName, this.km, required this.line, required this.name, required this.openNow, required this.photo});
+
+  final String area;
+  final String business;
+  /// It takes chats (the Chat button).
+  final bool canChat;
+  final String category;
+  final String categoryName;
+  /// How far it is, when the search gave `near` and the business its place.
+  final double? km;
+  /// The line under its name ("Open now, closes at 18:00", "Closed now. Opens
+  /// tomorrow at 09:00").
+  final String line;
+  final String name;
+  final bool openNow;
+  /// Its photo's sizes, by width.
+  final Map<String, dynamic> photo;
+
+  factory DiscoverResult.fromJson(Map<String, dynamic> j) => DiscoverResult(
+        area: j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] as String,
+        categoryName: j['category_name'] as String,
+        km: j['km'] == null ? null : (j['km'] as num).toDouble(),
+        line: j['line'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] as bool,
+        photo: j['photo'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': area,
+        'business': business,
+        'can_chat': canChat,
+        'category': category,
+        'category_name': categoryName,
+        'km': ?km,
+        'line': line,
+        'name': name,
+        'open_now': openNow,
+        'photo': photo,
+      };
+}
+
+class DiscoverCategoriesResponse {
+  const DiscoverCategoriesResponse({required this.categories});
+
+  final List<DiscoverCategoriesResponseCategoriesItem> categories;
+
+  factory DiscoverCategoriesResponse.fromJson(Map<String, dynamic> j) => DiscoverCategoriesResponse(
+        categories: (j['categories'] as List).map((e) => DiscoverCategoriesResponseCategoriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'categories': categories.map((e) => e.toJson()).toList(),
+      };
+}
+
+class DiscoverCategoriesResponseCategoriesItem {
+  const DiscoverCategoriesResponseCategoriesItem({required this.key, required this.name});
+
+  final String key;
+  final String name;
+
+  factory DiscoverCategoriesResponseCategoriesItem.fromJson(Map<String, dynamic> j) => DiscoverCategoriesResponseCategoriesItem(
+        key: j['key'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'name': name,
+      };
+}
+
+/// A business's profile in Discover (its listing, with its hours' line and the
+/// person's own chat).
+class DiscoverProfile {
+  const DiscoverProfile({this.address, this.area, required this.business, required this.canChat, this.category, required this.categoryName, this.chat, required this.hasBook, required this.hasShop, required this.hours, required this.line, this.mapLink, required this.name, required this.openNow, this.photo, required this.photos, this.shop, this.tagline});
+
+  final String? address;
+  final String? area;
+  final String business;
+  /// Chat is offered (POST /v1/me/chats with from discover).
+  final bool canChat;
+  final String? category;
+  final String categoryName;
+  /// The person's own conversation with the business, when they have one.
+  final String? chat;
+  /// Book is offered, in the chat.
+  final bool hasBook;
+  /// Their shop is offered, in the chat.
+  final bool hasShop;
+  /// Opening hours, Monday first (as a storefront's).
+  final Map<String, dynamic> hours;
+  /// The line under its name ("Open now, closes at 18:00"; "" when it keeps no
+  /// hours).
+  final String line;
+  final String? mapLink;
+  final String name;
+  final bool openNow;
+  final DiscoverPhoto? photo;
+  final List<DiscoverPhoto> photos;
+  /// Its published storefront's address.
+  final String? shop;
+  final String? tagline;
+
+  factory DiscoverProfile.fromJson(Map<String, dynamic> j) => DiscoverProfile(
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        categoryName: j['category_name'] as String,
+        chat: j['chat'] == null ? null : j['chat'] as String,
+        hasBook: j['has_book'] as bool,
+        hasShop: j['has_shop'] as bool,
+        hours: j['hours'] as Map<String, dynamic>,
+        line: j['line'] as String,
+        mapLink: j['map_link'] == null ? null : j['map_link'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] as bool,
+        photo: j['photo'] == null ? null : DiscoverPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        photos: (j['photos'] as List).map((e) => DiscoverPhoto.fromJson(e as Map<String, dynamic>)).toList(),
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'area': ?area,
+        'business': business,
+        'can_chat': canChat,
+        'category': ?category,
+        'category_name': categoryName,
+        'chat': ?chat,
+        'has_book': hasBook,
+        'has_shop': hasShop,
+        'hours': hours,
+        'line': line,
+        'map_link': ?mapLink,
+        'name': name,
+        'open_now': openNow,
+        'photo': ?photo?.toJson(),
+        'photos': photos.map((e) => e.toJson()).toList(),
+        'shop': ?shop,
+        'tagline': ?tagline,
+      };
+}
+
+class DiscoverPhoto {
+  const DiscoverPhoto({this.caption, required this.urls});
+
+  final String? caption;
+  /// The photo's sizes, by width.
+  final Map<String, dynamic> urls;
+
+  factory DiscoverPhoto.fromJson(Map<String, dynamic> j) => DiscoverPhoto(
+        caption: j['caption'] == null ? null : j['caption'] as String,
+        urls: j['urls'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'caption': ?caption,
+        'urls': urls,
+      };
+}
+
+class DiscoverReportRequest {
+  const DiscoverReportRequest({this.note, required this.reason});
+
+  final String? note;
+  final String reason;
+
+  factory DiscoverReportRequest.fromJson(Map<String, dynamic> j) => DiscoverReportRequest(
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'note': ?note,
+        'reason': reason,
+      };
+}
+
+class DiscoverReportResponse {
+  const DiscoverReportResponse({required this.reported, required this.words});
+
+  final bool reported;
+  final String words;
+
+  factory DiscoverReportResponse.fromJson(Map<String, dynamic> j) => DiscoverReportResponse(
+        reported: j['reported'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reported': reported,
+        'words': words,
+      };
+}
+
+/// A business's listing in Discover, its switch and what it lacks
+/// (taskiem-for-everyone §10).
+class DiscoverSettings {
+  const DiscoverSettings({this.area, this.category, this.chatOff, this.chosen, required this.default_, this.hidden, this.hours, required this.listed, required this.listing, this.location, required this.missing, this.missingLine, this.removedNote, required this.shown, this.workspace});
+
+  final String? area;
+  /// The listing's own category, when the business gave one.
+  final String? category;
+  final String? chatOff;
+  /// The business's own choice; null leaves it to the default.
+  final Object? chosen;
+  /// On with a published storefront.
+  final bool default_;
+  final String? hidden;
+  final Map<String, dynamic>? hours;
+  /// Listed now (its choice, else the default).
+  final bool listed;
+  final DiscoverListing listing;
+  final DiscoverLocation? location;
+  final List<String> missing;
+  final String? missingLine;
+  final String? removedNote;
+  final bool shown;
+  /// A workflows workspace, never listed.
+  final bool? workspace;
+
+  factory DiscoverSettings.fromJson(Map<String, dynamic> j) => DiscoverSettings(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        chatOff: j['chat_off'] == null ? null : j['chat_off'] as String,
+        chosen: j['chosen'],
+        default_: j['default'] as bool,
+        hidden: j['hidden'] == null ? null : j['hidden'] as String,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        listed: j['listed'] as bool,
+        listing: DiscoverListing.fromJson(j['listing'] as Map<String, dynamic>),
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+        missing: (j['missing'] as List).map((e) => e as String).toList(),
+        missingLine: j['missing_line'] == null ? null : j['missing_line'] as String,
+        removedNote: j['removed_note'] == null ? null : j['removed_note'] as String,
+        shown: j['shown'] as bool,
+        workspace: j['workspace'] == null ? null : j['workspace'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'chat_off': ?chatOff,
+        'chosen': ?chosen,
+        'default': default_,
+        'hidden': ?hidden,
+        'hours': ?hours,
+        'listed': listed,
+        'listing': listing.toJson(),
+        'location': ?location?.toJson(),
+        'missing': missing.map((e) => e).toList(),
+        'missing_line': ?missingLine,
+        'removed_note': ?removedNote,
+        'shown': shown,
+        'workspace': ?workspace,
+      };
+}
+
+/// A business's listing in Discover.
+class DiscoverListing {
+  const DiscoverListing({this.address, this.area, required this.business, required this.canChat, this.category, required this.hasBook, required this.hasShop, required this.hours, this.location, this.mapLink, required this.name, this.photo, required this.photos, this.shop, this.tagline});
+
+  final String? address;
+  final String? area;
+  final String business;
+  final bool canChat;
+  final String? category;
+  final bool hasBook;
+  final bool hasShop;
+  /// Opening hours, Monday first (as a storefront's).
+  final Map<String, dynamic> hours;
+  final DiscoverLocation? location;
+  final String? mapLink;
+  final String name;
+  final DiscoverPhoto? photo;
+  final List<DiscoverPhoto> photos;
+  /// Its published storefront's address.
+  final String? shop;
+  final String? tagline;
+
+  factory DiscoverListing.fromJson(Map<String, dynamic> j) => DiscoverListing(
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        hasBook: j['has_book'] as bool,
+        hasShop: j['has_shop'] as bool,
+        hours: j['hours'] as Map<String, dynamic>,
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mapLink: j['map_link'] == null ? null : j['map_link'] as String,
+        name: j['name'] as String,
+        photo: j['photo'] == null ? null : DiscoverPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        photos: (j['photos'] as List).map((e) => DiscoverPhoto.fromJson(e as Map<String, dynamic>)).toList(),
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'area': ?area,
+        'business': business,
+        'can_chat': canChat,
+        'category': ?category,
+        'has_book': hasBook,
+        'has_shop': hasShop,
+        'hours': hours,
+        'location': ?location?.toJson(),
+        'map_link': ?mapLink,
+        'name': name,
+        'photo': ?photo?.toJson(),
+        'photos': photos.map((e) => e.toJson()).toList(),
+        'shop': ?shop,
+        'tagline': ?tagline,
+      };
+}
+
+/// A place on the map.
+class DiscoverLocation {
+  const DiscoverLocation({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+
+  factory DiscoverLocation.fromJson(Map<String, dynamic> j) => DiscoverLocation(
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class PutDiscoverSettingsRequest {
+  const PutDiscoverSettingsRequest({this.area, this.category, this.clearHours, this.clearLocation, this.default_, this.hours, this.listed, this.location});
+
+  final String? area;
+  final String? category;
+  final bool? clearHours;
+  final bool? clearLocation;
+  final bool? default_;
+  final Map<String, dynamic>? hours;
+  final bool? listed;
+  final DiscoverLocation? location;
+
+  factory PutDiscoverSettingsRequest.fromJson(Map<String, dynamic> j) => PutDiscoverSettingsRequest(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        clearHours: j['clear_hours'] == null ? null : j['clear_hours'] as bool,
+        clearLocation: j['clear_location'] == null ? null : j['clear_location'] as bool,
+        default_: j['default'] == null ? null : j['default'] as bool,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        listed: j['listed'] == null ? null : j['listed'] as bool,
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'clear_hours': ?clearHours,
+        'clear_location': ?clearLocation,
+        'default': ?default_,
+        'hours': ?hours,
+        'listed': ?listed,
+        'location': ?location?.toJson(),
       };
 }
 
@@ -4577,7 +7699,7 @@ class PutChatToolsRequest {
 }
 
 class PushDevices {
-  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones});
+  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones, required this.side});
 
   /// The browser a PUT just added or updated
   final String? added;
@@ -4589,6 +7711,9 @@ class PushDevices {
   final int max;
   /// Phones can be notified on this server (Firebase)
   final bool phones;
+  /// Whose devices these are, the session's business's or the person's own
+  /// (personal session, or side=you)
+  final String side;
 
   factory PushDevices.fromJson(Map<String, dynamic> j) => PushDevices(
         added: j['added'] == null ? null : j['added'] as String,
@@ -4597,6 +7722,7 @@ class PushDevices {
         kinds: (j['kinds'] as List).map((e) => e as String).toList(),
         max: (j['max'] as num).toInt(),
         phones: j['phones'] as bool,
+        side: j['side'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -4606,6 +7732,7 @@ class PushDevices {
         'kinds': kinds.map((e) => e).toList(),
         'max': max,
         'phones': phones,
+        'side': side,
       };
 }
 
@@ -4656,7 +7783,9 @@ class PutPushRequest {
   final PutPushRequestKeys? keys;
   final String? kind;
   /// The kinds of notification the device takes; left out, a new device takes
-  /// the defaults (all for owners and admins, all but alerts for others)
+  /// the defaults (all for owners and admins, all but alerts for others; `you`
+  /// for a person's own device). A business's device never takes `you`, a
+  /// person's own takes nothing else (400)
   final Object? kinds;
   /// Only find this device (a page that lost which one it is); one the server
   /// does not have is not added again (404)
@@ -4749,5 +7878,4320 @@ class DeletePushEndpointRequest {
   Map<String, dynamic> toJson() => {
         'endpoint': ?endpoint,
         'token': ?token,
+      };
+}
+
+class ChatLinkCard {
+  const ChatLinkCard({this.app, this.area, this.choices, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, this.whatsapp, required this.words});
+
+  /// Where to get the Taskiem app (TASKIEM_APP_GET_URL), for the page's Get the
+  /// Taskiem app; absent where it is not listed.
+  final String? app;
+  final String? area;
+  /// The ways to chat the link offers, in order: `whatsapp` (Chat on WhatsApp,
+  /// `whatsapp.link`) and `taskiem` (Chat on Taskiem: the app, or the browser);
+  /// empty when neither.
+  final List<String>? choices;
+  final String code;
+  final Map<String, dynamic>? hours;
+  final String link;
+  final String name;
+  final bool? openNow;
+  final Map<String, dynamic>? photo;
+  final String? shop;
+  final String? tagline;
+  final bool takesChats;
+  /// Chat on WhatsApp, for a business with its own WhatsApp number that offers
+  /// it on its link (taskiem-for-everyone §11): its number and its wa.me link.
+  final ChatLinkCardWhatsapp? whatsapp;
+  final String words;
+
+  factory ChatLinkCard.fromJson(Map<String, dynamic> j) => ChatLinkCard(
+        app: j['app'] == null ? null : j['app'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => e as String).toList(),
+        code: j['code'] as String,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        link: j['link'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] == null ? null : j['open_now'] as bool,
+        photo: j['photo'] == null ? null : j['photo'] as Map<String, dynamic>,
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+        takesChats: j['takes_chats'] as bool,
+        whatsapp: j['whatsapp'] == null ? null : ChatLinkCardWhatsapp.fromJson(j['whatsapp'] as Map<String, dynamic>),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'app': ?app,
+        'area': ?area,
+        'choices': ?choices?.map((e) => e).toList(),
+        'code': code,
+        'hours': ?hours,
+        'link': link,
+        'name': name,
+        'open_now': ?openNow,
+        'photo': ?photo,
+        'shop': ?shop,
+        'tagline': ?tagline,
+        'takes_chats': takesChats,
+        'whatsapp': ?whatsapp?.toJson(),
+        'words': words,
+      };
+}
+
+/// Chat on WhatsApp, for a business with its own WhatsApp number that offers it
+/// on its link (taskiem-for-everyone §11): its number and its wa.me link.
+class ChatLinkCardWhatsapp {
+  const ChatLinkCardWhatsapp({required this.link, required this.number});
+
+  final String link;
+  final String number;
+
+  factory ChatLinkCardWhatsapp.fromJson(Map<String, dynamic> j) => ChatLinkCardWhatsapp(
+        link: j['link'] as String,
+        number: j['number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': link,
+        'number': number,
+      };
+}
+
+class ChatLink {
+  const ChatLink({required this.code, required this.createdAt, required this.qr, required this.settings, required this.url, required this.words});
+
+  final String code;
+  final DateTime createdAt;
+  /// Where the link's QR code is (GET, svg or png)
+  final String qr;
+  final ChatSettings settings;
+  final String url;
+  /// "Chat with {business} on Taskiem: {link}", to paste
+  final String words;
+
+  factory ChatLink.fromJson(Map<String, dynamic> j) => ChatLink(
+        code: j['code'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        qr: j['qr'] as String,
+        settings: ChatSettings.fromJson(j['settings'] as Map<String, dynamic>),
+        url: j['url'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'qr': qr,
+        'settings': settings.toJson(),
+        'url': url,
+        'words': words,
+      };
+}
+
+class ChatSettings {
+  const ChatSettings({this.linkInUpdates, this.linkWhatsapp, this.ordersOff, this.ownNumber, required this.storefrontButton, required this.takesChats, required this.updatesLink});
+
+  /// The business's own choice; null for the default
+  final Object? linkInUpdates;
+  /// Whether the chat link offers Chat on WhatsApp, on the business's own
+  /// number, beside Chat on Taskiem (on unless turned off; only for a business
+  /// with its own number).
+  final bool? linkWhatsapp;
+  /// The Orders area is off, so no chats are taken whatever takes_chats was set
+  /// to
+  final bool? ordersOff;
+  /// The business's own WhatsApp number, when it has one: where Chat on
+  /// WhatsApp goes (taskiem-for-everyone §11). Settings offers the
+  /// link_whatsapp switch only with it.
+  final String? ownNumber;
+  final String storefrontButton;
+  /// Whether customers can start chats now (off while the Orders area is off)
+  final bool takesChats;
+  /// Whether updates end with the link now
+  final bool updatesLink;
+
+  factory ChatSettings.fromJson(Map<String, dynamic> j) => ChatSettings(
+        linkInUpdates: j['link_in_updates'],
+        linkWhatsapp: j['link_whatsapp'] == null ? null : j['link_whatsapp'] as bool,
+        ordersOff: j['orders_off'] == null ? null : j['orders_off'] as bool,
+        ownNumber: j['own_number'] == null ? null : j['own_number'] as String,
+        storefrontButton: j['storefront_button'] as String,
+        takesChats: j['takes_chats'] as bool,
+        updatesLink: j['updates_link'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_in_updates': ?linkInUpdates,
+        'link_whatsapp': ?linkWhatsapp,
+        'orders_off': ?ordersOff,
+        'own_number': ?ownNumber,
+        'storefront_button': storefrontButton,
+        'takes_chats': takesChats,
+        'updates_link': updatesLink,
+      };
+}
+
+class PutChatSettingsRequest {
+  const PutChatSettingsRequest({this.linkInUpdates, this.linkInUpdatesDefault, this.linkWhatsapp, this.storefrontButton, this.takesChats});
+
+  final bool? linkInUpdates;
+  final bool? linkInUpdatesDefault;
+  /// Whether the chat link offers Chat on WhatsApp (the business's own number)
+  /// beside Chat on Taskiem; on by default; only when the business has a
+  /// WhatsApp number of its own.
+  final bool? linkWhatsapp;
+  final String? storefrontButton;
+  final bool? takesChats;
+
+  factory PutChatSettingsRequest.fromJson(Map<String, dynamic> j) => PutChatSettingsRequest(
+        linkInUpdates: j['link_in_updates'] == null ? null : j['link_in_updates'] as bool,
+        linkInUpdatesDefault: j['link_in_updates_default'] == null ? null : j['link_in_updates_default'] as bool,
+        linkWhatsapp: j['link_whatsapp'] == null ? null : j['link_whatsapp'] as bool,
+        storefrontButton: j['storefront_button'] == null ? null : j['storefront_button'] as String,
+        takesChats: j['takes_chats'] == null ? null : j['takes_chats'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_in_updates': ?linkInUpdates,
+        'link_in_updates_default': ?linkInUpdatesDefault,
+        'link_whatsapp': ?linkWhatsapp,
+        'storefront_button': ?storefrontButton,
+        'takes_chats': ?takesChats,
+      };
+}
+
+class MyStorefrontOrdersResponse {
+  const MyStorefrontOrdersResponse({required this.orders, required this.waiting, required this.waitingCount});
+
+  final List<PhoneOrder> orders;
+  /// Some orders wait for "These are mine"
+  final bool waiting;
+  /// How many orders wait for "These are mine"; nothing else of them is shown
+  final int waitingCount;
+
+  factory MyStorefrontOrdersResponse.fromJson(Map<String, dynamic> j) => MyStorefrontOrdersResponse(
+        orders: (j['orders'] as List).map((e) => PhoneOrder.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: j['waiting'] as bool,
+        waitingCount: (j['waiting_count'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'orders': orders.map((e) => e.toJson()).toList(),
+        'waiting': waiting,
+        'waiting_count': waitingCount,
+      };
+}
+
+class PhoneOrder {
+  const PhoneOrder({required this.business, required this.businessId, required this.madeAt, required this.reference, required this.state, required this.totalKobo});
+
+  final String business;
+  final String businessId;
+  final DateTime madeAt;
+  final String reference;
+  final String state;
+  final int totalKobo;
+
+  factory PhoneOrder.fromJson(Map<String, dynamic> j) => PhoneOrder(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        madeAt: DateTime.parse(j['made_at'] as String),
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'reference': reference,
+        'state': state,
+        'total_kobo': totalKobo,
+      };
+}
+
+class ConfirmStorefrontOrdersResponse {
+  const ConfirmStorefrontOrdersResponse({required this.confirmed});
+
+  final bool confirmed;
+
+  factory ConfirmStorefrontOrdersResponse.fromJson(Map<String, dynamic> j) => ConfirmStorefrontOrdersResponse(
+        confirmed: j['confirmed'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirmed': confirmed,
+      };
+}
+
+class MyOrdersResponse {
+  const MyOrdersResponse({this.next, required this.orders, required this.waitingCount});
+
+  /// The cursor of the next page; null on the last
+  final Object? next;
+  final List<PersonOrder> orders;
+  /// How many orders made with the person's phone before it was on their
+  /// account wait for "These are mine"; nothing else of them is shown
+  final int waitingCount;
+
+  factory MyOrdersResponse.fromJson(Map<String, dynamic> j) => MyOrdersResponse(
+        next: j['next'],
+        orders: (j['orders'] as List).map((e) => PersonOrder.fromJson(e as Map<String, dynamic>)).toList(),
+        waitingCount: (j['waiting_count'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'next': ?next,
+        'orders': orders.map((e) => e.toJson()).toList(),
+        'waiting_count': waitingCount,
+      };
+}
+
+/// One row of Orders on You.
+class PersonOrder {
+  const PersonOrder({this.bookingType, required this.business, required this.businessId, this.chatId, required this.dueKobo, this.earlier, required this.kind, required this.madeAt, required this.pay, this.photo, required this.reference, required this.state, required this.summary, required this.totalKobo});
+
+  /// What kind of booking (bookings only).
+  final String? bookingType;
+  final String business;
+  final String businessId;
+  /// The person's chat with the business, for "Chat about this"; null when
+  /// there is none (POST /v1/me/chats {business_id, from: "order"} starts it).
+  final Object? chatId;
+  final int dueKobo;
+  /// An order made with the person's number before it was verified on this
+  /// account (the number may have been someone else's): shown short only
+  /// (business, reference, state, total, date), with no summary, nothing due
+  /// and no Pay, even after "These are mine". Its detail is this row alone, its
+  /// pay link is refused (409 `earlier`); "Chat about this" is the way to ask
+  /// about it. Absent otherwise.
+  final bool? earlier;
+  final String kind;
+  final DateTime madeAt;
+  /// Something is due now and can be paid in the app (one rule,
+  /// storefront.PayableNow and taskiem_order_payable_now; never a cancelled,
+  /// declined, expired, completed or refunded order); GET
+  /// /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the
+  /// business blocked the person or turned Orders off, and never for an earlier
+  /// order.
+  final bool pay;
+  final OrderPhoto? photo;
+  final String reference;
+  /// The order's status, as the business's order has it.
+  final String state;
+  /// "2 × Jollof rice, 1 × Chapman"; a booking's service, a hire's item and
+  /// days ("Canopy, 3 days"), tickets ("2 tickets, Afrobeats Night"), a class's
+  /// places or a space; up to 200 characters. Empty for an earlier order.
+  final String summary;
+  final int totalKobo;
+
+  factory PersonOrder.fromJson(Map<String, dynamic> j) => PersonOrder(
+        bookingType: j['booking_type'] == null ? null : j['booking_type'] as String,
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        earlier: j['earlier'] == null ? null : j['earlier'] as bool,
+        kind: j['kind'] as String,
+        madeAt: DateTime.parse(j['made_at'] as String),
+        pay: j['pay'] as bool,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+        summary: j['summary'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'booking_type': ?bookingType,
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'due_kobo': dueKobo,
+        'earlier': ?earlier,
+        'kind': kind,
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'pay': pay,
+        'photo': ?photo?.toJson(),
+        'reference': reference,
+        'state': state,
+        'summary': summary,
+        'total_kobo': totalKobo,
+      };
+}
+
+/// A business's photo, its sizes' addresses (as the chat's header has it).
+class OrderPhoto {
+  const OrderPhoto({required this.urls});
+
+  final Map<String, dynamic> urls;
+
+  factory OrderPhoto.fromJson(Map<String, dynamic> j) => OrderPhoto(
+        urls: j['urls'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'urls': urls,
+      };
+}
+
+/// One of the person's orders, with what it holds. An earlier order (`earlier`)
+/// is its row alone, with no lines.
+class PersonOrderDetail {
+  const PersonOrderDetail({this.address, this.bookingType, required this.business, required this.businessId, this.chatId, this.delivery, this.deliveryKobo, required this.dueKobo, this.earlier, this.endsAt, this.fulfilment, required this.kind, required this.lines, required this.madeAt, required this.paidKobo, required this.pay, this.photo, required this.reference, this.serviceName, this.startsAt, required this.state, required this.summary, required this.totalKobo, this.zone});
+
+  /// The address on the order, as it was copied there when it was placed.
+  final PersonOrderDetailAddress? address;
+  final String? bookingType;
+  final String business;
+  final String businessId;
+  final Object? chatId;
+  final DeliveryProgress? delivery;
+  final int? deliveryKobo;
+  final int dueKobo;
+  final bool? earlier;
+  final DateTime? endsAt;
+  final String? fulfilment;
+  final String kind;
+  final List<PersonOrderDetailLinesItem> lines;
+  final DateTime madeAt;
+  final int paidKobo;
+  final bool pay;
+  final OrderPhoto? photo;
+  final String reference;
+  final String? serviceName;
+  final DateTime? startsAt;
+  final String state;
+  final String summary;
+  final int totalKobo;
+  final String? zone;
+
+  factory PersonOrderDetail.fromJson(Map<String, dynamic> j) => PersonOrderDetail(
+        address: j['address'] == null ? null : PersonOrderDetailAddress.fromJson(j['address'] as Map<String, dynamic>),
+        bookingType: j['booking_type'] == null ? null : j['booking_type'] as String,
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        deliveryKobo: j['delivery_kobo'] == null ? null : (j['delivery_kobo'] as num).toInt(),
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        earlier: j['earlier'] == null ? null : j['earlier'] as bool,
+        endsAt: j['ends_at'] == null ? null : DateTime.parse(j['ends_at'] as String),
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        kind: j['kind'] as String,
+        lines: (j['lines'] as List).map((e) => PersonOrderDetailLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        madeAt: DateTime.parse(j['made_at'] as String),
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        pay: j['pay'] as bool,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        reference: j['reference'] as String,
+        serviceName: j['service_name'] == null ? null : j['service_name'] as String,
+        startsAt: j['starts_at'] == null ? null : DateTime.parse(j['starts_at'] as String),
+        state: j['state'] as String,
+        summary: j['summary'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address?.toJson(),
+        'booking_type': ?bookingType,
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'delivery': ?delivery?.toJson(),
+        'delivery_kobo': ?deliveryKobo,
+        'due_kobo': dueKobo,
+        'earlier': ?earlier,
+        'ends_at': ?endsAt?.toUtc().toIso8601String(),
+        'fulfilment': ?fulfilment,
+        'kind': kind,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'paid_kobo': paidKobo,
+        'pay': pay,
+        'photo': ?photo?.toJson(),
+        'reference': reference,
+        'service_name': ?serviceName,
+        'starts_at': ?startsAt?.toUtc().toIso8601String(),
+        'state': state,
+        'summary': summary,
+        'total_kobo': totalKobo,
+        'zone': ?zone,
+      };
+}
+
+/// The address on the order, as it was copied there when it was placed.
+class PersonOrderDetailAddress {
+  const PersonOrderDetailAddress({required this.address, this.landmark});
+
+  final String address;
+  final String? landmark;
+
+  factory PersonOrderDetailAddress.fromJson(Map<String, dynamic> j) => PersonOrderDetailAddress(
+        address: j['address'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': address,
+        'landmark': ?landmark,
+      };
+}
+
+class PersonOrderDetailLinesItem {
+  const PersonOrderDetailLinesItem({required this.lineKobo, required this.name, required this.priceKobo, required this.quantity});
+
+  final int lineKobo;
+  final String name;
+  final int priceKobo;
+  final int quantity;
+
+  factory PersonOrderDetailLinesItem.fromJson(Map<String, dynamic> j) => PersonOrderDetailLinesItem(
+        lineKobo: (j['line_kobo'] as num).toInt(),
+        name: j['name'] as String,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line_kobo': lineKobo,
+        'name': name,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+      };
+}
+
+class PayMyOrderResponse {
+  const PayMyOrderResponse({required this.dueKobo, required this.reference, required this.url});
+
+  final int dueKobo;
+  final String reference;
+  final String url;
+
+  factory PayMyOrderResponse.fromJson(Map<String, dynamic> j) => PayMyOrderResponse(
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'due_kobo': dueKobo,
+        'reference': reference,
+        'url': url,
+      };
+}
+
+class MyAddressesResponse {
+  const MyAddressesResponse({required this.addresses});
+
+  final List<SavedAddress> addresses;
+
+  factory MyAddressesResponse.fromJson(Map<String, dynamic> j) => MyAddressesResponse(
+        addresses: (j['addresses'] as List).map((e) => SavedAddress.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'addresses': addresses.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// One of the person's saved addresses.
+class SavedAddress {
+  const SavedAddress({required this.area, required this.createdAt, required this.default_, required this.id, required this.label, required this.landmark, required this.line, this.phone, required this.updatedAt});
+
+  final String area;
+  final DateTime createdAt;
+  final bool default_;
+  final String id;
+  /// Home, Work
+  final String label;
+  final String landmark;
+  /// The street and number
+  final String line;
+  /// A phone for the rider (E.164), when it is not the person's own
+  final Object? phone;
+  final DateTime updatedAt;
+
+  factory SavedAddress.fromJson(Map<String, dynamic> j) => SavedAddress(
+        area: j['area'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        default_: j['default'] as bool,
+        id: j['id'] as String,
+        label: j['label'] as String,
+        landmark: j['landmark'] as String,
+        line: j['line'] as String,
+        phone: j['phone'],
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': area,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'default': default_,
+        'id': id,
+        'label': label,
+        'landmark': landmark,
+        'line': line,
+        'phone': ?phone,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+      };
+}
+
+class SavedAddressIn {
+  const SavedAddressIn({this.area, this.default_, this.label, this.landmark, this.line, this.phone});
+
+  final String? area;
+  final bool? default_;
+  final String? label;
+  final String? landmark;
+  final String? line;
+  final String? phone;
+
+  factory SavedAddressIn.fromJson(Map<String, dynamic> j) => SavedAddressIn(
+        area: j['area'] == null ? null : j['area'] as String,
+        default_: j['default'] == null ? null : j['default'] as bool,
+        label: j['label'] == null ? null : j['label'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'default': ?default_,
+        'label': ?label,
+        'landmark': ?landmark,
+        'line': ?line,
+        'phone': ?phone,
+      };
+}
+
+class DeleteAccountStartRequest {
+  const DeleteAccountStartRequest({this.via});
+
+  final String? via;
+
+  factory DeleteAccountStartRequest.fromJson(Map<String, dynamic> j) => DeleteAccountStartRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class DeleteAccountStartResponse {
+  const DeleteAccountStartResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory DeleteAccountStartResponse.fromJson(Map<String, dynamic> j) => DeleteAccountStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class DeleteAccountPasskeyOptionsResponse {
+  const DeleteAccountPasskeyOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory DeleteAccountPasskeyOptionsResponse.fromJson(Map<String, dynamic> j) => DeleteAccountPasskeyOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class DeleteAccountRequest {
+  const DeleteAccountRequest({this.code, required this.confirm, this.credential, this.password});
+
+  final String? code;
+  final bool confirm;
+  final PasskeyCredential? credential;
+  final String? password;
+
+  factory DeleteAccountRequest.fromJson(Map<String, dynamic> j) => DeleteAccountRequest(
+        code: j['code'] == null ? null : j['code'] as String,
+        confirm: j['confirm'] as bool,
+        credential: j['credential'] == null ? null : PasskeyCredential.fromJson(j['credential'] as Map<String, dynamic>),
+        password: j['password'] == null ? null : j['password'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'confirm': confirm,
+        'credential': ?credential?.toJson(),
+        'password': ?password,
+      };
+}
+
+class DeleteAccountResponse {
+  const DeleteAccountResponse({required this.businessesTold, required this.deleted});
+
+  /// How many businesses were told "This customer left Taskiem".
+  final int businessesTold;
+  final bool deleted;
+
+  factory DeleteAccountResponse.fromJson(Map<String, dynamic> j) => DeleteAccountResponse(
+        businessesTold: (j['businesses_told'] as num).toInt(),
+        deleted: j['deleted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'businesses_told': businessesTold,
+        'deleted': deleted,
+      };
+}
+
+/// Which pushes the person's own devices get.
+class YouNotifications {
+  const YouNotifications({required this.groups, required this.messages, required this.offers, required this.people, required this.requests, required this.updates});
+
+  /// A message in one of their groups (push kind group; an invite to a group is
+  /// a request, kind group_invite).
+  final bool groups;
+  /// Someone at a business wrote to them.
+  final bool messages;
+  /// Offers from businesses they said yes to.
+  final bool offers;
+  /// A person wrote to them (push kind person).
+  final bool people;
+  /// A stranger's first message waits in their Requests (push kind request).
+  final bool requests;
+  /// A business's automatic words (an order's or a booking's news).
+  final bool updates;
+
+  factory YouNotifications.fromJson(Map<String, dynamic> j) => YouNotifications(
+        groups: j['groups'] as bool,
+        messages: j['messages'] as bool,
+        offers: j['offers'] as bool,
+        people: j['people'] as bool,
+        requests: j['requests'] as bool,
+        updates: j['updates'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'groups': groups,
+        'messages': messages,
+        'offers': offers,
+        'people': people,
+        'requests': requests,
+        'updates': updates,
+      };
+}
+
+class PutMyNotificationsRequest {
+  const PutMyNotificationsRequest({this.groups, this.messages, this.offers, this.people, this.requests, this.updates});
+
+  final bool? groups;
+  final bool? messages;
+  final bool? offers;
+  final bool? people;
+  final bool? requests;
+  final bool? updates;
+
+  factory PutMyNotificationsRequest.fromJson(Map<String, dynamic> j) => PutMyNotificationsRequest(
+        groups: j['groups'] == null ? null : j['groups'] as bool,
+        messages: j['messages'] == null ? null : j['messages'] as bool,
+        offers: j['offers'] == null ? null : j['offers'] as bool,
+        people: j['people'] == null ? null : j['people'] as bool,
+        requests: j['requests'] == null ? null : j['requests'] as bool,
+        updates: j['updates'] == null ? null : j['updates'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'groups': ?groups,
+        'messages': ?messages,
+        'offers': ?offers,
+        'people': ?people,
+        'requests': ?requests,
+        'updates': ?updates,
+      };
+}
+
+class MyPrivacyResponse {
+  const MyPrivacyResponse({required this.businesses, required this.erase, required this.shownToBusinesses});
+
+  final List<MyPrivacyResponseBusinessesItem> businesses;
+  final MyPrivacyResponseErase erase;
+  final MyPrivacyResponseShownToBusinesses shownToBusinesses;
+
+  factory MyPrivacyResponse.fromJson(Map<String, dynamic> j) => MyPrivacyResponse(
+        businesses: (j['businesses'] as List).map((e) => MyPrivacyResponseBusinessesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        erase: MyPrivacyResponseErase.fromJson(j['erase'] as Map<String, dynamic>),
+        shownToBusinesses: MyPrivacyResponseShownToBusinesses.fromJson(j['shown_to_businesses'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'businesses': businesses.map((e) => e.toJson()).toList(),
+        'erase': erase.toJson(),
+        'shown_to_businesses': shownToBusinesses.toJson(),
+      };
+}
+
+class MyPrivacyResponseBusinessesItem {
+  const MyPrivacyResponseBusinessesItem({required this.business, required this.businessId, this.chatId, this.lastOrderAt, required this.orders});
+
+  final String business;
+  final String businessId;
+  /// The person's chat with it, where they can ask it to erase their details.
+  final Object? chatId;
+  final Object? lastOrderAt;
+  final int orders;
+
+  factory MyPrivacyResponseBusinessesItem.fromJson(Map<String, dynamic> j) => MyPrivacyResponseBusinessesItem(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        lastOrderAt: j['last_order_at'],
+        orders: (j['orders'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'last_order_at': ?lastOrderAt,
+        'orders': orders,
+      };
+}
+
+class MyPrivacyResponseErase {
+  const MyPrivacyResponseErase({required this.how, required this.words});
+
+  final String how;
+  final String words;
+
+  factory MyPrivacyResponseErase.fromJson(Map<String, dynamic> j) => MyPrivacyResponseErase(
+        how: j['how'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'how': how,
+        'words': words,
+      };
+}
+
+class MyPrivacyResponseShownToBusinesses {
+  const MyPrivacyResponseShownToBusinesses({required this.name, this.phone, required this.photo});
+
+  final String name;
+  final Object? phone;
+  /// Always false; the person's photo stays on their own side.
+  final bool photo;
+
+  factory MyPrivacyResponseShownToBusinesses.fromJson(Map<String, dynamic> j) => MyPrivacyResponseShownToBusinesses(
+        name: j['name'] as String,
+        phone: j['phone'],
+        photo: j['photo'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'phone': ?phone,
+        'photo': photo,
+      };
+}
+
+/// A person's privacy towards other people (people-chatting §5.4).
+class PeoplePrivacy {
+  const PeoplePrivacy({required this.findByNumber, required this.findFromContacts, required this.groupsAdd, required this.lastSeen, required this.message, required this.photo, required this.readTicks, required this.showNumber});
+
+  final String findByNumber;
+  /// People who have the person's number in their phone's contacts find them by
+  /// contact matching, within `find_by_number`: a match is the number found, so
+  /// My contacts lets only people the person added match them, and Nobody no
+  /// one.
+  final bool findFromContacts;
+  /// Who can add me to groups (5b A3): contacts (the default: only people I
+  /// added), everyone, or nobody. Anyone else's add becomes an invite that
+  /// waits in my Requests.
+  final String groupsAdd;
+  final String lastSeen;
+  final String message;
+  final String photo;
+  /// Off means others do not see that the person read, and the person does not
+  /// see theirs.
+  final bool readTicks;
+  /// The person's number is shown to people they chat with or added.
+  final bool showNumber;
+
+  factory PeoplePrivacy.fromJson(Map<String, dynamic> j) => PeoplePrivacy(
+        findByNumber: j['find_by_number'] as String,
+        findFromContacts: j['find_from_contacts'] as bool,
+        groupsAdd: j['groups_add'] as String,
+        lastSeen: j['last_seen'] as String,
+        message: j['message'] as String,
+        photo: j['photo'] as String,
+        readTicks: j['read_ticks'] as bool,
+        showNumber: j['show_number'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'find_by_number': findByNumber,
+        'find_from_contacts': findFromContacts,
+        'groups_add': groupsAdd,
+        'last_seen': lastSeen,
+        'message': message,
+        'photo': photo,
+        'read_ticks': readTicks,
+        'show_number': showNumber,
+      };
+}
+
+class PutMyPeoplePrivacyRequest {
+  const PutMyPeoplePrivacyRequest({this.findByNumber, this.findFromContacts, this.groupsAdd, this.lastSeen, this.message, this.photo, this.readTicks, this.showNumber});
+
+  final String? findByNumber;
+  final bool? findFromContacts;
+  final String? groupsAdd;
+  final String? lastSeen;
+  final String? message;
+  final String? photo;
+  final bool? readTicks;
+  final bool? showNumber;
+
+  factory PutMyPeoplePrivacyRequest.fromJson(Map<String, dynamic> j) => PutMyPeoplePrivacyRequest(
+        findByNumber: j['find_by_number'] == null ? null : j['find_by_number'] as String,
+        findFromContacts: j['find_from_contacts'] == null ? null : j['find_from_contacts'] as bool,
+        groupsAdd: j['groups_add'] == null ? null : j['groups_add'] as String,
+        lastSeen: j['last_seen'] == null ? null : j['last_seen'] as String,
+        message: j['message'] == null ? null : j['message'] as String,
+        photo: j['photo'] == null ? null : j['photo'] as String,
+        readTicks: j['read_ticks'] == null ? null : j['read_ticks'] as bool,
+        showNumber: j['show_number'] == null ? null : j['show_number'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'find_by_number': ?findByNumber,
+        'find_from_contacts': ?findFromContacts,
+        'groups_add': ?groupsAdd,
+        'last_seen': ?lastSeen,
+        'message': ?message,
+        'photo': ?photo,
+        'read_ticks': ?readTicks,
+        'show_number': ?showNumber,
+      };
+}
+
+class MyContactsResponse {
+  const MyContactsResponse({required this.contacts});
+
+  final List<PersonContact> contacts;
+
+  factory MyContactsResponse.fromJson(Map<String, dynamic> j) => MyContactsResponse(
+        contacts: (j['contacts'] as List).map((e) => PersonContact.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contacts': contacts.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PersonContact {
+  const PersonContact({required this.addedAt, this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.source, this.suspended, required this.theyAddedYou});
+
+  final DateTime addedAt;
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  final String source;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonContact.fromJson(Map<String, dynamic> j) => PersonContact(
+        addedAt: DateTime.parse(j['added_at'] as String),
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        source: j['source'] as String,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_at': addedAt.toUtc().toIso8601String(),
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'source': source,
+        'suspended': ?suspended,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class AddContactRequest {
+  const AddContactRequest({required this.addToken, required this.from, this.name, required this.personId});
+
+  final String addToken;
+  final String from;
+  final String? name;
+  final String personId;
+
+  factory AddContactRequest.fromJson(Map<String, dynamic> j) => AddContactRequest(
+        addToken: j['add_token'] as String,
+        from: j['from'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': addToken,
+        'from': from,
+        'name': ?name,
+        'person_id': personId,
+      };
+}
+
+class RenameContactRequest {
+  const RenameContactRequest({this.name});
+
+  final Object? name;
+
+  factory RenameContactRequest.fromJson(Map<String, dynamic> j) => RenameContactRequest(
+        name: j['name'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': ?name,
+      };
+}
+
+class ContactsKeyResponse {
+  const ContactsKeyResponse({required this.expiresAt, required this.hash, required this.key, required this.keyId, required this.maxBatch, required this.maxPerDay, required this.words});
+
+  final DateTime expiresAt;
+  final String hash;
+  /// 32 bytes, base64.
+  final String key;
+  final String keyId;
+  final int maxBatch;
+  /// Hashes a day, 5000 (1000 in an account's first week).
+  final int maxPerDay;
+  final String words;
+
+  factory ContactsKeyResponse.fromJson(Map<String, dynamic> j) => ContactsKeyResponse(
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        hash: j['hash'] as String,
+        key: j['key'] as String,
+        keyId: j['key_id'] as String,
+        maxBatch: (j['max_batch'] as num).toInt(),
+        maxPerDay: (j['max_per_day'] as num).toInt(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'hash': hash,
+        'key': key,
+        'key_id': keyId,
+        'max_batch': maxBatch,
+        'max_per_day': maxPerDay,
+        'words': words,
+      };
+}
+
+class MatchContactsRequest {
+  const MatchContactsRequest({required this.hashes, required this.keyId});
+
+  final List<String> hashes;
+  final String keyId;
+
+  factory MatchContactsRequest.fromJson(Map<String, dynamic> j) => MatchContactsRequest(
+        hashes: (j['hashes'] as List).map((e) => e as String).toList(),
+        keyId: j['key_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'hashes': hashes.map((e) => e).toList(),
+        'key_id': keyId,
+      };
+}
+
+class MatchContactsResponse {
+  const MatchContactsResponse({required this.matches});
+
+  final List<MatchContactsResponseMatchesItem> matches;
+
+  factory MatchContactsResponse.fromJson(Map<String, dynamic> j) => MatchContactsResponse(
+        matches: (j['matches'] as List).map((e) => MatchContactsResponseMatchesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'matches': matches.map((e) => e.toJson()).toList(),
+      };
+}
+
+class MatchContactsResponseMatchesItem {
+  const MatchContactsResponseMatchesItem({required this.addToken, required this.hash, required this.person});
+
+  final String addToken;
+  final String hash;
+  final PersonCard person;
+
+  factory MatchContactsResponseMatchesItem.fromJson(Map<String, dynamic> j) => MatchContactsResponseMatchesItem(
+        addToken: j['add_token'] as String,
+        hash: j['hash'] as String,
+        person: PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': addToken,
+        'hash': hash,
+        'person': person.toJson(),
+      };
+}
+
+/// A person as the viewer may see them, by that person's settings.
+class PersonCard {
+  const PersonCard({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, this.suspended, required this.theyAddedYou});
+
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonCard.fromJson(Map<String, dynamic> j) => PersonCard(
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'suspended': ?suspended,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class PersonLink {
+  const PersonLink({required this.code, required this.createdAt, required this.qr, required this.url, required this.words});
+
+  final String code;
+  final DateTime createdAt;
+  /// The QR code's address (SVG; ?format=png for PNG).
+  final String qr;
+  final String url;
+  final String words;
+
+  factory PersonLink.fromJson(Map<String, dynamic> j) => PersonLink(
+        code: j['code'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        qr: j['qr'] as String,
+        url: j['url'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'qr': qr,
+        'url': url,
+        'words': words,
+      };
+}
+
+class MyPresenceRequest {
+  const MyPresenceRequest({this.connection, required this.online});
+
+  /// One of your open live connections (GET /v1/me/live)
+  final Object? connection;
+  final bool online;
+
+  factory MyPresenceRequest.fromJson(Map<String, dynamic> j) => MyPresenceRequest(
+        connection: j['connection'],
+        online: j['online'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': ?connection,
+        'online': online,
+      };
+}
+
+class LookupPersonRequest {
+  const LookupPersonRequest({required this.phone});
+
+  final String phone;
+
+  factory LookupPersonRequest.fromJson(Map<String, dynamic> j) => LookupPersonRequest(
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'phone': phone,
+      };
+}
+
+/// A person found (by number or link): `found` with `person` and `add_token`
+/// (none for oneself, `self`); or not on Taskiem yet, with the words to invite
+/// them.
+class PersonFound {
+  const PersonFound({this.addToken, required this.found, this.invite, this.person, this.self});
+
+  /// Proof for POST /v1/me/contacts, for a day.
+  final String? addToken;
+  final bool found;
+  final PersonFoundInvite? invite;
+  final PersonCard? person;
+  final bool? self;
+
+  factory PersonFound.fromJson(Map<String, dynamic> j) => PersonFound(
+        addToken: j['add_token'] == null ? null : j['add_token'] as String,
+        found: j['found'] as bool,
+        invite: j['invite'] == null ? null : PersonFoundInvite.fromJson(j['invite'] as Map<String, dynamic>),
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        self: j['self'] == null ? null : j['self'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': ?addToken,
+        'found': found,
+        'invite': ?invite?.toJson(),
+        'person': ?person?.toJson(),
+        'self': ?self,
+      };
+}
+
+class PersonFoundInvite {
+  const PersonFoundInvite({required this.link, required this.words});
+
+  /// The person's own link; empty where links are not set up.
+  final String link;
+  /// What to send from the person's own phone (SMS or WhatsApp); Taskiem sends
+  /// nothing.
+  final String words;
+
+  factory PersonFoundInvite.fromJson(Map<String, dynamic> j) => PersonFoundInvite(
+        link: j['link'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': link,
+        'words': words,
+      };
+}
+
+class PersonView {
+  const PersonView({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.number, this.online, this.photo, required this.readTicks, this.suspended, required this.theyAddedYou});
+
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Their number (E.164), only when they chose to show it and the viewer is
+  /// someone they chat with or added.
+  final Object? number;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonView.fromJson(Map<String, dynamic> j) => PersonView(
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        number: j['number'],
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'number': ?number,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'suspended': ?suspended,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class GetPersonLinkCardResponse {
+  const GetPersonLinkCardResponse({this.app, required this.code, required this.link, required this.name, this.photo});
+
+  /// Where to get the Taskiem app, where it is listed.
+  final String? app;
+  final String code;
+  final String link;
+  final String name;
+  final Object? photo;
+
+  factory GetPersonLinkCardResponse.fromJson(Map<String, dynamic> j) => GetPersonLinkCardResponse(
+        app: j['app'] == null ? null : j['app'] as String,
+        code: j['code'] as String,
+        link: j['link'] as String,
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'app': ?app,
+        'code': code,
+        'link': link,
+        'name': name,
+        'photo': ?photo,
+      };
+}
+
+class ListAllMyChatsResponse {
+  const ListAllMyChatsResponse({required this.chats, required this.invites, required this.more, this.next, required this.requests, required this.unread});
+
+  final List<ChatListItem> chats;
+  /// Invites to groups waiting for you (`GET /v1/me/groups/invites`).
+  final int invites;
+  /// There are more chats after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final int requests;
+  /// Unread messages in every chat of the list (archived or not, as asked), not
+  /// the page alone.
+  final int unread;
+
+  factory ListAllMyChatsResponse.fromJson(Map<String, dynamic> j) => ListAllMyChatsResponse(
+        chats: (j['chats'] as List).map((e) => ChatListItem.fromJson(e as Map<String, dynamic>)).toList(),
+        invites: (j['invites'] as num).toInt(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        requests: (j['requests'] as num).toInt(),
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'invites': invites,
+        'more': more,
+        'next': ?next,
+        'requests': requests,
+        'unread': unread,
+      };
+}
+
+/// One row of You's one Chats list: a business chat (`kind: business`, open
+/// `/v1/me/chats/{id}`), a people chat (`kind: person`, open
+/// `/v1/me/people/{id}`) or a group (`kind: group`, open `/v1/me/groups/{id}`,
+/// with `group`).
+class ChatListItem {
+  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, this.group, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.verified, this.waiting});
+
+  final bool archived;
+  /// You blocked them.
+  final bool blocked;
+  final String? businessId;
+  /// The person deleted their account (shown as "Deleted account").
+  final bool? gone;
+  /// A group: as `GET /v1/me/groups` shows it (photo, members, role, left,
+  /// mentioned).
+  final Group? group;
+  final String id;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  final bool muted;
+  final String name;
+  /// A people chat's other person as their settings let you see them: photo,
+  /// last seen and online. None once they deleted their account.
+  final PersonCard? person;
+  final String? personId;
+  /// A business chat: the business's photo (its logo; sizes by width in
+  /// `urls`), as Orders on You and one chat's header show it. None without one,
+  /// or while the business is not taking your messages.
+  final OrderPhoto? photo;
+  /// The person's account is suspended: it can't get messages right now
+  /// (sending answers 409). Not deleted: their name is shown, nothing else of
+  /// them.
+  final bool? suspended;
+  final int unread;
+  /// A business chat: its trust line, what the business has proved, the same as
+  /// the business chat's header (`GET /v1/me/chats/{id}`'s `verified`): its
+  /// phone, a check of the business, a payment provider connected, and whole
+  /// months on Taskiem. None while the business is not taking your messages.
+  final ChatListItemVerified? verified;
+  /// Your first messages wait for them to accept.
+  final bool? waiting;
+
+  factory ChatListItem.fromJson(Map<String, dynamic> j) => ChatListItem(
+        archived: j['archived'] as bool,
+        blocked: j['blocked'] as bool,
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        gone: j['gone'] == null ? null : j['gone'] as bool,
+        group: j['group'] == null ? null : Group.fromJson(j['group'] as Map<String, dynamic>),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
+        unread: (j['unread'] as num).toInt(),
+        verified: j['verified'] == null ? null : ChatListItemVerified.fromJson(j['verified'] as Map<String, dynamic>),
+        waiting: j['waiting'] == null ? null : j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'blocked': blocked,
+        'business_id': ?businessId,
+        'gone': ?gone,
+        'group': ?group?.toJson(),
+        'id': id,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'muted': muted,
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': ?personId,
+        'photo': ?photo?.toJson(),
+        'suspended': ?suspended,
+        'unread': unread,
+        'verified': ?verified?.toJson(),
+        'waiting': ?waiting,
+      };
+}
+
+/// A group as one of its members (or someone who was one) sees it
+/// (people-chatting §9, stage 5b): one copy, kept by Taskiem, sealed under the
+/// group's own key, readable by Taskiem's servers; not end-to-end encrypted.
+class Group {
+  const Group({required this.adminsOnlyEdit, required this.adminsOnlyPost, required this.approveJoins, required this.archived, required this.canEdit, required this.canPost, this.closed, required this.description, required this.id, this.joinRequests, required this.joinedAt, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, this.lastSender, required this.left, this.leftHow, this.linkStopped, required this.members, required this.mentioned, required this.mentions, required this.muted, required this.name, this.photo, required this.role, required this.unread});
+
+  /// Only admins change the name, photo and description (on by default, A2).
+  final bool adminsOnlyEdit;
+  final bool adminsOnlyPost;
+  /// Joining by the link waits for an admin (A4).
+  final bool approveJoins;
+  final bool archived;
+  final bool canEdit;
+  final bool canPost;
+  final GroupClosed? closed;
+  final String description;
+  final String id;
+  /// Admins: people waiting to join by the link.
+  final int? joinRequests;
+  final DateTime joinedAt;
+  final String? kept;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  /// Who wrote the last message, as you see them ("You" for you).
+  final String? lastSender;
+  /// You left or were removed (`left_how`): your copy up to then stays yours
+  /// until you delete it; nothing new comes and you can't write (A5).
+  final bool left;
+  final String? leftHow;
+  /// Taskiem's moderators turned the group's invite link off; no new one can be
+  /// made for now (403).
+  final bool? linkStopped;
+  /// How many are in it now (at most 256).
+  final int members;
+  /// An unread message mentions you.
+  final bool mentioned;
+  /// A message mentioning you pushes even while the group is muted (A7).
+  final bool mentions;
+  final bool muted;
+  final String name;
+  final Object? photo;
+  final String role;
+  final int unread;
+
+  factory Group.fromJson(Map<String, dynamic> j) => Group(
+        adminsOnlyEdit: j['admins_only_edit'] as bool,
+        adminsOnlyPost: j['admins_only_post'] as bool,
+        approveJoins: j['approve_joins'] as bool,
+        archived: j['archived'] as bool,
+        canEdit: j['can_edit'] as bool,
+        canPost: j['can_post'] as bool,
+        closed: j['closed'] == null ? null : GroupClosed.fromJson(j['closed'] as Map<String, dynamic>),
+        description: j['description'] as String,
+        id: j['id'] as String,
+        joinRequests: j['join_requests'] == null ? null : (j['join_requests'] as num).toInt(),
+        joinedAt: DateTime.parse(j['joined_at'] as String),
+        kept: j['kept'] == null ? null : j['kept'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        lastSender: j['last_sender'] == null ? null : j['last_sender'] as String,
+        left: j['left'] as bool,
+        leftHow: j['left_how'] == null ? null : j['left_how'] as String,
+        linkStopped: j['link_stopped'] == null ? null : j['link_stopped'] as bool,
+        members: (j['members'] as num).toInt(),
+        mentioned: j['mentioned'] as bool,
+        mentions: j['mentions'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        photo: j['photo'],
+        role: j['role'] as String,
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admins_only_edit': adminsOnlyEdit,
+        'admins_only_post': adminsOnlyPost,
+        'approve_joins': approveJoins,
+        'archived': archived,
+        'can_edit': canEdit,
+        'can_post': canPost,
+        'closed': ?closed?.toJson(),
+        'description': description,
+        'id': id,
+        'join_requests': ?joinRequests,
+        'joined_at': joinedAt.toUtc().toIso8601String(),
+        'kept': ?kept,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'last_sender': ?lastSender,
+        'left': left,
+        'left_how': ?leftHow,
+        'link_stopped': ?linkStopped,
+        'members': members,
+        'mentioned': mentioned,
+        'mentions': mentions,
+        'muted': muted,
+        'name': name,
+        'photo': ?photo,
+        'role': role,
+        'unread': unread,
+      };
+}
+
+/// Taskiem's moderators closed the group (people-chatting §8.3): no one sends
+/// in it or joins it (403), nor changes it or reaches its members (409: its
+/// info, rules, photo and link, adding, removing and letting people in,
+/// invites, admins, reactions, a share marked paid; typing shows nothing); each
+/// member still reads, leaves, sets their own settings, deletes for themselves,
+/// deletes their own message for everyone, reports and blocks, and its admins
+/// appeal; it is deleted with all its messages on `until` (§14) unless its
+/// admins appeal and the decision is overturned. `words` say so in plain words.
+/// For admins, the closure to appeal (POST /v1/me/groups/{id}/appeal) with its
+/// reason and the appeal.
+class GroupClosed {
+  const GroupClosed({this.actionId, this.appeal, required this.at, required this.canAppeal, this.reason, this.until, required this.words});
+
+  final String? actionId;
+  final StandingAppeal? appeal;
+  final DateTime at;
+  final bool canAppeal;
+  final String? reason;
+  final Object? until;
+  final String words;
+
+  factory GroupClosed.fromJson(Map<String, dynamic> j) => GroupClosed(
+        actionId: j['action_id'] == null ? null : j['action_id'] as String,
+        appeal: j['appeal'] == null ? null : StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        at: DateTime.parse(j['at'] as String),
+        canAppeal: j['can_appeal'] as bool,
+        reason: j['reason'] == null ? null : j['reason'] as String,
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action_id': ?actionId,
+        'appeal': ?appeal?.toJson(),
+        'at': at.toUtc().toIso8601String(),
+        'can_appeal': canAppeal,
+        'reason': ?reason,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class StandingAppeal {
+  const StandingAppeal({required this.at, this.decidedAt, required this.id, this.note, required this.state, required this.text});
+
+  final DateTime at;
+  final Object? decidedAt;
+  final String id;
+  final Object? note;
+  final String state;
+  final String text;
+
+  factory StandingAppeal.fromJson(Map<String, dynamic> j) => StandingAppeal(
+        at: DateTime.parse(j['at'] as String),
+        decidedAt: j['decided_at'],
+        id: j['id'] as String,
+        note: j['note'],
+        state: j['state'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'decided_at': ?decidedAt,
+        'id': id,
+        'note': ?note,
+        'state': state,
+        'text': text,
+      };
+}
+
+/// A business chat: its trust line, what the business has proved, the same as
+/// the business chat's header (`GET /v1/me/chats/{id}`'s `verified`): its
+/// phone, a check of the business, a payment provider connected, and whole
+/// months on Taskiem. None while the business is not taking your messages.
+class ChatListItemVerified {
+  const ChatListItemVerified({required this.business, required this.months, required this.payments, required this.phone});
+
+  final bool business;
+  final int months;
+  final bool payments;
+  final bool phone;
+
+  factory ChatListItemVerified.fromJson(Map<String, dynamic> j) => ChatListItemVerified(
+        business: j['business'] as bool,
+        months: (j['months'] as num).toInt(),
+        payments: j['payments'] as bool,
+        phone: j['phone'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'months': months,
+        'payments': payments,
+        'phone': phone,
+      };
+}
+
+class ListPeopleChatsResponse {
+  const ListPeopleChatsResponse({required this.chats, required this.more, this.next, required this.requests, required this.unread});
+
+  final List<PeopleChat> chats;
+  /// There are more chats after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final int requests;
+  /// Unread messages in every chat of the list (archived or not, as asked), not
+  /// the page alone.
+  final int unread;
+
+  factory ListPeopleChatsResponse.fromJson(Map<String, dynamic> j) => ListPeopleChatsResponse(
+        chats: (j['chats'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        requests: (j['requests'] as num).toInt(),
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'more': more,
+        'next': ?next,
+        'requests': requests,
+        'unread': unread,
+      };
+}
+
+/// A chat with a person, the person's own copy (people-chatting §7): kept by
+/// Taskiem, sealed under the person's key, readable by Taskiem's servers; not
+/// end-to-end encrypted.
+class PeopleChat {
+  const PeopleChat({required this.archived, required this.blocked, this.contact, required this.gone, required this.id, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, required this.personId, this.phone, required this.request, this.suspended, required this.unread, required this.waiting});
+
+  final bool archived;
+  /// You blocked them.
+  final bool blocked;
+  /// One chat only. They are in your contacts.
+  final bool? contact;
+  final bool gone;
+  final String id;
+  /// How people chats are kept, to show in the chat's info.
+  final String? kept;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  final bool muted;
+  /// The name you gave them in your contacts, else their own, or "Deleted
+  /// account" once they deleted it (`gone`).
+  final String name;
+  /// The other person as their settings let you see them (finding people): the
+  /// name you gave them, photo, last seen and online, whether read ticks go
+  /// between you. None once they deleted their account.
+  final PersonCard? person;
+  final String personId;
+  /// One chat only. Their number, only when they chose to show it.
+  final Object? phone;
+  /// A stranger's first messages, waiting in your Requests.
+  final bool request;
+  /// Their account is suspended: it can't get messages right now (sending
+  /// answers 409 "This account can't get messages right now."). Not deleted:
+  /// their name is shown, nothing else of them.
+  final bool? suspended;
+  final int unread;
+  /// Your first messages wait for them to accept (no read ticks until then).
+  final bool waiting;
+
+  factory PeopleChat.fromJson(Map<String, dynamic> j) => PeopleChat(
+        archived: j['archived'] as bool,
+        blocked: j['blocked'] as bool,
+        contact: j['contact'] == null ? null : j['contact'] as bool,
+        gone: j['gone'] as bool,
+        id: j['id'] as String,
+        kept: j['kept'] == null ? null : j['kept'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] as String,
+        phone: j['phone'],
+        request: j['request'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
+        unread: (j['unread'] as num).toInt(),
+        waiting: j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'blocked': blocked,
+        'contact': ?contact,
+        'gone': gone,
+        'id': id,
+        'kept': ?kept,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'muted': muted,
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': personId,
+        'phone': ?phone,
+        'request': request,
+        'suspended': ?suspended,
+        'unread': unread,
+        'waiting': waiting,
+      };
+}
+
+class StartPeopleChatRequest {
+  const StartPeopleChatRequest({this.linkCode, this.personId});
+
+  final String? linkCode;
+  final String? personId;
+
+  factory StartPeopleChatRequest.fromJson(Map<String, dynamic> j) => StartPeopleChatRequest(
+        linkCode: j['link_code'] == null ? null : j['link_code'] as String,
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_code': ?linkCode,
+        'person_id': ?personId,
+      };
+}
+
+class ListPeopleRequestsResponse {
+  const ListPeopleRequestsResponse({required this.more, this.next, required this.requests});
+
+  /// There are more requests after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final List<PeopleChat> requests;
+
+  factory ListPeopleRequestsResponse.fromJson(Map<String, dynamic> j) => ListPeopleRequestsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        requests: (j['requests'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListPeopleBlockedResponse {
+  const ListPeopleBlockedResponse({required this.people});
+
+  final List<ListPeopleBlockedResponsePeopleItem> people;
+
+  factory ListPeopleBlockedResponse.fromJson(Map<String, dynamic> j) => ListPeopleBlockedResponse(
+        people: (j['people'] as List).map((e) => ListPeopleBlockedResponsePeopleItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'people': people.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListPeopleBlockedResponsePeopleItem {
+  const ListPeopleBlockedResponsePeopleItem({required this.at, required this.chatId, required this.name, required this.personId});
+
+  final DateTime at;
+  final String chatId;
+  final String name;
+  final String personId;
+
+  factory ListPeopleBlockedResponsePeopleItem.fromJson(Map<String, dynamic> j) => ListPeopleBlockedResponsePeopleItem(
+        at: DateTime.parse(j['at'] as String),
+        chatId: j['chat_id'] as String,
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'chat_id': chatId,
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class ForwardPeopleMessageRequest {
+  const ForwardPeopleMessageRequest({required this.chatId, required this.messageId, required this.to});
+
+  final String chatId;
+  final String messageId;
+  final List<String> to;
+
+  factory ForwardPeopleMessageRequest.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageRequest(
+        chatId: j['chat_id'] as String,
+        messageId: j['message_id'] as String,
+        to: (j['to'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'message_id': messageId,
+        'to': to.map((e) => e).toList(),
+      };
+}
+
+class ForwardPeopleMessageResponse {
+  const ForwardPeopleMessageResponse({required this.failed, required this.sent});
+
+  final List<ForwardPeopleMessageResponseFailedItem> failed;
+  final List<ForwardPeopleMessageResponseSentItem> sent;
+
+  factory ForwardPeopleMessageResponse.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponse(
+        failed: (j['failed'] as List).map((e) => ForwardPeopleMessageResponseFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        sent: (j['sent'] as List).map((e) => ForwardPeopleMessageResponseSentItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed.map((e) => e.toJson()).toList(),
+        'sent': sent.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardPeopleMessageResponseFailedItem {
+  const ForwardPeopleMessageResponseFailedItem({required this.chatId, required this.error});
+
+  final String chatId;
+  final String error;
+
+  factory ForwardPeopleMessageResponseFailedItem.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponseFailedItem(
+        chatId: j['chat_id'] as String,
+        error: j['error'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'error': error,
+      };
+}
+
+class ForwardPeopleMessageResponseSentItem {
+  const ForwardPeopleMessageResponseSentItem({required this.chatId, required this.message});
+
+  final String chatId;
+  final PeopleMessage message;
+
+  factory ForwardPeopleMessageResponseSentItem.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponseSentItem(
+        chatId: j['chat_id'] as String,
+        message: PeopleMessage.fromJson(j['message'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'message': message.toJson(),
+      };
+}
+
+/// One message of the person's copy of a people chat, opened.
+class PeopleMessage {
+  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a file's caption, or "This message was deleted" (`deleted`).
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  final bool? forwarded;
+  /// Forwarded five or more times on its way here; it can be forwarded to one
+  /// chat at a time.
+  final bool? forwardedMany;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final bool mine;
+  final String? myReaction;
+  final Object? readAt;
+  final String? replyTo;
+  final bool? starred;
+  /// Your own messages: sent (one tick: not delivered, as while they block
+  /// you), delivered, read (only once the chat is accepted).
+  final String? status;
+  final String? theirReaction;
+  /// The safety checks found it looks like a scam or spam.
+  final bool? warn;
+  /// Their message asks for a transfer to an account; warn before paying.
+  final bool? warnTransfer;
+
+  factory PeopleMessage.fromJson(Map<String, dynamic> j) => PeopleMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        readAt: j['read_at'],
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        theirReaction: j['their_reaction'] == null ? null : j['their_reaction'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'read_at': ?readAt,
+        'reply_to': ?replyTo,
+        'starred': ?starred,
+        'status': ?status,
+        'their_reaction': ?theirReaction,
+        'warn': ?warn,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+/// A card in a people chat (people-chatting §10.1, §11 A), carrying only what
+/// is needed to show and open it: a product (business, item, its price when
+/// shared), a business, an order or a delivery (business, reference, state, the
+/// rider's progress when shared), or a share (amount, what for, the account to
+/// pay to, paid).
+class PeopleCard {
+  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? area;
+  /// A shared basket (5b C): made by the server; GET /v1/me/baskets/{basket_id}
+  /// reads it.
+  final String? basketId;
+  final String? business;
+  final String? businessId;
+  final DeliveryProgress? delivery;
+  final String? for_;
+  /// A share sent from a basket, in a group: who it is for.
+  final String? forId;
+  final String? itemId;
+  final bool? paid;
+  final DateTime? paidAt;
+  final bool? paidByMe;
+  final PayoutAccount? payTo;
+  final int? priceKobo;
+  final String? reference;
+  final String? state;
+  final String title;
+  final String type;
+  final String? what;
+
+  factory PeopleCard.fromJson(Map<String, dynamic> j) => PeopleCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        area: j['area'] == null ? null : j['area'] as String,
+        basketId: j['basket_id'] == null ? null : j['basket_id'] as String,
+        business: j['business'] == null ? null : j['business'] as String,
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        for_: j['for'] == null ? null : j['for'] as String,
+        forId: j['for_id'] == null ? null : j['for_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        paid: j['paid'] == null ? null : j['paid'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        paidByMe: j['paid_by_me'] == null ? null : j['paid_by_me'] as bool,
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        state: j['state'] == null ? null : j['state'] as String,
+        title: j['title'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'area': ?area,
+        'basket_id': ?basketId,
+        'business': ?business,
+        'business_id': ?businessId,
+        'delivery': ?delivery?.toJson(),
+        'for': ?for_,
+        'for_id': ?forId,
+        'item_id': ?itemId,
+        'paid': ?paid,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'paid_by_me': ?paidByMe,
+        'pay_to': ?payTo?.toJson(),
+        'price_kobo': ?priceKobo,
+        'reference': ?reference,
+        'state': ?state,
+        'title': title,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+/// A person's own bank account for being paid back, as they typed it; never
+/// checked by Taskiem, which moves no money.
+class PayoutAccount {
+  const PayoutAccount({required this.accountName, required this.accountNumber, required this.bank});
+
+  final String accountName;
+  /// Ten digits (spaces and dashes are taken out).
+  final String accountNumber;
+  final String bank;
+
+  factory PayoutAccount.fromJson(Map<String, dynamic> j) => PayoutAccount(
+        accountName: j['account_name'] as String,
+        accountNumber: j['account_number'] as String,
+        bank: j['bank'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'account_number': accountNumber,
+        'bank': bank,
+      };
+}
+
+class PeopleLocation {
+  const PeopleLocation({this.label, required this.lat, required this.lng});
+
+  final String? label;
+  final double lat;
+  final double lng;
+
+  factory PeopleLocation.fromJson(Map<String, dynamic> j) => PeopleLocation(
+        label: j['label'] == null ? null : j['label'] as String,
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': ?label,
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class PutPeopleChatRequest {
+  const PutPeopleChatRequest({this.archived, this.muted});
+
+  final bool? archived;
+  final bool? muted;
+
+  factory PutPeopleChatRequest.fromJson(Map<String, dynamic> j) => PutPeopleChatRequest(
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': ?archived,
+        'muted': ?muted,
+      };
+}
+
+class BlockPersonRequest {
+  const BlockPersonRequest({this.report});
+
+  final PeopleReport? report;
+
+  factory BlockPersonRequest.fromJson(Map<String, dynamic> j) => BlockPersonRequest(
+        report: j['report'] == null ? null : PeopleReport.fromJson(j['report'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'report': ?report?.toJson(),
+      };
+}
+
+class PeopleReport {
+  const PeopleReport({required this.consent, this.note, required this.reason});
+
+  /// The last 20 messages go to Taskiem's moderators only with it.
+  final bool consent;
+  final String? note;
+  final String reason;
+
+  factory PeopleReport.fromJson(Map<String, dynamic> j) => PeopleReport(
+        consent: j['consent'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'consent': consent,
+        'note': ?note,
+        'reason': reason,
+      };
+}
+
+class BlockPersonResponse {
+  const BlockPersonResponse({required this.blocked, required this.removed, required this.reported});
+
+  final bool blocked;
+  final bool removed;
+  final bool reported;
+
+  factory BlockPersonResponse.fromJson(Map<String, dynamic> j) => BlockPersonResponse(
+        blocked: j['blocked'] as bool,
+        removed: j['removed'] as bool,
+        reported: j['reported'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'removed': removed,
+        'reported': reported,
+      };
+}
+
+class UnblockPersonResponse {
+  const UnblockPersonResponse({required this.blocked});
+
+  final bool blocked;
+
+  factory UnblockPersonResponse.fromJson(Map<String, dynamic> j) => UnblockPersonResponse(
+        blocked: j['blocked'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+      };
+}
+
+class ReportPersonResponse {
+  const ReportPersonResponse({required this.id, required this.messagesSent, required this.said});
+
+  final String id;
+  final bool messagesSent;
+  final String said;
+
+  factory ReportPersonResponse.fromJson(Map<String, dynamic> j) => ReportPersonResponse(
+        id: j['id'] as String,
+        messagesSent: j['messages_sent'] as bool,
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'messages_sent': messagesSent,
+        'said': said,
+      };
+}
+
+class PeopleMessagesResponse {
+  const PeopleMessagesResponse({required this.messages, required this.more});
+
+  final List<PeopleMessage> messages;
+  final bool more;
+
+  factory PeopleMessagesResponse.fromJson(Map<String, dynamic> j) => PeopleMessagesResponse(
+        messages: (j['messages'] as List).map((e) => PeopleMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class SendPeopleMessageRequest {
+  const SendPeopleMessageRequest({this.card, this.clientId, this.location, this.replyTo, this.text});
+
+  /// What to share. product: business_id and item_id (from its shop); business:
+  /// business_id; order or delivery: business_id and reference of one of your
+  /// own orders (a delivery once a rider has it); split: amount_kobo, what, and
+  /// pay_to (else your saved payout account).
+  final SendPeopleMessageRequestCard? card;
+  final String? clientId;
+  final PeopleLocation? location;
+  final String? replyTo;
+  final String? text;
+
+  factory SendPeopleMessageRequest.fromJson(Map<String, dynamic> j) => SendPeopleMessageRequest(
+        card: j['card'] == null ? null : SendPeopleMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
+        'client_id': ?clientId,
+        'location': ?location?.toJson(),
+        'reply_to': ?replyTo,
+        'text': ?text,
+      };
+}
+
+/// What to share. product: business_id and item_id (from its shop); business:
+/// business_id; order or delivery: business_id and reference of one of your own
+/// orders (a delivery once a rider has it); split: amount_kobo, what, and
+/// pay_to (else your saved payout account).
+class SendPeopleMessageRequestCard {
+  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? businessId;
+  final String? itemId;
+  final PayoutAccount? payTo;
+  final String? reference;
+  final String type;
+  final String? what;
+
+  factory SendPeopleMessageRequestCard.fromJson(Map<String, dynamic> j) => SendPeopleMessageRequestCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'business_id': ?businessId,
+        'item_id': ?itemId,
+        'pay_to': ?payTo?.toJson(),
+        'reference': ?reference,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+class MarkPeopleMessageRequest {
+  const MarkPeopleMessageRequest({this.reaction, this.starred});
+
+  final String? reaction;
+  final bool? starred;
+
+  factory MarkPeopleMessageRequest.fromJson(Map<String, dynamic> j) => MarkPeopleMessageRequest(
+        reaction: j['reaction'] == null ? null : j['reaction'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reaction': ?reaction,
+        'starred': ?starred,
+      };
+}
+
+class MarkSplitPaidRequest {
+  const MarkSplitPaidRequest({required this.paid});
+
+  final bool paid;
+
+  factory MarkSplitPaidRequest.fromJson(Map<String, dynamic> j) => MarkSplitPaidRequest(
+        paid: j['paid'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'paid': paid,
+      };
+}
+
+class OpenPeopleCardResponse {
+  const OpenPeopleCardResponse({required this.card, required this.live});
+
+  final PeopleCard card;
+  final OpenPeopleCardResponseLive live;
+
+  factory OpenPeopleCardResponse.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponse(
+        card: PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        live: OpenPeopleCardResponseLive.fromJson(j['live'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': card.toJson(),
+        'live': live.toJson(),
+      };
+}
+
+class OpenPeopleCardResponseLive {
+  const OpenPeopleCardResponseLive({this.business, this.delivery, this.order, this.product, required this.yours});
+
+  final OpenPeopleCardResponseLiveBusiness? business;
+  final DeliveryProgress? delivery;
+  final PersonOrder? order;
+  final ShopItem? product;
+  final bool yours;
+
+  factory OpenPeopleCardResponseLive.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponseLive(
+        business: j['business'] == null ? null : OpenPeopleCardResponseLiveBusiness.fromJson(j['business'] as Map<String, dynamic>),
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        order: j['order'] == null ? null : PersonOrder.fromJson(j['order'] as Map<String, dynamic>),
+        product: j['product'] == null ? null : ShopItem.fromJson(j['product'] as Map<String, dynamic>),
+        yours: j['yours'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': ?business?.toJson(),
+        'delivery': ?delivery?.toJson(),
+        'order': ?order?.toJson(),
+        'product': ?product?.toJson(),
+        'yours': yours,
+      };
+}
+
+class OpenPeopleCardResponseLiveBusiness {
+  const OpenPeopleCardResponseLiveBusiness({this.area, required this.name, this.openNow, this.shop, this.tagline, required this.takesChats});
+
+  final String? area;
+  final String name;
+  final bool? openNow;
+  final String? shop;
+  final String? tagline;
+  final bool takesChats;
+
+  factory OpenPeopleCardResponseLiveBusiness.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponseLiveBusiness(
+        area: j['area'] == null ? null : j['area'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] == null ? null : j['open_now'] as bool,
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+        takesChats: j['takes_chats'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'name': name,
+        'open_now': ?openNow,
+        'shop': ?shop,
+        'tagline': ?tagline,
+        'takes_chats': takesChats,
+      };
+}
+
+class TypingPeopleRequest {
+  const TypingPeopleRequest({this.typing});
+
+  final bool? typing;
+
+  factory TypingPeopleRequest.fromJson(Map<String, dynamic> j) => TypingPeopleRequest(
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'typing': ?typing,
+      };
+}
+
+class SearchPeopleResponse {
+  const SearchPeopleResponse({required this.more, this.next, required this.results});
+
+  final bool more;
+  final String? next;
+  final List<PeopleFound> results;
+
+  factory SearchPeopleResponse.fromJson(Map<String, dynamic> j) => SearchPeopleResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        results: (j['results'] as List).map((e) => PeopleFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A message of your own people chats, found by search or starred, with its
+/// chat.
+class PeopleFound {
+  const PeopleFound({required this.chat, required this.chatId, required this.message, this.snippet, this.starredAt});
+
+  final PeopleChat chat;
+  final String chatId;
+  final PeopleMessage message;
+  /// Search: a little of the message around what was searched for (up to 120
+  /// characters, with … where cut).
+  final String? snippet;
+  /// Starred: when you starred it.
+  final DateTime? starredAt;
+
+  factory PeopleFound.fromJson(Map<String, dynamic> j) => PeopleFound(
+        chat: PeopleChat.fromJson(j['chat'] as Map<String, dynamic>),
+        chatId: j['chat_id'] as String,
+        message: PeopleMessage.fromJson(j['message'] as Map<String, dynamic>),
+        snippet: j['snippet'] == null ? null : j['snippet'] as String,
+        starredAt: j['starred_at'] == null ? null : DateTime.parse(j['starred_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat': chat.toJson(),
+        'chat_id': chatId,
+        'message': message.toJson(),
+        'snippet': ?snippet,
+        'starred_at': ?starredAt?.toUtc().toIso8601String(),
+      };
+}
+
+class StarredPeopleResponse {
+  const StarredPeopleResponse({required this.more, this.next, required this.starred});
+
+  final bool more;
+  final String? next;
+  final List<PeopleFound> starred;
+
+  factory StarredPeopleResponse.fromJson(Map<String, dynamic> j) => StarredPeopleResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        starred: (j['starred'] as List).map((e) => PeopleFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'starred': starred.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayoutAccountAnswer {
+  const PayoutAccountAnswer({this.account, required this.checked, required this.words});
+
+  final Object? account;
+  /// Always false, since Taskiem does not check the account.
+  final bool checked;
+  final String words;
+
+  factory PayoutAccountAnswer.fromJson(Map<String, dynamic> j) => PayoutAccountAnswer(
+        account: j['account'],
+        checked: j['checked'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': ?account,
+        'checked': checked,
+        'words': words,
+      };
+}
+
+class PersonStanding {
+  const PersonStanding({required this.actions, required this.appealWords, required this.state, required this.unseen, this.until, required this.words});
+
+  final List<PersonStandingActionsItem> actions;
+  final String appealWords;
+  final String state;
+  final int unseen;
+  final Object? until;
+  final String words;
+
+  factory PersonStanding.fromJson(Map<String, dynamic> j) => PersonStanding(
+        actions: (j['actions'] as List).map((e) => PersonStandingActionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        appealWords: j['appeal_words'] as String,
+        state: j['state'] as String,
+        unseen: (j['unseen'] as num).toInt(),
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': actions.map((e) => e.toJson()).toList(),
+        'appeal_words': appealWords,
+        'state': state,
+        'unseen': unseen,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class PersonStandingActionsItem {
+  const PersonStandingActionsItem({required this.action, this.appeal, required this.at, required this.canAppeal, required this.id, required this.inForce, this.liftedAt, required this.reason, required this.seen, this.until, required this.words});
+
+  final String action;
+  final Object? appeal;
+  final DateTime at;
+  final bool canAppeal;
+  final String id;
+  final bool inForce;
+  final Object? liftedAt;
+  final String reason;
+  final bool seen;
+  final Object? until;
+  final String words;
+
+  factory PersonStandingActionsItem.fromJson(Map<String, dynamic> j) => PersonStandingActionsItem(
+        action: j['action'] as String,
+        appeal: j['appeal'],
+        at: DateTime.parse(j['at'] as String),
+        canAppeal: j['can_appeal'] as bool,
+        id: j['id'] as String,
+        inForce: j['in_force'] as bool,
+        liftedAt: j['lifted_at'],
+        reason: j['reason'] as String,
+        seen: j['seen'] as bool,
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'appeal': ?appeal,
+        'at': at.toUtc().toIso8601String(),
+        'can_appeal': canAppeal,
+        'id': id,
+        'in_force': inForce,
+        'lifted_at': ?liftedAt,
+        'reason': reason,
+        'seen': seen,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class AppealMyStandingRequest {
+  const AppealMyStandingRequest({required this.actionId, required this.text});
+
+  final String actionId;
+  final String text;
+
+  factory AppealMyStandingRequest.fromJson(Map<String, dynamic> j) => AppealMyStandingRequest(
+        actionId: j['action_id'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action_id': actionId,
+        'text': text,
+      };
+}
+
+class AppealMyStandingResponse {
+  const AppealMyStandingResponse({required this.appeal, required this.said});
+
+  final StandingAppeal appeal;
+  final String said;
+
+  factory AppealMyStandingResponse.fromJson(Map<String, dynamic> j) => AppealMyStandingResponse(
+        appeal: StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'appeal': appeal.toJson(),
+        'said': said,
+      };
+}
+
+class GetLawfulRequestCountsResponse {
+  const GetLawfulRequestCountsResponse({required this.periods, required this.words});
+
+  final List<GetLawfulRequestCountsResponsePeriodsItem> periods;
+  final String words;
+
+  factory GetLawfulRequestCountsResponse.fromJson(Map<String, dynamic> j) => GetLawfulRequestCountsResponse(
+        periods: (j['periods'] as List).map((e) => GetLawfulRequestCountsResponsePeriodsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'periods': periods.map((e) => e.toJson()).toList(),
+        'words': words,
+      };
+}
+
+class GetLawfulRequestCountsResponsePeriodsItem {
+  const GetLawfulRequestCountsResponsePeriodsItem({required this.answered, required this.half, required this.label, required this.received, required this.refused, required this.year});
+
+  final int answered;
+  final int half;
+  final String label;
+  final int received;
+  final int refused;
+  final int year;
+
+  factory GetLawfulRequestCountsResponsePeriodsItem.fromJson(Map<String, dynamic> j) => GetLawfulRequestCountsResponsePeriodsItem(
+        answered: (j['answered'] as num).toInt(),
+        half: (j['half'] as num).toInt(),
+        label: j['label'] as String,
+        received: (j['received'] as num).toInt(),
+        refused: (j['refused'] as num).toInt(),
+        year: (j['year'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answered': answered,
+        'half': half,
+        'label': label,
+        'received': received,
+        'refused': refused,
+        'year': year,
+      };
+}
+
+class ListGroupsResponse {
+  const ListGroupsResponse({required this.groups, required this.invites, required this.more, this.next, required this.unread});
+
+  final List<Group> groups;
+  final int invites;
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final int unread;
+
+  factory ListGroupsResponse.fromJson(Map<String, dynamic> j) => ListGroupsResponse(
+        groups: (j['groups'] as List).map((e) => Group.fromJson(e as Map<String, dynamic>)).toList(),
+        invites: (j['invites'] as num).toInt(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'groups': groups.map((e) => e.toJson()).toList(),
+        'invites': invites,
+        'more': more,
+        'next': ?next,
+        'unread': unread,
+      };
+}
+
+class CreateGroupRequest {
+  const CreateGroupRequest({this.description, required this.name, this.personIds});
+
+  final String? description;
+  final String name;
+  final List<String>? personIds;
+
+  factory CreateGroupRequest.fromJson(Map<String, dynamic> j) => CreateGroupRequest(
+        description: j['description'] == null ? null : j['description'] as String,
+        name: j['name'] as String,
+        personIds: j['person_ids'] == null ? null : (j['person_ids'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'description': ?description,
+        'name': name,
+        'person_ids': ?personIds?.map((e) => e).toList(),
+      };
+}
+
+class CreateGroupResponse {
+  const CreateGroupResponse({required this.added, required this.group});
+
+  final List<GroupAdded> added;
+  final Group group;
+
+  factory CreateGroupResponse.fromJson(Map<String, dynamic> j) => CreateGroupResponse(
+        added: (j['added'] as List).map((e) => GroupAdded.fromJson(e as Map<String, dynamic>)).toList(),
+        group: Group.fromJson(j['group'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': added.map((e) => e.toJson()).toList(),
+        'group': group.toJson(),
+      };
+}
+
+class GroupAdded {
+  const GroupAdded({required this.personId, required this.state});
+
+  final String personId;
+  final String state;
+
+  factory GroupAdded.fromJson(Map<String, dynamic> j) => GroupAdded(
+        personId: j['person_id'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_id': personId,
+        'state': state,
+      };
+}
+
+class ListGroupInvitesResponse {
+  const ListGroupInvitesResponse({required this.invites});
+
+  final List<GroupInvite> invites;
+
+  factory ListGroupInvitesResponse.fromJson(Map<String, dynamic> j) => ListGroupInvitesResponse(
+        invites: (j['invites'] as List).map((e) => GroupInvite.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invites': invites.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupInvite {
+  const GroupInvite({required this.at, required this.by, required this.groupId, required this.invitedBy, required this.name, this.photo});
+
+  final DateTime at;
+  /// Who invited you, as you see them.
+  final String by;
+  final String groupId;
+  final String invitedBy;
+  final String name;
+  final Object? photo;
+
+  factory GroupInvite.fromJson(Map<String, dynamic> j) => GroupInvite(
+        at: DateTime.parse(j['at'] as String),
+        by: j['by'] as String,
+        groupId: j['group_id'] as String,
+        invitedBy: j['invited_by'] as String,
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'by': by,
+        'group_id': groupId,
+        'invited_by': invitedBy,
+        'name': name,
+        'photo': ?photo,
+      };
+}
+
+class SearchGroupsResponse {
+  const SearchGroupsResponse({required this.more, this.next, required this.results});
+
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final List<GroupFound> results;
+
+  factory SearchGroupsResponse.fromJson(Map<String, dynamic> j) => SearchGroupsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        results: (j['results'] as List).map((e) => GroupFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupFound {
+  const GroupFound({required this.group, required this.groupId, required this.message, this.snippet, this.starredAt});
+
+  final Group group;
+  final String groupId;
+  final GroupMessage message;
+  final String? snippet;
+  final DateTime? starredAt;
+
+  factory GroupFound.fromJson(Map<String, dynamic> j) => GroupFound(
+        group: Group.fromJson(j['group'] as Map<String, dynamic>),
+        groupId: j['group_id'] as String,
+        message: GroupMessage.fromJson(j['message'] as Map<String, dynamic>),
+        snippet: j['snippet'] == null ? null : j['snippet'] as String,
+        starredAt: j['starred_at'] == null ? null : DateTime.parse(j['starred_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'group': group.toJson(),
+        'group_id': groupId,
+        'message': message.toJson(),
+        'snippet': ?snippet,
+        'starred_at': ?starredAt?.toUtc().toIso8601String(),
+      };
+}
+
+/// One message of a group as a member sees it.
+class GroupMessage {
+  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a caption, an event in words ("Ada added Bola"), or "This
+  /// message was deleted".
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  final GroupMessageEvent? event;
+  final bool? forwarded;
+  final bool? forwardedMany;
+  final String groupId;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final List<String>? mentions;
+  final bool? mentionsMe;
+  final bool mine;
+  final String? myReaction;
+  final List<GroupMessageReactionsItem>? reactions;
+  final String? replyTo;
+  /// Who wrote it, as you see them ("You"; "Deleted account" once their account
+  /// was deleted, §17 Q17).
+  final String sender;
+  final Object? senderId;
+  final bool? starred;
+  /// Your own messages (A6): delivered once every member now in the group has
+  /// it; read once every one of them with read ticks on (theirs and yours) has
+  /// read it.
+  final String? status;
+  /// Taskiem's checks found it looks like a scam (in a new group, or from
+  /// someone who joined by its link in the last day, B1), and you haven't added
+  /// its sender: show "Never send money to someone you have not met". A share
+  /// card naming an account from someone you haven't added warns too.
+  final bool? warn;
+  /// It asks for a transfer to an account (words that ask, or a share card from
+  /// someone you have not added); warn before paying.
+  final bool? warnTransfer;
+
+  factory GroupMessage.fromJson(Map<String, dynamic> j) => GroupMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        event: j['event'] == null ? null : GroupMessageEvent.fromJson(j['event'] as Map<String, dynamic>),
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        groupId: j['group_id'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        mentionsMe: j['mentions_me'] == null ? null : j['mentions_me'] as bool,
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => GroupMessageReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        sender: j['sender'] as String,
+        senderId: j['sender_id'],
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'event': ?event?.toJson(),
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'group_id': groupId,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'mentions_me': ?mentionsMe,
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'reactions': ?reactions?.map((e) => e.toJson()).toList(),
+        'reply_to': ?replyTo,
+        'sender': sender,
+        'sender_id': ?senderId,
+        'starred': ?starred,
+        'status': ?status,
+        'warn': ?warn,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+class GroupMessageEvent {
+  const GroupMessageEvent({required this.actorId, this.targetId, required this.type});
+
+  final String actorId;
+  final String? targetId;
+  /// The taskiem_ events are Taskiem's moderators' (sender "Taskiem", actor the
+  /// nil id): the group closed, reopened, its link turned off or allowed again.
+  final String type;
+
+  factory GroupMessageEvent.fromJson(Map<String, dynamic> j) => GroupMessageEvent(
+        actorId: j['actor_id'] as String,
+        targetId: j['target_id'] == null ? null : j['target_id'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actor_id': actorId,
+        'target_id': ?targetId,
+        'type': type,
+      };
+}
+
+class GroupMessageReactionsItem {
+  const GroupMessageReactionsItem({required this.count, required this.reaction});
+
+  final int count;
+  final String reaction;
+
+  factory GroupMessageReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsItem(
+        count: (j['count'] as num).toInt(),
+        reaction: j['reaction'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'reaction': reaction,
+      };
+}
+
+class StarredGroupsResponse {
+  const StarredGroupsResponse({required this.more, this.next, required this.starred});
+
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final List<GroupFound> starred;
+
+  factory StarredGroupsResponse.fromJson(Map<String, dynamic> j) => StarredGroupsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        starred: (j['starred'] as List).map((e) => GroupFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'starred': starred.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardMessageRequest {
+  const ForwardMessageRequest({this.chatId, this.groupId, required this.messageId, this.toChats, this.toGroups});
+
+  final String? chatId;
+  final String? groupId;
+  final String messageId;
+  final List<String>? toChats;
+  final List<String>? toGroups;
+
+  factory ForwardMessageRequest.fromJson(Map<String, dynamic> j) => ForwardMessageRequest(
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+        messageId: j['message_id'] as String,
+        toChats: j['to_chats'] == null ? null : (j['to_chats'] as List).map((e) => e as String).toList(),
+        toGroups: j['to_groups'] == null ? null : (j['to_groups'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': ?chatId,
+        'group_id': ?groupId,
+        'message_id': messageId,
+        'to_chats': ?toChats?.map((e) => e).toList(),
+        'to_groups': ?toGroups?.map((e) => e).toList(),
+      };
+}
+
+class ForwardMessageResponse {
+  const ForwardMessageResponse({required this.failed, required this.sent});
+
+  final List<ForwardMessageResponseFailedItem> failed;
+  final List<ForwardMessageResponseSentItem> sent;
+
+  factory ForwardMessageResponse.fromJson(Map<String, dynamic> j) => ForwardMessageResponse(
+        failed: (j['failed'] as List).map((e) => ForwardMessageResponseFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        sent: (j['sent'] as List).map((e) => ForwardMessageResponseSentItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed.map((e) => e.toJson()).toList(),
+        'sent': sent.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardMessageResponseFailedItem {
+  const ForwardMessageResponseFailedItem({required this.error, required this.id, required this.kind});
+
+  final String error;
+  final String id;
+  final String kind;
+
+  factory ForwardMessageResponseFailedItem.fromJson(Map<String, dynamic> j) => ForwardMessageResponseFailedItem(
+        error: j['error'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'error': error,
+        'id': id,
+        'kind': kind,
+      };
+}
+
+class ForwardMessageResponseSentItem {
+  const ForwardMessageResponseSentItem({required this.id, required this.kind, required this.messageId});
+
+  final String id;
+  final String kind;
+  final String messageId;
+
+  factory ForwardMessageResponseSentItem.fromJson(Map<String, dynamic> j) => ForwardMessageResponseSentItem(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        messageId: j['message_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'message_id': messageId,
+      };
+}
+
+class JoinGroupByLinkResponse {
+  const JoinGroupByLinkResponse({this.group, required this.state});
+
+  final Group? group;
+  final String state;
+
+  factory JoinGroupByLinkResponse.fromJson(Map<String, dynamic> j) => JoinGroupByLinkResponse(
+        group: j['group'] == null ? null : Group.fromJson(j['group'] as Map<String, dynamic>),
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'group': ?group?.toJson(),
+        'state': state,
+      };
+}
+
+class PutGroupRequest {
+  const PutGroupRequest({this.adminsOnlyEdit, this.adminsOnlyPost, this.approveJoins, this.description, this.name});
+
+  final bool? adminsOnlyEdit;
+  final bool? adminsOnlyPost;
+  final bool? approveJoins;
+  final String? description;
+  final String? name;
+
+  factory PutGroupRequest.fromJson(Map<String, dynamic> j) => PutGroupRequest(
+        adminsOnlyEdit: j['admins_only_edit'] == null ? null : j['admins_only_edit'] as bool,
+        adminsOnlyPost: j['admins_only_post'] == null ? null : j['admins_only_post'] as bool,
+        approveJoins: j['approve_joins'] == null ? null : j['approve_joins'] as bool,
+        description: j['description'] == null ? null : j['description'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admins_only_edit': ?adminsOnlyEdit,
+        'admins_only_post': ?adminsOnlyPost,
+        'approve_joins': ?approveJoins,
+        'description': ?description,
+        'name': ?name,
+      };
+}
+
+class PutMyGroupRequest {
+  const PutMyGroupRequest({this.archived, this.mentions, this.muted});
+
+  final bool? archived;
+  final bool? mentions;
+  final bool? muted;
+
+  factory PutMyGroupRequest.fromJson(Map<String, dynamic> j) => PutMyGroupRequest(
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        mentions: j['mentions'] == null ? null : j['mentions'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': ?archived,
+        'mentions': ?mentions,
+        'muted': ?muted,
+      };
+}
+
+class LeaveGroupResponse {
+  const LeaveGroupResponse({required this.closed, this.group, required this.left});
+
+  final bool closed;
+  final Object? group;
+  final bool left;
+
+  factory LeaveGroupResponse.fromJson(Map<String, dynamic> j) => LeaveGroupResponse(
+        closed: j['closed'] as bool,
+        group: j['group'],
+        left: j['left'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': closed,
+        'group': ?group,
+        'left': left,
+      };
+}
+
+class GroupMembersResponse {
+  const GroupMembersResponse({this.invited, required this.members, this.waiting});
+
+  final List<GroupPending>? invited;
+  final List<GroupMember> members;
+  final List<GroupPending>? waiting;
+
+  factory GroupMembersResponse.fromJson(Map<String, dynamic> j) => GroupMembersResponse(
+        invited: j['invited'] == null ? null : (j['invited'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+        members: (j['members'] as List).map((e) => GroupMember.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: j['waiting'] == null ? null : (j['waiting'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invited': ?invited?.map((e) => e.toJson()).toList(),
+        'members': members.map((e) => e.toJson()).toList(),
+        'waiting': ?waiting?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupPending {
+  const GroupPending({required this.at, required this.name, required this.personId});
+
+  final DateTime at;
+  final String name;
+  final String personId;
+
+  factory GroupPending.fromJson(Map<String, dynamic> j) => GroupPending(
+        at: DateTime.parse(j['at'] as String),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class GroupMember {
+  const GroupMember({required this.joinedAt, required this.name, this.person, required this.personId, this.phone, required this.role, required this.you});
+
+  final DateTime joinedAt;
+  final String name;
+  final PersonCard? person;
+  final String personId;
+  /// Only when they chose to show their number.
+  final String? phone;
+  final String role;
+  final bool you;
+
+  factory GroupMember.fromJson(Map<String, dynamic> j) => GroupMember(
+        joinedAt: DateTime.parse(j['joined_at'] as String),
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        role: j['role'] as String,
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'joined_at': joinedAt.toUtc().toIso8601String(),
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': personId,
+        'phone': ?phone,
+        'role': role,
+        'you': you,
+      };
+}
+
+class AddGroupMembersRequest {
+  const AddGroupMembersRequest({required this.personIds});
+
+  final List<String> personIds;
+
+  factory AddGroupMembersRequest.fromJson(Map<String, dynamic> j) => AddGroupMembersRequest(
+        personIds: (j['person_ids'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_ids': personIds.map((e) => e).toList(),
+      };
+}
+
+class AddGroupMembersResponse {
+  const AddGroupMembersResponse({required this.added});
+
+  final List<GroupAdded> added;
+
+  factory AddGroupMembersResponse.fromJson(Map<String, dynamic> j) => AddGroupMembersResponse(
+        added: (j['added'] as List).map((e) => GroupAdded.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': added.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SetGroupAdminRequest {
+  const SetGroupAdminRequest({required this.admin});
+
+  final bool admin;
+
+  factory SetGroupAdminRequest.fromJson(Map<String, dynamic> j) => SetGroupAdminRequest(
+        admin: j['admin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admin': admin,
+      };
+}
+
+class SetGroupAdminResponse {
+  const SetGroupAdminResponse({required this.admin, required this.personId});
+
+  final bool admin;
+  final String personId;
+
+  factory SetGroupAdminResponse.fromJson(Map<String, dynamic> j) => SetGroupAdminResponse(
+        admin: j['admin'] as bool,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admin': admin,
+        'person_id': personId,
+      };
+}
+
+class BlockGroupMemberResponse {
+  const BlockGroupMemberResponse({required this.blocked, required this.chatId});
+
+  final bool blocked;
+  final String chatId;
+
+  factory BlockGroupMemberResponse.fromJson(Map<String, dynamic> j) => BlockGroupMemberResponse(
+        blocked: j['blocked'] as bool,
+        chatId: j['chat_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'chat_id': chatId,
+      };
+}
+
+class GroupLink {
+  const GroupLink({this.code, this.createdAt, required this.on, this.qr, this.url, this.words});
+
+  final String? code;
+  final DateTime? createdAt;
+  final bool on;
+  final String? qr;
+  final String? url;
+  final String? words;
+
+  factory GroupLink.fromJson(Map<String, dynamic> j) => GroupLink(
+        code: j['code'] == null ? null : j['code'] as String,
+        createdAt: j['created_at'] == null ? null : DateTime.parse(j['created_at'] as String),
+        on: j['on'] as bool,
+        qr: j['qr'] == null ? null : j['qr'] as String,
+        url: j['url'] == null ? null : j['url'] as String,
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'created_at': ?createdAt?.toUtc().toIso8601String(),
+        'on': on,
+        'qr': ?qr,
+        'url': ?url,
+        'words': ?words,
+      };
+}
+
+class GroupJoinRequestsResponse {
+  const GroupJoinRequestsResponse({required this.requests});
+
+  final List<GroupPending> requests;
+
+  factory GroupJoinRequestsResponse.fromJson(Map<String, dynamic> j) => GroupJoinRequestsResponse(
+        requests: (j['requests'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupMessagesResponse {
+  const GroupMessagesResponse({required this.messages, required this.more});
+
+  final List<GroupMessage> messages;
+  final bool more;
+
+  factory GroupMessagesResponse.fromJson(Map<String, dynamic> j) => GroupMessagesResponse(
+        messages: (j['messages'] as List).map((e) => GroupMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class GroupMediaResponse {
+  const GroupMediaResponse({required this.messages, required this.more});
+
+  final List<GroupMessage> messages;
+  final bool more;
+
+  factory GroupMediaResponse.fromJson(Map<String, dynamic> j) => GroupMediaResponse(
+        messages: (j['messages'] as List).map((e) => GroupMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class SendGroupMessageRequest {
+  const SendGroupMessageRequest({this.card, this.clientId, this.location, this.mentions, this.replyTo, this.text});
+
+  final SendGroupMessageRequestCard? card;
+  final String? clientId;
+  final PeopleLocation? location;
+  final List<String>? mentions;
+  final String? replyTo;
+  final String? text;
+
+  factory SendGroupMessageRequest.fromJson(Map<String, dynamic> j) => SendGroupMessageRequest(
+        card: j['card'] == null ? null : SendGroupMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
+        'client_id': ?clientId,
+        'location': ?location?.toJson(),
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'reply_to': ?replyTo,
+        'text': ?text,
+      };
+}
+
+class SendGroupMessageRequestCard {
+  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? businessId;
+  final String? itemId;
+  final SendGroupMessageRequestCardPayTo? payTo;
+  final String? reference;
+  final String type;
+  final String? what;
+
+  factory SendGroupMessageRequestCard.fromJson(Map<String, dynamic> j) => SendGroupMessageRequestCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        payTo: j['pay_to'] == null ? null : SendGroupMessageRequestCardPayTo.fromJson(j['pay_to'] as Map<String, dynamic>),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'business_id': ?businessId,
+        'item_id': ?itemId,
+        'pay_to': ?payTo?.toJson(),
+        'reference': ?reference,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+class SendGroupMessageRequestCardPayTo {
+  const SendGroupMessageRequestCardPayTo({this.accountName, this.accountNumber, this.bank});
+
+  final String? accountName;
+  final String? accountNumber;
+  final String? bank;
+
+  factory SendGroupMessageRequestCardPayTo.fromJson(Map<String, dynamic> j) => SendGroupMessageRequestCardPayTo(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        bank: j['bank'] == null ? null : j['bank'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'bank': ?bank,
+      };
+}
+
+class MarkGroupMessageRequest {
+  const MarkGroupMessageRequest({this.reaction, this.starred});
+
+  final String? reaction;
+  final bool? starred;
+
+  factory MarkGroupMessageRequest.fromJson(Map<String, dynamic> j) => MarkGroupMessageRequest(
+        reaction: j['reaction'] == null ? null : j['reaction'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reaction': ?reaction,
+        'starred': ?starred,
+      };
+}
+
+class GroupMessageInfoResponse {
+  const GroupMessageInfoResponse({required this.deliveredTo, required this.readBy, required this.waiting});
+
+  final List<GroupReader> deliveredTo;
+  final List<GroupReader> readBy;
+  final int waiting;
+
+  factory GroupMessageInfoResponse.fromJson(Map<String, dynamic> j) => GroupMessageInfoResponse(
+        deliveredTo: (j['delivered_to'] as List).map((e) => GroupReader.fromJson(e as Map<String, dynamic>)).toList(),
+        readBy: (j['read_by'] as List).map((e) => GroupReader.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivered_to': deliveredTo.map((e) => e.toJson()).toList(),
+        'read_by': readBy.map((e) => e.toJson()).toList(),
+        'waiting': waiting,
+      };
+}
+
+class GroupReader {
+  const GroupReader({this.at, required this.name, required this.personId});
+
+  final Object? at;
+  final String name;
+  final String personId;
+
+  factory GroupReader.fromJson(Map<String, dynamic> j) => GroupReader(
+        at: j['at'],
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': ?at,
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class GroupMessageReactionsResponse {
+  const GroupMessageReactionsResponse({required this.reactions});
+
+  final List<GroupMessageReactionsResponseReactionsItem> reactions;
+
+  factory GroupMessageReactionsResponse.fromJson(Map<String, dynamic> j) => GroupMessageReactionsResponse(
+        reactions: (j['reactions'] as List).map((e) => GroupMessageReactionsResponseReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reactions': reactions.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupMessageReactionsResponseReactionsItem {
+  const GroupMessageReactionsResponseReactionsItem({required this.at, required this.name, required this.personId, required this.reaction});
+
+  final DateTime at;
+  final String name;
+  final String personId;
+  final String reaction;
+
+  factory GroupMessageReactionsResponseReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsResponseReactionsItem(
+        at: DateTime.parse(j['at'] as String),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        reaction: j['reaction'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'name': name,
+        'person_id': personId,
+        'reaction': reaction,
+      };
+}
+
+class OpenGroupCardResponse {
+  const OpenGroupCardResponse({required this.card, required this.live});
+
+  final PeopleCard card;
+  final Map<String, dynamic> live;
+
+  factory OpenGroupCardResponse.fromJson(Map<String, dynamic> j) => OpenGroupCardResponse(
+        card: PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        live: j['live'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': card.toJson(),
+        'live': live,
+      };
+}
+
+class MarkGroupSplitPaidRequest {
+  const MarkGroupSplitPaidRequest({required this.paid});
+
+  final bool paid;
+
+  factory MarkGroupSplitPaidRequest.fromJson(Map<String, dynamic> j) => MarkGroupSplitPaidRequest(
+        paid: j['paid'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'paid': paid,
+      };
+}
+
+class TypingGroupRequest {
+  const TypingGroupRequest({this.typing});
+
+  final bool? typing;
+
+  factory TypingGroupRequest.fromJson(Map<String, dynamic> j) => TypingGroupRequest(
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'typing': ?typing,
+      };
+}
+
+class GroupLinkPreviewResponse {
+  const GroupLinkPreviewResponse({required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
+
+  final String code;
+  final bool full;
+  final String link;
+  final int members;
+  final String name;
+  final Object? photo;
+
+  factory GroupLinkPreviewResponse.fromJson(Map<String, dynamic> j) => GroupLinkPreviewResponse(
+        code: j['code'] as String,
+        full: j['full'] as bool,
+        link: j['link'] as String,
+        members: (j['members'] as num).toInt(),
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'full': full,
+        'link': link,
+        'members': members,
+        'name': name,
+        'photo': ?photo,
+      };
+}
+
+class ReportGroupRequest {
+  const ReportGroupRequest({required this.consent, this.note, this.personId, required this.reason});
+
+  /// The last 20 messages go to Taskiem's moderators only with it.
+  final bool consent;
+  final String? note;
+  /// A member to report (or someone who was one); without it, the group.
+  final String? personId;
+  final String reason;
+
+  factory ReportGroupRequest.fromJson(Map<String, dynamic> j) => ReportGroupRequest(
+        consent: j['consent'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'consent': consent,
+        'note': ?note,
+        'person_id': ?personId,
+        'reason': reason,
+      };
+}
+
+class ReportGroupResponse {
+  const ReportGroupResponse({required this.id, required this.messagesSent, required this.said});
+
+  final String id;
+  final bool messagesSent;
+  final String said;
+
+  factory ReportGroupResponse.fromJson(Map<String, dynamic> j) => ReportGroupResponse(
+        id: j['id'] as String,
+        messagesSent: j['messages_sent'] as bool,
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'messages_sent': messagesSent,
+        'said': said,
+      };
+}
+
+class AppealGroupRequest {
+  const AppealGroupRequest({required this.text});
+
+  final String text;
+
+  factory AppealGroupRequest.fromJson(Map<String, dynamic> j) => AppealGroupRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class AppealGroupResponse {
+  const AppealGroupResponse({required this.appeal, required this.said});
+
+  final StandingAppeal appeal;
+  final String said;
+
+  factory AppealGroupResponse.fromJson(Map<String, dynamic> j) => AppealGroupResponse(
+        appeal: StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'appeal': appeal.toJson(),
+        'said': said,
+      };
+}
+
+class StartBasketRequest {
+  const StartBasketRequest({required this.businessId, this.chatId, this.groupId});
+
+  final String businessId;
+  /// Your own people chat's id (one of group_id and chat_id).
+  final String? chatId;
+  final String? groupId;
+
+  factory StartBasketRequest.fromJson(Map<String, dynamic> j) => StartBasketRequest(
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'group_id': ?groupId,
+      };
+}
+
+class StartBasketResponse {
+  const StartBasketResponse({required this.basket, required this.message});
+
+  final Basket basket;
+  final Map<String, dynamic> message;
+
+  factory StartBasketResponse.fromJson(Map<String, dynamic> j) => StartBasketResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        message: j['message'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'message': message,
+      };
+}
+
+/// A shared basket (people-chatting §10.3, 5b C): ordering together from one
+/// business in a group or a chat between two people.
+class Basket {
+  const Basket({required this.business, required this.businessId, this.chatId, this.closedAt, required this.createdAt, required this.deliveryKobo, this.fulfilment, this.groupId, required this.holder, required this.holderGone, required this.holderId, required this.id, required this.itemsKobo, required this.members, this.order, this.payment, required this.people, this.placedAt, this.placedBy, required this.problems, this.shop, required this.starterId, required this.state, required this.totalKobo, required this.where, required this.youHold, required this.youId, this.zone});
+
+  final String business;
+  final String businessId;
+  /// Your own copy's id, for a chat between two people.
+  final String? chatId;
+  final DateTime? closedAt;
+  final DateTime createdAt;
+  final int deliveryKobo;
+  final String? fulfilment;
+  final String? groupId;
+  final String holder;
+  /// The holder is no longer in the group or the chat; any member may take it.
+  final bool holderGone;
+  final String holderId;
+  final String id;
+  final int itemsKobo;
+  /// Who is in the group or the chat now (empty when you reach it only as its
+  /// placer or one with lines in it, after leaving).
+  final List<BasketMember> members;
+  final BasketOrder? order;
+  final String? payment;
+  final List<BasketPerson> people;
+  final DateTime? placedAt;
+  final String? placedBy;
+  final List<String> problems;
+  final BasketShop? shop;
+  final String starterId;
+  final String state;
+  final int totalKobo;
+  final String where;
+  final bool youHold;
+  /// The person reading it (to compare with `placed_by` and `holder_id`).
+  final String youId;
+  final String? zone;
+
+  factory Basket.fromJson(Map<String, dynamic> j) => Basket(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        closedAt: j['closed_at'] == null ? null : DateTime.parse(j['closed_at'] as String),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deliveryKobo: (j['delivery_kobo'] as num).toInt(),
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+        holder: j['holder'] as String,
+        holderGone: j['holder_gone'] as bool,
+        holderId: j['holder_id'] as String,
+        id: j['id'] as String,
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        members: (j['members'] as List).map((e) => BasketMember.fromJson(e as Map<String, dynamic>)).toList(),
+        order: j['order'] == null ? null : BasketOrder.fromJson(j['order'] as Map<String, dynamic>),
+        payment: j['payment'] == null ? null : j['payment'] as String,
+        people: (j['people'] as List).map((e) => BasketPerson.fromJson(e as Map<String, dynamic>)).toList(),
+        placedAt: j['placed_at'] == null ? null : DateTime.parse(j['placed_at'] as String),
+        placedBy: j['placed_by'] == null ? null : j['placed_by'] as String,
+        problems: (j['problems'] as List).map((e) => e as String).toList(),
+        shop: j['shop'] == null ? null : BasketShop.fromJson(j['shop'] as Map<String, dynamic>),
+        starterId: j['starter_id'] as String,
+        state: j['state'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        where: j['where'] as String,
+        youHold: j['you_hold'] as bool,
+        youId: j['you_id'] as String,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'closed_at': ?closedAt?.toUtc().toIso8601String(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery_kobo': deliveryKobo,
+        'fulfilment': ?fulfilment,
+        'group_id': ?groupId,
+        'holder': holder,
+        'holder_gone': holderGone,
+        'holder_id': holderId,
+        'id': id,
+        'items_kobo': itemsKobo,
+        'members': members.map((e) => e.toJson()).toList(),
+        'order': ?order?.toJson(),
+        'payment': ?payment,
+        'people': people.map((e) => e.toJson()).toList(),
+        'placed_at': ?placedAt?.toUtc().toIso8601String(),
+        'placed_by': ?placedBy,
+        'problems': problems.map((e) => e).toList(),
+        'shop': ?shop?.toJson(),
+        'starter_id': starterId,
+        'state': state,
+        'total_kobo': totalKobo,
+        'where': where,
+        'you_hold': youHold,
+        'you_id': youId,
+        'zone': ?zone,
+      };
+}
+
+/// Someone in the basket's group or chat now (the holder hands it to one of
+/// them).
+class BasketMember {
+  const BasketMember({required this.name, required this.personId, required this.you});
+
+  final String name;
+  final String personId;
+  final bool you;
+
+  factory BasketMember.fromJson(Map<String, dynamic> j) => BasketMember(
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'person_id': personId,
+        'you': you,
+      };
+}
+
+/// A placed basket's order as its members follow it; never the customer's
+/// details.
+class BasketOrder {
+  const BasketOrder({this.delivery, required this.leftKobo, required this.line, required this.paidKobo, this.payBy, required this.payableNow, required this.paymentState, required this.reference, required this.status, required this.totalKobo});
+
+  final DeliveryProgress? delivery;
+  final int leftKobo;
+  /// The state in words.
+  final String line;
+  final int paidKobo;
+  final DateTime? payBy;
+  final bool payableNow;
+  final String paymentState;
+  final String reference;
+  final String status;
+  final int totalKobo;
+
+  factory BasketOrder.fromJson(Map<String, dynamic> j) => BasketOrder(
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        leftKobo: (j['left_kobo'] as num).toInt(),
+        line: j['line'] as String,
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payBy: j['pay_by'] == null ? null : DateTime.parse(j['pay_by'] as String),
+        payableNow: j['payable_now'] as bool,
+        paymentState: j['payment_state'] as String,
+        reference: j['reference'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivery': ?delivery?.toJson(),
+        'left_kobo': leftKobo,
+        'line': line,
+        'paid_kobo': paidKobo,
+        'pay_by': ?payBy?.toUtc().toIso8601String(),
+        'payable_now': payableNow,
+        'payment_state': paymentState,
+        'reference': reference,
+        'status': status,
+        'total_kobo': totalKobo,
+      };
+}
+
+class BasketPerson {
+  const BasketPerson({required this.itemsKobo, required this.lines, required this.name, required this.personId, this.share, required this.you});
+
+  final int itemsKobo;
+  final List<BasketLine> lines;
+  /// "You", the name you gave them in contacts, else theirs; "Deleted account".
+  final String name;
+  final String personId;
+  final BasketShare? share;
+  final bool you;
+
+  factory BasketPerson.fromJson(Map<String, dynamic> j) => BasketPerson(
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        lines: (j['lines'] as List).map((e) => BasketLine.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        share: j['share'] == null ? null : BasketShare.fromJson(j['share'] as Map<String, dynamic>),
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items_kobo': itemsKobo,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'name': name,
+        'person_id': personId,
+        'share': ?share?.toJson(),
+        'you': you,
+      };
+}
+
+/// One line of a member's in a shared basket.
+class BasketLine {
+  const BasketLine({required this.addedPriceKobo, required this.available, this.fewLeft, required this.id, required this.itemId, required this.lineKobo, required this.name, required this.priceChanged, required this.priceKobo, required this.quantity});
+
+  /// The price when the line was added.
+  final int addedPriceKobo;
+  /// In the shop now and not sold out (always true once placed).
+  final bool available;
+  final int? fewLeft;
+  final String id;
+  final String itemId;
+  final int lineKobo;
+  final String name;
+  final bool priceChanged;
+  /// The shop's price now (as placed, once placed).
+  final int priceKobo;
+  final int quantity;
+
+  factory BasketLine.fromJson(Map<String, dynamic> j) => BasketLine(
+        addedPriceKobo: (j['added_price_kobo'] as num).toInt(),
+        available: j['available'] as bool,
+        fewLeft: j['few_left'] == null ? null : (j['few_left'] as num).toInt(),
+        id: j['id'] as String,
+        itemId: j['item_id'] as String,
+        lineKobo: (j['line_kobo'] as num).toInt(),
+        name: j['name'] as String,
+        priceChanged: j['price_changed'] as bool,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_price_kobo': addedPriceKobo,
+        'available': available,
+        'few_left': ?fewLeft,
+        'id': id,
+        'item_id': itemId,
+        'line_kobo': lineKobo,
+        'name': name,
+        'price_changed': priceChanged,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+      };
+}
+
+/// A member's share once placed (C2): their items and an equal part of the
+/// delivery (the placer's carries the kobo left over, even with no items of
+/// their own); paid by its own link ("each pays"), or a "Your share" card sent
+/// ("I'll pay all").
+class BasketShare {
+  const BasketShare({required this.amountKobo, required this.cardSent, required this.deliveryKobo, required this.itemsKobo, required this.paid, this.paidAt, required this.refundDue});
+
+  final int amountKobo;
+  final bool cardSent;
+  final int deliveryKobo;
+  final int itemsKobo;
+  final bool paid;
+  final DateTime? paidAt;
+  /// Paid after the order could take it (it lapsed or closed, or had less left
+  /// to pay); never counted, the business sends it back.
+  final bool refundDue;
+
+  factory BasketShare.fromJson(Map<String, dynamic> j) => BasketShare(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        cardSent: j['card_sent'] as bool,
+        deliveryKobo: (j['delivery_kobo'] as num).toInt(),
+        itemsKobo: (j['items_kobo'] as num).toInt(),
+        paid: j['paid'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        refundDue: j['refund_due'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'card_sent': cardSent,
+        'delivery_kobo': deliveryKobo,
+        'items_kobo': itemsKobo,
+        'paid': paid,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'refund_due': refundDue,
+      };
+}
+
+class BasketShop {
+  const BasketShop({this.closed, required this.delivery, required this.eachOffered, required this.open, required this.payment, required this.pickup, required this.zones});
+
+  final String? closed;
+  final bool delivery;
+  /// Each member may pay their own share (the business takes payment in the app
+  /// by card).
+  final bool eachOffered;
+  final bool open;
+  final String payment;
+  final bool pickup;
+  final List<BasketZone> zones;
+
+  factory BasketShop.fromJson(Map<String, dynamic> j) => BasketShop(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        delivery: j['delivery'] as bool,
+        eachOffered: j['each_offered'] as bool,
+        open: j['open'] as bool,
+        payment: j['payment'] as String,
+        pickup: j['pickup'] as bool,
+        zones: (j['zones'] as List).map((e) => BasketZone.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'delivery': delivery,
+        'each_offered': eachOffered,
+        'open': open,
+        'payment': payment,
+        'pickup': pickup,
+        'zones': zones.map((e) => e.toJson()).toList(),
+      };
+}
+
+class BasketZone {
+  const BasketZone({required this.feeKobo, required this.name});
+
+  final int feeKobo;
+  final String name;
+
+  factory BasketZone.fromJson(Map<String, dynamic> j) => BasketZone(
+        feeKobo: (j['fee_kobo'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fee_kobo': feeKobo,
+        'name': name,
+      };
+}
+
+class PutBasketRequest {
+  const PutBasketRequest({this.fulfilment, this.zone});
+
+  final String? fulfilment;
+  final String? zone;
+
+  factory PutBasketRequest.fromJson(Map<String, dynamic> j) => PutBasketRequest(
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fulfilment': ?fulfilment,
+        'zone': ?zone,
+      };
+}
+
+class BasketShopResponse {
+  const BasketShopResponse({this.closed, required this.delivery, required this.items, required this.open, required this.payment, required this.pickup, required this.zones});
+
+  final String? closed;
+  final bool delivery;
+  final List<ShopItem> items;
+  final bool open;
+  final String payment;
+  final bool pickup;
+  final List<BasketZone> zones;
+
+  factory BasketShopResponse.fromJson(Map<String, dynamic> j) => BasketShopResponse(
+        closed: j['closed'] == null ? null : j['closed'] as String,
+        delivery: j['delivery'] as bool,
+        items: (j['items'] as List).map((e) => ShopItem.fromJson(e as Map<String, dynamic>)).toList(),
+        open: j['open'] as bool,
+        payment: j['payment'] as String,
+        pickup: j['pickup'] as bool,
+        zones: (j['zones'] as List).map((e) => BasketZone.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': ?closed,
+        'delivery': delivery,
+        'items': items.map((e) => e.toJson()).toList(),
+        'open': open,
+        'payment': payment,
+        'pickup': pickup,
+        'zones': zones.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PutMyBasketLinesRequest {
+  const PutMyBasketLinesRequest({required this.lines});
+
+  final List<PutMyBasketLinesRequestLinesItem> lines;
+
+  factory PutMyBasketLinesRequest.fromJson(Map<String, dynamic> j) => PutMyBasketLinesRequest(
+        lines: (j['lines'] as List).map((e) => PutMyBasketLinesRequestLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PutMyBasketLinesRequestLinesItem {
+  const PutMyBasketLinesRequestLinesItem({required this.itemId, required this.quantity});
+
+  final String itemId;
+  final int quantity;
+
+  factory PutMyBasketLinesRequestLinesItem.fromJson(Map<String, dynamic> j) => PutMyBasketLinesRequestLinesItem(
+        itemId: j['item_id'] as String,
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': itemId,
+        'quantity': quantity,
+      };
+}
+
+class HandBasketRequest {
+  const HandBasketRequest({required this.personId});
+
+  final String personId;
+
+  factory HandBasketRequest.fromJson(Map<String, dynamic> j) => HandBasketRequest(
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_id': personId,
+      };
+}
+
+class PlaceBasketRequest {
+  const PlaceBasketRequest({this.address, this.addressId, this.landmark, this.note, required this.payment, this.totalKobo});
+
+  final String? address;
+  final String? addressId;
+  final String? landmark;
+  final String? note;
+  final String payment;
+  /// The total you were shown; 0 or absent to skip the check.
+  final int? totalKobo;
+
+  factory PlaceBasketRequest.fromJson(Map<String, dynamic> j) => PlaceBasketRequest(
+        address: j['address'] == null ? null : j['address'] as String,
+        addressId: j['address_id'] == null ? null : j['address_id'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        payment: j['payment'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'address_id': ?addressId,
+        'landmark': ?landmark,
+        'note': ?note,
+        'payment': payment,
+        'total_kobo': ?totalKobo,
+      };
+}
+
+class PlaceBasketResponse {
+  const PlaceBasketResponse({required this.basket, required this.order});
+
+  final Basket basket;
+  final Map<String, dynamic> order;
+
+  factory PlaceBasketResponse.fromJson(Map<String, dynamic> j) => PlaceBasketResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        order: j['order'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'order': order,
+      };
+}
+
+class PayBasketShareResponse {
+  const PayBasketShareResponse({required this.amountKobo, required this.for_, this.paid, required this.reference, required this.url});
+
+  final int amountKobo;
+  final String for_;
+  final bool? paid;
+  final String reference;
+  final String url;
+
+  factory PayBasketShareResponse.fromJson(Map<String, dynamic> j) => PayBasketShareResponse(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        for_: j['for'] as String,
+        paid: j['paid'] == null ? null : j['paid'] as bool,
+        reference: j['reference'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'for': for_,
+        'paid': ?paid,
+        'reference': reference,
+        'url': url,
+      };
+}
+
+class SendBasketShareCardsRequest {
+  const SendBasketShareCardsRequest({this.payTo});
+
+  final PayoutAccount? payTo;
+
+  factory SendBasketShareCardsRequest.fromJson(Map<String, dynamic> j) => SendBasketShareCardsRequest(
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pay_to': ?payTo?.toJson(),
+      };
+}
+
+class SendBasketShareCardsResponse {
+  const SendBasketShareCardsResponse({required this.basket, required this.failed, required this.sent});
+
+  final Basket basket;
+  final List<Map<String, dynamic>> failed;
+  final List<String> sent;
+
+  factory SendBasketShareCardsResponse.fromJson(Map<String, dynamic> j) => SendBasketShareCardsResponse(
+        basket: Basket.fromJson(j['basket'] as Map<String, dynamic>),
+        failed: (j['failed'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        sent: (j['sent'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'basket': basket.toJson(),
+        'failed': failed.map((e) => e).toList(),
+        'sent': sent.map((e) => e).toList(),
       };
 }

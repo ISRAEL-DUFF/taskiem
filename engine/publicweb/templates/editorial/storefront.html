@@ -14,7 +14,8 @@
     {{range .Forms}}<a class="btn{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}} btn-primary{{end}}" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>
     {{end}}
   </nav>{{end}}
-  {{if or .M.WhatsLink .Phone .M.MapLink}}<nav class="contact" aria-label="Contact">
+  {{if or .M.ChatLink .M.WhatsLink .Phone .M.MapLink}}<nav class="contact" aria-label="Contact">
+    {{with .M.ChatLink}}<a href="{{.}}" rel="noopener">Chat with us</a>{{end}}
     {{with .M.WhatsLink}}<a href="{{.}}" rel="noopener">WhatsApp</a>{{end}}
     {{with .Phone}}<a href="tel:{{.}}">Call</a>{{end}}
     {{with .M.MapLink}}<a href="{{.}}" rel="noopener">Directions</a>{{end}}

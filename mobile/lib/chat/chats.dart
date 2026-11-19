@@ -27,6 +27,7 @@ import 'customer.dart';
 import 'explore.dart';
 import 'live.dart';
 import 'thread.dart' show showHeadMenu;
+import 'cards.dart' show CardPill;
 import 'words.dart';
 
 /// What the list shows, loaded as the web's page loads it.
@@ -496,9 +497,13 @@ class ChatsScreen extends StatefulWidget {
     this.onOpenAt,
     this.onLinks,
     this.onProfile,
+    this.onSwitch,
   });
 
   final ChatsData data;
+
+  /// The ⋯ menu's Switch: You and the person's other businesses.
+  final VoidCallback? onSwitch;
   final VoidCallback? onMenu;
   final VoidCallback? onFind;
 
@@ -832,6 +837,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       items: [
         if (widget.onLinks != null) ('Linked businesses', widget.onLinks!),
         if (widget.onProfile != null) ('Your business in Explore', widget.onProfile!),
+        if (widget.onSwitch != null) ('Switch to You or a business', widget.onSwitch!),
         if (widget.onMenu != null) ('Settings', widget.onMenu!),
         if (d.chatTools && p != null) ('Sound for new orders and payments: ${p.sound ? 'on' : 'off'}', () => p.setSound(!p.sound)),
       ],
@@ -1009,7 +1015,17 @@ class ChatRow extends StatelessWidget {
     this.alert = false,
     this.need = 0,
     this.onTap,
+    this.avatar,
+    this.marks = const [],
   });
+
+  /// Small marks after the name: a customer's lines, WhatsApp and App
+  /// (taskiem-for-everyone §11), [off] when that line takes no messages.
+  final List<({String label, bool off})> marks;
+
+  /// Its face in place of the letters or logo (a business's photo by its
+  /// address, on You).
+  final Widget? avatar;
 
   /// Its count in orange (Taskiem's: what needs you).
   final bool alert;
@@ -1041,7 +1057,7 @@ class ChatRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            accent ? const _AccentAvatar() : ChatAvatar(name: letter, logo: logo, size: 48),
+            accent ? const _AccentAvatar() : (avatar ?? ChatAvatar(name: letter, logo: logo, size: 48)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -1058,6 +1074,16 @@ class ChatRow extends StatelessWidget {
                           style: tkText(size: 16, weight: 600, color: t.text),
                         ),
                       ),
+                      for (final m in marks) ...[
+                        const SizedBox(width: 6),
+                        Semantics(
+                          label: m.off ? '${m.label}, stopped' : m.label,
+                          excludeSemantics: true,
+                          // The app's pills (cards.dart CardPill): a stopped
+                          // line red, WhatsApp in its lime, the rest plain.
+                          child: CardPill(m.label, m.off ? CardTone.danger : (m.label == 'WhatsApp' ? CardTone.lime : CardTone.plain)),
+                        ),
+                      ],
                       if (time != null) ...[
                         const SizedBox(width: 8),
                         Text(
@@ -2025,10 +2051,15 @@ class _Customers extends StatelessWidget {
               key: ValueKey('row customer ${c.id}'),
               title: customerTitle(c),
               letter: customerLetter(c),
+              // One row for a customer on both lines (§11), with each line's mark.
+              marks: [
+                if (bothLines(c))
+                  for (final l in [?lineOf(c, 'whatsapp'), ?lineOf(c, 'app')]) (label: l.line == 'whatsapp' ? 'WhatsApp' : 'App', off: lineShut(l) != null),
+              ],
               time: listTime(c.lastAt, now),
               preview: _ChatsScreenState._previewText(
                 context,
-                c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}',
+                c.stopped ? ((c.replyLine ?? c.line) == 'app' ? 'Stopped messages' : 'Sent STOP') : '${c.lastMine ? 'You: ' : ''}${c.last}',
                 draft: drafts['customer:${c.id}'],
               ),
               unread: c.unread,

@@ -243,3 +243,274 @@ export interface OpsReport {
   reporters_on_site: number;
   agent_code: string | null;
 }
+
+// --- people chats' safety (api/ops_people.go, api/lawful.go) ---
+
+export interface PeopleOverview {
+  open: { people_reports: number; customer_reports: number; held: number; appeals: number; lawful_requests: number };
+  storage: { table: string; rows: number; bytes: number }[];
+  storage_words: string;
+}
+
+export interface OpsPeopleReportRow {
+  id: string;
+  reporter_id: string | null;
+  detached: boolean;
+  reported_id: string | null;
+  reported_name: string;
+  reported_gone: boolean;
+  reported_suspended: boolean;
+  reason: string;
+  note: string;
+  from_request: boolean;
+  files: number;
+  sealed: boolean;
+  status: "open" | "reviewed";
+  created_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reports_against: number;
+  /** A report from inside a group: of the group or of a member (group_member). */
+  group_id: string | null;
+  /** A member's report, still one after their account goes (reported_id null then). */
+  group_member: boolean;
+}
+
+export interface OpsCustomerReportRow {
+  id: string;
+  reporter_id: string | null;
+  detached: boolean;
+  tenant_id: string;
+  business: string;
+  reason: string;
+  note: string;
+  messages: number;
+  status: "open" | "reviewed";
+  created_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+/** One message a report keeps, opened. */
+export interface OpsReportMessage {
+  id?: string;
+  from_reporter: boolean;
+  /** Who sent it, in a group's report (their own name). */
+  sender_id?: string;
+  sender?: string;
+  kind: string;
+  body: string;
+  card?: Record<string, unknown>;
+  location?: { lat: number; lng: number; label?: string };
+  attachment?: { kind?: string; type?: string; size?: number; name?: string };
+  deleted?: boolean;
+  file?: boolean;
+  file_left_out?: boolean;
+  at: string;
+}
+
+export interface OpsPeopleReport {
+  report: {
+    id: string;
+    reporter_id: string | null;
+    reported_id: string | null;
+    reported_name: string;
+    reason: string;
+    note: string;
+    from_request: boolean;
+    status: "open" | "reviewed";
+    created_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+    group_id: string | null;
+    group_member: boolean;
+  };
+  messages: OpsReportMessage[];
+  files: { message_id: string; type: string; size: number }[];
+  sealed: boolean;
+  /** A group's report: the group as the reporter saw it then. */
+  group: { name: string; description: string; members: number; left?: boolean } | null;
+}
+
+export interface OpsCustomerReport {
+  report: {
+    id: string;
+    reporter_id: string | null;
+    tenant_id: string;
+    business: string;
+    reason: string;
+    note: string;
+    messages: { from_customer: boolean; kind: string; body: string; offer?: boolean; at: string }[] | null;
+    status: "open" | "reviewed";
+    created_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+  };
+}
+
+export interface OpsHeldRow {
+  id: string;
+  sender_id: string | null;
+  sender_name: string;
+  recipient_id: string | null;
+  recipient_name: string;
+  kind: string;
+  reasons: string[];
+  has_file: boolean;
+  state: "held" | "released" | "confirmed";
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  /** Held in a group: no member got it. */
+  group_id: string | null;
+}
+
+export interface OpsHeld {
+  held: OpsHeldRow & { file_type: string | null; file_size: number | null; decision_note: string | null; released_message: string | null };
+  message: { body?: string; card?: Record<string, unknown>; location?: { lat: number; lng: number; label?: string }; name?: string };
+}
+
+export interface OpsVerdict {
+  from_person: string;
+  from_name: string;
+  to_person: string | null;
+  to_name: string;
+  verdict: string;
+  reasons: string[];
+  at: string;
+  group_id: string | null;
+}
+
+export interface OpsPersonAction {
+  id: string;
+  action: "warn" | "limit" | "suspend" | "close";
+  reason: string;
+  operator: string;
+  report_id: string | null;
+  until: string | null;
+  lifted_at: string | null;
+  lifted_by: string | null;
+  lift_reason: string | null;
+  closed_at: string | null;
+  close_note: string | null;
+  created_at: string;
+  appeal_id: string | null;
+  appeal_state: string | null;
+  appeal_text: string | null;
+  appeal_at: string | null;
+}
+
+export interface OpsPerson {
+  person: {
+    id: string;
+    name: string;
+    active: boolean;
+    deleted: boolean;
+    suspended: boolean;
+    created_at: string;
+    reports_against: number;
+    held: number;
+    verdicts_week: number;
+    device_accounts: number;
+    requests_waiting: number;
+    requests_accepted: number;
+    requests_refused: number;
+  };
+  actions: OpsPersonAction[];
+}
+
+export interface OpsAppeal {
+  id: string;
+  action_id: string;
+  person_id: string;
+  name: string;
+  action: "warn" | "limit" | "suspend" | "close" | "group_link_off" | "group_close";
+  action_reason: string;
+  operator: string;
+  until: string | null;
+  text: string;
+  state: "open" | "upheld" | "overturned";
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  /** An appeal of a group's closing, by one of its admins. */
+  group_id: string | null;
+}
+
+/** What moderators did to a group (api/ops_people_groups.go). */
+export interface OpsGroupAction extends Omit<OpsPersonAction, "action"> {
+  action: "group_link_off" | "group_close";
+}
+
+/** GET /v1/ops/people/groups/{id}?why=: a group for moderators; never its name or messages. */
+export interface OpsGroup {
+  group: {
+    id: string;
+    created_at: string;
+    created_by: string | null;
+    creator_name: string;
+    members: number;
+    admins: number;
+    link_on: boolean;
+    last_message_at: string;
+    closed_at: string | null;
+    close_until: string | null;
+    link_stopped_at: string | null;
+    reports: number;
+    held: number;
+  } | null;
+  gone: boolean;
+  members: {
+    person_id: string;
+    name: string;
+    role: "admin" | "member";
+    how: string;
+    joined_at: string;
+    left_at: string | null;
+    left_how: string | null;
+    deleted: boolean;
+    suspended: boolean;
+  }[];
+  reports: {
+    id: string;
+    reporter_id: string | null;
+    reported_id: string | null;
+    reported_name: string;
+    reason: string;
+    status: "open" | "reviewed";
+    created_at: string;
+    group_member: boolean;
+  }[];
+  actions: OpsGroupAction[];
+}
+
+export interface OpsLawfulRequest {
+  id: string;
+  authority: string;
+  reference: string;
+  legal_basis: string;
+  person_id: string | null;
+  person_name: string;
+  from: string;
+  to: string;
+  with_person_id: string | null;
+  files: boolean;
+  scope_note: string;
+  received_at: string;
+  recorded_by: string;
+  recorded_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  state: "recorded" | "approved" | "answered" | "refused";
+  answered_by: string | null;
+  answered_at: string | null;
+  messages_given: number | null;
+  refused_reason: string | null;
+  told_at: string | null;
+  not_told_reason: string | null;
+  /** Group messages asked for: none, sent (their own) or seen (every one they could see). */
+  groups: "none" | "sent" | "seen";
+}

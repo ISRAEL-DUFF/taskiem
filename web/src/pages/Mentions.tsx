@@ -7,6 +7,7 @@ import {
 } from "react";
 import { get } from "../api";
 import { Link } from "react-router-dom";
+import { flushSync } from "react-dom";
 import { Icon, TaskiemMark } from "../icons";
 import { usePresence } from "../kit";
 import { initialsOf } from "./ChatAvatar";
@@ -44,6 +45,9 @@ export function useMentions(
   sources: {
     "@": Suggestion[];
     "#": Suggestion[];
+    /** What "@" offers, said to a screen reader ("Members to mention");
+     * linked businesses by default. */
+    atLabel?: string;
     services?: Suggestion[];
     /** The categories "@" offers, when not the items' own. */
     categories?: { name: string; count: number }[];
@@ -144,14 +148,16 @@ export function useMentions(
       Math.max(caret, q.start + 1 + q.query.length),
       s.name,
     );
-    setText(next.text);
-    if (s.kind !== "taskiem")
-      setPicked((cur) => [...cur, s]);
-    setQ(null);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(next.caret, next.caret);
+    // The words and the caret move together, at once: a caret put back a
+    // frame later would land the next key typed at the end of the box.
+    flushSync(() => {
+      setText(next.text);
+      if (s.kind !== "taskiem")
+        setPicked((cur) => [...cur, s]);
+      setQ(null);
     });
+    el?.focus();
+    el?.setSelectionRange(next.caret, next.caret);
   };
   /** Keys in the text box: true when a suggestion took them. */
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
@@ -191,11 +197,15 @@ export function useMentions(
               ? { kind: p.kind, ref: p.id }
               : { kind: p.kind, item_id: p.id },
       );
+  /** The members picked with "@" (their id with the name picked): a
+   * group's mentions keep the one picked when names collide. */
+  const pickedPeople = () => picked.filter((p) => p.kind === "customer").map((p) => ({ id: p.id, name: p.name }));
   const reset = () => {
     setPicked([]);
     setQ(null);
   };
   return {
+    atLabel: sources.atLabel,
     q,
     shown,
     enterPick,
@@ -206,6 +216,7 @@ export function useMentions(
     onKeyDown,
     update,
     refs,
+    pickedPeople,
     reset,
     close: () => setQ(null),
     box,
@@ -487,7 +498,7 @@ function PlainList({ m }: { m: Mentions }) {
       className="mention-list"
       aria-label={
         mark === "@"
-          ? "Businesses to mention"
+          ? (m.atLabel ?? "Businesses to mention")
           : mark === "/"
             ? "Things to tag"
             : "Items to mention"

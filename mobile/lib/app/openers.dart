@@ -21,4 +21,8 @@ class Openers {
 
   /// Your business in Explore (the business profile).
   static void Function(BuildContext context)? businessProfile;
+
+  /// A customer's conversation, by its id (an order made in the app's
+  /// Write to them in the app).
+  static void Function(BuildContext context, String id)? customer;
 }

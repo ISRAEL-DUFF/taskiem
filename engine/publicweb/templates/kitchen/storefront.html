@@ -15,6 +15,7 @@
     <p class="kx-cta">
       {{if .HasItems}}<a class="btn btn-primary" href="#menu">See the menu</a>{{end}}
       {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{with .M.ChatLink}}<a class="btn" href="{{.}}" rel="noopener">Chat with us</a>{{end}}
       {{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">Order on WhatsApp</a>{{end}}
     </p>
   </div>

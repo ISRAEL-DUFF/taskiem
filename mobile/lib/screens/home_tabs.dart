@@ -20,7 +20,11 @@ import '../theme/theme.dart';
 typedef HomeTab = ({String label, String icon, Widget Function(BuildContext) build});
 
 class HomeTabs extends StatefulWidget {
-  const HomeTabs({super.key, required this.tabs, this.count, this.counted, this.offline, this.updating});
+  const HomeTabs({super.key, required this.tabs, this.count, this.counted, this.offline, this.updating, this.onShow});
+
+  /// A tab brought to the front again (from the bar, or a link): You's
+  /// Orders reads itself again.
+  final void Function(int tab)? onShow;
 
   /// No connection, the pages showing what the phone kept: said in a
   /// strip over the bar, quietly, as WhatsApp's "Waiting for network".
@@ -51,11 +55,16 @@ class HomeTabsState extends State<HomeTabs> {
 
   int get open => _open;
 
-  void show(int i) => setState(() {
-    _was = _open;
-    _open = i;
-    _built.add(i);
-  });
+  void show(int i) {
+    final again = i != _open && _built.contains(i);
+    setState(() {
+      _was = _open;
+      _open = i;
+      _built.add(i);
+    });
+    // Shown again, not first built (a tab reads itself when built).
+    if (again) widget.onShow?.call(i);
+  }
 
   @override
   Widget build(BuildContext context) {

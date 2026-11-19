@@ -17,6 +17,7 @@
     <p class="fx-cta">
       {{if .HasItems}}<a class="btn btn-primary" href="#shop">Shop the collection</a>{{end}}
       {{range .Forms}}{{if eq .Kind "booking"}}<a class="fx-under" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
+      {{with .M.ChatLink}}{{if not $.HasItems}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat with us</a>{{end}}{{end}}
       {{with .M.WhatsLink}}{{if not $.HasItems}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{end}}
     </p>
   </div>
@@ -43,7 +44,7 @@
 </main>
 <footer class="foot sf-foot fx-foot">
 <p class="sf-foot-name">{{.M.Card.Name}}</p>
-<nav class="fx-foot-links" aria-label="Links">{{if .HasItems}}<a href="#shop">Shop</a>{{end}}{{range .Forms}}{{if eq .Kind "booking"}}<a href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}{{with .M.WhatsLink}}<a href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{with .Phone}}<a href="tel:{{.}}">Call</a>{{end}}</nav>
+<nav class="fx-foot-links" aria-label="Links">{{if .HasItems}}<a href="#shop">Shop</a>{{end}}{{range .Forms}}{{if eq .Kind "booking"}}<a href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}{{with .M.ChatLink}}<a href="{{.}}" rel="noopener">Chat with us</a>{{end}}{{with .M.WhatsLink}}<a href="{{.}}" rel="noopener">Chat on WhatsApp</a>{{end}}{{with .Phone}}<a href="tel:{{.}}">Call</a>{{end}}</nav>
 <p class="sf-foot-meta">Powered by Taskiem · <a href="/report">Report this page</a></p>
 <p class="safety">Taskiem never asks for card details, PINs or OTPs. {{template "safety"}}</p>
 </footer>

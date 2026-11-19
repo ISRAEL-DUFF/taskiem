@@ -97,6 +97,8 @@ class TkTokens {
   final Color chartIn;
   /// `--chart-out`
   final Color chartOut;
+  /// `--qr-ground`
+  final Color qrGround;
   /// `--shadow`
   final List<BoxShadow> shadow;
   /// `--shadow-md`
@@ -231,6 +233,7 @@ class TkTokens {
     required this.tintWarnText,
     required this.chartIn,
     required this.chartOut,
+    required this.qrGround,
     required this.shadow,
     required this.shadowMd,
     required this.shadowLg,
@@ -323,6 +326,7 @@ class TkTokens {
     Color? tintWarnText,
     Color? chartIn,
     Color? chartOut,
+    Color? qrGround,
     List<BoxShadow>? shadow,
     List<BoxShadow>? shadowMd,
     List<BoxShadow>? shadowLg,
@@ -413,6 +417,7 @@ class TkTokens {
         tintWarnText: tintWarnText ?? this.tintWarnText,
         chartIn: chartIn ?? this.chartIn,
         chartOut: chartOut ?? this.chartOut,
+        qrGround: qrGround ?? this.qrGround,
         shadow: shadow ?? this.shadow,
         shadowMd: shadowMd ?? this.shadowMd,
         shadowLg: shadowLg ?? this.shadowLg,
@@ -505,6 +510,7 @@ const tkLight = TkTokens(
   tintWarnText: Color(0xFF8A3410),
   chartIn: Color(0xFF1F8060),
   chartOut: Color(0xFFC9822F),
+  qrGround: Color(0xFFFFFFFF),
   shadow: <BoxShadow>[BoxShadow(offset: Offset(0.0, 1.0), blurRadius: 0.87, spreadRadius: 0.0, color: Color(0x0A0E0F0C))],
   shadowMd: <BoxShadow>[BoxShadow(offset: Offset(0.0, 1.0), blurRadius: 0.87, spreadRadius: 0.0, color: Color(0x0A0E0F0C)), BoxShadow(offset: Offset(0.0, 4.0), blurRadius: 9.53, spreadRadius: -2.0, color: Color(0x0F0E0F0C))],
   shadowLg: <BoxShadow>[BoxShadow(offset: Offset(0.0, 24.0), blurRadius: 40.7, spreadRadius: -16.0, color: Color(0x380E0F0C)), BoxShadow(offset: Offset(0.0, 2.0), blurRadius: 4.33, spreadRadius: 0.0, color: Color(0x0A0E0F0C))],
@@ -596,6 +602,7 @@ const tkDark = TkTokens(
   tintWarnText: Color(0xFFFDB022),
   chartIn: Color(0xFF1F8060),
   chartOut: Color(0xFFC9822F),
+  qrGround: Color(0xFFFFFFFF),
   shadow: <BoxShadow>[],
   shadowMd: <BoxShadow>[BoxShadow(offset: Offset(0.0, 4.0), blurRadius: 12.99, spreadRadius: 0.0, color: Color(0x59000000))],
   shadowLg: <BoxShadow>[BoxShadow(offset: Offset(0.0, 24.0), blurRadius: 40.7, spreadRadius: 0.0, color: Color(0x80000000))],

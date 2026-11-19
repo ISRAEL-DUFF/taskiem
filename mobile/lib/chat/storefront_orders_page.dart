@@ -10,7 +10,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show OpenAppCustomerChatRequest;
 import '../api/transport.dart';
+import '../app/openers.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show CloseSoon, TkSwitchRow, errorWords;
@@ -547,6 +549,25 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     if (mounted) setState(() => _busy = false);
   }
 
+  /// Write to them in the app: their conversation with the business,
+  /// opened (made if there is none yet).
+  Future<void> _writeInApp() async {
+    setState(() => (_busy = true, _actError = null));
+    try {
+      final chat = await _auth.api.openAppCustomerChat(body: OpenAppCustomerChatRequest(reference: widget.reference));
+      if (!mounted) return;
+      setState(() => _busy = false);
+      final open = Openers.customer;
+      if (open == null) {
+        showTkToast(context, 'Their conversation is in your chats, under Customers.');
+      } else {
+        open(context, chat.id);
+      }
+    } on Object catch (e) {
+      if (mounted) setState(() => (_actError = errorWords(e), _busy = false));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -605,6 +626,20 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       _top(t, o),
       if (_actError != null) TkErrorBox(_actError!),
       _customer(t, c),
+      // Made in the Taskiem app: the customer's own conversation with you.
+      if (o['in_app'] == true && _auth.can('storefront.manage|order.handle'))
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'Write to them in the app',
+              sub: 'Their chat with you in the Taskiem app',
+              icon: 'b-chat',
+              square: look.teal,
+              onTap: _busy ? null : _writeInApp,
+            ),
+          ],
+        ),
       if (basket.isNotEmpty && !booking)
         TkSection(
           title: 'What they ordered',

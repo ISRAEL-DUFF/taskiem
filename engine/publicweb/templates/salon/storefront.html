@@ -15,6 +15,7 @@
     <p class="sl-cta">
       {{range .Forms}}{{if eq .Kind "booking"}}<a class="btn btn-primary" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
       {{if .Services}}<a class="btn" href="#services">See services</a>{{end}}
+      {{with .M.ChatLink}}<a class="btn{{if not $.Forms}} btn-primary{{end}}" href="{{.}}" rel="noopener">Chat with us</a>{{end}}
       {{if not .Forms}}{{with .M.WhatsLink}}<a class="btn btn-primary" href="{{.}}" rel="noopener">Book on WhatsApp</a>{{end}}{{end}}
     </p>
   </div>

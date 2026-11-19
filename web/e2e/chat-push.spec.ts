@@ -259,8 +259,9 @@ test("the switch turns notifications on for this device, with its own switch for
   await expect(section.getByTestId("chat-push-switch")).toBeChecked();
   expect(await devices(page)).toHaveLength(1);
   await page.getByRole("button", { name: "Sign out" }).first().click();
+  // Signed out, the phone way in.
   await expect(
-    page.getByRole("button", { name: "Sign in", exact: true }),
+    page.getByRole("heading", { name: "Welcome to Taskiem" }),
   ).toBeVisible();
   const again = await page.request.post("/v1/auth/login", {
     headers: H,

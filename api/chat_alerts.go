@@ -120,6 +120,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
 		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.schoolApprovalAlerts, s.dealAlerts, s.orderDraftAlerts,
+		s.customerWaitingAlerts,
 	} {
 		got, err := kind(ctx, p)
 		if err != nil {

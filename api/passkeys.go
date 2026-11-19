@@ -501,7 +501,9 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		if err := passkeysGone(r.Context(), tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		// Every session, their own side's included (no business scope
+		// reaches it).
+		if _, err := tx.Exec(r.Context(), `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "passkey.reset", user.String(), map[string]any{"removed": tag.RowsAffected()})
@@ -647,9 +649,17 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 // their email is confirmed (where email can be sent); one with none of these (signed in by SSO only) has nothing more to give. A
 // passkey assertion must be for a challenge asked for "account.reauth"
 // and action (passkey.add, totp.setup, ...).
+//
+// A session made by a code to the person's phone or chat on a device with
+// no second proof, of someone who could give one, changes no factor at all
+// (401 second_proof_required, refuseUnproved): the code proves only that
+// someone holds the number today (docs/spec/taskiem-for-everyone.md §5.4).
 func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof, action string) bool {
 	ctx := r.Context()
 	p := principalFrom(ctx)
+	if s.refuseUnproved(w, r) {
+		return false
+	}
 	f, hash, err := s.factorsOf(ctx, p.TenantID, p.UserID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -851,14 +861,24 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
 		return
 	case errors.Is(err, errNoMembership) && method != "sso":
-		// No membership anywhere, but perhaps invitations to answer.
-		if ok, ierr := s.startInviteeSession(w, r, user, method, bearer); ierr != nil {
-			s.fail(w, r, ierr)
+		// No membership anywhere: the person's own side
+		// (docs/spec/taskiem-for-everyone.md §5.2), where their invitations
+		// wait too.
+		out := map[string]any{}
+		if perr := s.startPersonalSession(w, r, user, method, bearer, out); errors.Is(perr, errPhoneBusy) {
+			writeErr(w, http.StatusConflict, perr.Error())
 			return
-		} else if ok {
+		} else if errors.Is(perr, errAccountOff) {
+			writeErr(w, http.StatusUnauthorized, err.Error())
+			return
+		} else if perr != nil {
+			s.fail(w, r, perr)
 			return
 		}
-		writeErr(w, http.StatusUnauthorized, err.Error())
+		if method == "passkey" {
+			s.provedByPasskey(w, r, user, bearer)
+		}
+		writeJSON(w, http.StatusOK, out)
 		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
@@ -870,9 +890,25 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user}
+	if method == "passkey" {
+		s.provedByPasskey(w, r, user, bearer)
+	}
+	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user, "personal": false}
 	s.deliverSession(w, bearer, sess.token, out)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// provedByPasskey records a passkey sign-in as the device's second proof
+// (docs/spec/taskiem-for-everyone.md §5.4). A failure to record it costs the
+// person a proof later, not this sign-in.
+func (s *Server) provedByPasskey(w http.ResponseWriter, r *http.Request, user uuid.UUID, bearer bool) {
+	key := s.signinDeviceKey(w, r, bearer)
+	if key == nil {
+		return
+	}
+	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_device_prove($1, $2, 'passkey')`, user, key); err != nil {
+		s.Logger.Warn("a passkey sign-in not recorded as a second proof", "err", err)
+	}
 }
 
 // ResetPasskeys removes every passkey of the person with email and ends
@@ -897,7 +933,7 @@ func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator stri
 		if err := passkeysGone(ctx, tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		for _, t := range tenants {

@@ -234,6 +234,7 @@ func TestChatSignInTelegram(t *testing.T) {
 	}
 	w.update(t, acct, func(id int64) []byte { return telegramtest.Callback(id, acct, offer.MessageID, "q1", data) })
 	w.say(t, acct, "yes")
+	w.say(t, acct, "business")
 	w.say(t, acct, "Bisi Salon")
 	w.say(t, acct, "Bisi Ade")
 	w.say(t, acct, "salon")

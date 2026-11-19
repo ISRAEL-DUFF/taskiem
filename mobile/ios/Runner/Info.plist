@@ -7,11 +7,15 @@
 		<string>remote-notification</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Taskiem uses the camera when you take a photo to send in a chat.</string>
+	<string>Taskiem uses the camera when you take a photo to send in a chat, or scan someone's Taskiem QR code.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Only when you tap A place: Taskiem reads where you are once, to send that place in a chat. It does not follow you.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Taskiem opens your photos when you choose one to send in a chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Taskiem uses the microphone while you record a voice note to send in a chat.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Only if you agree: Taskiem checks which of your contacts are on Taskiem, then again at most once a day when you open it (turn that off in Privacy with people). Their numbers are scrambled on this phone before they are sent, and nothing of your contacts is kept.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Taskiem opens with Face ID when you come back to it, so no one else reads your business's chats.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

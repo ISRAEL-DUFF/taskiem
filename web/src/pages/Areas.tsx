@@ -50,11 +50,15 @@ export function Areas() {
   return (
     <>
       <PageHeader
-        title="What your business uses"
-        description="Turn on only the parts you need. A part that is off is hidden, and nothing in it is deleted: turn it on again and it is all back."
+        title={me?.tenant_kind === "workflows" ? "What you use" : "What your business uses"}
+        description={
+          me?.tenant_kind === "workflows"
+            ? "Workflows, forms and tables are always here. Turn a part on to sell or bill with Taskiem too: nothing is deleted when you turn it off again."
+            : "Turn on only the parts you need. A part that is off is hidden, and nothing in it is deleted: turn it on again and it is all back."
+        }
       />
       <ErrorBox error={list.error} />
-      {!rows && !list.error && <Skeleton rows={5} label="Loading what your business uses…" />}
+      {!rows && !list.error && <Skeleton rows={5} label="Loading…" />}
       {rows && (
         <Items label="Parts of Taskiem">
           {rows.map((r) => {

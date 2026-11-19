@@ -14,7 +14,6 @@ import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
-import 'app/app_signup.dart' show AppSignup;
 import 'app/applinks.dart';
 import 'app/notify.dart';
 import 'app/notify_firebase.dart';
@@ -37,20 +36,28 @@ import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
 import 'chat/links_screen.dart';
+import 'chat/my_chat.dart' show MyChatData, MyChatScreen;
 import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
-import 'screens/app_sign_up.dart';
+import 'screens/chat_link.dart';
+import 'chat/group_chat.dart' show GroupChatData, GroupChatScreen;
+import 'chat/group_new.dart' show GroupJoinScreen;
+import 'chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
+import 'chat/people_find.dart' show PersonLinkScreen;
 import 'school/school_clearance.dart' show GateScreen;
 import 'school/school_tab.dart' show SchoolTab;
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/forgot_password.dart';
 import 'screens/sign_in.dart';
-import 'screens/sign_up.dart';
+import 'screens/switcher.dart' show showSwitcher;
+import 'screens/welcome.dart';
+import 'screens/you.dart';
+import 'screens/you_links.dart' show openYouPage;
 import 'theme/theme.dart';
-import 'kit/mobile.dart' show TkRoute;
+import 'kit/mobile.dart' show TkRoute, tkPush;
 import 'kit/modal.dart' show showTkConfirm, showTkToast;
 
 void main() {
@@ -234,18 +241,23 @@ class _RootState extends State<_Root> {
       AuthState.checking => const _Opening(),
       AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
+      // A personal session: the person's own side (taskiem-for-everyone §7).
+      AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
   }
 }
 
-/// Signed out: signing in, or signing up when the server has it open
-/// (GET /v1/signup), as the web offers "Create an account".
+/// Signed out: the phone way in (docs/spec/taskiem-for-everyone.md §5.1),
+/// and behind **Sign in with email** today's email, passkey and chat
+/// sign-in. Nobody starts a business here any more: a person makes their
+/// own account, and starts one from **You** (§17, §18).
 class _SignedOut extends StatefulWidget {
   const _SignedOut({required this.auth, this.links});
   final Auth auth;
 
-  /// A password reset's link, opened while signed out: Choose a new password.
+  /// A password reset's link, or a business's chat link (its card over the
+  /// way in), that opened the app while signed out.
   final LinkInbox? links;
 
   @override
@@ -253,33 +265,23 @@ class _SignedOut extends StatefulWidget {
 }
 
 class _SignedOutState extends State<_SignedOut> {
-  // What is open: signing in, the email form, or Get started (as on WhatsApp).
-  String _at = 'in';
-  bool _open = false;
-  bool _chat = false;
+  // What is open: the phone way in ('phone'), signing in with email ('in'),
+  // Forgot password? ('forgot') or a reset link's new password ('reset').
+  String _at = 'phone';
   bool _passkeys = true;
-  // Kept while signed out: back from Get started and in again finds the
-  // conversation where it was (its code and token are not spent again).
-  late final AppSignup _signup = AppSignup(widget.auth);
   // Forgot password?: what was typed in Email; a reset link's token.
   String _forgotEmail = '';
   String? _reset;
 
   void _linked() {
+    if (!mounted) return;
     final token = widget.links?.takeReset();
-    if (token != null && mounted) {
-      setState(() {
+    setState(() {
+      if (token != null) {
         _reset = token;
         _at = 'reset';
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.links?.removeListener(_linked);
-    _signup.dispose();
-    super.dispose();
+      }
+    });
   }
 
   @override
@@ -288,42 +290,45 @@ class _SignedOutState extends State<_SignedOut> {
     widget.links?.addListener(_linked);
     // The link that opened the app.
     _linked();
-    widget.auth.api.signupOptions().then((o) {
-      if (mounted) setState(() => _open = o.enabled);
-    }, onError: (_) {});
-    // Signing up as on WhatsApp, where the server has it (M4 N7).
     widget.auth.api.appConfig().then((c) {
-      if (mounted) {
-        setState(() {
-          _chat = c.chatSignup ?? false;
-          _passkeys = c.passkeys;
-        });
-      }
+      if (mounted) setState(() => _passkeys = c.passkeys);
     }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    widget.links?.removeListener(_linked);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     void go(String at) => setState(() => _at = at);
-    // Android's back from signing up returns to signing in, not out of the app.
+    // Android's back returns to the phone way in, not out of the app.
     return PopScope(
-      canPop: _at == 'in',
+      canPop: _at == 'phone',
       onPopInvokedWithResult: (popped, _) {
-        if (!popped && _at != 'in') go('in');
+        if (!popped && _at != 'phone') go(_at == 'in' ? 'phone' : 'in');
       },
       child: switch (_at) {
-        'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
-        'app' => AppSignUpScreen(auth: widget.auth, signup: _signup, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
-        'forgot' => ForgotPasswordScreen(auth: widget.auth, email: _forgotEmail, onBack: () => go('in')),
-        'reset' when _reset != null => ResetPasswordScreen(key: ValueKey(_reset), auth: widget.auth, token: _reset!, onDone: () => go('in')),
-        _ => SignInScreen(
+        'in' => SignInScreen(
           auth: widget.auth,
-          signup: _open || _chat,
+          signup: false,
           passkeys: _passkeys,
-          onSignUp: () => go(_chat ? 'app' : 'email'),
+          onPhone: () => go('phone'),
           onForgot: (email) {
             _forgotEmail = email;
             go('forgot');
+          },
+        ),
+        'forgot' => ForgotPasswordScreen(auth: widget.auth, email: _forgotEmail, onBack: () => go('in')),
+        'reset' when _reset != null => ResetPasswordScreen(key: ValueKey(_reset), auth: widget.auth, token: _reset!, onDone: () => go('in')),
+        _ => Builder(
+          builder: (context) {
+            // A business's chat link waiting: its card over the way in.
+            final code = chatCodeOf(widget.links?.peek);
+            if (code != null) widget.links!.shownSignedOut = true;
+            return WelcomeScreen(key: ValueKey('welcome $code'), auth: widget.auth, onEmail: () => go('in'), chatCode: code);
           },
         ),
       },
@@ -442,6 +447,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.linkedBusinesses = _links;
     Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
     Openers.businessProfile = (context) => _profile(context, back: 'Back to Explore');
+    Openers.customer = (context, id) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: id, notify: widget.notify)));
     // Drafting an order needs table.edit; else their shop to look around.
     Openers.conversation = (context, link) {
       final c = _chats.conversations.where((x) => x.link == link).firstOrNull;
@@ -533,6 +539,27 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
+    // A business's chat link: its card, and the person's own chat with it
+    // (a business session is its person too, taskiem-for-everyone §8.4).
+    final code = chatCodeOf(path);
+    if (code != null) {
+      unawaited(tkPush<void>(context, ChatLinkScreen(auth: _chats.auth, code: code)));
+      return;
+    }
+    // A person's link (people-chatting §5.2): who it is, and the person's
+    // own chat with them, over the business.
+    final person = personLinkOf(path);
+    if (person != null) {
+      unawaited(tkPush<void>(context, PersonLinkScreen(auth: _chats.auth, code: person, openChat: _openPerson)));
+      return;
+    }
+    // A group's link (people-chatting §9): the group, then Join, over the
+    // business.
+    final group = groupLinkCodeOf(path);
+    if (group != null) {
+      unawaited(tkPush<void>(context, GroupJoinScreen(auth: _chats.auth, code: group, openGroup: _openGroup)));
+      return;
+    }
     final route = routeOf(path);
     // A school's orders open over Today: School is in Orders' place.
     final overToday = _school && route.tab == tabOrders;
@@ -568,8 +595,30 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openTradeOrder(context, auth, id);
       case RouteScreen.storefrontOrder:
         openStorefrontOrder(context, auth, id);
+      case RouteScreen.you:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
+      case RouteScreen.youPage:
+        // The rest of the person's own side: pushed over the business.
+        final you = youRouteOf(id);
+        if (you == null) return;
+        unawaited(openYouPage(context, auth, you, open: _openMine, openPerson: _openPerson, openGroup: _openGroup));
     }
   }
+
+  /// The person's own chat with a business, over the business (a business
+  /// session is its person too).
+  Future<void> _openMine(String chat, {String? notice, String draft = '', String? tool}) =>
+      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
+
+  /// The person's own chat with a person, over the business: a shared
+  /// card's Chat opens their chat with that business, and this phone's
+  /// notifications of it show nothing while it is on the screen.
+  Future<void> _openPerson(String chat, {PeopleChat? started}) =>
+      tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(_chats.auth, chat, started: started), notify: widget.notify, openBusiness: _openMine));
+
+  /// One of the person's own groups, over the business.
+  Future<void> _openGroup(String id, {String? focus}) =>
+      tkPush<void>(context, GroupChatScreen(data: GroupChatData(_chats.auth, id, focus: focus), notify: widget.notify, openBusiness: _openMine, openPerson: _openPerson));
 
   @override
   void dispose() {
@@ -582,6 +631,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.findBusiness = null;
     Openers.orderFrom = null;
     Openers.conversation = null;
+    Openers.customer = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
@@ -652,6 +702,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     return ChatsScreen(
       data: _chats,
       onLinks: () => _links(context),
+      // You and the person's other businesses (taskiem-for-everyone §6).
+      onSwitch: () => showSwitcher(context, widget.auth),
       onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(TkRoute<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify),
@@ -774,15 +826,28 @@ class _OpenCustomer extends StatefulWidget {
 
 class _OpenCustomerState extends State<_OpenCustomer> {
   late final CustomerData _data = CustomerData(widget.chats, widget.id);
+  String? _tag;
 
   @override
   void initState() {
     super.initState();
-    widget.notify?.show('c-${widget.id}', this);
+    _showTag();
+    _data.addListener(_showTag);
+  }
+
+  /// The customer's notifications are held back while they are open, by
+  /// their own id (a pair's is the app thread's, the tag the server gives),
+  /// whichever line's id opened them.
+  void _showTag() {
+    final tag = 'c-${_data.threadId}';
+    if (tag == _tag) return;
+    _tag = tag;
+    widget.notify?.show(tag, this);
   }
 
   @override
   void dispose() {
+    _data.removeListener(_showTag);
     widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();

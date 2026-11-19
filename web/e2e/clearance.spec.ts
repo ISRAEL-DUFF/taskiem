@@ -113,7 +113,7 @@ test("the clearance list, the gate's answers, an override until its end date, an
   const added = await page.request.post("/v1/members", { headers: H, data: { email, password: PASSWORD, roles: ["gate"] } });
   expect(added.status(), await added.text()).toBe(201);
   const gate = await (await browser.newContext()).newPage();
-  await gate.goto("/login");
+  await gate.goto("/login?with=email");
   await gate.getByLabel("Email").fill(email);
   await gate.getByLabel("Password").fill(PASSWORD);
   await gate.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -143,6 +143,6 @@ test("the clearance list, the gate's answers, an override until its end date, an
   expect(await gate.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await axeBoth(gate, "the gate (phone)");
   await gate.getByRole("button", { name: "Sign out" }).click();
-  await expect(gate.getByRole("heading", { name: "Sign in to Taskiem" })).toBeVisible();
+  await expect(gate.getByRole("heading", { name: "Welcome to Taskiem" })).toBeVisible();
   expect(await gate.evaluate(() => sessionStorage.getItem("taskiem-gate-recent"))).toBeNull();
 });
