@@ -285,7 +285,11 @@ The founder's order: **saved objects in full, then payments in full, then the re
 | 7 | Customers' tools (M5); pages with buttons and in the chat (G2, G3); scan and signature (D2) | Made tools, pages, the app as a node |
 | 8 | Recipes and the builder (M6); boards, charts and starters (G4, G5) | Made tools, pages |
 
-Written and marked for later, in no stage: [made tools for linked businesses](made-tools-linked.md). Not yet planned: the payments flow's later parts (statements, several bills on one number), and [schools in the chat](schools-in-the-chat.md), which has notes only.
+Outside these stages:
+
+- **Made tools for linked businesses** ([its plan](made-tools-linked.md)): fully written, and held back by the founder's choice until customers' tools (M5) are in use.
+- **The payments flow** ([its plan](chat-payments-flow.md)): part 1, paying a bill by transfer in the chat, is written, settled and is F1 above. Only its later parts (a statement, one number for several bills) are not yet written.
+- **Schools:** the Schools area and the school in the chat are **built** (the briefing card, second-person approvals as cards, the school's tiles in the tools panel, approvals and the daily line on WhatsApp and Telegram). [Schools in the chat](schools-in-the-chat.md) is notes on what could come next for schools and parents, not a plan yet.
 
 Before any of it ships to a business: a security review of saved accounts and paying one person (that plan's D7).
 
