@@ -1,6 +1,6 @@
 # Made tools and pages: a workflow as a tool in the chat, and as a screen
 
-Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§23 says what that changed) and again on 19 November, when pages were brought into it from a separate discussion (§24). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §15 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
+Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§24 says what that changed) and again on 19 November, when pages and the app as a node were brought into it from two discussions with the founder (§25). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §16 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
 
 ## 1. Summary
 
@@ -11,6 +11,8 @@ This plan lets **any workflow a person starts by hand become a tool**. The workf
 Nothing about how a workflow runs changes. A tool starts a run the way `run <workflow>` does now; the run is durable, audited and under the same approvals. What is new is the way in and the way out.
 
 Some work is not a message. An owner with twelve deliveries to confirm wants them on one screen with a button each, not twelve cards to scroll. So the same plan lets **a workflow declare its screens** (§12): named pages made of blocks Taskiem already draws (a figure, a list, a record, a table, a form, a row of actions), filled from the business's own tables and the run's outputs, placed under an area or in the tools panel, and drawn by the web, the phone app and, in a reduced form, WhatsApp. A tool's answer and a page's blocks are the same shapes (§7), so the two halves share one vocabulary and one renderer, and the built-in pages Taskiem hand-draws today (the deliveries page, the riders' Confirm) are what a workflow could have declared.
+
+The app is also **a node a workflow can draw from** (§13). The phone in a person's hand knows where it is, has a camera, can scan a code and take a signature. A workflow asks for these the way it asks any question: a form step to a person, with fields the device fills in when the person taps, on whatever they are using (the app, the web, WhatsApp, Telegram). Nothing is taken silently.
 
 It serves both kinds of user:
 
@@ -28,6 +30,8 @@ It serves both kinds of user:
 | **Care** | How much a tool asks before it runs: nothing, **Yes**, or step-up (§8) |
 | **Shape** | One of the things Taskiem can draw from data: text, a card, a list, a figure, a record, a table, a form, a row of actions. The answer of a tool is a shape; a page is a stack of them (§7, §12) |
 | **Page**, or **view** in the definition | A screen a workflow declares, made of shapes, placed somewhere in the app (§12) |
+| **Device field** | A field of a question that the person's device answers at their tap: a location, a live photo, a scanned code, a signature (§13) |
+| **A person** | Since decision 0068 every account is a person's. A question is addressed to a person, who may be the starter, a member of a business, a linked business's member such as a rider, a customer, or the author alone in their own workspace; it reaches them wherever they are |
 
 Owners never see "made tool" or "view". On their screens it is **Your tools** and **Your pages**; making one is **Use it from chat** and **Show it as a page**.
 
@@ -60,6 +64,7 @@ The kinds of tool people will want (look something up, do something, record some
 | **A question inside a run** (§9) | A run stops to ask a person, in the chat it was started from, and goes on | Ask back, Decide | The form step in chat. Decide is the approval step, built |
 | **A message with buttons** (§10) | A run that started by itself (a schedule, a webhook, an event) tells people, and its buttons call tools | Watch, Report | Buttons on `notify.tell` and on answers |
 | **A page** (§12) | A screen the workflow declares: shapes filled from tables and outputs, with actions that are tools, signals or approvals | See, Work through, Report | The `views` block, the data reads, the placement, the renderers |
+| **A device's answer** (§13) | A question whose fields the person's device fills in at their tap: where they are, a photo taken now, a scanned code, a signature | Prove, Locate, Scan, Sign | Device fields on the form step and on tool inputs; `to` as a person |
 
 A useful tool is often two of these: a warning whose button is a Do, a list whose row action ends in an approval, or a page whose rows are the records a Do tool makes.
 
@@ -83,12 +88,12 @@ An addition to `wd/v1`: an optional top-level `tool`. It needs a decision-log en
 | Field | Rule |
 | --- | --- |
 | `name` | What the tile and the form are called. 1 to 40 characters |
-| `command` | The word after `/`. `^[a-z][a-z0-9-]{1,23}$`, one per business and environment, and never a word Taskiem's own commands use in any language that is on (§13) |
+| `command` | The word after `/`. `^[a-z][a-z0-9-]{1,23}$`, one per business and environment, and never a word Taskiem's own commands use in any language that is on (§14) |
 | `about` | One line, to 120 characters: under the tile, in `tools`, and what the reader is told the tool is for |
 | `says` | Up to eight phrases that find the tool when a message starts with one. Optional |
 | `icon` | One of a fixed set drawn by Taskiem. Optional |
-| `for` | `members` (the business's own people), `customers` (anyone writing to the business's own number) or `linked` (businesses it is linked to). Phase by phase: §16 |
-| `roles` | With `members`: who may use it, beside needing `run.start`. Left out: everyone with `run.start`. **It has to hold on every way a person can start the workflow** (the tool, `run <workflow>`, the web's Run, the API as a member), or it only hides a tile: §15, 8 |
+| `for` | `members` (the business's own people), `customers` (anyone writing to the business's own number) or `linked` (businesses it is linked to). Phase by phase: §17 |
+| `roles` | With `members`: who may use it, beside needing `run.start`. Left out: everyone with `run.start`. **It has to hold on every way a person can start the workflow** (the tool, `run <workflow>`, the web's Run, the API as a member), or it only hides a tile: §16, 8 |
 | `answer` | What comes back (§7). Left out: today's "completed" message |
 
 Rules:
@@ -119,7 +124,7 @@ Rules:
 
 **Which business.** A person in several businesses on the shared number has the tools of the one the chat is working in (`switch`); answers carry that business's name in brackets, as every message there does.
 
-**The `/` on each app.** On the web, the phone app and WhatsApp `/expense` is ordinary text and reaches Taskiem. On Telegram a `/command` typed to a bot reaches the bot, but only commands the bot registered are offered as you type, and those are the same for everyone. On Slack `/` commands belong to Slack and must be registered with the app, so a business's `/expense` typed there is refused by Slack before Taskiem sees it: on Slack a tool is called by its plain command or a `says` phrase. Both are from knowledge of those apps, not from a test, and are to be checked (§22).
+**The `/` on each app.** On the web, the phone app and WhatsApp `/expense` is ordinary text and reaches Taskiem. On Telegram a `/command` typed to a bot reaches the bot, but only commands the bot registered are offered as you type, and those are the same for everyone. On Slack `/` commands belong to Slack and must be registered with the app, so a business's `/expense` typed there is refused by Slack before Taskiem sees it: on Slack a tool is called by its plain command or a `says` phrase. Both are from knowledge of those apps, not from a test, and are to be checked (§23).
 
 **Order of reading a message.** A question Taskiem is waiting on, first, as now. Then an exact `/command`. Then Taskiem's own word lists. Then a made tool's `says` phrase at the start of the message. Then the model, which is given Taskiem's commands and the person's tools (name, `about`, input names) and may answer with one of them and proposed values, or with none. **Taskiem's own commands always win**, so a business cannot take over `invoice` or `yes`. Two tools that fit are asked about with a numbered pick, as two tables are.
 
@@ -182,14 +187,14 @@ Rules:
 
 - **Masked as every message is.** Outputs pass through the same masking as today's messages (account numbers to four digits, phones, names, nothing named like a secret). An output declared personal with `x-pii` is masked whatever its name. A person who may see the full value opens the run. **Open:** an output built from a value sealed as personal data is sealed in the history; whether the answer opens it to mask it, or shows the mask without opening it, has to be designed with [privacy](../privacy.md) before T1.
 - **A run that is waiting.** A tool's run that stops for an approval or a form tells its starter once ("Waiting for Ada to approve"), so silence never means lost.
-- **A run that is queued.** A tool's run counts against the plan's run limits like any run (§15, 9). One held by `max_running_runs` says "Queued behind other work"; one refused by the day's or month's quota says so, with when it lifts.
+- **A run that is queued.** A tool's run counts against the plan's run limits like any run (§16, 9). One held by `max_running_runs` says "Queued behind other work"; one refused by the day's or month's quota says so, with when it lifts.
 - **Amounts** are in kobo in the workflow and drawn by Taskiem as naira (`naira()`), so no tool formats money for itself.
 - **A run that fails** answers as now: what failed, in plain words, and a link.
 - **A run that takes long.** If the run has not ended in ten seconds the person is told "Working on it. I'll tell you when it's done", and the answer comes when it does, through the run watch that exists.
 - **Outside WhatsApp's 24-hour window** an answer cannot be free text or carry buttons: it goes as the run-outcome template with **Open**, as outcomes do now.
 - **An answer is not a record.** It is drawn from the run's outputs when the run ends and kept as a message. It does not update itself afterwards, so a list can be stale by the time a row's button is pressed: the workflow behind the button must check the state itself.
 - **An answer that comes when the app is closed.** When this was written, [chat push](chat-push.md) covered messages from linked businesses and left Taskiem's own conversation out (its decision 4). Push has since grown with personal accounts (decision 0068); whether an answer in the Taskiem conversation is announced is to be re-read against the current push decisions before T1, and if not, push for answers is its own small plan.
-- **Not in this plan:** files and photos as inputs or as answers (a receipt, a report as a PDF), and dates picked from a calendar. A date is typed, and the reader may propose it from "Monday".
+- **Not in this plan:** files as answers (a report as a PDF) and dates picked from a calendar. A date is typed, and the reader may propose it from "Monday". A photo or a file **as an input** is a device field (§13), taken at the person's tap.
 
 ## 8. Care: what a tool asks before it runs
 
@@ -210,11 +215,11 @@ Today every start from chat needs an explicit **yes** after a summary. That is r
 - An owner may make a tool **more** careful in its settings (always ask **yes**), never less.
 - An approval step inside the workflow is separate and unchanged: care is about starting the run, approval is about a step in it.
 - **The echo line matters.** With no **yes**, the person must still see what the reader understood, so a wrong reading is noticed.
-- This changes one row of [WhatsApp's security model](../whatsapp.md#security-model) ("every start needs an explicit yes"). It is a decision (§15, 2). The reason to allow it is that such a tool changes nothing, not that it shows only what the person could already see: it may show more (above).
+- This changes one row of [WhatsApp's security model](../whatsapp.md#security-model) ("every start needs an explicit yes"). It is a decision (§16, 2). The reason to allow it is that such a tool changes nothing, not that it shows only what the person could already see: it may show more (above).
 
 ## 9. A question inside a run
 
-The form step asks someone for answers mid-run by a one-time link, or in the app for a role. Added: **`to: "starter"`**, the person who started this run from a chat.
+The form step asks someone for answers mid-run by a one-time link, or in the app for a role. Added: **`to: "starter"`**, the person who started this run from a chat, and, with §13, `to` as **any person**, reached wherever they are.
 
 - They are asked **in that chat**: the same form as inputs (a sheet, a Flow, a Mini App form), or, for one field with up to three choices, buttons.
 - The run waits, as it does for any form step, with the step's `timeout` and `on_timeout`.
@@ -260,7 +265,7 @@ A workflow that starts by itself is not a tool, but it should be able to lead to
 
 Made tools give a workflow a face in the conversation. Some work needs a screen. The dispatch work built a page listing the day's deliveries with **Confirm** on each, beside the card each delivery has in the chat, because an owner with twelve of them wants to see them together and act on several. That page is code in `web/` and in `mobile/`. Every workflow that keeps a list of things to work through (tickets, leave requests, quotes to price, stock to count, debts to chase) wants the same page, and Taskiem cannot hand-draw one for each.
 
-A page is that screen as a declaration: which shapes, filled from what, placed where, with which actions. It is the second half of the same idea, and it reuses the first half's pieces: the shapes (§7), the buttons (§10), the care and roles (§8, §5), the reader of definitions (§18).
+A page is that screen as a declaration: which shapes, filled from what, placed where, with which actions. It is the second half of the same idea, and it reuses the first half's pieces: the shapes (§7), the buttons (§10), the care and roles (§8, §5), the reader of definitions (§19).
 
 ### 12.2 The declaration
 
@@ -292,7 +297,7 @@ An optional top-level `views` in `wd/v1`, a list of pages.
 | `id` | `^[a-z][a-z0-9-]{1,31}$`, one per workflow; the page's address is `/pages/<workflow>/<id>` |
 | `name`, `about` | As a tool's: 1 to 40 characters, and one line to 120 |
 | `place` | Where it lives (§12.5). Left out: under **Your pages** only |
-| `roles` | Who may open it, beside being a member who may see the page's area. The same rule and the same enforcement as a tool's `roles` (§15, 8). Left out: every member who may see the area |
+| `roles` | Who may open it, beside being a member who may see the page's area. The same rule and the same enforcement as a tool's `roles` (§16, 8). Left out: every member who may see the area |
 | `data` | Named reads (§12.4), at most eight |
 | `blocks` | The shapes, in order, at most twelve |
 
@@ -346,9 +351,9 @@ A page is read when it is opened and when the person pulls to refresh. A page wh
 | `{ "card": "<kind>" }` | The page is also a card kind in the conversation: a record of that kind (a run of this workflow, a row of its table) is drawn with the page's `record` block and `actions`, so a made record gets a live card as orders and invoices have |
 | `{ "alert": true }` | A page with a `count` in its data becomes an alert kind: when the count is above zero the alerts list shows the page's name and the count, and opens it. The alerts list already has `confirm` and `order_draft` kinds built this way by hand |
 
-A page is never put in the sidebar as if it were Taskiem's own area (§15, 11). The line between what Taskiem guarantees and what a workflow promises stays visible.
+A page is never put in the sidebar as if it were Taskiem's own area (§16, 11). The line between what Taskiem guarantees and what a workflow promises stays visible.
 
-Who sees a page: a member who may see its area (the area switch, the role's areas), with the page's `roles` on top, and for a page placed as a tile the chat tools switch. The person's own side (**You**, decision 0068) sees the pages of workflows made with `for: "me"` (§15, 10). Customers and linked businesses see no pages in this plan.
+Who sees a page: a member who may see its area (the area switch, the role's areas), with the page's `roles` on top, and for a page placed as a tile the chat tools switch. The person's own side (**You**, decision 0068) sees the pages of workflows made with `for: "me"` (§16, 10). Customers and linked businesses see no pages in this plan.
 
 ### 12.6 How each surface draws a page
 
@@ -385,7 +390,7 @@ An action is one of three things, and nothing else:
 
 ### 12.9 What the validator refuses
 
-Added to §13's table when a version with `views` is validated and deployed:
+Added to §14's table when a version with `views` is validated and deployed:
 
 | Refused | Because |
 | --- | --- |
@@ -404,10 +409,10 @@ A column dropped from a table after a page was published makes the page say "Thi
 | --- | --- | --- |
 | **Show it as a page** | Everyone | A switch on a workflow in the builder, beside **Use it from chat**: its name, where it goes (a list of the areas that are on, the tools panel, or Your pages), and **What should it show?** built by picking: a figure from a table (which table, which column, counted or summed), a list from a table with its columns, the record's lines. Never a typed expression |
 | **Describe it** | Everyone | The AI builder: "show me today's deliveries with a Confirm button on each" drafts the `views` block with the workflow, read back in plain words |
-| **A recipe** | Everyone | A template that carries `views`. `tool-list-and-act` and `tool-daily-report` (§14) each gain a page |
+| **A recipe** | Everyone | A template that carries `views`. `tool-list-and-act` and `tool-daily-report` (§15) each gain a page |
 | **The definition** | Advanced | `views` in the JSON, `flow.view({...})` in the SDK, Git |
 
-Publishing a page is publishing its workflow, with the same checks and call-outs. The approver reads, in plain words, what the page shows and to whom (§18).
+Publishing a page is publishing its workflow, with the same checks and call-outs. The approver reads, in plain words, what the page shows and to whom (§19).
 
 ### 12.11 What pages are not
 
@@ -416,9 +421,122 @@ Publishing a page is publishing its workflow, with the same checks and call-outs
 - **Not a dashboard product.** Charts are not in this plan; a `hero` and a `table` of figures are. If owners ask for a chart, it is a shape added to `shapes/v1`, drawn by the kit in both themes, never a library in a page.
 - **Not a window onto other systems.** A page reads tables, known records and outputs. A workflow that calls a web address puts what it needs in a table or an output first, so every page is masked, bounded and offline-cached the same way.
 
-## 13. What the validator refuses
+## 13. The app as a node: a device's senses in a workflow
 
-When a version with `tool` is validated (`wdcheck`), and again when it is deployed (a version with `views` adds the rows of §12.9):
+### 13.1 The idea
+
+A workflow can send to WhatsApp, Telegram and Slack as steps, and be started by what arrives there. The Taskiem app, and the web, are a channel too, and the device running them knows things no message carries: where it is, what its camera sees, what a barcode says, what a hand signed. A delivery is proved by where it was handed over and a photo of the parcel at the door; a stock count is a scanned code and a number; a stop on a route is a location and a time.
+
+This section makes the device a node of the workflow in the one way that already exists for asking a person something: **the form step** (§9), with **fields the device answers** when the person taps. There is no silent reading. A device answers a question, and the question says why it asks (§16, 15).
+
+### 13.2 Who is asked
+
+Since decision 0068 every account is a person's, and a person is reached wherever they are. `to` on a form step, and on a tool's question (§9), names a person, not a channel:
+
+| `to` | Who | Reached |
+| --- | --- | --- |
+| `"starter"` | The person who started this run from a chat or a page | In that chat; in the app or the web if they started it there |
+| `{ "member": "<id>" }`, `{ "role": "<role>" }` | A member of the business, or everyone with a role | The app or the web first (a form request, with a push), then WhatsApp or Telegram if they are linked |
+| `{ "link": "<business>" }` | The person on the other side of a link who is working the conversation: a rider, a supplier's clerk | In their side of the conversation, through the door the rider steps already use |
+| `{ "phone": "=..." }`, `{ "email": "=..." }` | Anyone, by a one-time link, as today | SMS or email, then WhatsApp or Telegram where the number is on Taskiem |
+| `"me"` | The author alone, in their own workspace (that plan's §18) | Their app or web, as a member |
+
+The channel decides which device fields can be answered (§13.3). A question with a device field that the channel cannot answer offers the nearest thing (type the code; attach a photo) or, where there is none, says so and the field is `unavailable` in the answer.
+
+### 13.3 Device fields
+
+New field types in the forms schema, usable in a form step's `schema` and in a tool's `inputs`. Each is a field like any other: it can be required, it is validated, it is sealed and masked by its kind.
+
+| Field | What the device gives | The app | The web | WhatsApp | Telegram | SMS and email link |
+| --- | --- | --- | --- | --- | --- | --- |
+| `location` | `{ lat, lng, accuracy_m, at, source }`; `source` is `gps`, `network` or `typed` | The phone's location, asked at the tap, once | The browser's prompt | WhatsApp's location message, by the person | Telegram's location, by the person | The browser's prompt |
+| `photo` | A file (`{ id, name, type, size, sha256 }` as forms keep files), taken now | The camera, not the gallery | The camera where the browser allows, else a file | A photo sent in the chat | The same | The browser's camera or a file |
+| `scan` | `{ text, format }` of a barcode or QR code | The camera | The camera where allowed; else typed | Typed (WhatsApp has no scanner) | Typed | The camera where allowed; else typed |
+| `signature` | A PNG file of what was drawn | A pad on the screen | A pad | `unavailable` | `unavailable` | A pad |
+
+Every answer, device fields or not, carries `device: { app, version, online, at }`: which app answered (the phone app, the web, WhatsApp, Telegram, a link), its version where it has one, whether it was online when the answer was made (the phone app answers offline and sends when it can, as its offline plan says), and when.
+
+Options on a field:
+
+| Option | On | What |
+| --- | --- | --- |
+| `why` | every device field, **required** | One sentence the person reads before the device is asked: "so the delivery is recorded where it was handed over". Shown above the system's own prompt |
+| `max_accuracy_m` | `location` | An answer less accurate than this (a coarse network fix indoors) is marked `coarse: true`; the workflow decides whether that will do |
+| `max_age` | `location` | A location older than this (a cached fix) is asked for again |
+| `formats` | `scan` | Which code formats are accepted; others are refused with a plain message |
+| `allow_typed` | `location`, `scan` | Whether the person may type an address or a code where the device cannot answer; default true |
+
+### 13.4 How a device is asked
+
+- **Always at the person's tap, never silently.** A device field is a button in the form ("Use my location", "Take a photo", "Scan", "Sign"). The device is asked only when it is pressed, after the field's `why`, and the system's own permission prompt follows. The app never asks for a permission before the person has pressed the field that needs it, so the first time a rider sees the location prompt is the first time a workflow asks where they are.
+- **A refusal is an answer.** A person who refuses, or whose device cannot answer, sends the form with that field `refused` or `unavailable`. A required device field holds the form until it is answered or the person says why they cannot; the workflow handles both, as it handles `timed_out`.
+- **One answer, one reading.** A `location` is read once per question. There is no following, no repeat reading, no background location in this plan (§16, 15). A route is many questions, each at a stop.
+- **Offline.** The phone app takes the location, the photo and the scan offline and sends the answer when it is back, with `online: false` and the time the answer was made, so a rider in a dead spot is not stuck. The run waits as it does for any form step.
+- **The web and the chat apps** ask the same way, with what they have (§13.3).
+
+### 13.5 What the run gets, and what is kept
+
+- The answer is the form step's output, as today: `steps.<id>.output.location`, `.photo`, `.scan`, `.signature`, `.respondent`, `.device`.
+- **A location is personal data.** It is sealed in the run's history under `x-pii: location` as account numbers and phones are, masked in every message and card to the nearest 100 m and the area's name where Taskiem knows it, and shown exactly only to a person who may open the run. It is deleted with the run's data when retention purges it, and when the person is erased.
+- **A photo and a signature are files** and follow the forms' rules: private storage, scanned for malware, cleaned of their metadata (so a photo's own location tag never travels with it), the same limits and the same deletion.
+- **A scan is text** and is kept as any answer, unless the field marks it `x-pii`.
+- A card or an answer that shows a location shows a map pin at the masked point and the area's name, never coordinates in words.
+
+### 13.6 Example: the delivery proved
+
+The dispatch plan's **Delivered** step asks the rider for a photo when the business wants proof. With device fields it is one question, to the rider as a person, wherever they are:
+
+```json
+{ "id": "handover", "type": "form", "config": {
+  "title": "Delivered",
+  "to": "starter",
+  "schema": { "type": "object", "required": ["where", "proof"], "properties": {
+    "where": { "type": "location", "why": "so the delivery is recorded where it was handed over", "max_accuracy_m": 100 },
+    "proof": { "type": "photo", "why": "a photo of the parcel at the door, for the shop's records" },
+    "signed": { "type": "signature", "why": "if the customer will sign for it" } } },
+  "timeout": "2h", "on_timeout": "continue" } }
+```
+
+The next step compares `steps.handover.output.where` with the order's address and marks the delivery `confirmed_at_door` or `far_from_address`, and the Confirm card (riders plan, phase 4) shows the pin and the photo. The rider on the app taps three buttons; on WhatsApp they send their location and a photo and skip the signature, which is `unavailable`.
+
+### 13.7 A device as a trigger
+
+The other direction, a workflow started by something the device does, is the smaller and later part:
+
+| Trigger | What | In this plan |
+| --- | --- | --- |
+| **A scan from the home screen** | The app's scanner, outside any workflow, finds a code; a workflow with a `device` trigger of `kind: scan` whose `formats` match is offered, with the code as `trigger.body.scan` | **Yes, D2.** It is a tap: the person chose to scan |
+| **A tool from a shortcut** | The app puts a tool on the phone's home screen or in a widget | **Yes, D2**, as a way to call a tool (§6) |
+| **Entering or leaving a place**, **moving**, **the app opened** | The device reports without a tap | **No.** Each is background sensing, with the stores' rules, battery and consent at stake. Its own decision when there is a case for it |
+
+### 13.8 Limits
+
+| Limit | Value |
+| --- | --- |
+| Device fields a question | 4 (one of each) |
+| Photos a question | As forms: 10 files, 25 MB each; a photo is cleaned to at most 2,000 px on its long side |
+| Location readings | One a question; a question is not re-asked for a fresh reading more than once a minute |
+| Scan formats | The common ones the scanner library reads (QR, EAN, UPC, Code 128); `formats` names a subset |
+
+### 13.9 What the validator refuses
+
+| Refused | Because |
+| --- | --- |
+| A device field without `why` | The person must be told before their device is asked |
+| A `signature` required of `to: { phone }` or on a customer's tool | No surface they may be on can draw a pad; make it optional |
+| A `location` on a tool `for: "customers"` | Customers are asked only what WhatsApp's own location message gives, by sending it; a workflow may read `trigger.body.location` when a customer sends one, never ask for it |
+| `to` that names no person (an empty role, a link with no one working the conversation) | The validator cannot know, but the deploy warns, and the run says so in its waiting message |
+| A `device` trigger of a kind in §13.7's last row | Not in this plan |
+
+### 13.10 What this is not
+
+- **Not tracking.** No background location, no continuous reporting, no reading of the phone's contacts, files, messages or other apps. A device answers a question the person sees, once, at their tap.
+- **Not a new step.** The form step and the tool's inputs carry the fields; the run model and `decide()` are unchanged. The app, the web and the chat renderers learn four field types.
+- **Not only for riders.** The example is a delivery because the dispatch plan asked for proof; a stock count, a site visit, a meter reading, an attendance register and a signed handover of equipment are the same question with the same fields, for a business or for one person's own workflows.
+
+## 14. What the validator refuses
+
+When a version with `tool` is validated (`wdcheck`), and again when it is deployed (a version with `views` adds the rows of §12.9, and a question with device fields the rows of §13.9):
 
 | Refused | Because |
 | --- | --- |
@@ -435,7 +553,7 @@ When a version with `tool` is validated (`wdcheck`), and again when it is deploy
 
 A plan limit, `made_tools` (deployed tools a business may have), joins the others in [operations](../operations.md#plan-limits). Twenty is a starting figure; the reader is given at most forty tools, the nearest by words when there are more.
 
-## 14. Making a tool
+## 15. Making a tool
 
 | Way | Who | How |
 | --- | --- | --- |
@@ -459,7 +577,7 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | `tool-daily-report` | Report | A schedule, a count or a sum over a table, and a message with a button to the list |
 | `tool-watch-and-act` | Watch | A schedule or a webhook, a condition, and a message with a button to a Do tool |
 
-## 15. For the founder to decide
+## 16. For the founder to decide
 
 | # | Question | Recommendation |
 | --- | --- | --- |
@@ -468,21 +586,24 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | 3 | Do made tools need the chat tools switch on? | **The panel does; the commands do not.** `/expense` works wherever `run` works today, so a business on WhatsApp alone has its tools |
 | 4 | Does the public menu become tools for customers, or stay beside them? | **Become**, by migration, so there is one way to offer a workflow to customers and they get answers |
 | 5 | Tools for linked businesses: in this plan, or later? | **Later**, as its own plan after members and customers are in use |
-| 6 | Should made tools wait for [pages](#17-what-this-is-not) so both share one catalogue? | **No.** Build tools first with the three answer shapes; write pages so its list and action blocks are these same shapes |
+| 6 | Should made tools wait for [pages](#18-what-this-is-not) so both share one catalogue? | **No.** Build tools first with the three answer shapes; write pages so its list and action blocks are these same shapes |
 | 7 | Decision number | **0070.** 0067, 0068 and 0069 merged between 12 and 17 November; 0063 and 0064 are absent from the log |
 | 8 | A tool's `roles`: a rule for who may start the workflow on every path, or only who sees the tile? | **A rule on every path**, enforced where a person starts a run. Nothing limits who may start one workflow today, so this is new, and without it `run <workflow>` walks round a tool's roles. It is also useful with no tool at all, so it is **built first, as its own small change before T0**, and T1's diff stays about tools |
 | 9 | Does a tool's run count against the day's and month's run limits? | **Yes**, as any run. A look-up is cheap but not free (it is a run, with its history and its retention). Watch the first businesses' counts before changing the limits; if look-ups dominate, a cheaper retention class for them is the fix, not an exemption |
-| 10 | Tools and pages for a person's own side (**You**, decision 0068)? | **Yes, `for: "me"`**, in T1: a personal session has its own tools and pages, with no business. "Start something" on You (that plan's §18) is this. It costs little designed in now and much to retrofit |
+| 10 | Tools and pages for a person's own side (**You**, decision 0068)? | **Yes, `for: "me"`**, in T1: a personal session has its own tools and pages, with no business. "Start something" on You (that plan's §19) is this. It costs little designed in now and much to retrofit |
 | 11 | May an owner put a made page in the sidebar as if it were a Taskiem area? | **No, not in this plan.** Pages live under **Your pages**, under an area as a tab, in the tools panel, or as a card or alert kind. The line between what Taskiem guarantees and what a workflow promises stays visible. A setting to promote a page is a later question |
-| 12 | One spec and one decision for tools and pages, or two? | **One** (this document, decision 0070). The shapes are shared, and two documents would hold two copies of them. The build still goes tools first (§16) |
+| 12 | One spec and one decision for tools and pages, or two? | **One** (this document, decision 0070). The shapes are shared, and two documents would hold two copies of them. The build still goes tools first (§17) |
 | 13 | Do pages ship on the web and the phone app together, as the app's rule is? | **Together**, from P1. A page drawn on one and not the other is the thing the parity test exists to stop |
 | 14 | Are the hand-drawn deliveries page and the Confirm alert rebuilt as a declared page when pages ship? | **Not rebuilt, but declared as the acceptance test**: a fixture workflow declares a page equal to the deliveries page, and the two are compared in the browser tests. Rewriting what works is not the point; proving the vocabulary is |
+| 15 | Does a device ever answer without the person's tap (background location, the app opened, entering a place)? | **No, asked only**, in this plan. Settled by the founder on 19 November: "ask for now". Background sensing is its own later decision (§13.7) |
+| 16 | Who holds the device: a member, a rider, a customer, the author alone? | **Any person.** Since 0068 the question goes to a person and reaches them wherever they are; the channel decides which device fields it can answer (§13.2, §13.3). Settled by the founder on 19 November |
+| 17 | A scan from the home screen and a tool on the phone's home screen as ways in (§13.7): in this plan? | **Yes, in D2.** Both are a tap by the person; neither senses anything on its own |
 
-## 16. Phases
+## 17. Phases
 
 | Phase | What | Done when |
 | --- | --- | --- |
-| T0 | The decision, `tool` and `answer` in `schemas/wd-v1.schema.json` and the contract, the validator's rules (§13), care worked out and stored | A definition with `tool` validates or is refused for the right reason; nothing uses it yet |
+| T0 | The decision, `tool` and `answer` in `schemas/wd-v1.schema.json` and the contract, the validator's rules (§14), care worked out and stored | A definition with `tool` validates or is refused for the right reason; nothing uses it yet |
 | T1 | Members' tools everywhere: the index of deployed tools, **Your tools** in the panel and `/`, the commands on WhatsApp, Telegram and Slack, the form, care, the `text` answer, **Use it from chat** in the builder, the SDK | A person makes "Log an expense" without Advanced, and uses it from the web, the phone app and WhatsApp |
 | T2 | `card` and `list` answers, buttons on answers and on `notify.tell`, the sheet for a list | "Open tickets" lists, and **Assign to me** on a row works from a phone |
 | T3 | The reader: tools given to the model, proposed values, the numbered pick, evaluation cases in English and Pidgin | "spent 4,500 on diesel" opens the expense tool filled in; a built-in command is never taken by a tool |
@@ -494,10 +615,13 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | P1 | **Your pages** on the web and the phone app together: the renderer for every shape from the kit, reads with the change notices, `hero`, `list`, `record`, `table`, `text`, `status`; **Show it as a page** in the builder; the SDK | The deliveries fixture page draws on both and matches the hand-built page in the browser tests |
 | P2 | Placement under an area and in the tools panel; actions (tool, signal, approve); the chat's `/pages` word and the list-message form | **Confirm** on the fixture page moves a delivery from a phone, and shows on the web without a reload |
 | P3 | Card and alert kinds from a page; `form` and `photo` blocks; the two recipes' pages; the AI builder drafting `views` | A made record has a live card, and "show me today's deliveries with Confirm" drafts a working page |
+| D0 | The four device field types and their options in the forms schema and `wd/v1`; `to` as a person on the form step; the validator's rows (§13.9); `device` on every answer; the sealing and masking of a location | A form step with a `location` field validates; a location in a run's history is sealed and masked |
+| D1 | `location` and `photo` in the phone app (offline too), on the web and on WhatsApp and Telegram, in form steps and in tools' inputs; `to: "starter"`, `member`, `role` and `link`; the delivery fixture (§13.6) | A rider on WhatsApp and a rider on the app each prove a delivery, and the Confirm card shows the pin and the photo |
+| D2 | `scan` and `signature`; the scan-from-the-home-screen trigger and tools on the home screen (§13.7) | A stock count by scanning works from the app's scanner with no workflow open |
 
-T1 is the first thing worth showing. T2 and T3 can go side by side after it. P0 starts once T2 has built the shapes' renderer for answers, so pages begin from a renderer that exists; P1 and T3 can go side by side. The roles rule (§15, 8) comes before T0.
+T1 is the first thing worth showing. T2 and T3 can go side by side after it. P0 starts once T2 has built the shapes' renderer for answers, so pages begin from a renderer that exists; P1 and T3 can go side by side. D0 and D1 depend on T4 (`to: "starter"`) and on nothing in pages, so they can run beside P1 once T4 is in. The roles rule (§16, 8) comes before T0.
 
-## 17. What this is not
+## 18. What this is not
 
 - **Not a page builder, and not a dashboard product.** Pages (§12) are declared stacks of Taskiem's shapes, never layouts, styles or charts; §12.11 says what else they are not.
 - **Not the built-in tools rewritten.** Products, Stock, Orders, Money and the rest stay as built. They hold rules a wiring of steps must not be able to break.
@@ -505,18 +629,19 @@ T1 is the first thing worth showing. T2 and T3 can go side by side after it. P0 
 - **Not a bot.** There is no free conversation with a tool: it is called, it may ask through a form step, it answers.
 - **Not a new way to run.** No new step type, and nothing new in `decide()`: outputs are already worked out and kept when a run completes. One addition to an existing step (`to: "starter"` on the form step) and one to a connector (`buttons` on `notify.tell`). A page's signal and approval actions send what the run's own buttons send today.
 - **Not in people's groups.** A tool or a page is a business's (or, with `for: "me"`, a person's own). Whether one can be called inside a group of people (decision 0069) is a later question, and nothing here assumes it.
+- **Not tracking.** A device answers a question at the person's tap (§13.10); nothing here reads a phone on its own.
 - **Not for embedded builders.** A partner's sub-tenants do not get made tools in this plan; what an embedded app's end user may call needs its own look ([embedding](../embedding.md)).
 
-## 18. What else has to learn about `tool`
+## 19. What else has to learn about `tool`
 
 A new block in the definition touches everything that reads one. None of it is hard, and each is easy to forget.
 
 | Reader of a definition | What it must do |
 | --- | --- |
-| `engine/wd`, `engine/wdcheck`, `schemas/wd-v1.schema.json`, the contract page | Parse and validate `tool`, `views` and `shapes/v1` (§13, §12.9) |
+| `engine/wd`, `engine/wdcheck`, `schemas/wd-v1.schema.json`, the contract page | Parse and validate `tool`, `views` and `shapes/v1` (§14, §12.9) |
 | `engine/wddiff`, `engine/wdtext` | Say a change in plain words ("Customers can now use it", "It now answers without asking", "The page now shows the fee column to managers"), since these are what an approver reads |
 | `engine/wdmerge` | Two people changing `tool` at once is a conflict for a person; it is not merged field by field |
-| The builder and the canvas | **Use it from chat** and **Show it as a page** (§14, §12.10); the canvas shows that a workflow is a tool, a page, or both |
+| The builder and the canvas | **Use it from chat** and **Show it as a page** (§15, §12.10); the canvas shows that a workflow is a tool, a page, or both |
 | The TypeScript SDK, its codegen, `engine/flowcode` | `flow.tool({...})` and `flow.view({...})`, round-tripping to the definition |
 | `wd-test/v1` | A workflow test can state the answer it expects for given inputs, and the rows a page draws for given table contents, so a tool or a page is tested before it is published |
 | Git-led deploys | The same validation and the same call-outs as publishing on the web |
@@ -524,9 +649,12 @@ A new block in the definition touches everything that reads one. None of it is h
 | The AI builder, its schema, its property rules and `evals/builder` | Drafts `tool`; a rule that a drafted tool for customers has only `public` outputs in its answer |
 | Business parts | A tool whose steps belong to a part that is off is not offered, and says why to the owner, as templates follow the switches now; a page placed under an area that is off is not shown |
 | The chat tools, the alerts list, the card frame (`web/src/lib/tools.ts`, `alerts.ts`, `cardframe.ts`, and the same in `mobile/`) | Take their lists of kinds from data as well as code, so a page's tile, alert and card kinds join the built-in ones |
+| The forms schema and its renderers (`engine/publicweb/formfields.go`, `SchemaForm` on the web, the WhatsApp Flow, the app's form) | The four device field types (§13.3), each drawn by what the surface has, with `why` before the device is asked |
+| The form step (`engine/forms`, the delivery of links) | `to` as any person (§13.2); `device` on every answer; the sealing of `location` |
+| The phone app (`mobile/`) | The location, camera, scanner and signature pad asked only on tap, offline answers held and sent; the home-screen scanner and shortcuts (D2) |
 | Docs | A page for owners in `docs/guide`, the contract, `docs/whatsapp.md` and `docs/telegram.md`, the atlas pages on definitions and channels |
 
-## 19. Storage and API
+## 20. Storage and API
 
 **Storage.** One table, `workflow_tools`, a row for each deployed tool: tenant, workflow, environment, version, command, name, `about`, `says`, icon, audience, roles, care, the answer's type. Written in the transaction that deploys a version and removed by one that deploys a version without `tool`, so it never disagrees with what is deployed. Unique on tenant, environment and command. Under forced row-level security like every tenant table. Button nonces reuse the shape of `whatsapp_tokens`.
 
@@ -547,19 +675,21 @@ Runs gain nothing new: a run started by a tool is recorded with `run.start`, the
 | `GET /v1/pages` | The caller's pages: id, workflow, name, `about`, place, and the areas and kinds they join |
 | `GET /v1/pages/{workflow}/{id}` | The page as data: its blocks with every expression already worked out, masked, for the web and the app to draw; `?run=` for a run's page; `?more=` for the next rows of a list |
 | `POST /v1/pages/{workflow}/{id}/act` | An action: a tool (answers as `/v1/tools/{command}/start` does), a signal, or an approval, as the presser |
+| `POST /v1/form-requests/{id}/answer` (exists) | Gains the device fields and `device` in its body; a photo or signature is uploaded first as forms upload files |
+| `GET /v1/device-triggers` | The scan formats and tools the app offers from its home screen (D2) |
 
 The chat apps reach the same functions through the conversation engine, not these routes.
 
-## 20. Security and abuse
+## 21. Security and abuse
 
 | Concern | Control |
 | --- | --- |
-| A tool that takes over a command of Taskiem's | Reserved words refused at validation and at deploy; Taskiem's commands are read first (§6, §13) |
+| A tool that takes over a command of Taskiem's | Reserved words refused at validation and at deploy; Taskiem's commands are read first (§6, §14) |
 | A tool that says it is harmless | Care is worked out from the steps, and an unknown step counts as a write (§8) |
 | The model starting something | It proposes; the person sees the values and, for a write, says **yes**. Unchanged |
 | A wrong reading on a tool that answers at once | The echo line; and such a tool only reads |
 | Words meant to steer the model, in a tool's `about` or `says` | They are a business's own text, read only for that business's own members; they are length-limited and passed as data, and the model can still only return one of the listed commands |
-| Someone using a tool they should not | `run.start`, the tool's `roles` held on every way to start the workflow (§15, 8), and the person's roles at that moment; refusals audited |
+| Someone using a tool they should not | `run.start`, the tool's `roles` held on every way to start the workflow (§16, 8), and the person's roles at that moment; refusals audited |
 | A tool that shows more than its caller may open | Not prevented, by design: it reads with the business's connections. Publishing says who will be able to use it and what it gives back; a change of audience or roles is called out to the approver (§8) |
 | Two people pressing one button | `once: true`, or a workflow that checks the state itself (§10) |
 | A forwarded or forged button | Signed, with a nonce row; a press acts as the presser, never as whoever the message was sent to (§10) |
@@ -571,12 +701,15 @@ The chat apps reach the same functions through the conversation engine, not thes
 | A page that pokes another workflow's runs | A signal action is refused unless the run is the page's workflow's or that workflow declares the signal (§12.7) |
 | A page used to read a table fast and wide | The query spec's bounds (50 rows, one aggregate, eight reads) and one refresh a second; a page is never a bulk export |
 | A column removed, a table renamed | The page says it needs a change and draws what it can; nothing errors in front of staff (§12.9) |
+| A workflow that reads a device without the person knowing | Impossible by construction: a device field is a button the person presses after reading `why`; there is no background reading and no trigger that senses on its own (§13.4, §13.7) |
+| A location spread through messages | Sealed as personal data, masked to 100 m and an area name in every message and card, exact only to those who may open the run; a photo is stripped of its own location tag (§13.5) |
+| A forged answer (a typed location passed off as a fix, a replayed photo) | `source` says how a location was got, and `device` says what answered; the workflow may require `source: gps` and a fresh `at`. A one-time link is still one-time; the app's answers are signed by its session as every request is |
 
-## 21. Tests
+## 22. Tests
 
 | Test | What it proves |
 | --- | --- |
-| Schema and validator | Each row of §13 is refused with a plain sentence; a correct tool validates |
+| Schema and validator | Each row of §14 is refused with a plain sentence; a correct tool validates |
 | Care | A workflow of reads answers at once; adding a table write, a message, a non-GET `http` step, or a subflow that writes makes it **Yes**; a policy makes it step-up; an owner can raise it and not lower it |
 | Deploy keeps the index true | Deploy, deploy a change, deploy without `tool`, roll back: `workflow_tools` matches what is deployed each time |
 | Reading order | A pending question, `/command`, Taskiem's words, `says`, the model, in that order; `invoice` and `yes` cannot be taken |
@@ -586,7 +719,7 @@ The chat apps reach the same functions through the conversation engine, not thes
 | Roles on every path | A member outside a tool's `roles` is refused by the tool, by `run <workflow>`, by the web's Run and by the API |
 | Starting once | A **yes** sent twice, and a call repeated after a lost reply, start one run |
 | Limits and waits | A queued run and a run refused by quota say so; a run waiting on an approval tells its starter once |
-| Everything in §18 | Each reader of a definition handles `tool`: a diff in plain words, a merge conflict, the SDK round trip, a workflow test of an answer |
+| Everything in §19 | Each reader of a definition handles `tool`: a diff in plain words, a merge conflict, the SDK round trip, a workflow test of an answer |
 | Ask back | A question in the chat, answered, timed out, and two runs asking at once |
 | Customers | The migration carries menus over; a customer gets the answer; an output not marked `public` never reaches them |
 | Web | **Your tools** in the panel, the form sheet, each answer shape; added to `e2e/accessibility.spec.ts` and `src/lib/plainwords.test.ts` |
@@ -599,54 +732,66 @@ The chat apps reach the same functions through the conversation engine, not thes
 | Pages: actions | A tool action opens the form with its care; a signal to a run that moved on says so; a signal to another workflow's run is refused; an approval opens the approval sheet |
 | Pages: the chat | `/pages` lists them; a one-list page goes as a list message with its two row buttons; **See all** links to the page |
 | Pages: plain words and axe | Every shape in both themes, added to `e2e/accessibility.spec.ts` and `src/lib/plainwords.test.ts`, and the app's large-text and touch-target checks |
+| Device fields: the schema | Each row of §13.9 refused with a plain sentence; the delivery fixture (§13.6) validates |
+| Device fields: every surface | The fixture answered from the app (with the location, camera and scanner faked by the test harness), the web, WhatsApp (a location message and a photo) and Telegram; each gives the run the same shape of answer, with `device` saying which |
+| Device fields: asked, not taken | The permission prompt is never requested before the field's button is pressed; a refusal and an unavailable field reach the run as such |
+| Device fields: offline | The app answers with no network, holds the answer, sends it on reconnect with `online: false` and the time it was made |
+| Device fields: sealing | A location is sealed in the history, masked in a message and a card, exact in the run for a person who may open it, and gone when the run is purged; a photo arrives without its location tag |
+| The home-screen scanner (D2) | A scan with no workflow open offers the matching workflows and starts one with the code |
 
-## 22. Needs a person
+## 23. Needs a person
 
 | Item | Who |
 | --- | --- |
-| The decisions of §15 | The founder |
+| The decisions of §16 | The founder |
 | Meta's current limits for reply buttons and list messages, and whether list messages need review for the business's account | Whoever holds the WhatsApp Business Account |
 | How Telegram and Slack treat a typed `/command` the app did not register (§6) | Whoever holds the bot and the Slack app |
 | The record views for pages: which columns of invoices, orders, deliveries, customers and staff a page may read (§12.4) | Engineering with whoever owns privacy |
 | The words **Your pages** and **Show it as a page**, in the five languages | Product, native speakers |
+| Apple's and Google's rules for location, camera and scanning asked in-use (not background), and the wording of the system prompts | Whoever holds the store accounts |
+| How a location is masked in messages (100 m and an area name is a proposal) and its retention, written into the privacy page and the threat model | Engineering with whoever owns privacy |
+| Whether WhatsApp's location message may be asked for in a Flow, or only sent by the person | Whoever holds the WhatsApp Business Account |
 | How an answer shows an output built from a sealed value (§7) | Engineering with whoever owns privacy |
 | Words for owners ("Your tools", "Use it from chat", "What should it say back?") checked against the plain-words rules, and in the four other languages | Product, native speakers |
 | The fixed set of icons | Design |
 | Real requests for the evaluation cases, once design partners use it | Partner success |
 
-## 23. What a review of this plan changed
+## 24. What a review of this plan changed
 
 The plan was read against the code on the day it was written. What that found:
 
 | Was | Is |
 | --- | --- |
 | "Mini App form on Telegram" for inputs | Telegram has no forms; inputs are asked one by one (§3, §6) |
-| A read-only tool "shows data the person may already see" | Wrong: a workflow reads with the business's connections. Who may see an answer is now its own point (§8, §15, §20) |
-| `roles` on a tool, with nothing behind it | Nothing limits who may start one workflow today, so `run <workflow>` walked round it. Now a rule on every path, and a decision (§5, §15, 8) |
+| A read-only tool "shows data the person may already see" | Wrong: a workflow reads with the business's connections. Who may see an answer is now its own point (§8, §16, §21) |
+| `roles` on a tool, with nothing behind it | Nothing limits who may start one workflow today, so `run <workflow>` walked round it. Now a rule on every path, and a decision (§5, §16, 8) |
 | `/command` on every app | Slack keeps `/` for itself, and Telegram offers only registered commands (§6), both to be checked |
 | Nothing on where an answer's expressions run | The API, over `outputs` and `item` only (§7) |
 | Nothing on a run started twice, or a button pressed by two people | A key from the conversation; `once: true` (§6, §10) |
-| Nothing on a run that waits, is queued, or hits a quota | §7, and a decision on counting (§15, 9) |
-| Nothing on a word reserved after a tool took it, a renamed command, a recipe whose command is taken | §5, §13 |
+| Nothing on a run that waits, is queued, or hits a quota | §7, and a decision on counting (§16, 9) |
+| Nothing on a word reserved after a tool took it, a renamed command, a recipe whose command is taken | §5, §14 |
 | Nothing on sealed personal data in outputs, push for late answers, files, dates | Named as open or as not in this plan (§7) |
-| Nothing on the other readers of a definition | §18 |
+| Nothing on the other readers of a definition | §19 |
 | Unsure whether outputs are kept for an ordinary run | They are, for any run that completes with outputs (§3), so nothing in `decide()` changes |
 
-## 24. What the 19 November revision changed
+## 25. What the 19 November revision changed
 
 The plan was read again on 19 November, against the code after decisions 0067 to 0069 merged, and pages were brought into it from a separate discussion with the founder (12 November, on how a business adds UI to a workflow without Taskiem building an area for each).
 
 | Was | Is |
 | --- | --- |
-| "Not pages": a separate plan to be written | Pages are §12 of this plan, sharing the shapes (§7), the buttons (§10), roles and care, with their own phases (P0 to P3) after T2 and a decision on one document (§15, 12) |
+| "Not pages": a separate plan to be written | Pages are §12 of this plan, sharing the shapes (§7), the buttons (§10), roles and care, with their own phases (P0 to P3) after T2 and a decision on one document (§16, 12) |
 | Three answer shapes under `tool.answer` | One named `shapes/v1` inside `wd/v1`, referenced by `tool.answer` and by every block of a page, so there is one definition of each shape |
 | Whether the `whatsapp` trigger type is used: open | Checked: no code reads it. This plan ignores it (§3) |
-| Decision number: the next free one | 0070 (§15, 7) |
-| Audiences `members`, `customers`, `linked` | Plus `for: "me"` for a person's own side, now that personal accounts exist (§15, 10) |
+| Decision number: the next free one | 0070 (§16, 7) |
+| Audiences `members`, `customers`, `linked` | Plus `for: "me"` for a person's own side, now that personal accounts exist (§16, 10) |
 | Code steps count as reads | A code step is a read only when its declared host functions are reads; unknown counts as a write (§8) |
-| The echo line | Carries every value the reader filled in; the owner's **always ask** switch ships in T1 (§8, §15, 2) |
-| Roles on every path: a decision inside T0 | Built first, as its own small change (§15, 8) |
+| The echo line | Carries every value the reader filled in; the owner's **always ask** switch ships in T1 (§8, §16, 2) |
+| Roles on every path: a decision inside T0 | Built first, as its own small change (§16, 8) |
 | Where answer expressions run: "the API" | The workflow expression engine, sandboxed to `outputs` and `item`, with a budget; the apps never evaluate (§7) |
 | Push for answers: not covered | To be re-read against the push decisions since 0068 (§7) |
-| Groups | Named as not in this plan (§17) |
-| Phases T0 to T7 | Plus P0 to P3, with P0 starting after T2 (§16) |
+| Groups | Named as not in this plan (§18) |
+| Phases T0 to T7 | Plus P0 to P3, with P0 starting after T2, and D0 to D2 for device fields after T4 (§17) |
+| The app only as where a person meets a workflow | The app as a node (§13): device fields on the form step and on tools' inputs (location, photo, scan, signature), asked at the person's tap, answered offline, sealed as personal data; a scan from the home screen as a trigger; background sensing out (§16, 15 to 17) |
+| `to` on a question: a phone, an email, a role, the starter | Any person, reached wherever they are, since every account is a person's (§13.2) |
+| Photos not in this plan | A photo as an input is a device field (§7, §13.3) |
