@@ -37,6 +37,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'support.dart' show loadFonts;
 
 /// A stand-in server: answers by "METHOD /path", every request kept.
@@ -317,6 +318,7 @@ void main() {
     phone(t);
     final api = adaChat();
     await openPeople(t, api);
+    await looks(t, 'people-chat');
     expect(find.text('Ada Obi'), findsWidgets);
     expect(find.text('last seen today at ${clock(DateTime.parse('2026-11-17T09:05:00Z'))}'), findsOneWidget);
     expect(find.text('Forwarded many times'), findsOneWidget);

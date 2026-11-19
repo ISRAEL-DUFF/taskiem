@@ -244,8 +244,10 @@ func TestFindByNumber(t *testing.T) {
 	if _, err := f.p.FindByNumber(ctx, tolu, "+2348031000022"); !errors.Is(err, people.ErrNotFound) {
 		t.Fatalf("deleted: %v", err)
 	}
-	// Fifty a day, counted whatever the answer; the next day, again.
-	f.now = time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
+	// Fifty a day, counted whatever the answer; the next day, again. Two days
+	// on from the lookups above, so this Lagos day starts with none counted
+	// (a fixed date here once fell on their day).
+	f.now = f.now.Add(48 * time.Hour)
 	for i := 0; i < people.NumberLookupsPerDay; i++ {
 		if _, err := f.p.FindByNumber(ctx, stranger, "+2348031777777"); !errors.Is(err, people.ErrNotFound) {
 			t.Fatalf("lookup %d: %v", i, err)

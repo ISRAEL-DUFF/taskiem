@@ -21,6 +21,7 @@ import 'package:taskiem/screens/welcome.dart';
 import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'auth_test.dart' show FakeServer;
 import 'passkey_test.dart' show FakePasskeys;
 import 'support.dart' show loadFonts, snap;
@@ -150,6 +151,7 @@ void main() {
     expect((verify['device'] as Map)['name'], 'Tolu’s Tecno');
     expect(find.text('Make your account'), findsOneWidget);
     await snap(t, 'welcome-create');
+    await looks(t, 'welcome-create');
 
     await typeIn(t, find.byKey(const ValueKey('name')), 'Tolu Ade');
     await press(t, 'Create');
@@ -173,6 +175,7 @@ void main() {
     expect(find.text('Chats with businesses and people will show here. Start one with New chat.'), findsOneWidget);
     expect(find.text('Start something'), findsOneWidget);
     await snap(t, 'you');
+    await looks(t, 'you');
     expect(find.bySemanticsLabel('Switch'), findsNothing, reason: 'no switcher for a person in no business');
   });
 
@@ -231,6 +234,7 @@ void main() {
     expect(find.text('New device: prove it\'s you to open it'), findsOneWidget);
     expect(find.text('Workflows'), findsOneWidget, reason: 'a workflows workspace says so');
     await snap(t, 'switcher');
+    await looks(t, 'switcher');
 
     await press(t, 'Mama’s Kitchen');
     expect(server.calls.last.body, {'tenant_id': 'b1'});
@@ -319,6 +323,7 @@ void main() {
     await press(t, 'Start the business');
     expect(find.text('Choose what your business does.'), findsOneWidget);
     await snap(t, 'start-business');
+    await looks(t, 'start-something');
     server.answers['POST /v1/me/start'] = () => _json({'error': 'Five a day. Try again tomorrow.'}, 429);
     await press(t, 'I sell things');
     await press(t, 'Start the business');
@@ -380,6 +385,7 @@ void main() {
     expect(server.calls.lastWhere((c) => c.path == '/v1/me/phone/start').body, {'phone': '+2348039990000', 'confirm_old': true});
     expect(find.text('We sent a 6-digit code by SMS to +234 803 999 0000. And one to your old number, +234 803 123 0000.'), findsOneWidget);
     await snap(t, 'change-number');
+    await looks(t, 'change-number');
     // A wrong code: said, and nobody is signed out.
     server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'That code is not right.', 'code_wrong': true}, 401);
     await typeIn(t, find.byKey(const ValueKey('new-code')), '111111');
