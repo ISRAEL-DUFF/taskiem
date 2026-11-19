@@ -1,8 +1,8 @@
 # Schools in the chat, and parents on Taskiem
 
-Status: **notes for a plan** (17 November 2026), written with the founder. Nothing here is built. It waits for [PR #198, Taskiem for everyone](https://github.com/ISRAEL-DUFF/taskiem/pull/198) (its spec, `taskiem-for-everyone.md`, comes with it) to merge: parents having accounts of their own (§2 below) depends on it, and the plan is to be settled the moment it lands, beside the automation choices.
+Status: **notes for a plan** (17 November 2026; brought up to date on 19 November 2026, once [Taskiem for everyone](taskiem-for-everyone.md) merged in PR #198), written with the founder. Nothing here is built. It is settled beside the automation choices.
 
-Builds on: [Schools](schools.md) (B0 to B9 built, [open items](schools-open-items.md)), [the phone app's school](mobile-app-look.md#the-school-as-drawn), [chat tools](chat-tools.md), Taskiem for everyone (`taskiem-for-everyone.md`, stages 1 to 3 in #198).
+Builds on: [Schools](schools.md) (B0 to B9 built, [open items](schools-open-items.md)), [the phone app's school](mobile-app-look.md#the-school-as-drawn), [chat tools](chat-tools.md), [Taskiem for everyone](taskiem-for-everyone.md) (stages 1 to 4 built), [people chatting with people](people-chatting.md) (stage 5a built; 5b, [groups and ordering together](people-chatting-5b.md), largely built).
 
 ## What Schools has today
 
@@ -93,20 +93,32 @@ Each opens a sheet as the shop tools do, or the page where the school's is fulle
 
 **The phone app:** built (above). What's left there is the words and cards, so the app and the web chat stay the same.
 
-## 2. For parents, once #198 lets anyone have an account
+## 2. For parents
 
-This is the big opening. Today a parent gets an SMS or WhatsApp message and a family page link. With #198 a parent could:
+Today a parent gets an SMS or WhatsApp message and a family page link.
 
-- **chat with the school** like any business, and ask about fees with answers from their own family's balance;
-- **see "Fees" on You**, beside Orders, with:
+**What #198 already gives parents** ([Taskiem for everyone](taskiem-for-everyone.md)):
+
+- **A personal account** with their phone (stage 1). Parents and guardians are the users. Students are not: accounts are for those 18 and over (§15 there).
+- **Chatting with the school** like any business, in the app or the phone's browser, from its chat link or Discover (stage 2). The school's staff answer in its customer chats, as a shop's do.
+- **One parent across the app and WhatsApp** (stage 4). A parent writing on the school's own WhatsApp number and in the app is one customer to the school, joined by their verified phone. Families who stay on WhatsApp keep working as they do.
+
+**What it does not give them yet: their fees.** The customer door (§8.4 there) lets a person reach "their own orders, bookings and invoices" with a business. A school's fees are invoices on a student's family, tied to the guardian's phone, not to the person, so a parent sees none of them. The new work is mostly here:
+
+- **The customer door gains the family:** the students whose guardian phone is the person's verified phone, their fee invoices, receipts, payment plans and promises. It is read-only except for promising and asking for a plan. It is audited like the door's other entries, never shows another family, and is closed by a business that blocked the person.
+- **Matching a parent to their family** uses the guardian's phone, which already ties a guardian to one family ([schools-open-items.md](schools-open-items.md)). It is confirmed the way #198 confirms a person's orders by their verified phone: a waiting count, then "These are mine" (§13 there). A second guardian on the same family is their own person, matched by their own phone.
+- **"Fees" on You**, beside Your orders:
   - each child's balance;
   - the account number to pay into;
   - receipts;
-  - the payment plan and its next date;
-- **promise to pay or ask for a plan** from the chat, which the bursar answers with a tap. The school's side already decides these (Debtors, plans);
-- **get notices** (term starting, fee invoices, clearance, receipts on payment) by push in the app instead of SMS. This also saves the school's message costs, with WhatsApp or SMS kept for families not in the app.
+  - the payment plan and its next date.
+- **In the chat with the school:**
+  - ask about fees and get answers from their own family's balance;
+  - a family's card;
+  - **promise to pay or ask for a plan**, which the bursar answers with a tap. The school's side already decides these (Debtors, plans).
+- **Notices** (term starting, fee invoices, clearance, receipts on payment) by push in the app, through #198's push on You, instead of SMS. This also saves the school's message costs. WhatsApp or SMS is kept for families not in the app.
 
-Matching a parent to their family would use the guardian's phone, which already ties a guardian to one family ([schools-open-items.md](schools-open-items.md)). It would be confirmed the way #198 finds a person's orders by their verified phone, with "These are mine" first.
+**Groups** (stage 5b) are people's own: parents may make a class group among themselves, and the school is not in it. A school speaking to a class's parents (term dates, an event) is a different thing: a notice from the school to the families of a class, sent into each family's own chat with the school, never a group the school runs. Whether that is wanted is a question below.
 
 ## 3. School automations
 
@@ -118,10 +130,11 @@ These sit with the automation discussion; the choice of which to plan first is m
 - **The proprietor's evening summary** is already the daily close and is on the School tab. In the Taskiem chat it becomes a card each evening, not only a line in the briefing the next morning.
 - **Saved things for schools:** @bursar, @school-account, and templates like #fee-schedule, #uniform-list and #resumption-date, from the saved-things idea.
 
-## Questions for when #198 lands
+## Questions
 
 1. **Who first:** the school's staff (words and cards in the chat), parents on You, or both together?
-2. **Parents' conversations:** should they follow #198's customer conversations exactly (one conversation per school, the same safety rules), with "Fees" on You as a school's version of Orders? Suggested: yes, rather than a separate parent area.
-3. **Priority against the automation list:** schools near the top? Its staff side is mostly built, and parents are a large audience once #198 lands.
+2. **Parents' conversations:** they already follow #198's customer conversations (one conversation per school, the same safety rules). Should the family's fees come through the customer door, with "Fees" on You as a school's version of Your orders? Suggested: yes, rather than a separate parent area.
+3. **Notices to a class:** should a school be able to send one notice to the families of a class (or the whole school), arriving in each family's own chat with it? This would follow the offers rules where it is not about the family's own fees: only to families who chat with the school, at most so often.
+4. **Priority against the automation list:** schools near the top? Its staff side is mostly built, and parents are a large audience now that #198 has landed.
 
 (The question of the gate screen in the app is settled: it is built.)
