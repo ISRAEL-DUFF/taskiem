@@ -1,6 +1,6 @@
 # Made tools: a workflow as a tool in the chat
 
-Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
+Status: **plan, settled; not built.** The founder took every recommendation in §14 on 19 November 2026. Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder decided. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
 
 ## 1. Summary
 
@@ -293,7 +293,9 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 
 ## 14. For the founder to decide
 
-| # | Question | Recommendation |
+**Settled 19 November 2026.** The founder took each recommendation below, one by one: a block (1); read-only tools answer at once for members, with the echo line (2); the panel follows the chat tools switch and commands work wherever `run` does (3); the public menu becomes customers' tools, by migration (4); linked businesses later, with [their plan](made-tools-linked.md) written now (5); tools first, with [pages](pages.md) written now (6); roles are a rule on every path (8); a tool's run counts as any run, with a plain message at the limit, a warning at 80% and each tool's use shown on its page (9). Number 7 needs no answer: the record takes the next free number. With them stands the review's rule that a step which moves money always makes care step-up (§8).
+
+| # | Question | Recommendation (taken) |
 | --- | --- | --- |
 | 1 | Is `tool` a block of the workflow, or a trigger type of its own (`chat`)? | **A block.** The inputs, the outputs and the run are the workflow's already, and one workflow then has one way to be started by a person wherever they are. A trigger type would give tools their own inputs and split `run` from tools |
 | 2 | May a read-only tool answer without **yes**? | **Yes**, with the echo line, for members only, because it changes nothing. It may show a person more than they could open themselves (§8); that is settled by who may use the tool, not by asking **yes**. Customers and linked businesses always get **yes** |

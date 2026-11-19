@@ -48,7 +48,7 @@ And as for every screen: built on the web first and matched in the app's own loo
 | --- | --- | --- |
 | D1 | **A decision record for made tools** (the next free number; 0070 as of today). The `tool` block in `wd/v1` and its rules ([made tools](made-tools.md) §5, §14) | Founder accepts; written in M0 |
 | D2 | **A decision record for saved objects** (the next free number; 0071 as of today). Objects as a core part, their owners, sealing, and payees being objects ([saved objects](saved-objects.md) §5, §8, §15) | Founder accepts; written in S0 |
-| D3 | **Made tools' nine choices** (§14 there): each has a recommendation. With them, the review's rule that a tool which moves money always asks for step-up (§8 there) | Founder, before M0 |
+| D3 | **Made tools' nine choices** (§14 there). **Settled 19 November 2026:** the founder took each recommendation, with the review's rule that a tool which moves money always asks for step-up (§8 there) | Done |
 | D4 | **Paying people's open questions** (its last section): each has an answer in brackets. Two matter most: the one-time code by text (not built today), and who bears a payout's fee | Founder, before P1 |
 | D5 | **The payments flow's five open questions.** **Settled 19 November 2026** ([its last section](chat-payments-flow.md#settled-19-november-2026)): the seller bears the fee; transfer first, the last choice remembered; one bill at a time with "Pay the next one"; customers in part 1; 60 minutes with "I need longer" | Done |
 | D6 | **A payments provider in test mode** with payouts (Moniepoint and Anchor have `pay_bank` and `resolve_account` today; Paystack needs its transfer statuses confirmed) for the end-to-end tests, as the fakes allow for the rest. The provider questions left open by the system audit (Paystack's transfer statuses, Flutterwave's second transfer) are closed for the provider chosen | Founders |
@@ -73,7 +73,7 @@ Three tracks run side by side where nothing joins them: **S** (saved objects), *
 - No picker group, cards, sharing or other kinds yet: those are S1.
 - Done when: an owner saves a supplier's account as `@bayo`, the bank's name for it is checked and shown, staff see it masked, and changing the number asks for a passkey and is in the audit.
 
-**M0. Made tools: the declaration** (made tools T0). Needs: D1, D3.
+**M0. Made tools: the declaration** (made tools T0). Needs: D1 (D3 is settled).
 - The decision record; `tool` and `answer` in the schema and the contract; the validator's rules, with the money rule (a step that moves money makes care step-up; refused for customers' and linked tools); care worked out and stored; a tool's `roles` held on every way to start a workflow.
 - Done when: a definition with `tool` validates or is refused for the right reason; a tool with a payout step is marked step-up; and a member outside a workflow's roles cannot start it by any path.
 

@@ -207,7 +207,7 @@ G1 stands on tables alone, so it can be built beside made tools. G2 onward waits
 | --- | --- | --- |
 | 1 | Is a page its own document (`page/v1`), or a part of a workflow? | **Its own.** A page draws from many tables and tools and runs nothing; tying it to one workflow would be wrong for most pages |
 | 2 | Does a page read with the viewer's rights, or show what its maker chose? | **What its maker chose**, to those its `roles` allow, as a tool's answer does, with personal columns masked without `table.read` and publishing saying plainly what is shown (§8). Reading with the viewer's rights would make most pages empty for the staff they are made for |
-| 3 | Does a tool source's run count against the run limits? | **Yes**, as any run, kept for 60 seconds a viewer and shown as an estimate on the page's settings. Watch the first businesses before changing it |
+| 3 | Does a tool source's run count against the run limits? | **Settled 19 November 2026, with made tools' question 9: yes**, as any run, kept for 60 seconds a viewer and shown as an estimate on the page's settings. Watch the first businesses before changing it |
 | 4 | Pages for customers or linked businesses? | **No**, not in this plan |
 | 5 | Board and chart: in the first release or later? | **Later** (G4). Figures, lists and buttons cover most needs; a board and a chart are the two costliest to draw well in the app |
 | 6 | The limit on the lowest plan | **10 pages**, 12 blocks each |
