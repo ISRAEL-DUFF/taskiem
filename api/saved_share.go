@@ -74,12 +74,22 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 			return err
 		}
 		number := ""
-		if x.Kind == saved.KindBankAccount {
+		switch x.Kind {
+		case saved.KindBankAccount:
 			if number, err = s.openSaved(ctx, tx, o, x.ID, x.Sealed); err != nil {
 				return err
 			}
+			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
+		case saved.KindCustom:
+			// A made-up kind's: its fields but those never shared.
+			all, err := s.customValuesTx(ctx, tx, o, x)
+			if err != nil {
+				return err
+			}
+			card = saved.MakeCustomCard(x.KindName, x.Name, x.Title, x.Fields, all)
+		default:
+			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		}
-		card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		if card.Sensitive && !sh.Confirm {
 			return errShareConfirm{question: shareQuestion(x, to)}
 		}

@@ -52,10 +52,20 @@ func TestSavedCards(t *testing.T) {
 	bola.must(409, "POST", "/v1/me/people/forward", map[string]any{"chat_id": bolaChat, "message_id": got["id"], "to": []string{adaID.String()}})
 	// Only one's own, and only live ones.
 	ada.must(400, "POST", "/v1/me/people/"+adaChat+"/messages", map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": mum["id"], "owner": "business"}}})
+	// One of Ada's own kinds: what is never shared left out of the card.
+	pet := ada.must(201, "POST", "/v1/me/saved-kinds", map[string]any{"name": "Pet", "fields": []map[string]any{
+		{"label": "Breed", "type": "text"}, {"label": "Microchip", "type": "text", "never_share": true}, {"label": "Vet's phone", "type": "phone"}}})["kind"].(map[string]any)
+	rex := ada.must(201, "POST", "/v1/me/saved", map[string]any{"name": "rex", "title": "Rex", "kind": "custom", "kind_id": pet["id"],
+		"values": map[string]any{"breed": "Boerboel", "microchip": "985112003456789", "vets_phone": "0803 555 0101"}})["saved"].(map[string]any)
+	petShare := map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": rex["id"], "owner": "mine", "confirm": true}}}
+	pc := ada.must(201, "POST", "/v1/me/people/"+adaChat+"/messages", petShare)["card"].(map[string]any)["saved"].(map[string]any)
+	if pc["kind"] != "custom" || pc["kind_name"] != "Pet" || strings.Contains(fmt.Sprint(pc), "985112003456789") || !strings.Contains(fmt.Sprint(pc["lines"]), "Boerboel") {
+		t.Fatalf("a pet's card: %v", pc)
+	}
 	ada.must(204, "DELETE", "/v1/me/saved/"+mum["id"].(string), nil)
 	ada.must(404, "POST", "/v1/me/people/"+adaChat+"/messages", share(true))
 	var shared int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_object_events WHERE person_id = $1 AND action = 'shared'`, adaID).Scan(&shared); err != nil || shared != 1 {
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_object_events WHERE person_id = $1 AND action = 'shared'`, adaID).Scan(&shared); err != nil || shared != 2 {
 		t.Fatalf("shares logged: %d %v", shared, err)
 	}
 

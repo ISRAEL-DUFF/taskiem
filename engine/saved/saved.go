@@ -62,6 +62,9 @@ var ErrInvalid = errors.New("saved: invalid")
 
 func invalid(msg string) error { return fmt.Errorf("%w: %s", ErrInvalid, msg) }
 
+// Refuse is a refusal in words for the person (ErrInvalid; Plain says it).
+func Refuse(msg string) error { return invalid(msg) }
+
 // Plain is what a person reads for err: the words after the error's kind.
 func Plain(err error) string {
 	msg := err.Error()

@@ -104,6 +104,11 @@ type savedView struct {
 	// account's number is there only masked (account_number: "••6789").
 	Details map[string]any `json:"details"`
 	Check   savedCheckView `json:"check"`
+	// A made-up kind's: its id and name, and its values by field (each
+	// sensitive one masked, ••3456).
+	KindID   *uuid.UUID        `json:"kind_id,omitempty"`
+	KindName string            `json:"kind_name,omitempty"`
+	Values   map[string]string `json:"values,omitempty"`
 	// ToChange says whether the person may change or remove it.
 	ToChange  bool      `json:"to_change"`
 	CreatedAt time.Time `json:"created_at"`
@@ -140,13 +145,32 @@ type savedRow struct {
 	CheckProblem *string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	// A made-up kind's (saved_kinds.go): its id, name and fields as they
+	// are now.
+	KindID   *uuid.UUID
+	KindName string
+	Fields   []saved.Field
 }
 
-const savedCols = `id, name, title, kind, details, sealed, hint, check_state, checked_name, checked_via, checked_at, check_problem, created_at, updated_at`
+// savedCols are an object's columns, with its made-up kind's name and
+// fields when it has one.
+const savedCols = `id, name, title, kind, details, sealed, hint, check_state, checked_name, checked_via, checked_at, check_problem, created_at, updated_at,
+	kind_id, (SELECT jsonb_build_object('name', k.name, 'fields', k.fields) FROM saved_kinds k WHERE k.id = kind_id)`
 
 func scanSaved(r pgx.Row) (savedRow, error) {
 	var o savedRow
-	err := r.Scan(&o.ID, &o.Name, &o.Title, &o.Kind, &o.Details, &o.Sealed, &o.Hint, &o.CheckState, &o.CheckedName, &o.CheckedVia, &o.CheckedAt, &o.CheckProblem, &o.CreatedAt, &o.UpdatedAt)
+	var kind []byte
+	err := r.Scan(&o.ID, &o.Name, &o.Title, &o.Kind, &o.Details, &o.Sealed, &o.Hint, &o.CheckState, &o.CheckedName, &o.CheckedVia, &o.CheckedAt, &o.CheckProblem, &o.CreatedAt, &o.UpdatedAt,
+		&o.KindID, &kind)
+	if err == nil && len(kind) > 0 {
+		var k struct {
+			Name   string        `json:"name"`
+			Fields []saved.Field `json:"fields"`
+		}
+		if json.Unmarshal(kind, &k) == nil {
+			o.KindName, o.Fields = k.Name, k.Fields
+		}
+	}
 	return o, err
 }
 
@@ -168,9 +192,23 @@ func (o savedRow) view(owner savedOwner, toChange bool) savedView {
 	if last4, _ := o.Details["last4"].(string); last4 != "" {
 		d["account_number"] = "••" + last4
 	}
-	return savedView{ID: o.ID, Owner: owner.label(), Name: o.Name, Title: o.Title, Kind: o.Kind, Hint: o.Hint, Details: d,
+	v := savedView{ID: o.ID, Owner: owner.label(), Name: o.Name, Title: o.Title, Kind: o.Kind, Hint: o.Hint, Details: d,
 		Check:    savedCheckView{State: o.CheckState, AccountName: o.CheckedName, Via: o.CheckedVia, At: o.CheckedAt, Problem: o.CheckProblem},
 		ToChange: toChange, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
+	if o.Kind == saved.KindCustom {
+		delete(d, "values")
+		delete(d, "masked")
+		v.KindID, v.KindName, v.Values = o.KindID, o.KindName, map[string]string{}
+		for _, part := range []string{"values", "masked"} {
+			m, _ := o.Details[part].(map[string]any)
+			for _, f := range o.Fields {
+				if s, _ := m[f.Key].(string); s != "" {
+					v.Values[f.Key] = s
+				}
+			}
+		}
+	}
+	return v
 }
 
 // savedToChange says whether the request's person may change the owner's
@@ -247,7 +285,7 @@ func (s *Server) savedFail(w http.ResponseWriter, r *http.Request, err error) {
 func (s *Server) listSaved(w http.ResponseWriter, r *http.Request, o savedOwner) {
 	ctx := r.Context()
 	kind, q := r.URL.Query().Get("kind"), strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
-	if kind != "" && !slices.Contains(saved.Kinds, kind) {
+	if kind != "" && !slices.Contains(saved.Kinds, kind) && kind != saved.KindCustom {
 		writeErr(w, http.StatusBadRequest, "That is not a kind of saved thing.")
 		return
 	}
@@ -396,6 +434,10 @@ type savedIn struct {
 	// phone, a place's line, a text's body. On a change, the fields given
 	// replace those kept; null removes one.
 	Details map[string]any `json:"details"`
+	// A made-up kind's (kind custom): which, and its values by field key; on
+	// a change, those given replace those kept, and null removes one.
+	KindID *uuid.UUID     `json:"kind_id"`
+	Values map[string]any `json:"values"`
 	// Passkey confirms changing the account (its number or its bank), for
 	// a challenge asked for saved.change on this object.
 	Passkey *credentialJSON `json:"passkey,omitempty"`
@@ -451,7 +493,7 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 	if in.Kind == "" {
 		in.Kind = saved.KindBankAccount
 	}
-	if !slices.Contains(saved.Kinds, in.Kind) {
+	if !slices.Contains(saved.Kinds, in.Kind) && in.Kind != saved.KindCustom {
 		writeErr(w, http.StatusBadRequest, "That is not a kind of saved thing.")
 		return
 	}
@@ -571,6 +613,10 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 	}
 	if in.Kind != "" && in.Kind != was.Kind {
 		writeErr(w, http.StatusBadRequest, "A saved thing's kind does not change.")
+		return
+	}
+	if was.Kind == saved.KindCustom {
+		s.changeSavedCustom(w, r, o, was, in)
 		return
 	}
 	if was.Kind != saved.KindBankAccount {
@@ -737,8 +783,8 @@ func (s *Server) revealSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 	}
 	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		x, err := savedRowTx(ctx, tx, o, id, false)
-		if err == nil && x.Kind != saved.KindBankAccount {
-			return customerSendErr{http.StatusBadRequest, "Only a bank account's number is kept hidden: its details are shown in full."}
+		if err == nil && x.Kind != saved.KindBankAccount && (x.Kind != saved.KindCustom || len(x.Sealed) == 0) {
+			return customerSendErr{http.StatusBadRequest, "Nothing of it is kept hidden: its details are shown in full."}
 		}
 		return err
 	}); err != nil {
@@ -749,10 +795,20 @@ func (s *Server) revealSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		return
 	}
 	var number string
+	var values map[string]string
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		x, err := savedRowTx(ctx, tx, o, id, false)
 		if err != nil {
 			return err
+		}
+		if x.Kind == saved.KindCustom {
+			// A made-up kind's sensitive values, in full.
+			all, err := s.customValuesTx(ctx, tx, o, x)
+			if err != nil {
+				return err
+			}
+			_, values, _ = saved.SplitValues(x.Fields, all)
+			return s.savedEvent(r, tx, o, id, "revealed", map[string]any{"fields": len(values), "confirmed": "passkey"})
 		}
 		if number, err = s.openSaved(ctx, tx, o, id, x.Sealed); err != nil {
 			return err
@@ -764,6 +820,10 @@ func (s *Server) revealSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	if values != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"values": values})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"account_number": number})
 }
 
@@ -772,6 +832,11 @@ func (s *Server) revealSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 // sealSaved seals an account number for its owner: under the person's own
 // key, bound to the object; or under the business's subject keys.
 func (s *Server) sealSaved(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid.UUID, number string) (map[string]any, error) {
+	return s.sealSavedAs(ctx, tx, o, id, "account_number", number)
+}
+
+// sealSavedAs seals a value for its owner, a business's under category.
+func (s *Server) sealSavedAs(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid.UUID, category, number string) (map[string]any, error) {
 	if o.mine() {
 		key, err := s.keys().KeyTx(ctx, tx, o.person, true)
 		if err != nil {
@@ -783,7 +848,7 @@ func (s *Server) sealSaved(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid
 		}
 		return map[string]any{"person": base64.StdEncoding.EncodeToString(ct)}, nil
 	}
-	return s.Store.PII.SealTx(ctx, tx, o.tenant, "account_number", number)
+	return s.Store.PII.SealTx(ctx, tx, o.tenant, category, number)
 }
 
 // openSaved opens what sealSaved sealed.

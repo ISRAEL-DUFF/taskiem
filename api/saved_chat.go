@@ -117,6 +117,17 @@ func (s *Server) savedLines(c *chat, x savedRow) string {
 	case saved.KindProviderAccount:
 		add(str("provider") + ": " + str("number"))
 		add(str("name_on_it"))
+	case saved.KindCustom:
+		// A made-up kind's fields, the sensitive ones masked.
+		v := x.view(savedOwner{}, false).Values
+		for _, f := range x.Fields {
+			if val := v[f.Key]; val != "" {
+				if !f.Sensitive {
+					val = saved.ShownValue(f, val)
+				}
+				add(f.Label + ": " + val)
+			}
+		}
 	default:
 		for _, k := range []string{"line", "area", "landmark", "phone", "email", "address", "birthday"} {
 			add(str(k))

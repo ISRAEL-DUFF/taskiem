@@ -85,6 +85,9 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 		return x, savedProblem{}, err
 	}
 	id := uuid.Must(uuid.NewV7())
+	if in.Kind == saved.KindCustom {
+		return s.addSavedCustom(ctx, who, o, id, name, title, in)
+	}
 	if in.Kind != saved.KindBankAccount {
 		c, err := saved.Clean(in.Kind, in.Details)
 		if err != nil {

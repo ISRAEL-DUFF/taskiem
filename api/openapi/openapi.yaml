@@ -25722,6 +25722,109 @@ paths:
           description: Deleted
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/saved-kinds:
+    get:
+      operationId: listMySavedKinds
+      tags:
+      - Saved
+      summary: Kinds of your own
+      description: 'The kinds made (saved objects S1, part 5), by name, with the starters to copy and the limit (40).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The kinds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMySavedKind
+      tags:
+      - Saved
+      summary: Make a kind
+      description: 'A name and its fields (up to 30, each a label and a type; required, sensitive, never shared; a choice''s options). 409 `name_taken`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved-kinds/{id}:
+    put:
+      operationId: changeMySavedKind
+      tags:
+      - Saved
+      summary: Change a kind
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field made sensitive (or no longer) moves its values at once.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeMySavedKind
+      tags:
+      - Saved
+      summary: Remove a kind
+      description: 'Only once nothing live is of it (409 `in_use`, how many).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/saved:
     get:
       operationId: listMySaved
@@ -25738,7 +25841,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account, person, place, text, provider_account]
+          enum: [bank_account, person, place, text, provider_account, custom]
       - name: q
         in: query
         schema:
@@ -25989,10 +26092,14 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [account_number]
+                description: 'A bank account''s number; or a made-up kind''s sensitive values by field key (saved objects S1).'
                 properties:
                   account_number:
                     type: string
+                  values:
+                    type: object
+                    additionalProperties:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/me/saved/read:
@@ -33392,6 +33499,115 @@ paths:
                     format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved-kinds:
+    get:
+      operationId: listSavedKinds
+      tags:
+      - Saved
+      summary: Kinds of the business's
+      description: 'The kinds made (saved objects S1, part 5), by name, with the starters to copy and the limit (40).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The kinds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSavedKind
+      tags:
+      - Saved
+      summary: Make a kind
+      description: 'A name and its fields (up to 30, each a label and a type; required, sensitive, never shared; a choice''s options). Needs saved.manage; in the audit chain. 409 `name_taken`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved-kinds/{id}:
+    put:
+      operationId: changeSavedKind
+      tags:
+      - Saved
+      summary: Change a kind
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field made sensitive (or no longer) moves its values at once. Needs saved.manage; in the audit chain.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeSavedKind
+      tags:
+      - Saved
+      summary: Remove a kind
+      description: 'Only once nothing live is of it (409 `in_use`, how many). Needs saved.manage; in the audit chain.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved:
     get:
       operationId: listSaved
@@ -33408,7 +33624,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account, person, place, text, provider_account]
+          enum: [bank_account, person, place, text, provider_account, custom]
       - name: q
         in: query
         schema:
@@ -33776,10 +33992,14 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [account_number]
+                description: 'A bank account''s number; or a made-up kind''s sensitive values by field key (saved objects S1).'
                 properties:
                   account_number:
                     type: string
+                  values:
+                    type: object
+                    additionalProperties:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/banks:
@@ -46222,7 +46442,19 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account]
+          enum: [bank_account, person, place, text, provider_account, custom]
+          description: custom is one of the owner's own kinds (kind_id).
+        kind_id:
+          type: string
+          format: uuid
+        kind_name:
+          type: string
+          description: A made-up kind's name ("Car").
+        values:
+          type: object
+          description: A made-up kind's values by field key; each sensitive one masked (••3456), in full only by reveal.
+          additionalProperties:
+            type: string
         hint:
           type: string
           description: What a list shows ("GTBank ••6789").
@@ -46298,6 +46530,105 @@ components:
         updated_at:
           type: string
           format: date-time
+    SavedKindField:
+      type: object
+      additionalProperties: false
+      required: [label, type]
+      description: One field of a made-up kind. Its key is made from its label once and kept; never_share makes it sensitive too.
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+          maxLength: 60
+        type:
+          type: string
+          enum: [text, number, money, date, phone, email, choice]
+        required:
+          type: boolean
+        sensitive:
+          type: boolean
+          description: Sealed, masked in lists, shown in full only on a fresh unlock, asked before sharing.
+        never_share:
+          type: boolean
+          description: Kept out of every card.
+        options:
+          type: array
+          description: A choice's options, 2 to 30.
+          items:
+            type: string
+    SavedKind:
+      type: object
+      additionalProperties: false
+      required: [id, name, fields, count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedKindField'
+        count:
+          type: integer
+          description: How many live saved things are of it.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SavedKindIn:
+      type: object
+      additionalProperties: false
+      required: [name, fields]
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        fields:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/SavedKindField'
+    SavedKindList:
+      type: object
+      additionalProperties: false
+      required: [kinds, starters, limit, to_change]
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedKind'
+        starters:
+          type: array
+          description: Kinds to start from (a car, a generator, a pet, a medical card).
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, fields]
+            properties:
+              name:
+                type: string
+              fields:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedKindField'
+        limit:
+          type: integer
+        to_change:
+          type: boolean
+          description: The person may add, change and remove kinds.
+    SavedKindResult:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          $ref: '#/components/schemas/SavedKind'
     SavedShare:
       type: object
       additionalProperties: false
@@ -46316,11 +46647,14 @@ components:
       type: object
       additionalProperties: false
       required: [kind, title, name, lines, details, sensitive]
-      description: A saved thing as shared in a chat, a copy of it as it was when sent (never a link); details are its fields for Save this, an account number in full.
+      description: A saved thing as shared in a chat, a copy of it as it was when sent (never a link); details are its fields for Save this, an account number in full; a made-up kind's are its lines as a text's body.
       properties:
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account]
+          enum: [bank_account, person, place, text, provider_account, custom]
+        kind_name:
+          type: string
+          description: A made-up kind's name ("Car").
         title:
           type: string
         name:
@@ -46364,7 +46698,16 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account]
+          enum: [bank_account, person, place, text, provider_account, custom]
+        kind_id:
+          type: string
+          format: uuid
+          description: Which of the owner's kinds, for kind custom.
+        values:
+          type: object
+          description: A made-up kind's values by field key; on a change, those given replace those kept, and null removes one.
+          additionalProperties:
+            type: [string, 'null']
         bank_name:
           type: string
         bank_code:

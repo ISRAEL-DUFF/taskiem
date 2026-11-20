@@ -14,8 +14,10 @@ import (
 
 // Card is a saved thing as it is shared.
 type Card struct {
-	Kind  string `json:"kind"`
-	Title string `json:"title"`
+	Kind string `json:"kind"`
+	// KindName is a made-up kind's name ("Car"), for the card's kicker.
+	KindName string `json:"kind_name,omitempty"`
+	Title    string `json:"title"`
 	// Name is the sender's @name for it, for the receiver to keep or change.
 	Name string `json:"name"`
 	// Lines are its details as shown, each with its label.
@@ -100,15 +102,15 @@ func (c Card) Plain() string {
 // the server from a saved thing (MakeCard); this guards one read back.
 func (c Card) Check() error {
 	switch {
-	case !knownKind(c.Kind):
+	case !knownKind(c.Kind) && c.Kind != KindCustom:
 		return invalid("That is not a kind of saved thing.")
 	case c.Title == "" || len([]rune(c.Title)) > MaxTitle:
 		return invalid("A shared thing has a title.")
-	case len(c.Lines) > 12:
+	case len(c.Lines) > MaxFields:
 		return invalid("A shared thing has too many lines.")
 	}
 	for _, l := range c.Lines {
-		if len([]rune(l.Value)) > MaxText || len([]rune(l.Label)) > 40 {
+		if len([]rune(l.Value)) > MaxText || len([]rune(l.Label)) > MaxLabel {
 			return invalid("A shared thing's line is too long.")
 		}
 	}
