@@ -772,6 +772,10 @@
       "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
       "reviewed": false
     },
+    "wa.not_understood_help": {
+      "text": "Aika *help* don ganin abin da zan iya yi.",
+      "reviewed": false
+    },
     "wa.password.off": {
       "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
       "reviewed": false
@@ -1738,6 +1742,14 @@
     },
     "wa.cancelled": {
       "text": "An soke.",
+      "reviewed": false
+    },
+    "wa.understood.confirm": {
+      "text": "Ina tsammani kana nufin: *{command}*\nIn yi shi?",
+      "reviewed": false
+    },
+    "wa.understood.left": {
+      "text": "To, na bar shi. Ka sake faɗa ta wata hanya, ko ka aika *help* don ganin abin da zan iya yi.",
       "reviewed": false
     },
     "wa.yes_stale": {

@@ -222,6 +222,9 @@ type chat struct {
 	// tools is the business's chat tools switch (chat_tools.go), and
 	// toTaskiem that this message called Taskiem with "@Taskiem".
 	tools, toTaskiem bool
+	// understood is that this message is a command the model gave
+	// (chat_understand.go): read once, never put to the model again.
+	understood bool
 }
 
 // t is a message in the conversation's language.
@@ -290,6 +293,9 @@ type chatData struct {
 	// Direct is when a lone "..." was sent: the next message goes to the
 	// linked businesses it mentions (chat_direct.go).
 	Direct *time.Time `json:"direct,omitempty"`
+	// Understand is the model's help waiting on the person: a command to
+	// confirm, or a question it asked (chat_understand.go).
+	Understand *chatUnderstand `json:"understand,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -882,6 +888,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if strings.HasPrefix(text, orderPrefix) {
 		return s.waOrderPress(ctx, c, text)
 	}
+	if c.data.Understand != nil && c.state != stateIdle {
+		return s.waUnderstandReply(ctx, c, text, cmd)
+	}
 	if c.data.Build != nil && c.state != stateIdle {
 		return s.waBuildReply(ctx, c, text, cmd)
 	}
@@ -1169,7 +1178,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	// Not recognised: a typed request for a tool, read by the model, is
 	// answered with its form, filled in (chat_tool_requests.go).
-	if c.state == stateIdle && !matched {
+	if c.state == stateIdle && !matched && !c.understood {
 		if done, err := s.waToolRequest(ctx, c, text); done || err != nil {
 			return err
 		}
@@ -1183,14 +1192,22 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	// In a language other than English, the model may route it
 	// (engine/ai/intent); it never confirms anything.
-	if c.state == stateIdle && !matched {
+	if c.state == stateIdle && !matched && !c.understood {
 		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
 			if done, err := s.waIntent(ctx, c, m); done || err != nil {
 				return err
 			}
 		}
 	}
-	return c.say(ctx, s, c.t("wa.not_understood")+" "+s.waHelp(c))
+	// Still not recognised: the model reads the commands this person may
+	// send and helps with the message (chat_understand.go). The whole list
+	// comes only when they ask for help.
+	if c.state == stateIdle && !c.understood {
+		if done, err := s.waUnderstand(ctx, c, text); done || err != nil {
+			return err
+		}
+	}
+	return c.say(ctx, s, notUnderstood(c))
 }
 
 // waIntent does what a recognised command asks; false when it is not one

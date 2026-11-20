@@ -964,6 +964,11 @@
       "reviewed": true,
       "context": "\"sign in\" or \"password\" from a chat linked from an emailed link in the last 24 hours"
     },
+    "wa.not_understood_help": {
+      "text": "Send *help* to see what I can do.",
+      "reviewed": true,
+      "context": "After \"Sorry, I did not understand that.\", when nothing could work out a message: how to see the commands, instead of all of them"
+    },
     "wa.password.off": {
       "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
       "reviewed": true,
@@ -2173,6 +2178,16 @@
       "text": "Cancelled.",
       "reviewed": true,
       "context": "cancel dropped what was in progress"
+    },
+    "wa.understood.confirm": {
+      "text": "I think you mean: *{command}*\nShall I do it?",
+      "reviewed": true,
+      "context": "Taskiem's model read a message no command matched as this command, which changes something; done only on Yes. {command} is the command in English"
+    },
+    "wa.understood.left": {
+      "text": "OK, I left it. Tell me again in other words, or send *help* to see what I can do.",
+      "reviewed": true,
+      "context": "No to the command Taskiem's model read a message as"
     },
     "wa.yes_stale": {
       "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
