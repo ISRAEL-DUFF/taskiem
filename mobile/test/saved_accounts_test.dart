@@ -80,6 +80,74 @@ Finder field(String label) => find.ancestor(of: find.text(label), matching: find
 void main() {
   setUpAll(loadFonts);
 
+  testWidgets('the other kinds: saved through the chooser, filtered by kind, changed with no passkey', (t) async {
+    phone(t);
+    final api = conversation(c: chat());
+    final list = <Map<String, dynamic>>[
+      {
+        ...saved('w1', 'warehouse', 'Our warehouse', 'Yaba'),
+        'kind': 'place',
+        'details': {'line': '12 Herbert Macaulay Way', 'area': 'Yaba'},
+        'check': {'state': 'none', 'account_name': null, 'via': null, 'at': null, 'problem': null},
+      },
+      saved('s1', 'bayo', 'Bayo (rice)', 'GTBank ••6789', checkedName: 'BAYO ADEWALE'),
+    ];
+    api.routes['GET /v1/saved'] = (_) => {'saved': list, 'limit': 2000, 'can_check': false};
+    api.routes['GET /v1/saved/provider'] = (_) => _wallet;
+    api.routes['POST /v1/saved'] = (r) {
+      final b = api.body(r);
+      final x = {
+        ...saved('t1', b['name'] as String, b['title'] as String, '2 lines of text'),
+        'kind': b['kind'],
+        'details': b['details'],
+        'check': {'state': 'none', 'account_name': null, 'via': null, 'at': null, 'problem': null},
+      };
+      list.add(x);
+      return answer({'saved': x}, 201);
+    };
+    api.routes['PUT /v1/saved/w1'] = (r) => {'saved': list.first};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SavedAccountsPage(auth: api.auth(permissions: ['saved.manage'], personal: false), mine: false)));
+    await settle(t);
+    // Two kinds: a filter; a place has no check pill.
+    expect(find.text('Places'), findsOneWidget);
+    expect(find.text('Checked'), findsOneWidget);
+    await press(t, find.text('Places'));
+    expect(find.text('Bayo (rice)'), findsNothing);
+    expect(find.text('Our warehouse'), findsOneWidget);
+    await press(t, find.text('All'));
+
+    await press(t, find.text('Save something'));
+    await press(t, find.text('A text'));
+    await press(t, find.text('Save'));
+    expect(find.text('Give it a short name to call it up by, like @mum or @bayo.'), findsOneWidget);
+    await typeIn(t, field('Name to call it up by'), 'bank-details');
+    await typeIn(t, field('Title'), 'Our bank details');
+    await press(t, find.text('Save'));
+    expect(find.text('Write the text.'), findsOneWidget);
+    await typeIn(t, field('The text'), 'Pay to Bola Stores\nGTBank 0123456789');
+    await press(t, find.text('Save'));
+    expect(api.body(api.sent('POST', '/v1/saved').last), {
+      'details': {'body': 'Pay to Bola Stores\nGTBank 0123456789'},
+      'kind': 'text',
+      'name': 'bank-details',
+      'title': 'Our bank details',
+    });
+    expect(find.text('Our bank details'), findsOneWidget);
+
+    // A place changed field by field, no passkey asked.
+    await press(t, find.text('Our warehouse'));
+    expect(find.text('Show the number'), findsNothing);
+    await press(t, find.text('Change'));
+    await typeIn(t, field('Landmark'), 'by the blue gate');
+    await press(t, find.text('Save'));
+    final body = api.body(api.sent('PUT', '/v1/saved/w1').last);
+    expect((body['details'] as Map)['landmark'], 'by the blue gate');
+    expect((body['details'] as Map)['phone'], isNull);
+    expect(body.containsKey('passkey'), isFalse);
+    expect(api.sent('POST', '/v1/saved/step-up/options'), isEmpty);
+    await drain(t);
+  });
+
   test('a search finds choices by the start of their words', () {
     expect(choiceMatches('Guaranty Trust Bank', 'guar'), isTrue);
     expect(choiceMatches('First City Monument Bank', 'first city'), isTrue);
@@ -106,7 +174,8 @@ void main() {
     await settle(t);
     await looks(t, 'saved');
 
-    await press(t, find.text('Save an account'));
+    await press(t, find.text('Save something'));
+    await press(t, find.text('A bank account'));
     await press(t, find.text('Save account'));
     expect(find.text('Give it a short name to call it up by, like @mum or @bayo.'), findsOneWidget);
     await typeIn(t, field('Name to call it up by'), '@Ada Obi');
@@ -188,7 +257,8 @@ void main() {
     expect(find.text('Check names with the bank'), findsOneWidget);
     expect(find.text('Paystack, Anchor'), findsOneWidget);
     // The save form says the name is not checked until one is connected.
-    await press(t, find.text('Save an account'));
+    await press(t, find.text('Save something'));
+    await press(t, find.text('A bank account'));
     expect(find.text('The bank’s name is not checked yet'), findsOneWidget);
     await t.tapAt(const Offset(5, 5));
     await settle(t);
@@ -205,7 +275,7 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SavedAccountsPage(auth: staff.auth(personal: false), mine: false)));
     await settle(t);
     expect(find.text('Check names with the bank'), findsNothing);
-    expect(find.text('Save an account'), findsNothing);
+    expect(find.text('Save something'), findsNothing);
     expect(find.text('The business’s owners and admins add and change them.'), findsOneWidget);
     await drain(t);
   });

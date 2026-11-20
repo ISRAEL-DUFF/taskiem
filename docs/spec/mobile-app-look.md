@@ -333,7 +333,7 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
 - Signing in: Passkeys and Your phones, each with its count.
 - The chats you work from: WhatsApp, Telegram and Slack, each with
   whether it is linked.
-- Saved: Saved accounts, the business's (saved objects S0).
+- Saved: Saved things, the business's (saved objects S0, S1).
 - For everyone here: Chat tools, a switch, for owners and admins.
 - Sign out of this phone.
 
@@ -353,7 +353,10 @@ The other pages from Settings:
   Unblock) is a tap on the row.
 - **Your business in Explore:** your card as others see it, Be found in
   Explore as a switch, then the card's words and the photos.
-- **Saved** (and You › Settings › Saved accounts): the accounts as rows, the
+- **Saved** (and You › Settings › Saved things): a filter by kind (All,
+  Accounts, People, Places, Texts, Bills) once there are two kinds, each
+  row with its kind's icon; Save something asks which kind with
+  `pickAction`, then a form sheet for it. A bank account's row: the
   bank's name checked or not as a pill at the row's end, the bank and its
   masked number kept together on the line under the title. A business with
   no payments account shows its owner the step to connect one first: a

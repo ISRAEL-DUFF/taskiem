@@ -902,8 +902,8 @@ class YouSettingsScreen extends StatelessWidget {
                   onTap: () => tkPush<void>(context, YourStandingScreen(auth: auth, now: now)),
                 ),
                 TkListRow(
-                  title: 'Saved accounts',
-                  sub: 'Accounts of your own, called up by name, like @mum',
+                  title: 'Saved things',
+                  sub: 'Accounts, people, places and texts of your own, like @mum',
                   icon: 'b-bank',
                   square: look.teal,
                   onTap: () => tkPush<void>(context, SavedAccountsPage(auth: auth, mine: true)),

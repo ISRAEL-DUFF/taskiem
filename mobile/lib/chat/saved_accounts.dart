@@ -61,8 +61,73 @@ String cleanAccountNumber(String typed) => typed.replaceAll(RegExp(r'[\s.-]'), '
 /// A saved account's bank as its hint shows it ("GTBank" of "GTBank ••6789").
 String savedShortHint(SavedObject x) {
   final i = x.hint.lastIndexOf(' ••');
-  return i < 0 ? x.details.bankName : x.hint.substring(0, i);
+  return i < 0 ? (x.details.bankName ?? '') : x.hint.substring(0, i);
 }
+
+/// The kinds Taskiem knows (saved-objects §4.1; lib/saved.ts), in the
+/// order the page lists them: each with what a filter calls them, what one
+/// is called, and its icon.
+const savedKinds = <String, ({String many, String one, String icon})>{
+  'bank_account': (many: 'Accounts', one: 'A bank account', icon: 'b-bank'),
+  'person': (many: 'People', one: 'A person', icon: 'b-person'),
+  'place': (many: 'Places', one: 'A place', icon: 'b-pin'),
+  'text': (many: 'Texts', one: 'A text', icon: 'b-note'),
+  'provider_account': (many: 'Bills', one: 'An account with a provider', icon: 'b-receipt'),
+};
+
+/// What a provider an account is with may be (saved.ProviderTypes).
+const providerTypes = <(String, String)>[
+  ('electricity', 'Electricity'),
+  ('tv', 'TV'),
+  ('phone', 'Phone'),
+  ('internet', 'Internet'),
+  ('water', 'Water'),
+  ('school', 'School'),
+  ('other', 'Another'),
+];
+
+/// A kind's own fields (lib/saved.ts KIND_FIELDS): each key, label, hint,
+/// what to say when it is needed and missing, and whether it is long text.
+const savedFields = <String, List<({String key, String label, String hint, String? need, bool long})>>{
+  'person': [
+    (key: 'phone', label: 'Phone', hint: 'Optional', need: null, long: false),
+    (key: 'email', label: 'Email', hint: 'Optional', need: null, long: false),
+    (key: 'address', label: 'Address', hint: 'Optional', need: null, long: false),
+    (key: 'birthday', label: 'Birthday', hint: 'Optional, like 1970-03-21', need: null, long: false),
+  ],
+  'place': [
+    (key: 'line', label: 'Street and number', hint: '', need: 'Give the place its street and number.', long: false),
+    (key: 'area', label: 'Area', hint: 'Optional, such as Yaba', need: null, long: false),
+    (key: 'landmark', label: 'Landmark', hint: 'Optional: what a rider looks for', need: null, long: false),
+    (key: 'phone', label: 'Phone for the rider', hint: 'Optional', need: null, long: false),
+  ],
+  'text': [
+    (key: 'body', label: 'The text', hint: 'Up to 4,000 characters. It goes into your message, to change before sending', need: 'Write the text.', long: true),
+  ],
+  'provider_account': [
+    (key: 'provider', label: 'Provider', hint: 'Such as Ikeja Electric, DSTV or MTN', need: 'Give the provider’s name, like Ikeja Electric or DSTV.', long: false),
+    (key: 'number', label: 'Number with them', hint: 'A meter, smartcard, phone or student number', need: 'Give the number you have with them.', long: false),
+    (key: 'name_on_it', label: 'Name on the account', hint: 'Optional', need: null, long: false),
+  ],
+};
+
+/// A saved thing's kept field by its key.
+String? savedField(SavedObjectDetails d, String key) => switch (key) {
+  'phone' => d.phone,
+  'email' => d.email,
+  'address' => d.address,
+  'birthday' => d.birthday,
+  'line' => d.line,
+  'area' => d.area,
+  'landmark' => d.landmark,
+  'body' => d.body,
+  'type' => d.type,
+  'provider' => d.provider,
+  'number' => d.number,
+  'name_on_it' => d.nameOnIt,
+  'note' => d.note,
+  _ => null,
+};
 
 /// One bank in a list: its code in that list ("" when chosen by name).
 typedef SavedBank = ({String code, String name});
@@ -80,7 +145,7 @@ SavedBank? savedBankIn(SavedBanks list, SavedObjectDetails d) {
   }
   String key(String s) => s.toLowerCase().split(RegExp('[^a-z0-9]+')).where((w) => w.isNotEmpty && !const {'bank', 'plc', 'limited', 'ltd'}.contains(w)).join(' ');
   for (final b in list.banks) {
-    if (key(b.name) == key(d.bankName)) return b;
+    if (key(b.name) == key(d.bankName ?? '')) return b;
   }
   return null;
 }
@@ -154,6 +219,7 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
   String? _error;
   final _shown = <String, String>{};
   bool _checked = false;
+  String _kind = '';
 
   bool get _manage => widget.mine || widget.auth.can('saved.manage');
 
@@ -183,6 +249,18 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     }
   }
 
+  /// Save something: which kind first.
+  Future<void> _add() async {
+    final k = await pickAction(context, title: 'Save something', actions: [for (final e in savedKinds.entries) (e.key, e.value.one, e.value.icon, false)]);
+    if (k == null || !mounted) return;
+    await (k == 'bank_account' ? _edit() : _editThing(k));
+  }
+
+  Future<void> _editThing(String kind, [SavedObject? x]) async {
+    final saved = await showTkSheet<bool>(context, (_) => SavedThingSheet(api: _api, kind: kind, thing: x));
+    if (saved == true && mounted) await _load();
+  }
+
   Future<void> _edit([SavedObject? x]) async {
     final p = _provider;
     final problem = await showTkSheet<String>(
@@ -195,21 +273,22 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
   }
 
   Future<void> _row(SavedObject x) async {
+    final bank = x.kind == 'bank_account';
     final c = savedCheck(x);
     final pick = await pickAction(
       context,
       title: x.title,
-      note: '@${x.name} · ${x.hint} · ${c.words}',
+      note: bank ? '@${x.name} · ${x.hint} · ${c.words}' : '@${x.name} · ${x.hint}',
       actions: [
         ('change', 'Change', 'b-note', false),
-        if (!_shown.containsKey(x.id)) ('show', 'Show the number', 'b-eye', false),
+        if (bank && !_shown.containsKey(x.id)) ('show', 'Show the number', 'b-eye', false),
         ('remove', 'Remove', 'b-x', true),
       ],
     );
     if (!mounted) return;
     switch (pick) {
       case 'change':
-        await _edit(x);
+        await (bank ? _edit(x) : _editThing(x.kind, x));
       case 'show':
         await _reveal(x);
       case 'remove':
@@ -258,17 +337,20 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
-    final list = _list;
+    final every = _list;
+    final held = [for (final k in savedKinds.keys) if (every?.any((x) => x.kind == k) ?? false) k];
+    final kind = held.contains(_kind) ? _kind : '';
+    final list = every == null ? null : [for (final x in every) if (kind.isEmpty || x.kind == kind) x];
     final p = _provider;
-    final full = list != null && list.length >= _limit;
+    final full = every != null && every.length >= _limit;
     final connect = p != null && p.connected == null && p.owner;
     return SettingsPage(
-      title: widget.mine ? 'Saved accounts' : 'Saved',
+      title: 'Saved',
       children: [
         if (_error != null)
           TkCallout(
             leading: TkSquare('b-warn', color: look.red),
-            title: 'The saved accounts did not load',
+            title: 'Your saved things did not load',
             sub: _error,
             color: look.red,
             button: 'Try again',
@@ -298,31 +380,40 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
             ],
           ),
         ],
-        if (list == null && _error == null) const TkLoading(label: 'Loading the saved accounts…'),
-        if (list != null && list.isEmpty)
-          const TkPanel(children: [TkEmpty(icon: 'b-bank', title: 'No saved accounts yet', line: 'Save one once, and call it up by its name, like @bayo.')]),
+        if (list == null && _error == null) const TkLoading(label: 'Loading your saved things…'),
+        if (every != null && every.isEmpty)
+          const TkPanel(children: [TkEmpty(icon: 'b-bank', title: 'Nothing saved yet', line: 'Save an account, a person, a place or a text once, and call it up by its name, like @bayo.')]),
+        if (held.length > 1)
+          TkChips<String>(
+            label: 'Kinds',
+            padding: EdgeInsets.zero,
+            chips: [('', 'All'), for (final k in held) (k, savedKinds[k]!.many)],
+            on: kind,
+            onPick: (k) => setState(() => _kind = k),
+          ),
         if (list != null && (list.isNotEmpty || (_manage && !full)))
           TkSection(
-            title: list.isEmpty ? null : 'Accounts',
+            title: list.isEmpty ? null : savedKinds[kind.isNotEmpty ? kind : (held.length == 1 ? held.first : '')]?.many ?? 'Everything',
             inset: 56,
             children: [
               for (final x in list)
                 () {
+                  final bank = x.kind == 'bank_account';
                   final c = savedCheck(x);
                   final shown = _shown[x.id];
                   return TkListRow(
                     key: ValueKey('saved ${x.id}'),
                     title: x.title,
-                    // The bank and its number kept together on one line.
-                    sub: '@${x.name} · ${(shown != null ? '${savedShortHint(x)} $shown' : x.hint).replaceAll(' ', '\u00a0')}',
-                    icon: 'b-bank',
-                    square: c.checked ? look.lime : look.orange,
-                    trailing: CardPill(c.checked ? 'Checked' : 'Not checked', c.checked ? CardTone.lime : CardTone.warn),
-                    semanticsLabel: '${x.title}, @${x.name}, ${x.hint}. ${c.words}',
+                    // A bank and its number kept together on one line.
+                    sub: x.hint.isEmpty ? '@${x.name}' : '@${x.name} · ${(shown != null ? '${savedShortHint(x)} $shown' : x.hint).replaceAll(' ', '\u00a0')}',
+                    icon: savedKinds[x.kind]?.icon ?? 'b-note',
+                    square: !bank ? look.teal : (c.checked ? look.lime : look.orange),
+                    trailing: bank ? CardPill(c.checked ? 'Checked' : 'Not checked', c.checked ? CardTone.lime : CardTone.warn) : null,
+                    semanticsLabel: bank ? '${x.title}, @${x.name}, ${x.hint}. ${c.words}' : '${x.title}, @${x.name}, ${x.hint}',
                     onTap: x.toChange ? () => _row(x) : null,
                   );
                 }(),
-              if (_manage && !full) TkListRow(title: 'Save an account', icon: 'b-plus', square: look.teal, onTap: () => _edit()),
+              if (_manage && !full) TkListRow(title: 'Save something', icon: 'b-plus', square: look.teal, onTap: _add),
             ],
           ),
         if (p?.connected != null) SettingsNote('Names are checked with the bank through ${p!.connected!.wallet ? 'your Taskiem wallet' : p.connected!.name}.'),
@@ -330,12 +421,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
           widget.mine
               ? 'Only you see these. No business you work in sees this list.'
               : full
-              ? 'You have $_limit saved accounts, the most you can keep.'
+              ? 'You have $_limit saved things, the most you can keep.'
               : _manage
-              ? 'Everyone in the business sees them, with the number masked.'
+              ? 'Everyone in the business sees them, account numbers masked.'
               : 'The business’s owners and admins add and change them.',
         ),
-        if (_manage && list != null && list.isNotEmpty) Text('Changing an account, or seeing its number in full, asks for your passkey.', style: tkHint(t)),
+        if (_manage && (every?.any((x) => x.kind == 'bank_account') ?? false))
+          Text('Changing a bank account, or seeing its number in full, asks for your passkey.', style: tkHint(t)),
       ],
     );
   }
@@ -607,6 +699,137 @@ class _OpenWalletSheetState extends State<OpenWalletSheet> {
               hint: '11 digits, sent once to the partner bank to open the account. Taskiem does not keep it.',
               child: TkTextBox(controller: _bvn, digits: 11),
             ),
+          ],
+        ),
+        if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
+      ],
+    );
+  }
+}
+
+/// Save a person, a place, a text or an account with a provider, or change
+/// one: its name, title, note and the kind's own fields (savedFields). No
+/// passkey: none of these moves money. Pops true when saved.
+class SavedThingSheet extends StatefulWidget {
+  const SavedThingSheet({super.key, required this.api, required this.kind, this.thing});
+  final SavedApi api;
+  final String kind;
+  final SavedObject? thing;
+
+  @override
+  State<SavedThingSheet> createState() => _SavedThingSheetState();
+}
+
+class _SavedThingSheetState extends State<SavedThingSheet> {
+  late final SavedObject? _x = widget.thing;
+  late final _name = TextEditingController(text: _x == null ? '' : '@${_x.name}');
+  late final _title = TextEditingController(text: _x?.title ?? '');
+  late final _note = TextEditingController(text: _x?.details.note ?? '');
+  late final _fields = {
+    for (final f in savedFields[widget.kind]!) f.key: TextEditingController(text: _x == null ? '' : (savedField(_x.details, f.key) ?? '')),
+  };
+  late String _type = _x?.details.type ?? '';
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    for (final c in [_name, _title, _note, ..._fields.values]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _pickType() async {
+    final v = await pickOneOf(context, title: 'What the provider is', value: _type, choices: [for (final (k, w) in providerTypes) (k, w, '')]);
+    if (v != null && mounted) setState(() => _type = v);
+  }
+
+  Future<void> _save() async {
+    final x = _x;
+    String? problem = savedNameProblem(_name.text) ?? (_title.text.trim().isEmpty ? 'Give it a title.' : null);
+    for (final f in savedFields[widget.kind]!) {
+      if (problem == null && f.need != null && _fields[f.key]!.text.trim().isEmpty) problem = f.need;
+    }
+    if (problem == null && widget.kind == 'provider_account' && _type.isEmpty) problem = 'Choose what the provider is.';
+    if (problem != null) return setState(() => _error = problem);
+    // Each field: its words, or (changing one) null to remove it.
+    final details = <String, dynamic>{};
+    void put(String key, String v) {
+      final w = key == 'body' ? v : v.trim();
+      if (w.trim().isNotEmpty) {
+        details[key] = w;
+      } else if (x != null) {
+        details[key] = null;
+      }
+    }
+    for (final e in _fields.entries) {
+      put(e.key, e.value.text);
+    }
+    put('note', _note.text);
+    if (widget.kind == 'provider_account') put('type', _type);
+    setState(() => (_busy = true, _error = null));
+    try {
+      final body = SavedObjectIn(name: cleanSavedName(_name.text), title: _title.text.trim(), kind: x == null ? widget.kind : null, details: details);
+      if (x == null) {
+        await widget.api.add(body);
+      } else {
+        await widget.api.change(x.id, body);
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiError catch (e) {
+      if (mounted) setState(() => (_busy = false, _error = e.has('name_taken') ? 'That name is taken: choose another.' : e.message));
+    } on Object catch (e) {
+      if (mounted) setState(() => (_busy = false, _error = sayFailure(e)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final look = TkLook.of(context);
+    final x = _x;
+    final kind = savedKinds[widget.kind]!;
+    return TkFormSheet(
+      title: x == null ? 'Save ${kind.one.toLowerCase()}' : 'Change @${x.name}',
+      crumb: 'Saved',
+      action: _busy ? 'Saving…' : 'Save',
+      onAction: _busy ? null : _save,
+      children: [
+        TkFormGroup(
+          children: [
+            TkKitField(
+              label: 'Name to call it up by',
+              hint: widget.kind == 'text' ? 'Such as @bank-details or @price-list' : 'Such as @mum or @warehouse',
+              child: TkTextBox(controller: _name, max: 33, plain: true),
+            ),
+            TkKitField(label: 'Title', hint: 'How it is shown', child: TkTextBox(controller: _title, max: 80)),
+          ],
+        ),
+        TkFormGroup(
+          children: [
+            if (widget.kind == 'provider_account')
+              TkKitField(
+                label: 'What the provider is',
+                field: false,
+                child: TkPickBox(
+                  label: 'What the provider is',
+                  shown: [for (final (k, w) in providerTypes) if (k == _type) w].firstOrNull ?? 'Choose',
+                  onTap: _pickType,
+                ),
+              ),
+            for (final f in savedFields[widget.kind]!)
+              TkKitField(
+                label: f.label,
+                hint: f.hint.isEmpty ? null : f.hint,
+                child: TkTextBox(
+                  controller: _fields[f.key]!,
+                  lines: f.long ? 6 : 1,
+                  max: f.long ? 4000 : 200,
+                  phone: f.key == 'phone',
+                  plain: f.key == 'email',
+                ),
+              ),
+            TkKitField(label: 'Note', hint: 'Optional, for your own reference', child: TkTextBox(controller: _note, max: 200)),
           ],
         ),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),

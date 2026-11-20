@@ -268,8 +268,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
             inset: 56,
             children: [
               TkListRow(
-                title: 'Saved accounts',
-                sub: 'Accounts your business pays or shares, by name',
+                title: 'Saved things',
+                sub: 'Accounts, people, places and texts, by name',
                 icon: 'b-bank',
                 square: look.lime,
                 onTap: () => _open(SavedAccountsPage(auth: widget.auth, mine: false)),
