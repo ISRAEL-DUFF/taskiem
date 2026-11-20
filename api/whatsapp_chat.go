@@ -993,6 +993,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waShareSaved(ctx, c, text); done || err != nil {
 			return err
 		}
+		// "remind me when @car insurance is due", "my reminders": before a
+		// workflow is built from "remind me" (saved_reminders.go).
+		if done, err := s.waSavedReminders(ctx, c, text); done || err != nil {
+			return err
+		}
 		// "save this as @name" with no message replied to: said how.
 		if done, err := s.waSaveQuoted(ctx, c, text); done || err != nil {
 			return err

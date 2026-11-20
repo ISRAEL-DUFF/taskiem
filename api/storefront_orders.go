@@ -203,6 +203,12 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 			s.Logger.Error("staff: the job", "err", err)
 		}
 	})
+	// Reminders on saved things' dates, told in the morning (saved_reminders.go).
+	go every(ctx, time.Minute, func() {
+		if err := s.SavedRemindersTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("saved: the reminders", "err", err)
+		}
+	})
 	// The phone index's one-time fill: orders made before it, a few
 	// businesses at a time (docs/spec/taskiem-for-everyone.md §13).
 	if s.PhoneIndex.Ready() {

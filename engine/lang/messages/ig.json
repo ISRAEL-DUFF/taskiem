@@ -1512,6 +1512,46 @@
       "text": "Not changed: {reason}",
       "reviewed": false
     },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": false
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": false
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": false
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": false
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": false
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": false
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": false

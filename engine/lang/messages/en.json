@@ -1889,6 +1889,56 @@
       "reviewed": true,
       "context": "Where a purchase is delivered could not be set; the reason follows"
     },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, yearly"
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, once"
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing that holds no dates"
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing with several dates and the words named none; {list} is their labels"
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": true,
+      "context": "A once-only reminder's date has passed"
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": true,
+      "context": "The person has no reminders"
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": true,
+      "context": "The person's reminders, one a line"
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": true,
+      "context": "After a reminder's date in the list: it repeats yearly"
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": true,
+      "context": "Stopping reminders on a saved thing that has none"
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": true,
+      "context": "The person's reminders on a saved thing were stopped"
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": true,
