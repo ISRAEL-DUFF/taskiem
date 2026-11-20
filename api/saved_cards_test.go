@@ -82,6 +82,35 @@ func TestSavedCards(t *testing.T) {
 	if !seen {
 		t.Fatal("the customer has no card")
 	}
+	// The customer's own, to the business: asked first (a phone), a card
+	// the business reads, sealed in its copy as the customer's words are.
+	home := tolu.must(201, "POST", "/v1/me/saved", map[string]any{"name": "home", "title": "Home", "kind": "place",
+		"details": map[string]any{"line": "4 Allen Avenue", "area": "Ikeja", "phone": "+2348031120099"}})["saved"].(map[string]any)
+	mineShare := func(confirm bool) map[string]any {
+		return map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": home["id"], "owner": "mine", "confirm": confirm}}, "client_id": "home-1"}
+	}
+	if e := tolu.must(409, "POST", "/v1/me/chats/"+toluChat+"/messages", mineShare(false)); e["confirm_share"] != true || !strings.HasPrefix(fmt.Sprint(e["error"]), "Share Home's phone number and details with ") {
+		t.Fatalf("customer asked: %v", e)
+	}
+	sentHome := tolu.must(201, "POST", "/v1/me/chats/"+toluChat+"/messages", mineShare(true))
+	if c, _ := sentHome["card"].(map[string]any); sentHome["kind"] != "card" || c == nil || c["saved"].(map[string]any)["details"].(map[string]any)["phone"] != "+2348031120099" {
+		t.Fatalf("customer's card: %v", sentHome)
+	}
+	tolu.must(200, "POST", "/v1/me/chats/"+toluChat+"/messages", mineShare(true)) // the same client_id: the first
+	tolu.must(400, "POST", "/v1/me/chats/"+toluChat+"/messages", map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": acct["id"], "owner": "business"}}})
+	var got2 map[string]any
+	for _, x := range w.owner.must(200, "GET", "/v1/customer-chats/"+w.threadOf(t, personID(t, tolu))+"/messages", nil)["messages"].([]any) {
+		if c, ok := x.(map[string]any)["card"].(map[string]any); ok && c["title"] == "Home" {
+			got2 = c
+		}
+	}
+	if got2 == nil || got2["sealed"] != nil || got2["saved"].(map[string]any)["details"].(map[string]any)["line"] != "4 Allen Avenue" {
+		t.Fatalf("the business's copy: %v", got2)
+	}
+	var plain int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM customer_messages WHERE card::text LIKE '%2348031120099%' OR card::text LIKE '%Allen%'`).Scan(&plain); err != nil || plain != 0 {
+		t.Fatalf("kept in the clear: %d %v", plain, err)
+	}
 	// On WhatsApp: the lines.
 	w.withOwnNumber(t)
 	w.onWhatsApp(t, "+2348031120084", "Your account number please")
@@ -92,4 +121,37 @@ func TestSavedCards(t *testing.T) {
 	}
 	w.owner.must(409, "POST", "/v1/customer-chats/"+threads[len(threads)-1]+"/messages", map[string]any{"card": map[string]any{"type": "saved",
 		"saved": map[string]any{"id": acct["id"], "owner": "business"}}})
+}
+
+// A saved thing shared between linked businesses (saved objects S1, part
+// 3): the seller's account as a tag in the words, asked first; the buyer
+// has it as a card with the account number to copy; not shared unnamed.
+func TestSavedLinkCards(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	acct := seller.must(201, "POST", "/v1/saved", map[string]any{"name": "our-account", "title": "Dangote Stores account", "bank_name": "Zenith Bank", "account_number": "1234567890"})["saved"].(map[string]any)
+	link := seller.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	theirs := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	msg := func(text string, confirm bool) map[string]any {
+		return map[string]any{"text": text, "mentions": []map[string]any{{"kind": "saved", "saved": map[string]any{"id": acct["id"], "owner": "business", "confirm": confirm}}}}
+	}
+	if e := seller.must(409, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to @our-account", false)); e["confirm_share"] != true || e["error"] != "Share Dangote Stores account's account details with Ada's Kitchen?" {
+		t.Fatalf("asked: %v", e)
+	}
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to us", true))
+	sent := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to @our-account", true))["message"].(map[string]any)
+	if ms, _ := sent["mentions"].([]any); len(ms) != 1 || ms[0].(map[string]any)["kind"] != "saved" {
+		t.Fatalf("sent: %v", sent)
+	}
+	var card map[string]any
+	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+theirs+"/messages", nil)["messages"].([]any) {
+		for _, m := range x.(map[string]any)["mentions"].([]any) {
+			if mm := m.(map[string]any); mm["kind"] == "saved" {
+				card = mm["saved"].(map[string]any)
+			}
+		}
+	}
+	if card == nil || card["details"].(map[string]any)["account_number"] != "1234567890" || card["title"] != "Dangote Stores account" {
+		t.Fatalf("the buyer's card: %v", card)
+	}
 }

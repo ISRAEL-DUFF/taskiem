@@ -446,6 +446,32 @@ func (s *Server) openCustomerText(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return t, nil
 }
 
+// openCustomerCard opens a card the customer shared, sealed in the
+// business's copy (customerCard.Sealed): its title and details, or, once
+// the customer was erased, a card that says so.
+func (s *Server) openCustomerCard(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *customerCard) error {
+	if c == nil || len(c.Sealed) == 0 {
+		return nil
+	}
+	raw, err := s.openCustomerText(ctx, tx, tenant, c.Sealed)
+	if err != nil {
+		return err
+	}
+	*c = sealedCard(c.Type, raw)
+	return nil
+}
+
+// sealedCard is a sealed card opened: what it held, or, erased (raw empty)
+// or unreadable, a card that says its details are gone.
+func sealedCard(kind, raw string) customerCard {
+	var open customerCard
+	if raw == "" || json.Unmarshal([]byte(raw), &open) != nil {
+		return customerCard{Type: kind, Title: "Details no longer kept"}
+	}
+	open.Sealed = nil
+	return open
+}
+
 // customerName is the customer's name in the business's book, else the
 // name they gave WhatsApp, else their number.
 func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, profile, phone string) (string, error) {
@@ -708,6 +734,9 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			if x.v.Attachment, err = s.openAttachment(r.Context(), tx, p.TenantID, x.att); err != nil {
 				return err
 			}
+			if err := s.openCustomerCard(r.Context(), tx, p.TenantID, x.v.Card); err != nil {
+				return err
+			}
 			out = append(out, x.v)
 		}
 		return nil
@@ -964,6 +993,9 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		return nil, err
 	}
 	if m.Attachment, err = s.openAttachment(ctx, tx, tenant, att); err != nil {
+		return nil, err
+	}
+	if err := s.openCustomerCard(ctx, tx, tenant, m.Card); err != nil {
 		return nil, err
 	}
 	return &m, nil

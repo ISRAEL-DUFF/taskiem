@@ -427,6 +427,9 @@ type mentionRef struct {
 	ServiceID string    `json:"service_id"`
 	// Ref is an invoice's or an order's id (from /link-chats/{link}/refs).
 	Ref string `json:"ref"`
+	// Saved is a saved thing shared as a card (kind saved; saved objects
+	// S1, part 3), checked by linkSavedMentions, not checkMentions.
+	Saved *savedShare `json:"saved"`
 }
 
 // conversationItems is what "#" names in a conversation with a link: the

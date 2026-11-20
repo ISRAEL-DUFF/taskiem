@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
 // The conversation (L3, docs/spec/business-links.md §5.5, §8): what two
@@ -113,7 +115,7 @@ type Preview struct {
 // composer: a linked business ("@Dangote Stores") or an item of the
 // conversation's price list ("#Rice, 50 kg", with its unit and price).
 type Mention struct {
-	Kind      string    `json:"kind"` // business, item, service, invoice, bill, order or purchase
+	Kind      string    `json:"kind"` // business, item, service, invoice, bill, order, purchase or saved
 	Name      string    `json:"name"`
 	Link      uuid.UUID `json:"link,omitzero"` // a business, on our copy only
 	ItemID    string    `json:"item_id,omitempty"`
@@ -128,6 +130,9 @@ type Mention struct {
 	// when named, and our own id for it (Ref, on our copy only).
 	Ref    string `json:"ref,omitempty"`
 	Status string `json:"status,omitempty"`
+	// Saved is a saved thing shared (saved objects S1, part 3): a copy of
+	// it as it was when sent, its @name as Name, a card on both sides.
+	Saved *saved.Card `json:"saved,omitempty"`
 }
 
 // Quote is the message a reply quotes, as the reply shows it.

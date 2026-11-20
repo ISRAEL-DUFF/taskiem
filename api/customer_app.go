@@ -64,6 +64,11 @@ type customerCard struct {
 	URL string `json:"url,omitempty"`
 	// Saved is a saved thing shared, as it was when sent (saved objects S1).
 	Saved *saved.Card `json:"saved,omitempty"`
+	// Sealed is, in the business's copy only, a card the customer shared
+	// (its title and Saved) sealed under their subject as their words are,
+	// so it goes when they are erased; opened (openCustomerCard) before it
+	// is shown, never sent.
+	Sealed json.RawMessage `json:"sealed,omitempty"`
 }
 
 // chatAttachment is a photo, voice note or file of an app message, as
@@ -229,13 +234,23 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 		v := m.personFile.view()
 		personAtt, _ = json.Marshal(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size, "name": v.Name, "file": fileID})
 	}
-	var card []byte
+	var card, bizCard []byte
 	if m.card != nil {
 		card, _ = json.Marshal(m.card)
+		bizCard = card
+		if m.fromPerson && m.card.Saved != nil {
+			// The customer's own details: sealed in the business's copy.
+			sealed, err := pii.SealText(ctx, s.Store.PII, tx, m.tenant, m.subject, "other", string(card))
+			if err != nil {
+				return at, conv, err
+			}
+			env, _ := json.Marshal(sealed)
+			bizCard, _ = json.Marshal(customerCard{Type: m.card.Type, Sealed: env})
+		}
 	}
 	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING created_at`,
-		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, card, bizAtt, m.offer).Scan(&at); err != nil {
+		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer).Scan(&at); err != nil {
 		return at, conv, err
 	}
 	// Made here only when the business writes first: not one of the
