@@ -11,6 +11,15 @@ code is half the job; the other half is **looking at the screen** and fixing
 what is off, in both themes, before calling it done.
 
 Flutter in a cloud session: `export PATH=/root/sdk/flutter/bin:$PATH`.
+If it is not there, install the version CI pins (`FLUTTER_VERSION` in
+`.github/workflows/mobile.yml`) the way CI does:
+
+```sh
+mkdir -p /root/sdk && cd /root/sdk
+curl -fsSL -o flutter.tar.xz "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+tar xf flutter.tar.xz && rm flutter.tar.xz
+git config --global --add safe.directory /root/sdk/flutter
+```
 Run the commands below from `mobile/`. The scripts are in
 `.claude/skills/mobile-screen/scripts/`. Keep pictures and throwaway files
 in your scratchpad, never in the repository: below, `$SCRATCH` is that

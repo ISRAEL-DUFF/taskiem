@@ -22,6 +22,7 @@ import '../chat/approve.dart' show TkTextBox;
 import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
 import '../app/presence.dart';
 import '../chat/people_cards.dart' show PayoutAccountPage;
+import '../chat/saved_accounts.dart' show SavedAccountsPage;
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_contacts.dart' show ContactMatch, ContactsMatchScreen, DevicePhoneContacts, PeopleContactsScreen, PhoneContacts, contactsDay, recheckContacts;
 import '../chat/people_find.dart';
@@ -899,6 +900,13 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-alert',
                   square: look.orange,
                   onTap: () => tkPush<void>(context, YourStandingScreen(auth: auth, now: now)),
+                ),
+                TkListRow(
+                  title: 'Saved accounts',
+                  sub: 'Accounts of your own, called up by name, like @mum',
+                  icon: 'b-bank',
+                  square: look.teal,
+                  onTap: () => tkPush<void>(context, SavedAccountsPage(auth: auth, mine: true)),
                 ),
                 TkListRow(
                   title: 'Your bank account for shares',

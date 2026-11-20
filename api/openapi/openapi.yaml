@@ -33455,9 +33455,10 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [connected, owner]
+                required: [owner]
                 properties:
                   connected:
+                    description: The payments connection names are checked through; null when there is none.
                     type: [object, 'null']
                     additionalProperties: false
                     required: [channel, name, wallet]

@@ -35,6 +35,7 @@ render and compare.
 | The card at the top | `TkTopCard`; `MyPhotoCard` for the person |
 | Fields | `TkFormGroup(title:, children: [TkKitField(label:, child:)])` |
 | A code | `CodeBoxes` (from `screens/sign_in.dart`), inside a `TkFormGroup` |
+| A field chosen, not typed (a bank, a class, a date) | `TkKitField(field: false, child: TkPickBox(label:, shown:, onTap:))`, opening `pickOneOf` or a date |
 | The page's main button | `TkCta(label:)`; `danger: true` to delete |
 | Two buttons side by side | `TkButtonRow([...])` |
 | A small button in a row or under a list | `TkSmallButton` (`primary:` / `danger:`) |
