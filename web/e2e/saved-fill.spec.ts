@@ -124,7 +124,7 @@ for (const width of [390, 360]) {
     const dates = page.getByRole("dialog", { name: "Saved dates" });
     await expect(dates.getByTestId("saved-fill-row")).toHaveCount(2);
     await expect(dates).toContainText("@car · Insurance due · 3 Mar 2027");
-    await expect(dates).toContainText("@bisi · Birthday · 4 Jul 1990");
+    await expect(dates).toContainText(/@bisi · Birthday · 4 Jul 20\d\d/);
     await expect(dates).not.toContainText("Bought");
     await axeBoth(page, "the Saved dates picker", width);
     await dates.getByRole("button", { name: "Use The car: Insurance due" }).click();

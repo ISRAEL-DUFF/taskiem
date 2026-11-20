@@ -504,16 +504,31 @@ export interface SavedDate {
 
 const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-/** The dates saved on things, in the things' order: a person's birthday,
- * and each date field of a kind the owner made (kinds give the fields'
- * types). A sensitive date is masked in lists and cannot be used, so it is
- * left out, as is anything that is not a whole day. */
-export function savedDates(things: SavedThing[], kinds: MadeKind[]): SavedDate[] {
+/** A birthday's next day from today (today itself included), as the app
+ * and the chat's reminders offer it: "1970-03-21" is 21 March this year or
+ * next; 29 February is 1 March in a year without it. */
+export function nextBirthday(day: string, today: Date = new Date()): string {
+  const [, m = 1, d = 1] = day.split("-").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const at = (y: number) => {
+    const t = new Date(y, m - 1, d);
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+  };
+  const now = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const mine = at(today.getFullYear());
+  return mine >= now ? mine : at(today.getFullYear() + 1);
+}
+
+/** The dates saved on things, in the things' order: a person's birthday
+ * (its next day), and each date field of a kind the owner made (kinds give
+ * the fields' types). A sensitive date is masked in lists and cannot be
+ * used, so it is left out, as is anything that is not a whole day. */
+export function savedDates(things: SavedThing[], kinds: MadeKind[], today: Date = new Date()): SavedDate[] {
   const out: SavedDate[] = [];
   for (const x of things) {
     if (x.kind === "person") {
       const b = (x.details.birthday ?? "").trim();
-      if (isDay(b)) out.push({ key: `${x.id}:birthday`, thing: x, label: "Birthday", date: b });
+      if (isDay(b)) out.push({ key: `${x.id}:birthday`, thing: x, label: "Birthday", date: nextBirthday(b, today) });
     } else if (x.kind === "custom") {
       const kind = kinds.find((k) => k.id === x.kind_id);
       for (const f of kind?.fields ?? []) {

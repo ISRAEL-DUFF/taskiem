@@ -23,6 +23,7 @@ import {
   personFill,
   savedPhone,
   savedDates,
+  nextBirthday,
   savedDateSub,
   bankCodeFor,
   revealProblem,
@@ -223,11 +224,13 @@ describe("filling a form from a saved thing (§6.4)", () => {
       thing({ id: "m", name: "mum", title: "Mum", kind: "person", details: { birthday: "1970-03-21" } }),
       thing({ id: "t", name: "tunde", title: "Tunde", kind: "person", details: { birthday: "March" } }),
     ];
-    const ds = savedDates(things, [car]);
+    const ds = savedDates(things, [car], new Date(2026, 10, 20));
     expect(ds.map((d) => [d.key, d.label, d.date])).toEqual([
       ["c:insurance_due", "Insurance due", "2027-03-03"],
-      ["m:birthday", "Birthday", "1970-03-21"],
+      ["m:birthday", "Birthday", "2027-03-21"],
     ]);
+    expect(nextBirthday("1970-11-20", new Date(2026, 10, 20))).toBe("2026-11-20");
+    expect(nextBirthday("1960-02-29", new Date(2026, 10, 20))).toBe("2027-03-01");
     expect(ds.map(savedDateSub)[0]).toBe("@car · Insurance due · 3 Mar 2027");
     expect(savedDates(things, [])).toHaveLength(1);
   });
