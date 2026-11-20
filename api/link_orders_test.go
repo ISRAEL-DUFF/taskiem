@@ -762,6 +762,16 @@ func TestLinkedPurchaseDeliveredToSaved(t *testing.T) {
 		"details": map[string]any{"line": "4 Creek Road", "area": "Apapa", "landmark": "by the port gate", "phone": "0803 112 0077"}})
 	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "mum", "title": "Mum", "kind": "person", "details": map[string]any{"phone": "0803 112 0011"}})
 
+	// The API: the default until it has its own, then its own.
+	path := "/v1/stock/purchases/" + po["id"].(string) + "/deliver-to"
+	if d := buyer.must(200, "GET", path, nil); d["own"] != false || d["phone"] != "+2348031234599" {
+		t.Fatalf("the default: %v", d)
+	}
+	buyer.must(400, "PUT", path, map[string]any{"address": "1 Wharf Road", "phone": "not a phone"})
+	if d := buyer.must(200, "PUT", path, map[string]any{"address": "1 Wharf Road, Apapa", "phone": "0803 112 0055"}); d["own"] != true || d["address"] != "1 Wharf Road, Apapa" {
+		t.Fatalf("its own: %v", d)
+	}
+	buyer.must(404, "GET", "/v1/stock/purchases/01a1f840-0000-7000-8000-000000000000/deliver-to", nil)
 	if r := w.say(t, buyerOn, "deliver "+ref+" to @mum"); !strings.Contains(r, "@mum is a person") {
 		t.Errorf("a person: %q", r)
 	}
@@ -782,4 +792,5 @@ func TestLinkedPurchaseDeliveredToSaved(t *testing.T) {
 	if r := w.say(t, buyerOn, "deliver "+ref+" to @warehouse"); !strings.Contains(r, "has reached the supplier already") {
 		t.Errorf("after: %q", r)
 	}
+	buyer.must(409, "PUT", path, map[string]any{"address": "1 Wharf Road, Apapa", "phone": "0803 112 0055"})
 }

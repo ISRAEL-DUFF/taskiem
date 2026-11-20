@@ -538,24 +538,33 @@ func SetDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, tenant uuid.UUID, d
 // purchaseDeliverToTx is where a purchase is delivered: its own place
 // (SetPurchaseDeliverToTx), else the business's default.
 func purchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) (DeliverTo, error) {
+	d, _, err := PurchaseDeliverToTx(ctx, tx, v, buyer, id)
+	return d, err
+}
+
+// PurchaseDeliverToTx is where a purchase is delivered, and whether it is
+// its own place (own) rather than the business's default.
+func PurchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) (DeliverTo, bool, error) {
 	var env map[string]any
 	if err := tx.QueryRow(ctx, `SELECT deliver_to FROM purchase_orders WHERE tenant_id = $1 AND id = $2`, buyer, id).Scan(&env); err != nil {
-		return DeliverTo{}, err
+		return DeliverTo{}, false, err
 	}
 	if env == nil {
-		return DeliverToTx(ctx, tx, v, buyer)
+		d, err := DeliverToTx(ctx, tx, v, buyer)
+		return d, false, err
 	}
 	got, err := v.OpenTx(ctx, tx, buyer, env)
 	if errors.Is(err, pii.ErrErased) {
-		return DeliverToTx(ctx, tx, v, buyer)
+		d, err := DeliverToTx(ctx, tx, v, buyer)
+		return d, false, err
 	}
 	if err != nil {
-		return DeliverTo{}, err
+		return DeliverTo{}, false, err
 	}
 	var d DeliverTo
 	raw, _ := json.Marshal(got)
 	_ = json.Unmarshal(raw, &d)
-	return d, nil
+	return d, true, nil
 }
 
 // SetPurchaseDeliverToTx says where one purchase from a linked supplier is

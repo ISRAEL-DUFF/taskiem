@@ -49,6 +49,8 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/stock/suppliers/{id}/link", s.linkSupplier)
 	r.With(manage).Get("/stock/deliver-to", s.getDeliverTo)
 	r.With(manage, s.tenantWide).Put("/stock/deliver-to", s.putDeliverTo)
+	r.With(manage).Get("/stock/purchases/{id}/deliver-to", s.getPurchaseDeliverTo)
+	r.With(manage, s.tenantWide).Put("/stock/purchases/{id}/deliver-to", s.putPurchaseDeliverTo)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/accept-change", s.acceptPurchaseChange)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/confirm-proposed", s.confirmProposed)
 	r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/all-came", s.allCame)
@@ -1275,6 +1277,76 @@ func (s *Server) getDeliverTo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// getPurchaseDeliverTo is GET /v1/stock/purchases/{id}/deliver-to: where
+// one purchase is delivered, its own place (own true) or the business's
+// default (saved objects S2).
+func (s *Server) getPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	var own bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		d, own, err = links.PurchaseDeliverToTx(r.Context(), tx, s.Vault, principalFrom(r.Context()).TenantID, id)
+		return err
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"address": d.Address, "phone": d.Phone, "own": own})
+}
+
+// putPurchaseDeliverTo is PUT /v1/stock/purchases/{id}/deliver-to
+// {address, phone}: where one purchase from a linked supplier is delivered
+// (a saved place, on the web and in the app), only before the supplier has
+// it (409 after).
+func (s *Server) putPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	if err := decodeBody(r, &d); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	e164, err := s.Purchases.Book.Phone(d.Phone)
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: %s is not a mobile number Taskiem can reach (like 0803 123 4567)", errBadRequest, strings.TrimSpace(d.Phone)))
+		return
+	}
+	d.Phone = e164
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := links.SetPurchaseDeliverToTx(r.Context(), tx, s.Vault, p.TenantID, id, d); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "purchase.deliver_to", id.String(), map[string]any{"own": true})
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	s.getPurchaseDeliverTo(w, r)
 }
 
 func (s *Server) putDeliverTo(w http.ResponseWriter, r *http.Request) {

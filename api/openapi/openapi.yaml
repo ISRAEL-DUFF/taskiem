@@ -12807,6 +12807,69 @@ paths:
                 $ref: '#/components/schemas/DeliverTo'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/deliver-to:
+    get:
+      operationId: getPurchaseDeliverTo
+      tags:
+      - Stock
+      summary: Where one purchase is delivered
+      description: Its own place (own true; saved objects S2), else where linked suppliers deliver our orders.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The address and the number a rider calls
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseDeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPurchaseDeliverTo
+      tags:
+      - Stock
+      summary: Say where one purchase is delivered
+      description: Sealed, and carried to the linked supplier's order in place of where our orders are delivered (a saved place, picked on the web and in the app). Only before the supplier has it (409 after); a supplier who is not linked, 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverTo'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseDeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/settings:
     get:
       operationId: getStockSettings
@@ -44156,6 +44219,18 @@ components:
         at:
           type: string
           format: date-time
+    PurchaseDeliverTo:
+      type: object
+      additionalProperties: false
+      required: [address, phone, own]
+      properties:
+        address:
+          type: string
+        phone:
+          type: string
+        own:
+          type: boolean
+          description: The purchase's own place, not the business's default.
     DeliverTo:
       type: object
       additionalProperties: false
