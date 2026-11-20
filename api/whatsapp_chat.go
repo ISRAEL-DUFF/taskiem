@@ -841,6 +841,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Task != nil && c.state != stateIdle {
 		return s.waTaskReply(ctx, c, cmd)
 	}
+	// A save offered after an action: words that answer none of it let it
+	// go (saved_offer.go).
+	if c.data.Save != nil && c.data.Save.Offer && c.state != stateIdle && !saveOfferWord(cmd) {
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return err
+		}
+		c.state, c.data = stateIdle, chatData{}
+	}
 	// DONE, CAN'T, "my tasks", and "@Tunde count the float by 7am" from
 	// those who give tasks, before "@" is read as a business; not in the
 	// middle of something else, where "done" is that thing's word.

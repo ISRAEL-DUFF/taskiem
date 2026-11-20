@@ -53,7 +53,8 @@ func TestWhatsAppInvoice(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT data::text FROM chat_sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&raw); err == nil && strings.Contains(raw, "8031234567") {
 		t.Errorf("the number is in the session: %s", raw)
 	}
-	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Bola Ade for ₦25,000.50") {
+	// Sent, and the customer typed offered as @name for next time.
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Bola Ade for ₦25,000.50") || !strings.Contains(r, "Save Bola Ade as @bola-ade for next time?") {
 		t.Fatalf("sent: %q", r)
 	}
 	x := owner.must(200, "GET", "/v1/invoices/INV-0001?reveal=true", nil)["invoice"].(map[string]any)
@@ -70,6 +71,22 @@ func TestWhatsAppInvoice(t *testing.T) {
 	}
 	if l := owner.must(200, "GET", "/v1/invoices", nil)["invoices"].([]any); len(l) != 1 {
 		t.Errorf("invoices %d", len(l))
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Errorf("an offer let go saved: %v", l)
+	}
+
+	// Taken: the business's saved person, with the number.
+	w.say(t, on, "invoice Tolu 5k")
+	w.say(t, on, "0803 765 4321")
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Save Tolu as @tolu") {
+		t.Fatalf("offered: %q", r)
+	}
+	if r := w.say(t, on, "save"); !strings.Contains(r, "Saved as @tolu") {
+		t.Fatalf("saved: %q", r)
+	}
+	if r := w.say(t, on, "@tolu"); !strings.Contains(r, "Tolu") || !strings.Contains(r, "4321") {
+		t.Errorf("@tolu: %q", r)
 	}
 }
 
@@ -110,7 +127,7 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 	if r := w.say(t, on, "2"); !strings.Contains(r, "Send Acme Ltd (") || !strings.Contains(r, "an invoice for ₦250,000: the October job?") {
 		t.Fatalf("confirm: %q", r)
 	}
-	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Acme Ltd") {
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Acme Ltd") || strings.Contains(r, "for next time") {
 		t.Fatalf("sent: %q", r)
 	}
 	x := owner.must(200, "GET", "/v1/invoices/INV-0001?reveal=true", nil)["invoice"].(map[string]any)

@@ -64,10 +64,11 @@ func TestSavedReminders(t *testing.T) {
 		}
 		return out
 	}
-	// Mum's birthday on the 2nd is Ada's own: to her own devices only,
-	// never through the business (no message, no notice of its).
-	if got := tick(time.Date(2027, 3, 2, 8, 30, 0, 0, lagos)); len(got) != 0 {
-		t.Fatalf("one's own told through the business: %v", got)
+	// Mum's birthday on the 2nd is Ada's own: to her own devices and her
+	// own chat on Taskiem's number, never through the business (not in its
+	// name, no notice of its).
+	if got := tick(time.Date(2027, 3, 2, 8, 30, 0, 0, lagos)); len(got) != 1 || !strings.Contains(got[0], "Birthday") || strings.Contains(got[0], "Ada Foods") {
+		t.Fatalf("one's own told: %v", got)
 	}
 	var notices int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM notifications WHERE title LIKE '%Birthday%'`).Scan(&notices); err != nil || notices != 0 {

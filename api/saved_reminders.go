@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -530,11 +531,13 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUI
 		return err
 	}
 	if o.mine() {
-		// One's own: to one's own devices only, never through a business
-		// (no notice, message or history of the business holds it: §5.3).
+		// One's own: to one's own devices and one's own chats on Taskiem's
+		// number and bot, never through a business (no notice, message or
+		// history of the business holds it: §5.3).
 		if _, err := s.PersonPusher().PushPerson(ctx, tellUser, chatlinks.PersonPush{Title: title, Body: body, Link: "/you", Tag: "saved-reminder:" + id.String()}); err != nil {
 			s.Logger.Warn("saved: pushing a reminder", "err", err)
 		}
+		s.tellOwnReminder(ctx, tellUser, title, body)
 		return nil
 	}
 	if tellTenant != nil {
@@ -578,6 +581,35 @@ func (s *Server) tellSavedReminder(ctx context.Context, tenant, user uuid.UUID, 
 		}
 		if _, err := ch.Send(ctx, t.addr, linkPhoneMessage(tenant, ch.Prefix(""), whatsapp.SafeText(title), whatsapp.SafeText(body), nil)); err != nil {
 			s.Logger.Warn("saved: a reminder's message", "tenant", tenant, "err", err)
+		}
+	}
+}
+
+// tellOwnReminder sends one's own reminder to one's own chats: the
+// WhatsApp number and Telegram account they linked, on Taskiem's own
+// number and bot, tied to no business.
+func (s *Server) tellOwnReminder(ctx context.Context, user uuid.UUID, title, body string) {
+	msg := linkPhoneMessage(uuid.Nil, "", whatsapp.SafeText(title), whatsapp.SafeText(body), nil)
+	if s.WhatsApp != nil {
+		var number *string
+		var verified *time.Time
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT number, verified_at FROM taskiem_wa_binding($1)`, user).Scan(&number, &verified); err != nil {
+			s.Logger.Warn("saved: one's own number", "err", err)
+		} else if number != nil && verified != nil {
+			if _, err := s.WhatsApp.Send(ctx, *number, msg); err != nil {
+				s.Logger.Warn("saved: one's own reminder on WhatsApp", "err", err)
+			}
+		}
+	}
+	if s.Telegram != nil {
+		var id *int64
+		var verified *time.Time
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT telegram_id, verified_at FROM taskiem_tg_binding($1)`, user).Scan(&id, &verified); err != nil {
+			s.Logger.Warn("saved: one's own Telegram", "err", err)
+		} else if id != nil && verified != nil {
+			if _, err := s.Telegram.Send(ctx, "tg:"+strconv.FormatInt(*id, 10), msg); err != nil {
+				s.Logger.Warn("saved: one's own reminder on Telegram", "err", err)
+			}
 		}
 	}
 }

@@ -40,6 +40,9 @@ type chatSave struct {
 	// under the business's key for the business's, under the person's own
 	// for theirs ({"person": base64}), so the business never holds them.
 	Sealed map[string]any `json:"sealed"`
+	// Offer: offered after an action (saved_offer.go), so a message that is
+	// no answer lets it go and is read as itself.
+	Offer bool `json:"offer,omitempty"`
 }
 
 // chatSaveRow is the row a person's waiting save is sealed for.

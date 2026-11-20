@@ -41,6 +41,9 @@ type chatInvoice struct {
 	LinkKey  string       `json:"link_key,omitempty"`
 	LinkName string       `json:"link_name,omitempty"`
 	Pick     []linkedPick `json:"pick,omitempty"`
+	// Saved: the customer came from a saved person (@acme), so saving them
+	// is not offered after.
+	Saved bool `json:"saved,omitempty"`
 }
 
 // linkedPick is a linked business an invoice's customer name could mean.
@@ -290,7 +293,7 @@ func (s *Server) waInvoiceSaved(ctx context.Context, c *chat, typed string, kobo
 	if addr == "" {
 		addr, isEmail = str("phone"), false
 	}
-	inv := &chatInvoice{AmountKobo: kobo, For: what}
+	inv := &chatInvoice{AmountKobo: kobo, For: what, Saved: true}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
 		if inv.Name, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "name", sender.CleanName(x.Title)); err != nil || addr == "" {
@@ -391,11 +394,13 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 		return c.say(ctx, s, c.t("wa.invoice.denied", "org", c.tenant.Name))
 	}
 	var cust invoicing.Customer
+	var addr string
 	if inv.LinkKey != "" {
 		// A linked business: its bills, with no address.
 		name, cust = inv.LinkName, invoicing.Customer{Name: inv.LinkName, Key: inv.LinkKey}
 	} else {
-		addr, err := s.openString(ctx, c, inv.Contact)
+		var err error
+		addr, err = s.openString(ctx, c, inv.Contact)
 		if err != nil {
 			return err
 		}
@@ -427,7 +432,15 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 	if len(sent.Queued) == 0 {
 		return c.say(ctx, s, c.t("wa.invoice.saved_not_sent", "number", x.Number))
 	}
-	return c.say(ctx, s, c.t("wa.invoice.sent", "number", x.Number, "name", whatsapp.SafeText(name), "amount", invoicing.Naira(x.TotalKobo)))
+	said := c.t("wa.invoice.sent", "number", x.Number, "name", whatsapp.SafeText(name), "amount", invoicing.Naira(x.TotalKobo))
+	// A customer typed, not saved: offered as @name for next time (saved
+	// objects S3's saving after an action, first for invoices).
+	if !inv.Saved && addr != "" {
+		if offered, err := s.offerSaveCustomer(ctx, c, name, addr, inv.Email, said); offered || err != nil {
+			return err
+		}
+	}
+	return c.say(ctx, s, said)
 }
 
 func (s *Server) openString(ctx context.Context, c *chat, env map[string]any) (string, error) {
