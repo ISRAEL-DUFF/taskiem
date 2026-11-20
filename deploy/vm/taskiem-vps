@@ -38,7 +38,17 @@ OPENBAO_IMAGE=openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
 need_root() { [ "$(id -u)" = 0 ] || die "run as root (sudo taskiem-vps $*)"; }
-compose() { docker compose --project-directory "$KIT" -f "$KIT/docker-compose.yml" "$@"; }
+# With another Caddy in front (external-proxy mode, below), a Compose file
+# of this server's own is added to the release's: it leaves Taskiem's Caddy
+# out and puts the web containers on the shared network.
+compose() {
+  local files=(-f "$KIT/docker-compose.yml")
+  if external_proxy; then
+    [ -f "$KIT/$PROXY_COMPOSE" ] || write_proxy_compose >/dev/null || true
+    files+=(-f "$KIT/$PROXY_COMPOSE")
+  fi
+  docker compose --project-directory "$KIT" "${files[@]}" "$@"
+}
 
 # Env files are KEY='value': single quotes make Compose read the value
 # literally. A value holding a single quote or a newline is refused.
@@ -54,6 +64,13 @@ env_set() { # FILE KEY VALUE
   grep -v "^$key=" "$file" >"$tmp" || true
   printf "%s='%s'\n" "$key" "$value" >>"$tmp"
   chmod 600 "$tmp" && mv "$tmp" "$file"
+}
+env_unset() { # FILE KEY
+  local tmp
+  [ -f "$1" ] || return 0
+  tmp=$(mktemp "$1.XXXX")
+  grep -v "^$2=" "$1" >"$tmp" || true
+  chmod 600 "$tmp" && mv "$tmp" "$1"
 }
 conf() { env_get "$ETC/vps.conf" "$1"; }
 
@@ -89,6 +106,157 @@ local_https() { # PATH [curl args...]
   domain=$(conf DOMAIN)
   [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ] || insecure=(-k) # tests only: Caddy's internal CA for localhost
   curl -fsS --max-time 10 "${insecure[@]}" --resolve "$domain:443:127.0.0.1" "$@" "https://$domain$path"
+}
+
+# --- external proxy ----------------------------------------------------------
+
+# External-proxy mode (docs/vm.md#sharing-the-server-with-xenibase): another
+# Caddy on this server, Xenibase's, holds ports 80 and 443 and serves
+# Taskiem's sites too. Taskiem's own Caddy is left out; taskiem and
+# taskiem-public join a shared Docker network that the other Caddy is on;
+# taskiem.caddy and taskiem.global go into the directory it imports (its
+# caddy.d), and it is told to reload. Chosen in setup (TASKIEM_VPS_PROXY=external,
+# TASKIEM_VPS_PROXY_DIR, TASKIEM_VPS_PROXY_CONTAINER, TASKIEM_VPS_PROXY_NETWORK)
+# and kept in vps.conf, so updates, rollbacks and restores keep it.
+PROXY_COMPOSE=docker-compose.external-proxy.yml
+external_proxy() { [ "$(conf PROXY)" = external ]; }
+
+# PATH CONTENT: write it (0644) only if it differs; 0 when it changed.
+write_if_changed() {
+  local tmp
+  [ "$(cat "$1" 2>/dev/null)" != "$2" ] || return 1
+  tmp=$(mktemp "$1.XXXX")
+  printf '%s\n' "$2" >"$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$1"
+}
+
+# The Compose file added to the release's in external-proxy mode. It is
+# this server's, not the kit's: an update replaces docker-compose.yml and
+# leaves it.
+write_proxy_compose() {
+  write_if_changed "$KIT/$PROXY_COMPOSE" "# Written by taskiem-vps for external-proxy mode (docs/vm.md#sharing-the-server-with-xenibase).
+# Added to docker-compose.yml on this server; do not edit, setup rewrites it.
+# Another Caddy serves Taskiem's sites, so Taskiem's own is left out (it runs
+# only with the own-caddy profile, which is never set), and the containers
+# that Caddy proxies to join the network it is on.
+services:
+  caddy:
+    profiles: [own-caddy]
+  taskiem:
+    networks: [default, proxy]
+  taskiem-public:
+    networks: [default, proxy]
+networks:
+  proxy:
+    name: $(conf PROXY_NETWORK)
+    external: true"
+}
+
+# The shared network, made by whichever installer runs first, and this
+# server's Compose file for it. COMPOSE_FILE in .env names both files, so
+# a person's own `docker compose --project-directory /opt/taskiem ...`
+# leaves Taskiem's Caddy out too.
+proxy_prepare() {
+  local net
+  net=$(conf PROXY_NETWORK)
+  docker network inspect "$net" >/dev/null 2>&1 || docker network create "$net" >/dev/null ||
+    docker network inspect "$net" >/dev/null 2>&1 || die "could not create the Docker network $net"
+  write_proxy_compose || true
+  env_set "$KIT/.env" COMPOSE_FILE "$KIT/docker-compose.yml:$KIT/$PROXY_COMPOSE"
+}
+
+# taskiem.caddy: the same sites as the kit's Caddyfile and public.caddy,
+# with the names written out, since the other Caddy does not have
+# Taskiem's environment. That Caddy already sends HTTP to HTTPS for the
+# app's name; for other names its own http:// site answers, so plain-HTTP
+# visits to preview addresses are sent to HTTPS here.
+proxy_site() {
+  local domain preview
+  domain=$(conf DOMAIN)
+  printf '%s\n' "# Taskiem's sites, served by this Caddy for Taskiem's external-proxy mode
+# (Taskiem's docs/vm.md#sharing-the-server-with-xenibase). Written by
+# taskiem-vps: do not edit, its setup and updates rewrite it.
+
+# The web app, /v1 and webhooks. Taskiem sets HSTS itself.
+${domain,,} {
+	encode zstd gzip
+	reverse_proxy taskiem:8080
+}"
+  [ "$(conf PUBLIC)" = yes ] || return 0
+  preview=$(conf PREVIEW_DOMAIN)
+  printf '%s\n' "
+# Storefronts and hosted forms: every other host goes to Taskiem's public
+# host. Each name gets a certificate when first visited, once the public
+# host's /tls/ask (taskiem.global) confirms it serves it.
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy taskiem-public:8082
+}
+
+# Preview addresses over plain HTTP go to HTTPS.
+http://*.${preview,,} {
+	redir https://{host}{uri} 308
+}"
+}
+
+# taskiem.global, imported inside the other Caddy's global options.
+proxy_global() {
+  printf '%s\n' "# Taskiem's global options for this Caddy (external-proxy mode). Written
+# by taskiem-vps: do not edit. Certificates for storefronts' hosts are
+# issued only for a host Taskiem's public host says it serves.
+on_demand_tls {
+	ask http://taskiem-public:9090/tls/ask
+}"
+}
+
+proxy_reload() { # CONTAINER
+  local out
+  out=$(docker exec "$1" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1) || {
+    log "the Caddy in $1 did not reload: $(printf '%s' "$out" | tail -3)"
+    return 1
+  }
+}
+
+# Write the two files into the other Caddy's directory and reload it when
+# they changed (always with "force"). Fails if it would not reload.
+proxy_publish() { # [force]
+  local dir changed=${1:-}
+  dir=$(conf PROXY_DIR)
+  [ -d "$dir" ] || { log "$dir, the other Caddy's site directory, does not exist"; return 1; }
+  write_if_changed "$dir/taskiem.global" "$(proxy_global)" && changed=1
+  write_if_changed "$dir/taskiem.caddy" "$(proxy_site)" && changed=1
+  [ -n "$changed" ] || return 0
+  log "reloading the Caddy in $(conf PROXY_CONTAINER)"
+  proxy_reload "$(conf PROXY_CONTAINER)"
+}
+
+# Taskiem's files out of a directory it no longer uses (setup moved the
+# server back to its own Caddy, or to another directory).
+proxy_unpublish() { # DIR CONTAINER
+  [ -n "$1" ] || return 0
+  [ -e "$1/taskiem.caddy" ] || [ -e "$1/taskiem.global" ] || return 0
+  rm -f "$1/taskiem.caddy" "$1/taskiem.global"
+  proxy_reload "$2" || true
+}
+
+# One line per problem, for run_checks.
+proxy_checks() {
+  local dir net c id domain
+  dir=$(conf PROXY_DIR) net=$(conf PROXY_NETWORK) c=$(conf PROXY_CONTAINER) domain=$(conf DOMAIN)
+  [ "$(cat "$dir/taskiem.caddy" 2>/dev/null)" = "$(proxy_site)" ] || echo "$dir/taskiem.caddy is missing or changed: run taskiem-vps setup"
+  [ "$(cat "$dir/taskiem.global" 2>/dev/null)" = "$(proxy_global)" ] || echo "$dir/taskiem.global is missing or changed: run taskiem-vps setup"
+  docker network inspect "$net" >/dev/null 2>&1 || { echo "the Docker network $net is missing: run taskiem-vps setup"; return 0; }
+  id=$(compose ps -q taskiem 2>/dev/null || true)
+  [ -z "$id" ] || docker inspect -f '{{json .NetworkSettings.Networks}}' "$id" 2>/dev/null | grep -qF "\"$net\":" ||
+    echo "Taskiem is not on the network $net: the Caddy in $c cannot reach it (taskiem-vps setup)"
+  if ! docker inspect -f '{{json .NetworkSettings.Networks}}' "$c" 2>/dev/null | grep -qF "\"$net\":"; then
+    echo "the Caddy in $c is not running or not on the network $net: it cannot reach Taskiem"
+  # Its running configuration (admin API) has Taskiem's site: the last reload took.
+  elif ! docker exec "$c" wget -qO- http://127.0.0.1:2019/config/ 2>/dev/null | grep -qF "\"${domain,,}\""; then
+    echo "the Caddy in $c has not loaded taskiem.caddy: docker exec $c caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
+  fi
 }
 
 # --- releases ----------------------------------------------------------------
@@ -225,6 +393,12 @@ sync_kit() { # REVISION
 
 install_kit() { # DIR
   local src=$1 f
+  # A kit whose taskiem-vps does not know external-proxy mode would start
+  # Taskiem's own Caddy on ports another Caddy holds: refused before
+  # anything changes.
+  if external_proxy && ! grep -q "$PROXY_COMPOSE" "$src/taskiem-vps"; then
+    die "this release's deployment kit is from before external-proxy mode, which this server uses (PROXY=external in $ETC/vps.conf): not installing it"
+  fi
   for f in docker-compose.yml Caddyfile openbao.hcl openbao-taskiem-policy.hcl; do
     install -m 0644 "$src/$f" "$KIT/$f"
   done
@@ -381,6 +555,7 @@ cmd_setup() {
   # ALERT_EMAIL and ALERT_WEBHOOK are read indirectly (${!f}) when saved below.
   # shellcheck disable=SC2034
   local DOMAIN OWNER_EMAIL ORG DATABASE_URL SMTP_URL MAIL_FROM CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK BACKUP_REPO BACKUP_KEY_ID BACKUP_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_USERNAME PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN ISWALLET_URL PAYROLLA_URL
+  local PROXY PROXY_DIR PROXY_CONTAINER PROXY_NETWORK
   echo "Taskiem setup. Press Enter to keep the value in brackets." >&2
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
@@ -430,6 +605,26 @@ cmd_setup() {
   [ "$WINDOW" != any ] || WINDOW=""
   ask ALERT_EMAIL "Alert email (empty: none)" "$(conf ALERT_EMAIL)"
   ask ALERT_WEBHOOK "Alert webhook, Slack-compatible (empty: none)" "$(conf ALERT_WEBHOOK)"
+  # HTTPS: Taskiem's own Caddy, or another Caddy on this server that holds
+  # ports 80 and 443 (Xenibase's), which then serves Taskiem's sites too.
+  ask PROXY "HTTPS: own (Taskiem's Caddy) or external (another Caddy on this server, such as Xenibase's)" "$(conf PROXY || true)"
+  PROXY=${PROXY:-own}
+  case $PROXY in own | external) ;; *) die "HTTPS: answer own or external" ;; esac
+  if [ "$PROXY" = external ]; then
+    ask PROXY_DIR "The other Caddy's site directory on this server, which its Caddyfile imports (Xenibase's deploy/compose/caddy.d)" "$(conf PROXY_DIR)"
+    ask PROXY_CONTAINER "The other Caddy's container" "$(conf PROXY_CONTAINER || true)"
+    PROXY_CONTAINER=${PROXY_CONTAINER:-xenibase-caddy-1}
+    ask PROXY_NETWORK "The Docker network Taskiem and that Caddy share" "$(conf PROXY_NETWORK || true)"
+    PROXY_NETWORK=${PROXY_NETWORK:-cohost}
+    PROXY_DIR=${PROXY_DIR%/}
+    [[ $PROXY_DIR == /* ]] && [ -d "$PROXY_DIR" ] || die "the other Caddy's site directory must be an existing absolute path ($PROXY_DIR)"
+    [[ $PROXY_CONTAINER =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "not a container name: $PROXY_CONTAINER"
+    [[ $PROXY_NETWORK =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "not a network name: $PROXY_NETWORK"
+    # Written into the other Caddy's configuration as it is.
+    [[ ${DOMAIN,,} =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || die "the host name must be a name such as app.example.com ($DOMAIN)"
+  else
+    PROXY_DIR="" PROXY_CONTAINER="" PROXY_NETWORK=""
+  fi
   ask BACKUP_REPO "Backup destination, restic repository such as s3:https://host/bucket/taskiem (empty: no backups)" "$(env_get "$ETC/backup.env" RESTIC_REPOSITORY)"
   if [ -n "$BACKUP_REPO" ]; then
     ask BACKUP_KEY_ID "Backup access key id" "$(env_get "$ETC/backup.env" AWS_ACCESS_KEY_ID)"
@@ -455,7 +650,12 @@ cmd_setup() {
   local f
   [ "$PUBLIC" != yes ] || [ "$PREVIEW_DOMAIN" != "${DOMAIN,,}" ] || die "the preview domain must differ from the app's host name"
   [ -z "$MAIL_DOMAIN" ] || [ "$MAIL_DOMAIN" != "${DOMAIN,,}" ] || die "the mail domain must differ from the app's host name (use a subdomain, such as in.${DOMAIN,,})"
-  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN; do env_set "$ETC/vps.conf" "$f" "${!f:-}"; done
+  # The other Caddy this server used before, if setup moves it.
+  local old_proxy_dir="" old_proxy_container=""
+  if external_proxy && { [ "$PROXY" != external ] || [ "$(conf PROXY_DIR)" != "$PROXY_DIR" ]; }; then
+    old_proxy_dir=$(conf PROXY_DIR) old_proxy_container=$(conf PROXY_CONTAINER)
+  fi
+  for f in DOMAIN OWNER_EMAIL ORG CHANNEL WINDOW ALERT_EMAIL ALERT_WEBHOOK PUBLIC PREVIEW_DOMAIN MAIL_DOMAIN PROXY PROXY_DIR PROXY_CONTAINER PROXY_NETWORK; do env_set "$ETC/vps.conf" "$f" "${!f:-}"; done
   env_set "$ETC/vps.conf" TZ Africa/Lagos
 
   # Secrets made once, never regenerated.
@@ -554,6 +754,14 @@ cmd_setup() {
     env_set "$ETC/backup.env" AWS_SECRET_ACCESS_KEY "$BACKUP_SECRET"
   fi
 
+  # Before the first Compose command: in external-proxy mode its file names the shared network.
+  if [ "$PROXY" = external ]; then
+    proxy_prepare
+  else
+    rm -f "$KIT/$PROXY_COMPOSE"
+    env_unset "$KIT/.env" COMPOSE_FILE
+  fi
+
   log "checking the database"
   echo 'SELECT 1' | docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' >/dev/null ||
     die "cannot reach the database with that URL"
@@ -649,12 +857,21 @@ SQL
   fi
   [ "$PUBLIC" = yes ] || compose rm -sf taskiem-public >/dev/null 2>&1 || true
 
+  # Taskiem's own Caddy, if this server had it until now.
+  [ "$PROXY" != external ] || docker compose --project-directory "$KIT" -f "$KIT/docker-compose.yml" rm -sf caddy >/dev/null 2>&1 || true
+  proxy_unpublish "$old_proxy_dir" "$old_proxy_container"
+
   log "starting Taskiem"
   compose up -d --remove-orphans
+  if [ "$PROXY" = external ]; then
+    proxy_publish force || die "the Caddy in $PROXY_CONTAINER did not take Taskiem's sites: its Caddyfile must import $PROXY_DIR's *.global in its global options and *.caddy (docs/vm.md#sharing-the-server-with-xenibase)"
+  fi
   wait_healthy 300 || die "Taskiem did not become healthy: taskiem-vps logs"
-  # Caddy reads caddy.d/ only when told: public pages on or off.
-  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 ||
-    compose restart caddy >/dev/null
+  if [ "$PROXY" != external ]; then
+    # Caddy reads caddy.d/ only when told: public pages on or off.
+    compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 ||
+      compose restart caddy >/dev/null
+  fi
 
   if [ ! -f "$STATE/bootstrapped" ]; then
     log "creating the organisation and its owner"
@@ -754,7 +971,8 @@ cmd_update() {
   sync_kit "$(image_revision "$target")"
   printf '%s\n' "$current" >"$STATE/previous"
   set_image "$target"
-  if compose up -d --remove-orphans 2>"$STATE/last-update.log" && wait_healthy 240; then
+  ! external_proxy || proxy_prepare
+  if compose up -d --remove-orphans 2>"$STATE/last-update.log" && { ! external_proxy || proxy_publish || true; } && wait_healthy 240; then
     rm -f "$STATE/update-failed"
     # The release numbers travel with current and previous.
     if [ -n "$NEW_RELEASE" ]; then
@@ -797,7 +1015,9 @@ cmd_rollback() {
   was=$(cat "$STATE/current-release" 2>/dev/null || true)
   if [ -s "$STATE/previous-release" ]; then cp "$STATE/previous-release" "$STATE/current-release"; else rm -f "$STATE/current-release"; fi
   if [ -n "$was" ]; then printf '%s\n' "$was" >"$STATE/previous-release"; else rm -f "$STATE/previous-release"; fi
+  ! external_proxy || proxy_prepare
   compose up -d --remove-orphans
+  ! external_proxy || proxy_publish || true
   wait_healthy 240 || die "not healthy after rollback: taskiem-vps logs"
   log "rolled back"
 }
@@ -877,7 +1097,9 @@ cmd_backup() {
 # Rebuild on a new server: settings, OpenBao's storage and Taskiem's data
 # from the newest backup, the unseal key from the recovery sheet. The
 # database is the provider's (restore it with point-in-time recovery first
-# if it was lost too); the restored settings point at it.
+# if it was lost too); the restored settings point at it. Beside Xenibase,
+# its Caddy's files for Taskiem are written again: they are Xenibase's,
+# not in the backup.
 cmd_restore() {
   need_root restore
   [ ! -s "$KIT/openbao.env" ] || [ -n "${TASKIEM_VPS_FORCE:-}" ] ||
@@ -907,7 +1129,10 @@ cmd_restore() {
   printf '%s\n' "$current" >"$STATE/current"
   touch "$STATE/bootstrapped"
   test_mode || docker pull --quiet "$current" >/dev/null
+  ! external_proxy || proxy_prepare
   compose up -d --remove-orphans
+  # The other Caddy's files are not in the backup: written again.
+  ! external_proxy || proxy_publish force || log "WARNING: the Caddy in $(conf PROXY_CONTAINER) did not take Taskiem's sites"
   wait_healthy 300 || die "restored, but Taskiem is not healthy: taskiem-vps logs"
   enable_timers
   log "restored $(conf DOMAIN): point its DNS at this server if it is not already"
@@ -925,6 +1150,7 @@ run_checks() {
   compose exec -T openbao wget -qO- http://127.0.0.1:8200/v1/sys/health >/dev/null 2>&1 || echo "OpenBao is sealed or down: secrets cannot be read"
   public_healthy || echo "the public host (storefronts and forms) is not healthy: new business domains get no certificate"
   mail_healthy || echo "the mail server (email triggers) is not healthy: mail to workflows is refused until it is back, and senders retry"
+  ! external_proxy || proxy_checks
   if compose logs --since 30h openbao-renew 2>/dev/null | grep 'RENEWAL FAILED' >/dev/null; then echo "OpenBao token renewal failed: secrets stop working when the token expires"; fi
   df -P / /var/lib/docker 2>/dev/null | awk 'NR>1 && $5+0 >= 85 {print "disk " $6 " is " $5 " full"}' | sort -u
   if [ -z "${TASKIEM_VPS_INSECURE_TLS:-}" ]; then

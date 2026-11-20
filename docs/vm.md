@@ -4,6 +4,8 @@
 
 What runs: Taskiem with every role in one process, OpenBao (auto-unsealed) for the key that wraps every secret, and Caddy for HTTPS. Postgres is a managed service, outside the VM. Container steps are off (their only safe runner is Kubernetes).
 
+The server can also be shared with Xenibase: Xenibase's Caddy then serves Taskiem's sites, and Taskiem runs without its own (see [Sharing the server with Xenibase](#sharing-the-server-with-xenibase)).
+
 Taskiem's own staging is set up with this kit step by step in the [staging runbook](runbooks/staging.md).
 
 ## Before you start
@@ -27,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/
 
 It asks for the host name, the owner's email, the organisation's name, the database URL, SMTP, a [Telegram](telegram.md) bot token if you want the chat channel (it generates the webhook secret and signing key itself), the iswallet and Payrolla live API URLs (empty keeps each provider's production address; connections are live or test, chosen when made), the release channel (staging or production), the upgrade window, where to send alerts, and the backup bucket. Then, without further questions, it:
 
-1. installs Docker, cosign and the firewall rules (SSH, HTTP and HTTPS in; nothing else);
+1. installs Docker, cosign and the firewall rules (SSH, HTTP and HTTPS in; nothing else, but for Xenibase's database ports when [sharing the server with it](#sharing-the-server-with-xenibase));
 2. picks the newest release on the channel and checks its signature: only images signed by this repository's CI are accepted;
 3. generates every secret itself (OpenBao's unseal key, the audit-anchor key, the database password, the backup password);
 4. initialises OpenBao, creates Taskiem's transit key and a token limited to it, and revokes the root token;
@@ -48,7 +50,7 @@ Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every sec
 
 The three timers' units have a time limit (update 45 minutes, backup 6 hours, check 4 minutes), so a hung Docker call cannot hold the update lock for ever.
 
-**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
+**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, `_PROXY` (`own` or `external`) with `_PROXY_DIR`, `_PROXY_CONTAINER` and `_PROXY_NETWORK` ([Sharing the server with Xenibase](#sharing-the-server-with-xenibase)), with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
 With no SMTP there is no email to carry the owner's set-your-password link. At a terminal the first password is shown once; on an unattended install it is written to `/root/taskiem-owner-password-<date>.txt`, readable by root only, and only the file's path is printed, so the password is not in cloud-init or CI logs. Give it to the owner, then delete the file (`shred -u`); the health checks remind you until you do.
 
@@ -74,7 +76,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | `sudo taskiem-vps rollback` | Back to the release before the current one, with its deployment kit |
 | `sudo taskiem-vps backup` | Back up now |
 | `sudo taskiem-vps check` | Run the health checks |
-| `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on) |
+| `sudo taskiem-vps logs [service]` | Follow logs (`taskiem`, `openbao`, `caddy`, `openbao-renew`; `taskiem-public`, `taskiem-mail` and `clamav` when on). Beside Xenibase there is no `caddy`: `sudo docker logs -f xenibase-caddy-1` |
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 
 
@@ -107,6 +109,8 @@ curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/
 ```
 
 It asks for the bucket and its key, and from the recovery sheet the backup password and the unseal key; restores the newest backup; starts the release that was running; and turns the timers back on. Point the DNS name at the new VPS. CI rehearses this on every change.
+
+On a server shared with Xenibase, install and restore Xenibase first, then restore Taskiem with `TASKIEM_VPS_PROXY=external` given to the installer as well (for its firewall rules); the restore writes `taskiem.caddy` and `taskiem.global` again, since they are Xenibase's files and not in Taskiem's backup.
 
 ## Public pages: storefronts and forms
 
@@ -158,10 +162,50 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 
 **Upgrading a server from before email triggers:** the upgrade itself (automatic, or `taskiem-vps update --now`) adds the database tables and the `taskiem-mail` service but turns nothing on. Do the four steps above when you want it.
 
+## Sharing the server with Xenibase
+
+Taskiem and Xenibase can run on one server (production: one Whogohost VDS M, 4 vCores, 32 GB, in Nigeria). Both serve HTTPS on ports 80 and 443, so **Xenibase's Caddy serves Taskiem's sites** and Taskiem runs without its own: external-proxy mode.
+
+| Setting (setup question, or `TASKIEM_VPS_…`) | Default | Is |
+| --- | --- | --- |
+| `PROXY` | `own` | `external` for this mode; `own` is Taskiem's Caddy, as before |
+| `PROXY_DIR` | (none: required) | Xenibase's site directory on this server, which its Caddyfile imports as `/etc/caddy/caddy.d`: `<Xenibase checkout>/deploy/compose/caddy.d` |
+| `PROXY_CONTAINER` | `xenibase-caddy-1` | Xenibase's Caddy container |
+| `PROXY_NETWORK` | `cohost` | The Docker network Taskiem's web containers and Xenibase's Caddy share |
+
+**Install Xenibase first**, with its Caddyfile importing `caddy.d/*.global` in its global options and `caddy.d/*.caddy` among its sites, and its Caddy on the `cohost` network. Then install Taskiem with the mode on:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh |
+  sudo TASKIEM_VPS_PROXY=external TASKIEM_VPS_PROXY_DIR=/opt/xenibase/deploy/compose/caddy.d bash
+```
+
+(`/opt/xenibase` is where Xenibase is checked out; on a server already running Taskiem, `sudo TASKIEM_VPS_PROXY=external TASKIEM_VPS_PROXY_DIR=… taskiem-vps setup` switches it, and `TASKIEM_VPS_PROXY=own` switches back.)
+
+**What setup does:**
+- It creates the `cohost` network if Xenibase has not (`docker network create cohost`).
+- It writes `/opt/taskiem/docker-compose.external-proxy.yml`, which `taskiem-vps` adds to the release's Compose file: Taskiem's `caddy` is left out, and `taskiem` and `taskiem-public` join `cohost` as well as Taskiem's own network, so Xenibase's Caddy reaches `taskiem:8080`, `taskiem-public:8082` and `taskiem-public:9090` by name. It names both files in `/opt/taskiem/.env` (`COMPOSE_FILE`), so `docker compose --project-directory /opt/taskiem …` typed by hand uses them too, and removes Taskiem's Caddy container if there was one.
+- It writes `taskiem.caddy` into Xenibase's `caddy.d`: the app's host name to `taskiem:8080`, and, with public pages on, every other host to `taskiem-public:8082` with on-demand certificates, as Taskiem's own Caddyfile and `public.caddy` do, with the names written out (Xenibase's Caddy does not have Taskiem's environment). It also sends plain-HTTP visits to preview addresses (`*.<preview domain>`) to HTTPS, which Xenibase's own `http://` site would otherwise answer.
+- It writes `taskiem.global`, the on-demand certificate check (`ask http://taskiem-public:9090/tls/ask`), which Xenibase's Caddy imports into its global options.
+- It reloads Xenibase's Caddy (`docker exec xenibase-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), and stops if the reload fails: Xenibase's Caddyfile must import both files.
+
+The settings are kept in `/etc/taskiem/vps.conf`. Upgrades replace the release's Compose file and keep the server's own; they, rollbacks and restores write the two files again when they differ, and reload Xenibase's Caddy then. A release from before this mode is refused by update and rollback (it would start Taskiem's Caddy on Xenibase's ports).
+
+`taskiem-vps check` also reports: either file missing or changed, the `cohost` network missing, Taskiem or Xenibase's Caddy not on it, and Xenibase's Caddy not having Taskiem's site loaded (read from its admin API inside the container). `https://<domain>/readyz` is checked through Xenibase's Caddy, as before.
+
+**Firewall.** The installer's `ufw` lets in SSH, 80 and 443 (443/udp too, which Xenibase's Caddy does not use); with `TASKIEM_VPS_PROXY=external` it also opens 5432 and 6543, Xenibase's database poolers, as Xenibase's install guide does. Ports Docker publishes are reached through Docker's own firewall rules, which come before ufw's, so ufw does not close them either way; the rules keep ufw's list true and matter if Docker's are turned off. Taskiem's containers reach the database at its public host name, which is this server: Docker forwards it to Xenibase's pooler.
+
+**Memory.** Taskiem's limits add up to about 6 GiB (Taskiem 2 GiB, ClamAV 2.5 GiB); the rest of 32 GB is Xenibase's and its projects'. Raise a limit in `/opt/taskiem/.env` if needed ([Public pages](#public-pages-storefronts-and-forms)).
+
+**Not the same as with Taskiem's own Caddy:**
+- A plain-HTTP visit to a business's own domain (not a preview address) goes to Xenibase's web UI instead of to HTTPS, since Xenibase's `http://` site answers every name no site claims. Links and DNS checks use HTTPS, which works. Xenibase's catch-all redirecting to `https://{host}{uri}` would close this.
+- HTTP/3 (UDP 443) is not offered: Xenibase's Caddy publishes TCP only.
+- Certificates are in Xenibase's Caddy's storage, not Taskiem's `caddy_data` volume; Taskiem's own Caddy volumes are left unused.
+
 ## Security notes
 
 - Auto-unseal keeps OpenBao's unseal key on the VPS, in a root-only file outside the backups. Someone with root on the VPS can read every secret, as they could anyway through Taskiem's own token; a stolen backup alone cannot.
-- Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443, and 25 when email triggers are on.
+- Ports 8200 (OpenBao) and 9090 (metrics, on `127.0.0.1`) are never public. Docker publishes only 80 and 443, and 25 when email triggers are on. Beside Xenibase, Taskiem publishes no web port: Xenibase's Caddy reaches `taskiem` and `taskiem-public` (8080, 8082, and 9090 for `/tls/ask`) on the shared Docker network only.
 - The mail server takes mail only for addresses of live email triggers, refusing everything else before the message is sent: it is not a relay, and it sends nothing.
 - The public host and the mail server sign in as a separate user, a member of `taskiem_public` only, which reads no table; their env files hold nothing else.
 - The database user Taskiem signs in as is a member of `taskiem_app` only; row-level security applies to it ([operations](operations.md#database-roles)). The owner's URL is used for migrations only.
@@ -176,5 +220,7 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 | `taskiem-vps` | Setup, update, rollback, backup, restore, checks (installed to `/usr/local/bin`) |
 | `docker-compose.yml`, `Caddyfile`, `public.caddy`, `openbao.hcl`, `openbao-taskiem-policy.hcl` | The stack, installed to `/opt/taskiem` and replaced on each upgrade with the release's own copy (`public.caddy` is used only with public pages on). Its third-party images (Caddy, OpenBao, ClamAV), like the helpers `taskiem-vps` runs (psql, restic), are pinned by digest, so a setup or pull gets the image the release was reviewed with; `CLAMAV_IMAGE` and `OPENBAO_IMAGE` in `/opt/taskiem/.env` override them |
 | `systemd/` | The update, check and backup timers |
+
+Beside Xenibase, setup also writes `/opt/taskiem/docker-compose.external-proxy.yml` (the server's own, kept by upgrades) and `taskiem.caddy` and `taskiem.global` in Xenibase's `caddy.d`.
 
 The server's settings are in `/opt/taskiem/*.env` and `/etc/taskiem` (root only); its state (current and previous release, last backup) is in `/var/lib/taskiem-vps`.

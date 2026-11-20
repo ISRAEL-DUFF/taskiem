@@ -1,6 +1,11 @@
 # Taskiem on one VM (decision 0032): every role in one process, persistent
 # OpenBao, Caddy for HTTPS. Postgres is NOT here: use a managed Postgres 16
-# (or one on another host) with backups and point-in-time recovery.
+# or newer (or one on another host) with backups and point-in-time
+# recovery, such as a Xenibase dedicated project with role management on.
+#
+# Beside Xenibase on one server, Xenibase's Caddy serves Taskiem's sites and
+# this file's caddy is left out (external-proxy mode: taskiem-vps adds
+# docker-compose.external-proxy.yml, docs/vm.md#sharing-the-server-with-xenibase).
 #
 # Installed and run by taskiem-vps (docs/vm.md): `taskiem-vps setup` writes
 # the env files and initialises OpenBao, and `taskiem-vps update` moves

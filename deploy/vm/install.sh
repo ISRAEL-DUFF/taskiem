@@ -11,7 +11,8 @@
 # The kit is taken from the release named below (KIT_REF) and must match
 # its checksum (KIT_SHA256). Options (environment): TASKIEM_VPS_REF with
 # TASKIEM_VPS_KIT_SHA256 (another git ref of the kit and its tarball's
-# sha256), TASKIEM_VPS_NO_FIREWALL=1, TASKIEM_VPS_RESTORE=1 (rebuild from a backup
+# sha256), TASKIEM_VPS_NO_FIREWALL=1, TASKIEM_VPS_PROXY=external (beside
+# Xenibase, behind its Caddy: docs/vm.md), TASKIEM_VPS_RESTORE=1 (rebuild from a backup
 # instead of a new install), and every TASKIEM_VPS_* answer that setup takes
 # (docs/vm.md) for an unattended install.
 set -Eeuo pipefail
@@ -118,6 +119,15 @@ if [ -z "${TASKIEM_VPS_NO_FIREWALL:-}" ]; then
   ufw allow 80/tcp >/dev/null
   ufw allow 443/tcp >/dev/null
   ufw allow 443/udp >/dev/null
+  # Sharing the server with Xenibase (TASKIEM_VPS_PROXY=external): its
+  # database poolers, as Xenibase's own install opens them. Ports Docker
+  # publishes are reached through Docker's own firewall rules, before ufw's,
+  # so these only matter where Docker's are off; they keep ufw's list true.
+  if [ "${TASKIEM_VPS_PROXY:-}" = external ]; then
+    log "firewall: Xenibase's database poolers (5432, 6543) in"
+    ufw allow 5432/tcp >/dev/null
+    ufw allow 6543/tcp >/dev/null
+  fi
   ufw --force enable >/dev/null
 fi
 

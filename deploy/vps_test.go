@@ -41,7 +41,12 @@ func newVPS(t *testing.T) *vps {
 			t.Fatal(err)
 		}
 		for _, f := range []string{"docker-compose.yml", "Caddyfile", "openbao.hcl", "openbao-taskiem-policy.hcl", "public.caddy", "taskiem-vps"} {
-			if err := os.WriteFile(filepath.Join(src, f), []byte("# kit "+rev+"\n"), 0o644); err != nil {
+			body := "# kit " + rev + "\n"
+			// revC's taskiem-vps knows external-proxy mode; revA's and revB's do not.
+			if f == "taskiem-vps" && rev == "revC" {
+				body += "# docker-compose.external-proxy.yml\n"
+			}
+			if err := os.WriteFile(filepath.Join(src, f), []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -55,10 +60,17 @@ func newVPS(t *testing.T) *vps {
 		}
 	}
 	// docker: compose up fails for the broken release, its container is
-	// never healthy, and each image's revision label names its kit.
+	// never healthy, and each image's revision label names its kit. A
+	// network exists once created; the other Caddy (docker exec) has
+	// loaded app.example.com.
 	stub("docker", `img=$(sed -n "s/^TASKIEM_IMAGE='\(.*\)'$/\1/p" "$TASKIEM_VPS_KIT/.env" 2>/dev/null)
 case "$*" in
-  *" up "*|*" up") echo "up $img $(head -1 "$TASKIEM_VPS_KIT/docker-compose.yml")" >>"$CALLS"; [ "$img" != taskiem:broken ] ;;
+  *" up "*|*" up") echo "up $img $(head -1 "$TASKIEM_VPS_KIT/docker-compose.yml")" >>"$CALLS"; echo "compose $*" >>"$CALLS"; [ "$img" != taskiem:broken ] ;;
+  "network inspect "*) grep -qx "network create $3" "$CALLS" 2>/dev/null ;;
+  "network create "*) echo "$*" >>"$CALLS" ;;
+  "exec "*wget*) echo '{"match":[{"host":["app.example.com"]}]}' ;;
+  "exec "*) echo "$*" >>"$CALLS" ;;
+  inspect*Networks*) echo '{"taskiem_default":{},"cohost":{}}' ;;
   *" stop openbao"*) echo "stop openbao" >>"$CALLS" ;;
   *"ps -q"*) echo cid ;;
   *"config --services"*) echo taskiem ;;
@@ -490,5 +502,112 @@ fetch_kit main "$1" "$2"`, script, sum, dest)
 		if strings.Contains(string(b), "Type=oneshot") && !strings.Contains(string(b), "\nTimeoutStartSec=") {
 			t.Errorf("%s: a oneshot with no TimeoutStartSec can hang for ever", u)
 		}
+	}
+}
+
+// TestVPSExternalProxyKeepsItsSetup: beside Xenibase, Xenibase's Caddy
+// holds ports 80 and 443 and serves Taskiem's sites (external-proxy mode,
+// docs/vm.md#sharing-the-server-with-xenibase). Taskiem's own Caddy is left
+// out by a Compose file of the server's own, the web containers join the
+// shared network, and taskiem.caddy and taskiem.global go into Xenibase's
+// caddy.d, which is then reloaded. An update replaces the release's Compose
+// file but keeps all of that; a release whose kit predates the mode is
+// refused, since it would start Taskiem's Caddy on ports Xenibase holds.
+// The default (own Caddy) uses the release's Compose file alone.
+func TestVPSExternalProxyKeepsItsSetup(t *testing.T) {
+	v := newVPS(t)
+	etc := filepath.Join(v.dir, "etc", "vps.conf")
+	override := filepath.Join(v.kit, "docker-compose.external-proxy.yml")
+	calls := func() string { b, _ := os.ReadFile(v.log); return string(b) }
+
+	// Own Caddy: nothing changes.
+	v.write(etc, "DOMAIN='app.example.com'\n")
+	if out, err := v.run("taskiem:old", "update", "--now"); err != nil {
+		t.Fatalf("update with its own Caddy: %v: %s", err, out)
+	}
+	if strings.Contains(calls(), "external-proxy") || strings.Contains(calls(), "network create") || strings.Contains(calls(), "caddy reload") {
+		t.Errorf("own Caddy, but the external proxy was set up: %s", calls())
+	}
+	if _, err := os.Stat(override); err == nil {
+		t.Error("own Caddy, but the external-proxy Compose file was written")
+	}
+	if strings.Contains(v.read(filepath.Join(v.kit, ".env")), "COMPOSE_FILE") {
+		t.Error("own Caddy, but .env names Compose files")
+	}
+
+	caddyD := filepath.Join(v.dir, "xenibase", "caddy.d")
+	if err := os.MkdirAll(caddyD, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	v.write(etc, "DOMAIN='App.example.com'\nPUBLIC='yes'\nPREVIEW_DOMAIN='shops.example.net'\nPROXY='external'\nPROXY_DIR='"+caddyD+"'\nPROXY_CONTAINER='xenibase-caddy-1'\nPROXY_NETWORK='cohost'\n")
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil {
+		t.Fatalf("update in external-proxy mode: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.kit, "docker-compose.yml")); got != "# kit revC" {
+		t.Errorf("the release's Compose file was not installed: %q", got)
+	}
+	o := v.read(override)
+	for _, want := range []string{"  caddy:\n    profiles: [own-caddy]", "  taskiem:\n    networks: [default, proxy]", "  taskiem-public:\n    networks: [default, proxy]", "  proxy:\n    name: cohost\n    external: true"} {
+		if !strings.Contains(o, want) {
+			t.Errorf("the external-proxy Compose file lacks %q:\n%s", want, o)
+		}
+	}
+	// A person's own docker compose in /opt/taskiem uses both files too.
+	if env := v.read(filepath.Join(v.kit, ".env")); !strings.Contains(env, "COMPOSE_FILE='"+v.kit+"/docker-compose.yml:"+override+"'") {
+		t.Errorf(".env does not name both Compose files:\n%s", env)
+	}
+	c := calls()
+	if !strings.Contains(c, "network create cohost") {
+		t.Errorf("the shared network was not created: %s", c)
+	}
+	if !strings.Contains(c, "-f "+v.kit+"/docker-compose.yml -f "+override+" up") {
+		t.Errorf("the stack was not started with the external-proxy Compose file: %s", c)
+	}
+	if strings.Count(c, "exec xenibase-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile") != 1 {
+		t.Errorf("Xenibase's Caddy was not reloaded once: %s", c)
+	}
+	site := v.read(filepath.Join(caddyD, "taskiem.caddy"))
+	for _, want := range []string{"\napp.example.com {\n\tencode zstd gzip\n\treverse_proxy taskiem:8080\n}", "\nhttps:// {\n\ttls {\n\t\ton_demand\n\t}\n\tencode zstd gzip\n\treverse_proxy taskiem-public:8082\n}", "\nhttp://*.shops.example.net {\n\tredir https://{host}{uri} 308\n}"} {
+		if !strings.Contains(site, want) {
+			t.Errorf("taskiem.caddy lacks %q:\n%s", want, site)
+		}
+	}
+	if g := v.read(filepath.Join(caddyD, "taskiem.global")); !strings.Contains(g, "on_demand_tls {\n\task http://taskiem-public:9090/tls/ask\n}") {
+		t.Errorf("taskiem.global:\n%s", g)
+	}
+
+	// Back to a release from before the mode: refused, nothing changes.
+	out, err := v.run("", "rollback")
+	if err == nil || !strings.Contains(out, "external-proxy") {
+		t.Fatalf("rollback to a kit without external-proxy mode: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current")); got != "taskiem:good2" {
+		t.Errorf("current after the refused rollback = %q", got)
+	}
+	if got := v.read(filepath.Join(v.kit, "docker-compose.yml")); got != "# kit revC" {
+		t.Errorf("the refused rollback changed the kit: %q", got)
+	}
+
+	if out, err := v.run("", "check"); err != nil || !strings.Contains(out, "all checks pass") {
+		t.Errorf("check in external-proxy mode: %v: %s", err, out)
+	}
+	if err := os.Remove(filepath.Join(caddyD, "taskiem.caddy")); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := v.run("", "check"); err == nil || !strings.Contains(out, "taskiem.caddy is missing") {
+		t.Errorf("check with taskiem.caddy gone: %v: %s", err, out)
+	}
+	// The next update writes it again and reloads; the override stays.
+	if out, err := v.run("taskiem:unstated", "update", "--now"); err != nil {
+		t.Fatalf("update: %v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(caddyD, "taskiem.caddy")); err != nil {
+		t.Errorf("the update did not write taskiem.caddy again: %v", err)
+	}
+	if n := strings.Count(calls(), "caddy reload"); n != 2 {
+		t.Errorf("Xenibase's Caddy reloaded %d times, want 2 (only when the files changed)", n)
+	}
+	if v.read(override) != o {
+		t.Error("the update changed the external-proxy Compose file")
 	}
 }
