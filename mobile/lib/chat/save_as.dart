@@ -14,6 +14,7 @@ import '../kit/modal.dart';
 import '../kit/sheet.dart';
 import 'groups.dart' show pickOneOf;
 import 'saved_accounts.dart';
+import 'saved_kinds.dart' show SavedCustomSheet;
 
 /// Whose saved things it goes in: the business's in its chats for those
 /// who may manage them.
@@ -38,9 +39,31 @@ Future<void> saveFromWords(BuildContext context, Auth auth, String text, {bool b
 
 /// Save "@mum"… in the picker: what kind, then its sheet with the name.
 Future<void> saveNamed(BuildContext context, Auth auth, String name, {bool business = false}) async {
-  final kind = await pickOneOf(context, title: 'Save @$name', choices: [for (final e in savedKinds.entries) (e.key, e.value.one, '')]);
+  final api = _savedFor(auth, business);
+  // The owner's own kinds first (saved objects S1, part 5).
+  var made = const <SavedKind>[];
+  try {
+    made = (await api.kinds()).kinds;
+  } on Object {
+    // Only the kinds Taskiem knows, then.
+  }
+  if (!context.mounted) return;
+  final kind = await pickOneOf(
+    context,
+    title: 'Save @$name',
+    choices: [
+      for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', ''),
+      for (final e in savedKinds.entries) (e.key, e.value.one, ''),
+    ],
+  );
   if (kind == null || !context.mounted) return;
-  await _open(context, _savedFor(auth, business), readingCard(kind, '', const {}, name: name));
+  if (kind.startsWith('k:')) {
+    final m = made.firstWhere((m) => 'k:${m.id}' == kind);
+    final done = await showTkSheet<bool>(context, (_) => SavedCustomSheet(api: api, kind: m, startName: name));
+    if (done == true && context.mounted) showTkToast(context, 'Saved');
+    return;
+  }
+  await _open(context, api, readingCard(kind, '', const {}, name: name));
 }
 
 Future<void> _open(BuildContext context, SavedApi api, SavedCard start) async {

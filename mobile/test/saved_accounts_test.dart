@@ -300,4 +300,103 @@ void main() {
     expect(find.textContaining('0123452222'), findsOneWidget);
     await drain(t);
   });
+
+  testWidgets('kinds of one’s own: a car with its chassis number hidden, shown with a passkey; a kind made from a starter; a car saved', (t) async {
+    phone(t, 1200);
+    final was = passkeys;
+    final fake = FakePasskeys();
+    passkeys = fake;
+    addTearDown(() => passkeys = was);
+    final api = conversation(c: chat());
+    final car = {
+      'id': 'k1',
+      'name': 'Car',
+      'count': 1,
+      'fields': [
+        {'key': 'plate_number', 'label': 'Plate number', 'type': 'text', 'required': true, 'sensitive': false, 'never_share': false},
+        {'key': 'insurance_due', 'label': 'Insurance due', 'type': 'date', 'required': false, 'sensitive': false, 'never_share': false},
+        {'key': 'chassis_number', 'label': 'Chassis number', 'type': 'text', 'required': false, 'sensitive': true, 'never_share': true},
+      ],
+      'created_at': '2026-11-20T10:00:00Z',
+      'updated_at': '2026-11-20T10:00:00Z',
+    };
+    final kinds = <Map<String, dynamic>>[car];
+    final list = <Map<String, dynamic>>[
+      saved('m1', 'mum', 'Mum', 'GTBank ••2222', owner: 'mine'),
+      {
+        ...saved('v1', 'van', 'Delivery van', 'LND 123 XY · 3 Mar 2027', owner: 'mine'),
+        'kind': 'custom',
+        'kind_id': 'k1',
+        'kind_name': 'Car',
+        'values': {'plate_number': 'LND 123 XY', 'insurance_due': '2027-03-03', 'chassis_number': '••3456'},
+        'details': <String, dynamic>{},
+        'check': {'state': 'none', 'account_name': null, 'via': null, 'at': null, 'problem': null},
+      },
+    ];
+    api.routes['GET /v1/me/saved'] = (_) => {'saved': list, 'limit': 500};
+    api.routes['GET /v1/me/saved-kinds'] = (_) => {
+      'kinds': kinds,
+      'starters': [
+        {'name': 'Car', 'fields': car['fields']},
+        {
+          'name': 'Pet',
+          'fields': [
+            {'key': 'breed', 'label': 'Breed', 'type': 'text'},
+            {'key': 'vets_phone', 'label': 'Vet’s phone', 'type': 'phone'},
+          ],
+        },
+      ],
+      'limit': 40,
+      'to_change': true,
+    };
+    api.routes['POST /v1/me/saved-kinds'] = (r) {
+      final k = {...api.body(r), 'id': 'k2', 'count': 0, 'created_at': '2026-11-20T10:00:00Z', 'updated_at': '2026-11-20T10:00:00Z'};
+      kinds.add(k);
+      return answer({'kind': k}, 201);
+    };
+    api.routes['POST /v1/me/saved'] = (r) => answer({'saved': list.last}, 201);
+    api.routes['POST /v1/me/saved/step-up/options'] = (_) => {'publicKey': {'challenge': 'abc', 'rpId': 'taskiem.test'}};
+    api.routes['POST /v1/me/saved/v1/reveal'] = (_) => {'values': {'chassis_number': 'JTDBR32E720123456'}};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SavedAccountsPage(auth: api.auth(), mine: true)));
+    await settle(t);
+    expect(find.text('Car'), findsWidgets, reason: 'the filter and the kinds');
+    expect(find.text('Your own kinds'), findsOneWidget);
+    expect(find.text('3 fields · 1 saved'), findsOneWidget);
+    await looks(t, 'saved-kinds');
+
+    // Hidden until a passkey: then in full.
+    await press(t, find.text('Delivery van'));
+    expect(find.textContaining('Chassis number: ••3456'), findsOneWidget);
+    await press(t, find.text('Show hidden'));
+    expect(api.body(api.sent('POST', '/v1/me/saved/step-up/options').last), {'operation': 'saved.reveal', 'target': 'v1'});
+    expect(find.text('JTDBR32E720123456'), findsOneWidget);
+    expect(find.text('3 Mar 2027'), findsOneWidget);
+    await press(t, find.text('Done'));
+
+    // A kind made from a starter: Car is made already, so Pet is offered.
+    await press(t, find.text('Make a kind'));
+    expect(find.text('Pet'), findsOneWidget);
+    await press(t, find.text('Pet'));
+    await looks(t, 'saved-kind-sheet');
+    await press(t, find.text('Make it'));
+    final made = api.body(api.sent('POST', '/v1/me/saved-kinds').last);
+    expect(made['name'], 'Pet');
+    expect([for (final f in made['fields'] as List) (f as Map)['label']], ['Breed', 'Vet’s phone']);
+
+    // A car saved: a field for each, its kind's id with it.
+    await press(t, find.text('Save something'));
+    await press(t, find.text('A car'));
+    await typeIn(t, field('Name to call it up by'), 'truck');
+    await typeIn(t, field('Title'), 'The truck');
+    await press(t, find.text('Save'));
+    expect(find.text('Plate number is needed.'), findsOneWidget);
+    await looks(t, 'saved-custom-sheet');
+    await typeIn(t, field('Plate number'), 'KJA 555 AB');
+    await press(t, find.text('Save'));
+    final body = api.body(api.sent('POST', '/v1/me/saved').last);
+    expect(body['kind'], 'custom');
+    expect(body['kind_id'], 'k1');
+    expect(body['values'], {'plate_number': 'KJA 555 AB'});
+    await drain(t);
+  });
 }

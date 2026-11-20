@@ -240,7 +240,7 @@ func CleanValues(fields []Field, in map[string]any, was map[string]string) (map[
 	}
 	for _, f := range fields {
 		if f.Required && out[f.Key] == "" {
-			return nil, invalid("Give it " + strings.ToLower(f.Label[:1]) + f.Label[1:] + ".")
+			return nil, invalid(f.Label + " is needed.")
 		}
 	}
 	return out, nil

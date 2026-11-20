@@ -328,4 +328,12 @@ removeMySaved
 revealMySaved
 mySavedStepUpOptions
 readSavedWords
+listMySavedKinds
+addMySavedKind
+changeMySavedKind
+removeMySavedKind
+listSavedKinds
+addSavedKind
+changeSavedKind
+removeSavedKind
 listMyBanks

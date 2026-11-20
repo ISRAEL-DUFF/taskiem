@@ -30,6 +30,8 @@ String savedCardSub(SavedCard c) {
     'place' => 'Place',
     'text' => 'Text',
     'provider_account' => 'Account with a provider',
+    // A made-up kind's own name ("Car").
+    'custom' => c.kindName ?? 'Saved',
     _ => 'Saved',
   };
   final first = c.lines.isEmpty ? '' : c.lines.first.value.split('\n').first;
@@ -63,7 +65,7 @@ class _SavedCardViewState extends State<SavedCardView> {
     final c = widget.card;
     final ink = widget.ink ?? t.text;
     final muted = widget.ink == null ? t.muted : ink.withValues(alpha: 0.75);
-    final icon = savedKinds[c.kind]?.icon ?? 'b-note';
+    final icon = c.kind == 'custom' ? 'b-box' : (savedKinds[c.kind]?.icon ?? 'b-note');
     final head = Semantics(
       button: true,
       label: '${c.title}, shared. ${savedCardSub(c)}. ${_open ? 'Show less' : 'Show details'}',
@@ -164,7 +166,9 @@ Future<void> saveSavedCard(BuildContext context, Auth auth, SavedCard c, {bool m
   final api = SavedApi(auth, mine);
   final done = c.kind == 'bank_account'
       ? (await showTkSheet<String>(context, (_) => SavedAccountSheet(api: api, checks: false, start: c))) != null
-      : (await showTkSheet<bool>(context, (_) => SavedThingSheet(api: api, kind: c.kind, start: c))) == true;
+      // A made-up kind's card is kept as a text of its lines: the receiver
+      // has no such kind.
+      : (await showTkSheet<bool>(context, (_) => SavedThingSheet(api: api, kind: c.kind == 'custom' ? 'text' : c.kind, start: c))) == true;
   if (done && context.mounted) showTkToast(context, mine ? 'Saved as yours' : 'Saved for the business');
 }
 

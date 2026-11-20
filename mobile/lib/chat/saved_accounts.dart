@@ -31,6 +31,7 @@ import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardPill;
 import 'groups.dart' show pickAction, pickOneOf, askSure;
 import 'my_chat.dart' show sayFailure;
+import 'saved_kinds.dart';
 import 'words.dart' show CardTone;
 
 /// A name as typed, as the server keeps it: no @, lowercase, spaces as "-".
@@ -192,12 +193,25 @@ class SavedApi {
     return PasskeyCredential.fromJson(await passkeys.get(pk));
   }
 
-  Future<String> reveal(String id) async {
+  /// An account's number, or a made-up kind's sensitive values, in full
+  /// (a passkey first).
+  Future<({String number, Map<String, String> values})> reveal(String id) async {
     final p = await proof('saved.reveal', id);
-    return mine
-        ? (await _a.revealMySaved(id: id, body: RevealMySavedRequest(passkey: p))).accountNumber
-        : (await _a.revealSaved(id: id, body: RevealSavedRequest(passkey: p))).accountNumber;
+    final (number, values) = mine
+        ? await _a.revealMySaved(id: id, body: RevealMySavedRequest(passkey: p)).then((r) => (r.accountNumber, r.values))
+        : await _a.revealSaved(id: id, body: RevealSavedRequest(passkey: p)).then((r) => (r.accountNumber, r.values));
+    return (number: number ?? '', values: {for (final e in (values ?? const {}).entries) e.key: '${e.value}'});
   }
+
+  // Kinds the owner makes (saved objects S1, part 5).
+  Future<SavedKindList> kinds() => mine ? _a.listMySavedKinds() : _a.listSavedKinds();
+
+  Future<SavedKind> addKind(SavedKindIn body) async => (mine ? await _a.addMySavedKind(body: body) : await _a.addSavedKind(body: body)).kind;
+
+  Future<SavedKind> changeKind(String id, SavedKindIn body) async =>
+      (mine ? await _a.changeMySavedKind(id: id, body: body) : await _a.changeSavedKind(id: id, body: body)).kind;
+
+  Future<void> removeKind(String id) => mine ? _a.removeMySavedKind(id: id) : _a.removeSavedKind(id: id);
 }
 
 /// You › Settings › Saved accounts (mine), or a business's Settings ›
@@ -219,7 +233,12 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
   String? _error;
   final _shown = <String, String>{};
   bool _checked = false;
+  // A filter: '' (all), a kind Taskiem knows, or one of the owner's (k:<id>).
   String _kind = '';
+  // Kinds the owner made (saved objects S1, part 5).
+  SavedKindList? _kinds;
+
+  SavedKind? _kindOf(SavedObject x) => _kinds?.kinds.where((k) => k.id == x.kindId).firstOrNull;
 
   bool get _manage => widget.mine || widget.auth.can('saved.manage');
 
@@ -233,8 +252,14 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     try {
       final l = await _api.list();
       final p = widget.mine ? null : await widget.auth.api.savedProvider();
+      SavedKindList? kinds;
+      try {
+        kinds = await _api.kinds();
+      } on Object {
+        // The kinds the owner made, missing: those Taskiem knows still work.
+      }
       if (!mounted) return;
-      setState(() => (_list = l.saved, _limit = l.limit, _provider = p, _error = null));
+      setState(() => (_list = l.saved, _limit = l.limit, _provider = p, _kinds = kinds, _error = null));
       // Accounts saved before a payments account was connected are checked
       // as soon as one is.
       if (l.canCheck && !_checked) {
@@ -251,9 +276,62 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
 
   /// Save something: which kind first.
   Future<void> _add() async {
-    final k = await pickAction(context, title: 'Save something', actions: [for (final e in savedKinds.entries) (e.key, e.value.one, e.value.icon, false)]);
+    final made = _kinds?.kinds ?? const <SavedKind>[];
+    final k = await pickAction(
+      context,
+      title: 'Save something',
+      actions: [
+        for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', 'b-box', false),
+        for (final e in savedKinds.entries) (e.key, e.value.one, e.value.icon, false),
+      ],
+    );
     if (k == null || !mounted) return;
+    if (k.startsWith('k:')) {
+      final m = made.where((m) => 'k:${m.id}' == k).firstOrNull;
+      if (m != null) await _editCustom(m);
+      return;
+    }
     await (k == 'bank_account' ? _edit() : _editThing(k));
+  }
+
+  Future<void> _editCustom(SavedKind kind, [SavedObject? x]) async {
+    final saved = await showTkSheet<bool>(context, (_) => SavedCustomSheet(api: _api, kind: kind, thing: x));
+    if (saved == true && mounted) await _load();
+  }
+
+  /// Make a kind, or change one.
+  Future<void> _editKind([SavedKind? kind]) async {
+    final made = _kinds?.kinds ?? const <SavedKind>[];
+    final starters = [for (final st in _kinds?.starters ?? const <SavedKindListStartersItem>[]) if (!made.any((k) => k.name.toLowerCase() == st.name.toLowerCase())) st];
+    final k = await showTkSheet<SavedKind>(context, (_) => SavedKindSheet(api: _api, kind: kind, starters: starters));
+    if (k == null || !mounted) return;
+    showTkToast(context, kind == null ? '${k.name} made' : 'Kind changed');
+    await _load();
+  }
+
+  Future<void> _kindRow(SavedKind k) async {
+    final pick = await pickAction(
+      context,
+      title: k.name,
+      note: '${k.fields.length} ${k.fields.length == 1 ? 'field' : 'fields'} · ${k.count} saved',
+      actions: [('change', 'Change', 'b-note', false), ('remove', 'Remove', 'b-x', true)],
+    );
+    if (!mounted) return;
+    switch (pick) {
+      case 'change':
+        await _editKind(k);
+      case 'remove':
+        final yes = await askSure(context, title: 'Remove the kind ${k.name}?', body: 'It is only removed once nothing saved is of it.', ok: 'Remove', danger: true);
+        if (!yes || !mounted) return;
+        try {
+          await _api.removeKind(k.id);
+          if (!mounted) return;
+          showTkToast(context, '${k.name} removed');
+          await _load();
+        } on Object catch (e) {
+          if (mounted) showTkToast(context, sayFailure(e), error: true);
+        }
+    }
   }
 
   Future<void> _editThing(String kind, [SavedObject? x]) async {
@@ -274,20 +352,31 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
 
   Future<void> _row(SavedObject x) async {
     final bank = x.kind == 'bank_account';
+    final made = _kindOf(x);
+    final hidden = made != null && made.fields.any((f) => (f.sensitive ?? false) && '${x.values?[f.key] ?? ''}'.isNotEmpty);
     final c = savedCheck(x);
     final pick = await pickAction(
       context,
       title: x.title,
-      note: bank ? '@${x.name} · ${x.hint} · ${c.words}' : '@${x.name} · ${x.hint}',
+      note: bank
+          ? '@${x.name} · ${x.hint} · ${c.words}'
+          : made != null
+          ? [for (final (l, v) in savedValueLines(made, x)) '$l: $v'].join('\n')
+          : '@${x.name} · ${x.hint}',
       actions: [
         ('change', 'Change', 'b-note', false),
         if (bank && !_shown.containsKey(x.id)) ('show', 'Show the number', 'b-eye', false),
+        if (hidden) ('show', 'Show hidden', 'b-eye', false),
         ('remove', 'Remove', 'b-x', true),
       ],
     );
     if (!mounted) return;
     switch (pick) {
       case 'change':
+        if (x.kind == 'custom') {
+          if (made != null) await _editCustom(made, x);
+          return;
+        }
         await (bank ? _edit(x) : _editThing(x.kind, x));
       case 'show':
         await _reveal(x);
@@ -299,7 +388,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
   Future<void> _reveal(SavedObject x) async {
     try {
       final n = await _api.reveal(x.id);
-      if (mounted) setState(() => _shown[x.id] = n);
+      if (!mounted) return;
+      final made = _kindOf(x);
+      if (made != null) {
+        await showSavedValues(context, made, x, n.values);
+        return;
+      }
+      setState(() => _shown[x.id] = n.number);
     } on PasskeyCancelled {
       return;
     } on Object catch (e) {
@@ -338,9 +433,14 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final every = _list;
-    final held = [for (final k in savedKinds.keys) if (every?.any((x) => x.kind == k) ?? false) k];
+    final made = _kinds?.kinds ?? const <SavedKind>[];
+    final held = [
+      for (final k in savedKinds.keys) if (every?.any((x) => x.kind == k) ?? false) k,
+      for (final k in made) if (every?.any((x) => x.kindId == k.id) ?? false) 'k:${k.id}',
+    ];
+    String heldName(String k) => k.startsWith('k:') ? made.firstWhere((m) => 'k:${m.id}' == k).name : savedKinds[k]!.many;
     final kind = held.contains(_kind) ? _kind : '';
-    final list = every == null ? null : [for (final x in every) if (kind.isEmpty || x.kind == kind) x];
+    final list = every == null ? null : [for (final x in every) if (kind.isEmpty || (kind.startsWith('k:') ? 'k:${x.kindId}' == kind : x.kind == kind)) x];
     final p = _provider;
     final full = every != null && every.length >= _limit;
     final connect = p != null && p.connected == null && p.owner;
@@ -387,13 +487,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
           TkChips<String>(
             label: 'Kinds',
             padding: EdgeInsets.zero,
-            chips: [('', 'All'), for (final k in held) (k, savedKinds[k]!.many)],
+            chips: [('', 'All'), for (final k in held) (k, heldName(k))],
             on: kind,
             onPick: (k) => setState(() => _kind = k),
           ),
         if (list != null && (list.isNotEmpty || (_manage && !full)))
           TkSection(
-            title: list.isEmpty ? null : savedKinds[kind.isNotEmpty ? kind : (held.length == 1 ? held.first : '')]?.many ?? 'Everything',
+            title: list.isEmpty ? null : (kind.isNotEmpty ? heldName(kind) : (held.length == 1 ? heldName(held.first) : 'Everything')),
             inset: 56,
             children: [
               for (final x in list)
@@ -406,14 +506,32 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
                     title: x.title,
                     // A bank and its number kept together on one line.
                     sub: x.hint.isEmpty ? '@${x.name}' : '@${x.name} · ${(shown != null ? '${savedShortHint(x)} $shown' : x.hint).replaceAll(' ', '\u00a0')}',
-                    icon: savedKinds[x.kind]?.icon ?? 'b-note',
-                    square: !bank ? look.teal : (c.checked ? look.lime : look.orange),
+                    icon: x.kind == 'custom' ? 'b-box' : (savedKinds[x.kind]?.icon ?? 'b-note'),
+                    square: x.kind == 'custom' ? look.violet : (!bank ? look.teal : (c.checked ? look.lime : look.orange)),
                     trailing: bank ? CardPill(c.checked ? 'Checked' : 'Not checked', c.checked ? CardTone.lime : CardTone.warn) : null,
                     semanticsLabel: bank ? '${x.title}, @${x.name}, ${x.hint}. ${c.words}' : '${x.title}, @${x.name}, ${x.hint}',
                     onTap: x.toChange ? () => _row(x) : null,
                   );
                 }(),
               if (_manage && !full) TkListRow(title: 'Save something', icon: 'b-plus', square: look.teal, onTap: _add),
+            ],
+          ),
+        // Kinds the owner made (saved objects S1, part 5).
+        if (_kinds != null && (made.isNotEmpty || _manage))
+          TkSection(
+            title: widget.mine ? 'Your own kinds' : 'The business’s own kinds',
+            inset: 56,
+            children: [
+              for (final k in made)
+                TkListRow(
+                  key: ValueKey('kind ${k.id}'),
+                  title: k.name,
+                  sub: '${k.fields.length} ${k.fields.length == 1 ? 'field' : 'fields'} · ${k.count} saved',
+                  icon: 'b-box',
+                  square: look.violet,
+                  onTap: _manage ? () => _kindRow(k) : null,
+                ),
+              if (_manage && made.length < (_kinds?.limit ?? 40)) TkListRow(title: 'Make a kind', sub: 'A car, a generator, a tenant: with the fields you need', icon: 'b-plus', square: look.violet, onTap: _editKind),
             ],
           ),
         if (p?.connected != null) SettingsNote('Names are checked with the bank through ${p!.connected!.wallet ? 'your Taskiem wallet' : p.connected!.name}.'),

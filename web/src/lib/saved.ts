@@ -182,7 +182,7 @@ export function shownValue(f: KindField, v: string): string {
  * required field filled (a sensitive one kept as it was counts). */
 export function valuesProblem(fields: KindField[], v: Record<string, string>, had: Record<string, string> = {}): string | null {
   for (const f of fields) {
-    if (f.required && !(v[f.key ?? ""] ?? "").trim() && !had[f.key ?? ""]) return `Give it ${f.label.charAt(0).toLowerCase()}${f.label.slice(1)}.`;
+    if (f.required && !(v[f.key ?? ""] ?? "").trim() && !had[f.key ?? ""]) return `${f.label} is needed.`;
   }
   return null;
 }

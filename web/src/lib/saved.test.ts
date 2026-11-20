@@ -145,7 +145,7 @@ describe("kinds the owner makes", () => {
     expect(shownValue(fields[3]!, "••3456")).toBe("••3456");
   });
   it("asks for each required field, a sensitive one kept counting", () => {
-    expect(valuesProblem(fields, { plate_number: "" })).toBe("Give it plate number.");
+    expect(valuesProblem(fields, { plate_number: "" })).toBe("Plate number is needed.");
     expect(valuesProblem(fields, { plate_number: "LND 1", chassis_number: "" }, { chassis_number: "••3456" })).toBeNull();
   });
   it("checks a kind before it is sent", () => {
