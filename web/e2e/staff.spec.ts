@@ -10,7 +10,7 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true });
 
 const H = { "X-Taskiem-Request": "1" };
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 
 function sql(text: string): string {
   const base = process.env.TASKIEM_TEST_DATABASE_URL;

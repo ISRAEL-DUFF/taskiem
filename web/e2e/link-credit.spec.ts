@@ -9,7 +9,7 @@ import { axe, describe } from "./a11y";
 test.use({ bypassCSP: true, viewport: { width: 390, height: 844 } });
 
 const H = { "X-Taskiem-Request": "1" };
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 
 async function signUp(page: Page, tenant: string) {
   const r = await page.request.post("/v1/signup", {

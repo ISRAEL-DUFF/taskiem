@@ -35,7 +35,7 @@ test("two businesses find each other and link", async ({ browser }) => {
   // the other two-business tests, which have the long timeout too.
   test.setTimeout(180_000);
   // Letters, not digits: a search with six digits in a row is never run.
-  const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+  const stamp = String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
   const dangoteName = `Dangote Depot ${stamp}`;
   const dangote = await (await browser.newContext()).newPage();
   await signUp(dangote, dangoteName);
@@ -108,7 +108,7 @@ test("two businesses find each other and link", async ({ browser }) => {
 });
 
 test("a link code opens a request to a business that is not found by search", async ({ browser }) => {
-  const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+  const stamp = String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
   const cherryName = `Cherry Blocks ${stamp}`;
   const cherry = await (await browser.newContext()).newPage();
   await signUp(cherry, cherryName);
