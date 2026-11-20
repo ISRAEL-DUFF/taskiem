@@ -27,6 +27,8 @@ export interface SavedThing {
   kind_name?: string;
   /** A made-up kind's values by field key, each sensitive one masked. */
   values?: Record<string, string>;
+  /** A made-up kind's file fields: each file's name, type and size. */
+  files?: Record<string, FileMeta>;
   hint: string;
   details: SavedDetails;
   check: SavedCheck;
@@ -37,9 +39,9 @@ export interface SavedThing {
 
 /** The kinds Taskiem knows (saved-objects §4.1), in the order the page
  * lists them. */
-export type SavedKind = "bank_account" | "person" | "place" | "text" | "provider_account";
+export type SavedKind = "bank_account" | "person" | "place" | "text" | "provider_account" | "file";
 
-export const SAVED_KINDS: SavedKind[] = ["bank_account", "person", "place", "text", "provider_account"];
+export const SAVED_KINDS: SavedKind[] = ["bank_account", "person", "place", "text", "provider_account", "file"];
 
 /** Each kind's fields that are not sensitive (a bank account's number only
  * masked). */
@@ -61,7 +63,31 @@ export interface SavedDetails {
   provider?: string;
   number?: string;
   name_on_it?: string;
+  /** A file's: its id, name, type and size (GET …/saved/{id}/file). */
+  file?: string;
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
 }
+
+/** A saved file as lists name it. */
+export interface FileMeta {
+  file: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
+/** A size as people read it: 240 KB, 1.2 MB. */
+export function sizeWords(n: number): string {
+  if (n >= 1 << 20) return `${(n / (1 << 20)).toFixed(1)} MB`;
+  if (n >= 1 << 10) return `${Math.round(n / (1 << 10))} KB`;
+  return `${n} bytes`;
+}
+
+/** Where a saved thing's file is opened: its own, or a field's. */
+export const savedFileURL = (owner: "mine" | "business", id: string, field?: string) =>
+  `${owner === "mine" ? "/v1/me/saved" : "/v1/saved"}/${encodeURIComponent(id)}/file${field ? `?field=${encodeURIComponent(field)}` : ""}`;
 
 export type ProviderType = "electricity" | "tv" | "phone" | "internet" | "water" | "school" | "other";
 
@@ -84,6 +110,7 @@ export const KIND_WORDS: Record<SavedKind, { many: string; one: string; icon: st
   person: { many: "People", one: "a person", icon: "members" },
   place: { many: "Places", one: "a place", icon: "place" },
   text: { many: "Texts", one: "a text", icon: "note" },
+  file: { many: "Files", one: "a photo or document", icon: "file" },
   provider_account: { many: "Bills", one: "an account with a provider", icon: "invoices" },
 };
 
@@ -103,6 +130,8 @@ export const KIND_FIELDS: Record<Exclude<SavedKind, "bank_account">, { key: keyo
     { key: "phone", label: "Phone for the rider", hint: "Optional." },
   ],
   text: [{ key: "body", label: "The text", hint: "Up to 4,000 characters. It goes into your message to change before sending.", need: "Write the text.", long: true }],
+  // A file has its own sheet (FileSheet): the file itself, then a title.
+  file: [],
   provider_account: [
     { key: "provider", label: "Provider", hint: "Such as Ikeja Electric, DSTV or MTN.", need: "Give the provider's name, like Ikeja Electric or DSTV." },
     { key: "number", label: "Number with them", hint: "A meter, smartcard, phone or student number.", need: "Give the number you have with them." },
@@ -121,7 +150,7 @@ export function detailsProblem(kind: Exclude<SavedKind, "bank_account">, d: Save
 }
 
 /** A field of a kind the owner makes (saved objects S1, part 5). */
-export type FieldType = "text" | "number" | "money" | "date" | "phone" | "email" | "choice";
+export type FieldType = "text" | "number" | "money" | "date" | "phone" | "email" | "choice" | "place" | "bank_account" | "file";
 
 export interface KindField {
   /** Made from the label once by the server, then kept. */
@@ -159,6 +188,9 @@ export const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "phone", label: "A phone" },
   { value: "email", label: "An email" },
   { value: "choice", label: "A choice from a list" },
+  { value: "place", label: "A place (an address)" },
+  { value: "bank_account", label: "A bank account" },
+  { value: "file", label: "A photo or document" },
 ];
 
 /** The kinds a person's own or a business's are made at. */
@@ -360,6 +392,7 @@ export function savedSuggestions(mine: SavedThing[], business: SavedThing[], tex
     savedKind: x.kind,
     savedOwner: x.owner,
     savedSensitive: savedSensitive(x),
+    savedFile: x.kind === "file" && x.details.file ? { name: x.details.file_name ?? x.name, type: x.details.file_type ?? "" } : undefined,
     body: x.kind === "text" ? (x.details.body ?? "") : undefined,
   }));
 }

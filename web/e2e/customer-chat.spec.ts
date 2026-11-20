@@ -172,6 +172,13 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await expect(pane.getByText("Customer in the app")).toBeVisible({ timeout: 20_000 });
   await expect(biz.getByTestId("in-the-app")).toBeVisible();
   await expect(pane.getByTestId("customer-note")).toHaveCount(0);
+  // Save as… on the customer's words: their text, to change before saving.
+  const asked = pane.getByTestId("customer-message").filter({ hasText: "Is the jollof ready?" });
+  await asked.hover();
+  await asked.locator(".bubble-chevron").click({ force: true });
+  await biz.getByTestId("chat-more").getByRole("button", { name: "Save as…", exact: true }).click();
+  await expect(biz.getByTestId("saved-thing-form").getByLabel("The text")).toHaveValue("Is the jollof ready?");
+  await biz.getByTestId("saved-thing-form").getByRole("button", { name: "Cancel" }).click();
   await pane.getByLabel("Reply to Tolu Bello").fill("Yes, come at 4");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Yes, come at 4" })).toBeVisible();
@@ -569,4 +576,78 @@ test("a link that no longer works, and a business not taking chats, pass axe in 
     await expect(page.getByText("Ikeja · Closed now")).toBeVisible();
     await check(page, "not taking chats", width);
   }
+});
+
+// Saved things in a person's chat with a business (saved objects S1): Save
+// as… on the business's words (an account read from them) and on its
+// Menu.pdf (kept as a file of their own); a saved photo picked with "@"
+// attached to the message as itself.
+test("a person's chat: Save as… on words and on a file, and a saved photo attached from @", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 800 });
+  const w = world();
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  const now = new Date().toISOString();
+  const logo = {
+    id: "f1", owner: "mine", name: "logo", title: "Our logo", kind: "file", hint: "Photo · 1 KB",
+    details: { file: "0192e2e0-0000-7000-8000-0000000000f1", file_name: "logo.png", file_type: "image/png", file_size: 900 },
+    check: { state: "none", account_name: null, via: null, at: null, problem: null }, to_change: true, created_at: now, updated_at: now,
+  };
+  const posted: unknown[] = [];
+  await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
+  await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+  await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
+  await page.route(/\/v1\/me\/(chats|conversations)(\/|$|\?)/, w.handle);
+  await page.route(/\/v1\/me\/saved(\?|$)/, (r) => {
+    if (r.request().method() === "POST") {
+      posted.push(r.request().postDataJSON());
+      return r.fulfill(json({ saved: logo }, 201));
+    }
+    return r.fulfill(json({ saved: [logo], limit: 500 }));
+  });
+  await page.route(/\/v1\/me\/saved-kinds(\?|$)/, (r) => r.fulfill(json({ kinds: [], starters: [], limit: 40, to_change: true })));
+  await page.route("**/v1/me/banks", (r) => r.fulfill(json({ banks: [{ code: "", name: "Guaranty Trust Bank" }], from: "" })));
+  await page.route("**/v1/me/saved/read", (r) =>
+    r.fulfill(json({ kind: "bank_account", title: "Ngozi", details: { bank_name: "Guaranty Trust Bank", account_number: "0123456789" } })),
+  );
+  await page.route("**/v1/me/saved/uploads", (r) => r.fulfill(json({ upload: { file: "0192e2e0-0000-7000-8000-0000000000f2", name: "Menu.pdf", type: "application/pdf", size: 120_000 } }, 201)));
+  await page.route("**/v1/me/saved/f1/file", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
+
+  await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [], next: null, waiting_count: 0 })));
+  await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
+  await page.goto("/you");
+  await page.getByTestId("person-chat").click();
+  await expect(page.getByTestId("person-message").filter({ hasText: "We have jollof" })).toBeVisible();
+  const menuOf = async (text: string, entry = "Save as…") => {
+    const bubble = page.getByTestId("person-message").filter({ hasText: text }).last();
+    await bubble.hover();
+    await bubble.locator(".bubble-chevron").click({ force: true });
+    await page.getByTestId("chat-more").getByRole("button", { name: entry, exact: true }).click();
+  };
+
+  // The business's words: an account read from them.
+  await menuOf("Or pay to 0123456789");
+  const form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-number-input")).toHaveValue("0123456789");
+  await expect(form.getByLabel("Title")).toHaveValue("Ngozi");
+  await form.getByRole("button", { name: "Cancel" }).click();
+
+  // Its menu: kept as a file of the person's own.
+  await menuOf("Menu", "Save the file as…");
+  const file = page.getByTestId("saved-file-form");
+  await expect(file.getByTestId("saved-file-pick")).toContainText("Menu.pdf · 117 KB");
+  await expect(file.getByLabel("Title")).toHaveValue("Menu");
+  await file.getByLabel("Name to call it up by").fill("menu");
+  await check(page, "saving a file from a chat", 390);
+  await file.getByTestId("saved-file-save").click();
+  await expect(file).toHaveCount(0);
+  expect(posted.at(-1)).toEqual({ name: "menu", title: "Menu", kind: "file", details: { note: "", file: "0192e2e0-0000-7000-8000-0000000000f2" } });
+
+  // A saved photo from "@": attached as itself, to send.
+  const box = page.getByLabel("Message Mama's Kitchen");
+  await box.click();
+  await box.pressSequentially("@log");
+  await page.getByTestId("mention-list").getByRole("button", { name: /logo/ }).click();
+  await expect(box).toHaveValue("");
+  await expect(page.getByText("logo.png")).toBeVisible();
 });

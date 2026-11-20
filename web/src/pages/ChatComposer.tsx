@@ -9,6 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
+import { getBlob } from "../api";
+import { savedFileURL } from "../lib/saved";
+import type { Suggestion } from "../lib/mentions";
 import { toast } from "../toast";
 import { insertAt } from "../lib/emoji";
 import { isHeic, preparePhoto } from "../lib/photo";
@@ -165,7 +168,16 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     text,
     setText,
     textBox,
-    o.sources,
+    // A saved file picked with "@" is attached as itself, as if chosen
+    // (saved objects S1): the chat's own checks and sending.
+    {
+      ...o.sources,
+      attachSaved: (s: Suggestion) =>
+        void getBlob(savedFileURL(s.savedOwner ?? "mine", s.id)).then(
+          (b) => void choose(new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type })),
+          (e: unknown) => setFileError(e),
+        ),
+    },
     o.grouped && {
       ...o.grouped,
       onCategory: (name) => onCategory.current(name),

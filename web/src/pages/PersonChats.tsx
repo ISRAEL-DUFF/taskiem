@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
-import { useSaveAs } from "./SaveAs";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
@@ -40,7 +40,7 @@ import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, yo
 import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -730,6 +730,26 @@ export function PersonChatPage() {
               testid="person-message"
               className={`${card ? "card-bubble" : ""}${m.offer ? " offer-bubble" : ""}`.trim()}
               what={(card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
+              menu={(() => {
+                // Copy and Save as… (saved objects S1): the words, or a photo
+                // or document as a file thing.
+                const words = !card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) ? m.body : "";
+                const file = m.attachment && m.attachment.kind !== "voice" && !m.local ? m.attachment : undefined;
+                if (m.local || (!words && !file)) return undefined;
+                return (close: () => void) => ({
+                  actions: (
+                    <>
+                      {words && <CopyItem text={words} />}
+                      {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
+                      {file && (
+                        <PopItem icon="note" onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
+                          {words ? "Save the file as…" : "Save as…"}
+                        </PopItem>
+                      )}
+                    </>
+                  ),
+                });
+              })()}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>

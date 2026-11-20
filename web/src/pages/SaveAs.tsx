@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { get, post } from "../api";
+import { get, getBlob, post } from "../api";
 import { useAuth } from "../auth";
 import { Items, Modal, Row } from "../ui";
-import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type KindList, type MadeKind, type SavedCard, type SavedDetails, type SavedKind } from "../lib/saved";
+import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type FileMeta, type KindList, type MadeKind, type SavedCard, type SavedDetails, type SavedKind } from "../lib/saved";
 import { PopItem } from "./BubbleShell";
 import { AccountSheet, ThingSheet } from "./Saved";
-import { CustomSheet } from "./SavedKinds";
+import { CustomSheet, FileSheet, uploadSaved } from "./SavedKinds";
 
 // Saving from a message, and from the picker (saved objects S1, part 4;
 // saved-objects §9): Save as… on a message reads its words (POST
@@ -36,6 +36,14 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
   // The owner's own kinds, read when Save "@mum"… asks what kind.
   const [made, setMade] = useState<MadeKind[]>([]);
   const [custom, setCustom] = useState<{ kind: MadeKind; name: string }>();
+  const [fileStart, setFileStart] = useState<FileMeta>();
+
+  /** Save as… on a photo or document in a chat: kept as a file thing,
+   * checked again as it is uploaded. */
+  const fromFile = (url: string, name: string, type: string) =>
+    void getBlob(url)
+      .then((b) => uploadSaved(mine, new File([b], name, { type: type || b.type })))
+      .then(setFileStart, (e: unknown) => setSaid(e instanceof Error ? e.message : "That file could not be saved."));
 
   /** Save as… on a message: its words read, the sheet opened. */
   const fromWords = (text: string) =>
@@ -112,6 +120,17 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
           }}
         />
       )}
+      {fileStart && (
+        <FileSheet
+          mine={mine}
+          start={fileStart}
+          onClose={() => setFileStart(undefined)}
+          onSaved={() => {
+            setFileStart(undefined);
+            setSaid("Saved");
+          }}
+        />
+      )}
       {said && (
         <p className="sr-only" role="status" data-testid="save-as-done">
           {said}
@@ -119,14 +138,14 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
       )}
     </>
   );
-  return { fromWords, named, node };
+  return { fromWords, fromFile, named, node };
 }
 
 /** The message menu's Save as…: its words to save. */
-export function SaveAsItem({ text, onSave, close }: { text: string; onSave: (text: string) => void; close: () => void }) {
+export function SaveAsItem({ text, onSave, close, label = "Save as…" }: { text: string; onSave: (text: string) => void; close: () => void; label?: string }) {
   return (
     <PopItem icon="note" onClick={() => (close(), onSave(text))}>
-      Save as…
+      {label}
     </PopItem>
   );
 }

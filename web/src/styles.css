@@ -2467,3 +2467,8 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 @media (min-width: 560px) { .kind-field-top { grid-template-columns: 2fr 1fr; } }
 .kind-field-flags { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 8px; font-size: 14px; color: var(--text); }
 .kind-field-flags label { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; }
+/* A made-up kind's bank account field: the bank, then its number; a file
+   chosen: the button, then what it is. */
+.bank-field { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 480px) { .bank-field { grid-template-columns: 3fr 2fr; } }
+.file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

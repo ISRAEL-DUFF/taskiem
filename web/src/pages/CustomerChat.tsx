@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, del, get, post, put, upload } from "../api";
+import { ApiError, del, get, getBlob, post, put, upload } from "../api";
+import { savedFileURL } from "../lib/saved";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { naira } from "../lib/billing";
@@ -28,7 +29,7 @@ import { useAutoGrow } from "../lib/useAutoGrow";
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -40,7 +41,7 @@ import { CustomerOrders } from "./CustomerOrders";
 import { MentionList, useMentions } from "./Mentions";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
-import { useSaveAs } from "./SaveAs";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
@@ -441,7 +442,14 @@ export function CustomerPane({
       }
     })();
   };
-  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) });
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
+    // A saved file: sent as itself, in the app (saved objects S1).
+    attachSaved: (s) =>
+      void getBlob(savedFileURL(s.savedOwner ?? "business", s.id)).then(
+        (b) => send({ file: new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type }) }),
+        (e: unknown) => setSendError(e),
+      ),
+  });
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
@@ -672,6 +680,29 @@ export function CustomerPane({
             testid="customer-message"
             className={m.card ? "card-bubble" : m.kind === "media" && !m.attachment ? "media-note" : ""}
             what={(m.card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
+            menu={(() => {
+              // Copy and Save as… (saved objects S1): the words, or a photo or
+              // document as a file thing.
+              const words = !m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && m.kind !== "media" ? m.body : "";
+              const file = m.attachment && m.attachment.kind !== "voice" && !m.local ? m.attachment : undefined;
+              if (m.local || (!words && !file)) return undefined;
+              return (close: () => void) => ({
+                actions: (
+                  <>
+                    {words && <CopyItem text={words} />}
+                    {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
+                    {file && (
+                      <PopItem
+                        icon="note"
+                        onClick={() => (close(), saveAs.fromFile(`/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`, file.name ?? "File", file.type))}
+                      >
+                        {words ? "Save the file as…" : "Save as…"}
+                      </PopItem>
+                    )}
+                  </>
+                ),
+              });
+            })()}
             after={
               <span className={m.card || m.attachment ? "stamp" : "stamp inline"}>
                 {m.mine && m.sent_as === "template" && (

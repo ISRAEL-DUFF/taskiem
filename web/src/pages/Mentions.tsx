@@ -63,6 +63,9 @@ export function useMentions(
     /** A saved thing other than a text, picked where the chat shares it as
      * a card: what was typed for it goes, and the chat sends the card. */
     shareSaved?: (s: Suggestion) => void;
+    /** A saved file picked: attached to the message as itself (saved
+     * objects S1), what was typed for it taken out of the box. */
+    attachSaved?: (s: Suggestion) => void;
     /** Save "mum"… when nothing saved has the name typed (saved objects
      * S1, part 4): the name, to save something as. */
     saveNamed?: (name: string) => void;
@@ -181,6 +184,12 @@ export function useMentions(
       return;
     }
     const end = Math.max(caret, q.start + 1 + q.query.length);
+    if (s.kind === "saved" && s.savedFile && sources.attachSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.attachSaved(s);
+      return;
+    }
     if (s.kind === "save-new") {
       setText(text.slice(0, q.start) + text.slice(end));
       setQ(null);

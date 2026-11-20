@@ -44,6 +44,8 @@ export interface Suggestion {
   /** A saved thing that holds what is sensitive (saved.MakeCard's rule):
    * sharing it asks first. */
   savedSensitive?: boolean;
+  /** A saved file's name and type: picked, it is attached as itself. */
+  savedFile?: { name: string; type: string };
 }
 
 /** A mention as a message stores it. */

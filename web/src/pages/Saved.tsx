@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { assert } from "../passkeys";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
-import { CustomSheet, KindSheet } from "./SavedKinds";
+import { CustomSheet, FileSheet, KindSheet } from "./SavedKinds";
 import {
   BANK_SEARCH_FROM,
   bankFields,
@@ -27,6 +27,7 @@ import {
   providerLine,
   savedBase,
   savedKindsBase,
+  savedFileURL,
   savedSub,
   shownValue,
   type KindList,
@@ -257,6 +258,11 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
                     >
                       Change<span className="sr-only"> @{x.name}</span>
                     </button>
+                    {x.kind === "file" && (
+                      <a className="button small" href={savedFileURL(x.owner, x.id)} target="_blank" rel="noreferrer">
+                        Open<span className="sr-only"> @{x.name}</span>
+                      </a>
+                    )}
                     {hidden && !open && (
                       <button type="button" className="small" disabled={act.busy} onClick={() => reveal(x)}>
                         Show hidden<span className="sr-only"> of @{x.name}</span>
@@ -380,7 +386,18 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           }}
         />
       )}
-      {editing && editing !== "choose" && editing !== "bank_account" && (typeof editing !== "object" || editing.kind !== "bank_account") && (
+      {(editing === "file" || (typeof editing === "object" && editing.kind === "file")) && (
+        <FileSheet
+          mine={mine}
+          thing={typeof editing === "object" ? editing : undefined}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
+            list.reload();
+          }}
+        />
+      )}
+      {editing && editing !== "choose" && editing !== "bank_account" && editing !== "file" && (typeof editing !== "object" || (editing.kind !== "bank_account" && editing.kind !== "file")) && (
         <ThingSheet
           mine={mine}
           kind={typeof editing === "object" ? (editing.kind as Exclude<SavedKind, "bank_account">) : (editing as Exclude<SavedKind, "bank_account">)}
