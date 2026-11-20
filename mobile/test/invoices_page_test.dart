@@ -45,6 +45,20 @@ Map<String, dynamic> _invoice({String status = 'sent', bool disputed = false, St
   ],
 };
 
+Map<String, dynamic> _saved(String id, String owner, String kind, String name, String title, String hint, Map<String, dynamic> details) => {
+  'id': id,
+  'owner': owner,
+  'name': name,
+  'title': title,
+  'kind': kind,
+  'hint': hint,
+  'details': details,
+  'check': {'state': 'none', 'account_name': null, 'via': null, 'at': null, 'problem': null},
+  'to_change': true,
+  'created_at': '2026-11-20T10:00:00Z',
+  'updated_at': '2026-11-20T10:00:00Z',
+};
+
 void main() {
   setUpAll(loadFonts);
 
@@ -97,6 +111,7 @@ void main() {
     double height = 2400,
     bool voidFails = false,
     bool schools = false,
+    Map<String, List<Map<String, dynamic>>> saved = const {},
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = Size(390, height);
@@ -112,6 +127,7 @@ void main() {
           final p = req.url.path;
           final key = req.headers['idempotency-key'] ?? req.headers['Idempotency-Key'];
           if (req.method == 'GET') {
+            if (saved[p] case final list?) return ok({'saved': list, 'limit': 200, 'can_check': false});
             if (p == '/v1/schools/receipts') {
               sent.add('RECEIPTS ${req.url.query}');
               return ok({
@@ -319,6 +335,45 @@ void main() {
     await t.tap(find.bySemanticsLabel('One more item 1'));
     await t.pump();
     expect(find.bySemanticsLabel('Total ₦3,000'), findsOneWidget);
+  });
+
+  testWidgets('a new invoice: the customer from a saved person, the business’s or one’s own', (t) async {
+    await open(
+      t,
+      (c) => InvoiceEditorPage(auth: c.auth),
+      saved: {
+        '/v1/me/saved': [_saved('M1', 'mine', 'person', 'mum', 'Mum', '', {'email': 'mum@example.com'})],
+        '/v1/saved': [
+          _saved('B1', 'business', 'person', 'tolu', 'Tolu Bakare', '••0099', {'phone': '+2348031120099', 'email': 'tolu@example.com'}),
+          _saved('B2', 'business', 'place', 'shop', 'The shop', 'Yaba', {'line': '3 Herbert Macaulay Way'}),
+        ],
+      },
+    );
+    await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved people'), findsOneWidget);
+    expect(find.text('@tolu · ••0099 · The business’s'), findsOneWidget);
+    expect(find.text('The shop'), findsNothing, reason: 'a place is not a person');
+    await t.tap(find.text('Tolu Bakare'));
+    await t.pumpAndSettle();
+    expect(find.text('Tolu Bakare'), findsOneWidget);
+    expect(find.text('+2348031120099'), findsOneWidget, reason: 'the details in full, not the masked hint');
+    expect(find.text('tolu@example.com'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Mum'));
+    await t.pumpAndSettle();
+    expect(find.text('Mum'), findsOneWidget);
+    expect(find.text('+2348031120099'), findsOneWidget, reason: 'Mum has no phone: the one there stays');
+    expect(find.text('mum@example.com'), findsOneWidget);
+  });
+
+  testWidgets('a new invoice: nothing saved of the kind is said', (t) async {
+    await open(t, (c) => InvoiceEditorPage(auth: c.auth), saved: {'/v1/me/saved': [], '/v1/saved': []});
+    await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+    await t.pump();
+    expect(find.text('Nothing saved of this kind yet'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a new invoice for a linked business: no phone asked', (t) async {

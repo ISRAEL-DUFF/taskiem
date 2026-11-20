@@ -138,7 +138,8 @@ String? groupPhotoPath(Object? photo) => personPhotoPath(photo);
 // --- one of a few choices, in the app's look ---
 
 /// One of [choices] (value, words, a line under), the one on now ticked;
-/// null when put away.
+/// null when put away. With [icon], each row has that icon in place of a
+/// tick: things to take one of (a saved person), not a setting.
 Future<String?> pickOneOf(
   BuildContext context, {
   required String title,
@@ -146,10 +147,11 @@ Future<String?> pickOneOf(
   String? value,
   String? note,
   String? searchHint,
+  String? icon,
 }) => showTkSheet<String>(
   context,
   (context) => TkAppLook(
-    child: _PickOne(title: title, choices: choices, value: value, note: note, searchHint: searchHint),
+    child: _PickOne(title: title, choices: choices, value: value, note: note, searchHint: searchHint, icon: icon),
   ),
 );
 
@@ -174,12 +176,13 @@ bool choiceMatches(String words, String typed) {
 /// search box over them (for a long list, such as banks) that keeps the
 /// chosen one.
 class _PickOne extends StatefulWidget {
-  const _PickOne({required this.title, required this.choices, this.value, this.note, this.searchHint});
+  const _PickOne({required this.title, required this.choices, this.value, this.note, this.searchHint, this.icon});
   final String title;
   final List<(String, String, String)> choices;
   final String? value;
   final String? note;
   final String? searchHint;
+  final String? icon;
 
   @override
   State<_PickOne> createState() => _PickOneState();
@@ -223,7 +226,10 @@ class _PickOneState extends State<_PickOne> {
                     child: TkListRow(
                       title: words,
                       sub: sub,
-                      leading: TkCheckbox(checked: k == widget.value),
+                      leading: widget.icon == null ? TkCheckbox(checked: k == widget.value) : null,
+                      icon: widget.icon,
+                      square: widget.icon == null ? null : TkLook.of(context).teal,
+                      chevron: false,
                       onTap: () => Navigator.of(context).pop(k),
                     ),
                   ),

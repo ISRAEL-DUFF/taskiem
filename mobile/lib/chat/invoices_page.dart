@@ -29,6 +29,7 @@ import 'doc_thread.dart' show DocThread;
 import 'invoice_match.dart' show CustomerMatching, InvoiceMatchPage, groupSuggestions, suggestionsPath;
 import 'money_sheets.dart' show InvoiceActions, dateLabel, invoiceActions, invoicePath, invoiceStatus, owing;
 import 'product_form.dart' show SaveKey, formKey;
+import 'saved_fill.dart' show pickSaved;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
 import '../kit/mobile.dart';
@@ -1512,6 +1513,18 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
     });
   }
 
+  /// A saved person (saved objects S2): their name, and their phone and
+  /// email where they have them.
+  Future<void> _fromSaved() async {
+    final x = await pickSaved(context, widget.auth, kind: 'person', title: 'Saved people');
+    if (x == null || !mounted) return;
+    setState(() {
+      if (x.title.isNotEmpty) _name.text = x.title;
+      if ((x.details.phone ?? '').isNotEmpty) _phone.text = x.details.phone!;
+      if ((x.details.email ?? '').isNotEmpty) _email.text = x.details.email!;
+    });
+  }
+
   Widget _whoFace(TkTokens t, String name, bool on, VoidCallback tap) {
     final look = TkLook.of(context);
     final other = name == 'Someone else';
@@ -1603,6 +1616,8 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
                     child: Row(
                       children: [
                         Expanded(child: TkTextBox(controller: _name, max: 120)),
+                        const SizedBox(width: 8),
+                        TkSmallButton(label: 'Saved', semantics: 'Pick from your saved people', onPressed: _fromSaved),
                         const SizedBox(width: 8),
                         TkHeadButton(icon: 'b-people', label: 'Pick from your contacts', onCard: true, onTap: _fromContacts),
                       ],

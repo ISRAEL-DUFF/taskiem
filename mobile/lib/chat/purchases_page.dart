@@ -26,6 +26,7 @@ import 'bills_page.dart' show openBills;
 import 'book_sheet.dart' show whenLabel;
 import 'doc_thread.dart' show DocThread;
 import 'product_form.dart' show formKey;
+import 'saved_fill.dart' show pickSaved, placeLine;
 import 'purchase_view.dart' show answersDelivery, buyerSteps, sameName;
 import 'statement_page.dart' show openStatement;
 import 'stock_page.dart' show StockPage, feeInput, feeKobo;
@@ -1094,6 +1095,18 @@ class _SuppliersPageState extends State<SuppliersPage> {
     super.dispose();
   }
 
+  /// A saved place (saved objects S2): its line, area and landmark, and its
+  /// phone for the rider when it has one.
+  Future<void> _fromSaved() async {
+    final x = await pickSaved(context, _auth, kind: 'place', title: 'Saved places');
+    if (x == null || !mounted) return;
+    setState(() {
+      final line = placeLine(x.details);
+      if (line.isNotEmpty) _address.text = line;
+      if ((x.details.phone ?? '').isNotEmpty) _phone.text = x.details.phone!;
+    });
+  }
+
   Future<void> _load() async {
     final t = _auth.transport;
     await Future.wait([
@@ -1280,7 +1293,13 @@ class _SuppliersPageState extends State<SuppliersPage> {
               const SizedBox(height: 10),
               TkKitField(
                 label: 'Address',
-                child: TkTextBox(controller: _address, max: 300, hint: '12 Admiralty Way, Lekki'),
+                child: Row(
+                  children: [
+                    Expanded(child: TkTextBox(controller: _address, max: 300, hint: '12 Admiralty Way, Lekki')),
+                    const SizedBox(width: 8),
+                    TkSmallButton(label: 'Saved', semantics: 'Pick from your saved places', onPressed: _busy ? null : _fromSaved),
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               TkKitField(

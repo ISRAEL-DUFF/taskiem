@@ -16,6 +16,20 @@ import 'package:taskiem/theme/theme.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
+Map<String, dynamic> _saved(String id, String owner, String kind, String name, String title, String hint, Map<String, dynamic> details) => {
+  'id': id,
+  'owner': owner,
+  'name': name,
+  'title': title,
+  'kind': kind,
+  'hint': hint,
+  'details': details,
+  'check': {'state': 'none', 'account_name': null, 'via': null, 'at': null, 'problem': null},
+  'to_change': true,
+  'created_at': '2026-11-20T10:00:00Z',
+  'updated_at': '2026-11-20T10:00:00Z',
+};
+
 Map<String, dynamic> _purchase({
   String id = 'P1',
   String status = 'sent',
@@ -77,6 +91,8 @@ void main() {
     List<Map<String, dynamic>>? list,
     bool keeps = true,
     bool linksFail = false,
+    Map<String, List<Map<String, dynamic>>> saved = const {},
+    bool savedFails = false,
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
@@ -114,6 +130,8 @@ void main() {
                 ],
               }),
               '/v1/stock/deliver-to' => ok({'address': '', 'phone': ''}),
+              '/v1/me/saved' when savedFails => http.Response(jsonEncode({'error': 'Saved things cannot be read now.'}), 500, headers: {'content-type': 'application/json'}),
+              _ when saved.containsKey(p) => ok({'saved': saved[p], 'limit': 200, 'can_check': false}),
               '/v1/links' when linksFail => http.Response(jsonEncode({'error': 'Something broke.'}), 500, headers: {'content-type': 'application/json'}),
               '/v1/links' => ok({
                 'links': [
@@ -261,6 +279,47 @@ void main() {
     await t.tap(find.bySemanticsLabel('Save the limit'));
     await settle(t);
     expect(sent.last, 'PUT /v1/stock/settings {"purchase_limit_kobo":null}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: a saved place fills it', (t) async {
+    final sent = await open(
+      t,
+      (c) => SuppliersPage(auth: c.auth),
+      saved: {
+        '/v1/me/saved': [_saved('M1', 'mine', 'place', 'home', 'Home', 'Yaba', {'line': '3 Herbert Macaulay Way', 'area': 'Yaba'})],
+        '/v1/saved': [
+          _saved('B1', 'business', 'place', 'warehouse', 'Warehouse', 'Lekki', {'line': '12 Admiralty Way', 'area': 'Lekki', 'landmark': 'by the filling station', 'phone': '+2348031120099'}),
+          _saved('B2', 'business', 'person', 'tolu', 'Tolu', '••0099', {'phone': '+2348031120099'}),
+        ],
+      },
+    );
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved places'), findsOneWidget);
+    expect(find.text('Tolu'), findsNothing, reason: 'a person is not a place');
+    await t.tap(find.text('Warehouse'));
+    await t.pumpAndSettle();
+    expect(find.text('12 Admiralty Way, Lekki (by the filling station)'), findsOneWidget);
+    expect(find.text('+2348031120099'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Home'));
+    await t.pumpAndSettle();
+    expect(find.text('3 Herbert Macaulay Way, Yaba'), findsOneWidget);
+    expect(find.text('+2348031120099'), findsOneWidget, reason: 'no phone saved: the one there stays');
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/stock/deliver-to {"address":"3 Herbert Macaulay Way, Yaba","phone":"+2348031120099"}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: a list that cannot be read is said', (t) async {
+    await open(t, (c) => SuppliersPage(auth: c.auth), savedFails: true);
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pump();
+    expect(find.text('Saved places'), findsNothing);
+    expect(find.textContaining('Saved things cannot be read now.'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
 
