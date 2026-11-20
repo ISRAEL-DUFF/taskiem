@@ -359,8 +359,11 @@ The other pages from Settings:
   no payments account shows its owner the step to connect one first: a
   callout, then Open a Taskiem wallet (a sheet: the email and the
   director's BVN) and I already have an account (the web's Connections).
-  A row's actions come from `pickAction`; changing the account or showing
-  its number asks for a passkey.
+  A row's actions come from `pickAction`, with why its name is not checked
+  when that waits for a change; changing the account or showing its number
+  asks for a passkey. The bank is chosen with `pickOneOf` and a search box
+  over a long list; with no payments account the save sheet says the name
+  is not checked yet.
 - **Invoice settings:** the next invoice's number large, from the prefix
   and the next number. Then Getting paid (the connection, who pays the
   fee, part payments and automatic matching) and Credit terms.

@@ -3,9 +3,9 @@
 // one with a passkey, the step to open a Taskiem wallet, and a person's own
 // number shown with a passkey.
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/app/passkey.dart';
+import 'package:taskiem/chat/groups.dart' show choiceMatches;
 import 'package:taskiem/chat/saved_accounts.dart';
 import 'package:taskiem/kit/sheet.dart' show TkKitField;
 import 'package:taskiem/main.dart';
@@ -16,7 +16,7 @@ import 'my_chats_test.dart' show Api, answer, chat, conversation, drain, phone, 
 import 'passkey_test.dart' show FakePasskeys;
 import 'support.dart' show loadFonts;
 
-Map<String, dynamic> saved(String id, String name, String title, String hint, {String owner = 'business', String? checkedName}) => {
+Map<String, dynamic> saved(String id, String name, String title, String hint, {String owner = 'business', String? checkedName, String? problem}) => {
   'id': id,
   'owner': owner,
   'name': name,
@@ -24,7 +24,13 @@ Map<String, dynamic> saved(String id, String name, String title, String hint, {S
   'kind': 'bank_account',
   'hint': hint,
   'details': {'bank_name': 'Guaranty Trust Bank', 'bank_code': '000013', 'code_from': 'iswallet/taskiem', 'account_number': '••${hint.substring(hint.length - 4)}'},
-  'check': {'state': checkedName == null ? 'unchecked' : 'checked', 'account_name': checkedName, 'via': checkedName == null ? null : 'iswallet/taskiem', 'at': checkedName == null ? null : '2026-11-20T10:00:00Z'},
+  'check': {
+    'state': checkedName == null ? 'unchecked' : 'checked',
+    'account_name': checkedName,
+    'via': checkedName == null ? null : 'iswallet/taskiem',
+    'at': checkedName == null ? null : '2026-11-20T10:00:00Z',
+    'problem': problem,
+  },
   'to_change': true,
   'created_at': '2026-11-20T10:00:00Z',
   'updated_at': '2026-11-20T10:00:00Z',
@@ -37,12 +43,22 @@ const _wallet = {
 
 Api business({Map<String, dynamic> provider = _wallet}) {
   final api = conversation(c: chat());
-  final list = [saved('s1', 'bayo', 'Bayo (rice)', 'GTBank ••6789', checkedName: 'BAYO ADEWALE'), saved('s2', 'landlord', 'Landlord', 'Zenith Bank ••1111')];
+  final list = [
+    saved('s1', 'bayo', 'Bayo (rice)', 'GTBank ••6789', checkedName: 'BAYO ADEWALE'),
+    saved('s2', 'landlord', 'Landlord', 'Zenith Bank ••1111', problem: 'Your Taskiem wallet does not list Zenith Bank by that name: choose the bank again from its list to check the name.'),
+  ];
   api.routes['GET /v1/saved'] = (_) => {'saved': list, 'limit': 2000, 'can_check': false};
   api.routes['GET /v1/saved/provider'] = (_) => provider;
   api.routes['GET /v1/banks'] = (_) => {
     'banks': [
+      {'code': '000014', 'name': 'Access Bank'},
+      {'code': '000009', 'name': 'Citibank Nigeria'},
+      {'code': '000010', 'name': 'Ecobank Nigeria'},
+      {'code': '000007', 'name': 'Fidelity Bank'},
+      {'code': '000016', 'name': 'First Bank of Nigeria'},
+      {'code': '000003', 'name': 'First City Monument Bank'},
       {'code': '000013', 'name': 'Guaranty Trust Bank'},
+      {'code': '090267', 'name': 'Kuda Microfinance Bank'},
       {'code': '000015', 'name': 'Zenith Bank'},
     ],
     'from': 'iswallet/taskiem',
@@ -64,6 +80,15 @@ Finder field(String label) => find.ancestor(of: find.text(label), matching: find
 void main() {
   setUpAll(loadFonts);
 
+  test('a search finds choices by the start of their words', () {
+    expect(choiceMatches('Guaranty Trust Bank', 'guar'), isTrue);
+    expect(choiceMatches('First City Monument Bank', 'first city'), isTrue);
+    expect(choiceMatches('GTBank', 'gtb'), isTrue);
+    expect(choiceMatches('Kuda Microfinance Bank', 'fi'), isFalse);
+    expect(choiceMatches('Zenith Bank', ''), isTrue);
+    expect(choiceMatches('Zenith Bank', 'acc'), isFalse);
+  });
+
   testWidgets('a business’s saved accounts, and saving one with the bank’s name shown first', (t) async {
     phone(t);
     final api = business();
@@ -74,6 +99,11 @@ void main() {
     expect(find.text('Not checked'), findsOneWidget);
     expect(find.text('Names are checked with the bank through your Taskiem wallet.'), findsOneWidget);
     expect(find.text('Check names with the bank'), findsNothing);
+    // Why the landlord's name is not checked, on its actions.
+    await press(t, find.text('Landlord'));
+    expect(find.textContaining('does not list Zenith Bank by that name'), findsOneWidget);
+    await t.tapAt(const Offset(5, 5));
+    await settle(t);
     await looks(t, 'saved');
 
     await press(t, find.text('Save an account'));
@@ -81,7 +111,12 @@ void main() {
     expect(find.text('Give it a short name to call it up by, like @mum or @bayo.'), findsOneWidget);
     await typeIn(t, field('Name to call it up by'), '@Ada Obi');
     await typeIn(t, field('Title'), 'Ada Obi Stores');
+    // The wallet lists many banks: a search narrows them.
     await press(t, find.text('Choose the bank'));
+    expect(find.text('Zenith Bank'), findsOneWidget);
+    await typeIn(t, find.bySemanticsLabel('Find the bank: guaranty, kuda…').last, 'guar');
+    expect(find.text('Zenith Bank'), findsNothing);
+    expect(find.text('Access Bank'), findsNothing);
     await press(t, find.text('Guaranty Trust Bank').last);
     await typeIn(t, field('Account number'), '0123454321');
     await settle(t);
@@ -152,6 +187,11 @@ void main() {
     await settle(t);
     expect(find.text('Check names with the bank'), findsOneWidget);
     expect(find.text('Paystack, Anchor'), findsOneWidget);
+    // The save form says the name is not checked until one is connected.
+    await press(t, find.text('Save an account'));
+    expect(find.text('The bank’s name is not checked yet'), findsOneWidget);
+    await t.tapAt(const Offset(5, 5));
+    await settle(t);
     await press(t, find.text('Open a Taskiem wallet'));
     await press(t, find.text('Open my wallet'));
     expect(find.text('Give your business email and the director’s 11-digit BVN.'), findsOneWidget);

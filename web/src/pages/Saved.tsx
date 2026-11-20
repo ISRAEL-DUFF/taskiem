@@ -7,12 +7,14 @@ import { assert } from "../passkeys";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
 import {
+  BANK_SEARCH_FROM,
   bankFields,
   bankValue,
   bankValueOf,
   checkLine,
   cleanName,
   cleanNumber,
+  filterBanks,
   nameProblem,
   numberProblem,
   providerLine,
@@ -206,6 +208,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
       {editing && (
         <AccountSheet
           mine={mine}
+          provider={mine ? undefined : provider}
           checks={!mine && !!provider?.connected}
           thing={editing === "new" ? undefined : editing}
           onClose={() => setEditing(undefined)}
@@ -234,12 +237,14 @@ interface Form {
  * before saving. */
 function AccountSheet({
   mine,
+  provider,
   checks,
   thing,
   onClose,
   onSaved,
 }: {
   mine: boolean;
+  provider?: SavedProvider;
   checks: boolean;
   thing?: SavedThing;
   onClose: () => void;
@@ -260,6 +265,8 @@ function AccountSheet({
   }, [thing, banks.data, f.bank]);
   const [problem, setProblem] = useState<string>();
   const [bankName, setBankName] = useState<string>();
+  const [bankSearch, setBankSearch] = useState("");
+  const shownBanks = filterBanks(banks.data?.banks ?? [], bankSearch, f.bank);
   const act = useAction();
   const set = (patch: Partial<Form>) => {
     setF((cur) => ({ ...cur, ...patch }));
@@ -325,10 +332,15 @@ function AccountSheet({
         <Field label="Title" hint="How it is shown, such as Bayo (rice).">
           <input value={f.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} required />
         </Field>
+        {(banks.data?.banks.length ?? 0) > BANK_SEARCH_FROM && (
+          <Field label="Find the bank" hint="Type part of its name, such as guaranty or kuda.">
+            <input type="search" value={bankSearch} autoComplete="off" onChange={(e) => setBankSearch(e.target.value)} data-testid="saved-bank-search" />
+          </Field>
+        )}
         <Field label="Bank">
           <select value={f.bank} onChange={(e) => set({ bank: e.target.value })} disabled={!banks.data} data-testid="saved-bank">
-            <option value="">{banks.data ? "Choose the bank" : "Loading the banks…"}</option>
-            {banks.data?.banks.map((b) => (
+            <option value="">{!banks.data ? "Loading the banks…" : shownBanks.length === 0 ? "No bank has that name" : "Choose the bank"}</option>
+            {shownBanks.map((b) => (
               <option key={bankValue(b)} value={bankValue(b)}>
                 {b.name}
               </option>
@@ -352,6 +364,17 @@ function AccountSheet({
           <input value={f.note} maxLength={200} onChange={(e) => set({ note: e.target.value })} />
         </Field>
         {thing && accountChanges && <p className="hint">Changing the account asks for your passkey.</p>}
+        {provider && !provider.connected && (
+          <div className="warning" role="note" data-testid="saved-form-connect">
+            The bank's name is not checked until your business connects a payments account; it is saved as "Name not checked yet".
+            {provider.owner && provider.wallet?.available && provider.wallet.plan && (
+              <>
+                {" "}
+                <Link to="/settings/payments">Open a Taskiem wallet</Link>
+              </>
+            )}
+          </div>
+        )}
         {(problem || taken) && (
           <p className="error" role="alert">
             {problem ?? taken}

@@ -52,6 +52,9 @@ String cleanAccountNumber(String typed) => typed.replaceAll(RegExp(r'[\s.-]'), '
 ({bool checked, String words}) savedCheck(SavedObject x) {
   final name = x.check.accountName;
   if (x.check.state == 'checked' && name is String && name.isNotEmpty) return (checked: true, words: 'Bank’s name: $name');
+  // Why it will not be checked until it changes (lib/saved.ts checkLine).
+  final problem = x.check.problem;
+  if (problem is String && problem.isNotEmpty) return (checked: false, words: problem);
   return (checked: false, words: 'Name not checked yet');
 }
 
@@ -184,7 +187,7 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     final p = _provider;
     final problem = await showTkSheet<String>(
       context,
-      (_) => SavedAccountSheet(api: _api, thing: x, checks: !widget.mine && p?.connected != null),
+      (_) => SavedAccountSheet(api: _api, thing: x, checks: !widget.mine && p?.connected != null, unconnected: !widget.mine && p != null && p.connected == null),
     );
     if (problem == null || !mounted) return;
     if (problem.isNotEmpty) showTkToast(context, problem);
@@ -343,10 +346,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
 /// name for it shows before it is saved. Pops "" when saved, or the reason
 /// its name could not be checked just now.
 class SavedAccountSheet extends StatefulWidget {
-  const SavedAccountSheet({super.key, required this.api, this.thing, required this.checks});
+  const SavedAccountSheet({super.key, required this.api, this.thing, required this.checks, this.unconnected = false});
   final SavedApi api;
   final SavedObject? thing;
   final bool checks;
+
+  /// The business has no payments account yet: its names are not checked.
+  final bool unconnected;
 
   @override
   State<SavedAccountSheet> createState() => _SavedAccountSheetState();
@@ -441,6 +447,8 @@ class _SavedAccountSheetState extends State<SavedAccountSheet> {
       title: 'Bank',
       value: _bank == null ? null : '${_bank!.code}|${_bank!.name}',
       choices: [for (final b in list.banks) ('${b.code}|${b.name}', b.name, '')],
+      // A payments account lists many banks.
+      searchHint: list.banks.length > 8 ? 'Find the bank: guaranty, kuda…' : null,
     );
     if (v == null || !mounted) return;
     setState(() => _bank = list.banks.firstWhere((b) => '${b.code}|${b.name}' == v));
@@ -524,6 +532,14 @@ class _SavedAccountSheetState extends State<SavedAccountSheet> {
           ),
         if (x != null && _accountChanges)
           TkCallout(leading: TkSquare('b-key', color: look.violet), title: 'Changing the account asks for your passkey', color: look.violet),
+        if (widget.unconnected)
+          TkCallout(
+            leading: TkSquare('b-bank', color: look.orange),
+            title: 'The bank’s name is not checked yet',
+            sub: 'Not until your business connects a payments account, on Saved. It is saved as “Name not checked yet”.',
+            color: look.orange,
+            subLines: 3,
+          ),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
       ],
     );

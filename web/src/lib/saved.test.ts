@@ -3,6 +3,7 @@ import {
   bankFields,
   bankValueOf,
   checkLine,
+  filterBanks,
   cleanName,
   nameProblem,
   numberProblem,
@@ -22,7 +23,7 @@ const bayo: SavedThing = {
   kind: "bank_account",
   hint: "GTBank ••6789",
   details: { bank_name: "Guaranty Trust Bank", account_number: "••6789" },
-  check: { state: "unchecked", account_name: null, via: null, at: null },
+  check: { state: "unchecked", account_name: null, via: null, at: null, problem: null },
   to_change: true,
   created_at: "2026-11-20T10:00:00Z",
   updated_at: "2026-11-20T10:00:00Z",
@@ -46,7 +47,11 @@ describe("saved things", () => {
   it("words a row", () => {
     expect(savedSub(bayo)).toBe("@bayo · GTBank ••6789");
     expect(checkLine(bayo)).toEqual({ words: "Name not checked yet", tone: "warn" });
-    expect(checkLine({ ...bayo, check: { state: "checked", account_name: "BAYO ADEWALE", via: "iswallet/taskiem", at: "x" } })).toEqual({
+    expect(checkLine({ ...bayo, check: { state: "unchecked", account_name: null, via: null, at: null, problem: "Choose the bank again." } })).toEqual({
+      words: "Choose the bank again.",
+      tone: "warn",
+    });
+    expect(checkLine({ ...bayo, check: { state: "checked", account_name: "BAYO ADEWALE", via: "iswallet/taskiem", at: "x", problem: null } })).toEqual({
       words: "Bank's name: BAYO ADEWALE",
       tone: "ok",
     });
@@ -62,6 +67,26 @@ describe("saved things", () => {
     expect(bankValueOf(wallet, { bank_name: "Guaranty Trust Bank" })).toBe("c:000013");
     expect(bankValueOf(wallet, { bank_name: "x", bank_code: "000015", code_from: "iswallet/taskiem" })).toBe("c:000015");
     expect(bankValueOf(byName, { bank_name: "Kuda" })).toBe("");
+  });
+
+  it("searches banks by the start of their words", () => {
+    const banks = [
+      { code: "1", name: "Guaranty Trust Bank" },
+      { code: "2", name: "Zenith Bank" },
+      { code: "3", name: "First Bank of Nigeria" },
+      { code: "4", name: "First City Monument Bank" },
+      { code: "5", name: "GTBank" },
+    ];
+    const names = (typed: string, chosen = "") => filterBanks(banks, typed, chosen).map((b) => b.name);
+    expect(names("")).toHaveLength(5);
+    expect(names("guar")).toEqual(["Guaranty Trust Bank"]);
+    expect(filterBanks([...banks, { code: "6", name: "Kuda Microfinance Bank" }], "fi").map((b) => b.name)).toEqual(["First Bank of Nigeria", "First City Monument Bank"]);
+    expect(names("first")).toEqual(["First Bank of Nigeria", "First City Monument Bank"]);
+    expect(names("first city")).toEqual(["First City Monument Bank"]);
+    expect(names("gtb")).toEqual(["GTBank"]);
+    expect(names("bank")).toHaveLength(5); // "bank" alone is not a word to search by
+    expect(names("zzz")).toEqual([]);
+    expect(names("zzz", "c:2")).toEqual(["Zenith Bank"]); // the chosen one stays
   });
 
   it("says where names are checked, and to whom the connect step is shown", () => {

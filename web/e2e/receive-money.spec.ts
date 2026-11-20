@@ -85,6 +85,13 @@ test.beforeAll(async () => {
             // The bank's full name, as a saved account chosen by name
             // before the wallet was open names it (saved.spec below).
             { code: "000013", name: "Guaranty Trust Bank" },
+            // Enough banks that the Saved form offers a search.
+            { code: "000015", name: "Zenith Bank" },
+            { code: "000016", name: "First Bank of Nigeria" },
+            { code: "000003", name: "First City Monument Bank" },
+            { code: "000004", name: "United Bank for Africa" },
+            { code: "090267", name: "Kuda Microfinance Bank" },
+            { code: "000017", name: "Wema Bank" },
           ],
         });
       if (req.method === "POST" && url === "/v1/name-enquiry") {
@@ -264,9 +271,10 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   await expect(saved).toContainText("No saved accounts yet.");
   await axeBoth(page, "/settings/saved (no payments account)");
 
-  // Saved with no payments account: kept, not checked yet.
+  // Saved with no payments account: kept, not checked yet, as the form says.
   await saved.getByRole("button", { name: "Save an account" }).click();
   let form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-form-connect")).toContainText("not checked until your business connects a payments account");
   await form.getByLabel("Name to call it up by").fill("@Bayo");
   await form.getByLabel("Title").fill("Bayo (rice)");
   await form.getByTestId("saved-bank").selectOption({ label: "Guaranty Trust Bank" });
@@ -298,8 +306,12 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   // A new account shows the bank's name before it is saved.
   await saved.getByRole("button", { name: "Save an account" }).click();
   form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-form-connect")).toHaveCount(0);
   await form.getByLabel("Name to call it up by").fill("landlord");
   await form.getByLabel("Title").fill("Landlord");
+  // The wallet lists many banks: a search narrows them.
+  await form.getByTestId("saved-bank-search").fill("acc");
+  await expect(form.getByTestId("saved-bank").locator("option")).toHaveText(["Choose the bank", "Access Bank"]);
   await form.getByTestId("saved-bank").selectOption({ label: "Access Bank" });
   await form.getByLabel("Account number").fill("1111 111 111");
   await expect(form.getByTestId("saved-bank-name")).toContainText("ADA OBI STORES");

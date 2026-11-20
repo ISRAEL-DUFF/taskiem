@@ -8,6 +8,8 @@ export interface SavedCheck {
   account_name: string | null;
   via: string | null;
   at: string | null;
+  /** Why it will not be checked until the account changes; null otherwise. */
+  problem: string | null;
 }
 
 export interface SavedThing {
@@ -85,8 +87,37 @@ export const savedSub = (x: SavedThing) => `@${x.name} · ${x.hint}`;
 /** What a row says of the bank's name for the account. */
 export function checkLine(x: SavedThing): { words: string; tone: "ok" | "warn" } {
   if (x.check.state === "checked" && x.check.account_name) return { words: `Bank's name: ${x.check.account_name}`, tone: "ok" };
+  if (x.check.problem) return { words: x.check.problem, tone: "warn" };
   return { words: "Name not checked yet", tone: "warn" };
 }
+
+/** A bank's name as searched: lowercase, without "Bank", "PLC" or
+ * punctuation, so "gtb", "guaranty" and "Guaranty Trust" all find it. */
+const bankWords = (s: string) =>
+  s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && !["bank", "plc", "limited", "ltd", "of", "for"].includes(w));
+
+/** The banks whose name has every word typed at the start of one of its
+ * words (or, three letters or more, within the whole name run together,
+ * for "gtbank"), the chosen one
+ * always kept so the picker still shows it. Empty search: all of them. */
+export function filterBanks(banks: Bank[], typed: string, chosen = ""): Bank[] {
+  const want = bankWords(typed);
+  if (want.length === 0) return banks;
+  return banks.filter((b) => {
+    if (bankValue(b) === chosen) return true;
+    const words = bankWords(b.name);
+    const joined = b.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    // Within the name run together only for three letters or more, so
+    // "fi" finds First, not Microfinance.
+    return want.every((w) => words.some((x) => x.startsWith(w)) || (w.length >= 3 && joined.includes(w)));
+  });
+}
+
+/** The banks a list offers a search for: lists longer than this. */
+export const BANK_SEARCH_FROM = 8;
 
 /** The bank chosen in a picker, as its value: the code when the list has
  * codes, else the name. */

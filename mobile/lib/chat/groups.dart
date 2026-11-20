@@ -139,35 +139,102 @@ String? groupPhotoPath(Object? photo) => personPhotoPath(photo);
 
 /// One of [choices] (value, words, a line under), the one on now ticked;
 /// null when put away.
-Future<String?> pickOneOf(BuildContext context, {required String title, required List<(String, String, String)> choices, String? value, String? note}) =>
-    showTkSheet<String>(
-      context,
-      (context) => TkAppLook(
-        child: TkSheet(
-          title: title,
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-            children: [
-              TkPanel(
-                children: [
-                  for (final (k, words, sub) in choices)
-                    Semantics(
-                      selected: k == value,
-                      child: TkListRow(
-                        title: words,
-                        sub: sub,
-                        leading: TkCheckbox(checked: k == value),
-                        onTap: () => Navigator.of(context).pop(k),
-                      ),
+Future<String?> pickOneOf(
+  BuildContext context, {
+  required String title,
+  required List<(String, String, String)> choices,
+  String? value,
+  String? note,
+  String? searchHint,
+}) => showTkSheet<String>(
+  context,
+  (context) => TkAppLook(
+    child: _PickOne(title: title, choices: choices, value: value, note: note, searchHint: searchHint),
+  ),
+);
+
+/// The words of a choice as searched: lowercase, split at anything but
+/// letters and digits.
+List<String> _searchWords(String s) => s.toLowerCase().split(RegExp('[^a-z0-9]+')).where((w) => w.isNotEmpty).toList();
+
+/// Whether [words] (a choice's title) has every typed word at the start of
+/// one of its words, or (three letters or more) within the whole run
+/// together ("gtbank").
+bool choiceMatches(String words, String typed) {
+  final want = _searchWords(typed);
+  if (want.isEmpty) return true;
+  final have = _searchWords(words);
+  final joined = have.join();
+  // Within the name run together only for three letters or more, so
+  // "fi" finds First, not Microfinance.
+  return want.every((w) => have.any((x) => x.startsWith(w)) || (w.length >= 3 && joined.contains(w)));
+}
+
+/// pickOneOf's sheet: the choices as ticked rows, and with [searchHint] a
+/// search box over them (for a long list, such as banks) that keeps the
+/// chosen one.
+class _PickOne extends StatefulWidget {
+  const _PickOne({required this.title, required this.choices, this.value, this.note, this.searchHint});
+  final String title;
+  final List<(String, String, String)> choices;
+  final String? value;
+  final String? note;
+  final String? searchHint;
+
+  @override
+  State<_PickOne> createState() => _PickOneState();
+}
+
+class _PickOneState extends State<_PickOne> {
+  final _q = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _q.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = [
+      for (final c in widget.choices)
+        if (c.$1 == widget.value || choiceMatches(c.$2, _q.text)) c,
+    ];
+    return TkSheet(
+      title: widget.title,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+        children: [
+          if (widget.searchHint != null) TkSearchBox(controller: _q, hint: widget.searchHint!, margin: const EdgeInsets.only(bottom: 12)),
+          if (shown.isEmpty)
+            const TkPanel(children: [TkEmpty(icon: 'search', title: 'Nothing has that name', line: 'Try fewer letters, or another part of its name.')])
+          else
+            TkPanel(
+              children: [
+                for (final (k, words, sub) in shown)
+                  Semantics(
+                    selected: k == widget.value,
+                    child: TkListRow(
+                      title: words,
+                      sub: sub,
+                      leading: TkCheckbox(checked: k == widget.value),
+                      onTap: () => Navigator.of(context).pop(k),
                     ),
-                ],
-              ),
-              if (note != null) Padding(padding: const EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text(note, style: tkHint(TkTheme.tokens(context)))),
-            ],
-          ),
-        ),
+                  ),
+              ],
+            ),
+          if (widget.note != null) Padding(padding: const EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text(widget.note!, style: tkHint(TkTheme.tokens(context)))),
+        ],
       ),
     );
+  }
+}
 
 // --- chats and groups to send to ---
 
