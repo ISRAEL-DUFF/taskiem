@@ -35,6 +35,7 @@ import 'live.dart';
 import 'explore.dart' show showExploreCard;
 import 'menu.dart';
 import 'ref_card.dart';
+import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
@@ -511,6 +512,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
+    // Saved things by @name (saved objects S1): Taskiem reads any of them.
+    saved: SavedPicks(
+      auth: widget.data.chats.auth,
+      textsOnly: false,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    ),
   );
 
   // The tools panel (ChatTools.tsx): every tool the person may open.

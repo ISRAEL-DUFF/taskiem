@@ -174,8 +174,11 @@ class _Pick extends StatelessWidget {
 
 /// `.mention-list`: the plain list, each a name with its mark and a line.
 class TagList extends StatelessWidget {
-  const TagList({super.key, required this.mark, required this.items, required this.onPick});
+  const TagList({super.key, required this.mark, required this.items, required this.onPick, this.label});
   final String mark;
+
+  /// What a screen reader hears the list as, when not what the mark says.
+  final String? label;
   final List<TagSuggestion> items;
   final ValueChanged<TagSuggestion> onPick;
 
@@ -184,7 +187,7 @@ class TagList extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Semantics(
       container: true,
-      label: mark == '@' ? 'Businesses to mention' : (mark == '/' ? 'Things to tag' : 'Items to mention'),
+      label: label ?? (mark == '@' ? 'Businesses to mention' : (mark == '/' ? 'Things to tag' : 'Items to mention')),
       explicitChildNodes: true,
       child: Container(
         // `margin: 0 10px; padding: 4px; border: 1px solid; border-radius: 16px; max-height: 240px`

@@ -52,6 +52,7 @@ import 'contact.dart';
 import 'deal.dart';
 import 'live_card.dart';
 import 'explore.dart' show showExploreCard;
+import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
@@ -1101,6 +1102,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: (o) => widget.onOpenLink?.call(o.link)),
+    // Saved texts (saved objects S1): their words into the box.
+    saved: SavedPicks(
+      auth: widget.data.chats.auth,
+      textsOnly: true,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    ),
   );
 
   String _words = '';

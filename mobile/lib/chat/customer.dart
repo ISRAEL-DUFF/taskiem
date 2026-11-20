@@ -19,6 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
+import 'saved_picks.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
@@ -541,6 +542,14 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen> {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.chats.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
   StreamSubscription<String>? _back;
 
   /// The line staff chose for the reply (both lines); the one held while
@@ -563,6 +572,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     // The words left unsent here, back in the box, and kept as they change.
     _draftKey = 'customer:${d.threadId}';
     _text.text = d.chats.draft(_draftKey);
+    _text.addListener(_saved.typed);
     _text.addListener(() {
       d.chats.setDraft(_draftKey, _text.text);
       final writing = _text.text.trim().isNotEmpty;
@@ -601,6 +611,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
   void dispose() {
     widget.data.removeListener(_rekey);
     _back?.cancel();
+    _saved.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -834,6 +845,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       ),
                     ),
                   ),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     _ReplyBox(
                       text: _text,

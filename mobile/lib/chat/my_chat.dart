@@ -14,6 +14,7 @@
 // WhatsApp chat with them is here too". What the person writes goes in the
 // app.
 
+import 'saved_picks.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -778,6 +779,14 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
   StreamSubscription<String>? _back;
 
   MyChatData get d => widget.data;
@@ -806,6 +815,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     widget.notify?.show(d.tag, this);
     _text.addListener(() {
       if (_text.text.trim().isNotEmpty) d.typing();
+      _saved.typed();
     });
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
@@ -816,6 +826,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   void dispose() {
     widget.notify?.unshow(this);
     _back?.cancel();
+    _saved.dispose();
     _text.dispose();
     // The screen owns its conversation: closed, it stops reading.
     d.dispose();
@@ -1003,6 +1014,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                   if (c != null && c.blocked)
                     _Note(text: 'You blocked $name. They can’t write to you, and you can’t write to them.', action: 'Unblock', onAction: () => _say(d.block(false), 'Unblocked $name')),
                   if (c != null && !c.blocked && c.blockedYou) _Note(text: '$name is not taking messages from you.'),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
                       text: _text,

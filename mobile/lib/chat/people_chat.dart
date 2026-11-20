@@ -17,6 +17,7 @@
 // says so plainly (people.dart, peopleKeptWords) and nothing says they are
 // end-to-end encrypted.
 
+import 'saved_picks.dart';
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
 
@@ -750,6 +751,14 @@ class PeopleChatScreen extends StatefulWidget {
 
 class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
   String? _paying;
@@ -774,6 +783,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       _text.text = w;
     });
     _text.addListener(_typed);
+    _text.addListener(_saved.typed);
     // Put away with words in the box: they no longer see "typing…".
     _life = AppLifecycleListener(
       onStateChange: (s) {
@@ -798,6 +808,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     widget.notify?.unshow(this);
     _back?.cancel();
     _life?.dispose();
+    _saved.dispose();
     // Closed with words in the box: they no longer see "typing…".
     d.stopTyping();
     _text.dispose();
@@ -1138,6 +1149,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                   if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),
                   if (c != null && !c.gone && c.suspended == true) const _Note(text: '$suspendedWords You can read the chat, but not write to it now.'),
                   if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: _unblock),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
                       text: _text,

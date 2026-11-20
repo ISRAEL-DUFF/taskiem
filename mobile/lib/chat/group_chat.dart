@@ -18,6 +18,7 @@
 // plainly (groups.dart, groupKeptWords) and nothing says they are
 // end-to-end encrypted.
 
+import 'saved_picks.dart';
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
 
@@ -817,6 +818,14 @@ class GroupChatScreen extends StatefulWidget {
 
 class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+  );
   StreamSubscription<String>? _back;
   GroupMessage? _reply;
   String? _paying;
@@ -847,6 +856,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       _text.text = w;
     });
     _text.addListener(_typed);
+    _text.addListener(_saved.typed);
     _life = AppLifecycleListener(
       onStateChange: (s) {
         if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) d.stopTyping();
@@ -886,6 +896,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     _back?.cancel();
     _life?.dispose();
     d.stopTyping();
+    _saved.dispose();
     _text.dispose();
     d.dispose();
     super.dispose();
@@ -1295,6 +1306,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                     ),
                   ?notice,
                   if (suggest.isNotEmpty) _MentionPicker(members: suggest, transport: d.auth.transport, onPick: _mention),
+                  if (d.canSend) _saved.plain(),
                   if (d.canSend)
                     Composer(
                       text: _text,

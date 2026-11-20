@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import 'saved_picks.dart';
 import 'tag_picker.dart';
 import 'tags.dart';
 
@@ -23,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -41,6 +42,10 @@ class TagBox {
   /// A business not linked, picked: its card.
   final ValueChanged<ExploreCard>? onExplore;
 
+  /// Saved things "@" offers (saved objects S1; saved_picks.dart), read
+  /// the first time "@" is typed.
+  final SavedPicks? saved;
+
   TagQuery? query;
   final picked = <TagSuggestion>[];
   final overlay = OverlayPortalController();
@@ -53,6 +58,12 @@ class TagBox {
   Timer? _soon;
 
   void dispose() => _soon?.cancel();
+
+  /// The floating picker shut, when it is open: a box with no floating
+  /// picker (a chat offering only saved texts) never placed it.
+  void _hideFloating() {
+    if (overlay.isShowing) overlay.hide();
+  }
 
   /// Floating over the thread (the tools' picker), not the plain list.
   bool get floats => query != null && grouped() && (query!.mark == '@' || query!.mark == '/');
@@ -67,12 +78,13 @@ class TagBox {
     final q = tagQuery(v.text, caret);
     if (q == query) return;
     query = q;
+    if (q?.mark == '@') saved?.want();
     _ask();
     onChange();
     if (floats) {
       overlay.show();
     } else {
-      overlay.hide();
+      _hideFloating();
     }
   }
 
@@ -112,9 +124,16 @@ class TagBox {
         businesses: src.businesses,
         taskiem: taskiem,
         unlinked: found != null && words.length >= 2 && found.q == words ? found.list : const [],
+        saved: saved?.list ?? const [],
       );
     }
-    return [(label: '', items: suggest(q.mark == '@' ? src.businesses : src.items, q.query))];
+    return [
+      for (final g in <TagGroup>[
+        (label: '', items: suggest(q.mark == '@' ? src.businesses : src.items, q.query)),
+        if (q.mark == '@' && saved != null) (label: 'Saved', items: suggest(saved!.list, q.query).take(4).toList()),
+      ])
+        if (g.items.isNotEmpty) g,
+    ];
   }
 
   /// What Enter would take: the first; the Taskiem row only when "Taskiem"
@@ -133,7 +152,7 @@ class TagBox {
     if (explored != null) {
       // Not linked: its card, with Connect; the words stay as typed.
       query = null;
-      overlay.hide();
+      _hideFloating();
       onChange();
       onExplore?.call(explored);
       return;
@@ -143,13 +162,16 @@ class TagBox {
     // Where what was typed for it ends: the mark, "invoice " for "/", the words.
     final head = q.mark == '/' ? RegExp(r'^[a-z]+[/ ]', caseSensitive: false).firstMatch(v.text.substring(q.start + 1))?.end ?? 0 : 0;
     final end = q.start + 1 + head + q.query.length;
-    final next = insertTag(v.text, q, caret < end ? end : caret, s.name);
-    if (s.kind != 'taskiem') picked.add(s);
+    // A saved text's words in place of what was typed, to change before
+    // sending; any other saved thing as its @name, which the words carry.
+    final body = s.body;
+    final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name);
+    if (s.kind != 'taskiem' && s.kind != 'saved') picked.add(s);
     _picking = true;
     text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
     _picking = false;
     query = null;
-    overlay.hide();
+    _hideFloating();
     onChange();
   }
 
@@ -166,7 +188,9 @@ class TagBox {
     if (q == null || floats) return const SizedBox.shrink();
     final shown = [for (final g in groups()) ...g.items];
     if (shown.isEmpty) return const SizedBox.shrink();
-    return TagList(mark: q.mark, items: shown, onPick: pick);
+    // Only saved things to offer (a chat with no one else to name).
+    final onlySaved = shown.every((s) => s.kind == 'saved');
+    return TagList(mark: q.mark, items: shown, onPick: pick, label: onlySaved ? 'Saved things' : null);
   }
 
   /// The floating picker's place: put just above the box; it hangs 8 px

@@ -14,7 +14,12 @@ import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body});
+
+  /// A saved thing (kind "saved", saved objects S1): its kind, and a
+  /// text's words, which a pick puts in the box in place of what was typed.
+  final String? savedKind;
+  final String? body;
 
   /// A short word on the right ("Invoice").
   final String? badge;
@@ -115,6 +120,7 @@ List<TagGroup> groupTags(
   required List<TagSuggestion> businesses,
   required bool taskiem,
   List<TagSuggestion> unlinked = const [],
+  List<TagSuggestion> saved = const [],
 }) {
   final out = <TagGroup>[];
   void add(String label, List<TagSuggestion> list, int n, [List<TagSuggestion> more = const []]) {
@@ -126,6 +132,8 @@ List<TagGroup> groupTags(
 
   add('Products', items, 4);
   add('Services', services, 3);
+  // The person's saved things, then the business's (saved objects S1).
+  add('Saved', saved, 4);
   // Found in Explore for these words: not linked, after the linked.
   add('Businesses', businesses, 4, unlinked);
   if (taskiem) out.add((label: '', items: const [taskiemTag]));
@@ -137,6 +145,13 @@ List<TagGroup> groupTags(
 ({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name) {
   // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
   final head = '${text.substring(0, q.start)}${q.mark == '/' ? '#' : q.mark}$name ';
+  return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
+}
+
+/// mentions.ts insertWords: the query replaced by words (a saved text's),
+/// nothing of the "@" left; the text and where the caret goes.
+({String text, int caret}) insertWords(String text, TagQuery q, int caret, String words) {
+  final head = '${text.substring(0, q.start)}$words';
   return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
 }
 
