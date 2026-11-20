@@ -218,6 +218,14 @@ func scanMessage(r pgx.Row) (Message, error) {
 		if err := json.Unmarshal(ments, &m.Mentions); err != nil {
 			return m, err
 		}
+		// A saved thing the sender shared is shown to them masked: the
+		// full values went to the other business (saved objects §6.2).
+		for i := range m.Mentions {
+			if m.Mine && m.Mentions[i].Saved != nil {
+				c := m.Mentions[i].Saved.Masked()
+				m.Mentions[i].Saved = &c
+			}
+		}
 	}
 	if prev != nil {
 		m.Preview = &Preview{}

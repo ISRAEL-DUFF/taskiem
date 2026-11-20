@@ -112,6 +112,9 @@ type savedView struct {
 	// Files are a made-up kind's file fields: each file's name, type and
 	// size (its value the file's id; GET …/file?field= opens it).
 	Files map[string]saved.FileMeta `json:"files,omitempty"`
+	// ShareSensitive says whether sharing it shares what is sensitive, so
+	// the sender is asked first (shareSensitive).
+	ShareSensitive bool `json:"share_sensitive,omitempty"`
 	// ToChange says whether the person may change or remove it.
 	ToChange  bool      `json:"to_change"`
 	CreatedAt time.Time `json:"created_at"`
@@ -196,8 +199,8 @@ func (o savedRow) view(owner savedOwner, toChange bool) savedView {
 		d["account_number"] = "••" + last4
 	}
 	v := savedView{ID: o.ID, Owner: owner.label(), Name: o.Name, Title: o.Title, Kind: o.Kind, Hint: o.Hint, Details: d,
-		Check:    savedCheckView{State: o.CheckState, AccountName: o.CheckedName, Via: o.CheckedVia, At: o.CheckedAt, Problem: o.CheckProblem},
-		ToChange: toChange, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
+		Check:          savedCheckView{State: o.CheckState, AccountName: o.CheckedName, Via: o.CheckedVia, At: o.CheckedAt, Problem: o.CheckProblem},
+		ShareSensitive: shareSensitive(o), ToChange: toChange, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
 	if o.Kind == saved.KindCustom {
 		delete(d, "values")
 		delete(d, "masked")

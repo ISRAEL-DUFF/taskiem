@@ -3,6 +3,9 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -27,6 +30,36 @@ type savedShare struct {
 	Owner string `json:"owner"`
 	// Confirm: the sender said yes to sharing what is sensitive in it.
 	Confirm bool `json:"confirm"`
+	// namedIn, when set, is the message's words, which must name the
+	// saved thing by its @name: checked before anything is asked.
+	namedIn string
+}
+
+// namesSaved says whether text names @name as a whole word: "@mum" is
+// not named by "@mummy" or "x@mum".
+func namesSaved(text, name string) bool {
+	if name == "" {
+		return false
+	}
+	lower, want := strings.ToLower(text), "@"+strings.ToLower(name)
+	part := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' }
+	for i := 0; ; {
+		j := strings.Index(lower[i:], want)
+		if j < 0 {
+			return false
+		}
+		at, end := i+j, i+j+len(want)
+		before, _ := utf8.DecodeLastRuneInString(lower[:at])
+		after, _ := utf8.DecodeRuneInString(lower[end:])
+		// A trailing full stop ends the sentence, not the name.
+		afterNext, _ := utf8.DecodeRuneInString(lower[min(end+1, len(lower)):])
+		okBefore := at == 0 || !part(before) || before == '.'
+		okAfter := end == len(lower) || !part(after) || (after == '.' && (end+1 == len(lower) || !part(afterNext)))
+		if okBefore && okAfter {
+			return true
+		}
+		i = at + 1
+	}
 }
 
 // errShareConfirm asks the sender to confirm sharing what is sensitive; the
@@ -46,11 +79,40 @@ func shareConfirmFail(w http.ResponseWriter, err error) bool {
 	return true
 }
 
+// savedShareRecord is a share to record once its message is kept: in the
+// person's own log or the business's audit, with what kind and to whom,
+// never the values. Recorded only after the send, so a refused or failed
+// message records nothing.
+type savedShareRecord struct {
+	o         savedOwner
+	id        uuid.UUID
+	kind      string
+	to        string
+	sensitive bool
+}
+
+// recordShare records a share whose message was kept.
+func (s *Server) recordShare(r *http.Request, rec *savedShareRecord) {
+	if rec == nil {
+		return
+	}
+	err := s.savedTx(r.Context(), rec.o, func(tx pgx.Tx) error {
+		return s.savedEvent(r, tx, rec.o, rec.id, "shared", map[string]any{"kind": rec.kind, "to": rec.to, "sensitive": rec.sensitive})
+	})
+	if err != nil {
+		s.Logger.Warn("saved: a share not recorded", "err", err)
+	}
+}
+
 // savedCardFor makes the card a message shares: the saved thing must be the
 // sender's own (person) or their business's (tenant, which may be Nil
-// outside a business), live; sensitive values need sh.Confirm. to names who
-// it goes to, for the question and the record ("Bola Stores").
-func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh savedShare, to string) (saved.Card, error) {
+// outside a business), live; sensitive values need sh.Confirm, and a
+// business's sensitive values someone who may manage its saved things
+// (sharing is no way round reveal's passkey). A text is not shared as a
+// card: its words go into the message. to names who it goes to, for the
+// question and the record ("Bola Stores"). The share is recorded by the
+// caller once the message is kept (recordShare).
+func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh savedShare, to string) (saved.Card, *savedShareRecord, error) {
 	ctx := r.Context()
 	var o savedOwner
 	switch sh.Owner {
@@ -58,13 +120,14 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 		o = savedOwner{person: person, by: person}
 	case "business":
 		if tenant == uuid.Nil {
-			return saved.Card{}, customerSendErr{http.StatusBadRequest, "Only your own saved things can be shared here."}
+			return saved.Card{}, nil, customerSendErr{http.StatusBadRequest, "Only your own saved things can be shared here."}
 		}
 		o = savedOwner{tenant: tenant, by: person}
 	default:
-		return saved.Card{}, customerSendErr{http.StatusBadRequest, "Say whose saved thing it is: yours or the business's."}
+		return saved.Card{}, nil, customerSendErr{http.StatusBadRequest, "Say whose saved thing it is: yours or the business's."}
 	}
 	var card saved.Card
+	var rec *savedShareRecord
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		x, err := savedRowTx(ctx, tx, o, sh.ID, false)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -72,6 +135,9 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 		}
 		if err != nil {
 			return err
+		}
+		if sh.namedIn != "" && !namesSaved(sh.namedIn, x.Name) {
+			return customerSendErr{http.StatusBadRequest, "Write @" + x.Name + " in the message to share it."}
 		}
 		number := ""
 		switch x.Kind {
@@ -82,6 +148,8 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		case saved.KindFile:
 			return customerSendErr{http.StatusBadRequest, "A file is sent as itself: attach it to the message."}
+		case saved.KindText:
+			return customerSendErr{http.StatusBadRequest, "A text goes into your message as words: pick it with @ to put them in the box."}
 		case saved.KindCustom:
 			// A made-up kind's: its fields but those never shared.
 			all, err := s.customValuesTx(ctx, tx, o, x)
@@ -92,12 +160,19 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 		default:
 			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		}
+		if card.Sensitive && !o.mine() && !principalFrom(ctx).Can(PermSavedManage) {
+			return customerSendErr{http.StatusForbidden, "Only those who manage the business's saved things share its account numbers and other sensitive details."}
+		}
 		if card.Sensitive && !sh.Confirm {
 			return errShareConfirm{question: shareQuestion(x, to)}
 		}
-		return s.savedEvent(r, tx, o, x.ID, "shared", map[string]any{"kind": x.Kind, "to": to, "sensitive": card.Sensitive})
+		rec = &savedShareRecord{o: o, id: x.ID, kind: x.Kind, to: to, sensitive: card.Sensitive}
+		return nil
 	})
-	return card, err
+	if err != nil {
+		return saved.Card{}, nil, err
+	}
+	return card, rec, nil
 }
 
 // shareQuestion is what the sender is asked before sharing what is
@@ -118,36 +193,70 @@ func shareQuestion(x savedRow, to string) string {
 
 // savedPeopleCard is the card a people chat or a group shares: one of the
 // sender's own saved things only (a business's are not shared with people).
-func (s *Server) savedPeopleCard(r *http.Request, person uuid.UUID, sh *savedShare) (*peopleCard, error) {
+func (s *Server) savedPeopleCard(r *http.Request, person uuid.UUID, sh *savedShare, to string) (*peopleCard, *savedShareRecord, error) {
 	if sh == nil {
-		return nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+		return nil, nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
 	}
 	if sh.Owner == "" {
 		sh.Owner = "mine"
 	}
 	if sh.Owner != "mine" {
-		return nil, customerSendErr{http.StatusBadRequest, "Only your own saved things are shared with people."}
+		return nil, nil, customerSendErr{http.StatusBadRequest, "Only your own saved things are shared with people."}
 	}
-	c, err := s.savedCardFor(r, person, uuid.Nil, *sh, "")
+	c, rec, err := s.savedCardFor(r, person, uuid.Nil, *sh, to)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &peopleCard{Type: "saved", Title: c.Title, Saved: &c}, nil
+	return &peopleCard{Type: "saved", Title: c.Title, Saved: &c}, rec, nil
+}
+
+// maskMine is a message's saved card as its sender sees it: masked
+// (saved.Card.Masked). Everyone else sees what was shared with them.
+func maskMine(mine bool, c *saved.Card) *saved.Card {
+	if !mine || c == nil {
+		return c
+	}
+	m := c.Masked()
+	return &m
+}
+
+// shareSensitive says whether sharing x asks first: what saved.MakeCard and
+// MakeCustomCard mark sensitive, worked out from what lists show (an
+// account's number, a person's phone or email, a place's phone, a made-up
+// kind's sensitive field that may be shared and has a value).
+func shareSensitive(x savedRow) bool {
+	str := func(k string) string { v, _ := x.Details[k].(string); return v }
+	switch x.Kind {
+	case saved.KindBankAccount:
+		return str("last4") != ""
+	case saved.KindPerson:
+		return str("phone") != "" || str("email") != ""
+	case saved.KindPlace:
+		return str("phone") != ""
+	case saved.KindCustom:
+		masked, _ := x.Details["masked"].(map[string]any)
+		for _, f := range x.Fields {
+			if f.Sensitive && !f.NeverShare && masked[f.Key] != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // savedForCustomer is the card a business's reply to its customer shares:
 // the business's saved thing or the member's own; and whether it goes as a
 // card (the customer chats in the app, and line is not whatsapp) or as
 // plain lines on WhatsApp.
-func (s *Server) savedForCustomer(r *http.Request, thread string, sh *savedShare, line string) (saved.Card, bool, error) {
+func (s *Server) savedForCustomer(r *http.Request, thread string, sh *savedShare, line string) (saved.Card, *savedShareRecord, bool, error) {
 	ctx := r.Context()
 	p := principalFrom(ctx)
 	person, err := personOf(r)
 	if err != nil {
-		return saved.Card{}, false, err
+		return saved.Card{}, nil, false, err
 	}
 	if sh == nil {
-		return saved.Card{}, false, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+		return saved.Card{}, nil, false, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
 	}
 	inApp := false
 	if line != lineWhatsApp {
@@ -160,9 +269,27 @@ func (s *Server) savedForCustomer(r *http.Request, thread string, sh *savedShare
 			return err
 		})
 		if err != nil {
-			return saved.Card{}, false, err
+			return saved.Card{}, nil, false, err
 		}
 	}
-	c, err := s.savedCardFor(r, person, p.TenantID, *sh, "this customer")
-	return c, inApp, err
+	c, rec, err := s.savedCardFor(r, person, p.TenantID, *sh, "this customer")
+	return c, rec, inApp, err
+}
+
+// maskCustomerCard is a customer chat's card as its reader sees it: a
+// saved thing's masked in its sender's copy.
+func maskCustomerCard(mine bool, c *customerCard) *customerCard {
+	if c == nil || c.Saved == nil || !mine {
+		return c
+	}
+	out := *c
+	out.Saved = maskMine(true, c.Saved)
+	return &out
+}
+
+// savedNamesAccount says whether a customer chat's card is a saved thing
+// naming an account to pay: the customer is warned, as a message asking
+// for a transfer warns them (§6.2, §15).
+func savedNamesAccount(c *customerCard) bool {
+	return c != nil && c.Saved != nil && c.Saved.NamesAccount()
 }

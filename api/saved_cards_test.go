@@ -35,6 +35,24 @@ func TestSavedCards(t *testing.T) {
 	if m["kind"] != "card" || card["type"] != "saved" || card["title"] != "Mum" {
 		t.Fatalf("shared: %v", m)
 	}
+	// Ada's own copy shows the number masked, in the answer and the list.
+	if strings.Contains(fmt.Sprint(card), "0123452222") || !strings.Contains(fmt.Sprint(card), "••2222") {
+		t.Fatalf("ada's copy: %v", card)
+	}
+	for _, x := range messagesOf(t, ada, adaChat) {
+		if strings.Contains(fmt.Sprint(x["card"]), "0123452222") {
+			t.Fatalf("ada's list: %v", x)
+		}
+	}
+	// A saved list says what asks first.
+	for _, x := range ada.must(200, "GET", "/v1/me/saved", nil)["saved"].([]any) {
+		if x.(map[string]any)["id"] == mum["id"] && x.(map[string]any)["share_sensitive"] != true {
+			t.Fatalf("mum asks first: %v", x)
+		}
+	}
+	// A text goes in as words, not a card.
+	note := ada.must(201, "POST", "/v1/me/saved", map[string]any{"name": "wifi", "title": "Wifi", "kind": "text", "details": map[string]any{"body": "The code is 1234"}})["saved"].(map[string]any)
+	ada.must(400, "POST", "/v1/me/people/"+adaChat+"/messages", map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": note["id"], "owner": "mine"}}})
 	// Bola has it in full, with Save this's fields; not to pass on.
 	var got map[string]any
 	for _, x := range messagesOf(t, bola, bolaChat) {
@@ -80,17 +98,18 @@ func TestSavedCards(t *testing.T) {
 	toluChat := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz})["id"].(string)
 	tolu.must(201, "POST", "/v1/me/chats/"+toluChat+"/messages", map[string]any{"text": "How do I pay?"})
 	inApp := reply(w.threadOf(t, personID(t, tolu)))
-	if c, _ := inApp["card"].(map[string]any); c == nil || c["type"] != "saved" || c["saved"].(map[string]any)["details"].(map[string]any)["account_number"] != "1234567890" {
+	// The business's own copy is masked; the customer's has the number.
+	if c, _ := inApp["card"].(map[string]any); c == nil || c["type"] != "saved" || strings.Contains(fmt.Sprint(c), "1234567890") || !strings.Contains(fmt.Sprint(c), "••7890") {
 		t.Fatalf("in the app: %v", inApp)
 	}
 	var seen bool
 	for _, x := range tolu.must(200, "GET", "/v1/me/chats/"+toluChat+"/messages", nil)["messages"].([]any) {
 		if c, ok := x.(map[string]any)["card"].(map[string]any); ok && c["type"] == "saved" {
-			seen = true
+			seen = c["saved"].(map[string]any)["details"].(map[string]any)["account_number"] == "1234567890" && x.(map[string]any)["warn_transfer"] == true
 		}
 	}
 	if !seen {
-		t.Fatal("the customer has no card")
+		t.Fatal("the customer has no card with the number, or no warning to check before paying")
 	}
 	// The customer's own, to the business: asked first (a phone), a card
 	// the business reads, sealed in its copy as the customer's words are.
@@ -103,7 +122,8 @@ func TestSavedCards(t *testing.T) {
 		t.Fatalf("customer asked: %v", e)
 	}
 	sentHome := tolu.must(201, "POST", "/v1/me/chats/"+toluChat+"/messages", mineShare(true))
-	if c, _ := sentHome["card"].(map[string]any); sentHome["kind"] != "card" || c == nil || c["saved"].(map[string]any)["details"].(map[string]any)["phone"] != "+2348031120099" {
+	// The customer's own copy is masked.
+	if c, _ := sentHome["card"].(map[string]any); sentHome["kind"] != "card" || c == nil || strings.Contains(fmt.Sprint(c), "+2348031120099") {
 		t.Fatalf("customer's card: %v", sentHome)
 	}
 	tolu.must(200, "POST", "/v1/me/chats/"+toluChat+"/messages", mineShare(true)) // the same client_id: the first
@@ -149,9 +169,22 @@ func TestSavedLinkCards(t *testing.T) {
 		t.Fatalf("asked: %v", e)
 	}
 	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to us", true))
-	sent := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to @our-account", true))["message"].(map[string]any)
-	if ms, _ := sent["mentions"].([]any); len(ms) != 1 || ms[0].(map[string]any)["kind"] != "saved" {
-		t.Fatalf("sent: %v", sent)
+	// Named as a whole word: @our-accountant is not @our-account, and it is
+	// refused before anything is asked.
+	seller.must(400, "POST", "/v1/link-chats/"+link+"/messages", msg("Ask @our-accountant", false))
+	// Staff who may write to linked businesses but not manage saved things
+	// do not share its account number.
+	clerk := w.member(t, seller, "clerk@seller.test", "shift_manager")
+	if e := clerk.must(403, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to @our-account", true)); !strings.Contains(fmt.Sprint(e["error"]), "Only those who manage") {
+		t.Fatalf("clerk: %v", e)
+	}
+	sent := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", msg("Pay to @our-account.", true))["message"].(map[string]any)
+	if ms, _ := sent["mentions"].([]any); len(ms) != 1 || ms[0].(map[string]any)["kind"] != "saved" || strings.Contains(fmt.Sprint(ms), "1234567890") {
+		t.Fatalf("sent (the seller's copy masked): %v", sent)
+	}
+	var shares int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM audit_log WHERE target = $1 AND action = 'saved.shared'`, acct["id"]).Scan(&shares); err != nil || shares != 1 {
+		t.Fatalf("shares recorded: %d %v", shares, err)
 	}
 	var card map[string]any
 	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+theirs+"/messages", nil)["messages"].([]any) {

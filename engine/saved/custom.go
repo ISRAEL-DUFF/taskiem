@@ -400,7 +400,7 @@ func CustomHint(kindName string, fields []Field, all map[string]string, files ma
 // field but those never shared, sensitive ones in full (the sender says
 // yes first).
 func MakeCustomCard(kindName, name, title string, fields []Field, all map[string]string, files map[string]FileMeta) Card {
-	c := Card{Kind: KindCustom, KindName: kindName, Title: title, Name: name, Details: map[string]any{}}
+	c := Card{Kind: KindCustom, KindName: kindName, Title: title, Name: name, Lines: []CardLine{}, Details: map[string]any{}}
 	for _, f := range fields {
 		v := all[f.Key]
 		if v == "" || f.NeverShare {
@@ -414,7 +414,7 @@ func MakeCustomCard(kindName, name, title string, fields []Field, all map[string
 		} else {
 			v = ShownValue(f, v)
 		}
-		c.Lines = append(c.Lines, CardLine{Label: f.Label, Value: v})
+		c.Lines = append(c.Lines, CardLine{Label: f.Label, Value: v, Sensitive: f.Sensitive})
 		if f.Sensitive {
 			c.Sensitive = true
 		}

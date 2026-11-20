@@ -467,3 +467,51 @@ func TestGroupReportsMembersAndReach(t *testing.T) {
 	mod.write(422, "ops.people.group.link_off", gid, "/v1/ops/people/groups/"+gid+"/actions", map[string]any{"action": "link_off", "reason": "Spam", "report_id": elsewhere})
 	mod.write(201, "ops.people.group.link_off", gid, "/v1/ops/people/groups/"+gid+"/actions", map[string]any{"action": "link_off", "reason": "Spam", "report_id": whole})
 }
+
+// A saved account shared in a group: its sender sees it masked, a member
+// who hasn't added the sender is warned before paying, and the share is
+// recorded once, naming the group.
+func TestGroupSavedCardMaskedAndWarned(t *testing.T) {
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159961", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159962", "Bola Ade")
+	chidi, chidiID := w.many(t, "+2348031159963", "Chidi Eze")
+	for _, id := range []uuid.UUID{adaID, bolaID, chidiID} {
+		w.older(t, id)
+	}
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	adds(t, ada, chidi)
+	adds(t, chidi, ada)
+	gid, _ := newGroup(t, ada, "Party", bolaID, chidiID)
+	acct := bola.must(201, "POST", "/v1/me/saved", map[string]any{"name": "me", "title": "My account", "bank_name": "Guaranty Trust Bank", "account_number": "0123453333"})["saved"].(map[string]any)
+	share := func(confirm bool) map[string]any {
+		return map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": acct["id"], "owner": "mine", "confirm": confirm}}}
+	}
+	if e := bola.must(409, "POST", "/v1/me/groups/"+gid+"/messages", share(false)); e["error"] != "Share My account's account details with the group?" {
+		t.Fatalf("asked: %v", e)
+	}
+	id := bola.must(201, "POST", "/v1/me/groups/"+gid+"/messages", share(true))["id"].(string)
+	seen := func(c *client) map[string]any {
+		for _, m := range gmessages(t, c, gid) {
+			if m["id"] == id {
+				return m
+			}
+		}
+		t.Fatal("no card")
+		return nil
+	}
+	if m := seen(bola); strings.Contains(fmt.Sprint(m["card"]), "0123453333") || !strings.Contains(fmt.Sprint(m["card"]), "••3333") {
+		t.Fatalf("bola's copy: %v", m)
+	}
+	if m := seen(chidi); m["warn_transfer"] != true || !strings.Contains(fmt.Sprint(m["card"]), "0123453333") {
+		t.Fatalf("chidi hasn't added bola: %v", m)
+	}
+	if m := seen(ada); m["warn_transfer"] == true || !strings.Contains(fmt.Sprint(m["card"]), "0123453333") {
+		t.Fatalf("ada has: %v", m)
+	}
+	var shares int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM saved_object_events WHERE object_id = $1 AND action = 'shared' AND detail->>'to' = 'the group'`, acct["id"]).Scan(&shares); err != nil || shares != 1 {
+		t.Fatalf("shares recorded: %d %v", shares, err)
+	}
+}

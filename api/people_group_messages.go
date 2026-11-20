@@ -258,14 +258,21 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 				v.Card.PaidByMe = &by
 			}
 		}
+		// A saved thing's card: masked in its sender's view.
+		if v.Card != nil && v.Card.Type == "saved" && v.Card.Saved != nil {
+			c := *v.Card
+			c.Saved = maskMine(v.Mine, c.Saved)
+			v.Card = &c
+		}
 		if !v.Mine {
 			known := false
 			if m.sender != nil {
 				known = cards[*m.sender].InContacts
 			}
-			// A share card naming an account, from someone the person hasn't
-			// added, always warns as a transfer does (§11 A, as 5a's).
-			splitPay := v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known
+			// A share card naming an account (or a saved thing's naming one),
+			// from someone the person hasn't added, always warns as a
+			// transfer does (§11 A, as 5a's).
+			splitPay := v.Card != nil && ((v.Card.Type == "split" && v.Card.PayTo != nil) || (v.Card.Type == "saved" && v.Card.Saved != nil && v.Card.Saved.NamesAccount())) && !known
 			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || splitPay
 			// The checks' mark (warn: a group never keeps 5a's "transfer",
 			// whose one recipient is known when it is sent; here splitPay
@@ -703,6 +710,8 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	// The share a saved thing's card makes, recorded once it is sent.
+	var share *savedShareRecord
 	var in struct {
 		Text     string          `json:"text"`
 		ClientID string          `json:"client_id"`
@@ -737,7 +746,7 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		var card *peopleCard
 		var err error
 		if in.Card.Type == "saved" {
-			card, err = s.savedPeopleCard(r, person, in.Card.Saved)
+			card, share, err = s.savedPeopleCard(r, person, in.Card.Saved, "the group")
 		} else {
 			card, err = s.makeCard(r.Context(), person, *in.Card)
 		}
@@ -762,6 +771,9 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.personFail(w, r, err)
 		return
+	}
+	if fresh {
+		s.recordShare(r, share)
 	}
 	writeJSON(w, map[bool]int{true: http.StatusCreated, false: http.StatusOK}[fresh], m)
 }
@@ -1757,8 +1769,8 @@ func (s *Server) groupDraftOf(ctx context.Context, person, group, msg uuid.UUID)
 		if err != nil {
 			return err
 		}
-		if v.Card != nil && (v.Card.Type == "split" || v.Card.Type == "basket") {
-			return customerSendErr{http.StatusConflict, "A share card or a shared basket is not forwarded."}
+		if v.Card != nil && (v.Card.Type == "split" || v.Card.Type == "basket" || v.Card.Type == "saved") {
+			return customerSendErr{http.StatusConflict, "A share card, a shared basket or a saved thing is not forwarded."}
 		}
 		d = peopleDraft{kind: m.kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
 		if m.attach != nil {

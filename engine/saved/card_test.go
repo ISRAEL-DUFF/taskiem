@@ -36,3 +36,20 @@ func TestCards(t *testing.T) {
 		}
 	}
 }
+
+func TestCardMasked(t *testing.T) {
+	c := MakeCard(KindBankAccount, "mum", "Mum", map[string]any{"bank_name": "Guaranty Trust Bank"}, "0123452222")
+	m := c.Masked()
+	if m.Lines[1].Value != "••2222" || m.Lines[0].Value != "Guaranty Trust Bank" || len(m.Details) != 0 || c.Lines[1].Value != "0123452222" {
+		t.Fatalf("masked: %+v (was %+v)", m, c)
+	}
+	p := MakeCard(KindPerson, "ada", "Ada", map[string]any{}, "")
+	if p.Lines == nil {
+		t.Fatal("lines nil")
+	}
+	_, fields, _ := CleanKind("Supplier", []Field{{Label: "Account", Type: "bank_account"}, {Label: "Note", Type: "text"}})
+	k := MakeCustomCard("Supplier", "s", "S", fields, map[string]string{"account": "Zenith Bank · 0123456789", "note": "x"}, nil)
+	if mk := k.Masked(); mk.Lines[0].Value != "Zenith Bank ••6789" || mk.Lines[1].Value != "x" {
+		t.Fatalf("custom masked: %+v", mk)
+	}
+}

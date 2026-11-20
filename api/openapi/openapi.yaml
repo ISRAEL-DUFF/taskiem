@@ -46633,6 +46633,9 @@ components:
           type: string
           enum: [bank_account, person, place, text, provider_account, file, custom]
           description: custom is one of the owner's own kinds (kind_id).
+        share_sensitive:
+          type: boolean
+          description: Sharing it in a chat shares what is sensitive (an account number, a phone, an email), so the sender is asked first.
         kind_id:
           type: string
           format: uuid
@@ -46891,6 +46894,9 @@ components:
                 type: string
               value:
                 type: string
+              sensitive:
+                type: boolean
+                description: The line holds what is sensitive (an account number, a phone, an email); its sender sees it masked.
         details:
           type: object
           additionalProperties:

@@ -127,7 +127,15 @@ func (m peopleRow) view(key []byte, owner uuid.UUID) (peopleMessage, peopleSeale
 		out.Card.PaidAt = m.paidAt
 		out.Card.PaidByMe = m.paidByMe
 	}
-	out.WarnTransfer = !out.Mine && ((out.Kind == "text" && warnTransfer(out.Body)) || m.screen == "transfer")
+	// A saved thing's card: masked in its sender's copy; naming an account,
+	// it warns as a transfer does.
+	if out.Card != nil && out.Card.Type == "saved" && out.Card.Saved != nil {
+		c := *out.Card
+		c.Saved = maskMine(out.Mine, c.Saved)
+		out.Card = &c
+	}
+	savedPay := out.Card != nil && out.Card.Type == "saved" && out.Card.Saved != nil && out.Card.Saved.NamesAccount()
+	out.WarnTransfer = !out.Mine && ((out.Kind == "text" && warnTransfer(out.Body)) || m.screen == "transfer" || savedPay)
 	return out, v
 }
 
@@ -166,6 +174,11 @@ func (d peopleDraft) screenText() string {
 			parts = append(parts, "Pay to "+a.Bank+" account "+a.AccountNumber+" "+a.AccountName)
 		}
 	}
+	// A saved thing's card carries the sender's own words: its title and
+	// lines are read as a message's are.
+	if d.card != nil && d.card.Type == "saved" && d.card.Saved != nil {
+		parts = append(parts, d.card.Saved.Words())
+	}
 	if d.location != nil {
 		parts = append(parts, d.location.Label)
 	}
@@ -178,8 +191,12 @@ func (d peopleDraft) screenText() string {
 	return strings.Join(out, "\n")
 }
 
-// asksToBePaid is a share card naming an account to pay.
+// asksToBePaid is a card naming an account to pay: a share card, or a
+// saved thing's with a bank account in it.
 func (d peopleDraft) asksToBePaid() bool {
+	if d.card != nil && d.card.Type == "saved" && d.card.Saved != nil {
+		return d.card.Saved.NamesAccount()
+	}
 	return d.card != nil && d.card.Type == "split" && d.card.PayTo != nil
 }
 
@@ -609,6 +626,8 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	// The share a saved thing's card makes, recorded once it is sent.
+	var share *savedShareRecord
 	var in struct {
 		Text     string          `json:"text"`
 		ClientID string          `json:"client_id"`
@@ -642,7 +661,7 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		var card *peopleCard
 		var err error
 		if in.Card.Type == "saved" {
-			card, err = s.savedPeopleCard(r, person, in.Card.Saved)
+			card, share, err = s.savedPeopleCard(r, person, in.Card.Saved, s.peopleShareTo(r.Context(), person, chi.URLParam(r, "id")))
 		} else {
 			card, err = s.makeCard(r.Context(), person, *in.Card)
 		}
@@ -671,8 +690,24 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 	code := http.StatusCreated
 	if !fresh {
 		code = http.StatusOK
+	} else {
+		s.recordShare(r, share)
 	}
 	writeJSON(w, code, m)
+}
+
+// peopleShareTo is who a people chat's share goes to, for the question and
+// the record: the other person's name, or "them".
+func (s *Server) peopleShareTo(ctx context.Context, person uuid.UUID, chat string) string {
+	id, err := uuid.Parse(chat)
+	if err != nil {
+		return ""
+	}
+	var name string
+	_ = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT u.name FROM people_chats c JOIN users u ON u.id = c.peer_id WHERE c.person_id = $1 AND c.id = $2`, person, id).Scan(&name)
+	})
+	return name
 }
 
 // sendPeopleFile is POST /v1/me/people/{id}/files (multipart: file; text,

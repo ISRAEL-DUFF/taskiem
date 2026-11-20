@@ -34,18 +34,23 @@ type Card struct {
 type CardLine struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+	// Sensitive: what the sender was asked before sharing (an account
+	// number, a phone, an email, a made-up kind's sensitive field). It is
+	// masked in the sender's own copy (Masked).
+	Sensitive bool `json:"sensitive,omitempty"`
 }
 
 // MakeCard is the card for an object of kind with its kept details and, for
 // a bank account, its account number in full.
 func MakeCard(kind, name, title string, details map[string]any, accountNumber string) Card {
 	str := func(k string) string { v, _ := details[k].(string); return v }
-	c := Card{Kind: kind, Title: title, Name: name, Details: map[string]any{}}
+	c := Card{Kind: kind, Title: title, Name: name, Lines: []CardLine{}, Details: map[string]any{}}
 	line := func(label, key, value string) {
 		if value == "" {
 			return
 		}
-		c.Lines = append(c.Lines, CardLine{Label: label, Value: value})
+		sensitive := key == "account_number" || key == "phone" || key == "email"
+		c.Lines = append(c.Lines, CardLine{Label: label, Value: value, Sensitive: sensitive})
 		if key != "" {
 			c.Details[key] = value
 		}
@@ -79,6 +84,55 @@ func MakeCard(kind, name, title string, details map[string]any, accountNumber st
 		c.Details["type"], c.Details["provider"] = str("type"), str("provider")
 	}
 	return c
+}
+
+// Masked is the card as its sender's own copy shows it: what they were
+// asked before sharing masked (sharing is not a way to see a value in full,
+// which only reveal with a passkey is), and no details to save it by.
+func (c Card) Masked() Card {
+	out := c
+	out.Details = map[string]any{}
+	out.Lines = make([]CardLine, len(c.Lines))
+	for i, l := range c.Lines {
+		if l.Sensitive {
+			if bank, number := SplitBankValue(l.Value); bank != "" && len(number) == 10 {
+				l.Value = ShortBank(bank) + " " + Masked(number)
+			} else if l.Label == "Account number" {
+				l.Value = Masked(l.Value)
+			} else {
+				l.Value = MaskValue(l.Value)
+			}
+		}
+		out.Lines[i] = l
+	}
+	return out
+}
+
+// NamesAccount says whether the card gives an account to pay: a bank
+// account's number, or a made-up kind's bank account field.
+func (c Card) NamesAccount() bool {
+	for _, l := range c.Lines {
+		if !l.Sensitive {
+			continue
+		}
+		if l.Label == "Account number" {
+			return true
+		}
+		if bank, number := SplitBankValue(l.Value); bank != "" && len(number) == 10 {
+			return true
+		}
+	}
+	return false
+}
+
+// Words are what the card says, for the checks on strangers' messages:
+// its title and each line.
+func (c Card) Words() string {
+	parts := []string{c.Title}
+	for _, l := range c.Lines {
+		parts = append(parts, l.Label+": "+l.Value)
+	}
+	return strings.Join(parts, "\n")
 }
 
 // Plain is a card as plain lines, for WhatsApp, Telegram and Slack: the

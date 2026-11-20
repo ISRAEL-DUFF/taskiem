@@ -765,7 +765,8 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line); err != nil {
 				return m, err
 			}
-			m.WarnTransfer = !m.Mine && m.Kind != "card" && warnTransfer(m.Body)
+			m.WarnTransfer = !m.Mine && ((m.Kind != "card" && warnTransfer(m.Body)) || savedNamesAccount(m.Card))
+			m.Card = maskCustomerCard(m.Mine, m.Card)
 			return m, nil
 		})
 		if err != nil {
@@ -888,6 +889,7 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
+	m.Card = maskCustomerCard(m.Mine, m.Card)
 	return &m, err
 }
 
@@ -1059,7 +1061,7 @@ func (s *Server) sendPersonSaved(w http.ResponseWriter, r *http.Request, person 
 		s.personFail(w, r, errDoorYouBlocked)
 		return
 	}
-	c, err := s.savedCardFor(r, person, uuid.Nil, *sh, chat.Name)
+	c, rec, err := s.savedCardFor(r, person, uuid.Nil, *sh, chat.Name)
 	if err != nil {
 		if !shareConfirmFail(w, err) {
 			s.personFail(w, r, err)
@@ -1074,7 +1076,10 @@ func (s *Server) sendPersonSaved(w http.ResponseWriter, r *http.Request, person 
 	code := http.StatusCreated
 	if !fresh {
 		code = http.StatusOK
+	} else {
+		s.recordShare(r, rec)
 	}
+	m.Card = maskCustomerCard(true, m.Card)
 	writeJSON(w, code, m)
 }
 

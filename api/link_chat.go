@@ -384,6 +384,8 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var ments []links.Mention
+	// The shares saved things make, recorded once the message is sent.
+	var shares []*savedShareRecord
 	// Saved things shared (S1 part 3) apart: asked first before what is
 	// sensitive, each share recorded.
 	others := slices.DeleteFunc(slices.Clone(in.Mentions), func(m mentionRef) bool { return m.Kind == "saved" })
@@ -398,7 +400,8 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(others) < len(in.Mentions) {
-		shared, err := s.linkSavedMentions(r, link, in.Text, in.Mentions)
+		var shared []links.Mention
+		shared, shares, err = s.linkSavedMentions(r, link, in.Text, in.Mentions)
 		if err != nil {
 			if !shareConfirmFail(w, err) {
 				var se customerSendErr
@@ -424,6 +427,9 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	for _, rec := range shares {
+		s.recordShare(r, rec)
+	}
 	out := linkMessageOut{Message: m}
 	if tools {
 		out.Also = s.sendAlso(r.Context(), p, link, in.Text, ments)
@@ -435,11 +441,11 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 // linked business shares (saved objects S1, part 3): the business's own or
 // the sender's, each named in the words by its @name; the question, before
 // what is sensitive, names the other business.
-func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, error) {
+func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, []*savedShareRecord, error) {
 	p := principalFrom(r.Context())
 	person, err := personOf(r)
 	if err != nil {
-		return nil, customerSendErr{http.StatusForbidden, "Saved things are shared by a person, not a key."}
+		return nil, nil, customerSendErr{http.StatusForbidden, "Saved things are shared by a person, not a key."}
 	}
 	var name string
 	if err := s.tx(r, func(tx pgx.Tx) error {
@@ -447,27 +453,32 @@ func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string,
 		name = l.Name
 		return err
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	lower := strings.ToLower(text)
 	var out []links.Mention
+	var recs []*savedShareRecord
+	seen := map[uuid.UUID]bool{}
 	for _, ref := range refs {
 		if ref.Kind != "saved" {
 			continue
 		}
 		if ref.Saved == nil {
-			return nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+			return nil, nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
 		}
-		c, err := s.savedCardFor(r, person, p.TenantID, *ref.Saved, name)
+		if seen[ref.Saved.ID] {
+			continue
+		}
+		seen[ref.Saved.ID] = true
+		sh := *ref.Saved
+		sh.namedIn = text // named in the words before anything is asked
+		c, rec, err := s.savedCardFor(r, person, p.TenantID, sh, name)
 		if err != nil {
-			return nil, err
-		}
-		if !strings.Contains(lower, "@"+strings.ToLower(c.Name)) {
-			return nil, customerSendErr{http.StatusBadRequest, "Write @" + c.Name + " in the message to share it."}
+			return nil, nil, err
 		}
 		out = append(out, links.Mention{Kind: "saved", Name: c.Name, Saved: &c})
+		recs = append(recs, rec)
 	}
-	return out, nil
+	return out, recs, nil
 }
 
 // sendAlso sends a message to the other linked businesses it names, with
