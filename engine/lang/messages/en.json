@@ -1869,6 +1869,26 @@
       "reviewed": true,
       "context": "An invoice was asked for a saved thing that is not a person (a place, an account\u2026); {kind} is what it is"
     },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "A purchase's delivery place was set from a saved place: its reference, the place's name and address"
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": true,
+      "context": "Delivering to a saved thing that is not a place; {kind} is what it is"
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": true,
+      "context": "A saved place has no phone, and the business has no delivery number"
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": true,
+      "context": "Where a purchase is delivered could not be set; the reason follows"
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": true,

@@ -1496,6 +1496,22 @@
       "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
       "reviewed": false
     },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": false
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": false
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": false
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": false

@@ -355,6 +355,10 @@ func (s *Server) waPurchaseCommand(ctx context.Context, c *chat, text, cmd strin
 	if !s.Purchases.Ready() || !s.Stock.Ready() {
 		return false, nil
 	}
+	// "deliver order P-7QX4KD to @warehouse": a saved place (saved_deliver.go).
+	if done, err := s.waDeliverToSaved(ctx, c, text); done || err != nil {
+		return true, err
+	}
 	// "Buy 400 bags of cement from @Dangote and … from @Cherry" (mentions.go).
 	if strings.Contains(text, "@") {
 		if done, err := s.waMentionOrder(ctx, c, text); done || err != nil {
