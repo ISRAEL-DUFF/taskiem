@@ -31,6 +31,8 @@ import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardPill;
 import 'groups.dart' show pickAction, pickOneOf, askSure;
 import 'my_chat.dart' show sayFailure;
+import 'composer.dart' show Pickers;
+import 'saved_files.dart';
 import 'saved_kinds.dart';
 import 'words.dart' show CardTone;
 
@@ -73,6 +75,7 @@ const savedKinds = <String, ({String many, String one, String icon})>{
   'person': (many: 'People', one: 'A person', icon: 'b-person'),
   'place': (many: 'Places', one: 'A place', icon: 'b-pin'),
   'text': (many: 'Texts', one: 'A text', icon: 'b-note'),
+  'file': (many: 'Files', one: 'A photo or document', icon: 'b-upload'),
   'provider_account': (many: 'Bills', one: 'An account with a provider', icon: 'b-receipt'),
 };
 
@@ -217,9 +220,12 @@ class SavedApi {
 /// You › Settings › Saved accounts (mine), or a business's Settings ›
 /// Saved.
 class SavedAccountsPage extends StatefulWidget {
-  const SavedAccountsPage({super.key, required this.auth, required this.mine});
+  const SavedAccountsPage({super.key, required this.auth, required this.mine, this.pickers = const Pickers()});
   final Auth auth;
   final bool mine;
+
+  /// Where a photo or document to save comes from.
+  final Pickers pickers;
 
   @override
   State<SavedAccountsPage> createState() => _SavedAccountsPageState();
@@ -291,7 +297,14 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
       if (m != null) await _editCustom(m);
       return;
     }
+    if (k == 'file') return _editFile();
     await (k == 'bank_account' ? _edit() : _editThing(k));
+  }
+
+  /// Save a photo or document, or change one.
+  Future<void> _editFile([SavedObject? x]) async {
+    final saved = await showTkSheet<bool>(context, (_) => SavedFileSheet(api: _api, auth: widget.auth, thing: x, pickers: widget.pickers));
+    if (saved == true && mounted) await _load();
   }
 
   Future<void> _editCustom(SavedKind kind, [SavedObject? x]) async {
@@ -365,6 +378,7 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
           : '@${x.name} · ${x.hint}',
       actions: [
         ('change', 'Change', 'b-note', false),
+        if (x.kind == 'file') ('open', 'Open', 'b-eye', false),
         if (bank && !_shown.containsKey(x.id)) ('show', 'Show the number', 'b-eye', false),
         if (hidden) ('show', 'Show hidden', 'b-eye', false),
         ('remove', 'Remove', 'b-x', true),
@@ -372,7 +386,14 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     );
     if (!mounted) return;
     switch (pick) {
+      case 'open':
+        final f = savedFileOfThing(x);
+        if (f != null) await openSavedFile(context, widget.auth, widget.mine, x.id, f);
       case 'change':
+        if (x.kind == 'file') {
+          await _editFile(x);
+          return;
+        }
         if (x.kind == 'custom') {
           if (made != null) await _editCustom(made, x);
           return;

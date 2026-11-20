@@ -24,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed, this.onAttachSaved});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -57,6 +57,10 @@ class TagBox {
   /// Save "@mum"… when nothing saved has the name typed (saved objects S1,
   /// part 4): the name, to save something as.
   final void Function(String name)? onSaveNamed;
+
+  /// A saved file picked: attached to the message as itself (S1), what was
+  /// typed for it taken out of the box.
+  final void Function(TagSuggestion)? onAttachSaved;
 
   TagQuery? query;
   final picked = <TagSuggestion>[];
@@ -190,6 +194,18 @@ class TagBox {
     // A saved text's words in place of what was typed, to change before
     // sending; any other saved thing as its @name, which the words carry.
     final body = s.body;
+    final attach = onAttachSaved;
+    if (s.kind == 'saved' && s.fileName != null && attach != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      attach(s);
+      return;
+    }
     final named = onSaveNamed;
     if (s.kind == 'save-new' && named != null) {
       final out = insertWords(v.text, q, caret < end ? end : caret, '');

@@ -80,6 +80,8 @@ List<TagSuggestion> savedTags(List<SavedObject> mine, List<SavedObject> business
         savedKind: x.kind,
         savedOwner: x.owner,
         savedSensitive: savedSensitive(x.kind, x.details),
+        fileName: x.kind == 'file' ? (x.details.fileName ?? x.title) : null,
+        fileType: x.kind == 'file' ? (x.details.fileType ?? '') : null,
         body: x.kind == 'text' ? (x.details.body ?? '') : null,
       ),
   ];
@@ -111,7 +113,7 @@ String shareQuestion(TagSuggestion s, String to) {
 /// shared as cards ([mineOnly]: only the person's own). The screen calls
 /// typed() as the words change, draws plain() over its box, and disposes
 /// it.
-TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange, void Function(TagSuggestion)? onShare, bool mineOnly = false, void Function(String name)? onSaveNamed}) => TagBox(
+TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange, void Function(TagSuggestion)? onShare, bool mineOnly = false, void Function(String name)? onSaveNamed, void Function(TagSuggestion)? onAttach}) => TagBox(
   text: text,
   sources: () => (items: const <TagSuggestion>[], services: const <TagSuggestion>[], businesses: const <TagSuggestion>[], refs: const <String, List<TagSuggestion>>{}),
   grouped: () => false,
@@ -120,4 +122,5 @@ TagBox savedTextBox({required TextEditingController text, required Auth auth, re
   saved: SavedPicks(auth: auth, textsOnly: onShare == null, mineOnly: mineOnly, onChange: onChange),
   onShareSaved: onShare,
   onSaveNamed: onSaveNamed,
+  onAttachSaved: onAttach,
 );

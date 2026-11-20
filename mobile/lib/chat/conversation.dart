@@ -59,6 +59,7 @@ import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
 import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 
 /// Conversation.tsx PAGE: a page of messages.
 const _page = 50;
@@ -1115,6 +1116,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     ),
     savedAsTags: true,
     onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    onAttachSaved: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => composerKey.currentState?.choose(f))),
   );
 
   /// The tags a message sends, with a yes to each saved thing's sensitive

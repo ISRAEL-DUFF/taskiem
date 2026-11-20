@@ -60,6 +60,7 @@ import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
 import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 
 /// How often an open group reads again.
 const _poll = Duration(seconds: 4);
@@ -856,7 +857,10 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
     onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
   GroupMessage? _reply;
   String? _paying;
@@ -1343,6 +1347,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                   if (d.canSend) _saved.plain(),
                   if (d.canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

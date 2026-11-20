@@ -19,7 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
-import 'save_as.dart' show saveNamed;
+import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'saved_picks.dart';
 import 'dart:async';
@@ -47,6 +47,8 @@ import 'customer_orders.dart' show CustomerOrders;
 import 'door.dart';
 import 'thread.dart';
 import 'words.dart';
+import 'saved_files.dart' show attachSavedFile;
+import 'menu.dart' show showMessageMenu;
 
 // --- words (lib/customerchat.ts) ---
 
@@ -586,6 +588,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
     // Anything else: shared as a card in the app, as lines on WhatsApp.
     onShare: (s) => unawaited(widget.data.shareSaved(s.id, s.savedOwner ?? 'business', askShare(context), line: _on)),
     onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    // A saved file: sent as itself, in the app (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => unawaited(widget.data.sendFile(f)))),
   );
   StreamSubscription<String>? _back;
 
@@ -658,6 +662,20 @@ class _CustomerScreenState extends State<CustomerScreen> {
     if (words.trim().isEmpty) return;
     _text.clear();
     widget.data.send(words, line: _on);
+  }
+
+  /// A message's menu (saved objects S1): Copy and Save as… on its words,
+  /// Save as… on a photo or document, into the business's saved things
+  /// for whoever may manage them.
+  Future<void> _hold(CustomerLine x, Rect at) async {
+    final m = x.m;
+    final a = m.attachment;
+    final words = m.card == null && m.kind != 'media' && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
+    final file = a != null && a.kind != 'voice';
+    final auth = widget.data.chats.auth;
+    final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true);
+    if (items.isEmpty) return;
+    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
 
   @override
@@ -813,7 +831,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                 final meta = m.m.mine && m.m.card == null ? t.chatOutMeta : t.muted;
                                 return Padding(
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
-                                  child: DoorBubble(
+                                  child: BubbleHold(
+                                    label: m.m.mine ? 'Your message' : 'Message from the customer',
+                                    onHold: m.local ? null : (at) => _hold(m, at),
+                                    child: DoorBubble(
                                     id: m.id,
                                     mine: m.m.mine,
                                     first: first,
@@ -837,10 +858,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                         if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
                                       ],
                                     ),
-                                  ),
+                                  )),
                                 );
                               }
-                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null));
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null)));
                             },
                           ),
                         ),

@@ -12503,7 +12503,7 @@ class ListSavedResponse {
 /// A saved thing (saved objects S0), as its owner's people see it. A bank
 /// account's number is only ever masked here.
 class SavedObject {
-  const SavedObject({required this.check, required this.createdAt, required this.details, required this.hint, required this.id, required this.kind, this.kindId, this.kindName, required this.name, required this.owner, required this.title, required this.toChange, required this.updatedAt, this.values});
+  const SavedObject({required this.check, required this.createdAt, required this.details, this.files, required this.hint, required this.id, required this.kind, this.kindId, this.kindName, required this.name, required this.owner, required this.title, required this.toChange, required this.updatedAt, this.values});
 
   final SavedObjectCheck check;
   final DateTime createdAt;
@@ -12513,6 +12513,9 @@ class SavedObject {
   /// (body); an account with a provider's (type, provider, number, name_on_it);
   /// and every kind's note.
   final SavedObjectDetails details;
+  /// A made-up kind's file fields, each its file's name, type and size (GET
+  /// …/saved/{id}/file?field= opens it).
+  final Map<String, dynamic>? files;
   /// What a list shows ("GTBank ••6789").
   final String hint;
   final String id;
@@ -12536,6 +12539,7 @@ class SavedObject {
         check: SavedObjectCheck.fromJson(j['check'] as Map<String, dynamic>),
         createdAt: DateTime.parse(j['created_at'] as String),
         details: SavedObjectDetails.fromJson(j['details'] as Map<String, dynamic>),
+        files: j['files'] == null ? null : j['files'] as Map<String, dynamic>,
         hint: j['hint'] as String,
         id: j['id'] as String,
         kind: j['kind'] as String,
@@ -12553,6 +12557,7 @@ class SavedObject {
         'check': check.toJson(),
         'created_at': createdAt.toUtc().toIso8601String(),
         'details': details.toJson(),
+        'files': ?files,
         'hint': hint,
         'id': id,
         'kind': kind,
@@ -12605,7 +12610,7 @@ class SavedObjectCheck {
 /// (body); an account with a provider's (type, provider, number, name_on_it);
 /// and every kind's note.
 class SavedObjectDetails {
-  const SavedObjectDetails({this.accountNumber, this.address, this.area, this.bankCode, this.bankName, this.birthday, this.body, this.codeFrom, this.email, this.landmark, this.line, this.nameOnIt, this.note, this.number, this.phone, this.provider, this.type});
+  const SavedObjectDetails({this.accountNumber, this.address, this.area, this.bankCode, this.bankName, this.birthday, this.body, this.codeFrom, this.email, this.file, this.fileName, this.fileSize, this.fileType, this.landmark, this.line, this.nameOnIt, this.note, this.number, this.phone, this.provider, this.type});
 
   /// Masked (••6789).
   final String? accountNumber;
@@ -12617,6 +12622,11 @@ class SavedObjectDetails {
   final String? body;
   final String? codeFrom;
   final String? email;
+  /// A file's (GET …/saved/{id}/file opens it).
+  final String? file;
+  final String? fileName;
+  final int? fileSize;
+  final String? fileType;
   final String? landmark;
   final String? line;
   final String? nameOnIt;
@@ -12636,6 +12646,10 @@ class SavedObjectDetails {
         body: j['body'] == null ? null : j['body'] as String,
         codeFrom: j['code_from'] == null ? null : j['code_from'] as String,
         email: j['email'] == null ? null : j['email'] as String,
+        file: j['file'] == null ? null : j['file'] as String,
+        fileName: j['file_name'] == null ? null : j['file_name'] as String,
+        fileSize: j['file_size'] == null ? null : (j['file_size'] as num).toInt(),
+        fileType: j['file_type'] == null ? null : j['file_type'] as String,
         landmark: j['landmark'] == null ? null : j['landmark'] as String,
         line: j['line'] == null ? null : j['line'] as String,
         nameOnIt: j['name_on_it'] == null ? null : j['name_on_it'] as String,
@@ -12656,6 +12670,10 @@ class SavedObjectDetails {
         'body': ?body,
         'code_from': ?codeFrom,
         'email': ?email,
+        'file': ?file,
+        'file_name': ?fileName,
+        'file_size': ?fileSize,
+        'file_type': ?fileType,
         'landmark': ?landmark,
         'line': ?line,
         'name_on_it': ?nameOnIt,
@@ -13186,6 +13204,9 @@ class SavedKindField {
   /// Sealed, masked in lists, shown in full only on a fresh unlock, asked
   /// before sharing.
   final bool? sensitive;
+  /// A place is an address in one line; a bank account its bank and 10-digit
+  /// number (always sensitive); a file the id of an upload (POST
+  /// …/saved/uploads).
   final String type;
 
   factory SavedKindField.fromJson(Map<String, dynamic> j) => SavedKindField(

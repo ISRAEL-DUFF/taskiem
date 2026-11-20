@@ -50,9 +50,11 @@ import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
-import 'save_as.dart' show saveNamed;
+import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
+import 'saved_files.dart' show attachSavedFile;
+import 'menu.dart' show showMessageMenu;
 
 
 /// The words for a failure, as the chats say them.
@@ -821,7 +823,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
     onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
 
   MyChatData get d => widget.data;
@@ -919,6 +924,18 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   /// A card's button: Pay opens its pay link (an invoice's page) in the
   /// app; Book, that service; a product, their shop; an order or a
   /// delivery, your orders with them.
+  /// A message's menu (saved objects S1): Copy and Save as… on its words,
+  /// Save as… on a photo or document.
+  Future<void> _hold(MyLine x, Rect at) async {
+    final m = x.m;
+    final a = m.attachment;
+    final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
+    final file = a != null && a.kind != 'voice';
+    final items = saveAsItems(context, d.auth, words: words, filePath: file ? '/v1/me/chats/${d.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '');
+    if (items.isEmpty) return;
+    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+  }
+
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
     'pay' when (c.url ?? '').isNotEmpty => ('Pay', () => _openUrl(c.url!, 'The pay page didn’t open. Try again.')),
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
@@ -1012,7 +1029,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                         final act = m.card == null ? null : _cardAction(m.card!);
                         return Padding(
                           padding: EdgeInsets.only(top: first ? 6 : 0),
-                          child: DoorBubble(
+                          child: BubbleHold(
+                            label: m.mine ? 'Your message' : 'Message from ${d.name}',
+                            onHold: x.local ? null : (at) => _hold(x, at),
+                            child: DoorBubble(
                             id: m.id,
                             mine: m.mine,
                             first: first,
@@ -1039,7 +1059,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
                             ),
-                          ),
+                          )),
                         );
                       },
                     ),
@@ -1053,6 +1073,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                   if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

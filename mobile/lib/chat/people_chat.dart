@@ -58,6 +58,7 @@ import 'thread.dart';
 import 'words.dart';
 import 'pick_problem.dart';
 import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -790,7 +791,10 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
     onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
   String? _paying;
@@ -1187,6 +1191,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                   if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

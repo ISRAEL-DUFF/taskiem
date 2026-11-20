@@ -55,6 +55,7 @@ import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
 import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 import '../kit/mobile.dart' show TkRoute;
 import '../school/school_chasing.dart' show DebtorsPage;
 import '../school/school_clearance.dart' show ClearancePage;
@@ -522,7 +523,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       },
     ),
     onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    onAttachSaved: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
 
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
@@ -722,6 +725,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
                 ),
                 Composer(
+                  key: _composer,
                   tools: d.chats.chatTools ? _tools : null,
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to

@@ -17,7 +17,10 @@ import '../theme/look.dart';
 import 'approve.dart' show TkTextBox;
 import 'groups.dart' show pickOneOf;
 import 'my_chat.dart' show sayFailure;
+import 'attachments.dart' show fileSize;
+import 'composer.dart' show Pickers;
 import 'saved_accounts.dart' show SavedApi, cleanSavedName, savedNameProblem;
+import 'saved_files.dart';
 
 /// The types a field may have, as the form names them.
 const savedFieldTypes = <(String, String)>[
@@ -28,6 +31,9 @@ const savedFieldTypes = <(String, String)>[
   ('phone', 'A phone'),
   ('email', 'An email'),
   ('choice', 'A choice from a list'),
+  ('place', 'A place (an address)'),
+  ('bank_account', 'A bank account'),
+  ('file', 'A photo or document'),
 ];
 
 /// A value as a person reads it: money as naira, a date as a day; a
@@ -216,8 +222,11 @@ class _SavedKindSheetState extends State<SavedKindSheet> {
 
 /// Save a thing of a made-up kind, or change one. Pops true when saved.
 class SavedCustomSheet extends StatefulWidget {
-  const SavedCustomSheet({super.key, required this.api, required this.kind, this.thing, this.startName});
+  const SavedCustomSheet({super.key, required this.api, required this.kind, this.thing, this.startName, this.pickers = const Pickers()});
   final SavedApi api;
+
+  /// Where a file field's photo or document comes from.
+  final Pickers pickers;
   final SavedKind kind;
   final SavedObject? thing;
 
@@ -238,8 +247,43 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
   late final Map<String, TextEditingController> _v = {
     for (final f in widget.kind.fields) f.key ?? '': TextEditingController(text: (f.sensitive ?? false) ? '' : (_had[f.key ?? ''] ?? '')),
   };
+  // A bank account field's bank, chosen by name; a file field's file.
+  final _bank = <String, String>{};
+  late final Map<String, SavedFileMeta> _files = {
+    for (final e in (widget.thing?.files ?? const <String, dynamic>{}).entries) e.key: savedFileMetaOf((e.value as Map).cast<String, dynamic>()),
+  };
   bool _busy = false;
   String? _error;
+
+  Future<void> _pickBank(SavedKindField f) async {
+    try {
+      final b = await widget.api.banks();
+      if (!mounted) return;
+      final v = await pickOneOf(context, title: '${f.label}: the bank', value: _bank[f.key ?? ''], searchHint: 'Find the bank', choices: [for (final x in b.banks) (x.name, x.name, '')]);
+      if (v != null && mounted) setState(() => _bank[f.key ?? ''] = v);
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = sayFailure(e));
+    }
+  }
+
+  Future<void> _pickFile(SavedKindField f) async {
+    try {
+      final m = await pickSavedFile(context, widget.api.auth, widget.api.mine, widget.pickers);
+      if (m != null && mounted) setState(() => (_files[f.key ?? ''] = m, _v[f.key ?? '']!.text = m.id));
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = sayFailure(e));
+    }
+  }
+
+  /// A field's value as it is sent: a bank account's bank and number.
+  String _valueOf(SavedKindField f) {
+    final key = f.key ?? '';
+    final v = _v[key]!.text.trim();
+    if (f.type != 'bank_account') return v;
+    final digits = v.replaceAll(RegExp(r'\D'), '');
+    final bank = _bank[key] ?? '';
+    return bank.isEmpty || digits.isEmpty ? '' : '$bank · $digits';
+  }
 
   @override
   void dispose() {
@@ -260,7 +304,7 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
     String? problem = savedNameProblem(_name.text) ?? (_title.text.trim().isEmpty ? 'Give it a title, like My car.' : null);
     for (final f in widget.kind.fields) {
       final key = f.key ?? '';
-      if (problem == null && (f.required ?? false) && _v[key]!.text.trim().isEmpty && !(x != null && (_had[key] ?? '').isNotEmpty)) {
+      if (problem == null && (f.required ?? false) && _valueOf(f).isEmpty && !(x != null && (_had[key] ?? '').isNotEmpty)) {
         problem = '${f.label} is needed.';
       }
     }
@@ -268,7 +312,7 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
     final values = <String, dynamic>{};
     for (final f in widget.kind.fields) {
       final key = f.key ?? '';
-      final v = _v[key]!.text.trim();
+      final v = _valueOf(f);
       if (v.isNotEmpty) {
         values[key] = v;
       } else if (x != null && !(f.sensitive ?? false) && (_had[key] ?? '').isNotEmpty) {
@@ -325,6 +369,30 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
                   if (kept) 'Kept as ${_had[key]}: type it only to change it' else if (f.sensitive ?? false) 'Kept sealed',
                   if (f.type == 'date') 'Like 2027-03-03',
                 ].join('. ');
+                if (f.type == 'file') {
+                  final m = _files[key];
+                  return TkKitField(
+                    label: f.label,
+                    hint: hint.isEmpty ? null : hint,
+                    field: false,
+                    child: TkPickBox(label: f.label, shown: m == null ? 'Choose a photo or PDF' : '${m.name} · ${fileSize(m.size)}', onTap: () => _pickFile(f)),
+                  );
+                }
+                if (f.type == 'bank_account') {
+                  return TkKitField(
+                    label: f.label,
+                    hint: hint.isEmpty ? null : hint,
+                    field: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TkPickBox(label: '${f.label}: the bank', shown: _bank[key] ?? 'Choose the bank', onTap: () => _pickBank(f)),
+                        const SizedBox(height: 8),
+                        TkTextBox(controller: _v[key]!, max: 14, digits: 10),
+                      ],
+                    ),
+                  );
+                }
                 if (f.type == 'choice') {
                   return TkKitField(
                     label: f.label,

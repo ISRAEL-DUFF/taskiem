@@ -14,7 +14,7 @@ import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner, this.savedSensitive = false});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner, this.savedSensitive = false, this.fileName, this.fileType});
 
   /// A saved thing (kind "saved", saved objects S1): its kind, and a
   /// text's words, which a pick puts in the box in place of what was typed.
@@ -26,6 +26,10 @@ class TagSuggestion {
   /// A saved thing that holds what is sensitive (saved.MakeCard's rule):
   /// sharing it asks first.
   final bool savedSensitive;
+
+  /// A saved file's name and type: picked, it is attached as itself.
+  final String? fileName;
+  final String? fileType;
   final String? body;
 
   /// A short word on the right ("Invoice").
