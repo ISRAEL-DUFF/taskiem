@@ -1288,3 +1288,21 @@ for (const scheme of ["light", "dark"] as const)
       expect(vs, describe("/transparency", vs)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
+
+// The privacy notice and how to delete an account, signed out (Google Play asks both).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`the privacy and account deletion pages pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.route("**/v1/app/config", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ support_email: "help@taskiem.test" }) }));
+      for (const [path, id] of [["/privacy", "privacy"], ["/delete-account", "delete-account"]] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(id)).toBeVisible();
+        await expect(page.getByTestId("legal-email").first()).toHaveAttribute("href", "mailto:help@taskiem.test");
+        const vs = await axe(page);
+        expect(vs, describe(path, vs)).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+      await expect(page.getByTestId("delete-steps-app")).toContainText("Delete your account");
+    });

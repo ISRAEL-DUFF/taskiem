@@ -80,7 +80,26 @@ Future<void> _settle(WidgetTester t) async {
   }
 }
 
+/// Store listings (mobile/README.md, "Releasing to Google Play"): with
+/// STORE_DIR set, each screen is also written there at a phone's sharpness
+/// (three pixels to a point), not compared with anything.
+Future<void> _store(WidgetTester t, String name) async {
+  final dir = Platform.environment['STORE_DIR'];
+  if (dir == null || dir.isEmpty) return;
+  await t.runAsync(() async {
+    final view = t.binding.renderViews.first;
+    final size = view.paintBounds;
+    // ignore: invalid_use_of_protected_member
+    final layer = view.debugLayer! as OffsetLayer;
+    final image = await layer.toImage(Rect.fromLTWH(0, 0, size.width, size.height.clamp(0, _tallest)), pixelRatio: 3);
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    Directory(dir).createSync(recursive: true);
+    File('$dir/$name.png').writeAsBytesSync(png!.buffer.asUint8List());
+  });
+}
+
 Future<void> _check(WidgetTester t, String name) async {
+  await _store(t, name);
   final file = File('test/looks/$name.png');
   final shot = await t.runAsync(() async {
     final view = t.binding.renderViews.first;

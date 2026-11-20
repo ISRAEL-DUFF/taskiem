@@ -120,6 +120,10 @@ type Server struct {
 	// AppMinVersion is the lowest phone app version this server serves
 	// (TASKIEM_APP_MIN_VERSION, GET /v1/app/config); empty is the first.
 	AppMinVersion string
+	// SupportEmail is where people write to Taskiem (TASKIEM_SUPPORT_EMAIL):
+	// told by GET /v1/app/config, and shown on the privacy notice and the
+	// page saying how to delete an account. Empty: not shown.
+	SupportEmail string
 	// SignupPerAddress is how many signups one client address may make a
 	// day, across every replica (TASKIEM_SIGNUP_PER_ADDRESS); 0 is the
 	// default (5), negative is no limit.

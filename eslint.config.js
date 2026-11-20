@@ -17,7 +17,7 @@ export default tseslint.config(
   },
   // The phone app's fixture recorder (mobile/tool/capture.mjs) runs on Node.
   {
-    files: ["mobile/tool/*.mjs"],
+    files: ["mobile/tool/*.mjs", "docs/store/*/*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
   },
   // The explainer's renderer, the recordings and the how-to videos

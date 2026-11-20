@@ -40553,6 +40553,10 @@ components:
         chat_signup:
           type: boolean
           description: Whether the app may sign people up as on WhatsApp (`app` in TASKIEM_CHAT_SIGNUP, with WhatsApp and terms).
+        support_email:
+          type: string
+          format: email
+          description: Where people write to Taskiem (TASKIEM_SUPPORT_EMAIL), shown on the privacy notice and the account deletion page. Absent when none is set.
         push:
           type: object
           description: Present when phones can be notified (Firebase is set up). The app starts Firebase with these public client values, so turning notifications on needs no new build.

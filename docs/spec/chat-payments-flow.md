@@ -107,9 +107,9 @@ the card that shows it, and both cards following the payment.
 - **The amount is what is due now.** The number is for the bill's
   `due_kobo` when it is asked for; part payments and queries change what
   the next number is for.
-- **How long it is good for**: 30 minutes, as invoice numbers are today
-  (`AccountMinutes`, kept within the rail's own range). Whether a
-  business may set its own is open question 5.
+- **How long it is good for**: 60 minutes by default (`AccountMinutes`,
+  kept within the rail's own range), with **I need longer** for the
+  buyer (settled, 5).
 - **Who may ask**: someone in the buyer's business with leave to manage
   bills (`invoice.manage`), as for the bill page. The request crosses to
   the seller's side the way link actions do (a definer function owned by
@@ -183,18 +183,14 @@ the card that shows it, and both cards following the payment.
 - **WhatsApp**: "pay INV-0001" answers with the number in words; paid
   says so.
 
-### Open questions
+### Settled (19 November 2026)
 
-1. **Fees.** If the seller's rail charges per transfer, who bears it? Today
-   the invoice fee rule (N1) applies to the seller. Keep it so?
-2. **Default way to pay.** Should Pay by transfer be first even when the
-   buyer has Pay from Taskiem? Paying from Taskiem needs an approval; a
-   transfer from the buyer's own bank needs none in Taskiem.
-3. **Several bills at once.** A buyer owing three bills to one supplier
-   may want one number for all three. Leave that for part 2
-   (statements), or include it here?
-4. **Customers (not linked businesses).** The customer thread's invoice
-   cards could use the same transfer card. Same part, or the next?
-5. **How long a number is good for.** Fixed at 30 minutes today. A buyer
-   paying from a business bank account with approvals may need longer.
-   Should the seller be able to set it (within the rail's range)?
+The founder answered the five open questions. Where the text above says otherwise, this holds.
+
+| # | Question | Settled |
+| --- | --- | --- |
+| 1 | Fees | **The seller bears the fee.** The buyer sends exactly the bill's amount; the fee is its own line in the seller's money log |
+| 2 | The default way to pay | **By transfer first**, with Pay from Taskiem and the checkout below it. The buyer's last choice for each seller is remembered and comes first next time |
+| 3 | Several bills at once | **One bill at a time.** When a bill turns Paid and the same seller has another open, the card offers **Pay the next one**. One number for several bills waits for statements |
+| 4 | Customers | **In part 1.** A customer's invoice card gets the same Pay by transfer: the number is shown to the customer the invoice is for; a customer on WhatsApp gets it as plain lines ("Send exactly ₦45,000 to 0123456789, Wema Bank, Bola Stores. Good for 60 minutes.") and a message when it lands; asking for numbers again and again is rate-limited, as checkout is; the checkout stays one tap below |
+| 5 | How long a number is good for | **60 minutes by default**, where the seller's provider allows. The buyer may press **I need longer** on the sheet, which asks for the longest the provider gives; it is hidden where the provider offers one fixed time. The seller has no setting. A payment that lands after expiry is still counted, and **Get a new number** is one tap |

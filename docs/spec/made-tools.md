@@ -1,6 +1,6 @@
 # Made tools: a workflow as a tool in the chat
 
-Status: **plan; not built, and nothing here is decided.** Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder has to decide, each with a recommendation. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
+Status: **plan, settled; not built.** The founder took every recommendation in §14 on 19 November 2026. Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder decided. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
 
 ## 1. Summary
 
@@ -122,7 +122,7 @@ Rules:
 
 ## 7. The answer
 
-A tool's answer is built from the workflow's `outputs`, which already exist with names and types and are already kept when a run completes. `answer.type` chooses the shape.
+A tool's answer is built from the workflow's `outputs`, which already exist with names and types and are already kept when a run completes. `answer.type` chooses the shape. The shapes are one named part of the schema, `shapes/v1`, which [pages](pages.md) use too, so each has one definition and one renderer.
 
 **Where the answer's expressions run.** Not in the run. The API works them out when it draws the answer, over two names only: `outputs` (what the completed run recorded) and, in a list, `item`. They cannot read steps, the trigger, secrets or the environment, so an answer can show nothing the workflow did not choose to give back, and `decide()` is not touched.
 
@@ -182,7 +182,7 @@ Rules:
 - **Outside WhatsApp's 24-hour window** an answer cannot be free text or carry buttons: it goes as the run-outcome template with **Open**, as outcomes do now.
 - **An answer is not a record.** It is drawn from the run's outputs when the run ends and kept as a message. It does not update itself afterwards, so a list can be stale by the time a row's button is pressed: the workflow behind the button must check the state itself.
 - **An answer that comes when the app is closed** is not announced on the phone: [chat push](chat-push.md) covers messages from linked businesses and leaves Taskiem's own conversation out (its decision 4). People with WhatsApp, Telegram or Slack linked get it there. Push for answers is its own small plan.
-- **Not in this plan:** files and photos as inputs or as answers (a receipt, a report as a PDF), and dates picked from a calendar. A date is typed, and the reader may propose it from "Monday".
+- **Not in this plan:** files as answers (a receipt, a report as a PDF), and dates picked from a calendar. A photo, a location, a scanned code and a signature as **inputs** are [device fields](device-fields.md), their own plan. A date is typed, and the reader may propose it from "Monday".
 
 ## 8. Care: what a tool asks before it runs
 
@@ -194,15 +194,15 @@ Today every start from chat needs an explicit **yes** after a summary. That is r
 
 | Care | When | What the person sees |
 | --- | --- | --- |
-| **Answers at once** | Every step that reaches outside is a `read`: connector actions of class `read`, `http` steps that are `GET` or `HEAD`, code steps (whose `host.fetch` allows only those), `ai` steps (within the AI budget). No step that writes a table, sends a message, asks a person (a form or approval step), runs a container, or starts another workflow | An echo of what was understood ("Leave left for: Musa"), then the answer |
+| **Answers at once** | Every step that reaches outside is a `read`: connector actions of class `read`, `http` steps that are `GET` or `HEAD`, code steps **only when every host function they declare is a read** (`host.fetch` allows only `GET` and `HEAD`; a code step that declares any other, or none that can be checked, counts as a write), `ai` steps (within the AI budget). No step that writes a table, sends a message, asks a person (a form or approval step), runs a container, or starts another workflow | An echo of what was understood ("Leave left for: Musa"), then the answer |
 | **Yes** | Anything else | The summary of exactly what will run, then **yes**, as now |
-| **Step-up** | The business's policies ask for it for this workflow or a step in it | **Yes**, then the PIN or the hand-off link, as an approval does now |
+| **Step-up** | The business's policies ask for it for this workflow or a step in it; **or a step moves money out of the business** (a payout or transfer action of a payments connector, such as `pay_bank`), whatever the policies say | **Yes**, then the PIN or the hand-off link, as an approval does now |
 
 - `wdcheck` works this out when a version is published and stores it with the tool. A step whose class is not known counts as a write. A template step is judged by the steps it expands into. A subflow step counts as a write: its child is a run of its own, and its version may change after this one is published.
 - A `GET` that changes something at the far end (a badly made API) would pass as a read. The owner's switch below is the answer to that, and the publishing screen says a tool will answer without asking.
 - An owner may make a tool **more** careful in its settings (always ask **yes**), never less.
 - An approval step inside the workflow is separate and unchanged: care is about starting the run, approval is about a step in it.
-- **The echo line matters.** With no **yes**, the person must still see what the reader understood, so a wrong reading is noticed.
+- **The echo line matters.** With no **yes**, the person must still see what the reader understood, so a wrong reading is noticed. It carries **every value** the reader filled in, not a summary. An owner may switch a tool to **always ask**, which gives it **yes** whatever its care; the switch ships with T1.
 - This changes one row of [WhatsApp's security model](../whatsapp.md#security-model) ("every start needs an explicit yes"). It is a decision (§14, 2). The reason to allow it is that such a tool changes nothing, not that it shows only what the person could already see: it may show more (above).
 
 ## 9. A question inside a run
@@ -245,7 +245,7 @@ A workflow that starts by itself is not a tool, but it should be able to lead to
 - **New: the answer.** A customer now gets the tool's answer, where today they get only a reference. This closes an item in WhatsApp's "Not yet".
 - A customer's answer shows only outputs the workflow marks `public: true`. Anything else is left out, so a workflow written for staff does not leak when someone later opens it to customers.
 
-**Linked businesses** (`for: "linked"`). A tool appears in the other business's side of the conversation ([business chat tools](business-chat-tools.md) §3), under "Their tools". The run is the offering business's, started by `link:<business>` with no roles, inputs by form, always **yes**, answer from `public` outputs only. This is the last phase, and it needs its own look at what a linked business may be shown.
+**Linked businesses** (`for: "linked"`). A tool appears in the other business's side of the conversation ([business chat tools](business-chat-tools.md) §3), under "Their tools". The run is the offering business's, started by `link:<business>` with no roles, inputs by form, always **yes**, answer from `public` outputs only. This is the last phase, and it has [its own plan](made-tools-linked.md), written 19 November 2026 and marked for later.
 
 ## 12. What the validator refuses
 
@@ -261,6 +261,7 @@ When a version with `tool` is validated (`wdcheck`), and again when it is deploy
 | A button whose `inputs` name a field its tool does not have | Checked at deploy against the tool then deployed; a button to a tool that does not exist is a warning, and the button says "This is not available" if pressed |
 | `for: "customers"` with inputs a form cannot carry (nested, more than ten) | Customers are never asked in chat |
 | `for: "customers"` or `"linked"` with an `answer` that reads an output not marked `public` | §11 |
+| `for: "customers"` or `"linked"` with a step that moves money out of the business | Only a member, with step-up, may start a run that pays (§8) |
 
 **A word reserved later.** A language turned on after a tool was deployed, or a new command of Taskiem's, can take a word a tool already uses. Taskiem's command wins from then on; the tool stays reachable by its tile, its `says` and `run`, and the owner is told to choose another command.
 
@@ -292,7 +293,9 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 
 ## 14. For the founder to decide
 
-| # | Question | Recommendation |
+**Settled 19 November 2026.** The founder took each recommendation below, one by one: a block (1); read-only tools answer at once for members, with the echo line (2); the panel follows the chat tools switch and commands work wherever `run` does (3); the public menu becomes customers' tools, by migration (4); linked businesses later, with [their plan](made-tools-linked.md) written now (5); tools first, with [pages](pages.md) written now (6); roles are a rule on every path (8); a tool's run counts as any run, with a plain message at the limit, a warning at 80% and each tool's use shown on its page (9). Number 7 needs no answer: the record takes the next free number. With them stands the review's rule that a step which moves money always makes care step-up (§8).
+
+| # | Question | Recommendation (taken) |
 | --- | --- | --- |
 | 1 | Is `tool` a block of the workflow, or a trigger type of its own (`chat`)? | **A block.** The inputs, the outputs and the run are the workflow's already, and one workflow then has one way to be started by a person wherever they are. A trigger type would give tools their own inputs and split `run` from tools |
 | 2 | May a read-only tool answer without **yes**? | **Yes**, with the echo line, for members only, because it changes nothing. It may show a person more than they could open themselves (§8); that is settled by who may use the tool, not by asking **yes**. Customers and linked businesses always get **yes** |
@@ -315,13 +318,13 @@ Publishing a tool is publishing its workflow: the same checks, four-eyes where t
 | T4 | `to: "starter"` on the form step | A run asks "Which branch?" in the chat it was started from and goes on with the answer |
 | T5 | Customers: the public menu carried over, answers for customers, `public` outputs | A customer picks from **menu**, fills the form, says **yes** and gets the answer |
 | T6 | The eight recipes, and the AI builder drafting `tool` | "Describe it" produces a working tool from one sentence |
-| T7 | Linked businesses | Its own plan |
+| T7 | Linked businesses | [Its own plan](made-tools-linked.md), for later |
 
 T1 is the first thing worth showing. T2 and T3 can go side by side after it.
 
 ## 16. What this is not
 
-- **Not pages.** A screen made of blocks for a workflow (a list, a board, figures) is a separate plan, discussed with the founder and not written. It should reuse this plan's shapes: a tool is an action block, a `list` answer is a list block.
+- **Not pages.** A screen made of blocks (a list, a board, figures) is a separate plan: [pages](pages.md), written 19 November 2026, built after this. It reuses this plan's shapes: a tool is an action, a `list` answer is a list block, a `card` a detail.
 - **Not the built-in tools rewritten.** Products, Stock, Orders, Money and the rest stay as built. They hold rules a wiring of steps must not be able to break.
 - **Not code in the chat.** A tool cannot bring its own drawing, script or frame. The shapes are Taskiem's, which is what lets the web, the phone app and WhatsApp all draw them and keeps the phone app's picture test meaningful.
 - **Not a bot.** There is no free conversation with a tool: it is called, it may ask through a form step, it answers.
@@ -427,6 +430,8 @@ The plan was read against the code on the day it was written. What that found:
 | A read-only tool "shows data the person may already see" | Wrong: a workflow reads with the business's connections. Who may see an answer is now its own point (§8, §14, §19) |
 | `roles` on a tool, with nothing behind it | Nothing limits who may start one workflow today, so `run <workflow>` walked round it. Now a rule on every path, and a decision (§5, §14, 8) |
 | `/command` on every app | Slack keeps `/` for itself, and Telegram offers only registered commands (§6), both to be checked |
+| A tool with a payout step was plain **yes**, so it could pay on a word typed in WhatsApp (found 19 November 2026, with [the build plan](build-plan-saved-tools-payments.md)) | A step that moves money makes care step-up, always; on WhatsApp, Telegram and Slack it is confirmed by the hand-off link, never by a typed yes; refused for customers' and linked tools (§8, §12). A workflow that pays a saved account uses `payments@1 prepare` ([paying people](chat-pay-people.md)) |
+| A code step always counted as a read; the echo line was a summary; roles were decided inside T0 (taken from pull request #211, 19 November 2026) | A code step is a read only when its declared host functions are; the echo carries every value and the owner has **always ask** (§8); the roles rule is built first, as its own small change before the rest of T0 ([the build plan](build-plan-saved-tools-payments.md), M0) |
 | Nothing on where an answer's expressions run | The API, over `outputs` and `item` only (§7) |
 | Nothing on a run started twice, or a button pressed by two people | A key from the conversation; `once: true` (§6, §10) |
 | Nothing on a run that waits, is queued, or hits a quota | §7, and a decision on counting (§14, 9) |

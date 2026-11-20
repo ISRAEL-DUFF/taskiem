@@ -16,6 +16,9 @@ import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
+// The day the pictures were made: the bill falls due the next day.
+DateTime _picturedOn() => DateTime(2026, 11, 19, 9);
+
 Map<String, dynamic> _bill({String status = 'open', bool disputed = false}) => {
   'id': 'B1',
   'reference': 'INV-0042',
@@ -106,7 +109,7 @@ void main() {
   }
 
   testWidgets('the list: left to pay, then paid', (t) async {
-    final sent = await open(t, (c) => BillsPage(auth: c.auth));
+    final sent = await open(t, (c) => BillsPage(auth: c.auth, now: _picturedOn));
     await looks(t, 'bills');
     expect(sent, containsAll(['LIST ', 'LIST status=paid']));
     expect(find.text('₦100,000'), findsWidgets);
@@ -206,7 +209,7 @@ void main() {
       t,
       TaskiemApp(
         mode: TkMode.light,
-        home: BillsPage(auth: chats.auth),
+        home: BillsPage(auth: chats.auth, now: _picturedOn),
       ),
       drive: settle,
     );

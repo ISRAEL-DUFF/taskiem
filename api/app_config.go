@@ -24,6 +24,11 @@ func (s *Server) appConfig(w http.ResponseWriter, _ *http.Request) {
 		// Signing up in the app as on WhatsApp (app_signup.go).
 		"chat_signup": s.appSignupOn(),
 	}
+	// Where to write to Taskiem: the privacy notice and the account
+	// deletion page show it, signed in or not.
+	if s.SupportEmail != "" {
+		out["support_email"] = s.SupportEmail
+	}
 	// The app starts Firebase with these (public client values, as in any
 	// app's google-services.json), so notifications turn on with no new build.
 	if s.Push.FCMOn() {

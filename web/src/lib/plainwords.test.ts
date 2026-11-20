@@ -69,6 +69,7 @@ const OWNER_FILES = [
   "pages/Basket.tsx",
   "pages/Groups.tsx",
   "pages/Transparency.tsx",
+  "pages/Legal.tsx",
   "pages/CustomerChatSettings.tsx",
   "pages/CustomerCards.tsx",
   "pages/Switch.tsx",

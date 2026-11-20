@@ -381,6 +381,13 @@ body:has(.login) { background: var(--bg); min-height: 100vh; }
   .auth-main { align-items: center; padding: 48px 32px; }
   .auth-main .login { margin: 0; align-self: center; padding: 36px 36px 30px; }
 }
+/* The privacy notice and account deletion (pages/Legal.tsx): long reading, so wider and from the top. */
+.auth-main .login.legal { max-width: 680px; align-self: flex-start; line-height: 1.55; }
+.auth-main .login.legal h2 { font-size: 17px; margin: 22px 0 6px; }
+.auth-main .login.legal ul, .auth-main .login.legal ol { padding-left: 20px; margin: 6px 0; }
+.auth-main .login.legal li { margin: 4px 0; }
+.auth-main .login.legal p a, .auth-main .login.legal li a { display: inline; padding: 0; }
+.auth-main .login.legal .legal-links { margin-top: 24px; color: var(--muted); }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(14, 15, 12, 0.32); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 50; animation: fade-in 0.12s ease-out; }
 .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; width: min(560px, 92vw); max-height: 86vh; overflow: auto; box-shadow: var(--shadow-lg); }
 .modal h2:first-child { font-size: 17px; }

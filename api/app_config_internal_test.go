@@ -28,12 +28,16 @@ func TestAppConfig(t *testing.T) {
 	if got["min_version"] != "0.1.0" || got["passkeys"] != false || got["signup"] != false {
 		t.Fatalf("defaults: %v", got)
 	}
+	if _, ok := got["support_email"]; ok {
+		t.Fatalf("a support address with none set: %v", got)
+	}
 	got = read(&Server{
 		AppMinVersion: "0.4.2",
 		AllowSignup:   true,
+		SupportEmail:  "help@taskiem.test",
 		WebAuthn:      webauthn.Config{RPID: "taskiem.test", Origins: []string{"https://taskiem.test"}},
 	})
-	if got["min_version"] != "0.4.2" || got["passkeys"] != true || got["signup"] != true {
+	if got["min_version"] != "0.4.2" || got["passkeys"] != true || got["signup"] != true || got["support_email"] != "help@taskiem.test" {
 		t.Fatalf("configured: %v", got)
 	}
 }
