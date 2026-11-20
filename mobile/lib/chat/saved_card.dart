@@ -48,7 +48,7 @@ class SavedCardView extends StatefulWidget {
   /// Save this (saveSavedCard); none, no button.
   final VoidCallback? onSave;
 
-  /// The words' colour on the bubble (white on your own pine bubble).
+  /// The words' colour on the bubble; none, the theme's.
   final Color? ink;
 
   @override

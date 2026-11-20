@@ -26,7 +26,7 @@ class TkTheme extends InheritedWidget {
   TkTokens get t => own ?? (mode == TkMode.dark ? tkAppDark : tkAppLight);
 
   /// The app look's accents of its own, for a part of a screen on a dark
-  /// ground in the light (your own pine bubble); else the mode's.
+  /// ground in the light; else the mode's.
   final TkLook? look;
 
   /// [child] with [change] made to the tokens in force (a part of a screen
@@ -49,29 +49,14 @@ class TkTheme extends InheritedWidget {
   bool updateShouldNotify(TkTheme old) => old.mode != mode || old.own != own || old.look != look;
 }
 
-/// The chat in the app's own look (docs/spec/mobile-app-look.md, "The
-/// chat"): no wallpaper, the page's ground under it; their bubbles white
-/// (#1A1B1A in the dark), yours pine (a deep green in the dark); read ticks
-/// lime. The rest of the tokens are the web's.
-final tkAppLight = tkLight.copyWith(
-  chatWallpaper: const Color(0xFFF2F3F0),
-  chatIn: const Color(0xFFFFFFFF),
-  chatOut: const Color(0xFF0D3B2E),
-  chatOutMeta: const Color(0xB3FFFFFF),
-  chatTickRead: const Color(0xFFC8F169),
-  chatShadow: const Color(0x0D000000),
-  chatDoodle: const Color(0x00000000),
-);
+/// The app's tokens. The chat's colours are the web chat's, WhatsApp's
+/// (docs/spec/mobile-app-look.md, "The chat", 20 November 2026): the warm
+/// wallpaper with its doodles, their bubbles white (a lifted grey in the
+/// dark), yours light green with the usual dark words, read ticks blue. The
+/// chat keeps the app's own shapes; only its colours went back.
+final tkAppLight = tkLight;
 
-final tkAppDark = tkDark.copyWith(
-  chatWallpaper: const Color(0xFF000000),
-  chatIn: const Color(0xFF1A1B1A),
-  chatOut: const Color(0xFF1D3A2D),
-  chatOutMeta: const Color(0xA6F2F3F0),
-  chatTickRead: const Color(0xFFC8F169),
-  chatShadow: const Color(0x00000000),
-  chatDoodle: const Color(0x00000000),
-);
+final tkAppDark = tkDark;
 
 /// The families after Inter's latin file, one per alphabet: the browser picks
 /// among the web's files by unicode-range; Flutter falls back letter by letter.

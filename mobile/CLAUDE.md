@@ -71,12 +71,15 @@ theme has.
 
 ## Mistakes that have happened before
 
-- **Your own words on the pine bubble.** In the light theme your bubble is
-  dark pine and its words white. `ownWords` recolours the theme *inside*
-  the bubble, so a colour read *outside* it (a `t` taken at the top of
-  `build`) is still the dark one. Work the ink out yourself:
-  `final ink = mine && TkTheme.of(context).mode != TkMode.dark ? white : t.text;`
-  (see `chat/door.dart`, `chat/customer.dart`).
+- **The chat's colours are WhatsApp's.** Bubbles, wallpaper and ticks
+  are the web chat's tokens (`t.chatIn`, `t.chatOut`, `t.chatWallpaper`,
+  `t.chatDoodle`, `t.chatTickRead`): your own bubble is light green with
+  the theme's usual dark words, so use `t.text` and `t.tintText` in it,
+  never white or lime typed in. A dark bubble with white words (pine, 16–20
+  November 2026) was tried and dropped: it needed its own colours inside
+  every bubble and kept breaking. The chat keeps the app's own shapes.
+  Its wallpaper is `WallpaperBox` (the doodles of `tools/chatwallpaper`);
+  change the doodles there, not in a screen.
 - **Code boxes vanish** on the page's ground: put them in a `TkFormGroup`.
 - **A stamp over the words.** A bubble's time sits over the end of the last
   line; a longer stamp (with "on WhatsApp", a template's note) goes under
