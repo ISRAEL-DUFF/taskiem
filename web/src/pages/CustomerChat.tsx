@@ -40,6 +40,7 @@ import { CustomerOrders } from "./CustomerOrders";
 import { MentionList, useMentions } from "./Mentions";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
+import { useSaveAs } from "./SaveAs";
 import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
@@ -411,6 +412,9 @@ export function CustomerPane({
   // Saved texts by @name (saved objects S1): "@bank-details" puts the
   // business's words in the box, to change before sending.
   const savedTexts = useSavedPicks("share");
+  // Save "mum"… in the picker (saved objects S1, part 4): the business's
+  // for whoever may manage them, else one's own.
+  const saveAs = useSaveAs({ business: true });
   // A saved thing other than a text, picked: shared with the customer
   // (saved objects S1), after a yes to sharing what is sensitive in it; a
   // card in the app, its lines on WhatsApp, by the line replies go on.
@@ -437,7 +441,7 @@ export function CustomerPane({
       }
     })();
   };
-  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved });
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) });
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
@@ -635,6 +639,7 @@ export function CustomerPane({
         }
       />
       {sure.node}
+      {saveAs.node}
       <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
       <ChatStream
         items={messages}

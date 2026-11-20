@@ -2,6 +2,7 @@ import type { ToolKey } from "../lib/tools";
 import { useSavedPicks } from "./SavedPicks";
 import { shareQuestion } from "../lib/saved";
 import { SavedCardView } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import {
@@ -627,6 +628,7 @@ function Bubble({
   current,
   onDone = () => undefined,
   onForward,
+  onSaveAs,
   onHide,
   onJump,
   flash = false,
@@ -651,6 +653,8 @@ function Bubble({
   current?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
+  /** Save as… on its words (saved objects S1, part 4). */
+  onSaveAs?: (text: string) => void;
   onHide?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
@@ -755,6 +759,7 @@ function Bubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {!card && onForward && (
                     <PopItem
                       icon="forward"
@@ -1373,6 +1378,7 @@ export function ConversationPane({
           : [],
       // Saved texts (saved objects S1): their words into the box.
       saved: savedTexts.saved, wantSaved: savedTexts.want, savedAsTags: true,
+      saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],
@@ -1735,6 +1741,9 @@ export function ConversationPane({
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
   const { confirm, node: confirmNode } = useConfirm();
+  // Save as… on a message (saved objects S1, part 4): the business's for
+  // whoever may manage them, else one's own.
+  const saveAs = useSaveAs({ business: true });
   const hide = async (m: LinkMessage) => {
     if (
       !(await confirm({
@@ -1971,6 +1980,7 @@ export function ConversationPane({
               onRetry={retry}
               onDiscard={discard}
               onReply={setReply}
+              onSaveAs={saveAs.fromWords}
               onJump={jump}
               first={first}
               flash={flashId === m.id}
@@ -2095,6 +2105,7 @@ export function ConversationPane({
         />
       )}
       {confirmNode}
+      {saveAs.node}
     </section>
   );
 }

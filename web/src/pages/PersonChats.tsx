@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
+import { useSaveAs } from "./SaveAs";
 import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
@@ -536,6 +537,8 @@ export function PersonChatPage() {
   };
 
   const savedTexts = useSavedPicks("share-mine");
+  // Save "mum"… in the picker (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs();
   // One's own saved thing other than a text, picked: shared with the
   // business as a card (saved objects S1), after a yes to sharing what is
   // sensitive in it.
@@ -562,7 +565,7 @@ export function PersonChatPage() {
     rules: BUSINESS_FILES,
     // Saved things (saved objects S1): a text's words into the box; the
     // rest shared as cards.
-    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved },
+    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
@@ -906,6 +909,7 @@ export function PersonChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import type { Suggestion } from "../lib/mentions";
 import { SavedCardView } from "./SavedCard";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -390,6 +391,8 @@ export function PeopleChatPage() {
 
   const closed = closedWords(c);
   const savedTexts = useSavedPicks("share-mine");
+  // Save as… on a message (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs();
   // A saved thing other than a text, picked: shared as a card (saved
   // objects S1), after a yes to sharing what is sensitive in it.
   const shareSaved = (pick: Suggestion) =>
@@ -413,7 +416,7 @@ export function PeopleChatPage() {
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     // Saved texts (saved objects S1): their words into the box.
-    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved },
+    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     replyLine: (m) => messageLine(m),
     // What a send ran into goes once the words are changed; the other
     // person is told we are typing.
@@ -663,6 +666,7 @@ export function PeopleChatPage() {
                             </PopItem>
                           )}
                           {!card && m.body && <CopyItem text={m.body} />}
+                          {!card && m.body && <SaveAsItem text={m.body} onSave={saveAs.fromWords} close={close} />}
                           {card?.type !== "split" && card?.type !== "basket" && !c?.request && (
                             <PopItem icon="forward" onClick={() => (close(), setSheet({ k: "forward", m }))}>
                               Forward
@@ -839,6 +843,7 @@ export function PeopleChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
   );
 }

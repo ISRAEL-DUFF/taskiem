@@ -63,6 +63,9 @@ export function useMentions(
     /** A saved thing other than a text, picked where the chat shares it as
      * a card: what was typed for it goes, and the chat sends the card. */
     shareSaved?: (s: Suggestion) => void;
+    /** Save "mum"… when nothing saved has the name typed (saved objects
+     * S1, part 4): the name, to save something as. */
+    saveNamed?: (name: string) => void;
     /** Saved things other than texts kept as tags, sent with the message
      * (a business's chat with another business; saved objects S1). */
     savedAsTags?: boolean;
@@ -130,13 +133,28 @@ export function useMentions(
               ...(q.mark === "@" && sources.saved ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }] : []),
             ].filter((g) => g.items.length > 0)
           : [];
+  // Save "mum"… (saved objects S1, part 4): offered under Saved once the
+  // saved things are read and none has the name typed.
+  const newName = q?.mark === "@" ? q.query.toLowerCase() : "";
+  if (
+    sources.saveNamed &&
+    sources.saved &&
+    /^[a-z0-9][a-z0-9_-]{0,31}$/.test(newName) &&
+    !sources.saved.some((x) => x.name.toLowerCase() === newName) &&
+    !groups.some((g) => g.items.some((x) => x.name.toLowerCase() === newName))
+  ) {
+    const row: Suggestion = { kind: "save-new", id: `save-new:${newName}`, name: newName, sub: "Save something by this name" };
+    const saved = groups.find((g) => g.label === "Saved");
+    if (saved) saved.items = [...saved.items, row];
+    else groups.push({ label: "Saved", items: [row] });
+  }
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
   // only when "Taskiem" is what is being typed ("@4500" stays as typed).
   // A category is not a tag: Enter tags an item, a tap opens the category.
   const enterPick = shown.find(
     (s) =>
-      (s.kind !== "taskiem" && s.kind !== "category") ||
+      (s.kind !== "taskiem" && s.kind !== "category" && s.kind !== "save-new") ||
       (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
   );
   const update = (value: string, caret: number | null) => {
@@ -163,6 +181,12 @@ export function useMentions(
       return;
     }
     const end = Math.max(caret, q.start + 1 + q.query.length);
+    if (s.kind === "save-new") {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.saveNamed?.(s.name);
+      return;
+    }
     if (s.kind === "saved" && s.body === undefined && sources.shareSaved) {
       setText(text.slice(0, q.start) + text.slice(end));
       setQ(null);
@@ -364,7 +388,7 @@ function PickIcon({ s }: { s: Suggestion }) {
         {initialsOf(s.name)}
       </span>
     );
-  if (s.kind === "saved")
+  if (s.kind === "saved" || s.kind === "save-new")
     return (
       <span className="pick-icon soft" aria-hidden="true">
         <Icon name={savedIcon(s.savedKind)} />
@@ -488,7 +512,7 @@ function Picker({
               >
                 <PickIcon s={s} />
                 <span className="pick-words">
-                  <span className="pick-name">{s.name}</span>
+                  <span className="pick-name">{s.kind === "save-new" ? `Save "@${s.name}"…` : s.name}</span>
                   {s.sub && <span className="pick-sub">{s.sub}</span>}
                 </span>
                 {s.explore && <span className="sr-only">: see their card</span>}
@@ -545,8 +569,14 @@ function PlainList({ m }: { m: Mentions }) {
         <li key={`${s.kind}:${s.id}`}>
           <button type="button" onClick={() => m.pick(s)} onKeyDown={move}>
             <span className="name">
-              {mark === "/" ? "#" : mark}
-              {s.name}
+              {s.kind === "save-new" ? (
+                `Save "@${s.name}"…`
+              ) : (
+                <>
+                  {mark === "/" ? "#" : mark}
+                  {s.name}
+                </>
+              )}
             </span>
             {s.sub && <span className="hint">{s.sub}</span>}
           </button>

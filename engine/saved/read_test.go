@@ -14,6 +14,8 @@ func TestRead(t *testing.T) {
 		{"Pay to:\nAccount name: Ada Obi\nZenith Bank\n0123 456 789", Reading{Kind: KindBankAccount, Title: "Ada Obi",
 			Details: map[string]string{"bank_name": "Zenith Bank", "account_number": "0123456789"}}},
 		{"ADA OBI\n2034567891\nUBA", Reading{Kind: KindBankAccount, Title: "ADA OBI", Details: map[string]string{"bank_name": "United Bank for Africa", "account_number": "2034567891"}}},
+		{"My sister's account: Zenith Bank 2034567891, Account name: Ngozi Obi", Reading{Kind: KindBankAccount, Title: "Ngozi Obi",
+			Details: map[string]string{"bank_name": "Zenith Bank", "account_number": "2034567891"}}},
 		// A number with no bank: the bank is asked for.
 		{"acct 0123456789", Reading{Kind: KindBankAccount, Details: map[string]string{"account_number": "0123456789"}}},
 		// A phone's 11 digits are not an account number.

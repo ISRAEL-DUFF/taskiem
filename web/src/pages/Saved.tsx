@@ -308,7 +308,7 @@ export function AccountSheet({
   const base = savedBase(mine);
   const banks = useLoad(() => get<BankList>(mine ? "/v1/me/banks" : "/v1/banks"), [mine]);
   const [f, setF] = useState<Form>(() => ({
-    name: thing ? `@${thing.name}` : start ? `@${start.name}` : "",
+    name: thing ? `@${thing.name}` : start?.name ? `@${start.name}` : "",
     title: thing?.title ?? start?.title ?? "",
     bank: "",
     number: start?.details.account_number ?? "",
@@ -470,7 +470,7 @@ export function ThingSheet({
   onSaved: () => void;
 }) {
   const base = savedBase(mine);
-  const [name, setName] = useState(thing ? `@${thing.name}` : start ? `@${start.name}` : "");
+  const [name, setName] = useState(thing ? `@${thing.name}` : start?.name ? `@${start.name}` : "");
   const [title, setTitle] = useState(thing?.title ?? start?.title ?? "");
   const [d, setD] = useState<SavedDetails>(() => ({ ...(thing?.details ?? start?.details ?? {}) }));
   const [problem, setProblem] = useState<string>();

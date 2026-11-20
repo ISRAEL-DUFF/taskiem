@@ -496,6 +496,48 @@ test("a saved account shared with @: asked first, a card the friend opens, copie
   await expect(sheet.getByTestId("saved-number-input")).toHaveValue(/0123452222|0123 452 222/);
 });
 
+test("saving from a message and from the picker: an account read from Ada's words, and @landlord named first", async () => {
+  test.setTimeout(180_000);
+  const ada = st.ada as NonNullable<typeof st.ada>;
+  const bola = st.bola as NonNullable<typeof st.bola>;
+  await ada.page.goto(`/you/people/${st.chat}`);
+  const words = "My sister's account: Zenith Bank 2034567891, Account name: Ngozi Obi";
+  await ada.page.getByLabel(/^Message Bola/).fill(words);
+  await ada.page.getByLabel(/^Message Bola/).press("Enter");
+  const chats = await must<{ chats: { id: string; name: string; kind: string }[] }>(bola.page.request.get("/v1/me/conversations", { headers: H }), 200);
+  await bola.page.goto(`/you/people/${chats.chats.find((c) => c.kind === "person" && c.name === "Ada Obi")?.id ?? ""}`);
+  await expect(bola.page.getByTestId("people-message").filter({ hasText: "2034567891" })).toBeVisible({ timeout: 20_000 });
+
+  // Save as…: the account read from the words, the sheet filled in.
+  await bubbleMenu(bola.page, "2034567891", "Save as…");
+  const form = bola.page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-number-input")).toHaveValue("2034567891");
+  await expect(form.getByLabel("Title")).toHaveValue("Ngozi Obi");
+  await expect(form.getByTestId("saved-bank")).toHaveValue(/Zenith/);
+  await form.getByLabel("Name to call it up by").fill("@ngozi");
+  await check(bola.page, "Save as… on a message", 390);
+  await form.getByTestId("saved-save").click();
+  await expect(form).toHaveCount(0);
+  const mine = await must<{ saved: { name: string; hint: string }[] }>(bola.page.request.get("/v1/me/saved", { headers: H }), 200);
+  expect(mine.saved.find((x) => x.name === "ngozi")?.hint).toBe("Zenith Bank ••7891");
+
+  // Save "@landlord"…: nothing has the name; what kind, then its sheet.
+  const box = bola.page.getByLabel(/^Message Ada/);
+  await box.click();
+  await box.pressSequentially("@landlord");
+  await bola.page.getByTestId("mention-list").getByRole("button", { name: /Save "@landlord"/ }).click();
+  await expect(box).toHaveValue("");
+  await bola.page.getByTestId("save-as-kind").filter({ hasText: "A person" }).getByRole("button").click();
+  const thing = bola.page.getByTestId("saved-thing-form");
+  await expect(thing.getByLabel("Name to call it up by")).toHaveValue("@landlord");
+  await thing.getByLabel("Title").fill("Mr Bayo, the landlord");
+  await thing.getByLabel("Phone").fill("0803 120 0099");
+  await thing.getByTestId("saved-thing-save").click();
+  await expect(thing).toHaveCount(0);
+  const after = await must<{ saved: { name: string }[] }>(bola.page.request.get("/v1/me/saved", { headers: H }), 200);
+  expect(after.saved.map((x) => x.name)).toContain("landlord");
+});
+
 test("a share asks what for, a refused card is not called sent, a stranger's share is warned, and a forward keeps what failed", async ({ browser }) => {
   test.setTimeout(240_000);
   const ada = st.ada as NonNullable<typeof st.ada>;

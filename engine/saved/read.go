@@ -35,6 +35,8 @@ var (
 	readDigits = regexp.MustCompile(`\d(?:[\s-]?\d){5,15}`)
 	// "Account name: Ada Obi", "Name - Ada Obi", "acct name Ada Obi".
 	readNamed = regexp.MustCompile(`(?im)^\s*(?:acc(?:oun)?t\.?\s*name|name)\s*[:\-–]?\s*([A-Za-z][A-Za-z .'\-]{1,80})$`)
+	// "…, Account name: Ada Obi" within a line, up to a comma or its end.
+	readNamedIn = regexp.MustCompile(`(?i)acc(?:oun)?t\.?\s*name\s*[:\-–]\s*([A-Za-z][A-Za-z .'\-]{1,80}?)\s*(?:[,;\n]|$)`)
 	// "Address: …", a line given as one.
 	readAddress = regexp.MustCompile(`(?im)^\s*(?:address|addr|location)\s*[:\-–]\s*(.+)$`)
 	// A street: a word that names one.
@@ -105,6 +107,8 @@ func Read(text string) Reading {
 		}
 	}
 	if m := readNamed.FindStringSubmatch(text); m != nil {
+		r.Title = strings.TrimSpace(m[1])
+	} else if m := readNamedIn.FindStringSubmatch(text); m != nil {
 		r.Title = strings.TrimSpace(m[1])
 	}
 	bank := readBank(rest)

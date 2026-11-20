@@ -18,7 +18,9 @@ export interface Suggestion {
     | "order"
     | "purchase"
     | "customer"
-    | "saved";
+    | "saved"
+    /** Save "mum"…: a name nothing has yet, to save as (saved objects S1). */
+    | "save-new";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
