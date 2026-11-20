@@ -318,5 +318,12 @@ for (const width of [390, 360]) {
     await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
     await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
     await expect(sheet.getByLabel("Their phone number")).toHaveValue("08031234567");
+    // Esc closes the list only: the sheet and what was typed stay.
+    await open.click();
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(2);
+    await page.keyboard.press("Escape");
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
   });
 }
