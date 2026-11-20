@@ -37,6 +37,8 @@ import { CardSheet } from "./CustomerCards";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { CustomerOrders } from "./CustomerOrders";
+import { MentionList, useMentions } from "./Mentions";
+import { useSavedPicks } from "./SavedPicks";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
 // phase 1): the list's Customers section and a customer's thread. A reply
@@ -404,6 +406,10 @@ export function CustomerPane({
   const filePick = useRef<HTMLInputElement>(null);
   const sure = useConfirm();
   const lastTyped = useRef(0);
+  // Saved texts by @name (saved objects S1): "@bank-details" puts the
+  // business's words in the box, to change before sending.
+  const savedTexts = useSavedPicks("texts");
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want });
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
@@ -787,6 +793,7 @@ export function CustomerPane({
               />
             </>
           )}
+          <MentionList m={mentions} />
           <div className="composer-pill">
             <label className="sr-only" htmlFor="customer-text">
               Reply to {c ? customerTitle(c) : "the customer"}
@@ -800,8 +807,12 @@ export function CustomerPane({
               maxLength={2000}
               placeholder={both ? `Reply ${lineWords(replyLine)}` : "Reply"}
               value={text}
-              onChange={(e) => typed(e.target.value)}
+              onChange={(e) => {
+                typed(e.target.value);
+                mentions.update(e.target.value, e.target.selectionStart);
+              }}
               onKeyDown={(e) => {
+                if (mentions.onKeyDown(e)) return;
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send();

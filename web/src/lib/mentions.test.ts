@@ -3,6 +3,7 @@ import {
   groupSuggestions,
   unlinkedSuggestion,
   insertMention,
+  insertWords,
   mentionParts,
   mentionQuery,
   stillNamed,
@@ -91,6 +92,16 @@ describe("the grouped picker (chat tools)", () => {
     expect(all[2]?.items[0]?.kind).toBe("taskiem");
     expect(groupSuggestions("zzz", { items, businesses }, true).map((x) => x.label)).toEqual([""]);
     expect(groupSuggestions("", { items, businesses }, false).some((x) => x.label === "")).toBe(false);
+  });
+  it("puts saved things between services and businesses", () => {
+    const saved = [{ kind: "saved" as const, id: "s1", name: "rivers-depot", sub: "Rivers depot · Yaba", savedKind: "place" }];
+    expect(groupSuggestions("ri", { items, businesses, saved }, true).map((x) => x.label)).toEqual(["Products", "Saved", "Businesses", ""]);
+  });
+  it("puts a saved text's words in place of what was typed", () => {
+    const q = mentionQuery("Hello @bank", 11);
+    expect(q).not.toBeNull();
+    if (!q) return;
+    expect(insertWords("Hello @bank", q, 11, "Pay to Bola\nGTBank 0123")).toEqual({ text: "Hello Pay to Bola\nGTBank 0123", caret: 29 });
   });
   it("knows an item written with @ or #", () => {
     const picked = [{ kind: "item", name: "Rice, 25kg bag" }];

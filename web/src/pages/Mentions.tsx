@@ -14,6 +14,7 @@ import { initialsOf } from "./ChatAvatar";
 import {
   groupSuggestions,
   insertMention,
+  insertWords,
   mentionParts,
   mentionQuery,
   stillNamed,
@@ -30,6 +31,7 @@ import {
 import { formatPrice } from "../lib/storefront";
 import { exploreLogo, type ExploreCard, type ExploreResult } from "../lib/explore";
 import { BusinessCardSheet } from "./BusinessCardSheet";
+import { savedIcon } from "../lib/saved";
 
 // Mentions in the composer (business links L4, §5.5): typing "@" offers
 // linked businesses, "#" items with their unit and price. Enter or Tab
@@ -53,6 +55,11 @@ export function useMentions(
     categories?: { name: string; count: number }[];
     /** What "/invoice", "/product", "/order" and "/customer" offer. */
     refs?: Partial<Record<RefKind, Suggestion[]>>;
+    /** Saved things "@" offers (saved objects S1): a text's words go in the
+     * box; any other is written as its @name. wantSaved is called when "@"
+     * is typed, so they are read only then. */
+    saved?: Suggestion[];
+    wantSaved?: () => void;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -100,6 +107,7 @@ export function useMentions(
             businesses: sources["@"],
             unlinked,
             categories: sources.categories,
+            saved: sources.saved,
           },
           grouped.taskiem,
         )
@@ -111,7 +119,10 @@ export function useMentions(
             },
           ]
         : q && q.mark !== "/"
-          ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
+          ? [
+              { label: "", items: suggest(sources[q.mark], q.query) },
+              ...(q.mark === "@" && sources.saved ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }] : []),
+            ].filter((g) => g.items.length > 0)
           : [];
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
@@ -122,8 +133,11 @@ export function useMentions(
       (s.kind !== "taskiem" && s.kind !== "category") ||
       (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
   );
-  const update = (value: string, caret: number | null) =>
-    setQ(mentionQuery(value, caret ?? value.length));
+  const update = (value: string, caret: number | null) => {
+    const next = mentionQuery(value, caret ?? value.length);
+    if (next?.mark === "@") sources.wantSaved?.();
+    setQ(next);
+  };
   const pick = (s: Suggestion, from?: DOMRect) => {
     if (!q) return;
     const el = box.current;
@@ -142,17 +156,18 @@ export function useMentions(
       grouped?.onCategory?.(s.name);
       return;
     }
-    const next = insertMention(
-      text,
-      q,
-      Math.max(caret, q.start + 1 + q.query.length),
-      s.name,
-    );
+    const end = Math.max(caret, q.start + 1 + q.query.length);
+    // A saved text's words in place of what was typed, to change before
+    // sending; any other saved thing as its @name, which the words carry.
+    const next =
+      s.kind === "saved" && s.body !== undefined
+        ? insertWords(text, q, end, s.body)
+        : insertMention(text, q, end, s.name);
     // The words and the caret move together, at once: a caret put back a
     // frame later would land the next key typed at the end of the box.
     flushSync(() => {
       setText(next.text);
-      if (s.kind !== "taskiem")
+      if (s.kind !== "taskiem" && s.kind !== "saved")
         setPicked((cur) => [...cur, s]);
       setQ(null);
     });
@@ -205,7 +220,8 @@ export function useMentions(
     setQ(null);
   };
   return {
-    atLabel: sources.atLabel,
+    // Only saved things to offer (a chat with no one else to name).
+    atLabel: sources.atLabel ?? (sources["@"].length === 0 && sources.saved ? "Saved things" : undefined),
     q,
     shown,
     enterPick,
@@ -332,6 +348,12 @@ function PickIcon({ s }: { s: Suggestion }) {
         aria-hidden="true"
       >
         {initialsOf(s.name)}
+      </span>
+    );
+  if (s.kind === "saved")
+    return (
+      <span className="pick-icon soft" aria-hidden="true">
+        <Icon name={savedIcon(s.savedKind)} />
       </span>
     );
   if (s.kind === "taskiem")

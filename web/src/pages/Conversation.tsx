@@ -1,4 +1,5 @@
 import type { ToolKey } from "../lib/tools";
+import { useSavedPicks } from "./SavedPicks";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import {
@@ -1316,6 +1317,7 @@ export function ConversationPane({
           : []),
       ]
     : [];
+  const savedTexts = useSavedPicks("texts");
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1362,6 +1364,8 @@ export function ConversationPane({
         (priced.data?.whose === "ours" && can("table.read"))
           ? undefined
           : [],
+      // Saved texts (saved objects S1): their words into the box.
+      saved: savedTexts.saved, wantSaved: savedTexts.want,
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],

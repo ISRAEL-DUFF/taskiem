@@ -1,3 +1,5 @@
+import type { Suggestion } from "./mentions";
+
 // Saved things (docs/spec/saved-objects.md; build plan S0, S1): a person's
 // own and a business's saved accounts, people, places, texts and accounts
 // with a provider, called up by @name. The server
@@ -248,3 +250,26 @@ export function providerLine(p: SavedProvider | undefined): string | null {
 /** Whether the step to connect a payments account is shown: to an owner
  * of a business with none. */
 export const showConnectStep = (p: SavedProvider | undefined) => !!p && !p.connected && p.owner;
+
+/** A saved thing's icon by its kind. */
+export const savedIcon = (kind?: string) => KIND_WORDS[kind as SavedKind]?.icon ?? "note";
+
+/** The picker's suggestions for saved things (saved objects S1): the
+ * person's own first, then the business's, each by its @name with its
+ * title and hint under it; a text carries its words. Texts only where
+ * nothing else can be shared yet (every chat but Taskiem's: other kinds go
+ * as cards, later). */
+export function savedSuggestions(mine: SavedThing[], business: SavedThing[], textsOnly: boolean): Suggestion[] {
+  const all = [...mine, ...business].filter((x) => !textsOnly || x.kind === "text");
+  // Two of one name (one's own and the business's): each says whose.
+  const twice = new Set(all.filter((x, i) => all.findIndex((y) => y.name === x.name) !== i).map((x) => x.name));
+  return all.map((x) => ({
+    kind: "saved" as const,
+    id: x.id,
+    name: x.name,
+    sub: [x.title, x.hint, twice.has(x.name) ? (x.owner === "mine" ? "Yours" : "The business's") : ""].filter(Boolean).join(" · "),
+    words: x.title,
+    savedKind: x.kind,
+    body: x.kind === "text" ? (x.details.body ?? "") : undefined,
+  }));
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
 import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
 import { DiaryLine } from "../kit";
@@ -213,6 +214,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   // The briefing card is here for those who sell or bill; the tools menu
   // and "briefing" typed bring it back.
   const briefs = !!chatTools && (can("storefront.manage") || can("invoice.manage"));
+  // Saved things by @name (saved objects S1): Taskiem reads any of them.
+  const savedPicks = useSavedPicks("all");
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
@@ -274,6 +277,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       )],
       categories: categoriesOf(ownStock.data ?? []),
       refs: { ...refSrc, product: ownProducts },
+      saved: savedPicks.saved, wantSaved: savedPicks.want,
     },
     onSend: (s) => {
       if (!s.file && briefs && asksBriefing(s.text)) showBriefing();

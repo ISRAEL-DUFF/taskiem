@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
@@ -385,10 +386,12 @@ export function PeopleChatPage() {
   };
 
   const closed = closedWords(c);
+  const savedTexts = useSavedPicks("texts");
   const composer = useComposer<PeopleMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    sources: { "@": [], "#": [] },
+    // Saved texts (saved objects S1): their words into the box.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want },
     replyLine: (m) => messageLine(m),
     // What a send ran into goes once the words are changed; the other
     // person is told we are typing.

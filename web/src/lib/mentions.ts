@@ -16,7 +16,8 @@ export interface Suggestion {
     | "bill"
     | "order"
     | "purchase"
-    | "customer";
+    | "customer"
+    | "saved";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
@@ -31,6 +32,10 @@ export interface Suggestion {
    * description): search reads both, after the name. */
   category?: string;
   words?: string;
+  /** A saved thing (saved objects S1): its kind, and a text's words, which
+   * a pick puts in the box in place of what was typed. */
+  savedKind?: string;
+  body?: string;
 }
 
 /** A mention as a message stores it. */
@@ -207,6 +212,18 @@ export function insertMention(
   return { text: head + text.slice(caret), caret: head.length };
 }
 
+/** The text with the query replaced by words (a saved text's), and where
+ * the caret goes: after them, with nothing of the "@" left. */
+export function insertWords(
+  text: string,
+  q: MentionQuery,
+  caret: number,
+  words: string,
+): { text: string; caret: number } {
+  const head = text.slice(0, q.start) + words;
+  return { text: head + text.slice(caret), caret: head.length };
+}
+
 /** The mentions still named in the text (a name typed over is gone). */
 export function stillNamed<T extends { kind: string; name: string }>(
   text: string,
@@ -290,6 +307,8 @@ export function groupSuggestions(
     /** The categories offered (the business's own, in its Taskiem chat);
      * else the items' own. */
     categories?: { name: string; count: number }[];
+    /** The person's saved things, then the business's (saved objects). */
+    saved?: Suggestion[];
   },
   taskiem: boolean,
 ): SuggestionGroup[] {
@@ -305,6 +324,7 @@ export function groupSuggestions(
   if (cats.length > 0) out.push({ label: "Categories", items: cats });
   add("Products", src.items, 4);
   add("Services", src.services, 3);
+  add("Saved", src.saved, 4);
   add("Businesses", src.businesses, 4, src.unlinked);
   // Taskiem is always offered last, as the designs show: it can do what
   // the words ask, whatever they name.

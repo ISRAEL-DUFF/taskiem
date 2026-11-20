@@ -8,6 +8,7 @@ import {
   kindChoice,
   cleanName,
   nameProblem,
+  savedSuggestions,
   numberProblem,
   providerLine,
   savedBase,
@@ -109,5 +110,20 @@ describe("saved things", () => {
     expect(showConnectStep({ connected: null, owner: true })).toBe(true);
     expect(showConnectStep({ connected: null, owner: false })).toBe(false);
     expect(savedBase(true)).toBe("/v1/me/saved");
+  });
+});
+
+describe("saved things in the picker", () => {
+  const text: SavedThing = { ...bayo, id: "t", kind: "text", name: "bank-details", title: "Our bank details", hint: "2 lines of text", details: { body: "Pay to Bola\nGTBank 0123" } };
+  const mine: SavedThing = { ...bayo, id: "m", owner: "mine", name: "bank-details", title: "My bank details", kind: "text", hint: "1 line of text", details: { body: "Mine" } };
+  it("offers one's own first, texts with their words, and says whose when two share a name", () => {
+    const s = savedSuggestions([mine], [text, bayo], false);
+    expect(s.map((x) => x.id)).toEqual(["m", "t", "1"]);
+    expect(s[0]).toMatchObject({ kind: "saved", name: "bank-details", body: "Mine", sub: "My bank details · 1 line of text · Yours" });
+    expect(s[1]?.sub).toBe("Our bank details · 2 lines of text · The business's");
+    expect(s[2]).toMatchObject({ savedKind: "bank_account", body: undefined, sub: "Bayo (rice) · GTBank ••6789" });
+  });
+  it("offers texts only where nothing else can be shared yet", () => {
+    expect(savedSuggestions([], [text, bayo], true).map((x) => x.id)).toEqual(["t"]);
   });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
 import { useAuth } from "../auth";
@@ -532,10 +533,12 @@ export function PersonChatPage() {
     }
   };
 
+  const savedTexts = useSavedPicks("texts");
   const composer = useComposer<never>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    sources: { "@": [], "#": [] },
+    // Saved texts (saved objects S1): their words into the box.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);

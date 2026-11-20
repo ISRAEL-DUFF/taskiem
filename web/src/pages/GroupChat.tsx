@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
@@ -335,6 +336,7 @@ export function GroupChatPage() {
     }
   };
 
+  const savedTexts = useSavedPicks("texts");
   const composer = useComposer<GroupMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
@@ -342,6 +344,8 @@ export function GroupChatPage() {
       "@": mentionable(members).map((m) => ({ kind: "customer" as const, id: m.person_id, name: m.name, sub: m.role === "admin" ? "Admin" : undefined })),
       "#": [],
       atLabel: "Members to mention",
+      // Saved texts (saved objects S1): their words into the box.
+      saved: savedTexts.saved, wantSaved: savedTexts.want,
     },
     replyLine: (m) => messageLine(m),
     onType: (v) => {

@@ -87,6 +87,12 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   const biz = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   const name = `Mama Kitchen ${letters()}`;
   await owner(biz, name);
+  // The business's saved text, dropped into a customer chat below (saved objects S1).
+  const savedText = await biz.request.post("/v1/saved", {
+    headers: H,
+    data: { kind: "text", name: "bank-details", title: "Our bank details", details: { body: "Pay to Mama Kitchen, Zenith Bank 1234567890" } },
+  });
+  expect(savedText.status(), await savedText.text()).toBe(201);
   const link = (await (await biz.request.get("/v1/customers/chat-link", { headers: H })).json()) as { code: string; url: string; words: string };
   expect(link.words).toBe(`Chat with ${name} on Taskiem: ${link.url}`);
 
@@ -149,6 +155,15 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await pane.getByLabel("Reply to Tolu Bello").fill("Yes, come at 4");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Yes, come at 4" })).toBeVisible();
+  // A saved text by @name: its words go in the box, to change before sending.
+  const reply = pane.getByLabel("Reply to Tolu Bello");
+  await reply.fill("@bank");
+  const picks = pane.getByRole("list", { name: "Saved things" });
+  await expect(picks).toContainText("@bank-details");
+  await picks.getByRole("button", { name: /bank-details/ }).click();
+  await expect(reply).toHaveValue("Pay to Mama Kitchen, Zenith Bank 1234567890");
+  await reply.press("Enter");
+  await expect(pane.getByTestId("customer-message").filter({ hasText: "Pay to Mama Kitchen" })).toBeVisible();
   // A message asking for a transfer to an account: the person is warned.
   await pane.getByLabel("Reply to Tolu Bello").fill("Or send it to 0123456789 at GTBank");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
