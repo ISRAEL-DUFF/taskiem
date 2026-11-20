@@ -91,6 +91,10 @@ const (
 	IntentOwes Intent = "owes"
 	IntentPaid Intent = "paid"
 	IntentAsk  Intent = "ask"
+	// A saved thing, as the model routes it (saved objects S2): its words
+	// in English with the thing as @name, read as the English commands are
+	// (saved_question.go, saved_reminders.go…), so no list names them.
+	IntentSaved Intent = "saved"
 
 	IntentSignup  Intent = "signup"
 	IntentConnect Intent = "connect"
@@ -103,7 +107,7 @@ var Intents = []Intent{IntentHelp, IntentStatus, IntentApprovals, IntentCancel, 
 	IntentTables, IntentAdd, IntentFind, IntentPublish, IntentMakePage, IntentMyPage, IntentOrders, IntentOpenShop, IntentCloseShop, IntentQR, IntentReady, IntentDelivered,
 	IntentFronts, IntentAddFront, IntentFrontOn, IntentFrontOff,
 	IntentInvoice, IntentExpense, IntentCashIn, IntentCashOut, IntentSold, IntentReceived, IntentCount, IntentStock, IntentTakeOff,
-	IntentSignup, IntentConnect, IntentInvite, IntentPlan, IntentNewTable, IntentChangeRow, IntentDeleteRow, IntentOwes, IntentPaid, IntentAsk}
+	IntentSignup, IntentConnect, IntentInvite, IntentPlan, IntentNewTable, IntentChangeRow, IntentDeleteRow, IntentOwes, IntentPaid, IntentAsk, IntentSaved}
 
 // Word lists live in intents/<tag>.json: whole messages that mean an
 // intent (phrases), words that start one and are followed by what it is

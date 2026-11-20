@@ -253,13 +253,15 @@ func (s *Server) waModelIntent(ctx context.Context, c *chat, text string) lang.M
 		return lang.Match{}
 	}
 	info, _ := lang.Lookup(c.lang.Tag)
+	// The person's saved things, by name and kind only (saved objects S2).
+	named := s.savedNamed(ctx, c)
 	// The call's tokens are reserved until it is recorded (finding F49).
-	release, err := s.reserveAI(ctx, c.tenant.ID, "intent", intent.Request(text, info, 0).Estimate(), chatAIReservation)
+	release, err := s.reserveAI(ctx, c.tenant.ID, "intent", intent.RequestWith(text, info, 0, intent.Allowed, named).Estimate(), chatAIReservation)
 	if err != nil {
 		return lang.Match{}
 	}
 	defer release()
-	cl := &intent.Classifier{Provider: s.Languages.Model}
+	cl := &intent.Classifier{Provider: s.Languages.Model, Saved: named}
 	res, resp, err := cl.Classify(ctx, text, info)
 	outcome, errText := "valid", ""
 	switch {

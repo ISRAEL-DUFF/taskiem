@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -31,7 +32,9 @@ var Allowed = []lang.Intent{lang.IntentHelp, lang.IntentStatus, lang.IntentAppro
 	// The tables and the debtor book (decision 0060, R6): each still waits
 	// for the person's own yes before anything is written.
 	lang.IntentTables, lang.IntentAdd, lang.IntentFind, lang.IntentNewTable, lang.IntentChangeRow, lang.IntentDeleteRow,
-	lang.IntentOwes, lang.IntentPaid, lang.IntentAsk}
+	lang.IntentOwes, lang.IntentPaid, lang.IntentAsk,
+	// A saved thing (saved objects S2): its words, read as the English are.
+	lang.IntentSaved}
 
 // Stranger is what the model may return for someone no business knows
 // yet, writing to the shared number or bot: whether they ask to start
@@ -59,7 +62,19 @@ var described = map[lang.Intent]string{
 	lang.IntentOwes:      `"owes" (a customer owes the business money, or who owes it; argument: in English, "<name> owes <amount>" with " for <what>" when said, the name as written; empty for who owes)`,
 	lang.IntentPaid:      `"paid" (a customer paid money they owed; argument: in English, "<name> paid <amount>", then " cash" or " transfer" when said, the name as written)`,
 	lang.IntentAsk:       `"ask" (a question about their tables or lists, such as how many customers are in a place or who owes the most; argument: the question in English, names and values as written)`,
+	lang.IntentSaved: `"saved" (about one of the things they saved, named with @ or meant by its name: a question about it, a reminder of a date it holds, sharing it, invoicing it or delivering an order to it; ` +
+		`argument: the request in plain English with the thing as its @name, such as "what is @mum's phone", "remind me when @car insurance is due", "share @shop-account with Ada's Kitchen", "invoice @acme 25000 for rice", "deliver P-7QX4KD to @warehouse")`,
 }
+
+// Named is a saved thing as the model is told it: its @name and its kind,
+// never its title or anything it holds (saved objects S2).
+type Named struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+// MaxNamed bounds the saved things the model is told.
+const MaxNamed = 100
 
 // Unknown is the model's answer when no command fits.
 const Unknown = "unknown"
@@ -83,6 +98,9 @@ type Classifier struct {
 	MaxTokens int
 	// Intents are what it may answer (default Allowed).
 	Intents []lang.Intent
+	// Saved are the person's saved things, by name and kind only, so "my
+	// mama's number" can be @mum.
+	Saved []Named
 }
 
 // ErrUnusable means the model's answer could not be used.
@@ -129,6 +147,12 @@ func Request(text string, l lang.Info, maxTokens int) ai.Request {
 
 // RequestFor is Request for a set of intents.
 func RequestFor(text string, l lang.Info, maxTokens int, intents []lang.Intent) ai.Request {
+	return RequestWith(text, l, maxTokens, intents, nil)
+}
+
+// RequestWith is RequestFor told the person's saved things: their names
+// and kinds, nothing they hold.
+func RequestWith(text string, l lang.Info, maxTokens int, intents []lang.Intent, saved []Named) ai.Request {
 	if maxTokens <= 0 {
 		maxTokens = 1024
 	}
@@ -136,6 +160,20 @@ func RequestFor(text string, l lang.Info, maxTokens int, intents []lang.Intent) 
 		text = string([]rune(text)[:MaxText])
 	}
 	user := fmt.Sprintf("The person usually writes in %s (%s). Their message:\n\n<message>\n%s\n</message>", l.English, l.Tag, text)
+	if len(saved) > 0 && slices.Contains(intents, lang.IntentSaved) {
+		if len(saved) > MaxNamed {
+			saved = saved[:MaxNamed]
+		}
+		list := make([]string, len(saved))
+		for i, n := range saved {
+			kind := n.Kind
+			if utf8.RuneCountInString(kind) > 40 {
+				kind = string([]rune(kind)[:40])
+			}
+			list[i] = "@" + n.Name + " (" + kind + ")"
+		}
+		user += "\n\nThe things they saved, by @name (kind): " + strings.Join(list, ", ")
+	}
 	return ai.Request{System: []ai.SystemBlock{{Text: system(intents), Cache: true}}, Messages: []ai.Message{{Role: "user", Text: user}},
 		Schema: SchemaFor(intents), MaxTokens: maxTokens, Effort: "low"}
 }
@@ -151,7 +189,7 @@ func (c *Classifier) Classify(ctx context.Context, text string, l lang.Info) (Re
 	if len(intents) == 0 {
 		intents = Allowed
 	}
-	req := RequestFor(text, l, c.MaxTokens, intents)
+	req := RequestWith(text, l, c.MaxTokens, intents, c.Saved)
 	resp, err := ai.Redacted(c.Provider).Complete(ctx, req)
 	if err != nil {
 		return Result{}, nil, err
