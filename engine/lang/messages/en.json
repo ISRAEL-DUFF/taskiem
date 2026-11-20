@@ -1744,6 +1744,41 @@
       "reviewed": true,
       "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
     },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": true,
+      "context": "A saved bank account's bank and its account number, masked"
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": true,
+      "context": "The name the bank gave for a saved account"
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": true,
+      "context": "Labels the business's saved thing when two share a name"
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": true,
+      "context": "A saved thing asked for by its name: its name and title, before its details"
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": true,
+      "context": "A saved bank account whose name has not been checked"
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": true,
+      "context": "Before two saved things of one name, the person's own and their business's"
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": true,
+      "context": "Labels the person's own saved thing when two share a name"
+    },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
       "reviewed": true,

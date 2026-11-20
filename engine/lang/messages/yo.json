@@ -1396,6 +1396,34 @@
       "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
       "reviewed": false
     },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": false
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": false
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": false
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": false
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": false
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": false
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": false
+    },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
       "reviewed": false

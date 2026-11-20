@@ -956,6 +956,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// What the business turned off is not a command here: its words pass
 		// on as ordinary chat (docs/spec/business-areas.md).
 		on := s.chatAreas(ctx, c)
+		// A saved thing by its name alone (saved_chat.go): "@mum".
+		if done, err := s.waSavedName(ctx, c, text); done || err != nil {
+			return err
+		}
 		if !on.On(areas.Storefront) {
 			// no booking words
 		} else if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {
