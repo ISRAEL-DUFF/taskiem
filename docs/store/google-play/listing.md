@@ -10,7 +10,7 @@ Status: **draft for the founder** (19 November 2026). Paste each part into Play 
 | Free or paid | Free (businesses pay for plans on the web; nothing is sold in the app) |
 | Contact email | (the support address) |
 | Website | (the public site) |
-| Privacy policy | (the public privacy notice page: needed before production) |
+| Privacy policy | `<site>/privacy` (web/src/pages/Legal.tsx) |
 
 ## Main store listing
 
@@ -122,7 +122,7 @@ Tablet screenshots are optional and left out: the app is made for phones.
 
 | Section | Answer |
 | --- | --- |
-| **Privacy policy** | The public privacy notice (must exist before production) |
+| **Privacy policy** | `<site>/privacy`; the account deletion page is `<site>/delete-account` (Data safety asks for it) |
 | **App access** | Restricted: sign-in needed. Give reviewers a test account that does not need a WhatsApp or SMS code: an email and password, with a demo business that has orders, money and stock (see "For the reviewers" below) |
 | **Ads** | No ads |
 | **Content rating** | Questionnaire: category "Utility, Productivity, Communication or Other"; users can communicate with each other (yes: chats); shares location (yes: a person can share a place in a chat); no violence, sexual content, gambling or drugs. Expected rating: Everyone / PEGI 3, with "Users Interact" |
@@ -141,7 +141,7 @@ Draft from the code and [PC5](../../needs-people.md) ("App-store privacy labels 
 
 **Overview:**
 - Data is encrypted in transit: **yes** (HTTPS only).
-- People can ask for their data to be deleted: **yes**, in the app (You › Settings › Delete account) and by the web page for deletion requests (to be published).
+- People can ask for their data to be deleted: **yes**, in the app (You › Settings › Delete your account) and on the web page `/delete-account`.
 - Shared with third parties: **no**. Firebase (Google) delivers notifications and the business's payment provider processes payments, as service providers acting for Taskiem, which Play does not count as sharing.
 - Ads, analytics or crash reporting libraries: **none**.
 

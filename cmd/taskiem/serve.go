@@ -103,6 +103,8 @@ type config struct {
 	SecureCookies, TrustProxy, Signup bool
 	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
 	AppMinVersion string
+	// SupportEmail is where people write to Taskiem (TASKIEM_SUPPORT_EMAIL).
+	SupportEmail string
 	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
 	// a chat link's page and the shared number's answer to a customer.
 	AppGetURL string
@@ -505,6 +507,7 @@ func loadConfig() (config, error) {
 		TrustProxy:         flag("TASKIEM_TRUST_PROXY", false),
 		Signup:             flag("TASKIEM_ALLOW_SIGNUP", false),
 		AppMinVersion:      os.Getenv("TASKIEM_APP_MIN_VERSION"),
+		SupportEmail:       strings.TrimSpace(os.Getenv("TASKIEM_SUPPORT_EMAIL")),
 		AppGetURL:          os.Getenv("TASKIEM_APP_GET_URL"),
 		UpdateChatTemplate: flag("TASKIEM_WA_UPDATE_CHAT_TEMPLATE", false),
 		Queues:             strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
@@ -1259,7 +1262,7 @@ func serve(ctx context.Context, args []string) error {
 		// Checking a key before it is saved calls the connector as a run
 		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
-			AllowSignup: cfg.Signup, AppMinVersion: cfg.AppMinVersion, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
+			AllowSignup: cfg.Signup, AppMinVersion: cfg.AppMinVersion, SupportEmail: cfg.SupportEmail, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
 			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
 		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()

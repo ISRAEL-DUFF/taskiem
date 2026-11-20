@@ -1423,7 +1423,7 @@ class TaskiemApi {
 }
 
 class AppConfig {
-  const AppConfig({this.chatSignup, required this.minVersion, required this.passkeys, this.push, required this.signup});
+  const AppConfig({this.chatSignup, required this.minVersion, required this.passkeys, this.push, required this.signup, this.supportEmail});
 
   /// Whether the app may sign people up as on WhatsApp (`app` in
   /// TASKIEM_CHAT_SIGNUP, with WhatsApp and terms).
@@ -1439,6 +1439,9 @@ class AppConfig {
   final AppConfigPush? push;
   /// Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
   final bool signup;
+  /// Where people write to Taskiem (TASKIEM_SUPPORT_EMAIL), shown on the
+  /// privacy notice and the account deletion page. Absent when none is set.
+  final String? supportEmail;
 
   factory AppConfig.fromJson(Map<String, dynamic> j) => AppConfig(
         chatSignup: j['chat_signup'] == null ? null : j['chat_signup'] as bool,
@@ -1446,6 +1449,7 @@ class AppConfig {
         passkeys: j['passkeys'] as bool,
         push: j['push'] == null ? null : AppConfigPush.fromJson(j['push'] as Map<String, dynamic>),
         signup: j['signup'] as bool,
+        supportEmail: j['support_email'] == null ? null : j['support_email'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1454,6 +1458,7 @@ class AppConfig {
         'passkeys': passkeys,
         'push': ?push?.toJson(),
         'signup': signup,
+        'support_email': ?supportEmail,
       };
 }
 

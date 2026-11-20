@@ -35,6 +35,7 @@ import { Account, Passkeys } from "./pages/Account";
 import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
 import { AccountDeleted } from "./pages/YouAccount";
 import { TransparencyPage } from "./pages/Transparency";
+import { DeleteAccountPage, PrivacyPage } from "./pages/Legal";
 import { PeopleOnYou, PersonLinkPage } from "./pages/People";
 import { GroupLinkPage } from "./pages/Groups";
 import { ChatLinkPage } from "./pages/ChatLinkPage";
@@ -273,6 +274,9 @@ function Shell() {
   if (loc.pathname === "/account-deleted") return alone(<AccountDeleted />);
   // The published count of lawful requests (people-chatting §8.5), for anyone.
   if (loc.pathname === "/transparency") return alone(<TransparencyPage />);
+  // The privacy notice and how to delete an account (Google Play asks both), for anyone.
+  if (loc.pathname === "/privacy") return alone(<PrivacyPage />);
+  if (loc.pathname === "/delete-account") return alone(<DeleteAccountPage />);
   if (/^\/c\/[A-Za-z0-9_-]{32}$/.test(loc.pathname))
     return alone(
       <Routes>
