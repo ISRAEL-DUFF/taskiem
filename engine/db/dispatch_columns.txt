@@ -1327,6 +1327,7 @@ tenant_limits.max_payload_bytes
 tenant_limits.max_queued_runs
 tenant_limits.max_retention_days
 tenant_limits.max_running_runs
+tenant_limits.max_saved_objects
 tenant_limits.max_secrets
 tenant_limits.max_steps_per_run
 tenant_limits.max_workflows
