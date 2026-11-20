@@ -1769,6 +1769,11 @@
       "reviewed": true,
       "context": "A saved bank account whose name has not been checked"
     },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": true,
+      "context": "A command acting on @name when the person's own and their business's both have the name: which, by number"
+    },
     "wa.saved.two": {
       "text": "You have two things called @{name}:",
       "reviewed": true,

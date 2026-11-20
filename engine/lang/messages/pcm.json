@@ -1416,6 +1416,10 @@
       "text": "Its name is not checked with the bank yet.",
       "reviewed": false
     },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": false
+    },
     "wa.saved.two": {
       "text": "You have two things called @{name}:",
       "reviewed": false

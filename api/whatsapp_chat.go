@@ -222,6 +222,10 @@ type chat struct {
 	// tools is the business's chat tools switch (chat_tools.go), and
 	// toTaskiem that this message called Taskiem with "@Taskiem".
 	tools, toTaskiem bool
+	// savedChoice is which of two saved things of one name the person
+	// picked, "mine" or "business", while the command waiting for it is
+	// read again (saved_pick.go).
+	savedChoice string
 }
 
 // t is a message in the conversation's language.
@@ -290,6 +294,9 @@ type chatData struct {
 	// Direct is when a lone "..." was sent: the next message goes to the
 	// linked businesses it mentions (chat_direct.go).
 	Direct *time.Time `json:"direct,omitempty"`
+	// SavedPick is a command waiting for which of two saved things of one
+	// name (saved_pick.go).
+	SavedPick *chatSavedPick `json:"saved_pick,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -923,6 +930,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.File != nil && c.state != stateIdle {
 		return s.waFileReply(ctx, c, text, cmd)
+	}
+	if c.data.SavedPick != nil && c.state != stateIdle {
+		if done, err := s.waSavedPickReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
 	}
 	if c.data.Found != nil && c.state != stateIdle {
 		// A message that is not about the rows found lets them go and is

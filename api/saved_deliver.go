@@ -44,14 +44,13 @@ func (s *Server) waDeliverToSaved(ctx context.Context, c *chat, text string) (bo
 	if len(got) == 0 {
 		return true, c.say(ctx, s, c.t("wa.saved.share_none", "name", name))
 	}
-	// The business's own place over one's own of the name; one's own gives
-	// the business only the copy on the order (§5.3).
-	x := got[0].row
-	for _, f := range got {
-		if !f.mine {
-			x = f.row
-		}
+	// Which, when one's own and the business's both have the name; one's
+	// own gives the business only the copy on the order (§5.3).
+	one, ok, err := s.savedPickOne(ctx, c, chatSavedPick{Kind: "deliver", Text: text, Name: name}, got)
+	if !ok || err != nil {
+		return true, err
 	}
+	x := one.row
 	if x.Kind != saved.KindPlace {
 		return true, c.say(ctx, s, c.t("wa.deliver.saved_kind", "name", x.Name, "kind", savedKindWords(x)))
 	}

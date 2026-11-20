@@ -277,12 +277,11 @@ func (s *Server) waInvoiceSaved(ctx context.Context, c *chat, typed string, kobo
 	if len(got) == 0 {
 		return true, c.say(ctx, s, c.t("wa.saved.share_none", "name", name))
 	}
-	x := got[0].row
-	for _, f := range got {
-		if !f.mine {
-			x = f.row
-		}
+	one, ok, err := s.savedPickOne(ctx, c, chatSavedPick{Kind: "invoice", Name: name, Kobo: kobo, What: what}, got)
+	if !ok || err != nil {
+		return true, err
 	}
+	x := one.row
 	if x.Kind != saved.KindPerson {
 		return true, c.say(ctx, s, c.t("wa.invoice.saved_kind", "name", x.Name, "kind", savedKindWords(x)))
 	}

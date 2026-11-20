@@ -89,7 +89,25 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place", "details": map[string]any{"line": "12 Herbert Macaulay Way"}})
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "tolu", "title": "Tolu Bello", "kind": "person", "details": map[string]any{"address": "4 Allen Avenue"}})
 
-	if r := w.say(t, on, "invoice @acme 250k for the October job"); !strings.Contains(r, "Send Acme Ltd (") || !strings.Contains(r, "an invoice for ₦250,000: the October job?") {
+	// Two of the name: which, by number. A reply that is neither lets the
+	// command go; 1 is one's own, 2 the business's.
+	pick := func() {
+		t.Helper()
+		if r := w.say(t, on, "invoice @acme 250k for the October job"); !strings.Contains(r, "Which @acme?") || !strings.Contains(r, "1. Your own: My Acme contact") || !strings.Contains(r, "2. Ada Foods's: Acme Ltd") {
+			t.Fatalf("which: %q", r)
+		}
+	}
+	pick()
+	if r := w.say(t, on, "help"); strings.Contains(r, "Which @acme?") || strings.Contains(r, "Send ") {
+		t.Errorf("let go: %q", r)
+	}
+	pick()
+	if r := w.say(t, on, "1"); !strings.Contains(r, "Send My Acme contact (") {
+		t.Fatalf("one's own: %q", r)
+	}
+	w.say(t, on, "no")
+	pick()
+	if r := w.say(t, on, "2"); !strings.Contains(r, "Send Acme Ltd (") || !strings.Contains(r, "an invoice for ₦250,000: the October job?") {
 		t.Fatalf("confirm: %q", r)
 	}
 	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Acme Ltd") {

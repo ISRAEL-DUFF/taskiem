@@ -141,19 +141,35 @@ func (s *Server) waSavedReminders(ctx context.Context, c *chat, text string) (bo
 	return false, nil
 }
 
-// remindOwner is the thing a reminder is on, among what @name names: the
-// business's over one's own of the name.
-func remindOwner(c *chat, got []savedFound) (savedRow, savedOwner) {
-	f := got[0]
-	for _, g := range got {
-		if !g.mine {
-			f = g
+// foundOwner is whose a found thing is, as the person in the chat
+// reaches it.
+func foundOwner(c *chat, f savedFound) savedOwner {
+	if f.mine {
+		return savedOwner{person: c.p.UserID, by: c.p.UserID}
+	}
+	return savedOwner{tenant: c.tenant.ID, by: c.p.UserID}
+}
+
+// dateAsked is the date field the words name, by its label (the longest
+// first) or by a date word; nil when they name none.
+func dateAsked(asked string, dates []savedDateField) *savedDateField {
+	sort.SliceStable(dates, func(i, j int) bool { return len(dates[i].label) > len(dates[j].label) })
+	for i := range dates {
+		if labelAsked(asked, dates[i].label) {
+			return &dates[i]
 		}
 	}
-	if f.mine {
-		return f.row, savedOwner{person: c.p.UserID, by: c.p.UserID}
+	return dateNamed(asked, dates)
+}
+
+// hasDate says whether any of the date fields holds a date.
+func hasDate(dates []savedDateField) bool {
+	for _, d := range dates {
+		if d.value != "" {
+			return true
+		}
 	}
-	return f.row, savedOwner{tenant: c.tenant.ID, by: c.p.UserID}
+	return false
 }
 
 // waRemindSet sets a reminder on the date the words name.
@@ -171,40 +187,51 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 		// No saved thing by the name: the words go on (a workflow, maybe).
 		return err != nil, err
 	}
-	x, o := remindOwner(c, got)
-	var dates []savedDateField
-	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
-		var err error
-		dates, err = s.datesTx(ctx, tx, o, x)
-		return err
-	}); err != nil {
-		return true, err
+	// The things of the name the words can be about: those holding a date
+	// they name, or any date when they say "due".
+	asked := withoutName(text, name)
+	due := remindDue.MatchString(text)
+	var fit, empty []savedFound
+	datesOf := map[bool][]savedDateField{}
+	for _, g := range got {
+		o := foundOwner(c, g)
+		var dates []savedDateField
+		if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+			var err error
+			dates, err = s.datesTx(ctx, tx, o, g.row)
+			return err
+		}); err != nil {
+			return true, err
+		}
+		if len(dates) == 0 {
+			continue
+		}
+		datesOf[g.mine] = dates
+		// One holding the date over one whose field is empty.
+		switch f := dateAsked(asked, dates); {
+		case f != nil && f.value != "", f == nil && due && hasDate(dates):
+			fit = append(fit, g)
+		case f != nil || due:
+			empty = append(empty, g)
+		}
 	}
-	if len(dates) == 0 {
-		// Not about a date at all: a workflow to build, maybe.
-		if !remindDue.MatchString(text) {
+	if len(fit) == 0 {
+		fit = empty
+	}
+	if len(fit) == 0 {
+		// Not about a date it holds: a workflow to build, maybe; with "due",
+		// it holds none.
+		if !due {
 			return false, nil
 		}
-		return true, c.say(ctx, s, c.t("wa.remind.no_dates", "name", x.Name))
+		return true, c.say(ctx, s, c.t("wa.remind.no_dates", "name", got[0].row.Name))
 	}
-	// The date the words name, by its label (not in the thing's own name);
-	// the only one when they name none.
-	asked := withoutName(text, x.Name)
-	sort.SliceStable(dates, func(i, j int) bool { return len(dates[i].label) > len(dates[j].label) })
-	var f *savedDateField
-	for i := range dates {
-		if labelAsked(asked, dates[i].label) {
-			f = &dates[i]
-			break
-		}
+	one, ok, err := s.savedPickOne(ctx, c, chatSavedPick{Kind: "remind", Text: text, Name: name}, fit)
+	if !ok || err != nil {
+		return true, err
 	}
-	if f == nil {
-		f = dateNamed(asked, dates)
-	}
-	// Neither a date's label nor "due" in the words: not about its dates.
-	if f == nil && !remindDue.MatchString(text) {
-		return false, nil
-	}
+	x, o, dates := one.row, foundOwner(c, one), datesOf[one.mine]
+	f := dateAsked(asked, dates)
 	if f == nil && len(dates) == 1 {
 		f = &dates[0]
 	}

@@ -160,3 +160,28 @@ func TestSavedReminderEndsWhenMemberLeaves(t *testing.T) {
 		t.Errorf("reminders left: %d %v", n, err)
 	}
 }
+
+// Two things of one name: a reminder asks which only when both hold the
+// date the words name.
+func TestSavedReminderPick(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada Foods", "ada@reminderpick.test")
+	const on = "+2348010000520"
+	w.bind(t, owner, on)
+	lagos, _ := time.LoadLocation("Africa/Lagos")
+	w.srv.BriefingClock = func() time.Time { return time.Date(2027, 3, 1, 10, 0, 0, 0, lagos) }
+
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "mum", "title": "Mum", "kind": "person", "details": map[string]any{"birthday": "1960-03-02"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "mum", "title": "Mum's shop", "kind": "person", "details": map[string]any{"phone": "0803 123 4567"}})
+	if r := w.say(t, on, "remind me of @mum's birthday"); !strings.Contains(r, "on 2 Mar 2027 that @mum's Birthday") {
+		t.Fatalf("only one holds it: %q", r)
+	}
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "tolu", "title": "Tolu", "kind": "person", "details": map[string]any{"birthday": "1990-04-02"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "tolu", "title": "Tolu Bello", "kind": "person", "details": map[string]any{"birthday": "1988-05-09"}})
+	if r := w.say(t, on, "remind me of @tolu's birthday"); !strings.Contains(r, "Which @tolu?") || !strings.Contains(r, "2. Ada Foods's: Tolu Bello") {
+		t.Fatalf("which: %q", r)
+	}
+	if r := w.say(t, on, "2"); !strings.Contains(r, "on 9 May 2027 that @tolu's Birthday") {
+		t.Fatalf("the business's: %q", r)
+	}
+}
