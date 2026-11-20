@@ -79,7 +79,7 @@ CREATE TABLE saved_object_events (
   id         uuid PRIMARY KEY,
   person_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   object_id  uuid NOT NULL REFERENCES saved_objects(id) ON DELETE CASCADE,
-  action     text NOT NULL CHECK (action IN ('added', 'changed', 'revealed', 'checked', 'removed')),
+  action     text NOT NULL CHECK (action IN ('added', 'changed', 'revealed', 'checked', 'removed', 'shared')),
   -- What changed, with sensitive values masked; how a change or a reveal
   -- was confirmed (passkey).
   detail     jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(detail) = 'object'),
