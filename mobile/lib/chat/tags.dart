@@ -14,7 +14,7 @@ import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner, this.savedSensitive = false});
 
   /// A saved thing (kind "saved", saved objects S1): its kind, and a
   /// text's words, which a pick puts in the box in place of what was typed.
@@ -22,6 +22,10 @@ class TagSuggestion {
 
   /// A saved thing's: mine (the person's own) or business.
   final String? savedOwner;
+
+  /// A saved thing that holds what is sensitive (saved.MakeCard's rule):
+  /// sharing it asks first.
+  final bool savedSensitive;
   final String? body;
 
   /// A short word on the right ("Invoice").
@@ -180,6 +184,7 @@ List<SendLinkMessageRequestMentionsItem> tagRefs(String text, List<TagSuggestion
         'business' => SendLinkMessageRequestMentionsItem(kind: p.kind, link: p.id),
         'service' => SendLinkMessageRequestMentionsItem(kind: p.kind, serviceId: p.id),
         'invoice' || 'bill' || 'order' || 'purchase' => SendLinkMessageRequestMentionsItem(kind: p.kind, ref: p.id),
+        'saved' => SendLinkMessageRequestMentionsItem(kind: p.kind, saved: SavedShare(id: p.id, owner: p.savedOwner ?? 'business', confirm: false)),
         _ => SendLinkMessageRequestMentionsItem(kind: p.kind, itemId: p.id),
       },
 ];

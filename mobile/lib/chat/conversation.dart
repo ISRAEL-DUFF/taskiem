@@ -52,6 +52,7 @@ import 'contact.dart';
 import 'deal.dart';
 import 'live_card.dart';
 import 'explore.dart' show showExploreCard;
+import 'saved_card.dart' show SavedCardView, askShare, saveSavedCard;
 import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
@@ -1102,15 +1103,35 @@ class _ConversationScreenState extends State<ConversationScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: (o) => widget.onOpenLink?.call(o.link)),
-    // Saved texts (saved objects S1): their words into the box.
+    // Saved things (saved objects S1): a text's words into the box; the
+    // rest named as tags, each shared as a card with the message.
     saved: SavedPicks(
       auth: widget.data.chats.auth,
-      textsOnly: true,
+      textsOnly: false,
       onChange: () {
         if (mounted) setState(() {});
       },
     ),
+    savedAsTags: true,
   );
+
+  /// The tags a message sends, with a yes to each saved thing's sensitive
+  /// details (the server's question, asked here since the message goes
+  /// later); null on a no.
+  Future<List<SendLinkMessageRequestMentionsItem>?> _withYes(List<SendLinkMessageRequestMentionsItem> tags) async {
+    final out = <SendLinkMessageRequestMentionsItem>[];
+    for (final x in tags) {
+      final sh = x.saved;
+      if (x.kind != 'saved' || sh == null) {
+        out.add(x);
+        continue;
+      }
+      final pick = _tags.saved?.list.where((s) => s.id == sh.id).firstOrNull;
+      if (pick != null && pick.savedSensitive && !await askShare(context)(shareQuestion(pick, widget.data.conv.name))) return null;
+      out.add(SendLinkMessageRequestMentionsItem(kind: 'saved', saved: SavedShare(id: sh.id, owner: sh.owner, confirm: true)));
+    }
+    return out;
+  }
 
   String _words = '';
 
@@ -1476,9 +1497,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),
                 onCancelReply: () => setState(() => _reply = null),
-                onSend: (words, file) {
+                onSend: (words, file) async {
                   final r = _reply;
-                  final tags = _tags.take(words);
+                  final tags = await _withYes(_tags.take(words));
+                  if (tags == null) {
+                    // Not shared: the words come back to the box.
+                    if (_text.text.isEmpty) _text.text = words;
+                    return;
+                  }
+                  if (!mounted) return;
                   setState(() => _reply = null);
                   d.send(words, file: file, reply: r, tags: tags);
                 },
@@ -1787,7 +1814,9 @@ class _Bubble extends StatelessWidget {
     final meta = mine ? t.chatOutMeta : t.muted;
     final body = msg.body ?? '';
     final card = msg.kind == 'card' ? msg.card : null;
-    final inline = card == null && body.isNotEmpty && msg.preview == null && !failed;
+    // A saved thing's card under the words: the time goes under it.
+    final savedCards = (msg.mentions ?? const <LinkMention>[]).any((x) => x.kind == 'saved' && x.saved != null);
+    final inline = card == null && body.isNotEmpty && msg.preview == null && !failed && !savedCards;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
     // A voice note alone: its time ends its row (as drawn).
     final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
@@ -1988,6 +2017,19 @@ class _Bubble extends StatelessWidget {
                                         auth: refs!.auth,
                                         now: now,
                                         load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
+                                      ),
+                                  // Saved things it shares (saved objects S1), each as its
+                                  // card; Save this into the business's Saved.
+                                  for (final x in msg.mentions ?? const <LinkMention>[])
+                                    if (x.kind == 'saved' && x.saved != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 6),
+                                        child: SavedCardView(
+                                          key: ValueKey('saved:${x.name}'),
+                                          card: x.saved!,
+                                          mine: mine,
+                                          onSave: refs == null ? null : () => saveSavedCard(context, refs!.auth, x.saved!, mine: false),
+                                        ),
                                       ),
                                   if (msg.preview != null) _PreviewCard(p: msg.preview!),
                                   if (!inline && !voiceOnly)

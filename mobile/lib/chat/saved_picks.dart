@@ -75,9 +75,30 @@ List<TagSuggestion> savedTags(List<SavedObject> mine, List<SavedObject> business
         words: x.title,
         savedKind: x.kind,
         savedOwner: x.owner,
+        savedSensitive: savedSensitive(x.kind, x.details),
         body: x.kind == 'text' ? (x.details.body ?? '') : null,
       ),
   ];
+}
+
+/// saved.MakeCard's rule: an account's number, a person's phone or email,
+/// a place's phone.
+bool savedSensitive(String kind, SavedObjectDetails d) => switch (kind) {
+  'bank_account' => true,
+  'person' => (d.phone ?? '').isNotEmpty || (d.email ?? '').isNotEmpty,
+  'place' => (d.phone ?? '').isNotEmpty,
+  _ => false,
+};
+
+/// The server's question before sharing what is sensitive (shareQuestion):
+/// "Share Mum's account details with Bola Stores?".
+String shareQuestion(TagSuggestion s, String to) {
+  final what = switch (s.savedKind) {
+    'bank_account' => 'account details',
+    'person' || 'place' => 'phone number and details',
+    _ => 'details',
+  };
+  return "Share ${(s.words ?? '').isNotEmpty ? s.words : s.name}'s $what with ${to.isEmpty ? 'them' : to}?";
 }
 
 /// A tag box offering saved things alone (saved objects S1): for the chats

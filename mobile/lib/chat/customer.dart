@@ -19,7 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
-import 'saved_card.dart' show askShare, sendSaved;
+import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'saved_picks.dart';
 import 'dart:async';
 
@@ -822,6 +822,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                     other: title,
                                     sender: m.m.mine ? m.m.senderName : null,
                                     card: m.m.card,
+                                    // A customer's saved thing: Save this, into the business's Saved.
+                                    onCard: !m.m.mine && m.m.card?.saved != null ? () => saveSavedCard(context, d.chats.auth, m.m.card!.saved!, mine: false) : null,
                                     attachment: m.m.attachment,
                                     offer: m.m.offer == true,
                                     local: m.file,

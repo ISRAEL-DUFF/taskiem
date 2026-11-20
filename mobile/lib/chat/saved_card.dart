@@ -157,14 +157,15 @@ class _Line extends StatelessWidget {
   }
 }
 
-/// Save this: a card shared with the person, saved as their own, in the
-/// sheet that saves one, filled from the card to change before saving.
-Future<void> saveSavedCard(BuildContext context, Auth auth, SavedCard c) async {
-  final api = SavedApi(auth, true);
+/// Save this: a card shared with the person, saved as their own (or, read
+/// in a business's chat, [mine] false, the business's), in the sheet that
+/// saves one, filled from the card to change before saving.
+Future<void> saveSavedCard(BuildContext context, Auth auth, SavedCard c, {bool mine = true}) async {
+  final api = SavedApi(auth, mine);
   final done = c.kind == 'bank_account'
       ? (await showTkSheet<String>(context, (_) => SavedAccountSheet(api: api, checks: false, start: c))) != null
       : (await showTkSheet<bool>(context, (_) => SavedThingSheet(api: api, kind: c.kind, start: c))) == true;
-  if (done && context.mounted) showTkToast(context, 'Saved as yours');
+  if (done && context.mounted) showTkToast(context, mine ? 'Saved as yours' : 'Saved for the business');
 }
 
 /// Sends a saved thing as a card: once, and when the server asks for a yes

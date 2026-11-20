@@ -9,7 +9,7 @@ import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/saved_picks.dart';
 import 'package:taskiem/chat/tags.dart';
 
-import 'my_chats_test.dart' show conversation, drain, openChat, phone, press, settle;
+import 'my_chats_test.dart' show answer, conversation, drain, openChat, phone, press, settle;
 import 'support.dart' show loadFonts;
 
 Map<String, dynamic> thing(String id, String owner, String kind, String name, String title, String hint, Map<String, dynamic> details) => {
@@ -68,6 +68,38 @@ void main() {
     expect(find.text('@mum'), findsNothing);
     await press(t, find.text('@my-address'));
     expect(t.widget<EditableText>(box).controller.text, 'Deliver to 12 Allen Avenue, Ikeja');
+    await drain(t);
+  });
+
+  testWidgets('to a business, one’s own place from “@”: asked first, then shared as a card', (t) async {
+    phone(t);
+    final api = conversation();
+    api.routes['GET /v1/me/saved'] = (_) => {
+      'saved': [thing('h1', 'mine', 'place', 'home', 'Home', '4 Allen Avenue', {'line': '4 Allen Avenue', 'phone': '+2348031120099'})],
+      'limit': 500,
+    };
+    final bodies = <Map<String, dynamic>>[];
+    api.routes['POST /v1/me/chats/c1/messages'] = (r) {
+      final b = api.body(r);
+      bodies.add(b);
+      if (((b['card'] as Map)['saved'] as Map)['confirm'] != true) return answer({'error': 'Share Home’s phone number and details with Mama’s Kitchen?', 'confirm_share': true}, 409);
+      return answer({
+        'id': 'h-sent', 'mine': true, 'kind': 'card', 'body': 'Home', 'line': 'app', 'created_at': '2026-11-17T10:29:00Z',
+        'card': {'type': 'saved', 'title': 'Home', 'saved': {'kind': 'place', 'name': 'home', 'title': 'Home', 'sensitive': true, 'details': {'line': '4 Allen Avenue', 'phone': '+2348031120099'},
+          'lines': [{'label': 'Address', 'value': '4 Allen Avenue'}, {'label': 'Phone for the rider', 'value': '+2348031120099'}]}},
+      }, 201);
+    };
+    await openChat(t, api);
+    final box = find.byType(EditableText).last;
+    await t.enterText(box, '@ho');
+    await settle(t);
+    await press(t, find.text('@home'));
+    expect(t.widget<EditableText>(box).controller.text, '');
+    expect(find.text('Share Home’s phone number and details with Mama’s Kitchen?'), findsOneWidget);
+    await press(t, find.text('Share'));
+    expect([for (final b in bodies) ((b['card'] as Map)['saved'] as Map)['confirm']], [false, true]);
+    expect(((bodies.last['card'] as Map)['saved'] as Map)['owner'], 'mine');
+    expect(find.bySemanticsLabel(RegExp(r'^Home, shared\.')), findsOneWidget);
     await drain(t);
   });
 }

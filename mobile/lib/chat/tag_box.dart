@@ -24,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -49,6 +49,10 @@ class TagBox {
   /// A saved thing other than a text picked: shared as a card (S1 part 3),
   /// what was typed for it taken out of the box.
   final void Function(TagSuggestion)? onShareSaved;
+
+  /// Saved things other than texts kept as tags, sent with the message (a
+  /// business's chat with another business; S1 part 3).
+  final bool savedAsTags;
 
   TagQuery? query;
   final picked = <TagSuggestion>[];
@@ -182,7 +186,7 @@ class TagBox {
       return;
     }
     final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name);
-    if (s.kind != 'taskiem' && s.kind != 'saved') picked.add(s);
+    if (s.kind != 'taskiem' && (s.kind != 'saved' || (savedAsTags && body == null))) picked.add(s);
     _picking = true;
     text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
     _picking = false;

@@ -3043,7 +3043,7 @@ class LinkDocCardDealStepsItem {
 
 /// A structured reference the composer put in a message
 class LinkMention {
-  const LinkMention({this.itemId, required this.kind, this.link, this.minutes, required this.name, this.priceKobo, this.ref, this.serviceId, this.status, this.unit});
+  const LinkMention({this.itemId, required this.kind, this.link, this.minutes, required this.name, this.priceKobo, this.ref, this.saved, this.serviceId, this.status, this.unit});
 
   final String? itemId;
   final String kind;
@@ -3055,6 +3055,7 @@ class LinkMention {
   final int? priceKobo;
   /// An invoice's or an order's id, on our copy only
   final String? ref;
+  final SavedCard? saved;
   /// One of the sender's own services
   final String? serviceId;
   /// An invoice's or an order's status when it was named
@@ -3069,6 +3070,7 @@ class LinkMention {
         name: j['name'] as String,
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         ref: j['ref'] == null ? null : j['ref'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         status: j['status'] == null ? null : j['status'] as String,
         unit: j['unit'] == null ? null : j['unit'] as String,
@@ -3082,9 +3084,59 @@ class LinkMention {
         'name': name,
         'price_kobo': ?priceKobo,
         'ref': ?ref,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'status': ?status,
         'unit': ?unit,
+      };
+}
+
+/// A saved thing as shared in a chat, a copy of it as it was when sent (never a
+/// link); details are its fields for Save this, an account number in full.
+class SavedCard {
+  const SavedCard({required this.details, required this.kind, required this.lines, required this.name, required this.sensitive, required this.title});
+
+  final Map<String, dynamic> details;
+  final String kind;
+  final List<SavedCardLinesItem> lines;
+  /// The sender's @name for it.
+  final String name;
+  final bool sensitive;
+  final String title;
+
+  factory SavedCard.fromJson(Map<String, dynamic> j) => SavedCard(
+        details: j['details'] as Map<String, dynamic>,
+        kind: j['kind'] as String,
+        lines: (j['lines'] as List).map((e) => SavedCardLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        sensitive: j['sensitive'] as bool,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'details': details,
+        'kind': kind,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'name': name,
+        'sensitive': sensitive,
+        'title': title,
+      };
+}
+
+class SavedCardLinesItem {
+  const SavedCardLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory SavedCardLinesItem.fromJson(Map<String, dynamic> j) => SavedCardLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
       };
 }
 
@@ -3877,7 +3929,11 @@ class SendLinkMessageRequest {
   /// services ({kind: service, service_id}), or an invoice, bill, order or
   /// purchase between you and this business ({kind, ref}: one of
   /// /link-chats/{link}/refs), named in the text as @Name (any but a business
-  /// also #Name); one the text does not name is left out.
+  /// also #Name); one the text does not name is left out. A saved thing ({kind:
+  /// saved, saved}: the business's or your own; saved objects S1) is shared as
+  /// a card, its @name in the text (400 without it), after 409 `confirm_share`
+  /// (its error the question) until `saved.confirm` when it holds what is
+  /// sensitive.
   final List<SendLinkMessageRequestMentionsItem>? mentions;
   final String? replyTo;
   final String text;
@@ -3898,13 +3954,14 @@ class SendLinkMessageRequest {
 }
 
 class SendLinkMessageRequestMentionsItem {
-  const SendLinkMessageRequestMentionsItem({this.itemId, required this.kind, this.link, this.ref, this.serviceId});
+  const SendLinkMessageRequestMentionsItem({this.itemId, required this.kind, this.link, this.ref, this.saved, this.serviceId});
 
   final String? itemId;
   final String kind;
   final String? link;
   /// An invoice's or an order's id, from /link-chats/{link}/refs
   final String? ref;
+  final SavedShare? saved;
   final String? serviceId;
 
   factory SendLinkMessageRequestMentionsItem.fromJson(Map<String, dynamic> j) => SendLinkMessageRequestMentionsItem(
@@ -3912,6 +3969,7 @@ class SendLinkMessageRequestMentionsItem {
         kind: j['kind'] as String,
         link: j['link'] == null ? null : j['link'] as String,
         ref: j['ref'] == null ? null : j['ref'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
       );
 
@@ -3920,7 +3978,32 @@ class SendLinkMessageRequestMentionsItem {
         'kind': kind,
         'link': ?link,
         'ref': ?ref,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
+      };
+}
+
+/// A saved thing a message shares (saved objects S1): the sender's own (mine)
+/// or their business's; confirm says yes to sharing what is sensitive in it (an
+/// account number, a phone, an email), asked first by a 409 `confirm_share`
+/// whose error is the question.
+class SavedShare {
+  const SavedShare({this.confirm, required this.id, required this.owner});
+
+  final bool? confirm;
+  final String id;
+  final String owner;
+
+  factory SavedShare.fromJson(Map<String, dynamic> j) => SavedShare(
+        confirm: j['confirm'] == null ? null : j['confirm'] as bool,
+        id: j['id'] as String,
+        owner: j['owner'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': ?confirm,
+        'id': id,
+        'owner': owner,
       };
 }
 
@@ -4588,55 +4671,6 @@ class DeliveryProgress {
       };
 }
 
-/// A saved thing as shared in a chat, a copy of it as it was when sent (never a
-/// link); details are its fields for Save this, an account number in full.
-class SavedCard {
-  const SavedCard({required this.details, required this.kind, required this.lines, required this.name, required this.sensitive, required this.title});
-
-  final Map<String, dynamic> details;
-  final String kind;
-  final List<SavedCardLinesItem> lines;
-  /// The sender's @name for it.
-  final String name;
-  final bool sensitive;
-  final String title;
-
-  factory SavedCard.fromJson(Map<String, dynamic> j) => SavedCard(
-        details: j['details'] as Map<String, dynamic>,
-        kind: j['kind'] as String,
-        lines: (j['lines'] as List).map((e) => SavedCardLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
-        name: j['name'] as String,
-        sensitive: j['sensitive'] as bool,
-        title: j['title'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'details': details,
-        'kind': kind,
-        'lines': lines.map((e) => e.toJson()).toList(),
-        'name': name,
-        'sensitive': sensitive,
-        'title': title,
-      };
-}
-
-class SavedCardLinesItem {
-  const SavedCardLinesItem({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  factory SavedCardLinesItem.fromJson(Map<String, dynamic> j) => SavedCardLinesItem(
-        label: j['label'] as String,
-        value: j['value'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'label': label,
-        'value': value,
-      };
-}
-
 class PutCustomerChatRequest {
   const PutCustomerChatRequest({this.archived, this.muted});
 
@@ -4715,30 +4749,6 @@ class ReplyCustomerRequestCard {
         'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'type': type,
-      };
-}
-
-/// A saved thing a message shares (saved objects S1): the sender's own (mine)
-/// or their business's; confirm says yes to sharing what is sensitive in it (an
-/// account number, a phone, an email), asked first by a 409 `confirm_share`
-/// whose error is the question.
-class SavedShare {
-  const SavedShare({this.confirm, required this.id, required this.owner});
-
-  final bool? confirm;
-  final String id;
-  final String owner;
-
-  factory SavedShare.fromJson(Map<String, dynamic> j) => SavedShare(
-        confirm: j['confirm'] == null ? null : j['confirm'] as bool,
-        id: j['id'] as String,
-        owner: j['owner'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'confirm': ?confirm,
-        'id': id,
-        'owner': owner,
       };
 }
 
@@ -5143,19 +5153,39 @@ class PersonMessage {
 }
 
 class SendMyChatMessageRequest {
-  const SendMyChatMessageRequest({this.clientId, required this.text});
+  const SendMyChatMessageRequest({this.card, this.clientId, this.text});
 
+  final SendMyChatMessageRequestCard? card;
   final String? clientId;
-  final String text;
+  final String? text;
 
   factory SendMyChatMessageRequest.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequest(
+        card: j['card'] == null ? null : SendMyChatMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
-        text: j['text'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
         'client_id': ?clientId,
-        'text': text,
+        'text': ?text,
+      };
+}
+
+class SendMyChatMessageRequestCard {
+  const SendMyChatMessageRequestCard({required this.saved, required this.type});
+
+  final SavedShare saved;
+  final String type;
+
+  factory SendMyChatMessageRequestCard.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequestCard(
+        saved: SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'saved': saved.toJson(),
+        'type': type,
       };
 }
 

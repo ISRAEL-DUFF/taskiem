@@ -50,7 +50,7 @@ import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
-import 'words.dart';import 'saved_card.dart' show saveSavedCard;
+import 'words.dart';import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 
 
 /// The words for a failure, as the chats say them.
@@ -706,6 +706,34 @@ class MyChatData extends ChangeNotifier {
     _changed();
   }
 
+  /// One of the person's own saved things shared with the business as a
+  /// card (saved objects S1), with [ask]'s yes when the server wants one
+  /// before what is sensitive.
+  Future<void> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final client = '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendMyChatMessage(
+          id: id,
+          body: SendMyChatMessageRequest(card: SendMyChatMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client),
+        ),
+        ask,
+      );
+      if (sent == null || _disposed) return;
+      messages = _merge(messages ?? const [], [MyLine(sent)]);
+      error = null;
+    } on Object catch (e) {
+      if (_disposed) return;
+      if (e is ApiError && e.status == 409 && e.message.contains('erased')) {
+        closed = e.message;
+      } else {
+        error = e is ApiError && e.status == 429 ? 'You are sending too fast. Wait a moment and try again.' : sayFailure(e);
+      }
+      unawaited(_chat());
+    }
+    _changed();
+  }
+
   /// Your settings with them: mute, archive, offers, the offers question
   /// passed over. False if refused ([actionError] says why).
   Future<bool> put({bool? muted, bool? archived, bool? offers, bool? offersAsked}) async {
@@ -780,13 +808,16 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
-  // Saved texts by @name (saved objects S1): their words into the box.
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest of one's own shared with the business as cards.
   late final _saved = savedTextBox(
     text: _text,
     auth: widget.data.auth,
     onChange: () {
       if (mounted) setState(() {});
     },
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
   );
   StreamSubscription<String>? _back;
 
