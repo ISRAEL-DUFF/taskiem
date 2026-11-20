@@ -26,7 +26,7 @@ import 'bills_page.dart' show openBills;
 import 'book_sheet.dart' show whenLabel;
 import 'doc_thread.dart' show DocThread;
 import 'product_form.dart' show formKey;
-import 'saved_fill.dart' show pickSaved, placeLine;
+import 'saved_fill.dart' show SavedButton, pickSavedPhone, pickSavedPlace;
 import 'purchase_view.dart' show answersDelivery, buyerSteps, sameName;
 import 'statement_page.dart' show openStatement;
 import 'stock_page.dart' show StockPage, feeInput, feeKobo;
@@ -83,6 +83,12 @@ String sellerLine(Map<String, dynamic> p) {
     _ => '$s cancelled it.',
   };
 }
+
+/// Where an order is delivered can be its own place (saved objects S2)
+/// while a linked supplier has not received it yet: what they hold is
+/// their own copy.
+bool ownPlaceOpen(Map<String, dynamic> p) =>
+    _str(p['link_id']).isNotEmpty && _str(p['seller_status']).isEmpty && const {'drafted', 'sent'}.contains(_str(p['status']));
 
 /// purchases.ts linkedOrder: a linked supplier handles it.
 bool linkedOrder(Map<String, dynamic> p) => _str(p['link_id']).isNotEmpty && _str(p['seller_status']).isNotEmpty;
@@ -274,6 +280,11 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
   bool _ownFailed = false;
   final Map<int, String> _chosen = {};
 
+  /// Where this order is delivered ({address, phone, own}), read while it
+  /// can still change; a saved place being picked for it.
+  Map<String, dynamic>? _deliverTo;
+  bool _picking = false;
+
   Auth get _auth => widget.auth;
 
   @override
@@ -288,6 +299,16 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
       final r = (await _auth.transport.send('GET', _purchasePath(widget.id)) as Map).cast<String, dynamic>();
       final p = (r['purchase'] as Map).cast<String, dynamic>();
       if (mounted) setState(() => (_p = p, _error = null));
+      if (_auth.can('storefront.manage') && ownPlaceOpen(p)) {
+        try {
+          final d = (await _auth.transport.send('GET', _purchasePath(_str(p['id']), '/deliver-to')) as Map).cast<String, dynamic>();
+          if (mounted) setState(() => _deliverTo = d);
+        } on Object {
+          // Not said: the order shows without where it goes.
+        }
+      } else if (_deliverTo != null && mounted) {
+        setState(() => _deliverTo = null);
+      }
       if (_own == null && !_ownFailed && _auth.can('storefront.manage') && buyerSteps(p).confirmProposed) {
         try {
           final s = (await _auth.transport.send('GET', '/v1/stock') as Map).cast<String, dynamic>();
@@ -387,6 +408,7 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
         ],
       ),
       if (_str(p['cancel_asked_at']).isNotEmpty) Text('You asked $supplier to cancel it; they cancel it or keep it.', style: tkHint(t)),
+      if (_deliverTo != null && manage && ownPlaceOpen(p)) _whereTo(p),
       // As drawn: "Ofada rice, 50 kg × 3 … ₦126,000"; under a line, what
       // came of it once something came.
       TkSection(
@@ -511,6 +533,63 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
       if (_actError != null) TkErrorBox(_actError!),
       if (_str(p['link_id']).isNotEmpty) DocThread(key: ValueKey('thread $ref'), auth: _auth, doc: 'purchase', reference: ref, follow: widget.follow),
     ];
+  }
+
+  /// Where it is delivered: its own place, or where your orders go; and
+  /// Deliver to a saved place, until the supplier has it.
+  Widget _whereTo(Map<String, dynamic> p) {
+    final d = _deliverTo!;
+    final address = _str(d['address']);
+    final look = TkLook.of(context);
+    return TkSection(
+      title: 'Where it is delivered',
+      inset: 56,
+      children: [
+        TkListRow(
+          title: address.isEmpty ? 'You pick it up' : address,
+          sub: [
+            d['own'] == true ? 'This order’s own place' : 'Where your orders are delivered',
+            if (_str(d['phone']).isNotEmpty) 'the rider calls ${_str(d['phone'])}',
+          ].join(' · '),
+          icon: 'b-pin',
+          square: look.orange,
+          chevron: false,
+        ),
+        TkListRow(
+          title: 'Deliver to a saved place',
+          sub: _picking ? 'Loading…' : 'Until ${_str(p['supplier'])} has it',
+          icon: 'b-truck',
+          square: look.teal,
+          onTap: _busy || _picking ? null : () => _deliverToSaved(p),
+        ),
+      ],
+    );
+  }
+
+  /// A saved place as where this order goes (PUT …/deliver-to): its phone
+  /// for the rider, else the number there now. Refused once the supplier
+  /// has it (409): their words in a toast.
+  Future<void> _deliverToSaved(Map<String, dynamic> p) async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final x = await pickSavedPlace(context, _auth);
+      if (x == null || !mounted) return;
+      final body = {'address': x.address, 'phone': x.phone.isNotEmpty ? x.phone : _str(_deliverTo?['phone'])};
+      setState(() => _busy = true);
+      try {
+        final r = (await _auth.transport.send('PUT', _purchasePath(_str(p['id']), '/deliver-to'), body: body) as Map).cast<String, dynamic>();
+        if (!mounted) return;
+        setState(() => _deliverTo = r);
+        showTkToast(context, 'It is delivered there');
+      } on Object catch (e) {
+        if (mounted) showTkToast(context, errorWords(e), error: true);
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   /// The top card: what the order is now (and so what to do), its total,
@@ -1076,6 +1155,9 @@ class _SuppliersPageState extends State<SuppliersPage> {
   final _address = TextEditingController();
   final _phone = TextEditingController();
 
+  /// A Saved button's list is read and picked from: one picker at a time.
+  bool _picking = false;
+
   Auth get _auth => widget.auth;
 
   @override
@@ -1095,16 +1177,22 @@ class _SuppliersPageState extends State<SuppliersPage> {
     super.dispose();
   }
 
-  /// A saved place (saved objects S2): its line, area and landmark, and its
-  /// phone for the rider when it has one.
+  /// A saved place (saved objects S2): its line, area and landmark (to
+  /// the 300 characters an address has), and its phone for the rider when
+  /// it has one; else the number there stays, the business's own.
   Future<void> _fromSaved() async {
-    final x = await pickSaved(context, _auth, kind: 'place', title: 'Saved places');
-    if (x == null || !mounted) return;
-    setState(() {
-      final line = placeLine(x.details);
-      if (line.isNotEmpty) _address.text = line;
-      if ((x.details.phone ?? '').isNotEmpty) _phone.text = x.details.phone!;
-    });
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final x = await pickSavedPlace(context, _auth);
+      if (x == null || !mounted) return;
+      setState(() {
+        if (x.address.isNotEmpty) _address.text = x.address;
+        if (x.phone.isNotEmpty) _phone.text = x.phone;
+      });
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   Future<void> _load() async {
@@ -1297,7 +1385,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
                   children: [
                     Expanded(child: TkTextBox(controller: _address, max: 300, hint: '12 Admiralty Way, Lekki')),
                     const SizedBox(width: 8),
-                    TkSmallButton(label: 'Saved', semantics: 'Pick from your saved places', onPressed: _busy ? null : _fromSaved),
+                    SavedButton(semantics: 'Pick from your saved places', picking: _picking, busy: _busy, onPressed: _fromSaved),
                   ],
                 ),
               ),
@@ -1409,6 +1497,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
     if (!mounted) return;
     final picked = <String>{};
     var said = '';
+    var picking = false;
     final saved = await showTkModal<bool>(
       context,
       title: adding ? 'Add a supplier' : 'Change ${s['name']}',
@@ -1429,7 +1518,26 @@ class _SuppliersPageState extends State<SuppliersPage> {
               TkKitField(
                 label: 'Mobile number',
                 hint: 'They get a link by SMS. One tap, and your orders reach them on WhatsApp.',
-                child: TkTextBox(controller: c['phone']!, phone: true, hint: '0803 123 4567'),
+                child: Row(
+                  children: [
+                    Expanded(child: TkTextBox(controller: c['phone']!, phone: true, hint: '0803 123 4567')),
+                    const SizedBox(width: 8),
+                    SavedButton(
+                      semantics: 'Pick a saved phone number',
+                      picking: picking,
+                      onPressed: () async {
+                        if (picking) return;
+                        set(() => picking = true);
+                        try {
+                          final v = await pickSavedPhone(context, _auth);
+                          if (v != null) c['phone']!.text = v;
+                        } finally {
+                          if (context.mounted) set(() => picking = false);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
             if (adding && items.isNotEmpty) ...[

@@ -46,7 +46,7 @@ render and compare.
 | A status mark | `CardPill(words, CardTone.x)` |
 | A sheet with a form | `TkFormSheet(title:, action:, onAction:, children:)` |
 | Pick one of a few | `pickOneOf` (`chat/groups.dart`); of many (banks), with `searchHint:` for a search box over them; `icon:` in place of ticks for things to take one of (a saved person), not a setting |
-| A form's Saved button | `pickSaved(context, auth, kind:, title:)` (`chat/saved_fill.dart`), from a `TkSmallButton(label: 'Saved')` beside the field it fills |
+| A form's Saved button | `SavedButton(semantics:, picking:, busy:, onPressed:)` (`chat/saved_fill.dart`) beside the field it fills (or in its section's head when the row is full), with a `_picking` flag so one picker opens at a time; it opens `pickSaved(kind:)` (a person, a place), `pickSavedPhone`, `pickSavedPlace` (fits 300 characters), `pickSavedAccount`/`fillSavedAccount` (number shown with a passkey) or `pickSavedDate` |
 | A menu of actions | `pickAction` |
 | "Are you sure?" | `askSure(danger: true)` |
 | Text that is several lines of facts | `TkLines` |

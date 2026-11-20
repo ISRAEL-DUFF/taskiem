@@ -22,6 +22,7 @@ import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show lagosTime, whenLabel;
+import 'saved_fill.dart' show SavedButton, bankCodeIn, pickSavedAccount, pickSavedPhone;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'words.dart' show CardTone, naira;
 import '../kit/look.dart';
@@ -548,6 +549,20 @@ class _RiderFormState extends State<_RiderForm> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone (saved objects §6.4): the phone
+  /// only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _phone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   List<String> get _chosen => widget.zones.isNotEmpty ? _zones.toList() : _labels.text.split(',').map((z) => z.trim()).where((z) => z.isNotEmpty).toList();
 
   @override
@@ -567,7 +582,13 @@ class _RiderFormState extends State<_RiderForm> {
           TkKitField(
             label: 'Mobile number',
             hint: 'They get the link to your deliveries by SMS on this number.',
-            child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
+            child: Row(
+              children: [
+                Expanded(child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567')),
+                const SizedBox(width: 8),
+                SavedButton(semantics: 'Pick a saved phone number', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+              ],
+            ),
           )
         else
           Text('Mobile number: ${_r!['phone']}. To use another number, retire ${_r['name']} and add the new one.', style: tkHint(t)),
@@ -1011,6 +1032,32 @@ class _BankState extends State<_Bank> {
     super.dispose();
   }
 
+  /// A saved bank account (saved objects §6.4): its bank, and its number
+  /// once a passkey shows it; one picker at a time.
+  bool _picking = false;
+  Future<void> _fromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final a = await pickSavedAccount(context, widget.auth);
+      if (a == null || !mounted) return;
+      setState(() {
+        final banks = _banks ?? const [];
+        if (banks.isNotEmpty) {
+          final c = bankCodeIn(banks, a);
+          if (c.isNotEmpty) _code = c;
+        } else if (a.bankCode.isNotEmpty) {
+          _codeBox.text = a.bankCode;
+        }
+        _number.text = a.number;
+      });
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Widget _savedButton() => SavedButton(label: 'A saved account', semantics: 'Fill from a saved bank account', picking: _picking, busy: _busy, onPressed: _fromSaved);
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -1034,23 +1081,33 @@ class _BankState extends State<_Bank> {
           TkKitField(
             field: false,
             label: 'Bank',
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TkSmallButton(
-                label: banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'Choose their bank',
-                semantics: 'Bank: ${banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'none chosen'}',
-                onPressed: () async {
-                  final v = await showTkModalChoices(context, title: 'Bank', value: _code, choices: [for (final b in banks) (b.code, b.name)]);
-                  if (v != null) setState(() => _code = v);
-                },
-              ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TkSmallButton(
+                  label: banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'Choose their bank',
+                  semantics: 'Bank: ${banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'none chosen'}',
+                  onPressed: () async {
+                    final v = await showTkModalChoices(context, title: 'Bank', value: _code, choices: [for (final b in banks) (b.code, b.name)]);
+                    if (v != null) setState(() => _code = v);
+                  },
+                ),
+                _savedButton(),
+              ],
             ),
           )
         else
           TkKitField(
             label: 'Bank code',
             hint: 'The bank’s code, such as 058 for GTBank.',
-            child: TkTextBox(controller: _codeBox, plain: true, max: 6),
+            child: Row(
+              children: [
+                Expanded(child: TkTextBox(controller: _codeBox, plain: true, max: 6)),
+                const SizedBox(width: 8),
+                _savedButton(),
+              ],
+            ),
           ),
         const SizedBox(height: 10),
         TkKitField(

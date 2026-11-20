@@ -14,6 +14,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'guidelines.dart';
+import 'saved_stub.dart';
 import 'support.dart';
 
 Map<String, dynamic> _saved(String id, String owner, String kind, String name, String title, String hint, Map<String, dynamic> details) => {
@@ -93,6 +94,8 @@ void main() {
     bool linksFail = false,
     Map<String, List<Map<String, dynamic>>> saved = const {},
     bool savedFails = false,
+    SavedStub? stub,
+    bool deliverToFails = false,
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
@@ -105,8 +108,10 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             return switch (p) {
+              _ when p.endsWith('/deliver-to') && p != '/v1/stock/deliver-to' => ok({'address': '', 'phone': '+2348031110000', 'own': false}),
               '/v1/stock/purchases' => ok({
                 'purchases': list ?? [purchase ?? _purchase()],
               }),
@@ -143,6 +148,12 @@ void main() {
             };
           }
           sent.add('${req.method} $p ${req.body}');
+          if (req.method == 'PUT' && p.startsWith('/v1/stock/purchases/') && p.endsWith('/deliver-to')) {
+            if (deliverToFails) {
+              return http.Response(jsonEncode({'error': 'PO-0012 has reached the supplier already: tell them in your conversation with them'}), 409, headers: {'content-type': 'application/json'});
+            }
+            return ok({...(jsonDecode(req.body) as Map<String, dynamic>), 'own': true});
+          }
           if (p == '/v1/stock/purchases/low') {
             return ok({
               'purchases': [],
@@ -321,6 +332,73 @@ void main() {
     expect(find.text('Saved places'), findsNothing);
     expect(find.textContaining('Saved things cannot be read now.'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: a long saved place fits the 300 characters, and says what was left out', (t) async {
+    final long = 'Plot ${'1' * 4} ${'Admiralty Way ' * 13}'.trim();
+    final stub = SavedStub(
+      mine: [
+        savedThing('M1', 'mine', 'place', 'depot', 'Depot', 'Lekki', {'line': long, 'area': 'Lekki Phase 1', 'landmark': 'opposite the big blue gate by the filling station' * 2}),
+        savedThing('M2', 'mine', 'place', 'gate', 'Gate', '', {'landmark': 'The blue gate'}),
+      ],
+    );
+    await open(t, (c) => SuppliersPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Depot'));
+    await t.pump();
+    expect(find.text('$long, Lekki Phase 1'), findsOneWidget);
+    expect(find.text('Left out the landmark: an address here is up to 300 characters.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Gate'));
+    await t.pumpAndSettle();
+    expect(find.text('The blue gate'), findsOneWidget, reason: 'no street: the landmark alone, not “ (The blue gate)”');
+  });
+
+  testWidgets('a supplier’s number from a saved person', (t) async {
+    final stub = SavedStub(mine: [savedThing('M1', 'mine', 'person', 'dayo', 'Dayo', '••0099', {'phone': '+2348031120099'})]);
+    await open(t, (c) => SuppliersPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Add a supplier'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    await t.tap(find.text('Dayo'));
+    await t.pumpAndSettle();
+    expect(find.text('+2348031120099'), findsOneWidget);
+  });
+
+  testWidgets('an order not yet with its linked supplier: delivered to a saved place', (t) async {
+    final stub = SavedStub(
+      business: [savedThing('B1', 'business', 'place', 'warehouse', 'Warehouse', 'Lekki', {'line': '12 Admiralty Way', 'area': 'Lekki'})],
+    );
+    final sent = await open(t, (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false), stub: stub);
+    expect(find.text('Where it is delivered'), findsOneWidget);
+    expect(find.text('You pick it up'), findsOneWidget);
+    await t.tap(find.text('Deliver to a saved place'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Warehouse'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/stock/purchases/P1/deliver-to {"address":"12 Admiralty Way, Lekki","phone":"+2348031110000"}', reason: 'no phone saved: the number there now');
+    expect(find.text('12 Admiralty Way, Lekki'), findsOneWidget);
+    expect(find.textContaining('This order’s own place'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('an order the supplier has already: its refusal is said; one they hold offers no place', (t) async {
+    final stub = SavedStub(mine: [savedThing('M1', 'mine', 'place', 'home', 'Home', 'Yaba', {'line': '3 Herbert Macaulay Way', 'phone': '+2348031120099'})]);
+    await open(t, (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false), stub: stub, deliverToFails: true);
+    await t.tap(find.text('Deliver to a saved place'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Home'));
+    await settle(t);
+    expect(find.text('PO-0012 has reached the supplier already: tell them in your conversation with them'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await open(t, (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false), purchase: _purchase(seller: 'accepted'));
+    expect(find.text('Deliver to a saved place'), findsNothing);
   });
 
   testWidgets('a supplier added with what they supply', (t) async {

@@ -16,6 +16,7 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
 import 'guidelines.dart';
+import 'saved_stub.dart';
 import 'support.dart';
 
 final _now = DateTime.utc(2026, 11, 12, 12);
@@ -173,7 +174,7 @@ void main() {
     expect(repeatWords({'every': 'week', 'day': 'mon', 'at': '09:00'}), 'Every Monday at 09:00');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home) async {
+  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {SavedStub? stub}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -185,6 +186,7 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             return switch (p) {
               '/v1/staff' => ok(_staff),
@@ -248,6 +250,20 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/staff/U2/remove {}');
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('staff: their number from a saved place’s phone', (t) async {
+    final stub = SavedStub(business: [savedThing('B1', 'business', 'place', 'kitchen', 'The kitchen', 'Yaba', {'line': '3 Herbert Macaulay Way', 'phone': '08035551234'})]);
+    await open(t, (c) => StaffPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Add staff'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    expect(find.text('@kitchen · Yaba'), findsOneWidget);
+    await t.tap(find.text('The kitchen'));
+    await t.pumpAndSettle();
+    expect(find.text('08035551234'), findsOneWidget);
   });
 
   testWidgets('a person: their hours and pay; this month’s figures; a Saturday taken off', (t) async {

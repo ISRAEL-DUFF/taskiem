@@ -17,6 +17,7 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
 import 'guidelines.dart';
+import 'saved_stub.dart';
 import 'support.dart';
 
 Map<String, dynamic> _invoice({String status = 'sent', bool disputed = false, String key = 'phone:+2348031234567'}) => {
@@ -112,6 +113,7 @@ void main() {
     bool voidFails = false,
     bool schools = false,
     Map<String, List<Map<String, dynamic>>> saved = const {},
+    SavedStub? stub,
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = Size(390, height);
@@ -126,6 +128,7 @@ void main() {
         also: (req) async {
           final p = req.url.path;
           final key = req.headers['idempotency-key'] ?? req.headers['Idempotency-Key'];
+          if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             if (saved[p] case final list?) return ok({'saved': list, 'limit': 200, 'can_check': false});
             if (p == '/v1/schools/receipts') {
@@ -364,8 +367,83 @@ void main() {
     await t.tap(find.text('Mum'));
     await t.pumpAndSettle();
     expect(find.text('Mum'), findsOneWidget);
-    expect(find.text('+2348031120099'), findsOneWidget, reason: 'Mum has no phone: the one there stays');
+    expect(find.text('+2348031120099'), findsNothing, reason: 'a pick is the whole customer: Mum has no phone, so Tolu’s goes');
+    expect(find.text('tolu@example.com'), findsNothing);
     expect(find.text('mum@example.com'), findsOneWidget);
+  });
+
+  testWidgets('a new invoice: Saved tapped twice opens one picker, both lists read at once', (t) async {
+    final stub = SavedStub(mine: [savedThing('M1', 'mine', 'person', 'mum', 'Mum', '', {'phone': '+2348030000001'})]);
+    await open(t, (c) => InvoiceEditorPage(auth: c.auth), stub: stub);
+    final saved = find.bySemanticsLabel('Pick from your saved people');
+    await t.tap(saved);
+    await t.tap(saved, warnIfMissed: false);
+    await t.pumpAndSettle();
+    expect(find.text('Saved people'), findsOneWidget);
+    expect(stub.calls, unorderedEquals(['GET /v1/me/saved', 'GET /v1/saved']), reason: 'one read of each, not two');
+    await t.tap(find.text('Mum'));
+    await t.pumpAndSettle();
+    expect(find.text('+2348030000001'), findsOneWidget);
+  });
+
+  for (final status in [500, 403]) {
+    testWidgets('a new invoice: the business’s list not read ($status), one’s own still offered', (t) async {
+      final stub = SavedStub(mine: [savedThing('M1', 'mine', 'person', 'mum', 'Mum', '', {'phone': '+2348030000001'})], fail: {'/v1/saved': status});
+      await open(t, (c) => InvoiceEditorPage(auth: c.auth), stub: stub);
+      await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+      await t.pumpAndSettle();
+      expect(find.text('Saved people'), findsOneWidget);
+      expect(find.text('Mum'), findsOneWidget);
+      expect(find.textContaining('cannot be read'), findsNothing, reason: 'no toast while something can be picked');
+      expect(find.textContaining('may not see'), findsNothing);
+    });
+  }
+
+  testWidgets('a new invoice: both lists not read, or only the business’s with nothing of the kind, is said', (t) async {
+    await open(t, (c) => InvoiceEditorPage(auth: c.auth), stub: SavedStub(fail: {'/v1/me/saved': 500, '/v1/saved': 500}));
+    await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Saved people'), findsNothing);
+    expect(find.text('Saved things cannot be read now.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await open(
+      t,
+      (c) => InvoiceEditorPage(auth: c.auth),
+      stub: SavedStub(mine: [savedThing('P1', 'mine', 'place', 'home', 'Home', 'Yaba', {'line': '3 Herbert Macaulay Way'})], fail: {'/v1/saved': 500}),
+    );
+    await t.tap(find.bySemanticsLabel('Pick from your saved people'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Saved people'), findsNothing);
+    expect(find.text('Saved things cannot be read now. Nothing of this kind in what could be read.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a new invoice: the due date from a date saved on a thing; a hidden date left out', (t) async {
+    final stub = SavedStub(
+      mine: [
+        savedThing('C1', 'mine', 'custom', 'car', 'The car', 'LND 123', const {}, kindId: 'K1', values: {'insurance_due': '2027-03-03', 'bought': '••', 'plate': 'LND 123'}),
+        savedThing('M1', 'mine', 'person', 'mum', 'Mum', '', {'birthday': '1970-03-21'}),
+      ],
+      myKinds: [
+        savedKind('K1', 'Car', [
+          {'key': 'insurance_due', 'label': 'Insurance due', 'type': 'date'},
+          {'key': 'bought', 'label': 'Bought', 'type': 'date', 'sensitive': true},
+          {'key': 'plate', 'label': 'Plate', 'type': 'text'},
+        ]),
+      ],
+    );
+    await open(t, (c) => InvoiceEditorPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Pick a date from your saved things'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved dates'), findsOneWidget);
+    expect(find.text('@car · Insurance due · 3 Mar 2027'), findsOneWidget);
+    expect(find.textContaining('Bought'), findsNothing, reason: 'a sensitive date is masked: left out');
+    expect(find.textContaining('@mum · Birthday'), findsOneWidget);
+    await t.tap(find.text('@car · Insurance due · 3 Mar 2027'));
+    await t.pumpAndSettle();
+    expect(find.text('2027-03-03'), findsOneWidget);
   });
 
   testWidgets('a new invoice: nothing saved of the kind is said', (t) async {

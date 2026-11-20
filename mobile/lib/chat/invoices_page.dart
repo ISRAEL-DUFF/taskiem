@@ -29,7 +29,7 @@ import 'doc_thread.dart' show DocThread;
 import 'invoice_match.dart' show CustomerMatching, InvoiceMatchPage, groupSuggestions, suggestionsPath;
 import 'money_sheets.dart' show InvoiceActions, dateLabel, invoiceActions, invoicePath, invoiceStatus, owing;
 import 'product_form.dart' show SaveKey, formKey;
-import 'saved_fill.dart' show pickSaved;
+import 'saved_fill.dart' show SavedButton, pickSaved, pickSavedDate;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
 import '../kit/mobile.dart';
@@ -1307,6 +1307,10 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
   List<Map<String, dynamic>> _buyers = const [];
   bool _tried = false;
   bool _busy = false;
+
+  /// What a Saved button is reading and picking from (a person, a date):
+  /// one picker at a time.
+  String? _picking;
   String? _error;
   bool _ready = false;
   bool _hidden = false;
@@ -1513,17 +1517,34 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
     });
   }
 
-  /// A saved person (saved objects S2): their name, and their phone and
-  /// email where they have them.
-  Future<void> _fromSaved() async {
+  /// A Saved button's list read and picked from: one at a time.
+  Future<void> _pick(String what, Future<void> Function() pick) async {
+    if (_picking != null) return;
+    setState(() => _picking = what);
+    try {
+      await pick();
+    } finally {
+      if (mounted) setState(() => _picking = null);
+    }
+  }
+
+  /// A saved person (saved objects S2) is the whole customer: their name,
+  /// phone and email, empty where they have none (not the last one's).
+  Future<void> _fromSaved() => _pick('person', () async {
     final x = await pickSaved(context, widget.auth, kind: 'person', title: 'Saved people');
     if (x == null || !mounted) return;
     setState(() {
-      if (x.title.isNotEmpty) _name.text = x.title;
-      if ((x.details.phone ?? '').isNotEmpty) _phone.text = x.details.phone!;
-      if ((x.details.email ?? '').isNotEmpty) _email.text = x.details.email!;
+      _name.text = x.title.isNotEmpty ? x.title : x.name;
+      _phone.text = (x.details.phone ?? '').trim();
+      _email.text = (x.details.email ?? '').trim();
     });
-  }
+  });
+
+  /// A date saved on one of the owner's things, as the due date.
+  Future<void> _dueFromSaved() => _pick('date', () async {
+    final d = await pickSavedDate(context, widget.auth);
+    if (d != null && mounted) setState(() => _dueOn.text = d);
+  });
 
   Widget _whoFace(TkTokens t, String name, bool on, VoidCallback tap) {
     final look = TkLook.of(context);
@@ -1586,7 +1607,14 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
           // a linked business picked by its face, or someone else, picked
           // from the phone's contacts or typed; one amount or the items, each
           // with − n +.
-          TkSection(title: 'Customer', children: const []),
+          // Saved in the head, as the web has it: the name's row keeps
+          // its room at large text.
+          TkSection(
+            title: 'Customer',
+            trailing: _linked == null
+                ? SavedButton(semantics: 'Pick from your saved people', picking: _picking == 'person', busy: _busy || _picking != null, onPressed: _fromSaved)
+                : null,
+          ),
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
@@ -1616,8 +1644,6 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
                     child: Row(
                       children: [
                         Expanded(child: TkTextBox(controller: _name, max: 120)),
-                        const SizedBox(width: 8),
-                        TkSmallButton(label: 'Saved', semantics: 'Pick from your saved people', onPressed: _fromSaved),
                         const SizedBox(width: 8),
                         TkHeadButton(icon: 'b-people', label: 'Pick from your contacts', onCard: true, onTap: _fromContacts),
                       ],
@@ -1734,7 +1760,13 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
               TkKitField(
                 label: 'Due date',
                 hint: 'Optional, as 2026-12-01. It is overdue the day after.',
-                child: TkTextBox(controller: _dueOn, hint: '2026-12-01'),
+                child: Row(
+                  children: [
+                    Expanded(child: TkTextBox(controller: _dueOn, hint: '2026-12-01')),
+                    const SizedBox(width: 8),
+                    SavedButton(semantics: 'Pick a date from your saved things', picking: _picking == 'date', busy: _busy || _picking != null, onPressed: _dueFromSaved),
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               TkKitField(
