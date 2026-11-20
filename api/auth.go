@@ -59,6 +59,8 @@ const (
 	// settings; PermOrders is either (Can reads "a|b" as either).
 	PermOrderHandle = access.OrderHandle
 	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
+	// PermSavedManage is changing the business's saved things.
+	PermSavedManage = access.SavedManage
 	// PermTaskGive is giving staff tasks and seeing everyone's: those who
 	// run the business (staff_tasks.go).
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage

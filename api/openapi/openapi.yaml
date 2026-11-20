@@ -127,6 +127,9 @@ tags:
 - name: You
   description: 'A person''s own side: their chats with businesses, and the tools of each through the customer door (taskiem-for-everyone §7, §8).'
   x-taskiem-guide: spec/taskiem-for-everyone
+- name: Saved
+  description: 'Saved things a person or a business keeps and calls up by @name (saved objects, S0: saved bank accounts), with the bank list and the name check payments share.'
+  x-taskiem-guide: spec/saved-objects
 - name: People
   description: 'Chats between people, one to one (people-chatting, stage 5a): kept by Taskiem, sealed under each person''s own key and readable by Taskiem''s servers (not end-to-end encrypted); requests, blocks, reports, shared business cards and share cards; and You''s one Chats list.'
   x-taskiem-guide: spec/people-chatting
@@ -25702,6 +25705,317 @@ paths:
           description: Deleted
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/saved:
+    get:
+      operationId: listMySaved
+      tags:
+      - Saved
+      summary: Your saved things
+      description: 'The person''s own saved things (Mine), private to them: no business sees the list. Each account number masked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [bank_account]
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Part of a name or title.
+      responses:
+        '200':
+          description: The saved things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [saved, limit]
+                properties:
+                  saved:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+                  limit:
+                    type: integer
+                  can_check:
+                    type: boolean
+                    description: A payments connection can check the names not checked yet (POST /v1/saved/check).
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMySaved
+      tags:
+      - Saved
+      summary: Save an account of your own
+      description: 'As POST /v1/saved, on the person''s side, sealed under their own key. Not checked with a bank in S0: a person has no payments connection of their own. Up to 500.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/resolve:
+    get:
+      operationId: resolveMySaved
+      tags:
+      - Saved
+      summary: What one of your @names stands for
+      description: 'The person''s own saved thing of that name (`matches: []` when none).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The name, with or without @.
+      responses:
+        '200':
+          description: What the name stands for
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [name, matches]
+                properties:
+                  name:
+                    type: string
+                    description: The name as kept (lowercase, without @); empty when it is not a name.
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/step-up/options:
+    post:
+      operationId: mySavedStepUpOptions
+      tags:
+      - Saved
+      summary: A passkey challenge for one of your saved things
+      description: 'As POST /v1/saved/step-up/options, for the person''s own.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operation, target]
+              properties:
+                operation:
+                  type: string
+                  enum: [saved.change, saved.reveal]
+                target:
+                  type: string
+                  format: uuid
+                  description: The saved thing's id.
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}:
+    get:
+      operationId: getMySaved
+      tags:
+      - Saved
+      summary: One of your saved things
+      description: 'Masked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The saved thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: changeMySaved
+      tags:
+      - Saved
+      summary: Change one of your saved things
+      description: 'As PUT /v1/saved/{id}: changing the account needs a passkey; recorded in the person''s own log.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeMySaved
+      tags:
+      - Saved
+      summary: Remove one of your saved things
+      description: 'Archived, its name free again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}/reveal:
+    post:
+      operationId: revealMySaved
+      tags:
+      - Saved
+      summary: See one of your account numbers in full
+      description: 'For a passkey asked for `saved.reveal` on it; in the person''s own log.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The account number in full
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [account_number]
+                properties:
+                  account_number:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/banks:
+    get:
+      operationId: listMyBanks
+      tags:
+      - Saved
+      summary: The banks by name
+      description: 'For a person''s own accounts: the banks by name alone (`from: ""`).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The banks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks, from]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                          description: The bank's code in this list; empty in the list by name alone.
+                        name:
+                          type: string
+                  from:
+                    type: string
+                    description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/delete/start:
     post:
       operationId: deleteAccountStart
@@ -33012,6 +33326,469 @@ paths:
                   at:
                     type: string
                     format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved:
+    get:
+      operationId: listSaved
+      tags:
+      - Saved
+      summary: The business's saved things
+      description: 'Everyone in the business sees its saved things, each account number masked (••6789), by title. `can_check` when a payments connection can check the names not checked yet.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [bank_account]
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Part of a name or title.
+      responses:
+        '200':
+          description: The saved things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [saved, limit]
+                properties:
+                  saved:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+                  limit:
+                    type: integer
+                  can_check:
+                    type: boolean
+                    description: A payments connection can check the names not checked yet (POST /v1/saved/check).
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSaved
+      tags:
+      - Saved
+      summary: Save an account for the business
+      description: 'A saved bank account: a name to call it up by (@bayo), a title, its bank (from GET /v1/banks: `bank_code` and `code_from` with it) and its 10-digit number. Checked with the bank at once through the business''s payments connection when it has one: 400 when the bank has no such account; kept unchecked, with `check_problem`, when it could not be checked just now. With no connection it is kept unchecked ("Name not checked yet"). 409 `name_taken`, or past the limit (2,000).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/resolve:
+    get:
+      operationId: resolveSaved
+      tags:
+      - Saved
+      summary: What an @name stands for
+      description: 'The person''s own saved thing of that name and the business''s, the person''s first; both when both have it, for the person to choose ("Which @mum?"). None: `matches: []`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The name, with or without @.
+      responses:
+        '200':
+          description: What the name stands for
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [name, matches]
+                properties:
+                  name:
+                    type: string
+                    description: The name as kept (lowercase, without @); empty when it is not a name.
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/provider:
+    get:
+      operationId: savedProvider
+      tags:
+      - Saved
+      summary: What names are checked through
+      description: 'The business''s payments connection names are checked through (the Taskiem wallet first). For an owner of a business with none, the step to connect one: open a Taskiem wallet, or connect an account with Paystack, Flutterwave, Moniepoint or Anchor. Others are told only what is connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: What names are checked through
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [connected, owner]
+                properties:
+                  connected:
+                    type: [object, 'null']
+                    additionalProperties: false
+                    required: [channel, name, wallet]
+                    properties:
+                      channel:
+                        type: string
+                      name:
+                        type: string
+                      wallet:
+                        type: boolean
+                        description: It is the business's Taskiem wallet.
+                  owner:
+                    type: boolean
+                  wallet:
+                    type: object
+                    additionalProperties: false
+                    required: [available, plan]
+                    description: Open a Taskiem wallet (POST /v1/settings/receive-money); for an owner of a business with no connection.
+                    properties:
+                      available:
+                        type: boolean
+                      plan:
+                        type: boolean
+                      plan_note:
+                        type: string
+                  providers:
+                    type: array
+                    description: '"I already have an account with…": connected under Connections.'
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/step-up/options:
+    post:
+      operationId: savedStepUpOptions
+      tags:
+      - Saved
+      summary: A passkey challenge for one saved thing
+      description: 'WebAuthn assertion options for the person''s passkeys, good only for one operation on one saved thing: `saved.change` (its account) or `saved.reveal` (its number in full). 409 `no_passkey` without one; 403 without saved.manage.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operation, target]
+              properties:
+                operation:
+                  type: string
+                  enum: [saved.change, saved.reveal]
+                target:
+                  type: string
+                  format: uuid
+                  description: The saved thing's id.
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/check:
+    post:
+      operationId: checkAllSaved
+      tags:
+      - Saved
+      summary: Check the names not checked yet
+      description: 'Up to 25 of the business''s accounts not checked yet, checked now through its payments connection; an account the bank does not know stays unchecked, in `problems`. 409 `no_provider` without a connection.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      responses:
+        '200':
+          description: Checked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [checked, unchecked, problems, via]
+                properties:
+                  checked:
+                    type: integer
+                  unchecked:
+                    type: integer
+                    description: How many are left not checked.
+                  problems:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, problem]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        problem:
+                          type: string
+                  via:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}:
+    get:
+      operationId: getSaved
+      tags:
+      - Saved
+      summary: One saved thing
+      description: 'Masked, as the list shows it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The saved thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: changeSaved
+      tags:
+      - Saved
+      summary: Change a saved thing
+      description: 'What is given is changed. Changing the account itself (its bank or number) needs `passkey`, for a challenge asked for `saved.change` on it (403 `step_up` otherwise), checks the name again, and is in the audit with the account before and after, masked; its title, name and note do not.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeSaved
+      tags:
+      - Saved
+      summary: Remove a saved thing
+      description: 'It is archived and its name is free again; what was done with it stays in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}/reveal:
+    post:
+      operationId: revealSaved
+      tags:
+      - Saved
+      summary: See an account number in full
+      description: 'For `passkey`, a challenge asked for `saved.reveal` on it (403 `step_up` otherwise); in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The account number in full
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [account_number]
+                properties:
+                  account_number:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/banks:
+    get:
+      operationId: listBanks
+      tags:
+      - Saved
+      summary: The banks to choose an account's bank from
+      description: 'The business''s payments connection''s own list, each bank with its code (`from`: the connection); without a connection, or when it does not answer, the banks by name alone (`from: ""`), found by name in a connection''s list when the account is checked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: saved.manage
+      responses:
+        '200':
+          description: The banks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks, from]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                          description: The bank's code in this list; empty in the list by name alone.
+                        name:
+                          type: string
+                  from:
+                    type: string
+                    description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/name-check:
+    post:
+      operationId: nameCheck
+      tags:
+      - Saved
+      summary: The bank's name for an account
+      description: 'Through the business''s payments connection, before an account is saved or paid. 409 `no_provider` without one; 400 when the bank has no such account; 502 when it could not check just now.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: The bank's name for the account
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [account_name, via]
+                properties:
+                  account_name:
+                    type: string
+                  via:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/receive-money/banks:
@@ -45355,6 +46132,105 @@ components:
         offers:
           type: boolean
           description: Offers from businesses they said yes to.
+    SavedObject:
+      type: object
+      additionalProperties: false
+      description: A saved thing (saved objects S0), as its owner's people see it. A bank account's number is only ever masked here.
+      required: [id, owner, name, title, kind, hint, details, check, to_change, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          type: string
+          enum: [mine, business]
+        name:
+          type: string
+          description: What it is called up by after @, lowercase.
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [bank_account]
+        hint:
+          type: string
+          description: What a list shows ("GTBank ••6789").
+        details:
+          type: object
+          additionalProperties: false
+          required: [bank_name]
+          properties:
+            bank_name:
+              type: string
+            bank_code:
+              type: string
+            code_from:
+              type: string
+            note:
+              type: string
+            account_number:
+              type: string
+              description: Masked (••6789).
+        check:
+          type: object
+          additionalProperties: false
+          required: [state, account_name, via, at]
+          properties:
+            state:
+              type: string
+              enum: [checked, unchecked]
+            account_name:
+              type: [string, 'null']
+              description: The bank's name for the account.
+            via:
+              type: [string, 'null']
+              description: The payments connection that gave it ("iswallet/taskiem").
+            at:
+              type: [string, 'null']
+              format: date-time
+        to_change:
+          type: boolean
+          description: The person may change or remove it.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SavedObjectResult:
+      type: object
+      additionalProperties: false
+      required: [saved]
+      properties:
+        saved:
+          $ref: '#/components/schemas/SavedObject'
+        check_problem:
+          type: string
+          description: Why the name could not be checked just now; it stays unchecked.
+    SavedObjectIn:
+      type: object
+      additionalProperties: false
+      description: A saved bank account as its owner writes it; on a change, what is left out stays as it was.
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [bank_account]
+        bank_name:
+          type: string
+        bank_code:
+          type: string
+        code_from:
+          type: string
+        account_number:
+          type: string
+        note:
+          type: string
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
     SavedAddress:
       type: object
       additionalProperties: false

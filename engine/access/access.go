@@ -75,6 +75,10 @@ const (
 	// storefront's settings, prices, refunds or riders' pay
 	// (StorefrontManage).
 	OrderHandle = "order.handle"
+	// SavedManage adds, changes and removes the business's saved things
+	// (docs/spec/saved-objects.md §5.2): its saved accounts, and later its
+	// places, texts and the rest. Everyone in the business uses them.
+	SavedManage = "saved.manage"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -82,7 +86,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -121,6 +125,7 @@ var Descriptions = map[string]string{
 	LinkManage:       "Link with other businesses on Taskiem: ask, accept, decline, block and end links (audited in both businesses)",
 	ChatTrade:        "Write to linked businesses in their conversations, as the business",
 	OrderHandle:      "Work the orders: see them, accept or decline, ready and send them out, and offer them to riders (not the storefront's settings, prices or refunds)",
+	SavedManage:      "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
 }
 
 // Gate is the built-in role of the person at the school gate: the gate
@@ -133,7 +138,7 @@ var Roles = map[string][]string{
 	"owner": All,
 	"admin": {WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStart, RunCancel, RunResolve, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage,
 		ConnectorManage, RoleManage, SCIM, AlertManage, TableRead, TableEdit, StorefrontManage, FormLinks, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, LinkManage, ChatTrade,
-		OrderHandle},
+		OrderHandle, SavedManage},
 	// Staff who work from chat (chat tools phase 5): a cashier sells, keeps
 	// the stock and works the orders; a shift manager also takes payments,
 	// writes to linked businesses and hands the shift over.

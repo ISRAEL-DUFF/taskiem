@@ -36,6 +36,8 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`GET /v1/me/push(/key)?|(PUT|DELETE) /v1/me/push|(PATCH|DELETE) /v1/me/push/[^/]+|` +
 	// Orders on You and saved addresses (person_orders.go, person_addresses.go, stage 3).
 	`GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
+	// The person's own saved things (saved.go, saved objects S0).
+	`(GET|POST) /v1/me/saved|GET /v1/me/saved/resolve|POST /v1/me/saved/step-up/options|(GET|PUT|DELETE) /v1/me/saved/[^/]+|POST /v1/me/saved/[^/]+/reveal|GET /v1/me/banks|` +
 	// The person's account: deleting it, their photo, pushes, privacy (person_account.go).
 	`POST /v1/me/delete(/start|/passkey/options)?|(GET|PUT|DELETE) /v1/me/photo|(GET|PUT) /v1/me/notifications|GET /v1/me/privacy|` +
 	// Finding people: privacy towards people, contacts, the person's link,
