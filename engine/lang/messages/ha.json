@@ -2120,6 +2120,10 @@
       "text": "Za ka iya aika:",
       "reviewed": false
     },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "reviewed": false
+    },
     "wa.help.invoice": {
       "text": "• *invoice* (ko *takardar kuɗi*) tare da suna, kuɗi da abin da yake domin shi (*invoice Ada 25,000 for 5 bags of rice*): zai aika wa abokin cinikinku takardar kuɗi",
       "reviewed": false

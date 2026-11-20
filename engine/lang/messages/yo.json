@@ -2120,6 +2120,10 @@
       "text": "Ẹ lè fi ránṣẹ́:",
       "reviewed": false
     },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "reviewed": false
+    },
     "wa.help.invoice": {
       "text": "• *invoice* (tàbí *ìwé owó*) pẹ̀lú orúkọ, iye owó àti ohun tí ó jẹ́ fún (*invoice Ada 25,000 for 5 bags of rice*): yóò fi ìwé owó ránṣẹ́ sí oníbàárà yín",
       "reviewed": false

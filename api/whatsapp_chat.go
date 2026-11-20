@@ -1367,6 +1367,8 @@ func (s *Server) waHelp(c *chat) string {
 	if c.p.Can(PermChatTrade) {
 		lines = append(lines, c.t("wa.help.direct"))
 	}
+	// Saved things by @name, for everyone (saved objects S1, S2).
+	lines = append(lines, c.t("wa.help.saved"))
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))
 	}
