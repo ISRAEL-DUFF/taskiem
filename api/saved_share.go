@@ -42,7 +42,9 @@ func namesSaved(text, name string) bool {
 		return false
 	}
 	lower, want := strings.ToLower(text), "@"+strings.ToLower(name)
-	part := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' }
+	part := func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.'
+	}
 	for i := 0; ; {
 		j := strings.Index(lower[i:], want)
 		if j < 0 {
