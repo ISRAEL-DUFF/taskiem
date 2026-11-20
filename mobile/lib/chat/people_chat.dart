@@ -1295,9 +1295,7 @@ class PeopleBubble extends StatelessWidget {
     final deleted = m.deleted == true;
     final c = deleted ? null : m.card;
     final meta = mine && c == null ? t.chatOutMeta : t.muted;
-    // Your own words white on pine in the light (ownWords' ink): read here,
-    // outside the bubble, the theme's own ink would be dark on pine.
-    final ink = mine && TkTheme.of(context).mode != TkMode.dark ? const Color(0xFFFFFFFF) : t.text;
+    final ink = t.text;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
