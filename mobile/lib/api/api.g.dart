@@ -3181,18 +3181,23 @@ class SavedCard {
 }
 
 class SavedCardLinesItem {
-  const SavedCardLinesItem({required this.label, required this.value});
+  const SavedCardLinesItem({required this.label, this.sensitive, required this.value});
 
   final String label;
+  /// The line holds what is sensitive (an account number, a phone, an email);
+  /// its sender sees it masked.
+  final bool? sensitive;
   final String value;
 
   factory SavedCardLinesItem.fromJson(Map<String, dynamic> j) => SavedCardLinesItem(
         label: j['label'] as String,
+        sensitive: j['sensitive'] == null ? null : j['sensitive'] as bool,
         value: j['value'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'label': label,
+        'sensitive': ?sensitive,
         'value': value,
       };
 }
@@ -12503,7 +12508,7 @@ class ListSavedResponse {
 /// A saved thing (saved objects S0), as its owner's people see it. A bank
 /// account's number is only ever masked here.
 class SavedObject {
-  const SavedObject({required this.check, required this.createdAt, required this.details, this.files, required this.hint, required this.id, required this.kind, this.kindId, this.kindName, required this.name, required this.owner, required this.title, required this.toChange, required this.updatedAt, this.values});
+  const SavedObject({required this.check, required this.createdAt, required this.details, this.files, required this.hint, required this.id, required this.kind, this.kindId, this.kindName, required this.name, required this.owner, this.shareSensitive, required this.title, required this.toChange, required this.updatedAt, this.values});
 
   final SavedObjectCheck check;
   final DateTime createdAt;
@@ -12527,6 +12532,9 @@ class SavedObject {
   /// What it is called up by after @, lowercase.
   final String name;
   final String owner;
+  /// Sharing it in a chat shares what is sensitive (an account number, a phone,
+  /// an email), so the sender is asked first.
+  final bool? shareSensitive;
   final String title;
   /// The person may change or remove it.
   final bool toChange;
@@ -12547,6 +12555,7 @@ class SavedObject {
         kindName: j['kind_name'] == null ? null : j['kind_name'] as String,
         name: j['name'] as String,
         owner: j['owner'] as String,
+        shareSensitive: j['share_sensitive'] == null ? null : j['share_sensitive'] as bool,
         title: j['title'] as String,
         toChange: j['to_change'] as bool,
         updatedAt: DateTime.parse(j['updated_at'] as String),
@@ -12565,6 +12574,7 @@ class SavedObject {
         'kind_name': ?kindName,
         'name': name,
         'owner': owner,
+        'share_sensitive': ?shareSensitive,
         'title': title,
         'to_change': toChange,
         'updated_at': updatedAt.toUtc().toIso8601String(),
@@ -13248,19 +13258,25 @@ class SavedKindListStartersItem {
 }
 
 class SavedKindIn {
-  const SavedKindIn({required this.fields, required this.name});
+  const SavedKindIn({required this.fields, required this.name, this.passkey});
 
   final List<SavedKindField> fields;
   final String name;
+  /// Confirms a change that shows what was kept hidden (a field with values
+  /// made not sensitive, made shareable, or a sensitive one given another
+  /// type); asked for with 403 step_up, operation saved.kind.
+  final PasskeyCredential? passkey;
 
   factory SavedKindIn.fromJson(Map<String, dynamic> j) => SavedKindIn(
         fields: (j['fields'] as List).map((e) => SavedKindField.fromJson(e as Map<String, dynamic>)).toList(),
         name: j['name'] as String,
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
         'fields': fields.map((e) => e.toJson()).toList(),
         'name': name,
+        'passkey': ?passkey?.toJson(),
       };
 }
 

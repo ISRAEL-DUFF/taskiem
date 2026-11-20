@@ -111,7 +111,7 @@ class _SavedCardViewState extends State<SavedCardView> {
           head,
           if (_open) ...[
             const SizedBox(height: 6),
-            for (final l in c.lines) _Line(line: l, ink: ink, muted: muted),
+            for (final l in c.lines) _Line(line: l, ink: ink, muted: muted, copy: !(widget.mine && l.sensitive == true)),
             if (!widget.mine && widget.onSave != null) ...[const SizedBox(height: 10), CardButton(label: 'Save this', primary: true, onTap: widget.onSave)],
           ],
         ],
@@ -121,10 +121,13 @@ class _SavedCardViewState extends State<SavedCardView> {
 }
 
 class _Line extends StatelessWidget {
-  const _Line({required this.line, required this.ink, required this.muted});
+  const _Line({required this.line, required this.ink, required this.muted, this.copy = true});
   final SavedCardLinesItem line;
   final Color ink;
   final Color muted;
+
+  /// Copy beside it; not on one's own masked line (nothing there to copy).
+  final bool copy;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +145,7 @@ class _Line extends StatelessWidget {
             ],
           ),
         ),
+        if (copy)
         Semantics(
           button: true,
           label: 'Copy $what',
@@ -163,6 +167,8 @@ class _Line extends StatelessWidget {
 /// in a business's chat, [mine] false, the business's), in the sheet that
 /// saves one, filled from the card to change before saving.
 Future<void> saveSavedCard(BuildContext context, Auth auth, SavedCard c, {bool mine = true}) async {
+  // The business's only for whoever may manage its saved things.
+  mine = mine || !auth.can('saved.manage');
   final api = SavedApi(auth, mine);
   final done = c.kind == 'bank_account'
       ? (await showTkSheet<String>(context, (_) => SavedAccountSheet(api: api, checks: false, start: c))) != null

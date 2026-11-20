@@ -43,6 +43,14 @@ void main() {
     expect(insertWords('Hello @bank', q, 11, 'Pay to Bola'), (text: 'Hello Pay to Bola', caret: 17));
   });
 
+  test('asked before sharing as the server says: a made-up kind’s sensitive field too', () {
+    final van = SavedObject.fromJson({...thing('v', 'mine', 'custom', 'van', 'Van', 'LND 123', const {}), 'share_sensitive': true});
+    final plain = SavedObject.fromJson({...thing('p', 'mine', 'person', 'tolu', 'Tolu', '••0099', {'phone': '+2348031120099'}), 'share_sensitive': false});
+    final older = SavedObject.fromJson(thing('o', 'mine', 'person', 'ada', 'Ada', '', {'phone': '+2348031120098'}));
+    final tags = savedTags([van, plain, older], const [], textsOnly: false);
+    expect([for (final s in tags) s.savedSensitive], [true, false, true], reason: 'the server’s word, else the kinds’ own rule');
+  });
+
   testWidgets('in a chat with a business, “@” offers saved texts, and one picked fills the box', (t) async {
     phone(t);
     final api = conversation();

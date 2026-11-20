@@ -425,7 +425,12 @@ class CustomerData extends ChangeNotifier {
   /// wants one before sharing what is sensitive.
   Future<void> shareSaved(String saved, String owner, Future<bool> Function(String question) ask, {String? line}) async {
     final on = !both ? null : line;
-    if (!reaches(on) || busy) return;
+    // Picked, never dropped without a word.
+    if (!reaches(on) || busy) {
+      error = busy ? 'Wait for the last message to go, then pick it again.' : 'Not shared: this chat can’t take a message now.';
+      _changed();
+      return;
+    }
     busy = true;
     error = null;
     _changed();
@@ -449,6 +454,17 @@ class CustomerData extends ChangeNotifier {
       busy = false;
       _changed();
     }
+  }
+
+  /// A saved photo or document picked with "@": only in the app; said
+  /// when the customer is not chatting there.
+  Future<void> sendSavedFile(PickedFile f, String name) async {
+    if (!appOpen) {
+      error = '@$name was not sent: photos and documents go in the app, and this customer isn’t chatting in it.';
+      _changed();
+      return;
+    }
+    await sendFile(f);
   }
 
   /// A photo, voice note or PDF to an app customer.
@@ -589,7 +605,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
     onShare: (s) => unawaited(widget.data.shareSaved(s.id, s.savedOwner ?? 'business', askShare(context), line: _on)),
     onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
     // A saved file: sent as itself, in the app (S1).
-    onAttach: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => unawaited(widget.data.sendFile(f)))),
+    // Only the file goes: the words in the box stay there.
+    onAttach: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => unawaited(widget.data.sendSavedFile(f, s.name)))),
   );
   StreamSubscription<String>? _back;
 

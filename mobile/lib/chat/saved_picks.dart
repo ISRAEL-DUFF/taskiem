@@ -33,29 +33,49 @@ class SavedPicks {
   /// The lists were read (each, or found unreadable).
   bool loaded = false;
 
-  /// "@" was typed: read them, once.
+  /// Both lists were read: Save "@x"… is offered only then, so a name is
+  /// never offered as new because a list could not be read.
+  bool complete = false;
+
+  /// Read again (something was saved): what the picker offers is current.
+  void reload() {
+    if (!_wanted) return;
+    unawaited(_load());
+  }
+
+  /// Saves anywhere in the app: a list read before the last one is read
+  /// again the next time "@" is typed.
+  static int saves = 0;
+  int _readAt = 0;
+
+  /// "@" was typed: read them, once (again after something was saved).
   void want() {
-    if (_wanted) return;
+    if (_wanted && _readAt == saves) return;
     _wanted = true;
     unawaited(_load());
   }
 
   Future<void> _load() async {
+    _readAt = saves;
     List<SavedObject> mine = const [], business = const [];
+    var ok = true;
     try {
       mine = (await auth.api.listMySaved()).saved;
     } on Object {
       // Nothing of one's own to offer.
+      ok = false;
     }
     if (!auth.personal && !mineOnly) {
       try {
         business = (await auth.api.listSaved()).saved;
       } on Object {
         // Nothing of the business's to offer.
+        ok = false;
       }
     }
     list = savedTags(mine, business, textsOnly: textsOnly);
     loaded = true;
+    complete = ok;
     onChange();
   }
 }
@@ -79,7 +99,7 @@ List<TagSuggestion> savedTags(List<SavedObject> mine, List<SavedObject> business
         words: x.title,
         savedKind: x.kind,
         savedOwner: x.owner,
-        savedSensitive: savedSensitive(x.kind, x.details),
+        savedSensitive: x.shareSensitive ?? savedSensitive(x.kind, x.details),
         fileName: x.kind == 'file' ? (x.details.fileName ?? x.title) : null,
         fileType: x.kind == 'file' ? (x.details.fileType ?? '') : null,
         body: x.kind == 'text' ? (x.details.body ?? '') : null,
@@ -87,8 +107,8 @@ List<TagSuggestion> savedTags(List<SavedObject> mine, List<SavedObject> business
   ];
 }
 
-/// saved.MakeCard's rule: an account's number, a person's phone or email,
-/// a place's phone.
+/// saved.MakeCard's rule (an account's number, a person's phone or email,
+/// a place's phone), for a server that does not say share_sensitive.
 bool savedSensitive(String kind, SavedObjectDetails d) => switch (kind) {
   'bank_account' => true,
   'person' => (d.phone ?? '').isNotEmpty || (d.email ?? '').isNotEmpty,

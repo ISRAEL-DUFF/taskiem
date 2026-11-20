@@ -1130,8 +1130,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
         out.add(x);
         continue;
       }
+      // Asked as the server says (share_sensitive); one the list does not
+      // know (unread, or unreadable) asked about too; confirm only on a yes.
       final pick = _tags.saved?.list.where((s) => s.id == sh.id).firstOrNull;
-      if (pick != null && pick.savedSensitive && !await askShare(context)(shareQuestion(pick, widget.data.conv.name))) return null;
+      if (pick != null && !pick.savedSensitive) {
+        out.add(x);
+        continue;
+      }
+      final known = pick ?? _tags.taken.where((s) => s.id == sh.id).firstOrNull ?? TagSuggestion(kind: 'saved', id: sh.id, name: 'this saved thing');
+      if (!await askShare(context)(shareQuestion(known, widget.data.conv.name))) return null;
       out.add(SendLinkMessageRequestMentionsItem(kind: 'saved', saved: SavedShare(id: sh.id, owner: sh.owner, confirm: true)));
     }
     return out;
@@ -1507,8 +1514,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   final r = _reply;
                   final tags = await _withYes(_tags.take(words));
                   if (tags == null) {
-                    // Not shared: the words come back to the box.
-                    if (_text.text.isEmpty) _text.text = words;
+                    // Not shared: the words, the file and the picks come
+                    // back (the reply stays).
+                    if (_text.text.isEmpty) {
+                      _text.text = words;
+                      _tags.giveBack();
+                    }
+                    composerKey.currentState?.putBack(file);
                     return;
                   }
                   if (!mounted) return;

@@ -83,13 +83,16 @@ Future<SavedFileMeta?> pickSavedFile(BuildContext context, Auth auth, bool mine,
 
 /// Save a photo or document, or change one. Pops true when saved.
 class SavedFileSheet extends StatefulWidget {
-  const SavedFileSheet({super.key, required this.api, required this.auth, this.thing, this.start, this.pickers = const Pickers()});
+  const SavedFileSheet({super.key, required this.api, required this.auth, this.thing, this.start, this.startName, this.pickers = const Pickers()});
   final SavedApi api;
   final Auth auth;
   final SavedObject? thing;
 
   /// A file already uploaded to save (Save as… on a chat's file).
   final SavedFileMeta? start;
+
+  /// The name typed in the picker (Save "@menu"…).
+  final String? startName;
   final Pickers pickers;
 
   @override
@@ -98,7 +101,7 @@ class SavedFileSheet extends StatefulWidget {
 
 class _SavedFileSheetState extends State<SavedFileSheet> {
   late final SavedObject? _x = widget.thing;
-  late final _name = TextEditingController(text: _x == null ? '' : '@${_x.name}');
+  late final _name = TextEditingController(text: _x != null ? '@${_x.name}' : ((widget.startName ?? '').isEmpty ? '' : '@${widget.startName}'));
   late final _title = TextEditingController(text: _x?.title ?? (widget.start?.name.replaceFirst(RegExp(r'\.[a-zA-Z0-9]{1,5}$'), '') ?? ''));
   late final _note = TextEditingController(text: _x?.details.note ?? '');
   late SavedFileMeta? _file = widget.start;

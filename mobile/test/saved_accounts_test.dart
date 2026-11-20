@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart' show EditableText;
 // Saved accounts (saved objects S0; lib/chat/saved_accounts.dart): a
 // business's list, saving one with the bank's name shown first, changing
 // one with a passkey, the step to open a Taskiem wallet, and a person's own
@@ -397,6 +398,65 @@ void main() {
     expect(body['kind'], 'custom');
     expect(body['kind_id'], 'k1');
     expect(body['values'], {'plate_number': 'KJA 555 AB'});
+    await drain(t);
+  });
+
+  testWidgets('changing a kind: a removed field warns, an account is always sealed, a file never, and showing a sealed field asks for a passkey', (t) async {
+    phone(t, 1400);
+    final was = passkeys;
+    passkeys = FakePasskeys();
+    addTearDown(() => passkeys = was);
+    final api = conversation(c: chat());
+    final car = {
+      'id': 'k1',
+      'name': 'Car',
+      'count': 1,
+      'fields': [
+        {'key': 'plate_number', 'label': 'Plate number', 'type': 'text', 'required': true, 'sensitive': false, 'never_share': false},
+        {'key': 'colour', 'label': 'Colour', 'type': 'text', 'required': false, 'sensitive': false, 'never_share': false},
+        {'key': 'chassis_number', 'label': 'Chassis number', 'type': 'text', 'required': false, 'sensitive': true, 'never_share': false},
+      ],
+      'created_at': '2026-11-20T10:00:00Z',
+      'updated_at': '2026-11-20T10:00:00Z',
+    };
+    api.routes['GET /v1/me/saved'] = (_) => {'saved': <Map<String, dynamic>>[], 'limit': 500};
+    api.routes['GET /v1/me/saved-kinds'] = (_) => {'kinds': [car], 'starters': <Map<String, dynamic>>[], 'limit': 40, 'to_change': true};
+    var puts = 0;
+    api.routes['PUT /v1/me/saved-kinds/k1'] = (r) {
+      puts++;
+      // The first try: a passkey first (the chassis number would be shown).
+      if (api.body(r)['passkey'] == null) return answer({'error': 'Confirm with your passkey.', 'step_up': 'passkey', 'operation': 'saved.kind', 'target': 'k1'}, 403);
+      return {'kind': car};
+    };
+    api.routes['POST /v1/me/saved/step-up/options'] = (_) => {'publicKey': {'challenge': 'abc', 'rpId': 'taskiem.test'}};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SavedAccountsPage(auth: api.auth(), mine: true)));
+    await settle(t);
+    await press(t, find.text('Car').last);
+    await press(t, find.text('Change'));
+    // Colour removed: its values go.
+    await press(t, find.bySemanticsLabel('Remove Colour'));
+    expect(find.textContaining('Saving deletes what your saved things hold in Colour'), findsOneWidget);
+    // A new field of an account: always sealed; of a file: no Sensitive.
+    await press(t, find.text('Add a field'));
+    await t.enterText(find.byType(EditableText).last, 'Registration');
+    await t.pump();
+    await press(t, find.text('Words').last);
+    await press(t, find.text('A bank account'));
+    expect(find.text('An account is always sealed'), findsOneWidget);
+    await press(t, find.text('A bank account').last);
+    await press(t, find.text('A photo or document'));
+    expect(find.text('An account is always sealed'), findsNothing);
+    expect(find.text('Sensitive'), findsNWidgets(2), reason: 'the two text fields only');
+    await looks(t, 'saved-kind-change');
+    await press(t, find.text('Save'));
+    expect(puts, 2, reason: 'asked again with the passkey');
+    final body = api.body(api.sent('PUT', '/v1/me/saved-kinds/k1').last);
+    expect(body['passkey'], isNotNull);
+    expect(api.body(api.sent('POST', '/v1/me/saved/step-up/options').last), {'operation': 'saved.kind', 'target': 'k1'});
+    final fields = [for (final f in body['fields'] as List) f as Map];
+    expect([for (final f in fields) f['label']], ['Plate number', 'Chassis number', 'Registration']);
+    expect(fields.last['type'], 'file');
+    expect(fields.last['sensitive'], false);
     await drain(t);
   });
 }

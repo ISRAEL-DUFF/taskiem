@@ -157,7 +157,7 @@ class TagBox {
   List<TagGroup> _withSaveNew(TagQuery q, List<TagGroup> groups) {
     final name = q.query.toLowerCase();
     final picks = saved;
-    if (q.mark != '@' || onSaveNamed == null || picks == null || !picks.loaded || !RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$').hasMatch(name)) return groups;
+    if (q.mark != '@' || onSaveNamed == null || picks == null || !picks.loaded || !picks.complete || !RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$').hasMatch(name)) return groups;
     if (picks.list.any((s) => s.name.toLowerCase() == name) || groups.any((g) => g.items.any((s) => s.name.toLowerCase() == name))) return groups;
     final row = TagSuggestion(kind: 'save-new', id: 'save-new:$name', name: name, sub: 'Save something by this name');
     final i = groups.indexWhere((g) => g.label == 'Saved');
@@ -240,11 +240,23 @@ class TagBox {
     onChange();
   }
 
-  /// What the message sends of its tags, and the picks forgotten.
+  /// What the message sends of its tags, and the picks forgotten (kept in
+  /// [taken], to give back if the message does not go).
   List<SendLinkMessageRequestMentionsItem> take(String words) {
     final out = tagRefs(words, picked);
+    taken = [...picked];
     picked.clear();
     return out;
+  }
+
+  /// The picks of the last message taken.
+  List<TagSuggestion> taken = const [];
+
+  /// A message not sent after all: its picks back, with its words.
+  void giveBack() {
+    picked
+      ..clear()
+      ..addAll(taken);
   }
 
   /// The plain list above the box, when it is the one shown.

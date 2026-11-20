@@ -14,6 +14,7 @@ import '../kit/mobile.dart';
 import '../kit/look.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
+import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'groups.dart' show pickOneOf;
 import 'my_chat.dart' show sayFailure;
@@ -88,12 +89,18 @@ class _FieldDraft {
   bool sensitive;
   bool neverShare;
 
+  void dispose() {
+    label.dispose();
+    options.dispose();
+  }
+
   SavedKindField get field => SavedKindField(
     key: key,
     label: label.text.trim(),
     type: type,
     required: required,
-    sensitive: sensitive || neverShare,
+    // An account is always sensitive; a file never sealed (kept apart).
+    sensitive: type != 'file' && (sensitive || neverShare || type == 'bank_account'),
     neverShare: neverShare,
     options: type == 'choice' ? [for (final o in options.text.split('\n')) if (o.trim().isNotEmpty) o.trim()] : null,
   );
@@ -116,20 +123,33 @@ class _SavedKindSheetState extends State<SavedKindSheet> {
   bool _busy = false;
   String? _error;
 
+  // Fields taken out of the form: their controllers let go with the sheet,
+  // since the frame that drew them may still hold them.
+  final _gone = <_FieldDraft>[];
+
   @override
   void dispose() {
     _name.dispose();
-    for (final f in _fields) {
-      f.label.dispose();
-      f.options.dispose();
+    for (final f in [..._fields, ..._gone]) {
+      f.dispose();
     }
     super.dispose();
   }
 
   void _start(SavedKindListStartersItem st) => setState(() {
     _name.text = st.name;
+    _gone.addAll(_fields);
     _fields = [for (final f in st.fields) _FieldDraft(SavedKindField(label: f.label, type: f.type, required: f.required, sensitive: f.sensitive, neverShare: f.neverShare, options: f.options))];
   });
+
+  /// Fields of the kind as it was that are gone from the form: their
+  /// values go with them when it is saved.
+  List<String> get _goneLabels {
+    final k = widget.kind;
+    if (k == null || k.count == 0) return const [];
+    final keys = {for (final f in _fields) f.key};
+    return [for (final f in k.fields) if (f.key != null && !keys.contains(f.key)) f.label];
+  }
 
   Future<void> _pickType(_FieldDraft f) async {
     final v = await pickOneOf(context, title: 'What ${f.label.text.trim().isEmpty ? 'it' : f.label.text.trim()} is', value: f.type, choices: [for (final (k, w) in savedFieldTypes) (k, w, '')]);
@@ -190,7 +210,14 @@ class _SavedKindSheetState extends State<SavedKindSheet> {
                 ),
                 if (f.type == 'choice') TkKitField(label: 'Its choices', hint: 'One on each line', child: TkTextBox(controller: f.options, lines: 3, max: 600)),
                 TkSwitchRow(label: 'Required', on: f.required, onChanged: (v) => setState(() => f.required = v)),
-                TkSwitchRow(label: 'Sensitive', hint: 'Sealed, shown in full only with your passkey', on: f.sensitive || f.neverShare, onChanged: f.neverShare ? null : (v) => setState(() => f.sensitive = v)),
+                // A file is kept apart, never sealed; an account is always sensitive.
+                if (f.type != 'file')
+                  TkSwitchRow(
+                    label: 'Sensitive',
+                    hint: f.type == 'bank_account' ? 'An account is always sealed' : 'Sealed, shown in full only with your passkey',
+                    on: f.sensitive || f.neverShare || f.type == 'bank_account',
+                    onChanged: f.neverShare || f.type == 'bank_account' ? null : (v) => setState(() => f.sensitive = v),
+                  ),
                 TkSwitchRow(label: 'Never share', hint: 'Kept out of anything you share', on: f.neverShare, onChanged: (v) => setState(() => f.neverShare = v)),
                 Wrap(
                   spacing: 8,
@@ -206,7 +233,7 @@ class _SavedKindSheetState extends State<SavedKindSheet> {
                         label: 'Remove',
                         danger: true,
                         semantics: 'Remove ${f.label.text.trim().isEmpty ? 'field ${i + 1}' : f.label.text.trim()}',
-                        onPressed: () => setState(() => _fields.removeAt(i)),
+                        onPressed: () => setState(() => _gone.add(_fields.removeAt(i))),
                       ),
                   ],
                 ),
@@ -214,6 +241,14 @@ class _SavedKindSheetState extends State<SavedKindSheet> {
             );
           }(),
         if (_fields.length < 30) TkSmallButton(label: 'Add a field', icon: 'b-plus', onPressed: () => setState(() => _fields.add(_FieldDraft(const SavedKindField(label: '', type: 'text'))))),
+        if (_goneLabels.isNotEmpty)
+          TkCallout(
+            leading: TkSquare('b-warn', color: look.orange),
+            title: 'Saving deletes what your saved things hold in ${_goneLabels.join(', ')}',
+            color: look.orange,
+          ),
+        if (widget.kind != null && widget.kind!.count > 0)
+          Text('Showing what a field kept sealed asks for your passkey.', style: tkText(size: 12.5, lineHeight: 1.4, color: TkTheme.tokens(context).muted)),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
       ],
     );
@@ -253,6 +288,8 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
     for (final e in (widget.thing?.files ?? const <String, dynamic>{}).entries) e.key: savedFileMetaOf((e.value as Map).cast<String, dynamic>()),
   };
   bool _busy = false;
+  // A file field's photo or document being checked: Save waits.
+  int _uploading = 0;
   String? _error;
 
   Future<void> _pickBank(SavedKindField f) async {
@@ -267,11 +304,14 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
   }
 
   Future<void> _pickFile(SavedKindField f) async {
+    setState(() => _uploading++);
     try {
       final m = await pickSavedFile(context, widget.api.auth, widget.api.mine, widget.pickers);
       if (m != null && mounted) setState(() => (_files[f.key ?? ''] = m, _v[f.key ?? '']!.text = m.id));
     } on Object catch (e) {
       if (mounted) setState(() => _error = sayFailure(e));
+    } finally {
+      if (mounted) setState(() => _uploading--);
     }
   }
 
@@ -308,6 +348,17 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
         problem = '${f.label} is needed.';
       }
     }
+    // An account half filled (a bank and no number, or a number and no
+    // bank) is said, not left out.
+    for (final f in widget.kind.fields) {
+      final key = f.key ?? '';
+      if (problem != null || f.type != 'bank_account') continue;
+      final digits = _v[key]!.text.replaceAll(RegExp(r'\D'), '');
+      final bank = _bank[key] ?? '';
+      if ((bank.isEmpty) != (digits.isEmpty) || (digits.isNotEmpty && digits.length != 10)) {
+        problem = '${f.label}: choose the bank and type its 10-digit account number.';
+      }
+    }
     if (problem != null) return setState(() => _error = problem);
     final values = <String, dynamic>{};
     for (final f in widget.kind.fields) {
@@ -332,7 +383,8 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
       if (x == null) {
         await widget.api.add(body);
       } else {
-        await widget.api.change(x.id, body);
+        // Changing an account in it asks for a passkey (saved.change).
+        await widget.api.withPasskey((p) => widget.api.change(x.id, p == null ? body : SavedObjectIn(name: body.name, title: body.title, values: body.values, note: body.note, passkey: p)));
       }
       if (mounted) Navigator.of(context).pop(true);
     } on ApiError catch (e) {
@@ -349,8 +401,8 @@ class _SavedCustomSheetState extends State<SavedCustomSheet> {
     return TkFormSheet(
       title: x == null ? 'Save a ${widget.kind.name.toLowerCase()}' : 'Change @${x.name}',
       crumb: 'Saved',
-      action: _busy ? 'Saving…' : 'Save',
-      onAction: _busy ? null : _save,
+      action: _busy ? 'Saving…' : (_uploading > 0 ? 'Checking…' : 'Save'),
+      onAction: _busy || _uploading > 0 ? null : _save,
       children: [
         TkFormGroup(
           children: [

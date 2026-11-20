@@ -20,6 +20,16 @@ import 'my_chat.dart' show sayFailure;
 import 'saved_files.dart' show SavedFileSheet, uploadSavedFile;
 import 'saved_accounts.dart';
 import 'saved_kinds.dart' show SavedCustomSheet;
+import 'saved_picks.dart' show SavedPicks;
+
+/// Something was saved: the chats' pickers read their lists again.
+void _saved(BuildContext context, String words) {
+  SavedPicks.saves++;
+  if (context.mounted) showTkToast(context, words);
+}
+
+/// A chat's file being got ready to save: one at a time.
+bool _fileBusy = false;
 
 /// Whose saved things it goes in: the business's in its chats for those
 /// who may manage them.
@@ -65,7 +75,13 @@ Future<void> saveNamed(BuildContext context, Auth auth, String name, {bool busin
   if (kind.startsWith('k:')) {
     final m = made.firstWhere((m) => 'k:${m.id}' == kind);
     final done = await showTkSheet<bool>(context, (_) => SavedCustomSheet(api: api, kind: m, startName: name));
-    if (done == true && context.mounted) showTkToast(context, 'Saved');
+    if (done == true && context.mounted) _saved(context, 'Saved');
+    return;
+  }
+  // A photo or document: its own sheet, with the name.
+  if (kind == 'file') {
+    final done = await showTkSheet<bool>(context, (_) => SavedFileSheet(api: api, auth: api.auth, startName: name));
+    if (done == true && context.mounted) _saved(context, 'Saved');
     return;
   }
   await _open(context, api, readingCard(kind, '', const {}, name: name));
@@ -75,7 +91,7 @@ Future<void> _open(BuildContext context, SavedApi api, SavedCard start) async {
   final done = start.kind == 'bank_account'
       ? (await showTkSheet<String>(context, (_) => SavedAccountSheet(api: api, checks: false, start: start))) != null
       : (await showTkSheet<bool>(context, (_) => SavedThingSheet(api: api, kind: start.kind, start: start))) == true;
-  if (done && context.mounted) showTkToast(context, 'Saved');
+  if (done && context.mounted) _saved(context, 'Saved');
 }
 
 /// Save as… on a photo or document in a chat: fetched from the chat
@@ -83,14 +99,24 @@ Future<void> _open(BuildContext context, SavedApi api, SavedCard start) async {
 /// file opened with it.
 Future<void> saveFromChatFile(BuildContext context, Auth auth, String path, String name, String type, {bool business = false}) async {
   final api = _savedFor(auth, business);
+  if (_fileBusy) {
+    showTkToast(context, 'Another file is being got ready: wait a moment.');
+    return;
+  }
+  _fileBusy = true;
+  // Said at once: fetching and checking a file takes a moment.
+  showTkToast(context, 'Getting $name ready to save…');
   try {
     final bytes = await auth.transport.bytes(path);
     final meta = await uploadSavedFile(auth, api.mine, PickedFile(bytes: Uint8List.fromList(bytes), name: name, type: type));
+    _fileBusy = false;
     if (!context.mounted) return;
     final done = await showTkSheet<bool>(context, (_) => SavedFileSheet(api: api, auth: auth, start: meta));
-    if (done == true && context.mounted) showTkToast(context, 'Saved');
+    if (done == true && context.mounted) _saved(context, 'Saved');
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+  } finally {
+    _fileBusy = false;
   }
 }
 

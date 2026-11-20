@@ -211,8 +211,24 @@ class SavedApi {
 
   Future<SavedKind> addKind(SavedKindIn body) async => (mine ? await _a.addMySavedKind(body: body) : await _a.addSavedKind(body: body)).kind;
 
-  Future<SavedKind> changeKind(String id, SavedKindIn body) async =>
-      (mine ? await _a.changeMySavedKind(id: id, body: body) : await _a.changeSavedKind(id: id, body: body)).kind;
+  /// A kind changed; when the change shows what was kept hidden, the
+  /// server asks for a passkey first (saved.kind) and it is given.
+  Future<SavedKind> changeKind(String id, SavedKindIn body) => withPasskey((p) async {
+    final b = p == null ? body : SavedKindIn(name: body.name, fields: body.fields, passkey: p);
+    return (mine ? await _a.changeMySavedKind(id: id, body: b) : await _a.changeSavedKind(id: id, body: b)).kind;
+  });
+
+  /// [call], and when the server asks for a passkey first (403 step_up:
+  /// an account changed, a kind's hidden values shown), the passkey it
+  /// names asked for and [call] again with it.
+  Future<T> withPasskey<T>(Future<T> Function(PasskeyCredential? passkey) call) async {
+    try {
+      return await call(null);
+    } on ApiError catch (e) {
+      if (e.status != 403 || e.body['step_up'] != 'passkey') rethrow;
+      return call(await proof('${e.body['operation']}', '${e.body['target']}'));
+    }
+  }
 
   Future<void> removeKind(String id) => mine ? _a.removeMySavedKind(id: id) : _a.removeSavedKind(id: id);
 }
@@ -265,6 +281,8 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
         // The kinds the owner made, missing: those Taskiem knows still work.
       }
       if (!mounted) return;
+      // What a passkey showed is let go whenever the list is read again.
+      _shown.clear();
       setState(() => (_list = l.saved, _limit = l.limit, _provider = p, _kinds = kinds, _error = null));
       // Accounts saved before a payments account was connected are checked
       // as soon as one is.
@@ -406,6 +424,11 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     }
   }
 
+  Future<void> _openFile(SavedObject x) async {
+    final f = savedFileOfThing(x);
+    if (f != null) await openSavedFile(context, widget.auth, widget.mine, x.id, f);
+  }
+
   Future<void> _reveal(SavedObject x) async {
     try {
       final n = await _api.reveal(x.id);
@@ -531,7 +554,8 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
                     square: x.kind == 'custom' ? look.violet : (!bank ? look.teal : (c.checked ? look.lime : look.orange)),
                     trailing: bank ? CardPill(c.checked ? 'Checked' : 'Not checked', c.checked ? CardTone.lime : CardTone.warn) : null,
                     semanticsLabel: bank ? '${x.title}, @${x.name}, ${x.hint}. ${c.words}' : '${x.title}, @${x.name}, ${x.hint}',
-                    onTap: x.toChange ? () => _row(x) : null,
+                    // A file opens for whoever sees it, staff too.
+                    onTap: x.toChange ? () => _row(x) : (x.kind == 'file' ? () => _openFile(x) : null),
                   );
                 }(),
               if (_manage && !full) TkListRow(title: 'Save something', icon: 'b-plus', square: look.teal, onTap: _add),
