@@ -12,6 +12,7 @@ import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../kit/motion.dart';
 import '../kit/icon.dart';
@@ -22,55 +23,55 @@ import '../theme/theme.dart';
 import 'chats.dart' show UnreadCount;
 import 'words.dart';
 
-/// styles.css `--chat-pattern`: two grids of soft dots, 28 px apart, the
-/// second set 14 px in, over the wallpaper.
-class Wallpaper extends CustomPainter {
-  Wallpaper(this.ground, this.doodle);
-  final Color ground;
-  final Color doodle;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = ground);
-    // `radial-gradient(var(--chat-doodle) 1.2px, transparent 1.7px)`
-    // centred in each 28 px tile.
-    final clear = doodle.withValues(alpha: 0);
-    void dot(double x, double y) {
-      final c = Offset(x, y);
-      canvas.drawCircle(
-        c,
-        1.7,
-        Paint()..shader = RadialGradient(colors: [doodle, doodle, clear], stops: const [0, 1.2 / 1.7, 1]).createShader(Rect.fromCircle(center: c, radius: 1.7)),
-      );
-    }
-
-    for (var y = 0.0; y < size.height + 28; y += 28) {
-      for (var x = 0.0; x < size.width + 28; x += 28) {
-        dot(x + 14, y + 14);
-        dot(x, y);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(Wallpaper old) => old.ground != ground || old.doodle != doodle;
-}
-
-/// The chat's wallpaper under [child], drawn once in a layer of its own:
-/// nothing drawn over it (a caret blinking, a list scrolling) draws the
-/// dots again.
+/// The chat's wallpaper under [child] (styles.css `--chat-pattern`): the
+/// ground, and over it the doodles of where business meets chat
+/// (assets/chat/wallpaper.svg, drawn by tools/chatwallpaper), a 400 px tile
+/// repeated, its lines in [doodle]. Drawn in a layer of its own: nothing
+/// drawn over it (a caret blinking, a list scrolling) draws it again.
 class WallpaperBox extends StatelessWidget {
   const WallpaperBox({super.key, required this.ground, required this.doodle, required this.child});
   final Color ground;
   final Color doodle;
   final Widget child;
 
+  /// The tile's side, as the web's `400px 400px`.
+  static const tile = 400.0;
+
   @override
   Widget build(BuildContext context) => Stack(
     children: [
       Positioned.fill(
         child: RepaintBoundary(
-          child: CustomPaint(painter: Wallpaper(ground, doodle), isComplex: true),
+          child: ColoredBox(
+            color: ground,
+            child: ClipRect(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final across = (box.maxWidth / tile).ceil();
+                  final down = (box.maxHeight / tile).ceil();
+                  return Stack(
+                    children: [
+                      for (var r = 0; r < down; r++)
+                        for (var c = 0; c < across; c++)
+                          Positioned(
+                            left: c * tile,
+                            top: r * tile,
+                            width: tile,
+                            height: tile,
+                            child: SvgPicture.asset(
+                              'assets/chat/wallpaper.svg',
+                              width: tile,
+                              height: tile,
+                              colorFilter: ColorFilter.mode(doodle, BlendMode.srcIn),
+                              excludeFromSemantics: true,
+                            ),
+                          ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
       child,

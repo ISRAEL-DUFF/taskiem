@@ -78,6 +78,8 @@ theme has.
   never white or lime typed in. A dark bubble with white words (pine, 16–20
   November 2026) was tried and dropped: it needed its own colours inside
   every bubble and kept breaking. The chat keeps the app's own shapes.
+  Its wallpaper is `WallpaperBox` (the doodles of `tools/chatwallpaper`);
+  change the doodles there, not in a screen.
 - **Code boxes vanish** on the page's ground: put them in a `TkFormGroup`.
 - **A stamp over the words.** A bubble's time sits over the end of the last
   line; a longer stamp (with "on WhatsApp", a template's note) goes under

@@ -292,6 +292,16 @@ web's pictures (the parity test still builds and drives them).
   so these screens are still not compared with the web's pictures. The
   tokens have a `copyWith` (generated) and `TkTheme.recolour` gives a part
   of a screen colours of its own (a sheet's boxes).
+- **The wallpaper** (the founder, 20 November 2026): as WhatsApp's, a
+  texture of tiny doodles packed close, but of where business meets chat:
+  76 kinds (bubbles and ticks, a shop front, a POS, ₦, a receipt, an
+  invoice, a parcel, a keke, a danfo, an okada, a pot of jollof, a market
+  stall, a sewing machine, …), about 240 on a 400 px tile that repeats
+  without a seam. Drawn by `tools/chatwallpaper` (`go run
+  ./tools/chatwallpaper`; a test fails when its files are stale) into
+  `web/public/chat/wallpaper-light.svg`, `-dark.svg` (the lines in each
+  theme's `--chat-doodle`) and `mobile/assets/chat/wallpaper.svg` (black,
+  tinted with `chatDoodle` by `WallpaperBox`). Web and app the same.
 - **The conversation.** The head on the ground: Back, the face, the name in
   Inter Tight, who they are or "typing…" in lime, Search and ⋯ as round
   buttons, a hairline under it. Bubbles 20 px round; a run from one side
