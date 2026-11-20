@@ -64,6 +64,50 @@ Status: **draft for the founder** (19 November 2026). Paste each part into Play 
 >
 > Taskiem is made in Nigeria, for businesses that run on their phones.
 
+**Ready to paste** into Play Console's full description: plain text, with `<b>…</b>` for the headings (Play shows a few HTML tags such as `<b>` and `<i>`; it does not read Markdown, so `**` would show as typed). 2171 of 4,000 characters, tags included.
+
+```text
+Taskiem runs the busy work of your business for you, right beside the conversations you already have with customers and suppliers.
+
+Customers order, book and pay in the chat. Taskiem turns their messages into orders, keeps count of your stock, matches the money that comes in, chases what you're owed and tells you each morning what needs you. Less copying from WhatsApp into notebooks, fewer orders lost, and you always know where your money is.
+
+<b>Sell and take orders</b>
+• Customers order and book from your shop page or in the chat, in the app or on WhatsApp
+• Every order in one place, from new to on the way, with a rider assigned
+• Products with prices, photos, sizes and colours
+
+<b>Know where your money is</b>
+• Money in and out today, this week and this month
+• Payments matched to invoices for you; what's left to match, flagged
+• Invoices sent from the chat, with reminders until they're paid
+• Leaks found: money that should have come in and didn't
+
+<b>Keep stock right</b>
+• Every sale counted; low items flagged before they run out
+• Orders to your suppliers, and their bills, in the same chat
+• Shelf counts with what went missing, and why
+
+<b>Work with your team</b>
+• Staff with their own roles; approvals for cash, discounts and payments
+• Tasks given in the chat, with a photo when they're done
+• Riders and deliveries, step by step
+
+<b>Schools</b>
+• Every student their own account number, so a parent's transfer lands on the right child
+• Term fees, receipts, reminders, payment plans and clearance at the gate
+
+<b>Automate the rest</b>
+• Workflows that run on a schedule or when something happens: reminders, reports, follow-ups
+• Ask Taskiem in plain words: "invoice Ada 25,000", "how did we do yesterday?"
+
+<b>For your customers</b>
+Your customers chat with you in the Taskiem app or their phone's browser, with nothing to install, and see their orders with every business in one place. Customers who prefer WhatsApp keep using it: they are one customer to you, whichever line they write on.
+
+Your data stays yours: it is kept encrypted, never sold, and never used for ads.
+
+Taskiem is made in Nigeria, for businesses that run on their phones.
+```
+
 **Graphics** (all in this folder, made by `make.mjs`):
 
 | Asset | File | Play's rule |
