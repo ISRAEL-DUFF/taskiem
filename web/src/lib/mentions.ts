@@ -36,6 +36,8 @@ export interface Suggestion {
    * a pick puts in the box in place of what was typed. */
   savedKind?: string;
   body?: string;
+  /** Whose saved thing it is: the person's own, or their business's. */
+  savedOwner?: "mine" | "business";
 }
 
 /** A mention as a message stores it. */

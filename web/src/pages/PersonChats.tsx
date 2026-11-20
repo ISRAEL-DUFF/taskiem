@@ -733,6 +733,7 @@ export function PersonChatPage() {
               {card && (
                 <AppCardView
                   card={card}
+                  mine={m.mine}
                   actions={
                     (card.type === "pay" || card.type === "invoice") && card.url ? (
                       <a className="tk-btn primary" href={card.url} target="_blank" rel="noopener noreferrer">

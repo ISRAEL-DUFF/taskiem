@@ -13,15 +13,18 @@ import type { Suggestion } from "../lib/mentions";
 
 const none: SavedList = { saved: [], limit: 0 };
 
-/** The saved things to offer, every kind (the Taskiem chat, which reads an
- * @name) or texts only (chats with other people, until cards), and want:
- * what the picker calls when "@" is first typed. */
-export function useSavedPicks(scope: "all" | "texts"): { saved: Suggestion[]; want: () => void } {
+/** The saved things to offer, and want: what the picker calls when "@" is
+ * first typed. Scopes: all (the Taskiem chat, which reads an @name); texts
+ * (chats that cannot take a card yet); share (every kind, one's own and
+ * the business's, the rest sent as cards: a business's customer chats);
+ * share-mine (every kind, one's own only: people chats and groups). */
+export function useSavedPicks(scope: "all" | "texts" | "share" | "share-mine"): { saved: Suggestion[]; want: () => void } {
   const { me } = useAuth();
   const [wanted, setWanted] = useState(false);
   const inBusiness = !!me?.tenant_id && !me.personal;
   const mine = useLoad(() => (wanted ? get<SavedList>("/v1/me/saved").catch(() => none) : Promise.resolve(none)), [wanted]);
-  const business = useLoad(() => (wanted && inBusiness ? get<SavedList>("/v1/saved").catch(() => none) : Promise.resolve(none)), [wanted, inBusiness]);
+  const withBusiness = inBusiness && scope !== "share-mine";
+  const business = useLoad(() => (wanted && withBusiness ? get<SavedList>("/v1/saved").catch(() => none) : Promise.resolve(none)), [wanted, withBusiness]);
   return {
     saved: savedSuggestions(mine.data?.saved ?? [], business.data?.saved ?? [], scope === "texts"),
     want: () => {

@@ -463,6 +463,39 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   await expect(ada.page.getByTestId("people-card").filter({ hasText: "Your share" }).getByText("Paid", { exact: true })).toBeVisible({ timeout: 20_000 });
 });
 
+test("a saved account shared with @: asked first, a card the friend opens, copies from and saves", async () => {
+  test.setTimeout(180_000);
+  const ada = st.ada as NonNullable<typeof st.ada>;
+  const bola = st.bola as NonNullable<typeof st.bola>;
+  // Ada's mum's account, saved (saved objects S0), not checked by name.
+  await must(ada.page.request.post("/v1/me/saved", { headers: H, data: { name: "mum", title: "Mum", bank_name: "Guaranty Trust Bank", account_number: "0123452222" } }), 201);
+  await ada.page.goto(`/you/people/${st.chat}`);
+  const box = ada.page.getByLabel(/^Message Bola/);
+  await box.click();
+  await box.pressSequentially("@mu");
+  await ada.page.getByTestId("mention-list").getByRole("button", { name: /mum/ }).click();
+  // The account number: a yes first, the question the server's.
+  const ask = ada.page.getByRole("dialog").filter({ hasText: "Share Mum's account details with them?" });
+  await expect(ask).toBeVisible();
+  await ask.getByTestId("confirm-ok").click();
+  await expect(box).toHaveValue("");
+  await expect(ada.page.getByTestId("saved-card").filter({ hasText: "Mum" }).last()).toBeVisible();
+
+  // Bola: folded to a row, opened to each line with Copy, and Save this.
+  const chats = await must<{ chats: { id: string; name: string; kind: string }[] }>(bola.page.request.get("/v1/me/conversations", { headers: H }), 200);
+  await bola.page.goto(`/you/people/${chats.chats.find((c) => c.kind === "person" && c.name === "Ada Obi")?.id ?? ""}`);
+  const card = bola.page.getByTestId("saved-card").filter({ hasText: "Mum" }).last();
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await card.getByRole("button", { name: /Show details/ }).click();
+  await expect(card.getByTestId("saved-card-line")).toHaveCount(2);
+  await expect(card.getByTestId("saved-card-line").last()).toContainText("0123452222");
+  await expect(card.getByRole("button", { name: "Copy account number" })).toBeVisible();
+  await check(bola.page, "a saved account card", 390);
+  await card.getByTestId("saved-card-save").click();
+  const sheet = bola.page.getByTestId("saved-form");
+  await expect(sheet.getByTestId("saved-number-input")).toHaveValue(/0123452222|0123 452 222/);
+});
+
 test("a share asks what for, a refused card is not called sent, a stranger's share is warned, and a forward keeps what failed", async ({ browser }) => {
   test.setTimeout(240_000);
   const ada = st.ada as NonNullable<typeof st.ada>;

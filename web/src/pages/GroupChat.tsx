@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
@@ -336,7 +338,26 @@ export function GroupChatPage() {
     }
   };
 
-  const savedTexts = useSavedPicks("texts");
+  const savedTexts = useSavedPicks("share-mine");
+  // A saved thing other than a text, picked: shared as a card (saved
+  // objects S1), after a yes to sharing what is sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setProblem(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<GroupMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergePeople(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const said = sendProblem(e);
+        if (said) setProblem(said);
+        else setSendError(e);
+      }
+    })();
   const composer = useComposer<GroupMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
@@ -345,7 +366,7 @@ export function GroupChatPage() {
       "#": [],
       atLabel: "Members to mention",
       // Saved texts (saved objects S1): their words into the box.
-      saved: savedTexts.saved, wantSaved: savedTexts.want,
+      saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved,
     },
     replyLine: (m) => messageLine(m),
     onType: (v) => {

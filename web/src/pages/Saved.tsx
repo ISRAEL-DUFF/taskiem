@@ -28,6 +28,7 @@ import {
   savedSub,
   showConnectStep,
   type BankList,
+  type SavedCard,
   type SavedDetails,
   type SavedKind,
   type SavedList,
@@ -286,11 +287,12 @@ interface Form {
 /** Save an account, or change one. Changing its bank or number asks for a
  * passkey. A business with a payments account sees the bank's name for it
  * before saving. */
-function AccountSheet({
+export function AccountSheet({
   mine,
   provider,
   checks,
   thing,
+  start,
   onClose,
   onSaved,
 }: {
@@ -298,22 +300,25 @@ function AccountSheet({
   provider?: SavedProvider;
   checks: boolean;
   thing?: SavedThing;
+  /** A shared card to save (Save this): its fields to begin with. */
+  start?: SavedCard;
   onClose: () => void;
   onSaved: (problem?: string) => void;
 }) {
   const base = savedBase(mine);
   const banks = useLoad(() => get<BankList>(mine ? "/v1/me/banks" : "/v1/banks"), [mine]);
   const [f, setF] = useState<Form>(() => ({
-    name: thing ? `@${thing.name}` : "",
-    title: thing?.title ?? "",
+    name: thing ? `@${thing.name}` : start ? `@${start.name}` : "",
+    title: thing?.title ?? start?.title ?? "",
     bank: "",
-    number: "",
+    number: start?.details.account_number ?? "",
     note: thing?.details.note ?? "",
   }));
-  // The saved bank, found in the list once it loads.
+  // The saved (or shared) bank, found in the list once it loads.
+  const from = thing?.details ?? start?.details;
   useEffect(() => {
-    if (thing && banks.data && !f.bank) setF((cur) => ({ ...cur, bank: bankValueOf(banks.data, thing.details) }));
-  }, [thing, banks.data, f.bank]);
+    if (from && banks.data && !f.bank) setF((cur) => ({ ...cur, bank: bankValueOf(banks.data, from) }));
+  }, [from, banks.data, f.bank]);
   const [problem, setProblem] = useState<string>();
   const [bankName, setBankName] = useState<string>();
   const [bankSearch, setBankSearch] = useState("");
@@ -448,23 +453,26 @@ function AccountSheet({
 /** Save a person, a place, a text or an account with a provider, or
  * change one: its name, title, note and the kind's own fields. No passkey:
  * none of these moves money. */
-function ThingSheet({
+export function ThingSheet({
   mine,
   kind,
   thing,
+  start,
   onClose,
   onSaved,
 }: {
   mine: boolean;
   kind: Exclude<SavedKind, "bank_account">;
   thing?: SavedThing;
+  /** A shared card to save (Save this): its fields to begin with. */
+  start?: SavedCard;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const base = savedBase(mine);
-  const [name, setName] = useState(thing ? `@${thing.name}` : "");
-  const [title, setTitle] = useState(thing?.title ?? "");
-  const [d, setD] = useState<SavedDetails>(() => ({ ...(thing?.details ?? {}) }));
+  const [name, setName] = useState(thing ? `@${thing.name}` : start ? `@${start.name}` : "");
+  const [title, setTitle] = useState(thing?.title ?? start?.title ?? "");
+  const [d, setD] = useState<SavedDetails>(() => ({ ...(thing?.details ?? start?.details ?? {}) }));
   const [problem, setProblem] = useState<string>();
   const act = useAction();
   const fields = KIND_FIELDS[kind];

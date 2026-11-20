@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SavedCardView } from "./SavedCard";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { fileSize } from "../lib/linkchat";
@@ -18,10 +19,13 @@ const ICON: Record<AppCard["type"], string> = {
   product: "tag",
   invoice: "invoices",
   delivery: "package",
+  saved: "note",
 };
 
 /** A card in a conversation; `actions` are the side's own buttons. */
-export function AppCardView({ card, actions }: { card: AppCard; actions?: ReactNode }) {
+export function AppCardView({ card, actions, mine = false }: { card: AppCard; actions?: ReactNode; mine?: boolean }) {
+  // A saved thing shared (saved objects S1): its own card, with Copy and Save this.
+  if (card.type === "saved" && card.saved) return <SavedCardView card={card.saved} mine={mine} />;
   const st = cardState(card);
   const step = card.type === "delivery" && card.status ? deliveryStep({ status: card.status as "accepted" }) : 0;
   const figure = cardFigure(card);

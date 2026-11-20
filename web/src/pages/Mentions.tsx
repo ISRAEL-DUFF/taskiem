@@ -60,6 +60,9 @@ export function useMentions(
      * is typed, so they are read only then. */
     saved?: Suggestion[];
     wantSaved?: () => void;
+    /** A saved thing other than a text, picked where the chat shares it as
+     * a card: what was typed for it goes, and the chat sends the card. */
+    shareSaved?: (s: Suggestion) => void;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -157,6 +160,12 @@ export function useMentions(
       return;
     }
     const end = Math.max(caret, q.start + 1 + q.query.length);
+    if (s.kind === "saved" && s.body === undefined && sources.shareSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.shareSaved(s);
+      return;
+    }
     // A saved text's words in place of what was typed, to change before
     // sending; any other saved thing as its @name, which the words carry.
     const next =

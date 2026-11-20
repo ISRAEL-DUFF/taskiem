@@ -270,6 +270,36 @@ export function savedSuggestions(mine: SavedThing[], business: SavedThing[], tex
     sub: [x.title, x.hint, twice.has(x.name) ? (x.owner === "mine" ? "Yours" : "The business's") : ""].filter(Boolean).join(" · "),
     words: x.title,
     savedKind: x.kind,
+    savedOwner: x.owner,
     body: x.kind === "text" ? (x.details.body ?? "") : undefined,
   }));
+}
+
+/** A saved thing shared in a chat (saved objects S1, part 3; the server's
+ * saved.Card): a copy of it as it was sent, its lines to copy, and its
+ * fields for Save this. */
+export interface SavedCard {
+  kind: SavedKind;
+  title: string;
+  /** The sender's @name for it. */
+  name: string;
+  lines: { label: string; value: string }[];
+  details: SavedDetails;
+  sensitive: boolean;
+}
+
+/** A saved thing a message shares (POST …/messages {card: {type: saved,
+ * saved}}): one's own or the business's; confirm says yes to sharing what
+ * is sensitive in it, asked first by a 409 confirm_share. */
+export interface SavedShare {
+  id: string;
+  owner: "mine" | "business";
+  confirm?: boolean;
+}
+
+/** A card's line under its title, folded: its kind and first detail
+ * ("Bank account · Guaranty Trust Bank"). */
+export function cardSub(c: SavedCard): string {
+  const kind = KIND_WORDS[c.kind]?.one ?? "a saved thing";
+  return [kind.charAt(0).toUpperCase() + kind.slice(1), c.lines[0]?.label === "Text" ? "" : c.lines[0]?.value].filter(Boolean).join(" · ");
 }

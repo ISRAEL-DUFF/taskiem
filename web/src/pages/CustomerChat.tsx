@@ -39,6 +39,8 @@ import { ChatStream } from "./ChatStream";
 import { CustomerOrders } from "./CustomerOrders";
 import { MentionList, useMentions } from "./Mentions";
 import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
 // phase 1): the list's Customers section and a customer's thread. A reply
@@ -408,8 +410,34 @@ export function CustomerPane({
   const lastTyped = useRef(0);
   // Saved texts by @name (saved objects S1): "@bank-details" puts the
   // business's words in the box, to change before sending.
-  const savedTexts = useSavedPicks("texts");
-  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want });
+  const savedTexts = useSavedPicks("share");
+  // A saved thing other than a text, picked: shared with the customer
+  // (saved objects S1), after a yes to sharing what is sensitive in it; a
+  // card in the app, its lines on WhatsApp, by the line replies go on.
+  const shareSaved = (pick: Suggestion) => {
+    if (!canSend) return;
+    setSendError(undefined);
+    void (async () => {
+      try {
+        const out = await sendSaved(
+          (confirm) =>
+            post<CustomerMessage>(`/v1/customer-chats/${id}/messages`, {
+              card: { type: "saved", saved: { id: pick.id, owner: pick.savedOwner ?? "business", confirm } },
+              client_id: `${Date.now()}-${++localN}`,
+              ...(c ? replyLineBody(c, replyLine) : {}),
+            }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergeCustomer(cur ?? [], [out]));
+        changed.current();
+      } catch (e) {
+        setSendError(e);
+        chat.reload();
+      }
+    })();
+  };
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved });
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
@@ -672,6 +700,7 @@ export function CustomerPane({
             {m.card && (
               <AppCardView
                 card={m.card}
+                mine={m.mine}
                 actions={
                   cardLink(m.card) ? (
                     <Link className="tk-btn soft" to={cardLink(m.card) ?? "/"}>

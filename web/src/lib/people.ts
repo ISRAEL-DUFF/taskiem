@@ -7,6 +7,7 @@
 // People chats are kept by Taskiem and readable by its servers (§6). No
 // word here may say or suggest that they are end-to-end encrypted.
 
+import type { SavedCard, SavedShare } from "./saved";
 import { ApiError } from "../api";
 import { clock, dayLabel } from "./linkchat";
 import type { Group } from "./groups";
@@ -174,8 +175,10 @@ export interface PayoutAccount {
 
 /** A card in a people chat (§10.1, §11 A). */
 export interface PeopleCard {
-  type: "product" | "business" | "order" | "delivery" | "split" | "basket";
+  type: "product" | "business" | "order" | "delivery" | "split" | "basket" | "saved";
   title: string;
+  /** A saved thing shared (saved objects S1), as it was when sent. */
+  saved?: SavedCard;
   business_id?: string;
   business?: string;
   area?: string;
@@ -206,6 +209,9 @@ export interface CardAsk {
   amount_kobo?: number;
   what?: string;
   pay_to?: PayoutAccount;
+  /** A saved thing to share: one of the sender's own; confirm says yes to
+   * sharing what is sensitive in it. */
+  saved?: SavedShare;
 }
 
 export interface PeopleAttachment {
@@ -398,7 +404,7 @@ function nairaPlain(kobo: number): string {
 
 /** A card's line above its title. */
 export function cardKind(c: Pick<PeopleCard, "type">): string {
-  return { product: "Product", business: "Business", order: "Order", delivery: "Delivery", split: "Your share", basket: "Order together" }[c.type];
+  return { product: "Product", business: "Business", order: "Order", delivery: "Delivery", split: "Your share", basket: "Order together", saved: "Shared" }[c.type];
 }
 
 /** The code in a person's link, typed or pasted as a link or bare: "", when it is not one. */

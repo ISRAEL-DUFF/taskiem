@@ -693,3 +693,13 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .group-added li { margin: 4px 0; overflow-wrap: anywhere; }
 .group-row-at { color: var(--accent); font-weight: 700; }
 .group-info .people-info .row-actions { flex-wrap: wrap; justify-content: center; }
+/* A saved thing shared in a chat (saved objects S1): its details, each with Copy. */
+.tk-ref-lines { list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.tk-ref-lines li { display: flex; align-items: center; gap: 10px; background: var(--tk-soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.tk-ref-line-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-ref-line-label { font-size: 12px; color: var(--muted); }
+.tk-ref-lines b { font-size: 15px; color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+.tk-ref-lines button { flex: none; }
+/* A saved card in a bubble: its top row stops short of the bubble's menu
+   chevron, so each keeps a 24px target of its own. */
+.bubble .tk-ref-saved > button.tk-ref-top, .bubble .tk-ref-saved > .tk-ref-row { width: calc(100% - 22px); }
