@@ -3,7 +3,9 @@ import {
   bankFields,
   bankValueOf,
   checkLine,
+  detailsProblem,
   filterBanks,
+  kindChoice,
   cleanName,
   nameProblem,
   numberProblem,
@@ -87,6 +89,16 @@ describe("saved things", () => {
     expect(names("bank")).toHaveLength(5); // "bank" alone is not a word to search by
     expect(names("zzz")).toEqual([]);
     expect(names("zzz", "c:2")).toEqual(["Zenith Bank"]); // the chosen one stays
+  });
+
+  it("words the kinds and checks their forms", () => {
+    expect(kindChoice("person")).toBe("A person");
+    expect(kindChoice("provider_account")).toBe("An account with a provider");
+    expect(detailsProblem("place", { area: "Yaba" })).toBe("Give the place its street and number.");
+    expect(detailsProblem("text", { body: "  " })).toBe("Write the text.");
+    expect(detailsProblem("provider_account", { provider: "DSTV", number: "123" })).toBe("Choose what the provider is.");
+    expect(detailsProblem("person", {})).toBeNull();
+    expect(savedSub({ ...bayo, kind: "person", hint: "" })).toBe("@bayo");
   });
 
   it("says where names are checked, and to whom the connect step is shown", () => {

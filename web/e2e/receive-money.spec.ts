@@ -268,11 +268,12 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   const connect = page.getByTestId("saved-connect");
   await expect(connect).toContainText("Check names with the bank");
   const saved = page.getByTestId("saved");
-  await expect(saved).toContainText("No saved accounts yet.");
+  await expect(saved).toContainText("Nothing saved yet.");
   await axeBoth(page, "/settings/saved (no payments account)");
 
   // Saved with no payments account: kept, not checked yet, as the form says.
-  await saved.getByRole("button", { name: "Save an account" }).click();
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a bank account" }).click();
   let form = page.getByTestId("saved-form");
   await expect(form.getByTestId("saved-form-connect")).toContainText("not checked until your business connects a payments account");
   await form.getByLabel("Name to call it up by").fill("@Bayo");
@@ -304,7 +305,8 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   await axeBoth(page, "/settings/saved (checked)");
 
   // A new account shows the bank's name before it is saved.
-  await saved.getByRole("button", { name: "Save an account" }).click();
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a bank account" }).click();
   form = page.getByTestId("saved-form");
   await expect(form.getByTestId("saved-form-connect")).toHaveCount(0);
   await form.getByLabel("Name to call it up by").fill("landlord");
@@ -329,5 +331,21 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   await expect(form).toContainText("Add a passkey first");
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(row).toContainText("GTBank ••6789");
+
+  // Other kinds (S1): a text, saved with no passkey; the kinds filter.
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a text" }).click();
+  const thing = page.getByTestId("saved-thing-form");
+  await thing.getByLabel("Name to call it up by").fill("bank-details");
+  await thing.getByLabel("Title").fill("Our bank details");
+  await thing.getByLabel("The text").fill("Pay to Ada Obi Stores\nGTBank 0123456789");
+  await thing.getByRole("button", { name: "Save" }).click();
+  await expect(saved.getByTestId("saved-row").filter({ hasText: "Our bank details" })).toContainText("@bank-details · 2 lines of text");
+  const kinds = saved.getByTestId("saved-kinds");
+  await kinds.getByRole("button", { name: "Texts" }).click();
+  await expect(saved.getByTestId("saved-row")).toHaveCount(1);
+  await kinds.getByRole("button", { name: "All" }).click();
+  await expect(saved.getByTestId("saved-row")).toHaveCount(3);
+  await axeBoth(page, "/settings/saved (kinds)");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

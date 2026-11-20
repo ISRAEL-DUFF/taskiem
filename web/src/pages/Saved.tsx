@@ -15,6 +15,12 @@ import {
   cleanName,
   cleanNumber,
   filterBanks,
+  detailsProblem,
+  KIND_FIELDS,
+  KIND_WORDS,
+  kindChoice,
+  PROVIDER_TYPES,
+  SAVED_KINDS,
   nameProblem,
   numberProblem,
   providerLine,
@@ -22,6 +28,8 @@ import {
   savedSub,
   showConnectStep,
   type BankList,
+  type SavedDetails,
+  type SavedKind,
   type SavedList,
   type SavedProvider,
   type SavedThing,
@@ -88,12 +96,15 @@ function ConnectStep({ p }: { p: SavedProvider }) {
 export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedProvider }) {
   const base = savedBase(mine);
   const list = useLoad(() => get<SavedList>(base), [base]);
-  const [editing, setEditing] = useState<SavedThing | "new">();
+  const [editing, setEditing] = useState<SavedThing | SavedKind | "choose">();
+  const [kind, setKind] = useState<SavedKind | "">("");
   const [shown, setShown] = useState<Record<string, string>>({});
   const [news, setNews] = useState("");
   const act = useAction();
   const sure = useConfirm();
-  const all = list.data?.saved ?? [];
+  const every = list.data?.saved ?? [];
+  const all = kind ? every.filter((x) => x.kind === kind) : every;
+  const kindsHeld = SAVED_KINDS.filter((k) => every.some((x) => x.kind === k));
   const { can } = useAuth();
   const manage = mine || can("saved.manage");
 
@@ -127,7 +138,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
       setShown((s) => ({ ...s, [x.id]: r.account_number }));
     }, false);
 
-  const title = mine ? "Your saved accounts" : "Saved accounts";
+  const title = mine ? "Your saved things" : "Saved things";
   const line = providerLine(provider);
   return (
     <section className="card" aria-labelledby={`saved-h-${mine ? "mine" : "biz"}`} data-testid={mine ? "my-saved" : "saved"}>
@@ -135,17 +146,29 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
         <h2 id={`saved-h-${mine ? "mine" : "biz"}`} className="grow" style={{ margin: 0 }}>
           {title}
         </h2>
-        {list.data && manage && all.length < list.data.limit && (
-          <button type="button" className="small" onClick={() => setEditing("new")} data-testid="saved-add">
-            <Icon name="plus" /> Save an account
+        {list.data && manage && every.length < list.data.limit && (
+          <button type="button" className="small" onClick={() => setEditing("choose")} data-testid="saved-add">
+            <Icon name="plus" /> Save something
           </button>
         )}
       </div>
       <p className="hint">
         {mine
-          ? "Accounts of your own, like @mum. Only you see them: no business you work in sees this list."
-          : "Call one up by its name, like @bayo. Everyone in the business sees them, with the number masked."}
+          ? "Accounts, people, places and texts of your own, like @mum. Only you see them: no business you work in sees this list."
+          : "Accounts, people, places and texts your business uses, called up by name, like @bayo. Everyone in the business sees them, account numbers masked."}
       </p>
+      {kindsHeld.length > 1 && (
+        <div className="segmented" role="group" aria-label="Kinds" data-testid="saved-kinds">
+          <button type="button" aria-pressed={kind === ""} onClick={() => setKind("")}>
+            All
+          </button>
+          {kindsHeld.map((k) => (
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>
+              {KIND_WORDS[k].many}
+            </button>
+          ))}
+        </div>
+      )}
       {line && <p className="hint">{line}</p>}
       {news && (
         <div className="notice" role="status">
@@ -154,24 +177,27 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
       )}
       <ErrorBox error={list.error ?? act.error} />
       {!list.data && !list.error && <Skeleton rows={2} label="Loading the saved accounts…" />}
-      {list.data && all.length === 0 && <EmptyState icon="money">No saved accounts yet.</EmptyState>}
+      {list.data && every.length === 0 && <EmptyState icon="money">Nothing saved yet.</EmptyState>}
       {all.length > 0 && (
         <Items label={title}>
           {all.map((x) => {
+            const bank = x.kind === "bank_account";
             const c = checkLine(x);
             return (
               <Row
                 key={x.id}
-                icon="money"
-                tone={c.tone === "warn" ? "warn" : undefined}
+                icon={KIND_WORDS[x.kind].icon}
+                tone={bank && c.tone === "warn" ? "warn" : undefined}
                 title={x.title}
-                side={<span className={`badge sf-status ${c.tone}`}>{c.tone === "ok" ? "Checked" : "Not checked"}</span>}
+                side={bank ? <span className={`badge sf-status ${c.tone}`}>{c.tone === "ok" ? "Checked" : "Not checked"}</span> : undefined}
                 sub={
                   <span className="sub">
                     {savedSub(x)}
-                    <span className="block" data-testid="saved-check">
-                      {c.words}
-                    </span>
+                    {bank && (
+                      <span className="block" data-testid="saved-check">
+                        {c.words}
+                      </span>
+                    )}
                     {shown[x.id] && (
                       <span className="block" data-testid="saved-number">
                         Account number: <strong>{shown[x.id]}</strong>
@@ -188,7 +214,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
                     <button type="button" className="small" onClick={() => setEditing(x)}>
                       Change<span className="sr-only"> @{x.name}</span>
                     </button>
-                    {!shown[x.id] && (
+                    {bank && !shown[x.id] && (
                       <button type="button" className="small" disabled={act.busy} onClick={() => reveal(x)}>
                         Show number<span className="sr-only"> of @{x.name}</span>
                       </button>
@@ -203,18 +229,43 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           })}
         </Items>
       )}
-      {list.data && all.length >= list.data.limit && <p className="hint">You have {list.data.limit} saved things, the most you can keep.</p>}
-      {!mine && list.data && !manage && all.length > 0 && <p className="hint">The business's owners and admins add and change them.</p>}
-      {editing && (
+      {list.data && every.length >= list.data.limit && <p className="hint">You have {list.data.limit} saved things, the most you can keep.</p>}
+      {!mine && list.data && !manage && every.length > 0 && <p className="hint">The business's owners and admins add and change them.</p>}
+      {editing === "choose" && (
+        <Modal title="Save something" onClose={() => setEditing(undefined)}>
+          <Items label="What to save">
+            {SAVED_KINDS.map((k) => (
+              <Row key={k} icon={KIND_WORDS[k].icon} title={kindChoice(k)} testid="saved-kind">
+                <button type="button" className="small" onClick={() => setEditing(k)}>
+                  Choose<span className="sr-only"> {KIND_WORDS[k].one}</span>
+                </button>
+              </Row>
+            ))}
+          </Items>
+        </Modal>
+      )}
+      {editing && editing !== "choose" && (editing === "bank_account" || (typeof editing === "object" && editing.kind === "bank_account")) && (
         <AccountSheet
           mine={mine}
           provider={mine ? undefined : provider}
           checks={!mine && !!provider?.connected}
-          thing={editing === "new" ? undefined : editing}
+          thing={typeof editing === "object" ? editing : undefined}
           onClose={() => setEditing(undefined)}
           onSaved={(problem) => {
             setEditing(undefined);
             setNews(problem ?? "");
+            list.reload();
+          }}
+        />
+      )}
+      {editing && editing !== "choose" && editing !== "bank_account" && (typeof editing !== "object" || editing.kind !== "bank_account") && (
+        <ThingSheet
+          mine={mine}
+          kind={typeof editing === "object" ? (editing.kind as Exclude<SavedKind, "bank_account">) : (editing as Exclude<SavedKind, "bank_account">)}
+          thing={typeof editing === "object" ? editing : undefined}
+          onClose={() => setEditing(undefined)}
+          onSaved={() => {
+            setEditing(undefined);
             list.reload();
           }}
         />
@@ -384,6 +435,115 @@ function AccountSheet({
         <div className="row-actions">
           <button type="submit" className="primary" disabled={act.busy} data-testid="saved-save">
             {act.busy ? "Saving…" : thing ? "Save changes" : "Save account"}
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Save a person, a place, a text or an account with a provider, or
+ * change one: its name, title, note and the kind's own fields. No passkey:
+ * none of these moves money. */
+function ThingSheet({
+  mine,
+  kind,
+  thing,
+  onClose,
+  onSaved,
+}: {
+  mine: boolean;
+  kind: Exclude<SavedKind, "bank_account">;
+  thing?: SavedThing;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const base = savedBase(mine);
+  const [name, setName] = useState(thing ? `@${thing.name}` : "");
+  const [title, setTitle] = useState(thing?.title ?? "");
+  const [d, setD] = useState<SavedDetails>(() => ({ ...(thing?.details ?? {}) }));
+  const [problem, setProblem] = useState<string>();
+  const act = useAction();
+  const fields = KIND_FIELDS[kind];
+  const save = () => {
+    const p = nameProblem(name) ?? (title.trim() ? null : "Give it a title, like Mum or Our warehouse.") ?? detailsProblem(kind, d);
+    setProblem(p ?? undefined);
+    if (p) return;
+    // Each field: its words, or (changing one) null to remove it.
+    const details: Record<string, string | null> = {};
+    for (const f of [...fields.map((x) => x.key), "note" as const, ...(kind === "provider_account" ? ["type" as const] : [])]) {
+      const v = String(d[f] ?? "").trim();
+      if (v) details[f] = f === "body" ? String(d[f]) : v;
+      else if (thing) details[f] = null;
+    }
+    void act
+      .run(async () => {
+        const body = { name: cleanName(name), title: title.trim(), details };
+        if (thing) await put(`${base}/${encodeURIComponent(thing.id)}`, body);
+        else await post(base, { ...body, kind });
+        onSaved();
+      }, thing ? "Saved" : `Saved as @${cleanName(name)}`)
+      .then(() => undefined);
+  };
+  const taken = act.error instanceof ApiError && act.error.body.name_taken ? "That name is taken: choose another." : undefined;
+  const one = KIND_WORDS[kind].one;
+  return (
+    <Modal title={thing ? `Change @${thing.name}` : `Save ${one}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        data-testid="saved-thing-form"
+      >
+        <Field label="Name to call it up by" hint={kind === "text" ? "Such as @bank-details or @price-list." : "Such as @mum or @warehouse."}>
+          <input value={name} maxLength={33} autoCapitalize="none" autoComplete="off" onChange={(e) => setName(e.target.value)} required />
+        </Field>
+        <Field label="Title" hint="How it is shown.">
+          <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} required />
+        </Field>
+        {kind === "provider_account" && (
+          <Field label="What the provider is">
+            <select value={d.type ?? ""} onChange={(e) => setD((cur) => ({ ...cur, type: (e.target.value || undefined) as SavedDetails["type"] }))}>
+              <option value="">Choose</option>
+              {PROVIDER_TYPES.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {fields.map((f) => (
+          <Field key={f.key} label={f.label} hint={f.hint}>
+            {f.long ? (
+              <textarea value={String(d[f.key] ?? "")} rows={6} maxLength={4000} onChange={(e) => setD((cur) => ({ ...cur, [f.key]: e.target.value }))} />
+            ) : (
+              <input
+                value={String(d[f.key] ?? "")}
+                type={f.key === "email" ? "email" : f.key === "birthday" ? "date" : f.key === "phone" ? "tel" : "text"}
+                inputMode={f.key === "phone" ? "tel" : undefined}
+                maxLength={200}
+                onChange={(e) => setD((cur) => ({ ...cur, [f.key]: e.target.value }))}
+              />
+            )}
+          </Field>
+        ))}
+        <Field label="Note" hint="Optional, for your own reference.">
+          <input value={d.note ?? ""} maxLength={200} onChange={(e) => setD((cur) => ({ ...cur, note: e.target.value }))} />
+        </Field>
+        {(problem || taken) && (
+          <p className="error" role="alert">
+            {problem ?? taken}
+          </p>
+        )}
+        {!taken && <ErrorBox error={act.error} />}
+        <div className="row-actions">
+          <button type="submit" className="primary" disabled={act.busy} data-testid="saved-thing-save">
+            {act.busy ? "Saving…" : "Save"}
           </button>
           <button type="button" onClick={onClose}>
             Cancel
