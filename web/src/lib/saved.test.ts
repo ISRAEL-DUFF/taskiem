@@ -18,6 +18,8 @@ import {
   kindProblem,
   shownValue,
   valuesProblem,
+  placeAddress,
+  personFill,
   type BankList,
   type KindField,
   type SavedThing,
@@ -163,5 +165,20 @@ describe("kinds the owner makes", () => {
     expect(kindProblem("Car", [{ label: "A", type: "text" }, { label: "a", type: "text" }])).toMatch(/Two fields are called/);
     expect(kindProblem("Car", [{ label: "Fuel", type: "choice", options: ["Petrol", " "] }])).toMatch(/at least 2 choices/);
     expect(kindProblem("Car", fields)).toBeNull();
+  });
+});
+
+describe("filling a form from a saved thing (§6.4)", () => {
+  it("words a place as one address line, the landmark in brackets", () => {
+    expect(placeAddress({ line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate" })).toBe("12 Allen Avenue, Ikeja (By the blue gate)");
+    expect(placeAddress({ line: "12 Allen Avenue", area: "Ikeja" })).toBe("12 Allen Avenue, Ikeja");
+    expect(placeAddress({ line: " 3 Bode Thomas ", area: " ", landmark: "" })).toBe("3 Bode Thomas");
+    expect(placeAddress({ landmark: "Opposite the church" })).toBe("Opposite the church");
+    expect(placeAddress({})).toBe("");
+  });
+  it("fills a customer from a saved person, leaving what it has none of", () => {
+    expect(personFill({ title: "Bisi Okafor", details: { phone: "08031234567", email: "bisi@example.com" } })).toEqual({ name: "Bisi Okafor", phone: "08031234567", email: "bisi@example.com" });
+    expect(personFill({ title: "Tunde", details: { phone: "08030000000" } })).toEqual({ name: "Tunde", phone: "08030000000" });
+    expect(personFill({ title: "Kemi", details: { email: " " } })).toEqual({ name: "Kemi" });
   });
 });

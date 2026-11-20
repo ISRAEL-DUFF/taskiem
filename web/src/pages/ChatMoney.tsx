@@ -35,6 +35,8 @@ import {
   type MoneyEntry,
 } from "../lib/chatmoney";
 import { useAuth } from "../auth";
+import { personFill } from "../lib/saved";
+import { SavedFill } from "./SavedFill";
 
 const newKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -308,6 +310,16 @@ export function InvoiceAdd({
           </p>
         ) : (
           <>
+            <SavedFill
+              kind="person"
+              label="the customer"
+              inSheet
+              onPick={(x) => {
+                const f = personFill(x);
+                setName(f.name);
+                if (f.phone) setPhone(f.phone);
+              }}
+            />
             <KitField label="Customer's name">
               <input
                 value={name}

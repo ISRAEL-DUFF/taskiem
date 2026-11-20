@@ -2472,3 +2472,16 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .bank-field { display: grid; grid-template-columns: 1fr; gap: 8px; }
 @media (min-width: 480px) { .bank-field { grid-template-columns: 3fr 2fr; } }
 .file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* A form's Saved button (saved objects §6.4): beside the heading of the
+   fields it fills; in a chat tool's sheet, its list opens under it. */
+.saved-fill-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 32px 0 12px; }
+.saved-fill-head h2 { margin: 0; min-width: 0; }
+.card > .saved-fill-head:first-child { margin-top: 0; }
+.saved-fill-button { flex: none; }
+.saved-fill-group { margin: 12px 0 8px; font-size: 13px; color: var(--muted); }
+.saved-fill-sheet { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
+.saved-fill-sheet .saved-fill-button { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.saved-fill-sheet .saved-fill-list { align-self: stretch; padding: 4px 0 8px; border-bottom: 1px solid var(--border); }
+.saved-fill-sheet .saved-fill-list ul { list-style: none; margin: 0; padding: 0; }
+.saved-fill-row, .saved-fill-row:hover:not(:disabled) { width: 100%; min-height: 0; border: 0; box-shadow: none; background: none; text-align: left; font: inherit; font-weight: inherit; color: var(--text); }
+.saved-fill-row:hover:not(:disabled), .saved-fill-row:focus-visible { background: var(--tk-soft); }

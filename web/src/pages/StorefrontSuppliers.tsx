@@ -28,6 +28,8 @@ import type { LinksView } from "../lib/links";
 import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
+import { placeAddress } from "../lib/saved";
 
 /** The business's suppliers (docs/stock.md "Suppliers and purchase
  * orders"): who it buys from, where their orders reach them, and what is
@@ -270,7 +272,17 @@ function DeliverToForm({
       aria-labelledby="suppliers-deliver"
       data-testid="deliver-to"
     >
-      <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
+      <div className="saved-fill-head">
+        <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
+        <SavedFill
+          kind="place"
+          label="the address"
+          onPick={(x) => {
+            setAddress(placeAddress(x.details).slice(0, 300));
+            if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
+          }}
+        />
+      </div>
       <p className="hint">
         Orders to suppliers on Taskiem carry it, and their rider brings them
         here. Leave it empty and you pick orders up.

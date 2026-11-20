@@ -451,3 +451,24 @@ export function cardSub(c: SavedCard): string {
   const kind = c.kind === "custom" ? (c.kind_name ?? "a saved thing") : (KIND_WORDS[c.kind]?.one ?? "a saved thing");
   return [kind.charAt(0).toUpperCase() + kind.slice(1), c.lines[0]?.label === "Text" ? "" : c.lines[0]?.value].filter(Boolean).join(" · ");
 }
+
+/** A saved place as one address line, as a form's Address takes it
+ * (saved objects §6.4): "12 Allen Avenue, Ikeja (by the blue gate)". */
+export function placeAddress(d: Pick<SavedDetails, "line" | "area" | "landmark">): string {
+  const line = [d.line, d.area]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+  const landmark = (d.landmark ?? "").trim();
+  return landmark ? (line ? `${line} (${landmark})` : landmark) : line;
+}
+
+/** What a saved person fills in a customer's fields: the name from its
+ * title, and its phone and email only when it has them (a field it has
+ * none for is left as it was). The full phone and email are in details;
+ * a business's list masks only the hint. */
+export function personFill(x: Pick<SavedThing, "title" | "details">): { name: string; phone?: string; email?: string } {
+  const phone = (x.details.phone ?? "").trim();
+  const email = (x.details.email ?? "").trim();
+  return { name: x.title, ...(phone ? { phone } : {}), ...(email ? { email } : {}) };
+}
