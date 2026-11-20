@@ -1874,6 +1874,16 @@
       "reviewed": true,
       "context": "An invoice was asked for a saved thing that is not a person (a place, an account\u2026); {kind} is what it is"
     },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "An order to linked businesses ended with a saved place: where it will be delivered"
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": true,
+      "context": "An order to linked businesses named a saved thing in the middle: how to say where it goes"
+    },
     "wa.deliver.set": {
       "text": "{reference} will be delivered to @{name}: {address}.",
       "reviewed": true,

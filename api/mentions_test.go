@@ -97,6 +97,19 @@ func TestMentionsOrderFromTwo(t *testing.T) {
 		t.Fatalf("nothing asked: %q", r)
 	}
 
+	// "…, deliver to @warehouse": a saved place, where the order goes; a
+	// saved name in the middle is said how.
+	buyer.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place",
+		"details": map[string]any{"line": "4 Creek Road", "area": "Apapa", "phone": "0803 112 0077"}})
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement from @Dangote Stores, deliver to @warehouse"); !strings.Contains(r, "₦95,000") ||
+		!strings.Contains(r, "Delivered to @warehouse: 4 Creek Road, Apapa.") {
+		t.Fatalf("delivered to a saved place: %q", r)
+	}
+	w.say(t, buyerOn, "no")
+	if r := w.say(t, buyerOn, "Buy 10 bags of cement for @warehouse from @Dangote Stores"); !strings.Contains(r, "end the order with \"deliver to @warehouse\"") {
+		t.Errorf("in the middle: %q", r)
+	}
+
 	// On the web: the same words, the same answer.
 	out := buyer.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "order 10 bags of cement from @Dangote Stores"})["messages"].([]any)
 	if a := out[len(out)-1].(map[string]any)["text"].(string); !strings.Contains(a, "₦95,000") || !strings.Contains(a, "Send it to them?") {

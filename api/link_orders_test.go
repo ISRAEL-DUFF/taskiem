@@ -775,6 +775,12 @@ func TestLinkedPurchaseDeliveredToSaved(t *testing.T) {
 	if r := w.say(t, buyerOn, "deliver "+ref+" to @mum"); !strings.Contains(r, "@mum is a person") {
 		t.Errorf("a person: %q", r)
 	}
+	// Not sent, and whether or not the business keeps stock here.
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": false}, "confirm": true})
+	if r := w.say(t, buyerOn, "deliver "+ref+" to @warehouse"); !strings.Contains(r, ref+" will be delivered to @warehouse") || strings.Contains(r, "Sent ") {
+		t.Fatalf("deliver alone: %q", r)
+	}
+	buyer.must(200, "PUT", "/v1/settings/areas", map[string]any{"areas": map[string]bool{"stock": true}, "confirm": true})
 	r := w.say(t, buyerOn, "send order "+ref+" to @warehouse")
 	if !strings.Contains(r, "Sent "+ref) || !strings.Contains(r, ref+" will be delivered to @warehouse: 4 Creek Road, Apapa (by the port gate).") {
 		t.Fatalf("sent: %q", r)

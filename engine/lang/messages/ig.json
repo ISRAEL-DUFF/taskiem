@@ -1500,6 +1500,14 @@
       "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
       "reviewed": false
     },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": false
+    },
     "wa.deliver.set": {
       "text": "{reference} will be delivered to @{name}: {address}.",
       "reviewed": false

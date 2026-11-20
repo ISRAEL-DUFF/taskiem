@@ -85,6 +85,8 @@ func (s *Server) waSavedPickReply(ctx context.Context, c *chat, cmd string) (boo
 		return s.waSavedReminders(ctx, c, pick.Text)
 	case "share":
 		return s.waShareSaved(ctx, c, pick.Text)
+	case "order":
+		return s.waMentionOrder(ctx, c, pick.Text)
 	}
 	return false, nil
 }

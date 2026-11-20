@@ -1014,6 +1014,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waSaveQuoted(ctx, c, text); done || err != nil {
 			return err
 		}
+		// "deliver order P-7QX4KD to @warehouse": a saved place, whichever
+		// areas the business uses, since a purchase from a linked supplier
+		// is made from the links too (saved_deliver.go).
+		if s.Purchases.Ready() && s.Stock.Ready() {
+			if done, err := s.waDeliverToSaved(ctx, c, text); done || err != nil {
+				return err
+			}
+		}
 		if !on.On(areas.Storefront) {
 			// no booking words
 		} else if done, err := s.waBookingCommand(ctx, c, cmd); done || err != nil {

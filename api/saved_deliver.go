@@ -54,23 +54,11 @@ func (s *Server) waDeliverToSaved(ctx context.Context, c *chat, text string) (bo
 	if x.Kind != saved.KindPlace {
 		return true, c.say(ctx, s, c.t("wa.deliver.saved_kind", "name", x.Name, "kind", savedKindWords(x)))
 	}
-	str := func(k string) string { v, _ := x.Details[k].(string); return v }
-	address := strings.Trim(strings.Join([]string{str("line"), str("area")}, ", "), ", ")
-	if l := str("landmark"); l != "" {
-		address += " (" + l + ")"
-	}
-	d := links.DeliverTo{Address: address, Phone: str("phone")}
+	d, address := placeDeliverTo(x)
 	var sent stock.Purchase
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		if d.Phone == "" {
-			def, err := links.DeliverToTx(ctx, tx, s.Vault, c.tenant.ID)
-			if err != nil {
-				return err
-			}
-			d.Phone = def.Phone
-		}
-		if d.Phone == "" {
-			return errNoRiderPhone
+		if err := s.riderPhoneTx(ctx, tx, c, &d); err != nil {
+			return err
 		}
 		o, err := stock.PurchaseByReferenceTx(ctx, tx, c.tenant.ID, ref)
 		if err != nil {
@@ -108,6 +96,67 @@ func (s *Server) waDeliverToSaved(ctx context.Context, c *chat, text string) (bo
 		said = c.t("wa.order.sent", "reference", sent.Reference, "supplier", whatsapp.SafeText(sent.Supplier)) + "\n" + said
 	}
 	return true, c.say(ctx, s, said)
+}
+
+// placeDeliverTo is where a saved place has a purchase delivered: its
+// street, area and landmark, and its phone; and its address as said.
+func placeDeliverTo(x savedRow) (links.DeliverTo, string) {
+	str := func(k string) string { v, _ := x.Details[k].(string); return v }
+	address := strings.Trim(strings.Join([]string{str("line"), str("area")}, ", "), ", ")
+	if l := str("landmark"); l != "" {
+		address += " (" + l + ")"
+	}
+	return links.DeliverTo{Address: address, Phone: str("phone")}, address
+}
+
+// riderPhoneTx gives a place with no phone the business's own delivery
+// number; errNoRiderPhone when there is none either.
+func (s *Server) riderPhoneTx(ctx context.Context, tx pgx.Tx, c *chat, d *links.DeliverTo) error {
+	if d.Phone == "" {
+		def, err := links.DeliverToTx(ctx, tx, s.Vault, c.tenant.ID)
+		if err != nil {
+			return err
+		}
+		d.Phone = def.Phone
+	}
+	if d.Phone == "" {
+		return errNoRiderPhone
+	}
+	return nil
+}
+
+// deliverTail is "…, deliver to @warehouse" at the end of an order to
+// linked businesses (mentions.go): where what it buys is delivered.
+var deliverTail = regexp.MustCompile(`(?i)[\s,;.]*(?:and\s+)?(?:deliver|send)(?:\s+(?:it|them|all|everything))?\s+to\s+@([a-z0-9][a-z0-9_-]{0,31})\s*[.!]?\s*$`)
+
+// orderPlace is the saved place an order's words end with ("deliver to
+// @warehouse"), read off them: the words without it, and where; ok false
+// when the person was told why not (or asked which), so the order waits.
+func (s *Server) orderPlace(ctx context.Context, c *chat, text string) (rest string, d *links.DeliverTo, place, address string, ok bool, err error) {
+	m := deliverTail.FindStringSubmatchIndex(text)
+	if m == nil {
+		return text, nil, "", "", true, nil
+	}
+	name, nerr := saved.Name(text[m[2]:m[3]])
+	if nerr != nil {
+		return text, nil, "", "", true, nil //nolint:nilerr // not a saved thing's name: the words as they are
+	}
+	got, err := s.savedFind(ctx, c, name)
+	if err != nil {
+		return "", nil, "", "", false, err
+	}
+	if len(got) == 0 {
+		return "", nil, "", "", false, c.say(ctx, s, c.t("wa.saved.share_none", "name", name))
+	}
+	one, picked, err := s.savedPickOne(ctx, c, chatSavedPick{Kind: "order", Text: text, Name: name}, got)
+	if !picked || err != nil {
+		return "", nil, "", "", false, err
+	}
+	if one.row.Kind != saved.KindPlace {
+		return "", nil, "", "", false, c.say(ctx, s, c.t("wa.deliver.saved_kind", "name", one.row.Name, "kind", savedKindWords(one.row)))
+	}
+	to, address := placeDeliverTo(one.row)
+	return text[:m[0]], &to, one.row.Name, address, true, nil
 }
 
 // errNoRiderPhone: a place with no phone, and the business has no delivery
