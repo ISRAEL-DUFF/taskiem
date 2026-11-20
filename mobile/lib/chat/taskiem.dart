@@ -54,6 +54,7 @@ import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
 import '../kit/mobile.dart' show TkRoute;
 import '../school/school_chasing.dart' show DebtorsPage;
 import '../school/school_clearance.dart' show ClearancePage;
@@ -520,6 +521,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         if (mounted) setState(() {});
       },
     ),
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
   );
 
   // The tools panel (ChatTools.tsx): every tool the person may open.
@@ -1203,7 +1205,11 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
               bubble: at,
               mine: mine,
               what: m.text.split('\n').first.length > 60 ? m.text.split('\n').first.substring(0, 60) : m.text.split('\n').first,
-              items: [MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied')],
+              items: [
+                MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied'),
+                // Save as… (saved objects S1, part 4): in a business, its saved things for whoever may manage them.
+                if (widget.auth != null) MenuItem('note', 'Save as…', () => saveFromWords(context, widget.auth!, m.text, business: true)),
+              ],
             )
           : null,
       child: BubbleFrame(

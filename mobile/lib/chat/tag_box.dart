@@ -24,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -53,6 +53,10 @@ class TagBox {
   /// Saved things other than texts kept as tags, sent with the message (a
   /// business's chat with another business; S1 part 3).
   final bool savedAsTags;
+
+  /// Save "@mum"… when nothing saved has the name typed (saved objects S1,
+  /// part 4): the name, to save something as.
+  final void Function(String name)? onSaveNamed;
 
   TagQuery? query;
   final picked = <TagSuggestion>[];
@@ -125,7 +129,7 @@ class TagBox {
     if (grouped() && q.mark == '@') {
       final words = _words;
       final found = _found;
-      return groupTags(
+      return _withSaveNew(q, groupTags(
         q.query,
         items: src.items,
         services: src.services,
@@ -133,15 +137,28 @@ class TagBox {
         taskiem: taskiem,
         unlinked: found != null && words.length >= 2 && found.q == words ? found.list : const [],
         saved: saved?.list ?? const [],
-      );
+      ));
     }
-    return [
+    return _withSaveNew(q, [
       for (final g in <TagGroup>[
         (label: '', items: suggest(q.mark == '@' ? src.businesses : src.items, q.query)),
         if (q.mark == '@' && saved != null) (label: 'Saved', items: suggest(saved!.list, q.query).take(4).toList()),
       ])
         if (g.items.isNotEmpty) g,
-    ];
+    ]);
+  }
+
+  /// Save "@mum"… under Saved, once the saved things are read and none
+  /// (nor anything else offered) has the name typed.
+  List<TagGroup> _withSaveNew(TagQuery q, List<TagGroup> groups) {
+    final name = q.query.toLowerCase();
+    final picks = saved;
+    if (q.mark != '@' || onSaveNamed == null || picks == null || !picks.loaded || !RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$').hasMatch(name)) return groups;
+    if (picks.list.any((s) => s.name.toLowerCase() == name) || groups.any((g) => g.items.any((s) => s.name.toLowerCase() == name))) return groups;
+    final row = TagSuggestion(kind: 'save-new', id: 'save-new:$name', name: name, sub: 'Save something by this name');
+    final i = groups.indexWhere((g) => g.label == 'Saved');
+    if (i < 0) return [...groups, (label: 'Saved', items: [row])];
+    return [for (var j = 0; j < groups.length; j++) j == i ? (label: groups[j].label, items: [...groups[j].items, row]) : groups[j]];
   }
 
   /// What Enter would take: the first; the Taskiem row only when "Taskiem"
@@ -149,7 +166,7 @@ class TagBox {
   TagSuggestion? first(List<TagGroup> groups) {
     final q = query;
     return [for (final g in groups) ...g.items]
-        .where((s) => s.kind != 'taskiem' || (q != null && q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase())))
+        .where((s) => s.kind != 'save-new' && (s.kind != 'taskiem' || (q != null && q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase()))))
         .firstOrNull;
   }
 
@@ -173,6 +190,18 @@ class TagBox {
     // A saved text's words in place of what was typed, to change before
     // sending; any other saved thing as its @name, which the words carry.
     final body = s.body;
+    final named = onSaveNamed;
+    if (s.kind == 'save-new' && named != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      named(s.name);
+      return;
+    }
     final share = onShareSaved;
     if (s.kind == 'saved' && body == null && share != null) {
       final out = insertWords(v.text, q, caret < end ? end : caret, '');
@@ -209,7 +238,7 @@ class TagBox {
     final shown = [for (final g in groups()) ...g.items];
     if (shown.isEmpty) return const SizedBox.shrink();
     // Only saved things to offer (a chat with no one else to name).
-    final onlySaved = shown.every((s) => s.kind == 'saved');
+    final onlySaved = shown.every((s) => s.kind == 'saved' || s.kind == 'save-new');
     return TagList(mark: q.mark, items: shown, onPick: pick, label: onlySaved ? 'Saved things' : null);
   }
 

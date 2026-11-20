@@ -119,11 +119,12 @@ class _Pick extends StatelessWidget {
       'purchase' => _icon(t.tkBlueBg, child: TkIcon('orders', size: 20, color: t.tkBlueInk)),
       'taskiem' => _icon(t.brand, round: true, child: TkIcon('sparkle', size: 20, color: t.brandDark)),
       'service' => _icon(t.tkBlueBg, child: TkIcon('clock', size: 20, color: t.tkBlueInk)),
+      'save-new' => _icon(t.tkLimeSoft, child: TkIcon('plus', size: 20, color: softInk)),
       _ => _icon(t.tkLimeSoft, child: TkIcon('box', size: 20, color: dark ? t.brandDark : t.brand)),
     };
     return Semantics(
       button: true,
-      label: [s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
+      label: [s.kind == 'save-new' ? 'Save "@${s.name}"…' : s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -142,7 +143,7 @@ class _Pick extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(s.name, style: tkText(size: 15, weight: 600, lineHeight: 1.2, color: t.text)),
+                    Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : s.name, style: tkText(size: 15, weight: 600, lineHeight: 1.2, color: t.text)),
                     if (s.sub != null) Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),
                   ],
                 ),
@@ -203,7 +204,7 @@ class TagList extends StatelessWidget {
               for (final s in items)
                 Semantics(
                   button: true,
-                  label: '${mark == '/' ? '#' : mark}${s.name}${s.sub != null ? ', ${s.sub}' : ''}',
+                  label: '${s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? '#' : mark}${s.name}'}${s.sub != null ? ', ${s.sub}' : ''}',
                   onTap: () => onPick(s),
                   excludeSemantics: true,
                   child: GestureDetector(
@@ -215,7 +216,7 @@ class TagList extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${mark == '/' ? '#' : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
+                          Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? '#' : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
                           if (s.sub != null) ...[
                             const SizedBox(height: 2),
                             Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),

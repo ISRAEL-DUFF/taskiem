@@ -101,4 +101,56 @@ void main() {
     expect(find.text('Save this'), findsNothing);
     await drain(t);
   });
+
+  testWidgets('Save as… on a message: its words read, the sheet filled in', (t) async {
+    phone(t);
+    final words = 'My sister’s account: Zenith Bank 2034567891, Account name: Ngozi Obi';
+    final api = adaChat(messages: [
+      {'id': 'w1', 'mine': false, 'kind': 'text', 'body': words, 'read_at': null, 'created_at': '2026-11-17T09:00:00Z'},
+    ]);
+    api.routes['POST /v1/me/saved/read'] = (r) {
+      expect(api.body(r)['text'], words);
+      return {'kind': 'bank_account', 'title': 'Ngozi Obi', 'details': {'bank_name': 'Zenith Bank', 'account_number': '2034567891'}};
+    };
+    api.routes['GET /v1/me/banks'] = (_) => {
+      'banks': [
+        {'code': '', 'name': 'Zenith Bank'},
+        {'code': '', 'name': 'Access Bank'},
+      ],
+      'from': '',
+    };
+    await openPeople(t, api);
+    await t.longPress(find.text(words));
+    await settle(t);
+    await press(t, find.text('Save as…'));
+    expect(find.byType(SavedAccountSheet), findsOneWidget);
+    final fields = [for (final e in t.widgetList<EditableText>(find.descendant(of: find.byType(SavedAccountSheet), matching: find.byType(EditableText)))) e.controller.text];
+    expect(fields, containsAll(['', 'Ngozi Obi', '2034567891']));
+    expect(find.text('Zenith Bank'), findsWidgets);
+    await drain(t);
+  });
+
+  testWidgets('Save "@landlord"… in the picker when nothing has the name: what kind, then its sheet', (t) async {
+    phone(t);
+    final api = adaChat(messages: const []);
+    api.routes['GET /v1/me/saved'] = (_) => {
+      'saved': [thing('s1', 'mine', 'bank_account', 'mum', 'Mum', 'GTBank 2222', {'bank_name': 'Guaranty Trust Bank'})],
+      'limit': 500,
+    };
+    await openPeople(t, api);
+    final box = find.byType(EditableText).last;
+    await t.enterText(box, '@mum');
+    await settle(t);
+    expect(find.text('Save "@mum"…'), findsNothing, reason: 'it has the name');
+    await t.enterText(box, '@landlord');
+    await settle(t);
+    await looks(t, 'saved-save-new');
+    await press(t, find.text('Save "@landlord"…'));
+    expect(t.widget<EditableText>(box).controller.text, '');
+    await press(t, find.text('A person'));
+    expect(find.byType(SavedThingSheet), findsOneWidget);
+    final fields = [for (final e in t.widgetList<EditableText>(find.descendant(of: find.byType(SavedThingSheet), matching: find.byType(EditableText)))) e.controller.text];
+    expect(fields.first, '@landlord');
+    await drain(t);
+  });
 }

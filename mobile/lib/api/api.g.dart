@@ -1515,6 +1515,12 @@ class TaskiemApi {
     return MySavedStepUpOptionsResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Read a message for what can be saved (`POST /v1/me/saved/read`)
+  Future<ReadSavedWordsResponse> readSavedWords({required ReadSavedWordsRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/saved/read', body: body.toJson());
+    return ReadSavedWordsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The banks by name (`GET /v1/me/banks`)
   Future<ListMyBanksResponse> listMyBanks() async {
     final j = await _t.send('GET', '/v1/me/banks');
@@ -12987,6 +12993,43 @@ class MySavedStepUpOptionsResponse {
 
   Map<String, dynamic> toJson() => {
         'publicKey': publicKey,
+      };
+}
+
+class ReadSavedWordsRequest {
+  const ReadSavedWordsRequest({required this.text});
+
+  final String text;
+
+  factory ReadSavedWordsRequest.fromJson(Map<String, dynamic> j) => ReadSavedWordsRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class ReadSavedWordsResponse {
+  const ReadSavedWordsResponse({required this.details, required this.kind, required this.title});
+
+  /// The kind's fields (bank_name and account_number for an account; phone,
+  /// email; line, area, landmark; body for a text).
+  final Map<String, dynamic> details;
+  final String kind;
+  /// A name the words give ("Account name: Ada Obi"), or empty.
+  final String title;
+
+  factory ReadSavedWordsResponse.fromJson(Map<String, dynamic> j) => ReadSavedWordsResponse(
+        details: j['details'] as Map<String, dynamic>,
+        kind: j['kind'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'details': details,
+        'kind': kind,
+        'title': title,
       };
 }
 

@@ -50,7 +50,9 @@ import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
-import 'words.dart';import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
+import 'save_as.dart' show saveNamed;
+import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
+import 'words.dart';
 
 
 /// The words for a failure, as the chats say them.
@@ -818,6 +820,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     },
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
   );
   StreamSubscription<String>? _back;
 

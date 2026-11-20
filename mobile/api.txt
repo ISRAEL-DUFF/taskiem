@@ -327,4 +327,5 @@ changeMySaved
 removeMySaved
 revealMySaved
 mySavedStepUpOptions
+readSavedWords
 listMyBanks

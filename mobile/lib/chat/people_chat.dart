@@ -57,6 +57,7 @@ import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
 import 'pick_problem.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -788,6 +789,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     // Anything else of one's own: shared as a card (S1 part 3).
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
   );
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
@@ -1030,6 +1032,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       items: [
         if (write && m.deleted != true) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         if (m.deleted != true && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (m.deleted != true) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),

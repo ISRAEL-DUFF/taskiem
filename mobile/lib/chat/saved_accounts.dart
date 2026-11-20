@@ -457,7 +457,7 @@ class SavedAccountSheet extends StatefulWidget {
 class _SavedAccountSheetState extends State<SavedAccountSheet> {
   late final SavedObject? _x = widget.thing;
   late final SavedObjectDetails? _from = widget.start == null ? null : SavedObjectDetails.fromJson(widget.start!.details);
-  late final _name = TextEditingController(text: _x == null ? (widget.start == null ? '' : '@${widget.start!.name}') : '@${_x.name}');
+  late final _name = TextEditingController(text: _x == null ? ((widget.start?.name ?? '').isEmpty ? '' : '@${widget.start!.name}') : '@${_x.name}');
   late final _title = TextEditingController(text: _x?.title ?? widget.start?.title ?? '');
   late final _number = TextEditingController(text: _from?.accountNumber ?? '');
   late final _note = TextEditingController(text: _x?.details.note ?? '');
@@ -734,7 +734,7 @@ class SavedThingSheet extends StatefulWidget {
 class _SavedThingSheetState extends State<SavedThingSheet> {
   late final SavedObject? _x = widget.thing;
   late final SavedObjectDetails? _from = widget.start == null ? null : SavedObjectDetails.fromJson(widget.start!.details);
-  late final _name = TextEditingController(text: _x == null ? (widget.start == null ? '' : '@${widget.start!.name}') : '@${_x.name}');
+  late final _name = TextEditingController(text: _x == null ? ((widget.start?.name ?? '').isEmpty ? '' : '@${widget.start!.name}') : '@${_x.name}');
   late final _title = TextEditingController(text: _x?.title ?? widget.start?.title ?? '');
   late final _note = TextEditingController(text: _x?.details.note ?? '');
   late final _fields = {

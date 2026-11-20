@@ -30,6 +30,9 @@ class SavedPicks {
   List<TagSuggestion> list = const [];
   bool _wanted = false;
 
+  /// The lists were read (each, or found unreadable).
+  bool loaded = false;
+
   /// "@" was typed: read them, once.
   void want() {
     if (_wanted) return;
@@ -52,6 +55,7 @@ class SavedPicks {
       }
     }
     list = savedTags(mine, business, textsOnly: textsOnly);
+    loaded = true;
     onChange();
   }
 }
@@ -107,7 +111,7 @@ String shareQuestion(TagSuggestion s, String to) {
 /// shared as cards ([mineOnly]: only the person's own). The screen calls
 /// typed() as the words change, draws plain() over its box, and disposes
 /// it.
-TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange, void Function(TagSuggestion)? onShare, bool mineOnly = false}) => TagBox(
+TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange, void Function(TagSuggestion)? onShare, bool mineOnly = false, void Function(String name)? onSaveNamed}) => TagBox(
   text: text,
   sources: () => (items: const <TagSuggestion>[], services: const <TagSuggestion>[], businesses: const <TagSuggestion>[], refs: const <String, List<TagSuggestion>>{}),
   grouped: () => false,
@@ -115,4 +119,5 @@ TagBox savedTextBox({required TextEditingController text, required Auth auth, re
   onChange: onChange,
   saved: SavedPicks(auth: auth, textsOnly: onShare == null, mineOnly: mineOnly, onChange: onChange),
   onShareSaved: onShare,
+  onSaveNamed: onSaveNamed,
 );

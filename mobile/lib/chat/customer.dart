@@ -19,6 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
+import 'save_as.dart' show saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'saved_picks.dart';
 import 'dart:async';
@@ -584,6 +585,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     },
     // Anything else: shared as a card in the app, as lines on WhatsApp.
     onShare: (s) => unawaited(widget.data.shareSaved(s.id, s.savedOwner ?? 'business', askShare(context), line: _on)),
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
   );
   StreamSubscription<String>? _back;
 

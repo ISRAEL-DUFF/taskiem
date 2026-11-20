@@ -59,6 +59,7 @@ import 'pick_problem.dart';
 import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
 
 /// How often an open group reads again.
 const _poll = Duration(seconds: 4);
@@ -854,6 +855,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     // Anything else of one's own: shared as a card (S1 part 3).
     onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
     mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
   );
   StreamSubscription<String>? _back;
   GroupMessage? _reply;
@@ -1064,6 +1066,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       items: [
         if (write && live) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         if (live && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (live) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         if (m.mine && live) MenuItem('info', 'Info', () => showReadBy(context, d, m)),

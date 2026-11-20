@@ -58,6 +58,7 @@ import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
 
 /// Conversation.tsx PAGE: a page of messages.
 const _page = 50;
@@ -1113,6 +1114,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       },
     ),
     savedAsTags: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
   );
 
   /// The tags a message sends, with a yes to each saved thing's sensitive
@@ -1269,6 +1271,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         MenuItem('info', 'Message info', () => _info(m)),
         if (_write) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
+        // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
+        if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
         if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
         MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
         if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),
