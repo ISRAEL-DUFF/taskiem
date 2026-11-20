@@ -5,7 +5,8 @@
 -- * saved_objects: a thing a person or a business keeps and calls up by
 --   @name. One owner: a person (person_id, their own, on You) or a
 --   business (tenant_id, shared with its people by role), never both.
---   S0 has one kind, the bank account; the other kinds come with S1.
+--   The kinds Taskiem knows: the bank account (S0); a person, a place, a
+--   text and an account with a provider (S1).
 -- * A person's own objects are read and written only in their own scope,
 --   and never once a door names a business in the transaction, as
 --   person_addresses are (00465). A business's are under tenant
@@ -29,7 +30,7 @@ CREATE TABLE saved_objects (
   -- @mum, @bola-stores: lowercase letters, digits and "-", 2 to 32.
   name         text NOT NULL CHECK (name ~ '^[a-z0-9][a-z0-9-]{0,30}[a-z0-9]$' AND name !~ '--'),
   title        text NOT NULL CHECK (length(title) BETWEEN 1 AND 80),
-  kind         text NOT NULL CHECK (kind IN ('bank_account')),
+  kind         text NOT NULL CHECK (kind IN ('bank_account', 'person', 'place', 'text', 'provider_account')),
   -- What is not sensitive: for a bank account, the bank's name, its code
   -- and the list the code came from, a note.
   details      jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(details) = 'object'),
@@ -37,7 +38,9 @@ CREATE TABLE saved_objects (
   -- a person's value sealed under their key ({"person": base64}).
   sealed       jsonb NOT NULL CHECK (jsonb_typeof(sealed) = 'object'),
   hint         text NOT NULL DEFAULT '' CHECK (length(hint) <= 120),
-  check_state  text NOT NULL DEFAULT 'unchecked' CHECK (check_state IN ('unchecked', 'checked')),
+  -- A bank account's name check; none for the kinds that have none.
+  check_state  text NOT NULL DEFAULT 'unchecked' CHECK (check_state IN ('unchecked', 'checked', 'none')),
+  CHECK ((kind = 'bank_account') = (check_state <> 'none')),
   -- The bank's name for the account, when checked, and through which
   -- connection ("iswallet/taskiem").
   checked_name text CHECK (checked_name IS NULL OR length(checked_name) <= 200),

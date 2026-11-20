@@ -1,10 +1,10 @@
 // Package saved is saved objects: things a person or a business keeps and
 // calls up anywhere by @name (docs/spec/saved-objects.md; decision 0071).
 //
-// S0 of the build plan (docs/spec/build-plan-saved-tools-payments.md) has
-// one kind, the bank account: its account number sealed and shown masked,
-// the bank's name for it checked through a payments connection when one is
-// there. The other kinds, the picker and cards come with S1.
+// S0 of the build plan (docs/spec/build-plan-saved-tools-payments.md) made
+// the bank account: its account number sealed and shown masked, the bank's
+// name for it checked through a payments connection when one is there. S1
+// adds the other kinds Taskiem knows (kinds.go), the picker and cards.
 //
 // This package holds what an object is and the rules for its fields; the
 // store, its owners' rules and the name check are the API's (api/saved.go),
@@ -19,20 +19,28 @@ import (
 	"unicode"
 )
 
-// Kinds Taskiem knows. Only the bank account so far (S0).
+// Kinds Taskiem knows (saved-objects §4.1): the bank account (S0), and,
+// from S1, a person, a place, a text and an account with a provider. Files
+// and kinds an owner makes come later in S1.
 const (
-	KindBankAccount = "bank_account"
+	KindBankAccount     = "bank_account"
+	KindPerson          = "person"
+	KindPlace           = "place"
+	KindText            = "text"
+	KindProviderAccount = "provider_account"
 )
 
 // Kinds are the kinds an object may be, in the order the Saved page lists
 // them.
-var Kinds = []string{KindBankAccount}
+var Kinds = []string{KindBankAccount, KindPerson, KindPlace, KindText, KindProviderAccount}
 
 // Check states: the bank's name for an account was given by a payments
 // connection (checked), or has not been yet (unchecked).
 const (
 	Unchecked = "unchecked"
 	Checked   = "checked"
+	// NoCheck is the state of every kind but the bank account.
+	NoCheck = "none"
 )
 
 // Limits (saved-objects §8, §15 6): a person keeps up to 500 objects; a

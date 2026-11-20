@@ -25721,7 +25721,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account]
+          enum: [bank_account, person, place, text, provider_account]
       - name: q
         in: query
         schema:
@@ -33344,7 +33344,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account]
+          enum: [bank_account, person, place, text, provider_account]
       - name: q
         in: query
         schema:
@@ -46152,14 +46152,14 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account]
+          enum: [bank_account, person, place, text, provider_account]
         hint:
           type: string
           description: What a list shows ("GTBank ••6789").
         details:
+          description: The kind's fields that are not sensitive. A bank account's (bank_name, bank_code, code_from, account_number masked); a person's (phone, email, address, birthday); a place's (line, area, landmark, phone); a text's (body); an account with a provider's (type, provider, number, name_on_it); and every kind's note.
           type: object
           additionalProperties: false
-          required: [bank_name]
           properties:
             bank_name:
               type: string
@@ -46172,6 +46172,32 @@ components:
             account_number:
               type: string
               description: Masked (••6789).
+            phone:
+              type: string
+            email:
+              type: string
+            address:
+              type: string
+            birthday:
+              type: string
+              format: date
+            line:
+              type: string
+            area:
+              type: string
+            landmark:
+              type: string
+            body:
+              type: string
+            type:
+              type: string
+              enum: [electricity, tv, phone, internet, water, school, other]
+            provider:
+              type: string
+            number:
+              type: string
+            name_on_it:
+              type: string
         check:
           type: object
           additionalProperties: false
@@ -46179,7 +46205,8 @@ components:
           properties:
             state:
               type: string
-              enum: [checked, unchecked]
+              enum: [checked, unchecked, none]
+              description: A bank account's name check; none for every other kind.
             problem:
               type: [string, 'null']
               description: Why it will not be checked until the account changes (the bank has no such account; the payments account does not list its bank by that name). Null while checked or only waiting.
@@ -46214,7 +46241,7 @@ components:
     SavedObjectIn:
       type: object
       additionalProperties: false
-      description: A saved bank account as its owner writes it; on a change, what is left out stays as it was.
+      description: A saved thing as its owner writes it; on a change, what is left out stays as it was. A bank account by its own fields, every other kind by details.
       properties:
         name:
           type: string
@@ -46222,7 +46249,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account]
+          enum: [bank_account, person, place, text, provider_account]
         bank_name:
           type: string
         bank_code:
@@ -46233,6 +46260,11 @@ components:
           type: string
         note:
           type: string
+        details:
+          type: object
+          description: 'The fields of a kind other than the bank account (see SavedObject.details); on a change, those given replace those kept, and null removes one.'
+          additionalProperties:
+            type: [string, 'null']
         passkey:
           $ref: '#/components/schemas/PasskeyCredential'
     SavedAddress:

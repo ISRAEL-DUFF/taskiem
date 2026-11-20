@@ -466,3 +466,76 @@ func TestSavedReviewFixes(t *testing.T) {
 		t.Fatalf("problem kept: %v %v", problem, err)
 	}
 }
+
+// S1's kinds: a person, a place, a text and an account with a provider,
+// saved for a business and for oneself; listed by kind; changed field by
+// field with no passkey; nothing of theirs is sealed or shown in full; the
+// audit keeps no person's data.
+func TestSavedKinds(t *testing.T) {
+	ctx := context.Background()
+	w, owner := savedWorld(t)
+	biz := tenantOf(t, owner)
+
+	add := func(c *client, path, kind, name string, details map[string]any) map[string]any {
+		t.Helper()
+		return c.must(201, "POST", path, map[string]any{"kind": kind, "name": name, "title": strings.ToUpper(name[:1]) + name[1:], "details": details})["saved"].(map[string]any)
+	}
+	warehouse := add(owner, "/v1/saved", "place", "warehouse", map[string]any{"line": "12 Herbert Macaulay Way", "area": "Yaba", "landmark": "opposite the filling station", "phone": "08031234567"})
+	if warehouse["hint"] != "Yaba" || warehouse["check"].(map[string]any)["state"] != "none" || warehouse["details"].(map[string]any)["phone"] != "+2348031234567" {
+		t.Fatalf("place: %v", warehouse)
+	}
+	details := add(owner, "/v1/saved", "text", "bank-details", map[string]any{"body": "Pay to Bola Stores\nGTBank 0123456789"})
+	if details["hint"] != "2 lines of text" || details["details"].(map[string]any)["body"] != "Pay to Bola Stores\nGTBank 0123456789" {
+		t.Fatalf("text: %v", details)
+	}
+	add(owner, "/v1/saved", "provider_account", "meter", map[string]any{"type": "electricity", "provider": "Ikeja Electric", "number": "45012345678"})
+	mum := add(owner, "/v1/me/saved", "person", "mum", map[string]any{"phone": "08039990000", "email": "mum@example.ng", "birthday": "1960-03-21"})
+	if mum["owner"] != "mine" || mum["hint"] != "+2348039990000" {
+		t.Fatalf("person: %v", mum)
+	}
+
+	// Refused as each kind's rules say.
+	owner.must(400, "POST", "/v1/saved", map[string]any{"kind": "place", "name": "nowhere", "title": "Nowhere", "details": map[string]any{"area": "Yaba"}})
+	owner.must(400, "POST", "/v1/saved", map[string]any{"kind": "car", "name": "car", "title": "Car"})
+	owner.must(409, "POST", "/v1/saved", map[string]any{"kind": "text", "name": "warehouse", "title": "Again", "details": map[string]any{"body": "x"}})
+
+	// Listed by kind.
+	if l := owner.must(200, "GET", "/v1/saved?kind=place", nil)["saved"].([]any); len(l) != 1 || l[0].(map[string]any)["name"] != "warehouse" {
+		t.Fatalf("places: %v", l)
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 3 {
+		t.Fatalf("all: %v", l)
+	}
+
+	// Changed field by field, no passkey: a landmark replaced, the phone
+	// removed, the rest kept.
+	path := "/v1/saved/" + warehouse["id"].(string)
+	c := owner.must(200, "PUT", path, map[string]any{"details": map[string]any{"landmark": "by the blue gate", "phone": nil}})["saved"].(map[string]any)
+	d := c["details"].(map[string]any)
+	if d["landmark"] != "by the blue gate" || d["phone"] != nil || d["line"] != "12 Herbert Macaulay Way" {
+		t.Fatalf("changed: %v", c)
+	}
+	owner.must(400, "PUT", path, map[string]any{"details": map[string]any{"line": ""}})
+	owner.must(400, "PUT", path, map[string]any{"account_number": "0123456789"})
+	owner.must(400, "PUT", path, map[string]any{"kind": "text"})
+	// Nothing to show in full.
+	owner.must(400, "POST", path+"/reveal", map[string]any{})
+
+	// Staff see them and cannot change them.
+	owner.must(201, "POST", "/v1/members", map[string]any{"email": "kemi@kinds.test", "password": testPassword, "roles": []string{"cashier"}})
+	kemi := w.login(t, "kemi@kinds.test", testPassword)
+	if r := kemi.must(200, "GET", "/v1/saved/resolve?name=@bank-details", nil)["matches"].([]any); len(r) != 1 {
+		t.Fatalf("staff resolve: %v", r)
+	}
+	kemi.must(403, "PUT", path, map[string]any{"title": "Mine"})
+
+	// Nothing sealed; the audit holds no phone, email or text.
+	var sealed string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT sealed::text FROM saved_objects WHERE id = $1`, warehouse["id"]).Scan(&sealed); err != nil || sealed != "{}" {
+		t.Fatalf("sealed: %q %v", sealed, err)
+	}
+	var leaked int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND (detail::text LIKE '%2348031234567%' OR detail::text LIKE '%Pay to Bola%')`, biz).Scan(&leaked); err != nil || leaked != 0 {
+		t.Fatalf("the audit holds details: %d %v", leaked, err)
+	}
+}

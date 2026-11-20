@@ -391,6 +391,10 @@ type savedIn struct {
 	CodeFrom      *string `json:"code_from"`
 	AccountNumber *string `json:"account_number"`
 	Note          *string `json:"note"`
+	// Details are the fields of every other kind (saved.Clean): a person's
+	// phone, a place's line, a text's body. On a change, the fields given
+	// replace those kept; null removes one.
+	Details map[string]any `json:"details"`
 	// Passkey confirms changing the account (its number or its bank), for
 	// a challenge asked for saved.change on this object.
 	Passkey *credentialJSON `json:"passkey,omitempty"`
@@ -446,11 +450,19 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 	if in.Kind == "" {
 		in.Kind = saved.KindBankAccount
 	}
-	if in.Kind != saved.KindBankAccount {
-		writeErr(w, http.StatusBadRequest, "Only bank accounts can be saved so far.")
+	if !slices.Contains(saved.Kinds, in.Kind) {
+		writeErr(w, http.StatusBadRequest, "That is not a kind of saved thing.")
 		return
 	}
-	if in.Name == nil || in.Title == nil || in.AccountNumber == nil || in.BankName == nil {
+	if in.Name == nil || in.Title == nil {
+		writeErr(w, http.StatusBadRequest, "Give it a name to call it up by and a title.")
+		return
+	}
+	if in.Kind != saved.KindBankAccount {
+		s.addSavedThing(w, r, o, in)
+		return
+	}
+	if in.AccountNumber == nil || in.BankName == nil {
 		writeErr(w, http.StatusBadRequest, "Give the account a name to call it up by, a title, its bank and its 10-digit number.")
 		return
 	}
@@ -594,10 +606,6 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		s.fail(w, r, err)
 		return
 	}
-	if in.Kind != "" && in.Kind != saved.KindBankAccount {
-		writeErr(w, http.StatusBadRequest, "A saved thing's kind does not change.")
-		return
-	}
 	// What it is now, to know whether the account changes: the number
 	// opened only when a new one is given.
 	var was savedRow
@@ -607,12 +615,23 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		if was, err = savedRowTx(ctx, tx, o, id, false); err != nil {
 			return err
 		}
+		if was.Kind != saved.KindBankAccount {
+			return nil
+		}
 		wasAcct = saved.FromDetails(was.Details)
 		wasAcct.AccountNumber, err = s.openSaved(ctx, tx, o, id, was.Sealed)
 		return err
 	})
 	if err != nil {
 		s.savedFail(w, r, err)
+		return
+	}
+	if in.Kind != "" && in.Kind != was.Kind {
+		writeErr(w, http.StatusBadRequest, "A saved thing's kind does not change.")
+		return
+	}
+	if was.Kind != saved.KindBankAccount {
+		s.changeSavedThing(w, r, o, was, in)
 		return
 	}
 	acct, err := in.account(wasAcct)
@@ -774,7 +793,10 @@ func (s *Server) revealSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		return
 	}
 	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
-		_, err := savedRowTx(ctx, tx, o, id, false)
+		x, err := savedRowTx(ctx, tx, o, id, false)
+		if err == nil && x.Kind != saved.KindBankAccount {
+			return customerSendErr{http.StatusBadRequest, "Only a bank account's number is kept hidden: its details are shown in full."}
+		}
 		return err
 	}); err != nil {
 		s.savedFail(w, r, err)
@@ -957,4 +979,116 @@ func (s *Server) savedPasskey(w http.ResponseWriter, r *http.Request, o savedOwn
 		return false
 	}
 	return true
+}
+
+// --- the kinds other than the bank account ---
+
+// addSavedThing saves a person, a place, a text or an account with a
+// provider (saved.Clean): nothing sealed, no name check, recorded as every
+// object is (without its details, which may be a person's data).
+func (s *Server) addSavedThing(w http.ResponseWriter, r *http.Request, o savedOwner, in savedIn) {
+	ctx := r.Context()
+	name, err := saved.Name(*in.Name)
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	title, err := saved.Title(*in.Title)
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	c, err := saved.Clean(in.Kind, in.Details)
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	id := uuid.Must(uuid.NewV7())
+	var x savedRow
+	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		if err := lockSavedTx(ctx, tx, o); err != nil {
+			return err
+		}
+		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+			return err
+		}
+		if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint,
+				check_state, created_by, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, '{}', $8, $9, $10, $10) RETURNING `+savedCols,
+			id, nullable(o.person), nullable(o.tenant), name, title, in.Kind, c.Details, c.Hint, saved.NoCheck, o.by)); err != nil {
+			return err
+		}
+		return s.savedEvent(r, tx, o, id, "added", map[string]any{"name": name, "kind": in.Kind})
+	})
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"saved": x.view(o, true)})
+}
+
+// changeSavedThing changes a person, a place, a text or an account with a
+// provider: the fields given in details replace those kept (null removes
+// one), then the whole is checked again. No passkey: nothing of these moves
+// money. Refused when someone else changed it since it was read.
+func (s *Server) changeSavedThing(w http.ResponseWriter, r *http.Request, o savedOwner, was savedRow, in savedIn) {
+	ctx := r.Context()
+	if in.AccountNumber != nil || in.BankName != nil || in.BankCode != nil || in.CodeFrom != nil {
+		writeErr(w, http.StatusBadRequest, "Only a bank account has a bank and an account number.")
+		return
+	}
+	name, title := was.Name, was.Title
+	var err error
+	if in.Name != nil {
+		if name, err = saved.Name(*in.Name); err != nil {
+			s.savedFail(w, r, err)
+			return
+		}
+	}
+	if in.Title != nil {
+		if title, err = saved.Title(*in.Title); err != nil {
+			s.savedFail(w, r, err)
+			return
+		}
+	}
+	merged := map[string]any{}
+	for k, v := range was.Details {
+		merged[k] = v
+	}
+	for k, v := range in.Details {
+		if v == nil {
+			delete(merged, k)
+		} else {
+			merged[k] = v
+		}
+	}
+	if in.Note != nil {
+		merged["note"] = *in.Note
+	}
+	c, err := saved.Clean(was.Kind, merged)
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	var x savedRow
+	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		cur, err := savedRowTx(ctx, tx, o, was.ID, true)
+		if err != nil {
+			return err
+		}
+		if !cur.UpdatedAt.Equal(was.UpdatedAt) {
+			return errSavedChanged
+		}
+		where, owner := ownerWhere(o)
+		if x, err = scanSaved(tx.QueryRow(ctx, `UPDATE saved_objects SET name = $3, title = $4, details = $5, hint = $6, updated_by = $7, updated_at = now()
+			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, was.ID, name, title, c.Details, c.Hint, o.by)); err != nil {
+			return err
+		}
+		return s.savedEvent(r, tx, o, was.ID, "changed", map[string]any{"changed": changedFields(was, x)})
+	})
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"saved": x.view(o, true)})
 }

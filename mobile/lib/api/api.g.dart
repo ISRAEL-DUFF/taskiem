@@ -12330,6 +12330,11 @@ class SavedObject {
 
   final SavedObjectCheck check;
   final DateTime createdAt;
+  /// The kind's fields that are not sensitive. A bank account's (bank_name,
+  /// bank_code, code_from, account_number masked); a person's (phone, email,
+  /// address, birthday); a place's (line, area, landmark, phone); a text's
+  /// (body); an account with a provider's (type, provider, number, name_on_it);
+  /// and every kind's note.
   final SavedObjectDetails details;
   /// What a list shows ("GTBank ••6789").
   final String hint;
@@ -12382,6 +12387,7 @@ class SavedObjectCheck {
   /// account; the payments account does not list its bank by that name). Null
   /// while checked or only waiting.
   final Object? problem;
+  /// A bank account's name check; none for every other kind.
   final String state;
   /// The payments connection that gave it ("iswallet/taskiem").
   final Object? via;
@@ -12403,42 +12409,87 @@ class SavedObjectCheck {
       };
 }
 
+/// The kind's fields that are not sensitive. A bank account's (bank_name,
+/// bank_code, code_from, account_number masked); a person's (phone, email,
+/// address, birthday); a place's (line, area, landmark, phone); a text's
+/// (body); an account with a provider's (type, provider, number, name_on_it);
+/// and every kind's note.
 class SavedObjectDetails {
-  const SavedObjectDetails({this.accountNumber, this.bankCode, required this.bankName, this.codeFrom, this.note});
+  const SavedObjectDetails({this.accountNumber, this.address, this.area, this.bankCode, this.bankName, this.birthday, this.body, this.codeFrom, this.email, this.landmark, this.line, this.nameOnIt, this.note, this.number, this.phone, this.provider, this.type});
 
   /// Masked (••6789).
   final String? accountNumber;
+  final String? address;
+  final String? area;
   final String? bankCode;
-  final String bankName;
+  final String? bankName;
+  final String? birthday;
+  final String? body;
   final String? codeFrom;
+  final String? email;
+  final String? landmark;
+  final String? line;
+  final String? nameOnIt;
   final String? note;
+  final String? number;
+  final String? phone;
+  final String? provider;
+  final String? type;
 
   factory SavedObjectDetails.fromJson(Map<String, dynamic> j) => SavedObjectDetails(
         accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
         bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
-        bankName: j['bank_name'] as String,
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        birthday: j['birthday'] == null ? null : j['birthday'] as String,
+        body: j['body'] == null ? null : j['body'] as String,
         codeFrom: j['code_from'] == null ? null : j['code_from'] as String,
+        email: j['email'] == null ? null : j['email'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        nameOnIt: j['name_on_it'] == null ? null : j['name_on_it'] as String,
         note: j['note'] == null ? null : j['note'] as String,
+        number: j['number'] == null ? null : j['number'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        provider: j['provider'] == null ? null : j['provider'] as String,
+        type: j['type'] == null ? null : j['type'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'account_number': ?accountNumber,
+        'address': ?address,
+        'area': ?area,
         'bank_code': ?bankCode,
-        'bank_name': bankName,
+        'bank_name': ?bankName,
+        'birthday': ?birthday,
+        'body': ?body,
         'code_from': ?codeFrom,
+        'email': ?email,
+        'landmark': ?landmark,
+        'line': ?line,
+        'name_on_it': ?nameOnIt,
         'note': ?note,
+        'number': ?number,
+        'phone': ?phone,
+        'provider': ?provider,
+        'type': ?type,
       };
 }
 
-/// A saved bank account as its owner writes it; on a change, what is left out
-/// stays as it was.
+/// A saved thing as its owner writes it; on a change, what is left out stays as
+/// it was. A bank account by its own fields, every other kind by details.
 class SavedObjectIn {
-  const SavedObjectIn({this.accountNumber, this.bankCode, this.bankName, this.codeFrom, this.kind, this.name, this.note, this.passkey, this.title});
+  const SavedObjectIn({this.accountNumber, this.bankCode, this.bankName, this.codeFrom, this.details, this.kind, this.name, this.note, this.passkey, this.title});
 
   final String? accountNumber;
   final String? bankCode;
   final String? bankName;
   final String? codeFrom;
+  /// The fields of a kind other than the bank account (see
+  /// SavedObject.details); on a change, those given replace those kept, and
+  /// null removes one.
+  final Map<String, dynamic>? details;
   final String? kind;
   final String? name;
   final String? note;
@@ -12450,6 +12501,7 @@ class SavedObjectIn {
         bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
         bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
         codeFrom: j['code_from'] == null ? null : j['code_from'] as String,
+        details: j['details'] == null ? null : j['details'] as Map<String, dynamic>,
         kind: j['kind'] == null ? null : j['kind'] as String,
         name: j['name'] == null ? null : j['name'] as String,
         note: j['note'] == null ? null : j['note'] as String,
@@ -12462,6 +12514,7 @@ class SavedObjectIn {
         'bank_code': ?bankCode,
         'bank_name': ?bankName,
         'code_from': ?codeFrom,
+        'details': ?details,
         'kind': ?kind,
         'name': ?name,
         'note': ?note,
