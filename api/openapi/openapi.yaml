@@ -50366,6 +50366,9 @@ components:
         link_messages_daily:
           type: integer
           description: Messages to linked businesses per UTC day (0 no limit).
+        max_saved_objects:
+          type: integer
+          description: Saved things a business keeps (2,000 by default; 0 no limit).
       additionalProperties: false
     Usage:
       type: object

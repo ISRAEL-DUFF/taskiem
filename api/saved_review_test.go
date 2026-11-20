@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -218,4 +220,38 @@ func TestSavedChatOwnAppAndPersonalSeal(t *testing.T) {
 	if n := len(ada.must(200, "GET", "/v1/me/saved", nil)["saved"].([]any)); n != 1 {
 		t.Fatalf("ada's own: %d", n)
 	}
+}
+
+// A business keeps as many saved things as its plan says (2,000 by
+// default); a person's own are capped apart.
+func TestSavedPlanLimit(t *testing.T) {
+	ctx := context.Background()
+	w, owner := savedWorld(t)
+	biz := tenantOf(t, owner)
+	if l := owner.must(200, "GET", "/v1/saved", nil)["limit"]; l != float64(2000) {
+		t.Fatalf("the default: %v", l)
+	}
+	if l := owner.must(200, "GET", "/v1/me/saved", nil)["limit"]; l != float64(500) {
+		t.Fatalf("a person's own: %v", l)
+	}
+	id := uuid.MustParse(biz)
+	if err := w.env.Store.SetLimits(ctx, id, map[string]any{"max_saved_objects": 2}, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["limit"]; l != float64(2) {
+		t.Fatalf("the plan's: %v", l)
+	}
+	for _, n := range []string{"a1", "a2"} {
+		owner.must(201, "POST", "/v1/saved", map[string]any{"kind": "text", "name": n, "title": n, "details": map[string]any{"body": "x"}})
+	}
+	if e := owner.must(409, "POST", "/v1/saved", map[string]any{"kind": "text", "name": "a3", "title": "a3", "details": map[string]any{"body": "x"}}); !strings.Contains(fmt.Sprint(e["error"]), "plan keeps up to 2 saved things") {
+		t.Fatalf("over the plan: %v", e)
+	}
+	// One's own are not the business's: still room.
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"kind": "text", "name": "a3", "title": "a3", "details": map[string]any{"body": "x"}})
+	// No limit (0).
+	if err := w.env.Store.SetLimits(ctx, id, map[string]any{"max_saved_objects": 0}, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	owner.must(201, "POST", "/v1/saved", map[string]any{"kind": "text", "name": "a3", "title": "a3", "details": map[string]any{"body": "x"}})
 }

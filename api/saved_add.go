@@ -111,7 +111,7 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 			if err := lockSavedTx(ctx, tx, o); err != nil {
 				return err
 			}
-			if err := savedRoomTx(ctx, tx, o, name); err != nil {
+			if err := s.savedRoomTx(ctx, tx, o, name); err != nil {
 				return err
 			}
 			isDefault := false
@@ -144,7 +144,7 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 		return x, savedProblem{}, err
 	}
 	// A name taken or the limit reached is told before the bank is asked.
-	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error { return savedRoomTx(ctx, tx, o, name) }); err != nil {
+	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error { return s.savedRoomTx(ctx, tx, o, name) }); err != nil {
 		return x, savedProblem{}, err
 	}
 	// The name check, outside the transaction: a business's account the
@@ -160,7 +160,7 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 		if err := lockSavedTx(ctx, tx, o); err != nil {
 			return err
 		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+		if err := s.savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
 		}
 		sealed, err := s.sealSaved(ctx, tx, o, id, acct.AccountNumber)

@@ -264,6 +264,7 @@ func (s *Service) blockers(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p P
 		{"max_data_tables", int64(target.MaxDataTables), `SELECT count(*) FROM data_tables WHERE tenant_id = $1 AND kept_by IS NULL`, "data tables"},
 		{"storefront_items", int64(target.StorefrontItems), `SELECT count(*) FROM storefront_catalogue WHERE tenant_id = $1`, "storefront products"},
 		{"embed_sites", int64(target.EmbedSites), `SELECT count(*) FROM embed_sites WHERE tenant_id = $1`, "embedding websites"},
+		{"max_saved_objects", int64(target.MaxSavedObjects), `SELECT count(*) FROM saved_objects WHERE tenant_id = $1 AND archived_at IS NULL`, "saved things"},
 		{"max_subtenants", int64(p.Partner.MaxSubtenants), `SELECT count(*) FROM taskiem_partner_usage($1)`, "sub-tenants"},
 	}
 	for _, c := range checks {

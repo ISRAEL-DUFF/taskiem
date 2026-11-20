@@ -510,7 +510,7 @@ func (s *Server) addSavedCustom(ctx context.Context, who savedWho, o savedOwner,
 		if err := lockSavedTx(ctx, tx, o); err != nil {
 			return err
 		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+		if err := s.savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
 		}
 		files, claims, err := customFilesTx(ctx, tx, o, id, k.Fields, all, nil, nil)

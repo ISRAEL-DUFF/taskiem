@@ -87,6 +87,13 @@ TagQuery? tagQuery(String text, int caret) {
     if (ch == '/' && after) {
       final m = RegExp(r'^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$', caseSensitive: false).firstMatch(before.substring(i + 1));
       if (m != null) return (mark: '/', query: m[2] ?? '', start: i, kind: m[1]!.toLowerCase());
+      // "/mum": a word that names no document looks for a saved thing
+      // (saved objects §15 1); "/invoice" alone stays the tool's.
+      final word = before.substring(i + 1);
+      if (RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$', caseSensitive: false).hasMatch(word) &&
+          !RegExp(r'^(invoice|bill|order|purchase|product|customer)s?$', caseSensitive: false).hasMatch(word)) {
+        return (mark: '/', query: word, start: i, kind: null);
+      }
       continue;
     }
     if (before.length - i > 41) continue;
@@ -154,8 +161,9 @@ List<TagGroup> groupTags(
 /// mentions.ts insertMention: the query replaced by the picked name and a
 /// space; the text and where the caret goes.
 ({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name) {
-  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
-  final head = '${text.substring(0, q.start)}${q.mark == '/' ? '#' : q.mark}$name ';
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
+  // a saved thing found with "/mum" as its "@mum".
+  final head = '${text.substring(0, q.start)}${q.mark == '/' ? (q.kind == null ? '@' : '#') : q.mark}$name ';
   return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
 }
 

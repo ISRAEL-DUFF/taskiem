@@ -94,7 +94,7 @@ class TagBox {
     final q = tagQuery(v.text, caret);
     if (q == query) return;
     query = q;
-    if (q?.mark == '@') saved?.want();
+    if (q?.mark == '@' || (q?.mark == '/' && q?.kind == null)) saved?.want();
     _ask();
     onChange();
     if (floats) {
@@ -126,6 +126,11 @@ class TagBox {
     final q = query;
     if (q == null) return const [];
     final src = sources();
+    if (q.mark == '/' && q.kind == null) {
+      // "/mum": the saved things by that name, if any.
+      final found = suggest(saved?.list ?? const [], q.query).take(4).toList();
+      return [if (found.isNotEmpty) (label: 'Saved', items: found)];
+    }
     if (q.mark == '/') {
       final kind = q.kind ?? '';
       return [(label: refLabel[kind] ?? '', items: suggest(src.refs[kind] ?? const [], q.query))];
@@ -257,6 +262,14 @@ class TagBox {
     picked
       ..clear()
       ..addAll(taken);
+  }
+
+  /// Whether "/" is picking a thing to tag (a document, or a saved thing
+  /// that has the name typed), not a tool.
+  bool get tagging {
+    final q = query;
+    if (q == null || q.mark != '/') return false;
+    return q.kind != null || groups().isNotEmpty;
   }
 
   /// The plain list above the box, when it is the one shown.

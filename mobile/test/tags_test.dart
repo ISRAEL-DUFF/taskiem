@@ -35,6 +35,16 @@ void main() {
       expect(tagQuery('no mark here', 12), isNull);
     });
 
+    test('"/mum" looks for a saved thing; "/invoice" alone is the tool\'s', () {
+      expect(tagQuery('Pay /mum', 8), (mark: '/', query: 'mum', start: 4, kind: null));
+      expect(tagQuery('/invoice ada', 12), (mark: '/', query: 'ada', start: 0, kind: 'invoice'));
+      expect(tagQuery('/invoice', 8), isNull);
+      expect(tagQuery('and/or', 6), isNull);
+      expect(tagQuery('/mum and', 8), isNull);
+      final q = tagQuery('Pay /mu', 7)!;
+      expect(insertTag('Pay /mu', q, 7, 'mum'), (text: 'Pay @mum ', caret: 9));
+    });
+
     test('suggests by a word\'s start, then by what a name holds', () {
       expect(suggest(list, 'bl').map((s) => s.id), ['l2']);
       expect(suggest(list, '').map((s) => s.id), ['l1', 'l2', 'l3']);

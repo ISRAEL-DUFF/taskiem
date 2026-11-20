@@ -76,6 +76,11 @@ void main() {
     expect(find.text('@mum'), findsNothing);
     await press(t, find.text('@my-address'));
     expect(t.widget<EditableText>(box).controller.text, 'Deliver to 12 Allen Avenue, Ikeja');
+    // "/my" finds it too: a word that names no document.
+    await t.enterText(box, 'Deliver to /my');
+    await settle(t);
+    await press(t, find.text('@my-address'));
+    expect(t.widget<EditableText>(box).controller.text, 'Deliver to 12 Allen Avenue, Ikeja');
     await drain(t);
   });
 

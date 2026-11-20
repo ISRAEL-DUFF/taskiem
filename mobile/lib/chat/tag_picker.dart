@@ -204,7 +204,7 @@ class TagList extends StatelessWidget {
               for (final s in items)
                 Semantics(
                   button: true,
-                  label: '${s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? '#' : mark}${s.name}'}${s.sub != null ? ', ${s.sub}' : ''}',
+                  label: '${s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? (s.kind == 'saved' ? '@' : '#') : mark}${s.name}'}${s.sub != null ? ', ${s.sub}' : ''}',
                   onTap: () => onPick(s),
                   excludeSemantics: true,
                   child: GestureDetector(
@@ -216,7 +216,7 @@ class TagList extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? '#' : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
+                          Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? (s.kind == 'saved' ? '@' : '#') : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
                           if (s.sub != null) ...[
                             const SizedBox(height: 2),
                             Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),

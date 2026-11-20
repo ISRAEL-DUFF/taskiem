@@ -338,7 +338,7 @@ func (s *Server) addSavedFileObject(ctx context.Context, who savedWho, o savedOw
 		if err := lockSavedTx(ctx, tx, o); err != nil {
 			return err
 		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+		if err := s.savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
 		}
 		if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint, check_state, created_by, updated_by)

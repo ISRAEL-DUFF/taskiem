@@ -76,6 +76,19 @@ describe("mentions in the composer", () => {
   });
 });
 
+describe("/ finding a saved thing (saved objects §15 1)", () => {
+  it("reads /mum as a saved thing's name, and /invoice as a document", () => {
+    expect(mentionQuery("Pay /mum", 8)).toEqual({ mark: "/", query: "mum", start: 4 });
+    expect(mentionQuery("/invoice ada", 12)).toMatchObject({ mark: "/", kind: "invoice", query: "ada" });
+    expect(mentionQuery("and/or", 6)).toBeNull();
+    expect(mentionQuery("/mum and", 8)).toBeNull();
+  });
+  it("writes a saved thing found with / as its @name", () => {
+    const q = mentionQuery("Pay /mu", 7) ?? { mark: "/" as const, query: "", start: -1 };
+    expect(insertMention("Pay /mu", q, 7, "mum")).toEqual({ text: "Pay @mum ", caret: 9 });
+  });
+});
+
 describe("the grouped picker (chat tools)", () => {
   const items = [
     { kind: "item" as const, id: "i1", name: "Rice, 50kg bag", sub: "₦78,000 a bag" },

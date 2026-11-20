@@ -89,7 +89,8 @@ export interface MentionQuery {
   query: string;
   /** Where the mark is in the text. */
   start: number;
-  /** "/": what is being picked. */
+  /** "/": what is being picked; none for "/mum", which looks for a saved
+   * thing by its name (saved objects §15 1). */
   kind?: RefKind;
 }
 
@@ -132,8 +133,12 @@ export function mentionQuery(text: string, caret: number): MentionQuery | null {
     const ch = before.charAt(i);
     if (ch === "\n") return null;
     if (ch === "/" && (i === 0 || /\s|\(/.test(before.charAt(i - 1)))) {
-      const r = refQuery(before.slice(i + 1));
+      const after = before.slice(i + 1);
+      const r = refQuery(after);
       if (r) return { mark: "/", query: r.query, start: i, kind: r.kind };
+      // "/mum": a word that names no document looks for a saved thing.
+      // ("/invoice" alone stays the tool's.)
+      if (/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(after) && !/^(invoice|bill|order|purchase|product|customer)s?$/i.test(after)) return { mark: "/", query: after, start: i };
       continue;
     }
     // "@" and "#" look back 40 characters; "/invoice " a little further.
@@ -219,8 +224,9 @@ export function insertMention(
   caret: number,
   name: string,
 ): { text: string; caret: number } {
-  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
-  const head = text.slice(0, q.start) + (q.mark === "/" ? "#" : q.mark) + name + " ";
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
+  // a saved thing found with "/mum" as its "@mum".
+  const head = text.slice(0, q.start) + (q.mark === "/" ? (q.kind ? "#" : "@") : q.mark) + name + " ";
   return { text: head + text.slice(caret), caret: head.length };
 }
 

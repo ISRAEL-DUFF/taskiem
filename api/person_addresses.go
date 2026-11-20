@@ -265,7 +265,7 @@ func (s *Server) addAddress(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+		if err := s.savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
 		}
 		a.Default = !hasDefault || (in.Default != nil && *in.Default)

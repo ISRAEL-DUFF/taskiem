@@ -45,11 +45,10 @@ const (
 )
 
 // Limits (saved-objects §8, §15 6): a person keeps up to 500 objects; a
-// business up to 2,000 on the lowest plan (higher plans come with plan
-// limits).
+// business as many as its plan's max_saved_objects (runtime.Limits: 2,000
+// by default and on the lowest plans, more on higher ones).
 const (
-	MaxPerson   = 500
-	MaxBusiness = 2000
+	MaxPerson = 500
 	// MaxTitle and MaxNote are the longest title and note.
 	MaxTitle = 80
 	MaxNote  = 200

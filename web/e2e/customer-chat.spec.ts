@@ -646,6 +646,10 @@ test("a person's chat: Save as… on words and on a file, and a saved photo atta
   // A saved photo from "@": attached as itself, to send.
   const box = page.getByLabel("Message Mama's Kitchen");
   await box.click();
+  // "/log" finds it too (a word that names no document).
+  await box.pressSequentially("/log");
+  await expect(page.getByTestId("mention-list").getByRole("button", { name: /logo/ })).toBeVisible();
+  await box.fill("");
   await box.pressSequentially("@log");
   await page.getByTestId("mention-list").getByRole("button", { name: /logo/ }).click();
   await expect(box).toHaveValue("");

@@ -661,7 +661,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     _text.addListener(_tags.typed);
     // "/" and a word as the whole message: the panel, filtered by it.
-    _text.addListener(() => _tools.typed(_tags.query?.mark == '/' ? '' : _text.text));
+    _text.addListener(() => _tools.typed(_tags.tagging ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {

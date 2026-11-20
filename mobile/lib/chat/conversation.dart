@@ -1158,7 +1158,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _tags.typed();
     // "/" and a word as the whole message: the panel, filtered by it ("/invoice/"
     // picks a thing to tag instead).
-    _tools.typed(_tags.query?.mark == '/' ? '' : _text.text);
+    _tools.typed(_tags.tagging ? '' : _text.text);
   }
 
   /// What "@" and "#" offer here: the price list's items on sale, our own

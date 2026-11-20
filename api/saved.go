@@ -329,7 +329,12 @@ func (s *Server) listSaved(w http.ResponseWriter, r *http.Request, o savedOwner)
 		s.savedFail(w, r, err)
 		return
 	}
-	res := map[string]any{"saved": out, "limit": savedLimit(o)}
+	limit, err := s.savedLimit(ctx, o)
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	res := map[string]any{"saved": out, "limit": limit}
 	if !o.mine() {
 		rl, err := s.savedRail(ctx, o.tenant)
 		if err != nil {
@@ -341,11 +346,18 @@ func (s *Server) listSaved(w http.ResponseWriter, r *http.Request, o savedOwner)
 	writeJSON(w, http.StatusOK, res)
 }
 
-func savedLimit(o savedOwner) int {
+// savedLimit is how many saved things the owner may keep: a person 500;
+// a business its plan's max_saved_objects (2,000 by default, more on
+// higher plans; 0 no limit).
+func (s *Server) savedLimit(ctx context.Context, o savedOwner) (int, error) {
 	if o.mine() {
-		return saved.MaxPerson
+		return saved.MaxPerson, nil
 	}
-	return saved.MaxBusiness
+	lim, err := s.Store.LimitsFor(ctx, o.tenant)
+	if err != nil {
+		return 0, err
+	}
+	return lim.MaxSavedObjects, nil
 }
 
 // savedRowTx is one of the owner's live objects; pgx.ErrNoRows when there
@@ -542,7 +554,11 @@ func (p savedProblem) lasting() *string {
 
 // savedRoomTx refuses a new object whose name the owner already uses, or
 // past the owner's limit.
-func savedRoomTx(ctx context.Context, tx pgx.Tx, o savedOwner, name string) error {
+func (s *Server) savedRoomTx(ctx context.Context, tx pgx.Tx, o savedOwner, name string) error {
+	limit, err := s.savedLimit(ctx, o)
+	if err != nil {
+		return err
+	}
 	where, owner := ownerWhere(o)
 	var n int
 	var taken bool
@@ -552,8 +568,12 @@ func savedRoomTx(ctx context.Context, tx pgx.Tx, o savedOwner, name string) erro
 	if taken {
 		return &pgconn.PgError{Code: "23505"}
 	}
-	if n >= savedLimit(o) {
-		return customerSendErr{http.StatusConflict, fmt.Sprintf("You can keep up to %d saved things. Remove one you no longer use first.", savedLimit(o))}
+	if limit > 0 && n >= limit {
+		words := fmt.Sprintf("You can keep up to %d saved things. Remove one you no longer use first.", limit)
+		if !o.mine() {
+			words = fmt.Sprintf("The business's plan keeps up to %d saved things. Remove one it no longer uses, or move to a bigger plan.", limit)
+		}
+		return customerSendErr{http.StatusConflict, words}
 	}
 	return nil
 }

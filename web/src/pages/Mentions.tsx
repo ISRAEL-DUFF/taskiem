@@ -132,7 +132,12 @@ export function useMentions(
               items: suggest(sources.refs?.[q.kind] ?? [], q.query),
             },
           ]
-        : q && q.mark !== "/"
+        : q?.mark === "/"
+          ? // "/mum": the saved things by that name, if any (§15 1).
+            sources.saved
+            ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }].filter((g) => g.items.length > 0)
+            : []
+          : q
           ? [
               { label: "", items: suggest(sources[q.mark], q.query) },
               ...(q.mark === "@" && sources.saved ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }] : []),
@@ -165,7 +170,7 @@ export function useMentions(
   );
   const update = (value: string, caret: number | null) => {
     const next = mentionQuery(value, caret ?? value.length);
-    if (next?.mark === "@") sources.wantSaved?.();
+    if (next?.mark === "@" || (next?.mark === "/" && !next.kind)) sources.wantSaved?.();
     setQ(next);
   };
   const pick = (s: Suggestion, from?: DOMRect) => {
@@ -576,7 +581,7 @@ function PlainList({ m }: { m: Mentions }) {
         mark === "@"
           ? (m.atLabel ?? "Businesses to mention")
           : mark === "/"
-            ? "Things to tag"
+            ? m.q?.kind ? "Things to tag" : "Saved things"
             : "Items to mention"
       }
       data-testid="mention-list"
@@ -589,7 +594,7 @@ function PlainList({ m }: { m: Mentions }) {
                 `Save "@${s.name}"…`
               ) : (
                 <>
-                  {mark === "/" ? "#" : mark}
+                  {mark === "/" ? (s.kind === "saved" ? "@" : "#") : mark}
                   {s.name}
                 </>
               )}
