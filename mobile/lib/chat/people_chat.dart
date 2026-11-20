@@ -53,6 +53,7 @@ import 'people_live.dart';
 import 'people_place.dart';
 import 'people_search.dart';
 import 'people_standing.dart';
+import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
 import 'pick_problem.dart';
@@ -540,6 +541,32 @@ class PeopleChatData extends ChangeNotifier {
     }
   }
 
+  /// One of the person's own saved things, shared as a card (saved objects
+  /// S1), with [ask]'s yes when the server wants one first. False when it
+  /// failed (error says why); true when sent or the sender said no.
+  Future<bool> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final what = 'saved:$saved';
+    final client = _clientFor(what);
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: SendPeopleMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client)),
+        ask,
+      );
+      if (sent == null || _disposed) return true;
+      messages = _merge(messages ?? const [], [PeopleLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_chat());
+      return true;
+    } on Object catch (e) {
+      _keepUnsure(e, what, client);
+      error = sendFailure(e);
+      toStanding = pointsToStanding(e);
+      _changed();
+      return false;
+    }
+  }
+
   /// A card (a business, a product, an order, a delivery, your share).
   Future<bool> sendCard(SendPeopleMessageRequestCard card) async {
     final what = 'card:${jsonEncode(card.toJson())}';
@@ -758,6 +785,9 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     onChange: () {
       if (mounted) setState(() {});
     },
+    // Anything else of one's own: shared as a card (S1 part 3).
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
   );
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
@@ -1127,6 +1157,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                     busy: _paying == m.id,
                                     onOpenCard: m.card == null || m.card!.type == 'split'
                                         ? null
+                                        : m.card!.type == 'saved'
+                                        ? (m.card!.saved == null ? null : () => saveSavedCard(context, d.auth, m.card!.saved!))
                                         : m.card!.type == 'basket'
                                         ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
                                         : () => showPeopleCard(context, auth: d.auth, chat: d.id, message: m.id, openBusiness: _openBusiness, openOrder: widget.openOrder),
@@ -1239,6 +1271,7 @@ class PeopleBubble extends StatelessWidget {
   /// It answers a message no longer shown (older, or deleted for you).
   final bool quoteMissing;
   final bool readTicks;
+  /// The card opened live; a saved thing's card: Save this.
   final VoidCallback? onOpenCard;
   final ValueChanged<bool>? onPaid;
 
@@ -1288,7 +1321,10 @@ class PeopleBubble extends StatelessWidget {
                 ?head,
                 ?forwarded,
                 ?q,
-                PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
+                if (c.type == 'saved' && c.saved != null)
+                  SavedCardView(card: c.saved!, mine: mine, onSave: onOpenCard)
+                else
+                  PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
                 if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
                 Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
               ],

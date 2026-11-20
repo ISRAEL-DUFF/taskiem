@@ -1,8 +1,9 @@
 // The saved things a chat's "@" offers (saved objects S1, part 2;
 // web/src/pages/SavedPicks.ts): the person's own (any session reaches them)
 // and, in a business, the business's, read the first time "@" is typed in
-// the chat. Every kind in the Taskiem chat, which reads an @name; texts only
-// in chats with other people, until cards. A list that cannot be read
+// the chat. Every kind in the Taskiem chat, which reads an @name; in chats
+// with other people a text's words go in the box and anything else is
+// shared as a card (part 3), only one's own with people. A list that cannot be read
 // offers nothing rather than stopping the chat.
 
 import 'dart:async';
@@ -15,9 +16,13 @@ import 'tag_box.dart';
 import 'tags.dart';
 
 class SavedPicks {
-  SavedPicks({required this.auth, required this.textsOnly, required this.onChange});
+  SavedPicks({required this.auth, required this.textsOnly, required this.onChange, this.mineOnly = false});
   final Auth auth;
   final bool textsOnly;
+
+  /// Only the person's own (a chat with people: a business's are not
+  /// shared there).
+  final bool mineOnly;
 
   /// The list came: the picker is drawn again.
   final void Function() onChange;
@@ -39,7 +44,7 @@ class SavedPicks {
     } on Object {
       // Nothing of one's own to offer.
     }
-    if (!auth.personal) {
+    if (!auth.personal && !mineOnly) {
       try {
         business = (await auth.api.listSaved()).saved;
       } on Object {
@@ -69,20 +74,24 @@ List<TagSuggestion> savedTags(List<SavedObject> mine, List<SavedObject> business
         sub: [x.title, x.hint, if ((names[x.name] ?? 0) > 1) x.owner == 'mine' ? 'Yours' : 'The business’s'].where((w) => w.isNotEmpty).join(' · '),
         words: x.title,
         savedKind: x.kind,
+        savedOwner: x.owner,
         body: x.kind == 'text' ? (x.details.body ?? '') : null,
       ),
   ];
 }
 
-/// A tag box offering saved texts alone (saved objects S1): for the chats
+/// A tag box offering saved things alone (saved objects S1): for the chats
 /// with no other "@" (a customer's, a business's with its customer, people
-/// chats and groups). The screen calls typed() as the words change, draws
-/// plain() over its box, and disposes it.
-TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange}) => TagBox(
+/// chats and groups). Texts alone, or with [onShare] every kind, the rest
+/// shared as cards ([mineOnly]: only the person's own). The screen calls
+/// typed() as the words change, draws plain() over its box, and disposes
+/// it.
+TagBox savedTextBox({required TextEditingController text, required Auth auth, required VoidCallback onChange, void Function(TagSuggestion)? onShare, bool mineOnly = false}) => TagBox(
   text: text,
   sources: () => (items: const <TagSuggestion>[], services: const <TagSuggestion>[], businesses: const <TagSuggestion>[], refs: const <String, List<TagSuggestion>>{}),
   grouped: () => false,
   taskiem: false,
   onChange: onChange,
-  saved: SavedPicks(auth: auth, textsOnly: true, onChange: onChange),
+  saved: SavedPicks(auth: auth, textsOnly: onShare == null, mineOnly: mineOnly, onChange: onChange),
+  onShareSaved: onShare,
 );

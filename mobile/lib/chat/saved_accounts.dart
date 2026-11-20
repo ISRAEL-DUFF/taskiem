@@ -438,9 +438,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
 /// name for it shows before it is saved. Pops "" when saved, or the reason
 /// its name could not be checked just now.
 class SavedAccountSheet extends StatefulWidget {
-  const SavedAccountSheet({super.key, required this.api, this.thing, required this.checks, this.unconnected = false});
+  const SavedAccountSheet({super.key, required this.api, this.thing, required this.checks, this.unconnected = false, this.start});
   final SavedApi api;
   final SavedObject? thing;
+
+  /// A card shared in a chat, saved as one's own (Save this): the sheet
+  /// starts with its name, title, bank and number.
+  final SavedCard? start;
   final bool checks;
 
   /// The business has no payments account yet: its names are not checked.
@@ -452,9 +456,10 @@ class SavedAccountSheet extends StatefulWidget {
 
 class _SavedAccountSheetState extends State<SavedAccountSheet> {
   late final SavedObject? _x = widget.thing;
-  late final _name = TextEditingController(text: _x == null ? '' : '@${_x.name}');
-  late final _title = TextEditingController(text: _x?.title ?? '');
-  late final _number = TextEditingController();
+  late final SavedObjectDetails? _from = widget.start == null ? null : SavedObjectDetails.fromJson(widget.start!.details);
+  late final _name = TextEditingController(text: _x == null ? (widget.start == null ? '' : '@${widget.start!.name}') : '@${_x.name}');
+  late final _title = TextEditingController(text: _x?.title ?? widget.start?.title ?? '');
+  late final _number = TextEditingController(text: _from?.accountNumber ?? '');
   late final _note = TextEditingController(text: _x?.details.note ?? '');
   SavedBanks? _banks;
   SavedBank? _bank;
@@ -487,7 +492,9 @@ class _SavedAccountSheetState extends State<SavedAccountSheet> {
       setState(() {
         _banks = b;
         if (x != null) _bank = _wasBank = savedBankIn(b, x.details);
+        if (x == null && _from != null) _bank = savedBankIn(b, _from);
       });
+      unawaited(_askName());
     } on Object catch (e) {
       if (mounted) setState(() => _error = sayFailure(e));
     }
@@ -711,10 +718,14 @@ class _OpenWalletSheetState extends State<OpenWalletSheet> {
 /// one: its name, title, note and the kind's own fields (savedFields). No
 /// passkey: none of these moves money. Pops true when saved.
 class SavedThingSheet extends StatefulWidget {
-  const SavedThingSheet({super.key, required this.api, required this.kind, this.thing});
+  const SavedThingSheet({super.key, required this.api, required this.kind, this.thing, this.start});
   final SavedApi api;
   final String kind;
   final SavedObject? thing;
+
+  /// A card shared in a chat, saved as one's own (Save this): the sheet
+  /// starts with its name, title and fields.
+  final SavedCard? start;
 
   @override
   State<SavedThingSheet> createState() => _SavedThingSheetState();
@@ -722,13 +733,15 @@ class SavedThingSheet extends StatefulWidget {
 
 class _SavedThingSheetState extends State<SavedThingSheet> {
   late final SavedObject? _x = widget.thing;
-  late final _name = TextEditingController(text: _x == null ? '' : '@${_x.name}');
-  late final _title = TextEditingController(text: _x?.title ?? '');
+  late final SavedObjectDetails? _from = widget.start == null ? null : SavedObjectDetails.fromJson(widget.start!.details);
+  late final _name = TextEditingController(text: _x == null ? (widget.start == null ? '' : '@${widget.start!.name}') : '@${_x.name}');
+  late final _title = TextEditingController(text: _x?.title ?? widget.start?.title ?? '');
   late final _note = TextEditingController(text: _x?.details.note ?? '');
   late final _fields = {
-    for (final f in savedFields[widget.kind]!) f.key: TextEditingController(text: _x == null ? '' : (savedField(_x.details, f.key) ?? '')),
+    for (final f in savedFields[widget.kind]!)
+      f.key: TextEditingController(text: _x != null ? (savedField(_x.details, f.key) ?? '') : (_from == null ? '' : (savedField(_from, f.key) ?? ''))),
   };
-  late String _type = _x?.details.type ?? '';
+  late String _type = _x?.details.type ?? _from?.type ?? '';
   bool _busy = false;
   String? _error;
 

@@ -24,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -45,6 +45,10 @@ class TagBox {
   /// Saved things "@" offers (saved objects S1; saved_picks.dart), read
   /// the first time "@" is typed.
   final SavedPicks? saved;
+
+  /// A saved thing other than a text picked: shared as a card (S1 part 3),
+  /// what was typed for it taken out of the box.
+  final void Function(TagSuggestion)? onShareSaved;
 
   TagQuery? query;
   final picked = <TagSuggestion>[];
@@ -165,6 +169,18 @@ class TagBox {
     // A saved text's words in place of what was typed, to change before
     // sending; any other saved thing as its @name, which the words carry.
     final body = s.body;
+    final share = onShareSaved;
+    if (s.kind == 'saved' && body == null && share != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      share(s);
+      return;
+    }
     final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name);
     if (s.kind != 'taskiem' && s.kind != 'saved') picked.add(s);
     _picking = true;

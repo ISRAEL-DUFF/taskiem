@@ -56,6 +56,7 @@ import 'people_place.dart';
 import 'people_search.dart' show PeopleSearchScreen;
 import 'people_standing.dart';
 import 'pick_problem.dart';
+import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -575,6 +576,31 @@ class GroupChatData extends ChangeNotifier {
     (client) => SendGroupMessageRequest(card: SendGroupMessageRequestCard.fromJson(card.toJson()), clientId: client),
   );
 
+  /// One of the person's own saved things, shared as a card (saved objects
+  /// S1), with [ask]'s yes when the server wants one first.
+  Future<bool> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final what = 'saved:$saved';
+    final client = _clientFor(what);
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendGroupMessage(id: id, body: SendGroupMessageRequest(card: SendGroupMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client)),
+        ask,
+      );
+      if (sent == null || _disposed) return true;
+      messages = _merge(messages ?? const [], [GroupLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_group());
+      return true;
+    } on Object catch (e) {
+      _keepUnsure(e, what, client);
+      error = sendFailure(e);
+      toStanding = pointsToStanding(e);
+      _changed();
+      return false;
+    }
+  }
+
   void _replace(GroupMessage m) {
     if (_disposed) return;
     messages = _merge(messages ?? const [], [GroupLine(m)]);
@@ -825,6 +851,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     onChange: () {
       if (mounted) setState(() {});
     },
+    // Anything else of one's own: shared as a card (S1 part 3).
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
   );
   StreamSubscription<String>? _back;
   GroupMessage? _reply;
@@ -1143,6 +1172,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       spans: (words, style) => mentionSpans(words, style, names: names, mine: _myNames, ink: look.limeInk, mark: look.lime.withValues(alpha: 0.35)),
       onOpenCard: m.card == null || m.card!.type == 'split'
           ? null
+          : m.card!.type == 'saved'
+          ? (m.card!.saved == null ? null : () => saveSavedCard(context, d.auth, m.card!.saved!))
           : m.card!.type == 'basket'
           ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
           : () => showPeopleCard(

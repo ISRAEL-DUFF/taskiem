@@ -50,7 +50,8 @@ import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
-import 'words.dart';
+import 'words.dart';import 'saved_card.dart' show saveSavedCard;
+
 
 /// The words for a failure, as the chats say them.
 String sayFailure(Object e) => switch (e) {
@@ -891,6 +892,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     'product' => ('See in their shop', () => showShopSheet(context, d)),
     'order' => ('View order', () => showMyOrdersSheet(context, d)),
     'delivery' => ('View delivery', () => showMyOrdersSheet(context, d)),
+    'saved' when c.saved != null => ('Save this', () => saveSavedCard(context, d.auth, c.saved!)),
     _ => null,
   };
 

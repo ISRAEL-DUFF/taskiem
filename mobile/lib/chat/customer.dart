@@ -19,6 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
+import 'saved_card.dart' show askShare, sendSaved;
 import 'saved_picks.dart';
 import 'dart:async';
 
@@ -415,6 +416,38 @@ class CustomerData extends ChangeNotifier {
     same: 'card:${card.type}:${card.reference ?? ''}:${card.invoiceId ?? ''}:${card.serviceId ?? ''}:${card.itemId ?? ''}',
   );
 
+  /// A saved thing (the business's, or the member's own: [owner]) shared
+  /// with the customer (saved objects S1): a card in the app, its lines on
+  /// WhatsApp, on [line] as a reply goes; with [ask]'s yes when the server
+  /// wants one before sharing what is sensitive.
+  Future<void> shareSaved(String saved, String owner, Future<bool> Function(String question) ask, {String? line}) async {
+    final on = !both ? null : line;
+    if (!reaches(on) || busy) return;
+    busy = true;
+    error = null;
+    _changed();
+    try {
+      final client = '${DateTime.now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+      final out = await sendSaved(
+        (confirm) => api.replyCustomer(
+          id: id,
+          body: ReplyCustomerRequest(card: ReplyCustomerRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: owner, confirm: confirm)), clientId: client, line: on),
+        ),
+        ask,
+      );
+      if (out != null && !_disposed) {
+        messages = mergeCustomer(messages ?? const [], [CustomerLine(out)]);
+        unawaited(chats.load());
+      }
+    } on Object catch (e) {
+      _fail(e);
+      unawaited(_chat());
+    } finally {
+      busy = false;
+      _changed();
+    }
+  }
+
   /// A photo, voice note or PDF to an app customer.
   Future<void> sendFile(PickedFile f) => _reply(
     CustomerMessage(
@@ -549,6 +582,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
     onChange: () {
       if (mounted) setState(() {});
     },
+    // Anything else: shared as a card in the app, as lines on WhatsApp.
+    onShare: (s) => unawaited(widget.data.shareSaved(s.id, s.savedOwner ?? 'business', askShare(context), line: _on)),
   );
   StreamSubscription<String>? _back;
 

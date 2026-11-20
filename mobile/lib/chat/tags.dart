@@ -14,11 +14,14 @@ import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner});
 
   /// A saved thing (kind "saved", saved objects S1): its kind, and a
   /// text's words, which a pick puts in the box in place of what was typed.
   final String? savedKind;
+
+  /// A saved thing's: mine (the person's own) or business.
+  final String? savedOwner;
   final String? body;
 
   /// A short word on the right ("Invoice").
