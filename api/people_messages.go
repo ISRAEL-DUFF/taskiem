@@ -639,7 +639,16 @@ func (s *Server) sendPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		d.kind, d.location, d.body = "location", l, ""
 	case in.Card != nil && in.Location == nil:
-		card, err := s.makeCard(r.Context(), person, *in.Card)
+		var card *peopleCard
+		var err error
+		if in.Card.Type == "saved" {
+			card, err = s.savedPeopleCard(r, person, in.Card.Saved)
+		} else {
+			card, err = s.makeCard(r.Context(), person, *in.Card)
+		}
+		if shareConfirmFail(w, err) {
+			return
+		}
 		if err != nil {
 			s.personFail(w, r, err)
 			return
@@ -1171,6 +1180,10 @@ func (s *Server) peopleDraftOf(ctx context.Context, person, chat, msg uuid.UUID)
 		d = peopleDraft{kind: m.Kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
 		if v.Card != nil && (v.Card.Type == "split" || v.Card.Type == "basket") {
 			return customerSendErr{http.StatusConflict, "A share card or a shared basket is between the people in it: it is not forwarded."}
+		}
+		// Someone's saved details, shared with you: theirs to share again.
+		if v.Card != nil && v.Card.Type == "saved" {
+			return customerSendErr{http.StatusConflict, "Details someone shared with you are not forwarded: save them, or ask them to share them."}
 		}
 		if m.attach != nil {
 			var sealed []byte

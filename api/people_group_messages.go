@@ -734,7 +734,16 @@ func (s *Server) sendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		d.kind, d.location, d.body = "location", l, ""
 	case in.Card != nil && in.Location == nil:
-		card, err := s.makeCard(r.Context(), person, *in.Card)
+		var card *peopleCard
+		var err error
+		if in.Card.Type == "saved" {
+			card, err = s.savedPeopleCard(r, person, in.Card.Saved)
+		} else {
+			card, err = s.makeCard(r.Context(), person, *in.Card)
+		}
+		if shareConfirmFail(w, err) {
+			return
+		}
 		if err != nil {
 			s.personFail(w, r, err)
 			return

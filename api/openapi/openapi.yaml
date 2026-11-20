@@ -9817,8 +9817,8 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [order, pay, booking, product, invoice, delivery]
-                      description: 'invoice: one of this customer''s sent invoices (`invoice_id`); delivery: the rider''s progress on this customer''s order (`reference`), once a rider holds it.'
+                      enum: [order, pay, booking, product, invoice, delivery, saved]
+                      description: 'invoice: one of this customer''s sent invoices (`invoice_id`); delivery: the rider''s progress on this customer''s order (`reference`), once a rider holds it; saved: a saved thing of the business''s or the member''s own (`saved`), a card in the app and plain lines on WhatsApp, 409 `confirm_share` until `saved.confirm` when it holds what is sensitive.'
                     reference:
                       type: string
                     item_id:
@@ -9827,6 +9827,8 @@ paths:
                       type: string
                     invoice_id:
                       type: string
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
                 offer:
                   type: boolean
                 line:
@@ -23223,7 +23225,7 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [product, business, order, delivery, split]
+                      enum: [product, business, order, delivery, split, saved]
                     business_id:
                       type: string
                       format: uuid
@@ -23245,6 +23247,8 @@ paths:
                           type: string
                         account_name:
                           type: string
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
                 mentions:
                   type: array
                   maxItems: 256
@@ -24981,7 +24985,7 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [product, business, order, delivery, split]
+                      enum: [product, business, order, delivery, split, saved]
                     business_id:
                       type: string
                       format: uuid
@@ -24997,6 +25001,8 @@ paths:
                       maxLength: 120
                     pay_to:
                       $ref: '#/components/schemas/PayoutAccount'
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
       responses:
         '201':
           description: Sent
@@ -44664,7 +44670,9 @@ components:
       properties:
         type:
           type: string
-          enum: [order, pay, booking, product, invoice, delivery]
+          enum: [order, pay, booking, product, invoice, delivery, saved]
+        saved:
+          $ref: '#/components/schemas/SavedCard'
         reference:
           type: string
         invoice_id:
@@ -45547,9 +45555,11 @@ components:
       properties:
         type:
           type: string
-          enum: [product, business, order, delivery, split, basket]
+          enum: [product, business, order, delivery, split, basket, saved]
         title:
           type: string
+        saved:
+          $ref: '#/components/schemas/SavedCard'
         business_id:
           type: string
           format: uuid
@@ -46228,6 +46238,51 @@ components:
         updated_at:
           type: string
           format: date-time
+    SavedShare:
+      type: object
+      additionalProperties: false
+      required: [id, owner]
+      description: 'A saved thing a message shares (saved objects S1): the sender''s own (mine) or their business''s; confirm says yes to sharing what is sensitive in it (an account number, a phone, an email), asked first by a 409 `confirm_share` whose error is the question.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          type: string
+          enum: [mine, business]
+        confirm:
+          type: boolean
+    SavedCard:
+      type: object
+      additionalProperties: false
+      required: [kind, title, name, lines, details, sensitive]
+      description: A saved thing as shared in a chat, a copy of it as it was when sent (never a link); details are its fields for Save this, an account number in full.
+      properties:
+        kind:
+          type: string
+          enum: [bank_account, person, place, text, provider_account]
+        title:
+          type: string
+        name:
+          type: string
+          description: The sender's @name for it.
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, value]
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        sensitive:
+          type: boolean
     SavedObjectResult:
       type: object
       additionalProperties: false

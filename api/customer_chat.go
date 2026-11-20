@@ -833,6 +833,27 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	text := strings.TrimSpace(req.Text)
 	var card *customerCard
+	if req.Card != nil && req.Card.Type == "saved" {
+		// A saved thing (saved_share.go): a card in the app; on WhatsApp, its
+		// plain lines as the words, easy to copy.
+		shared, inApp, err := s.savedForCustomer(r, chi.URLParam(r, "id"), req.Card.Saved, req.Line)
+		if shareConfirmFail(w, err) {
+			return
+		}
+		if err != nil {
+			s.customerSendFail(w, r, err)
+			return
+		}
+		if inApp {
+			card = &customerCard{Type: "saved", Title: shared.Title, Saved: &shared}
+			if text == "" {
+				text = shared.Title
+			}
+		} else {
+			text = strings.TrimSpace(text + "\n\n" + shared.Plain())
+		}
+		req.Card = nil
+	}
 	if req.Card != nil {
 		var err error
 		if card, err = s.cardFor(ctx, p.TenantID, chi.URLParam(r, "id"), *req.Card); err != nil {

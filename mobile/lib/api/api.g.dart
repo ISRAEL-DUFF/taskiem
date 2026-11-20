@@ -4506,7 +4506,7 @@ class ChatAttachment {
 /// pay page in `url` while something is due), or a delivery (the rider's
 /// progress in `delivery`, as it was when sent).
 class CustomerCard {
-  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
+  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.saved, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
 
   final DeliveryProgress? delivery;
   final String? invoiceId;
@@ -4514,6 +4514,7 @@ class CustomerCard {
   final String? line;
   final int? minutes;
   final String? reference;
+  final SavedCard? saved;
   final String? serviceId;
   final String? status;
   final String title;
@@ -4528,6 +4529,7 @@ class CustomerCard {
         line: j['line'] == null ? null : j['line'] as String,
         minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         status: j['status'] == null ? null : j['status'] as String,
         title: j['title'] as String,
@@ -4543,6 +4545,7 @@ class CustomerCard {
         'line': ?line,
         'minutes': ?minutes,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'status': ?status,
         'title': title,
@@ -4582,6 +4585,55 @@ class DeliveryProgress {
         'line': line,
         'picked_up_at': ?pickedUpAt?.toUtc().toIso8601String(),
         'status': status,
+      };
+}
+
+/// A saved thing as shared in a chat, a copy of it as it was when sent (never a
+/// link); details are its fields for Save this, an account number in full.
+class SavedCard {
+  const SavedCard({required this.details, required this.kind, required this.lines, required this.name, required this.sensitive, required this.title});
+
+  final Map<String, dynamic> details;
+  final String kind;
+  final List<SavedCardLinesItem> lines;
+  /// The sender's @name for it.
+  final String name;
+  final bool sensitive;
+  final String title;
+
+  factory SavedCard.fromJson(Map<String, dynamic> j) => SavedCard(
+        details: j['details'] as Map<String, dynamic>,
+        kind: j['kind'] as String,
+        lines: (j['lines'] as List).map((e) => SavedCardLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        sensitive: j['sensitive'] as bool,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'details': details,
+        'kind': kind,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'name': name,
+        'sensitive': sensitive,
+        'title': title,
+      };
+}
+
+class SavedCardLinesItem {
+  const SavedCardLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory SavedCardLinesItem.fromJson(Map<String, dynamic> j) => SavedCardLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
       };
 }
 
@@ -4633,21 +4685,25 @@ class ReplyCustomerRequest {
 }
 
 class ReplyCustomerRequestCard {
-  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.serviceId, required this.type});
+  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.saved, this.serviceId, required this.type});
 
   final String? invoiceId;
   final String? itemId;
   final String? reference;
+  final SavedShare? saved;
   final String? serviceId;
   /// invoice: one of this customer's sent invoices (`invoice_id`); delivery:
   /// the rider's progress on this customer's order (`reference`), once a rider
-  /// holds it.
+  /// holds it; saved: a saved thing of the business's or the member's own
+  /// (`saved`), a card in the app and plain lines on WhatsApp, 409
+  /// `confirm_share` until `saved.confirm` when it holds what is sensitive.
   final String type;
 
   factory ReplyCustomerRequestCard.fromJson(Map<String, dynamic> j) => ReplyCustomerRequestCard(
         invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         type: j['type'] as String,
       );
@@ -4656,8 +4712,33 @@ class ReplyCustomerRequestCard {
         'invoice_id': ?invoiceId,
         'item_id': ?itemId,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'type': type,
+      };
+}
+
+/// A saved thing a message shares (saved objects S1): the sender's own (mine)
+/// or their business's; confirm says yes to sharing what is sensitive in it (an
+/// account number, a phone, an email), asked first by a 409 `confirm_share`
+/// whose error is the question.
+class SavedShare {
+  const SavedShare({this.confirm, required this.id, required this.owner});
+
+  final bool? confirm;
+  final String id;
+  final String owner;
+
+  factory SavedShare.fromJson(Map<String, dynamic> j) => SavedShare(
+        confirm: j['confirm'] == null ? null : j['confirm'] as bool,
+        id: j['id'] as String,
+        owner: j['owner'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': ?confirm,
+        'id': id,
+        'owner': owner,
       };
 }
 
@@ -10020,7 +10101,7 @@ class PeopleMessage {
 /// rider's progress when shared), or a share (amount, what for, the account to
 /// pay to, paid).
 class PeopleCard {
-  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
+  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.saved, this.state, required this.title, required this.type, this.what});
 
   final int? amountKobo;
   final String? area;
@@ -10040,6 +10121,7 @@ class PeopleCard {
   final PayoutAccount? payTo;
   final int? priceKobo;
   final String? reference;
+  final SavedCard? saved;
   final String? state;
   final String title;
   final String type;
@@ -10061,6 +10143,7 @@ class PeopleCard {
         payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         state: j['state'] == null ? null : j['state'] as String,
         title: j['title'] as String,
         type: j['type'] as String,
@@ -10083,6 +10166,7 @@ class PeopleCard {
         'pay_to': ?payTo?.toJson(),
         'price_kobo': ?priceKobo,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'state': ?state,
         'title': title,
         'type': type,
@@ -10291,13 +10375,14 @@ class SendPeopleMessageRequest {
 /// orders (a delivery once a rider has it); split: amount_kobo, what, and
 /// pay_to (else your saved payout account).
 class SendPeopleMessageRequestCard {
-  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, this.saved, required this.type, this.what});
 
   final int? amountKobo;
   final String? businessId;
   final String? itemId;
   final PayoutAccount? payTo;
   final String? reference;
+  final SavedShare? saved;
   final String type;
   final String? what;
 
@@ -10307,6 +10392,7 @@ class SendPeopleMessageRequestCard {
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         type: j['type'] as String,
         what: j['what'] == null ? null : j['what'] as String,
       );
@@ -10317,6 +10403,7 @@ class SendPeopleMessageRequestCard {
         'item_id': ?itemId,
         'pay_to': ?payTo?.toJson(),
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'type': type,
         'what': ?what,
       };
@@ -11435,13 +11522,14 @@ class SendGroupMessageRequest {
 }
 
 class SendGroupMessageRequestCard {
-  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, this.saved, required this.type, this.what});
 
   final int? amountKobo;
   final String? businessId;
   final String? itemId;
   final SendGroupMessageRequestCardPayTo? payTo;
   final String? reference;
+  final SavedShare? saved;
   final String type;
   final String? what;
 
@@ -11451,6 +11539,7 @@ class SendGroupMessageRequestCard {
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         payTo: j['pay_to'] == null ? null : SendGroupMessageRequestCardPayTo.fromJson(j['pay_to'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         type: j['type'] as String,
         what: j['what'] == null ? null : j['what'] as String,
       );
@@ -11461,6 +11550,7 @@ class SendGroupMessageRequestCard {
         'item_id': ?itemId,
         'pay_to': ?payTo?.toJson(),
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'type': type,
         'what': ?what,
       };

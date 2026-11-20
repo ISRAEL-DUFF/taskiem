@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -45,7 +46,7 @@ const lineApp = "app"
 // its state; Pay when due), a pay link, a booking offer (a service), a
 // product, or the business's closed reply.
 type customerCard struct {
-	Type      string `json:"type"` // order | pay | booking | product | invoice | delivery
+	Type      string `json:"type"` // order | pay | booking | product | invoice | delivery | saved
 	Reference string `json:"reference,omitempty"`
 	// InvoiceID is an invoice card's invoice (Reference is its number).
 	InvoiceID string `json:"invoice_id,omitempty"`
@@ -61,6 +62,8 @@ type customerCard struct {
 	Minutes   int               `json:"minutes,omitempty"`
 	// URL is a pay link's page (the order's status page, where it is paid).
 	URL string `json:"url,omitempty"`
+	// Saved is a saved thing shared, as it was when sent (saved objects S1).
+	Saved *saved.Card `json:"saved,omitempty"`
 }
 
 // chatAttachment is a photo, voice note or file of an app message, as
@@ -506,6 +509,9 @@ type cardAsk struct {
 	ItemID    string `json:"item_id"`
 	ServiceID string `json:"service_id"`
 	InvoiceID string `json:"invoice_id"`
+	// Saved is a saved thing (type saved; saved objects S1): the
+	// business's or the member's own, shared as a copy of it now.
+	Saved *savedShare `json:"saved"`
 }
 
 // cardFor makes a card from the business's own data: an order of this

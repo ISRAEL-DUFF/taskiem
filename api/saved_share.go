@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
 
@@ -101,4 +102,55 @@ func shareQuestion(x savedRow, to string) string {
 		to = "them"
 	}
 	return "Share " + x.Title + "'s " + what + " with " + to + "?"
+}
+
+// savedPeopleCard is the card a people chat or a group shares: one of the
+// sender's own saved things only (a business's are not shared with people).
+func (s *Server) savedPeopleCard(r *http.Request, person uuid.UUID, sh *savedShare) (*peopleCard, error) {
+	if sh == nil {
+		return nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+	}
+	if sh.Owner == "" {
+		sh.Owner = "mine"
+	}
+	if sh.Owner != "mine" {
+		return nil, customerSendErr{http.StatusBadRequest, "Only your own saved things are shared with people."}
+	}
+	c, err := s.savedCardFor(r, person, uuid.Nil, *sh, "")
+	if err != nil {
+		return nil, err
+	}
+	return &peopleCard{Type: "saved", Title: c.Title, Saved: &c}, nil
+}
+
+// savedForCustomer is the card a business's reply to its customer shares:
+// the business's saved thing or the member's own; and whether it goes as a
+// card (the customer chats in the app, and line is not whatsapp) or as
+// plain lines on WhatsApp.
+func (s *Server) savedForCustomer(r *http.Request, thread string, sh *savedShare, line string) (saved.Card, bool, error) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	person, err := personOf(r)
+	if err != nil {
+		return saved.Card{}, false, err
+	}
+	if sh == nil {
+		return saved.Card{}, false, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+	}
+	inApp := false
+	if line != lineWhatsApp {
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			_, _, err := s.customerLineIn(ctx, tx, p.TenantID, thread, lineApp)
+			if se := (customerSendErr{}); errors.As(err, &se) {
+				return nil // no app line: WhatsApp
+			}
+			inApp = err == nil
+			return err
+		})
+		if err != nil {
+			return saved.Card{}, false, err
+		}
+	}
+	c, err := s.savedCardFor(r, person, p.TenantID, *sh, "this customer")
+	return c, inApp, err
 }

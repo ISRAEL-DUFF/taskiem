@@ -1,0 +1,95 @@
+package api_test
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+)
+
+// Saved things shared in chats (saved objects S1, part 3; §6.2): a person's
+// own @mum shared with a friend as a card, after a yes to sharing the
+// account number, the friend unable to forward it, and only one's own
+// shared with people; a business's account shared with a customer in the
+// app as a card and on WhatsApp as plain lines; each share recorded.
+func TestSavedCards(t *testing.T) {
+	ctx := context.Background()
+	w := newPeopleWorld(t)
+	ada, adaID := w.person(t, "+2348031120081", "Ada Obi")
+	bola, bolaID := w.person(t, "+2348031120082", "Bola Ade")
+	adaChat := chatWith(t, ada, bolaID)
+	send(t, ada, adaChat, "Hi")
+	bolaChat := requestOf(t, bola)
+	bola.must(200, "POST", "/v1/me/people/"+bolaChat+"/accept", nil)
+
+	mum := ada.must(201, "POST", "/v1/me/saved", map[string]any{"name": "mum", "title": "Mum", "bank_name": "Guaranty Trust Bank", "account_number": "0123452222"})["saved"].(map[string]any)
+	share := func(confirm bool) map[string]any {
+		return map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": mum["id"], "owner": "mine", "confirm": confirm}}}
+	}
+	// The account number: asked first.
+	if e := ada.must(409, "POST", "/v1/me/people/"+adaChat+"/messages", share(false)); e["confirm_share"] != true || e["error"] != "Share Mum's account details with them?" {
+		t.Fatalf("asked: %v", e)
+	}
+	m := ada.must(201, "POST", "/v1/me/people/"+adaChat+"/messages", share(true))
+	card := m["card"].(map[string]any)
+	if m["kind"] != "card" || card["type"] != "saved" || card["title"] != "Mum" {
+		t.Fatalf("shared: %v", m)
+	}
+	// Bola has it in full, with Save this's fields; not to pass on.
+	var got map[string]any
+	for _, x := range messagesOf(t, bola, bolaChat) {
+		if c, ok := x["card"].(map[string]any); ok && c["type"] == "saved" {
+			got = x
+		}
+	}
+	if got == nil {
+		t.Fatal("bola has no card")
+	}
+	sc := got["card"].(map[string]any)["saved"].(map[string]any)
+	if sc["details"].(map[string]any)["account_number"] != "0123452222" || sc["sensitive"] != true || !strings.Contains(fmt.Sprint(sc["lines"]), "0123452222") {
+		t.Fatalf("bola's card: %v", sc)
+	}
+	bola.must(409, "POST", "/v1/me/people/forward", map[string]any{"chat_id": bolaChat, "message_id": got["id"], "to": []string{adaID.String()}})
+	// Only one's own, and only live ones.
+	ada.must(400, "POST", "/v1/me/people/"+adaChat+"/messages", map[string]any{"card": map[string]any{"type": "saved", "saved": map[string]any{"id": mum["id"], "owner": "business"}}})
+	ada.must(204, "DELETE", "/v1/me/saved/"+mum["id"].(string), nil)
+	ada.must(404, "POST", "/v1/me/people/"+adaChat+"/messages", share(true))
+	var shared int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_object_events WHERE person_id = $1 AND action = 'shared'`, adaID).Scan(&shared); err != nil || shared != 1 {
+		t.Fatalf("shares logged: %d %v", shared, err)
+	}
+
+	// The business's account, to its customers.
+	acct := w.owner.must(201, "POST", "/v1/saved", map[string]any{"name": "bank-account", "title": "Our account", "bank_name": "Zenith Bank", "account_number": "1234567890"})["saved"].(map[string]any)
+	reply := func(thread string) map[string]any {
+		return w.owner.must(201, "POST", "/v1/customer-chats/"+thread+"/messages", map[string]any{"card": map[string]any{"type": "saved",
+			"saved": map[string]any{"id": acct["id"], "owner": "business", "confirm": true}}})
+	}
+	// In the app: a card.
+	tolu, _ := w.personIn(t, "+2348031120083")
+	toluChat := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz})["id"].(string)
+	tolu.must(201, "POST", "/v1/me/chats/"+toluChat+"/messages", map[string]any{"text": "How do I pay?"})
+	inApp := reply(w.threadOf(t, personID(t, tolu)))
+	if c, _ := inApp["card"].(map[string]any); c == nil || c["type"] != "saved" || c["saved"].(map[string]any)["details"].(map[string]any)["account_number"] != "1234567890" {
+		t.Fatalf("in the app: %v", inApp)
+	}
+	var seen bool
+	for _, x := range tolu.must(200, "GET", "/v1/me/chats/"+toluChat+"/messages", nil)["messages"].([]any) {
+		if c, ok := x.(map[string]any)["card"].(map[string]any); ok && c["type"] == "saved" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Fatal("the customer has no card")
+	}
+	// On WhatsApp: the lines.
+	w.withOwnNumber(t)
+	w.onWhatsApp(t, "+2348031120084", "Your account number please")
+	threads := w.whatsappThread(t)
+	onWA := reply(threads[len(threads)-1])
+	if onWA["card"] != nil || onWA["body"] != "Our account\nBank: Zenith Bank\nAccount number: 1234567890" {
+		t.Fatalf("on WhatsApp: %v", onWA)
+	}
+	w.owner.must(409, "POST", "/v1/customer-chats/"+threads[len(threads)-1]+"/messages", map[string]any{"card": map[string]any{"type": "saved",
+		"saved": map[string]any{"id": acct["id"], "owner": "business"}}})
+}
