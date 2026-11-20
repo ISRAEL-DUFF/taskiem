@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -95,11 +96,17 @@ type savedShareRecord struct {
 
 // recordShare records a share whose message was kept.
 func (s *Server) recordShare(r *http.Request, rec *savedShareRecord) {
+	s.recordShareBy(r.Context(), savedWhoOf(r), rec)
+}
+
+// recordShareBy records a share whose message was kept, by who (the
+// Taskiem chat's, where there is no request).
+func (s *Server) recordShareBy(ctx context.Context, who savedWho, rec *savedShareRecord) {
 	if rec == nil {
 		return
 	}
-	err := s.savedTx(r.Context(), rec.o, func(tx pgx.Tx) error {
-		return s.savedEvent(r, tx, rec.o, rec.id, "shared", map[string]any{"kind": rec.kind, "to": rec.to, "sensitive": rec.sensitive})
+	err := s.savedTx(ctx, rec.o, func(tx pgx.Tx) error {
+		return savedEventBy(ctx, tx, who, rec.o, rec.id, "shared", map[string]any{"kind": rec.kind, "to": rec.to, "sensitive": rec.sensitive})
 	})
 	if err != nil {
 		s.Logger.Warn("saved: a share not recorded", "err", err)
@@ -115,7 +122,11 @@ func (s *Server) recordShare(r *http.Request, rec *savedShareRecord) {
 // question and the record ("Bola Stores"). The share is recorded by the
 // caller once the message is kept (recordShare).
 func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh savedShare, to string) (saved.Card, *savedShareRecord, error) {
-	ctx := r.Context()
+	return s.savedCardOf(r.Context(), principalFrom(r.Context()), person, tenant, sh, to)
+}
+
+// savedCardOf is savedCardFor for p, from a context (the Taskiem chat's).
+func (s *Server) savedCardOf(ctx context.Context, p *Principal, person, tenant uuid.UUID, sh savedShare, to string) (saved.Card, *savedShareRecord, error) {
 	var o savedOwner
 	switch sh.Owner {
 	case "mine":
@@ -162,7 +173,7 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 		default:
 			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		}
-		if card.Sensitive && !o.mine() && !principalFrom(ctx).Can(PermSavedManage) {
+		if card.Sensitive && !o.mine() && (p == nil || !p.Can(PermSavedManage)) {
 			return customerSendErr{http.StatusForbidden, "Only those who manage the business's saved things share its account numbers and other sensitive details."}
 		}
 		if card.Sensitive && !sh.Confirm {

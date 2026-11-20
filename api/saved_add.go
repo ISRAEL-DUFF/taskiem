@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	phonenum "github.com/israel-duff/taskiem/engine/phone"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
 
@@ -98,16 +100,36 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 			return x, savedProblem{}, err
 		}
 		err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+			// A person's place is one of their addresses (person_addresses.go):
+			// counted with them, and the default when they have none.
+			address := o.mine() && in.Kind == saved.KindPlace
+			if address {
+				if err := lockAddressesTx(ctx, tx, o.person); err != nil {
+					return err
+				}
+			}
 			if err := lockSavedTx(ctx, tx, o); err != nil {
 				return err
 			}
 			if err := savedRoomTx(ctx, tx, o, name); err != nil {
 				return err
 			}
+			isDefault := false
+			if address {
+				var n int
+				var hasDefault bool
+				if err := tx.QueryRow(ctx, `SELECT count(*), COALESCE(bool_or(default_place), false) FROM saved_objects WHERE `+placesWhere, o.person).Scan(&n, &hasDefault); err != nil {
+					return err
+				}
+				if n >= maxAddresses {
+					return saved.Refuse(fmt.Sprintf("You can keep up to %d places. Remove one you no longer use first.", maxAddresses))
+				}
+				isDefault = !hasDefault
+			}
 			if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint,
-					check_state, created_by, updated_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, '{}', $8, $9, $10, $10) RETURNING `+savedCols,
-				id, nullable(o.person), nullable(o.tenant), name, title, in.Kind, c.Details, c.Hint, saved.NoCheck, o.by)); err != nil {
+					check_state, default_place, created_by, updated_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, '{}', $8, $9, $10, $11, $11) RETURNING `+savedCols,
+				id, nullable(o.person), nullable(o.tenant), name, title, in.Kind, c.Details, savedHint(o, in.Kind, c), saved.NoCheck, isDefault, o.by)); err != nil {
 				return err
 			}
 			return savedEventBy(ctx, tx, who, o, id, "added", map[string]any{"name": name, "kind": in.Kind})
@@ -156,4 +178,100 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 		return savedEventBy(ctx, tx, who, o, id, "added", detail)
 	})
 	return x, problem, err
+}
+
+// savedHint is what a list shows of c: a business's person with their
+// phone and email masked (saved.Cleaned.MaskedHint); a person's own as
+// it is.
+func savedHint(o savedOwner, kind string, c saved.Cleaned) string {
+	if o.mine() {
+		return c.Hint
+	}
+	return c.MaskedHint(kind)
+}
+
+// eraseSavedContacts lets go of the business's saved things that hold a
+// phone or an email being erased (POST /v1/pii/erase {category, value}):
+// a person or a place with it, or a thing of the business's own kind with
+// it as a field's value. Each is removed as a removal does (savedScrub),
+// its files with it, and recorded. Answers how many.
+func (s *Server) eraseSavedContacts(r *http.Request, category string, value any) (int, error) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	v, _ := value.(string)
+	v = strings.TrimSpace(v)
+	switch category {
+	case "phone":
+		// Not a phone this reads: no saved thing holds it as one.
+		n, perr := phonenum.Normalise(v)
+		if perr != nil {
+			return 0, nil //nolint:nilerr // nothing to erase, not a failure
+		}
+		v = n
+	case "email":
+		v = strings.ToLower(v)
+	default:
+		return 0, nil
+	}
+	if v == "" {
+		return 0, nil
+	}
+	o := savedOwner{tenant: p.TenantID, by: p.UserID}
+	var gone []string
+	n := 0
+	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id FROM saved_objects WHERE tenant_id = $1 AND archived_at IS NULL AND (
+				details->>'phone' = $2 OR lower(details->>'email') = $2
+				OR EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(details->'values') = 'object' THEN details->'values' ELSE '{}' END) e WHERE lower(e.value) = $2))
+			FOR UPDATE`, p.TenantID, v)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		// A sensitive field's value is sealed: each thing of the business's
+		// own kinds with sealed values is opened to look.
+		rows, err = tx.Query(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE tenant_id = $1 AND archived_at IS NULL AND kind = 'custom' AND sealed <> '{}' AND NOT (id = ANY ($2)) FOR UPDATE`, p.TenantID, ids)
+		if err != nil {
+			return err
+		}
+		sealed, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (savedRow, error) { return scanSaved(r) })
+		if err != nil {
+			return err
+		}
+		for _, x := range sealed {
+			all, err := s.customValuesTx(ctx, tx, o, x)
+			if err != nil {
+				return err
+			}
+			for _, val := range all {
+				if strings.EqualFold(strings.TrimSpace(val), v) {
+					ids = append(ids, x.ID)
+					break
+				}
+			}
+		}
+		for _, id := range ids {
+			if _, err := tx.Exec(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $3 WHERE tenant_id = $1 AND id = $2`, p.TenantID, id, o.by); err != nil {
+				return err
+			}
+			paths, err := dropObjectFilesTx(ctx, tx, o, id)
+			if err != nil {
+				return err
+			}
+			gone = append(gone, paths...)
+			if err := savedEventBy(ctx, tx, savedWhoOf(r), o, id, "removed", map[string]any{"for": "pii.erase", "category": category}); err != nil {
+				return err
+			}
+		}
+		n = len(ids)
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	s.dropSavedPaths(ctx, o, gone)
+	return n, nil
 }

@@ -3,14 +3,17 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/saved"
 )
 
@@ -21,7 +24,10 @@ import (
 // (scanned, a photo's metadata cleaned, a PDF without scripts), and kept:
 // a person's here, a business's in its own storage. Saving the thing
 // claims it (its id given as details.file, or as a file field's value);
-// one never claimed goes after a day, when the owner next uploads. In a
+// one never claimed goes after a day (purgeSavedUploads, and when the
+// owner next uploads). An owner uploads at most savedUploadsWaiting not
+// yet claimed, and keeps at most savedFilesBytes in all; a person's file
+// is sealed under their own key, as their chats' files are. In a
 // chat, the clients send it as itself, through the chat's own files (so
 // each chat's checks and copies are its own).
 
@@ -36,6 +42,67 @@ func (s *Server) personSavedFileRoutes(r chi.Router) {
 	r.Get("/me/saved/{id}/file", s.savedHandler(true, s.savedFile))
 }
 
+// The limits on an owner's saved files: uploads waiting to be claimed,
+// all their files' bytes (a person's are kept in the database), and how
+// fast they upload.
+const (
+	savedUploadsWaiting = 20
+	savedFilesBytes     = 100 << 20
+	savedFilesBytesBiz  = 500 << 20
+	savedUploadsEvery   = 6 * time.Second
+	savedUploadsBurst   = 30
+)
+
+// savedFilesRoom refuses an upload of size more than the owner may keep:
+// too many waiting to be claimed, or too many bytes in all.
+func savedFilesRoomTx(ctx context.Context, tx pgx.Tx, o savedOwner, size int) error {
+	where, owner := fileWhere(o)
+	var waiting int
+	var bytes int64
+	if err := tx.QueryRow(ctx, `SELECT count(*) FILTER (WHERE object_id IS NULL AND created_at >= now() - interval '1 day'), coalesce(sum(size), 0)
+		FROM saved_files WHERE `+where, owner).Scan(&waiting, &bytes); err != nil {
+		return err
+	}
+	if waiting >= savedUploadsWaiting {
+		return saved.Refuse(fmt.Sprintf("%d files are waiting to be saved: save or let them go first.", savedUploadsWaiting))
+	}
+	most := int64(savedFilesBytes)
+	if !o.mine() {
+		most = savedFilesBytesBiz
+	}
+	if bytes+int64(size) > most {
+		return saved.Refuse(fmt.Sprintf("Your saved files take up the %d MB they may: remove some first.", most>>20))
+	}
+	return nil
+}
+
+// savedFileRow is the row a person's saved file is sealed for.
+func savedFileRow(id uuid.UUID) string { return "sf:" + id.String() }
+
+// purgeSavedUploads lets go of uploads never claimed, a day on, and their
+// copies in each business's storage.
+func (s *Server) purgeSavedUploads(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, path FROM taskiem_saved_uploads_purge()`)
+	if err != nil {
+		return err
+	}
+	type gone struct {
+		tenant uuid.UUID
+		path   string
+	}
+	files, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (gone, error) {
+		var g gone
+		return g, r.Scan(&g.tenant, &g.path)
+	})
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		s.dropSavedPaths(ctx, savedOwner{tenant: f.tenant}, []string{f.path})
+	}
+	return nil
+}
+
 func fileWhere(o savedOwner) (string, uuid.UUID) {
 	if o.mine() {
 		return `person_id = $1`, o.person
@@ -48,12 +115,25 @@ func fileWhere(o savedOwner) (string, uuid.UUID) {
 // to save it by, its name, type and size.
 func (s *Server) uploadSavedFile(w http.ResponseWriter, r *http.Request, o savedOwner) {
 	ctx := r.Context()
+	who := "person:" + o.person.String()
+	if !o.mine() {
+		who = "business:" + o.tenant.String()
+	}
+	if !s.limiter("saved-upload:"+who, savedUploadsEvery, savedUploadsBurst).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "Too many files at once: wait a minute, then try again.")
+		return
+	}
 	f, err := s.readChatFile(w, r)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	// Refused before the file is stored anywhere.
+	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error { return savedFilesRoomTx(ctx, tx, o, len(f.Data)) }); err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
 	id := uuid.Must(uuid.NewV7())
 	var path *string
 	if !o.mine() {
@@ -64,12 +144,22 @@ func (s *Server) uploadSavedFile(w http.ResponseWriter, r *http.Request, o saved
 		}
 		path = &bf.Path
 	}
-	var data []byte
-	if o.mine() {
-		data = f.Data
-	}
 	var stale []string
 	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		// One upload at a time per owner, so the limits hold.
+		if err := lockSavedTx(ctx, tx, o); err != nil {
+			return err
+		}
+		var data []byte
+		if o.mine() {
+			key, err := s.keys().KeyTx(ctx, tx, o.person, true)
+			if err != nil {
+				return err
+			}
+			if data, err = peoplechats.Seal(key, o.person, savedFileRow(id), f.Data); err != nil {
+				return err
+			}
+		}
 		where, owner := fileWhere(o)
 		// Uploads never claimed, a day on: gone.
 		rows, err := tx.Query(ctx, `DELETE FROM saved_files WHERE `+where+` AND object_id IS NULL AND created_at < now() - interval '1 day' RETURNING coalesce(path, '')`, owner)
@@ -77,6 +167,9 @@ func (s *Server) uploadSavedFile(w http.ResponseWriter, r *http.Request, o saved
 			return err
 		}
 		if stale, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+			return err
+		}
+		if err := savedFilesRoomTx(ctx, tx, o, len(f.Data)); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `INSERT INTO saved_files (id, person_id, tenant_id, type, size, name, data, path) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -87,7 +180,7 @@ func (s *Server) uploadSavedFile(w http.ResponseWriter, r *http.Request, o saved
 		if path != nil {
 			s.dropChatFile(ctx, o.tenant, *path)
 		}
-		s.personFail(w, r, err)
+		s.savedFail(w, r, err)
 		return
 	}
 	s.dropSavedPaths(ctx, o, stale)
@@ -181,8 +274,20 @@ func (s *Server) savedFile(w http.ResponseWriter, r *http.Request, o savedOwner)
 			return err
 		}
 		where, owner := fileWhere(o)
-		return tx.QueryRow(ctx, `SELECT data, coalesce(path, ''), type, name FROM saved_files WHERE `+where+` AND object_id = $2 AND field = $3`, owner, id, field).
-			Scan(&data, &path, &ctype, &name)
+		var fid uuid.UUID
+		if err := tx.QueryRow(ctx, `SELECT id, data, coalesce(path, ''), type, name FROM saved_files WHERE `+where+` AND object_id = $2 AND field = $3`, owner, id, field).
+			Scan(&fid, &data, &path, &ctype, &name); err != nil {
+			return err
+		}
+		if !o.mine() {
+			return nil
+		}
+		key, err := s.keys().KeyTx(ctx, tx, o.person, false)
+		if err != nil {
+			return err
+		}
+		data, err = peoplechats.Open(key, o.person, savedFileRow(fid), data)
+		return err
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

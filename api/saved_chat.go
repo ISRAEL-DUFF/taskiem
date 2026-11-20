@@ -63,8 +63,11 @@ func (s *Server) waSavedName(ctx context.Context, c *chat, text string) (bool, e
 			return err
 		})
 	}
-	if err := look(savedOwner{person: c.p.UserID, by: c.p.UserID}); err != nil {
-		return true, err
+	// Not the person's own on a business's own app (ownAppChat).
+	if !ownAppChat(c) {
+		if err := look(savedOwner{person: c.p.UserID, by: c.p.UserID}); err != nil {
+			return true, err
+		}
 	}
 	if c.tenant.ID != uuid.Nil {
 		if err := look(savedOwner{tenant: c.tenant.ID, by: c.p.UserID}); err != nil {

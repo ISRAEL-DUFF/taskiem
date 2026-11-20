@@ -752,8 +752,13 @@ func changedFields(a, b savedRow) []string {
 	return out
 }
 
+// savedScrub archives a saved thing and lets go of what it held: its
+// details, its sealed values and its hint (only its name and title are
+// kept, for the record of what was removed).
+const savedScrub = `archived_at = now(), default_place = false, details = '{}', sealed = '{}', hint = '', updated_at = now()`
+
 // removeSaved is DELETE /v1/saved/{id} and /v1/me/saved/{id}: it is
-// archived, its name free again.
+// archived, what it held let go, its name free again.
 func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwner) {
 	ctx := r.Context()
 	id, ok := savedID(r)
@@ -763,13 +768,20 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 	}
 	var gone []string
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		// A person's places are their addresses: held as an address's
+		// removal holds them, so the default stays right.
+		if o.mine() {
+			if err := lockAddressesTx(ctx, tx, o.person); err != nil {
+				return err
+			}
+		}
 		where, owner := ownerWhere(o)
 		var name string
 		var wasDefault bool
 		if err := tx.QueryRow(ctx, `SELECT default_place FROM saved_objects WHERE `+where+` AND id = $2 FOR UPDATE`, owner, id).Scan(&wasDefault); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `UPDATE saved_objects SET archived_at = now(), default_place = false, updated_by = $3, updated_at = now() WHERE `+where+` AND id = $2 RETURNING name`,
+		if err := tx.QueryRow(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $3 WHERE `+where+` AND id = $2 RETURNING name`,
 			owner, id, o.by).Scan(&name); err != nil {
 			return err
 		}
@@ -1087,7 +1099,7 @@ func (s *Server) changeSavedThing(w http.ResponseWriter, r *http.Request, o save
 		}
 		where, owner := ownerWhere(o)
 		if x, err = scanSaved(tx.QueryRow(ctx, `UPDATE saved_objects SET name = $3, title = $4, details = $5, hint = $6, updated_by = $7, updated_at = now()
-			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, was.ID, name, title, c.Details, c.Hint, o.by)); err != nil {
+			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, was.ID, name, title, c.Details, savedHint(o, was.Kind, c), o.by)); err != nil {
 			return err
 		}
 		return s.savedEvent(r, tx, o, was.ID, "changed", map[string]any{"changed": changedFields(was, x)})

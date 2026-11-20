@@ -50026,6 +50026,9 @@ components:
             commonly written before subject ids were canonical (`0803 123 4567` beside `+2348031234567`).
           items:
             type: string
+        saved:
+          type: integer
+          description: By a phone or an email, how many of the business's saved things held it (a person, a place, a field of its own kind) and were removed with what they held.
       additionalProperties: false
     BillingInterval:
       type: string

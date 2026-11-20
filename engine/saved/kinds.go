@@ -303,3 +303,30 @@ func SizeWords(n int64) string {
 	}
 	return strconv.FormatInt(n, 10) + " bytes"
 }
+
+// MaskedHint is a business's hint for what Clean made: a person's phone
+// and email masked ("••0099", "a•••@shop.ng"), since the business's lists
+// and its @ suggestions are seen by all its staff. Other kinds' hints hold
+// no contact and are kept.
+func (c Cleaned) MaskedHint(kind string) string {
+	if kind != KindPerson {
+		return c.Hint
+	}
+	str := func(k string) string { v, _ := c.Details[k].(string); return v }
+	ph, email := str("phone"), str("email")
+	if ph != "" {
+		ph = MaskValue(ph)
+	}
+	return firstOf(ph, MaskEmail(email), str("address"), "A person")
+}
+
+// MaskEmail is an email as a list shows it: its first letter and its
+// domain ("a•••@shop.ng"); "" for none.
+func MaskEmail(v string) string {
+	at := strings.LastIndex(v, "@")
+	if at < 1 {
+		return ""
+	}
+	first, _ := utf8.DecodeRuneInString(v)
+	return string(first) + "•••" + v[at:]
+}

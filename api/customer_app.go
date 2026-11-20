@@ -864,7 +864,10 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 func serveChatFile(w http.ResponseWriter, data []byte, ctype, name, kind string) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// A caller's own policy kept (a saved file is never cached).
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, max-age=86400")
+	}
 	disp := "inline"
 	if kind == "file" {
 		disp = "attachment"

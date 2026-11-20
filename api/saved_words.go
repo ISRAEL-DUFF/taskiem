@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -34,8 +36,78 @@ type chatSave struct {
 	Kind  string `json:"kind"`
 	// Business: it goes in the business's saved things, not the person's.
 	Business bool `json:"business"`
-	// Sealed are its details (saved.Reading's), sealed while they wait.
+	// Sealed are its details (saved.Reading's), sealed while they wait:
+	// under the business's key for the business's, under the person's own
+	// for theirs ({"person": base64}), so the business never holds them.
 	Sealed map[string]any `json:"sealed"`
+}
+
+// chatSaveRow is the row a person's waiting save is sealed for.
+func chatSaveRow(person uuid.UUID) string { return "chat-save:" + person.String() }
+
+// ownAppChat says whether c is on a business's own WhatsApp app, whose
+// sender is only as sure as the secret the business chose (F2): a person's
+// own saved things are neither saved nor looked up there.
+func ownAppChat(c *chat) bool { return c.wa != nil && c.wa.OwnApp }
+
+// sealChatSave seals a waiting save's details for whose it will be.
+func (s *Server) sealChatSave(ctx context.Context, c *chat, business bool, details map[string]string) (map[string]any, error) {
+	if business {
+		var sealed map[string]any
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			var err error
+			sealed, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "saved_details", details)
+			return err
+		})
+		return sealed, err
+	}
+	raw, _ := json.Marshal(details)
+	var sealed map[string]any
+	err := db.InPersonTx(ctx, s.Store.Pool, c.p.UserID, func(tx pgx.Tx) error {
+		key, err := s.keys().KeyTx(ctx, tx, c.p.UserID, true)
+		if err != nil {
+			return err
+		}
+		ct, err := peoplechats.Seal(key, c.p.UserID, chatSaveRow(c.p.UserID), raw)
+		if err != nil {
+			return err
+		}
+		sealed = map[string]any{"person": base64.StdEncoding.EncodeToString(ct)}
+		return nil
+	})
+	return sealed, err
+}
+
+// openChatSave opens what sealChatSave sealed.
+func (s *Server) openChatSave(ctx context.Context, c *chat, sealed map[string]any) (map[string]string, error) {
+	var details map[string]string
+	if b64, ok := sealed["person"].(string); ok {
+		ct, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			return nil, err
+		}
+		err = db.InPersonTx(ctx, s.Store.Pool, c.p.UserID, func(tx pgx.Tx) error {
+			key, err := s.keys().KeyTx(ctx, tx, c.p.UserID, false)
+			if err != nil {
+				return err
+			}
+			raw, err := peoplechats.Open(key, c.p.UserID, chatSaveRow(c.p.UserID), ct)
+			if err != nil {
+				return err
+			}
+			return json.Unmarshal(raw, &details)
+		})
+		return details, err
+	}
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+		v, err := s.Store.PII.OpenTx(ctx, tx, c.tenant.ID, sealed)
+		if err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(v)
+		return json.Unmarshal(raw, &details)
+	})
+	return details, err
 }
 
 // titleOf is a title made from a name: "mum" is Mum, "bank-details" Bank
@@ -64,6 +136,9 @@ func (s *Server) waSaveWords(ctx context.Context, c *chat, text string) (bool, e
 		return true, c.say(ctx, s, c.t("wa.saved.need_bank", "number", read.Details["account_number"], "name", name))
 	}
 	business := c.p.Can(PermSavedManage)
+	if ownAppChat(c) && !business {
+		return true, c.say(ctx, s, c.t("wa.saved.own_app", "org", c.tenant.Name))
+	}
 	o := s.chatSavedOwner(c, business)
 	taken := false
 	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
@@ -79,12 +154,8 @@ func (s *Server) waSaveWords(ctx context.Context, c *chat, text string) (bool, e
 	if title == "" {
 		title = titleOf(name)
 	}
-	var sealed map[string]any
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		var err error
-		sealed, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "saved_details", read.Details)
-		return err
-	}); err != nil {
+	sealed, err := s.sealChatSave(ctx, c, business, read.Details)
+	if err != nil {
 		return true, err
 	}
 	sv := &chatSave{Name: name, Title: title, Kind: read.Kind, Business: business, Sealed: sealed}
@@ -148,7 +219,7 @@ func (s *Server) waSaveAsk(ctx context.Context, c *chat, sv *chatSave, details m
 // saveButtons: Save, and for the business's, Keep it to myself; Cancel.
 func saveButtons(c *chat, sv *chatSave) []whatsapp.Button {
 	out := []whatsapp.Button{{ID: "yes", Title: c.t("button.save")}}
-	if sv.Business {
+	if sv.Business && !ownAppChat(c) {
 		out = append(out, whatsapp.Button{ID: "mine", Title: c.t("button.keep_mine")})
 	}
 	return append(out, whatsapp.Button{ID: "cancel", Title: c.t("button.cancel")})
@@ -160,6 +231,9 @@ func (s *Server) waSaveReply(ctx context.Context, c *chat, cmd string) error {
 	switch cmd {
 	case "yes", "y", "save", "confirm":
 	case "mine", "keep it to myself", "keep it to me", "mine only":
+		if ownAppChat(c) {
+			return c.say(ctx, s, c.t("wa.saved.own_app", "org", c.tenant.Name), saveButtons(c, sv)...)
+		}
 		sv.Business = false
 	case "no", "n":
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
@@ -169,15 +243,8 @@ func (s *Server) waSaveReply(ctx context.Context, c *chat, cmd string) error {
 	default:
 		return c.say(ctx, s, c.t("wa.saved.save_reminder", "name", sv.Name), saveButtons(c, sv)...)
 	}
-	var details map[string]string
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
-		v, err := s.Store.PII.OpenTx(ctx, tx, c.tenant.ID, sv.Sealed)
-		if err != nil {
-			return err
-		}
-		raw, _ := json.Marshal(v)
-		return json.Unmarshal(raw, &details)
-	}); err != nil {
+	details, err := s.openChatSave(ctx, c, sv.Sealed)
+	if err != nil {
 		return err
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {

@@ -1789,6 +1789,66 @@
       "reviewed": true,
       "context": "Saving an account in words named no bank"
     },
+    "wa.saved.own_app": {
+      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "reviewed": true,
+      "context": "On a business's own WhatsApp number, a person's own saved things are not saved or looked up; {org} is the business"
+    },
+    "wa.saved.share_ask": {
+      "text": "{question}",
+      "reviewed": true,
+      "context": "Sharing a saved thing from the chat: the question asked first (\"Share Our account's account details with Ada's Kitchen?\"); Share and Cancel follow"
+    },
+    "wa.saved.share_plain": {
+      "text": "Share @{name} with {to}?",
+      "reviewed": true,
+      "context": "Sharing a saved thing with nothing sensitive in it: asked first; Share and Cancel follow"
+    },
+    "wa.saved.share_which": {
+      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: the name given fits more than one business or customer; their names follow"
+    },
+    "wa.saved.share_nobody": {
+      "text": "No linked business or customer is called {to}.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: no one by the name given"
+    },
+    "wa.saved.share_none": {
+      "text": "You have nothing saved as @{name}.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: no saved thing by that name"
+    },
+    "wa.saved.shared": {
+      "text": "Shared @{name} with {to}.",
+      "reviewed": true,
+      "context": "A saved thing was shared from the chat"
+    },
+    "wa.saved.share_left": {
+      "text": "Not shared.",
+      "reviewed": true,
+      "context": "The person said no to sharing a saved thing"
+    },
+    "wa.saved.share_reminder": {
+      "text": "Share @{name}? Tap Share or Cancel.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: the answer was neither yes nor no"
+    },
+    "wa.saved.share_not": {
+      "text": "Not shared: {reason}",
+      "reviewed": true,
+      "context": "A saved thing could not be shared from the chat; the reason follows"
+    },
+    "wa.saved.save_quoted_none": {
+      "text": "Reply to a message from a linked business to save it.",
+      "reviewed": true,
+      "context": "Save this as @name sent without quoting a message Taskiem can read"
+    },
+    "button.share": {
+      "text": "Share",
+      "reviewed": true,
+      "context": "A button: share the saved thing (at most 20 characters)"
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": true,

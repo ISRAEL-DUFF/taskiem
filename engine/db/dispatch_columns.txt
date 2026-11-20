@@ -1703,3 +1703,8 @@ people_baskets.changed_at
 people_baskets.placed_at
 group_invites_gone.person_id
 group_invites_gone.at
+saved_files.id
+saved_files.tenant_id
+saved_files.object_id
+saved_files.path
+saved_files.created_at

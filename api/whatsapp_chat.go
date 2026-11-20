@@ -259,6 +259,8 @@ type chatData struct {
 	Booking *chatBooking `json:"booking,omitempty"`
 	// Save is a saved thing said in words, waiting for Save (saved_words.go).
 	Save *chatSave `json:"save,omitempty"`
+	// Share is a saved thing to share, waiting for Share (saved_chat_share.go).
+	Share *chatShare `json:"share,omitempty"`
 	// Shop is the storefront being set up, or a change to it being
 	// confirmed (whatsapp_storefront.go).
 	Shop *chatShop `json:"shop,omitempty"`
@@ -840,6 +842,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 	}
+	// "save this as @name" replying to a linked business's message: saved,
+	// not sent to them (saved_chat_share.go).
+	if c.in.Quoted != "" && c.in.Reply == "" {
+		if done, err := s.waSaveQuoted(ctx, c, c.in.Text); done || err != nil {
+			return err
+		}
+	}
 	// A reply quoting a linked business's message, into its conversation
 	// (link_chat.go), whatever else the conversation is in the middle of.
 	if done, err := s.waQuotedReply(ctx, c); done || err != nil {
@@ -925,6 +934,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if c.data.Save != nil {
 			return s.waSaveReply(ctx, c, cmd)
 		}
+		if c.data.Share != nil {
+			return s.waShareReply(ctx, c, cmd)
+		}
 		if c.data.Booking != nil {
 			switch cmd {
 			case "yes", "y", "confirm":
@@ -967,6 +979,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 		if done, err := s.waSaveWords(ctx, c, text); done || err != nil {
+			return err
+		}
+		// "share @our-account with Ada's Kitchen" (saved_chat_share.go).
+		if done, err := s.waShareSaved(ctx, c, text); done || err != nil {
+			return err
+		}
+		// "save this as @name" with no message replied to: said how.
+		if done, err := s.waSaveQuoted(ctx, c, text); done || err != nil {
 			return err
 		}
 		if !on.On(areas.Storefront) {

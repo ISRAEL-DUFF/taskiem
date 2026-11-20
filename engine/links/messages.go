@@ -804,6 +804,11 @@ func RecordSentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel stri
 	return err
 }
 
+// MessageTx is one message of a conversation, by its pair id.
+func MessageTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (Message, error) {
+	return scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.pair_id = $3`, tenant, link, pair))
+}
+
 // SentTx is the conversation's message a chat app's message to this
 // address was, in the business in scope: its link and id; ok false when
 // it was none.

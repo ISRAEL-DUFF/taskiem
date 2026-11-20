@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // Saved things shared in chats (saved objects S1, part 3; §6.2): a person's
@@ -196,5 +198,111 @@ func TestSavedLinkCards(t *testing.T) {
 	}
 	if card == nil || card["details"].(map[string]any)["account_number"] != "1234567890" || card["title"] != "Dangote Stores account" {
 		t.Fatalf("the buyer's card: %v", card)
+	}
+}
+
+// From the Taskiem chat (saved objects S1, after its review): "share @x
+// with" a linked business, asked first, sent as a card, recorded; a name
+// nobody has is said; "save this as @name" replying to a linked business's
+// message told on the phone saves what it says, not sent to them.
+func TestSavedFromTaskiemChat(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	const sellerOn, buyerOn = "+2348010000491", "+2348010000492"
+	w.bind(t, seller, sellerOn)
+	w.bind(t, buyer, buyerOn)
+	w.say(t, sellerOn, "links")
+	w.say(t, buyerOn, "links")
+	acct := seller.must(201, "POST", "/v1/saved", map[string]any{"name": "our-account", "title": "Dangote account", "bank_name": "Zenith Bank", "account_number": "1234567890"})["saved"].(map[string]any)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+
+	if said := taskiemSays(t, seller, "share @nothing with Ada's Kitchen"); !strings.Contains(said, "nothing saved as @nothing") {
+		t.Fatalf("no such thing: %q", said)
+	}
+	if said := taskiemSays(t, seller, "share @our-account with Nobody Ltd"); !strings.Contains(said, "No linked business or customer is called Nobody Ltd") {
+		t.Fatalf("nobody: %q", said)
+	}
+	if said := taskiemSays(t, seller, "share @our-account with Ada's Kitchen"); said != "Share Dangote account's account details with Ada's Kitchen?" {
+		t.Fatalf("asked: %q", said)
+	}
+	if said := taskiemSays(t, seller, "no"); !strings.Contains(said, "Not shared") {
+		t.Fatalf("no: %q", said)
+	}
+	taskiemSays(t, seller, "share @our-account with Ada's Kitchen")
+	if said := taskiemSays(t, seller, "yes"); !strings.Contains(said, "Shared @our-account with Ada's Kitchen") {
+		t.Fatalf("shared: %q", said)
+	}
+	var card map[string]any
+	for _, x := range buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any) {
+		for _, m := range x.(map[string]any)["mentions"].([]any) {
+			if mm := m.(map[string]any); mm["kind"] == "saved" {
+				card = mm["saved"].(map[string]any)
+			}
+		}
+	}
+	if card == nil || card["details"].(map[string]any)["account_number"] != "1234567890" {
+		t.Fatalf("the buyer's card: %v", card)
+	}
+	var shares int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE target = $1 AND action = 'saved.shared'`, acct["id"]).Scan(&shares); err != nil || shares != 1 {
+		t.Fatalf("shares recorded: %d %v", shares, err)
+	}
+
+	// The seller writes; the buyer saves it from the phone by replying.
+	m := seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Pay to GTBank 0123456789, Account name: Dangote Ltd"})["message"].(map[string]any)
+	w.srv.WaitBackground()
+	var wamid string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT message_id FROM link_chat_sent WHERE pair_id = $1 AND channel = 'whatsapp'`, m["id"]).Scan(&wamid); err != nil {
+		t.Fatal(err)
+	}
+	before := len(seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any))
+	q := whatsapptest.Text("save this as @dangote")
+	q["context"] = map[string]any{"from": "15550001111", "id": wamid}
+	if got := w.send(t, buyerOn, q); len(got) != 1 || !strings.Contains(got[0].Text, "Save this as @dangote?") || !strings.Contains(got[0].Text, "0123456789") {
+		t.Fatalf("save this: %+v", got)
+	}
+	if n := len(seller.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any)); n != before {
+		t.Fatalf("the words went to the seller: %d", n)
+	}
+	// Without a quote, said how.
+	if said := taskiemSays(t, buyer, "save this as @x"); !strings.Contains(said, "Reply to a message") {
+		t.Fatalf("no quote: %q", said)
+	}
+}
+
+// "share @x with" a customer from the Taskiem chat: a card in the app.
+func TestSavedFromTaskiemChatToCustomer(t *testing.T) {
+	w := newDoorShopWorld(t)
+	w.owner.must(201, "POST", "/v1/saved", map[string]any{"kind": "text", "name": "hours", "title": "Our hours", "details": map[string]any{"body": "Mon-Sat 8-6"}})
+	w.owner.must(201, "POST", "/v1/saved", map[string]any{"name": "bank-account", "title": "Our account", "bank_name": "Zenith Bank", "account_number": "1234567890"})
+	tolu, _ := w.personIn(t, "+2348031120093")
+	toluChat := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz})["id"].(string)
+	tolu.must(201, "POST", "/v1/me/chats/"+toluChat+"/messages", map[string]any{"text": "How do I pay?"})
+	var name string
+	for _, x := range w.owner.must(200, "GET", "/v1/customer-chats", nil)["chats"].([]any) {
+		name = x.(map[string]any)["name"].(string)
+	}
+	if name == "" {
+		t.Fatal("no customer name")
+	}
+	if said := taskiemSays(t, w.owner, "share @bank-account with "+name); !strings.HasPrefix(said, "Share Our account's account details with ") {
+		t.Fatalf("asked: %q", said)
+	}
+	if said := taskiemSays(t, w.owner, "yes"); !strings.Contains(said, "Shared @bank-account with") {
+		t.Fatalf("shared: %q", said)
+	}
+	var seen bool
+	for _, x := range tolu.must(200, "GET", "/v1/me/chats/"+toluChat+"/messages", nil)["messages"].([]any) {
+		if c, ok := x.(map[string]any)["card"].(map[string]any); ok && c["type"] == "saved" {
+			seen = c["saved"].(map[string]any)["details"].(map[string]any)["account_number"] == "1234567890"
+		}
+	}
+	if !seen {
+		t.Fatal("the customer has no card")
+	}
+	// A text is not shared as a card: said.
+	if said := taskiemSays(t, w.owner, "share @hours with "+name); !strings.Contains(said, "Not shared") {
+		t.Fatalf("a text: %q", said)
 	}
 }

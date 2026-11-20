@@ -33,8 +33,12 @@ var (
 	readPhone = regexp.MustCompile(`(?:\+\s?234|\b0)[\s-]?[789](?:[\s-]?\d){9}\b`)
 	// A run of digits, maybe spaced or dashed: an account number is 10.
 	readDigits = regexp.MustCompile(`\d(?:[\s-]?\d){5,15}`)
-	// "Account name: Ada Obi", "Name - Ada Obi", "acct name Ada Obi".
-	readNamed = regexp.MustCompile(`(?im)^\s*(?:acc(?:oun)?t\.?\s*name|name)\s*[:\-–]?\s*([A-Za-z][A-Za-z .'\-]{1,80})$`)
+	// "Account name: Ada Obi", "Name - Ada Obi", "acct name Ada Obi"; a
+	// bare "name" only with its colon or dash ("name your price" is not one).
+	readNamed = regexp.MustCompile(`(?im)^\s*(?:acc(?:oun)?t\.?\s*name\s*[:\-–]?|name\s*[:\-–])\s*([A-Za-z][A-Za-z .'\-]{1,80})$`)
+	// Words that say an account is meant: a number with none of them and
+	// no bank is an order or a reference, read as text.
+	readAccountWords = regexp.MustCompile(`(?i)\b(acc(?:oun)?t|acct|a/c|acc|nuban|bank|transfer|pay(?:ment)?|send)\b`)
 	// "…, Account name: Ada Obi" within a line, up to a comma or its end.
 	readNamedIn = regexp.MustCompile(`(?i)acc(?:oun)?t\.?\s*name\s*[:\-–]\s*([A-Za-z][A-Za-z .'\-]{1,80}?)\s*(?:[,;\n]|$)`)
 	// "Address: …", a line given as one.
@@ -46,7 +50,43 @@ var (
 	readNotWord  = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	// A line that is only a name: two to four words of letters.
 	readOnlyName = regexp.MustCompile(`^[A-Za-z][A-Za-z'.\-]*(?:\s+[A-Za-z][A-Za-z'.\-]*){1,3}$`)
+	// Words no one's name is made of: a greeting, thanks, a request.
+	readNotName = regexp.MustCompile(`(?i)\b(thanks?|thank|please|pls|plz|good|morning|afternoon|evening|night|regards|kind|hello|hi|hey|dear|sir|ma|madam|pay|send|transfer|bank|account|acct|number|cheers|welcome|bless|sorry|okay|ok|your|my|our|the|you|me|us|name|price|call)\b`)
+	// A run of digits split where it was spaced or dashed.
+	readGroups = regexp.MustCompile(`\d+`)
 )
+
+// accountIn is an account number in a run of digits: the run itself when
+// it is 10, else 10 made of whole groups as they were spaced ("0123 456
+// 789" in "0123 456 789 0803…", "0123456789" before another number).
+func accountIn(run string) string {
+	groups := readGroups.FindAllString(run, -1)
+	for i := range groups {
+		d := ""
+		for _, g := range groups[i:] {
+			d += g
+			if len(d) >= 10 {
+				break
+			}
+		}
+		if len(d) == 10 {
+			return d
+		}
+	}
+	return ""
+}
+
+// readNote is what is left of the words once what was read is taken out:
+// kept as the note ("call after 6"), its spaces folded, up to MaxNote.
+func readNote(text string, taken ...string) string {
+	for _, t := range taken {
+		if t != "" {
+			text = strings.Replace(text, t, " ", 1)
+		}
+	}
+	text = strings.Trim(strings.Join(strings.Fields(text), " "), " ,.;:-–")
+	return clip(text, MaxNote)
+}
 
 // bankWords are the words that name each bank, as people write them,
 // longest first where one holds another.
@@ -89,19 +129,14 @@ func Read(text string) Reading {
 	}
 	if m := readPhone.FindString(rest); m != "" {
 		if p, err := phonenum.Normalise(m); err == nil {
-			r.Details["phone"] = p
+			r.Details["phone"], r.Details["phone_written"] = p, m
 			rest = strings.Replace(rest, m, " ", 1)
 		}
 	}
+	var number string
 	for _, m := range readDigits.FindAllString(rest, -1) {
-		d := strings.Map(func(c rune) rune {
-			if c >= '0' && c <= '9' {
-				return c
-			}
-			return -1
-		}, m)
-		if len(d) == 10 {
-			r.Details["account_number"] = d
+		if d := accountIn(m); d != "" {
+			number, r.Details["account_number"] = m, d
 			rest = strings.Replace(rest, m, " ", 1)
 			break
 		}
@@ -112,6 +147,12 @@ func Read(text string) Reading {
 		r.Title = strings.TrimSpace(m[1])
 	}
 	bank := readBank(rest)
+	// A number with other words, no bank and no word of an account is not
+	// one ("Order ref 1234567890"): the words are read without it. A number
+	// alone is asked about (which bank?).
+	if number != "" && bank == "" && !readAccountWords.MatchString(text) && strings.TrimSpace(readNotWord.ReplaceAllString(rest, " ")) != "" {
+		delete(r.Details, "account_number")
+	}
 	if _, ok := r.Details["account_number"]; ok {
 		r.Kind = KindBankAccount
 		if bank != "" {
@@ -121,7 +162,7 @@ func Read(text string) Reading {
 			// A line that is only a name, beside the number: "ADA OBI".
 			for _, l := range strings.Split(text, "\n") {
 				l = strings.TrimSpace(l)
-				if readOnlyName.MatchString(l) && readBank(l) == "" {
+				if readOnlyName.MatchString(l) && readBank(l) == "" && !readNotName.MatchString(l) {
 					r.Title = l
 					break
 				}
@@ -129,9 +170,10 @@ func Read(text string) Reading {
 		}
 		delete(r.Details, "email")
 		delete(r.Details, "phone")
+		delete(r.Details, "phone_written")
 		return r
 	}
-	if line, area, landmark := readPlace(text); line != "" {
+	if line, area, landmark, found := readPlace(text); line != "" {
 		r.Kind = KindPlace
 		r.Details["line"] = line
 		if area != "" {
@@ -141,34 +183,50 @@ func Read(text string) Reading {
 			r.Details["landmark"] = landmark
 		}
 		delete(r.Details, "email")
+		if note := readNote(text, found, r.Details["phone_written"]); note != "" {
+			r.Details["note"] = note
+		}
+		delete(r.Details, "phone_written")
 		return r
 	}
 	if r.Details["phone"] != "" || r.Details["email"] != "" {
 		r.Kind = KindPerson
+		named := ""
+		if m := readNamed.FindString(text); m != "" {
+			named = m
+		}
+		if note := readNote(text, r.Details["email"], r.Details["phone_written"], named); note != "" {
+			r.Details["note"] = note
+		}
+		delete(r.Details, "phone_written")
 		return r
 	}
+	delete(r.Details, "phone_written")
 	r.Kind = KindText
 	r.Details = map[string]string{"body": text}
 	return r
 }
 
-// readPlace reads an address: given as one ("Address: …"), or the line
-// that names a street; then its parts by commas: the street and number,
-// the area after it, a landmark ("opposite the filling station").
-func readPlace(text string) (line, area, landmark string) {
+// readPlace reads an address: given as one ("Address: …"), or a line
+// with a number and a word that names a street ("12 Herbert Macaulay
+// Way": "I'll close the shop by 6" names none, "on my way" no number);
+// then its parts by commas: the street and number, the area after it, a
+// landmark ("opposite the filling station"). whole is the words read as
+// the address, as written.
+func readPlace(text string) (line, area, landmark, whole string) {
 	found := ""
 	if m := readAddress.FindStringSubmatch(text); m != nil {
-		found = m[1]
+		found, whole = m[1], m[0]
 	} else {
 		for _, l := range strings.Split(text, "\n") {
-			if readStreet.MatchString(l) {
-				found = l
+			if streetLine(l) {
+				found, whole = l, l
 				break
 			}
 		}
 	}
 	if found == "" {
-		return "", "", ""
+		return "", "", "", ""
 	}
 	// What else the line holds (a phone, an email) is not the address.
 	found = readPhone.ReplaceAllString(readEmail.ReplaceAllString(found, ""), "")
@@ -186,5 +244,24 @@ func readPlace(text string) (line, area, landmark string) {
 			area = part
 		}
 	}
-	return line, area, landmark
+	return line, area, landmark, whole
+}
+
+// readHouse is a house number: "12", "12b", "No. 12", "Plot 4".
+var readHouse = regexp.MustCompile(`(?i)(^|[\s,])(?:no\.?\s*|plot\s+|block\s+)?\d+[a-z]?\b`)
+
+// streetLine says whether a line reads as an address: a house number
+// before a word that names a street, in the same part of it (up to a
+// comma).
+func streetLine(l string) bool {
+	for _, part := range strings.Split(l, ",") {
+		loc := readStreet.FindStringIndex(part)
+		if loc == nil {
+			continue
+		}
+		if readHouse.MatchString(part[:loc[0]]) {
+			return true
+		}
+	}
+	return false
 }

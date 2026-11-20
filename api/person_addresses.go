@@ -241,7 +241,7 @@ func (s *Server) addAddress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := savedOwner{person: person, by: person}
-	c, err := a.place()
+	c, err := a.place("")
 	if err != nil {
 		s.addressFail(w, r, err)
 		return
@@ -316,10 +316,15 @@ func (s *Server) editAddress(w http.ResponseWriter, r *http.Request) {
 		if a, err = scanSavedAddress(tx.QueryRow(ctx, `SELECT `+savedAddressCols+` FROM saved_objects WHERE `+placesWhere+` AND id = $2 FOR UPDATE`, person, id)); err != nil {
 			return err
 		}
+		// The place's note (written on Saved) is kept: an address has none.
+		var note string
+		if err := tx.QueryRow(ctx, `SELECT coalesce(details->>'note', '') FROM saved_objects WHERE `+placesWhere+` AND id = $2`, person, id).Scan(&note); err != nil {
+			return err
+		}
 		if err := in.apply(&a); err != nil {
 			return err
 		}
-		c, err := a.place()
+		c, err := a.place(note)
 		if err != nil {
 			return err
 		}
@@ -364,7 +369,7 @@ func (s *Server) deleteAddress(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT default_place FROM saved_objects WHERE `+placesWhere+` AND id = $2 FOR UPDATE`, person, id).Scan(&wasDefault); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE saved_objects SET archived_at = now(), default_place = false, updated_by = $1 WHERE `+placesWhere+` AND id = $2`, person, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $1 WHERE `+placesWhere+` AND id = $2`, person, id); err != nil {
 			return err
 		}
 		if err := savedEventBy(ctx, tx, savedWhoOf(r), savedOwner{person: person, by: person}, id, "removed", map[string]any{"from": "addresses"}); err != nil {
@@ -390,9 +395,9 @@ func newestPlaceDefaultTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) erro
 	return err
 }
 
-// place is the address as a place object keeps it.
-func (a savedAddress) place() (saved.Cleaned, error) {
-	d := map[string]any{"line": a.Line, "area": a.Area, "landmark": a.Landmark}
+// place is the address as a place object keeps it, with the place's note.
+func (a savedAddress) place(note string) (saved.Cleaned, error) {
+	d := map[string]any{"line": a.Line, "area": a.Area, "landmark": a.Landmark, "note": note}
 	if a.Phone != nil {
 		d["phone"] = *a.Phone
 	}
