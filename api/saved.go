@@ -924,7 +924,8 @@ const (
 
 // savedStepUpOptions is POST /v1/saved/step-up/options and
 // /v1/me/saved/step-up/options {operation: saved.change | saved.reveal,
-// target: the object's id}: a passkey challenge good for that alone. 409
+// target: the object's id; or saved.kind, target: the kind's id, to show
+// what a kind kept hidden}: a passkey challenge good for that alone. 409
 // {no_passkey} when the person has none.
 func (s *Server) savedStepUpOptions(w http.ResponseWriter, r *http.Request, o savedOwner) {
 	if !s.passkeysOn(w) {
@@ -940,8 +941,8 @@ func (s *Server) savedStepUpOptions(w http.ResponseWriter, r *http.Request, o sa
 		return
 	}
 	id, err := uuid.Parse(req.Target)
-	if (req.Operation != savedOpChange && req.Operation != savedOpReveal) || err != nil {
-		writeErr(w, http.StatusBadRequest, "Name what the passkey confirms: saved.change or saved.reveal, and the saved thing's id.")
+	if (req.Operation != savedOpChange && req.Operation != savedOpReveal && req.Operation != savedOpKind) || err != nil {
+		writeErr(w, http.StatusBadRequest, "Name what the passkey confirms: saved.change or saved.reveal and the saved thing's id, or saved.kind and the kind's.")
 		return
 	}
 	if !s.limiter("challenge:"+limitIP(r), time.Second, 30).Allow() {
@@ -954,6 +955,10 @@ func (s *Server) savedStepUpOptions(w http.ResponseWriter, r *http.Request, o sa
 		return
 	}
 	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		if req.Operation == savedOpKind {
+			_, err := savedKindTx(ctx, tx, o, id, false)
+			return err
+		}
 		_, err := savedRowTx(ctx, tx, o, id, false)
 		return err
 	}); err != nil {

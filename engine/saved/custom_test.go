@@ -3,6 +3,7 @@ package saved
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,90 @@ func TestCustomFieldsPlaceBankFile(t *testing.T) {
 	}
 	if _, err := Clean(KindFile, map[string]any{"name": "menu.pdf"}); !errors.Is(err, ErrInvalid) {
 		t.Error("a file kind with no file passed")
+	}
+}
+
+// A field's key made from its label never takes a key given for a field
+// kept from before, wherever that field is in the list.
+func TestCleanKindKeysAvoidGiven(t *testing.T) {
+	_, fs, err := CleanKind("Car", []Field{{Label: "Plate", Type: "text"}, {Key: "plate", Label: "Old plate", Type: "text"}})
+	if err != nil || fs[0].Key == "plate" || fs[1].Key != "plate" {
+		t.Fatalf("keys: %+v %v", fs, err)
+	}
+	if _, _, err := CleanKind("Car", []Field{{Key: "a", Label: "A", Type: "text"}, {Key: "a", Label: "B", Type: "text"}}); err == nil {
+		t.Fatal("a key given twice was taken")
+	}
+}
+
+func TestCustomValueParsing(t *testing.T) {
+	num := Field{Key: "n", Label: "Seats", Type: "number"}
+	for _, v := range []string{"Inf", "NaN", "-Inf", "infinity", "0x10", "1e400"} {
+		if _, err := cleanValue(num, v); err == nil {
+			t.Errorf("number %q taken", v)
+		}
+	}
+	if v, err := cleanValue(num, "1,200.5"); err != nil || v != "1200.5" {
+		t.Errorf("1,200.5: %q %v", v, err)
+	}
+	money := Field{Key: "m", Label: "Rent", Type: "money"}
+	for in, want := range map[string]string{"₦ 25,000": "25000", "N25000": "25000", "n 25,000.50": "25000.50", "NGN 25,000": "25000", "ngn25000": "25000", "25,000 naira": "25000", "25000": "25000"} {
+		if v, err := cleanValue(money, in); err != nil || v != want {
+			t.Errorf("money %q: %q %v", in, v, err)
+		}
+	}
+	for _, in := range []string{"Naira", "N", "twenty", "25.123", "$25"} {
+		if _, err := cleanValue(money, in); err == nil {
+			t.Errorf("money %q taken", in)
+		}
+	}
+}
+
+// One upload is in one field only; a field gone takes its value with it,
+// and a value no longer good for its field's type is let go.
+func TestCustomValuesKeptAndLetGo(t *testing.T) {
+	id := "0190f3c2-7a3b-7c1d-8e2f-1a2b3c4d5e6f"
+	files := []Field{{Key: "front", Label: "Front", Type: "file"}, {Key: "back", Label: "Back", Type: "file"}}
+	if _, err := CleanValues(files, map[string]any{"front": id, "back": id}, nil); err == nil {
+		t.Fatal("one file in two fields")
+	}
+	was := map[string]string{"plate": "LAG 123", "vin": "SECRET", "made": "2020-01-02", "colour": "red"}
+	now := []Field{{Key: "plate", Label: "Plate", Type: "text"}, {Key: "made", Label: "Made", Type: "date"}, {Key: "colour", Label: "Colour", Type: "date"}}
+	got := KeepFields(now, was)
+	if len(got) != 2 || got["plate"] != "LAG 123" || got["made"] != "2020-01-02" {
+		t.Fatalf("kept: %v", got)
+	}
+	plain, secret, _ := SplitValues(now, was)
+	if _, ok := plain["vin"]; ok || len(secret) != 0 {
+		t.Fatalf("a removed field's value kept: %v %v", plain, secret)
+	}
+}
+
+func TestDesensitised(t *testing.T) {
+	was := []Field{
+		{Key: "vin", Label: "VIN", Type: "text", Sensitive: true},
+		{Key: "chip", Label: "Chip", Type: "text", Sensitive: true, NeverShare: true},
+		{Key: "acct", Label: "Account", Type: "bank_account", Sensitive: true},
+		{Key: "plate", Label: "Plate", Type: "text"},
+		{Key: "pin", Label: "PIN", Type: "text", Sensitive: true},
+	}
+	now := []Field{
+		{Key: "vin", Label: "VIN", Type: "text"},                       // sensitive off
+		{Key: "chip", Label: "Chip", Type: "text", Sensitive: true},    // shareable now
+		{Key: "acct", Label: "Account", Type: "text", Sensitive: true}, // another type
+		{Key: "plate", Label: "Plate", Type: "text", Sensitive: true},  // made sensitive: fine
+		{Key: "pin", Label: "PIN code", Type: "text", Sensitive: true}, // relabelled: fine
+	}
+	got := Desensitised(was, now)
+	if len(got) != 3 || got["vin"] != "VIN" || got["chip"] != "Chip" || got["acct"] != "Account" {
+		t.Fatalf("desensitised: %v", got)
+	}
+}
+
+func TestNote(t *testing.T) {
+	if n, err := Note("  pays   for\n rice "); err != nil || n != "pays for rice" {
+		t.Fatalf("note: %q %v", n, err)
+	}
+	if _, err := Note(strings.Repeat("x", MaxNote+1)); err == nil {
+		t.Fatal("a long note taken")
 	}
 }

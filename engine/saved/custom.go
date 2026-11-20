@@ -2,6 +2,7 @@ package saved
 
 import (
 	"fmt"
+	"math"
 	"net/mail"
 	"regexp"
 	"slices"
@@ -21,7 +22,8 @@ import (
 // and says whether it is required, sensitive (sealed, masked in lists,
 // shown in full only on a fresh unlock, asked before sharing) or never
 // shared (kept out of every card). A kind can change later: objects keep
-// what they had, and new fields start empty. An object of a made-up kind
+// what they had in the fields kept, new fields start empty, and a field
+// removed takes its values with it. An object of a made-up kind
 // is of kind custom, its kind's id beside it.
 
 // KindCustom is an object of a kind its owner made.
@@ -108,6 +110,17 @@ func CleanKind(name string, fields []Field) (string, []Field, error) {
 	}
 	out := make([]Field, 0, len(fields))
 	labels, keys := map[string]bool{}, map[string]bool{}
+	// The keys given (fields kept from before) first, so a new field's key
+	// made from its label never takes one of theirs.
+	given := map[string]bool{}
+	for _, f := range fields {
+		if f.Key != "" {
+			if given[f.Key] {
+				return "", nil, invalid("A field's key is taken or not one Taskiem makes.")
+			}
+			given[f.Key] = true
+		}
+	}
 	for _, f := range fields {
 		f.Label = strings.Join(strings.Fields(f.Label), " ")
 		if f.Label == "" {
@@ -125,7 +138,7 @@ func CleanKind(name string, fields []Field) (string, []Field, error) {
 		}
 		if f.Key == "" {
 			f.Key = keyOf(f.Label)
-			for n := 2; keys[f.Key]; n++ {
+			for n := 2; keys[f.Key] || given[f.Key]; n++ {
 				f.Key = fmt.Sprintf("%s_%d", keyOf(f.Label), n)
 			}
 		}
@@ -163,7 +176,23 @@ func CleanKind(name string, fields []Field) (string, []Field, error) {
 	return name, out, nil
 }
 
-var moneyText = regexp.MustCompile(`^\d+(\.\d{1,2})?$`)
+var (
+	moneyText  = regexp.MustCompile(`^\d+(\.\d{1,2})?$`)
+	numberText = regexp.MustCompile(`^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$`)
+	nairaMark  = regexp.MustCompile(`(?i)^(₦|ngn|naira|n(?:\s|\d))`)
+	nairaAfter = regexp.MustCompile(`(?i)\s*(naira|ngn)$`)
+)
+
+// moneyAmount is an amount in naira as typed ("₦ 25,000", "N25000", "NGN
+// 25,000", "25000 naira") without its mark, commas and spaces.
+func moneyAmount(v string) string {
+	v = strings.TrimSpace(v)
+	if m := nairaMark.FindString(v); m != "" {
+		v = strings.TrimPrefix(v, strings.TrimRight(m, "0123456789 \t"))
+	}
+	v = nairaAfter.ReplaceAllString(v, "")
+	return strings.NewReplacer(",", "", " ", "").Replace(v)
+}
 
 // cleanValue checks one field's value as its type takes it.
 func cleanValue(f Field, v string) (string, error) {
@@ -176,12 +205,12 @@ func cleanValue(f Field, v string) (string, error) {
 		return v, nil
 	case "number":
 		n, err := strconv.ParseFloat(strings.ReplaceAll(v, ",", ""), 64)
-		if err != nil {
+		if err != nil || math.IsInf(n, 0) || math.IsNaN(n) || !numberText.MatchString(strings.ReplaceAll(v, ",", "")) {
 			return "", invalid(f.Label + " should be a number.")
 		}
 		return strconv.FormatFloat(n, 'f', -1, 64), nil
 	case "money":
-		m := strings.ReplaceAll(strings.TrimPrefix(strings.TrimSpace(v), "₦"), ",", "")
+		m := moneyAmount(v)
 		if !moneyText.MatchString(m) {
 			return "", invalid(f.Label + " should be an amount in naira, such as 25,000.")
 		}
@@ -232,12 +261,9 @@ func cleanValue(f Field, v string) (string, error) {
 // CleanValues checks an object's values for its kind's fields: those in
 // in (a string, or nil to remove it) over those it had (was, sensitive
 // ones in full); every required field filled. Values of fields the kind no
-// longer has are kept as they were, unseen.
+// longer has are let go (KeepFields), and one file is in one field only.
 func CleanValues(fields []Field, in map[string]any, was map[string]string) (map[string]string, error) {
-	out := map[string]string{}
-	for k, v := range was {
-		out[k] = v
-	}
+	out := KeepFields(fields, was)
 	byKey := map[string]Field{}
 	for _, f := range fields {
 		byKey[f.Key] = f
@@ -265,12 +291,58 @@ func CleanValues(fields []Field, in map[string]any, was map[string]string) (map[
 		}
 		out[k] = v
 	}
+	files := map[string]bool{}
 	for _, f := range fields {
 		if f.Required && out[f.Key] == "" {
 			return nil, invalid(f.Label + " is needed.")
 		}
+		if f.Type == "file" && out[f.Key] != "" {
+			if files[out[f.Key]] {
+				return nil, invalid("One photo or document is in two fields: choose it for one.")
+			}
+			files[out[f.Key]] = true
+		}
 	}
 	return out, nil
+}
+
+// KeepFields are the values an object keeps when its kind is as fields
+// say: those of fields it still has, each still good for its field's type
+// (a field changed from text to a date keeps a value only if it is a
+// date); the rest are let go, never kept unseen.
+func KeepFields(fields []Field, was map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, f := range fields {
+		v, ok := was[f.Key]
+		if !ok || v == "" {
+			continue
+		}
+		if c, err := cleanValue(f, v); err == nil {
+			out[f.Key] = c
+		}
+	}
+	return out
+}
+
+// Desensitised are the fields of a kind's change that show what was kept
+// hidden: made not sensitive, made shareable, or a sensitive one given
+// another type; by key, with its label.
+func Desensitised(was, now []Field) map[string]string {
+	old := map[string]Field{}
+	for _, f := range was {
+		old[f.Key] = f
+	}
+	out := map[string]string{}
+	for _, f := range now {
+		o, ok := old[f.Key]
+		if !ok {
+			continue
+		}
+		if (o.Sensitive && !f.Sensitive) || (o.NeverShare && !f.NeverShare) || (o.Sensitive && o.Type != f.Type) {
+			out[f.Key] = f.Label
+		}
+	}
+	return out
 }
 
 var lastDigits = regexp.MustCompile(`(\d[\d \-]*\d)\s*$`)
@@ -303,19 +375,22 @@ func MaskValue(v string) string {
 
 // SplitValues parts an object's values: those kept as they are (plain),
 // those sealed (secret), and the sealed ones masked as lists show them.
-// Values of fields the kind no longer has are kept plain if they ever
-// were, so nothing is lost.
+// Values of fields the kind no longer has are left out: a sensitive one is
+// never made plain by its field being removed.
 func SplitValues(fields []Field, all map[string]string) (plain, secret, masked map[string]string) {
 	plain, secret, masked = map[string]string{}, map[string]string{}, map[string]string{}
-	sensitive := map[string]bool{}
+	sensitive, has := map[string]bool{}, map[string]bool{}
 	for _, f := range fields {
-		sensitive[f.Key] = f.Sensitive
+		sensitive[f.Key], has[f.Key] = f.Sensitive, true
 	}
 	bankField := map[string]bool{}
 	for _, f := range fields {
 		bankField[f.Key] = f.Type == "bank_account"
 	}
 	for k, v := range all {
+		if !has[k] {
+			continue
+		}
 		if sensitive[k] {
 			secret[k], masked[k] = v, MaskValue(v)
 			if bankField[k] {
@@ -469,4 +544,9 @@ var Starters = []Starter{
 		{Key: "expires", Label: "Expires", Type: "date"},
 		{Key: "insurer_phone", Label: "Insurer's phone", Type: "phone"},
 	}},
+}
+
+// Note is an owner's note as kept: its spaces folded, up to MaxNote.
+func Note(v string) (string, error) {
+	return field(map[string]any{"note": v}, "note", "note", MaxNote, false)
 }

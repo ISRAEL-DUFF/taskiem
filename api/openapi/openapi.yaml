@@ -25868,7 +25868,7 @@ paths:
       tags:
       - Saved
       summary: Change a kind
-      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field made sensitive (or no longer) moves its values at once.'
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field removed has its values deleted; a field made sensitive moves its values at once. Showing what was kept hidden (a field with values made not sensitive or shareable, or a sensitive one given another type) needs a passkey: 403 `step_up` (operation saved.kind, target the kind), then again with `passkey`.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -26048,7 +26048,7 @@ paths:
               properties:
                 operation:
                   type: string
-                  enum: [saved.change, saved.reveal]
+                  enum: [saved.change, saved.reveal, saved.kind]
                 target:
                   type: string
                   format: uuid
@@ -33742,7 +33742,7 @@ paths:
       tags:
       - Saved
       summary: Change a kind
-      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field made sensitive (or no longer) moves its values at once. Needs saved.manage; in the audit chain.'
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field removed has its values deleted; a field made sensitive moves its values at once. Showing what was kept hidden (a field with values made not sensitive or shareable, or a sensitive one given another type) needs a passkey: 403 `step_up` (operation saved.kind, target the kind), then again with `passkey`, and is recorded. Needs saved.manage; in the audit chain.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -33992,7 +33992,7 @@ paths:
               properties:
                 operation:
                   type: string
-                  enum: [saved.change, saved.reveal]
+                  enum: [saved.change, saved.reveal, saved.kind]
                 target:
                   type: string
                   format: uuid
@@ -46817,6 +46817,9 @@ components:
           maxItems: 30
           items:
             $ref: '#/components/schemas/SavedKindField'
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
+          description: Confirms a change that shows what was kept hidden (a field with values made not sensitive, made shareable, or a sensitive one given another type); asked for with 403 step_up, operation saved.kind.
     SavedKindList:
       type: object
       additionalProperties: false

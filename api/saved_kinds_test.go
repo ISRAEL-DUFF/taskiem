@@ -111,3 +111,92 @@ func TestSavedAddressesArePlaces(t *testing.T) {
 		t.Fatalf("the default moved: %v", list)
 	}
 }
+
+// A kind's change that shows what was kept hidden needs a passkey and is
+// recorded; a field removed takes its values (and file) with it; an account
+// in a thing of one's own kind is changed with a passkey and recorded
+// masked; the note is checked as any note is.
+func TestSavedKindsHiddenKept(t *testing.T) {
+	ctx := context.Background()
+	w, owner := savedWorld(t)
+	biz := tenantOf(t, owner)
+	gen := owner.must(201, "POST", "/v1/saved-kinds", map[string]any{"name": "Generator", "fields": []map[string]any{
+		{"label": "Model", "type": "text"},
+		{"label": "Serial", "type": "text", "sensitive": true},
+		{"label": "Unused secret", "type": "text", "sensitive": true},
+		{"label": "Old code", "type": "text", "sensitive": true},
+		{"label": "Pay to", "type": "bank_account"},
+	}})["kind"].(map[string]any)
+	kid := gen["id"].(string)
+	owner.must(400, "POST", "/v1/saved", map[string]any{"name": "g0", "title": "G", "kind": "custom", "kind_id": kid, "note": strings.Repeat("x", 201)})
+	g := owner.must(201, "POST", "/v1/saved", map[string]any{"name": "big-gen", "title": "Big gen", "kind": "custom", "kind_id": kid, "note": "  in   the yard ",
+		"values": map[string]any{"model": "Mikano 20", "serial": "SN-99887766", "old_code": "CODE-12345678", "pay_to": "Zenith Bank 0123456789"}})["saved"].(map[string]any)
+	gid := g["id"].(string)
+	if g["details"].(map[string]any)["note"] != "in the yard" {
+		t.Fatalf("note: %v", g)
+	}
+	fields := func(edit func([]any) []any) map[string]any {
+		fs := owner.must(200, "GET", "/v1/saved-kinds", nil)["kinds"].([]any)[0].(map[string]any)["fields"].([]any)
+		return map[string]any{"name": "Generator", "fields": edit(fs)}
+	}
+
+	// Sensitive off for a field no object fills: no passkey asked.
+	owner.must(200, "PUT", "/v1/saved-kinds/"+kid, fields(func(fs []any) []any { fs[2].(map[string]any)["sensitive"] = false; return fs }))
+	// Sensitive off for one with a value: a passkey first.
+	off := fields(func(fs []any) []any { fs[1].(map[string]any)["sensitive"] = false; return fs })
+	if e := owner.must(403, "PUT", "/v1/saved-kinds/"+kid, off); e["step_up"] != "passkey" || e["operation"] != "saved.kind" || e["target"] != kid {
+		t.Fatalf("asked: %v", e)
+	}
+	if v := owner.must(200, "GET", "/v1/saved/"+gid, nil)["values"].(map[string]any); v["serial"] != "••7766" {
+		t.Fatalf("still hidden: %v", v)
+	}
+	key := addPasskey(t, owner, "Phone")
+	// A passkey for another thing does not do.
+	wrong := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.change", "target": gid}))
+	off["passkey"] = key.Assert(wrong).JSON()
+	owner.must(403, "PUT", "/v1/saved-kinds/"+kid, off)
+	ch := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.kind", "target": kid}))
+	off["passkey"] = key.Assert(ch).JSON()
+	owner.must(200, "PUT", "/v1/saved-kinds/"+kid, off)
+	if v := owner.must(200, "GET", "/v1/saved/"+gid, nil)["values"].(map[string]any); v["serial"] != "SN-99887766" {
+		t.Fatalf("shown: %v", v)
+	}
+	if a := auditDetails(t, w, biz, "saved.kind.changed"); !strings.Contains(a[len(a)-1], `"shown": ["Serial"]`) || !strings.Contains(a[len(a)-1], `"confirmed": "passkey"`) {
+		t.Fatalf("kind audit: %v", a)
+	}
+	if a := auditDetails(t, w, biz, "saved.changed"); len(a) == 0 || !strings.Contains(a[len(a)-1], `"shown": ["Serial"]`) {
+		t.Fatalf("object audit: %v", a)
+	}
+
+	// Old code removed: its value deleted, not made plain, and not back if
+	// a field of that key comes again.
+	owner.must(200, "PUT", "/v1/saved-kinds/"+kid, fields(func(fs []any) []any { return append(fs[:3], fs[4]) }))
+	var left int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_objects WHERE id = $1 AND (details::text LIKE '%CODE-12345678%' OR details->'masked' ? 'old_code')`, gid).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("a removed field's value kept: %d %v", left, err)
+	}
+	back := fields(func(fs []any) []any {
+		return append(fs, map[string]any{"key": "old_code", "label": "Old code", "type": "text", "sensitive": true})
+	})
+	owner.must(200, "PUT", "/v1/saved-kinds/"+kid, back)
+	revealCh := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.reveal", "target": gid}))
+	if r := owner.must(200, "POST", "/v1/saved/"+gid+"/reveal", map[string]any{"passkey": key.Assert(revealCh).JSON()}); strings.Contains(toJSON(r), "CODE-12345678") {
+		t.Fatalf("came back: %v", r)
+	}
+
+	// The account in it: changed only with a passkey, recorded masked.
+	move := map[string]any{"values": map[string]any{"pay_to": "Zenith Bank 0123450000"}}
+	if e := owner.must(403, "PUT", "/v1/saved/"+gid, move); e["operation"] != "saved.change" {
+		t.Fatalf("account change asked: %v", e)
+	}
+	ch = challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.change", "target": gid}))
+	move["passkey"] = key.Assert(ch).JSON()
+	owner.must(200, "PUT", "/v1/saved/"+gid, move)
+	a := auditDetails(t, w, biz, "saved.changed")
+	last := a[len(a)-1]
+	if !strings.Contains(last, "Zenith Bank ••6789") || !strings.Contains(last, "Zenith Bank ••0000") || strings.Contains(last, "0123450000") || !strings.Contains(last, `"confirmed": "passkey"`) {
+		t.Fatalf("account change audit: %v", last)
+	}
+	// Other values change without one.
+	owner.must(200, "PUT", "/v1/saved/"+gid, map[string]any{"values": map[string]any{"model": "Mikano 30"}})
+}
