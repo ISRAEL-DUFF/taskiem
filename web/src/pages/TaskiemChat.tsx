@@ -219,7 +219,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   const savedPicks = useSavedPicks("all");
   // Save as… on a message (saved objects S1, part 4): in a business, its
   // saved things for whoever may manage them; else one's own.
-  const saveAs = useSaveAs({ business: true });
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedPicks.reload() });
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
@@ -281,7 +281,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       )],
       categories: categoriesOf(ownStock.data ?? []),
       refs: { ...refSrc, product: ownProducts },
-      saved: savedPicks.saved, wantSaved: savedPicks.want, saveNamed: (name) => saveAs.named(name),
+      saved: savedPicks.saved, savedComplete: savedPicks.complete, wantSaved: savedPicks.want, saveNamed: (name) => saveAs.named(name),
     },
     onSend: (s) => {
       if (!s.file && briefs && asksBriefing(s.text)) showBriefing();

@@ -1377,7 +1377,7 @@ export function ConversationPane({
           ? undefined
           : [],
       // Saved texts (saved objects S1): their words into the box.
-      saved: savedTexts.saved, wantSaved: savedTexts.want, savedAsTags: true,
+      saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, savedAsTags: true,
       saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (r) => previewLine(r, conv.name),
@@ -1643,13 +1643,18 @@ export function ConversationPane({
   // A message naming saved things: what is sensitive in them is shared only
   // after a yes, asked here (the server's question, the server refusing
   // without it) since the outbox sends later; on a no, the words come back.
+  // A pick the list does not know (it failed or is still loading) is asked
+  // about too; confirm is sent only after a yes.
   const shareThenSend = async (s: Sending<LinkMessage>) => {
     const refs = (s.mentions ?? []) as { kind: string; saved?: { id: string; owner: string; confirm: boolean } }[];
     for (const r of refs) {
       if (r.kind !== "saved" || !r.saved) continue;
       const pick = (savedTexts.saved ?? []).find((x) => x.id === r.saved?.id);
-      if (pick?.savedSensitive && !(await confirm({ title: shareQuestion(pick, conv.name), ok: "Share" }))) {
-        c.setText((cur) => (cur === "" ? s.text : cur));
+      if (pick && !pick.savedSensitive) continue;
+      const known = s.picked?.find((p) => p.kind === "saved" && p.id === r.saved?.id);
+      const title = pick ? shareQuestion(pick, conv.name) : shareQuestion({ name: `@${known?.name ?? "it"}`, words: known?.words, savedKind: known?.savedKind }, conv.name);
+      if (!(await confirm({ title, ok: "Share" }))) {
+        c.restore(s);
         return;
       }
       r.saved.confirm = true;
@@ -1743,7 +1748,7 @@ export function ConversationPane({
   const { confirm, node: confirmNode } = useConfirm();
   // Save as… on a message (saved objects S1, part 4): the business's for
   // whoever may manage them, else one's own.
-  const saveAs = useSaveAs({ business: true });
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedTexts.reload() });
   const hide = async (m: LinkMessage) => {
     if (
       !(await confirm({

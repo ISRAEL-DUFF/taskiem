@@ -538,7 +538,7 @@ export function PersonChatPage() {
 
   const savedTexts = useSavedPicks("share-mine");
   // Save "mum"… in the picker (saved objects S1, part 4): one's own.
-  const saveAs = useSaveAs();
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
   // One's own saved thing other than a text, picked: shared with the
   // business as a card (saved objects S1), after a yes to sharing what is
   // sensitive in it.
@@ -565,7 +565,7 @@ export function PersonChatPage() {
     rules: BUSINESS_FILES,
     // Saved things (saved objects S1): a text's words into the box; the
     // rest shared as cards.
-    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
+    sources: { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
@@ -742,7 +742,7 @@ export function PersonChatPage() {
                       {words && <CopyItem text={words} />}
                       {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
                       {file && (
-                        <PopItem icon="note" onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
+                        <PopItem icon="note" disabled={saveAs.fileBusy} onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
                           {words ? "Save the file as…" : "Save as…"}
                         </PopItem>
                       )}

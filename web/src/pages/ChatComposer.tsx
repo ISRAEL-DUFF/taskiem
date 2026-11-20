@@ -108,6 +108,8 @@ export type Sending<R> = {
   picks?: { id: string; name: string }[];
   /** A voice note held and let go: it goes at once, and the box is left. */
   held: boolean;
+  /** Everything picked with "@", to give back if it is not sent. */
+  picked?: Suggestion[];
 };
 
 export type ComposerOptions<R> = {
@@ -259,6 +261,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       reply,
       mentions: f ? undefined : mentions.refs(),
       picks: mentions.pickedPeople(),
+      picked: mentions.picked(),
       held: !!held,
     };
     if (!held) {
@@ -270,6 +273,17 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     o.onSend(s);
   };
   sendRef.current = send;
+  /** A message not sent after all (its sender said no) back in the box:
+   * its words, file, reply and picks, unless something new was typed. */
+  const restore = (s: Sending<R>) => {
+    setText((cur) => {
+      if (cur !== "") return cur;
+      mentions.restore(s.picked ?? []);
+      return s.text;
+    });
+    setFile((cur) => cur ?? s.file);
+    setReply((cur) => cur ?? s.reply);
+  };
   const choose = async (picked: File | undefined) => {
     setFileError(undefined);
     let f = picked;
@@ -388,6 +402,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     mentions,
     voice,
     send,
+    restore,
     choose,
     attach,
     addEmoji,

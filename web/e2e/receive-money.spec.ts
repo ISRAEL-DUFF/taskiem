@@ -399,6 +399,21 @@ test("an owner makes a Car kind from its starter and saves the van as one", asyn
   await expect(row.getByTestId("saved-values")).toContainText("Colour: White");
   await expect(row.getByTestId("saved-values")).toContainText("Chassis number: ••3456");
 
+  // Changing the kind: a field removed warns its values go with it; an
+  // account is always sensitive; a file is never sealed.
+  await made.getByRole("button", { name: "Change Car" }).click();
+  const change = page.getByTestId("kind-form");
+  await change.getByRole("button", { name: "Remove Colour" }).click();
+  await expect(change.getByTestId("kind-gone")).toContainText("Colour");
+  await change.getByTestId("kind-add-field").click();
+  const added = change.getByTestId("kind-field").last();
+  await added.getByLabel("What it is").selectOption("bank_account");
+  await expect(added.getByLabel("Sensitive")).toBeChecked();
+  await expect(added.getByLabel("Sensitive")).toBeDisabled();
+  await added.getByLabel("What it is").selectOption("file");
+  await expect(added.getByLabel("Sensitive")).toHaveCount(0);
+  await change.getByRole("button", { name: "Cancel" }).click();
+
   // In use: not removed.
   await made.getByRole("button", { name: "Remove Car" }).click();
   await page.getByTestId("confirm-ok").click();

@@ -8,6 +8,7 @@ import {
   kindChoice,
   cleanName,
   nameProblem,
+  savedSensitive,
   savedSuggestions,
   numberProblem,
   providerLine,
@@ -130,6 +131,14 @@ describe("saved things in the picker", () => {
   it("offers texts only where nothing else can be shared yet", () => {
     expect(savedSuggestions([], [text, bayo], true).map((x) => x.id)).toEqual(["t"]);
   });
+  it("asks before sharing as the server says, a made-up kind's sensitive fields too", () => {
+    const car: SavedThing = { ...bayo, id: "c", kind: "custom", kind_name: "Car", name: "van", title: "Van", details: {}, share_sensitive: true };
+    expect(savedSensitive(car)).toBe(true);
+    expect(savedSensitive({ ...bayo, share_sensitive: false })).toBe(false);
+    // An older server says nothing: the kinds' own rule.
+    expect(savedSensitive({ kind: "person", details: { phone: "+2348031234567" } })).toBe(true);
+    expect(savedSuggestions([], [car], false)[0]?.savedSensitive).toBe(true);
+  });
 });
 
 describe("kinds the owner makes", () => {
@@ -140,9 +149,9 @@ describe("kinds the owner makes", () => {
     { key: "chassis_number", label: "Chassis number", type: "text", required: true, sensitive: true },
   ];
   it("shows money as naira, a date as a day, and leaves a masked value as it is", () => {
-    expect(shownValue(fields[1]!, "4500000")).toBe("₦4,500,000");
-    expect(shownValue(fields[2]!, "2027-03-03")).toBe("3 Mar 2027");
-    expect(shownValue(fields[3]!, "••3456")).toBe("••3456");
+    expect(shownValue(fields[1] as KindField, "4500000")).toBe("₦4,500,000");
+    expect(shownValue(fields[2] as KindField, "2027-03-03")).toBe("3 Mar 2027");
+    expect(shownValue(fields[3] as KindField, "••3456")).toBe("••3456");
   });
   it("asks for each required field, a sensitive one kept counting", () => {
     expect(valuesProblem(fields, { plate_number: "" })).toBe("Plate number is needed.");

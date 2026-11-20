@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ApiError } from "../api";
+import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { cardSub, KIND_WORDS, type SavedCard } from "../lib/saved";
 import { Copy } from "./Forms";
@@ -13,6 +14,10 @@ import { AccountSheet, ThingSheet } from "./Saved";
 /** saveTo: where Save this keeps it, the person's own (mine) or, read in
  * a business's chat, the business's. */
 export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard; mine: boolean; saveTo?: "mine" | "business" }) {
+  const { can } = useAuth();
+  // The business's only for whoever may manage its saved things; else
+  // one's own.
+  const to = saveTo === "business" && can("saved.manage") ? "business" : "mine";
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const icon = card.kind === "custom" ? "box" : (KIND_WORDS[card.kind]?.icon ?? "note");
@@ -58,7 +63,8 @@ export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard
               {l.label !== "Text" && <span className="tk-ref-line-label">{l.label}</span>}
               <b>{l.value}</b>
             </span>
-            <Copy text={l.value} label={`Copy ${l.label === "Text" ? "the text" : l.label.toLowerCase()}`} />
+            {/* One's own copy is masked: nothing there to copy. */}
+            {!(mine && l.sensitive) && <Copy text={l.value} label={`Copy ${l.label === "Text" ? "the text" : l.label.toLowerCase()}`} />}
           </li>
         ))}
       </ul>
@@ -71,12 +77,12 @@ export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard
       )}
       {saving &&
         (card.kind === "bank_account" ? (
-          <AccountSheet mine={saveTo === "mine"} checks={false} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
+          <AccountSheet mine={to === "mine"} checks={false} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
         ) : (
           // A made-up kind's card is kept as a text of its lines: the
           // receiver has no such kind.
           <ThingSheet
-            mine={saveTo === "mine"}
+            mine={to === "mine"}
             kind={card.kind === "custom" ? "text" : card.kind}
             start={card.kind === "custom" ? { ...card, kind: "text" } : card}
             onClose={() => setSaving(false)}

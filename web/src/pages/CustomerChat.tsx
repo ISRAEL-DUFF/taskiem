@@ -415,12 +415,16 @@ export function CustomerPane({
   const savedTexts = useSavedPicks("share");
   // Save "mum"… in the picker (saved objects S1, part 4): the business's
   // for whoever may manage them, else one's own.
-  const saveAs = useSaveAs({ business: true });
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedTexts.reload() });
   // A saved thing other than a text, picked: shared with the customer
   // (saved objects S1), after a yes to sharing what is sensitive in it; a
   // card in the app, its lines on WhatsApp, by the line replies go on.
   const shareSaved = (pick: Suggestion) => {
-    if (!canSend) return;
+    // Picked, never dropped without a word.
+    if (!canSend) {
+      setSendError(new Error(`@${pick.name} was not shared: this chat can't take a message now.`));
+      return;
+    }
     setSendError(undefined);
     void (async () => {
       try {
@@ -442,13 +446,19 @@ export function CustomerPane({
       }
     })();
   };
-  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
     // A saved file: sent as itself, in the app (saved objects S1).
-    attachSaved: (s) =>
+    // Only the file goes: the words in the box stay there, theirs to send.
+    attachSaved: (s) => {
+      if (!appOpen) {
+        setSendError(new Error(`@${s.name} was not sent: photos and documents go in the app, and this customer isn't chatting in it.`));
+        return;
+      }
       void getBlob(savedFileURL(s.savedOwner ?? "business", s.id)).then(
-        (b) => send({ file: new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type }) }),
+        (b) => send({ file: new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type }), fileWords: "" }),
         (e: unknown) => setSendError(e),
-      ),
+      );
+    },
   });
   const typed = (v: string) => {
     setText(v);
@@ -459,8 +469,8 @@ export function CustomerPane({
   };
   // Each send is its own (its own client_id): a card or a file chosen while
   // another message is on its way goes too, never dropped.
-  const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File }) => {
-    const words = extra?.card ? (extra.cardWords ?? "") : text.trim();
+  const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File; fileWords?: string }) => {
+    const words = extra?.card ? (extra.cardWords ?? "") : extra?.fileWords !== undefined ? extra.fileWords : text.trim();
     const plain = !extra?.card && !extra?.file;
     // Cards and files go in the app whatever line is chosen.
     if ((!words && !extra?.file && !extra?.card) || !(plain ? canSend : appOpen)) return;
@@ -694,6 +704,7 @@ export function CustomerPane({
                     {file && (
                       <PopItem
                         icon="note"
+                        disabled={saveAs.fileBusy}
                         onClick={() => (close(), saveAs.fromFile(`/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`, file.name ?? "File", file.type))}
                       >
                         {words ? "Save the file as…" : "Save as…"}

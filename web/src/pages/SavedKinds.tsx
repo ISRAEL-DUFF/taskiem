@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ApiError, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
+import { assert } from "../passkeys";
 import { ErrorBox, Field, Modal, useAction, useLoad } from "../ui";
 import {
   FIELD_TYPES,
@@ -25,6 +26,19 @@ import {
 // the sheet that makes or changes one (its name and fields, or a starter
 // to copy), and the sheet that saves a thing of one (a field for each,
 // sensitive ones masked and kept unless typed again).
+
+/** call, and when the server asks for a passkey first (403 step_up:
+ * changing an account, showing what a kind kept hidden), the passkey it
+ * names asked for and call again with it. */
+export async function withSavedPasskey<T>(mine: boolean, call: (passkey?: unknown) => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (e) {
+    if (!(e instanceof ApiError && e.status === 403 && e.body.step_up === "passkey")) throw e;
+    const passkey = await assert(`${savedBase(mine)}/step-up/options`, { operation: e.body.operation, target: e.body.target });
+    return call(passkey);
+  }
+}
 
 /** Make a kind, or change one: its name and fields. */
 export function KindSheet({
@@ -60,10 +74,23 @@ export function KindSheet({
     void act.run(async () => {
       const base = savedKindsBase(mine);
       const body = { name: name.trim(), fields: clean };
-      const r = kind ? await put<{ kind: MadeKind }>(`${base}/${encodeURIComponent(kind.id)}`, body) : await post<{ kind: MadeKind }>(base, body);
+      // Showing what was kept hidden asks for a passkey (saved.kind).
+      const r = kind
+        ? await withSavedPasskey(mine, (passkey) => put<{ kind: MadeKind }>(`${base}/${encodeURIComponent(kind.id)}`, passkey ? { ...body, passkey } : body))
+        : await post<{ kind: MadeKind }>(base, body);
       onSaved(r.kind);
     }, kind ? "Kind changed" : `${name.trim()} made`);
   };
+  // Fields of the kind as it was that are gone now: their values go too.
+  const gone = kind && kind.count > 0 ? kind.fields.filter((k) => k.key && !fields.some((f) => f.key === k.key)).map((k) => k.label) : [];
+  // Fields once sealed that would be shown now: a passkey is asked.
+  const shownNow =
+    kind && kind.count > 0
+      ? fields.filter((f) => {
+          const was = kind.fields.find((k) => k.key && k.key === f.key);
+          return was && ((was.sensitive && !(f.sensitive || f.never_share || f.type === "bank_account")) || (was.never_share && !f.never_share) || (was.sensitive && was.type !== f.type));
+        })
+      : [];
   const taken = act.error instanceof ApiError && act.error.body.name_taken ? "You have a kind by that name: choose another." : undefined;
   return (
     <Modal title={kind ? `Change ${kind.name}` : "Make a kind"} onClose={onClose}>
@@ -126,9 +153,18 @@ export function KindSheet({
                 <label>
                   <input type="checkbox" checked={!!f.required} onChange={(e) => set(i, { required: e.target.checked })} /> Required
                 </label>
-                <label>
-                  <input type="checkbox" checked={!!f.sensitive || !!f.never_share} disabled={!!f.never_share} onChange={(e) => set(i, { sensitive: e.target.checked })} /> Sensitive
-                </label>
+                {/* A file is kept apart, never sealed; an account is always sensitive. */}
+                {f.type !== "file" && (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={!!f.sensitive || !!f.never_share || f.type === "bank_account"}
+                      disabled={!!f.never_share || f.type === "bank_account"}
+                      onChange={(e) => set(i, { sensitive: e.target.checked })}
+                    />{" "}
+                    Sensitive
+                  </label>
+                )}
                 <label>
                   <input type="checkbox" checked={!!f.never_share} onChange={(e) => set(i, { never_share: e.target.checked })} /> Never share
                 </label>
@@ -154,6 +190,16 @@ export function KindSheet({
           </button>
         )}
         <p className="hint">Sensitive fields are kept sealed and shown in full only with your passkey. Never share keeps a field out of anything you share.</p>
+        {gone.length > 0 && (
+          <p className="hint warn" data-testid="kind-gone">
+            Saving deletes what your saved things hold in {gone.join(", ")}.
+          </p>
+        )}
+        {shownNow.length > 0 && (
+          <p className="hint" data-testid="kind-shown">
+            {shownNow.map((f) => f.label).join(", ")} will no longer be kept sealed: saving asks for your passkey.
+          </p>
+        )}
         {(problem || taken) && (
           <p className="error" role="alert">
             {problem ?? taken}
@@ -201,9 +247,18 @@ export function CustomSheet({
   );
   const [note, setNote] = useState(thing?.details.note ?? "");
   const [problem, setProblem] = useState<string>();
+  // Files being checked: Save waits for them.
+  const [uploading, setUploading] = useState(0);
   const act = useAction();
   const save = () => {
-    const p = nameProblem(name) ?? (title.trim() ? null : "Give it a title, like My car.") ?? valuesProblem(kind.fields, v, thing ? had : {});
+    // An account half filled (a bank with no number, or a number with no
+    // bank) is said, not left out.
+    const half = kind.fields.find((f) => f.type === "bank_account" && (v[f.key ?? ""] ?? "") !== "" && !/^\S.* · \d{10}$/.test(v[f.key ?? ""] ?? ""));
+    const p =
+      nameProblem(name) ??
+      (title.trim() ? null : "Give it a title, like My car.") ??
+      (half ? `${half.label}: choose the bank and type its 10-digit account number.` : null) ??
+      valuesProblem(kind.fields, v, thing ? had : {});
     setProblem(p ?? undefined);
     if (p) return;
     const values: Record<string, string | null> = {};
@@ -216,7 +271,8 @@ export function CustomSheet({
     void act.run(
       async () => {
         const body = { name: cleanName(name), title: title.trim(), values, note: note.trim() };
-        if (thing) await put(`${base}/${encodeURIComponent(thing.id)}`, body);
+        // Changing an account in it asks for a passkey (saved.change).
+        if (thing) await withSavedPasskey(mine, (passkey) => put(`${base}/${encodeURIComponent(thing.id)}`, passkey ? { ...body, passkey } : body));
         else await post(base, { ...body, kind: "custom", kind_id: kind.id });
         onSaved();
       },
@@ -252,6 +308,7 @@ export function CustomSheet({
                   label={f.label}
                   had={thing?.files?.[key]}
                   onPicked={(m) => change(m.file)}
+                  onBusy={(b) => setUploading((n) => n + (b ? 1 : -1))}
                   testid={`custom-${key}`}
                 />
               ) : f.type === "bank_account" ? (
@@ -289,8 +346,8 @@ export function CustomSheet({
         )}
         {!taken && <ErrorBox error={act.error} />}
         <div className="row-actions">
-          <button type="submit" className="primary" disabled={act.busy} data-testid="saved-custom-save">
-            {act.busy ? "Saving…" : "Save"}
+          <button type="submit" className="primary" disabled={act.busy || uploading > 0} data-testid="saved-custom-save">
+            {act.busy ? "Saving…" : uploading > 0 ? "Checking the file…" : "Save"}
           </button>
           <button type="button" onClick={onClose}>
             Cancel
@@ -316,6 +373,7 @@ export function FilePick({
   label,
   had,
   onPicked,
+  onBusy,
   testid,
 }: {
   mine: boolean;
@@ -323,6 +381,8 @@ export function FilePick({
   /** What it holds now: its name and size. */
   had?: FileMeta;
   onPicked: (f: FileMeta) => void;
+  /** A file is being checked (true), or done (false). */
+  onBusy?: (busy: boolean) => void;
   testid?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -340,11 +400,14 @@ export function FilePick({
           const f = e.target.files?.[0];
           e.target.value = "";
           if (!f) return;
-          void act.run(async () => {
-            const m = await uploadSaved(mine, f);
-            setShown(m);
-            onPicked(m);
-          }, false);
+          onBusy?.(true);
+          void act
+            .run(async () => {
+              const m = await uploadSaved(mine, f);
+              setShown(m);
+              onPicked(m);
+            }, false)
+            .finally(() => onBusy?.(false));
         }}
       />
       <button type="button" className="small" disabled={act.busy} onClick={() => input.current?.click()}>
@@ -366,6 +429,7 @@ export function FileSheet({
   mine,
   thing,
   start,
+  startName,
   onClose,
   onSaved,
 }: {
@@ -373,15 +437,19 @@ export function FileSheet({
   thing?: SavedThing;
   /** A file already uploaded to save (Save as… on a chat's file). */
   start?: FileMeta;
+  /** The name typed in the picker (Save "@menu"…). */
+  startName?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const base = savedBase(mine);
-  const [name, setName] = useState(thing ? `@${thing.name}` : "");
+  const [name, setName] = useState(thing ? `@${thing.name}` : startName ? `@${startName}` : "");
   const [title, setTitle] = useState(thing?.title ?? (start ? start.name.replace(/\.[a-z0-9]{1,5}$/i, "") : ""));
   const [note, setNote] = useState(thing?.details.note ?? "");
   const [file, setFile] = useState<FileMeta | undefined>(start);
   const [problem, setProblem] = useState<string>();
+  // The file being checked: Save waits for it.
+  const [uploading, setUploading] = useState(false);
   const act = useAction();
   const had: FileMeta | undefined = thing?.details.file
     ? { file: thing.details.file, name: thing.details.file_name ?? "", type: thing.details.file_type ?? "", size: thing.details.file_size ?? 0 }
@@ -413,7 +481,7 @@ export function FileSheet({
         data-testid="saved-file-form"
       >
         <Field label="The photo or document" hint="A photo, or a PDF up to 25 MB. It is checked before it is kept.">
-          <FilePick mine={mine} label="The photo or document" had={had} onPicked={setFile} testid="saved-file-pick" />
+          <FilePick mine={mine} label="The photo or document" had={had} onPicked={setFile} onBusy={setUploading} testid="saved-file-pick" />
         </Field>
         <Field label="Name to call it up by" hint="Such as @menu or @cac-certificate.">
           <input value={name} maxLength={33} autoCapitalize="none" autoComplete="off" onChange={(e) => setName(e.target.value)} required />
@@ -438,8 +506,8 @@ export function FileSheet({
         )}
         {!taken && <ErrorBox error={act.error} />}
         <div className="row-actions">
-          <button type="submit" className="primary" disabled={act.busy} data-testid="saved-file-save">
-            {act.busy ? "Saving…" : "Save"}
+          <button type="submit" className="primary" disabled={act.busy || uploading} data-testid="saved-file-save">
+            {act.busy ? "Saving…" : uploading ? "Checking the file…" : "Save"}
           </button>
           <button type="button" onClick={onClose}>
             Cancel
@@ -460,7 +528,8 @@ function BankField({ value, onChange, label }: { value: string; onChange: (v: st
     setBank(b);
     setNumber(n);
     const digits = n.replace(/\D/g, "");
-    onChange(b && digits ? `${b} · ${digits}` : "");
+    // Half filled is kept half filled, so the form can say what is missing.
+    onChange(b || digits ? `${b} · ${digits}` : "");
   };
   return (
     <div className="bank-field">

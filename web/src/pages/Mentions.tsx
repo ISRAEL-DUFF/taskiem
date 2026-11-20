@@ -59,6 +59,8 @@ export function useMentions(
      * box; any other is written as its @name. wantSaved is called when "@"
      * is typed, so they are read only then. */
     saved?: Suggestion[];
+    /** The saved things were all read: Save "mum"… is offered only then. */
+    savedComplete?: boolean;
     wantSaved?: () => void;
     /** A saved thing other than a text, picked where the chat shares it as
      * a card: what was typed for it goes, and the chat sends the card. */
@@ -142,6 +144,7 @@ export function useMentions(
   if (
     sources.saveNamed &&
     sources.saved &&
+    sources.savedComplete !== false &&
     /^[a-z0-9][a-z0-9_-]{0,31}$/.test(newName) &&
     !sources.saved.some((x) => x.name.toLowerCase() === newName) &&
     !groups.some((g) => g.items.some((x) => x.name.toLowerCase() === newName))
@@ -267,6 +270,10 @@ export function useMentions(
     setQ(null);
   };
   return {
+    /** What was picked, kept to give back to a message not sent. */
+    picked: () => picked,
+    /** Picks given back, with the words they were picked in. */
+    restore: (ps: Suggestion[]) => setPicked(ps),
     // Only saved things to offer (a chat with no one else to name).
     atLabel: sources.atLabel ?? (sources["@"].length === 0 && sources.saved ? "Saved things" : undefined),
     q,

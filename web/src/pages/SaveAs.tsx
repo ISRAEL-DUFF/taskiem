@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { get, getBlob, post } from "../api";
 import { useAuth } from "../auth";
 import { Items, Modal, Row } from "../ui";
+import { toast } from "../toast";
 import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type FileMeta, type KindList, type MadeKind, type SavedCard, type SavedDetails, type SavedKind } from "../lib/saved";
 import { PopItem } from "./BubbleShell";
 import { AccountSheet, ThingSheet } from "./Saved";
@@ -27,7 +28,8 @@ export function readingCard(r: SavedReading, name = ""): SavedCard {
   return { kind: r.kind, title: r.title, name, lines: [], details: r.details, sensitive: false };
 }
 
-export function useSaveAs({ business = false }: { business?: boolean } = {}) {
+/** onSaved: something was saved (the chat's picker reads its list again). */
+export function useSaveAs({ business = false, onSaved }: { business?: boolean; onSaved?: () => void } = {}) {
   const { can } = useAuth();
   const mine = !(business && can("saved.manage"));
   const [start, setStart] = useState<SavedCard>();
@@ -37,13 +39,27 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
   const [made, setMade] = useState<MadeKind[]>([]);
   const [custom, setCustom] = useState<{ kind: MadeKind; name: string }>();
   const [fileStart, setFileStart] = useState<FileMeta>();
+  // Save "@menu"… as a photo or document: its sheet, with the name.
+  const [fileNamed, setFileNamed] = useState<string>();
+  // A chat's file being fetched and checked to save: one at a time.
+  const [fileBusy, setFileBusy] = useState(false);
 
   /** Save as… on a photo or document in a chat: kept as a file thing,
-   * checked again as it is uploaded. */
-  const fromFile = (url: string, name: string, type: string) =>
+   * checked again as it is uploaded; what is happening shown, and why it
+   * could not be. */
+  const fromFile = (url: string, name: string, type: string) => {
+    if (fileBusy) return;
+    setFileBusy(true);
+    toast(`Getting ${name} ready to save…`, "info");
     void getBlob(url)
       .then((b) => uploadSaved(mine, new File([b], name, { type: type || b.type })))
-      .then(setFileStart, (e: unknown) => setSaid(e instanceof Error ? e.message : "That file could not be saved."));
+      .then(setFileStart, (e: unknown) => {
+        const words = e instanceof Error ? e.message : "That file could not be saved.";
+        setSaid(words);
+        toast(words, "error");
+      })
+      .finally(() => setFileBusy(false));
+  };
 
   /** Save as… on a message: its words read, the sheet opened. */
   const fromWords = (text: string) =>
@@ -64,6 +80,7 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
   const done = (words: string) => {
     setStart(undefined);
     setSaid(words);
+    onSaved?.();
   };
 
   const node: ReactNode = (
@@ -91,7 +108,8 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
                   type="button"
                   className="small"
                   onClick={() => {
-                    setStart({ kind: k, title: "", name: naming, lines: [], details: {}, sensitive: false });
+                    if (k === "file") setFileNamed(naming);
+                    else setStart({ kind: k, title: "", name: naming, lines: [], details: {}, sensitive: false });
                     setNaming(undefined);
                   }}
                 >
@@ -117,6 +135,7 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
           onSaved={() => {
             setCustom(undefined);
             setSaid("Saved");
+            onSaved?.();
           }}
         />
       )}
@@ -128,6 +147,19 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
           onSaved={() => {
             setFileStart(undefined);
             setSaid("Saved");
+            onSaved?.();
+          }}
+        />
+      )}
+      {fileNamed !== undefined && (
+        <FileSheet
+          mine={mine}
+          startName={fileNamed}
+          onClose={() => setFileNamed(undefined)}
+          onSaved={() => {
+            setFileNamed(undefined);
+            setSaid("Saved");
+            onSaved?.();
           }}
         />
       )}
@@ -138,7 +170,7 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
       )}
     </>
   );
-  return { fromWords, fromFile, named, node };
+  return { fromWords, fromFile, fileBusy, named, node };
 }
 
 /** The message menu's Save as…: its words to save. */

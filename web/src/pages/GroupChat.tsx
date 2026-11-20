@@ -341,7 +341,7 @@ export function GroupChatPage() {
 
   const savedTexts = useSavedPicks("share-mine");
   // Save as… on a message (saved objects S1, part 4): one's own.
-  const saveAs = useSaveAs();
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
   // A saved thing other than a text, picked: shared as a card (saved
   // objects S1), after a yes to sharing what is sensitive in it.
   const shareSaved = (pick: Suggestion) =>
@@ -369,7 +369,7 @@ export function GroupChatPage() {
       "#": [],
       atLabel: "Members to mention",
       // Saved texts (saved objects S1): their words into the box.
-      saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
+      saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (m) => messageLine(m),
     onType: (v) => {

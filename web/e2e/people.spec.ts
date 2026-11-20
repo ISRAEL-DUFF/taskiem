@@ -480,6 +480,12 @@ test("a saved account shared with @: asked first, a card the friend opens, copie
   await ask.getByTestId("confirm-ok").click();
   await expect(box).toHaveValue("");
   await expect(ada.page.getByTestId("saved-card").filter({ hasText: "Mum" }).last()).toBeVisible();
+  // Ada's own copy: the number masked, nothing to copy of it.
+  const own = ada.page.getByTestId("saved-card").filter({ hasText: "Mum" }).last();
+  await own.getByRole("button", { name: /Show details/ }).click();
+  await expect(own.getByTestId("saved-card-line").last()).toContainText("••2222");
+  await expect(own.getByTestId("saved-card-line").last()).not.toContainText("0123452222");
+  await expect(own.getByRole("button", { name: "Copy account number" })).toHaveCount(0);
 
   // Bola: folded to a row, opened to each line with Copy, and Save this.
   const chats = await must<{ chats: { id: string; name: string; kind: string }[] }>(bola.page.request.get("/v1/me/conversations", { headers: H }), 200);

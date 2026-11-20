@@ -349,17 +349,21 @@ export function PopItem({
   danger = false,
   onClick,
   children,
+  disabled,
 }: {
   icon: string;
   danger?: boolean;
   onClick: () => void;
   children: ReactNode;
+  /** Not now (something is already under way). */
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       className={`pop-item${danger ? " danger" : ""}`}
       onClick={onClick}
+      disabled={disabled}
     >
       <Icon name={icon} />
       <span>{children}</span>

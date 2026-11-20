@@ -108,6 +108,12 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
   const [kind, setKind] = useState<string>("");
   const [shown, setShown] = useState<Record<string, string>>({});
   const [shownValues, setShownValues] = useState<Record<string, Record<string, string>>>({});
+  // What a passkey showed is let go whenever the list is read again (after
+  // a save, a change or a removal): shown once, never left on the page.
+  useEffect(() => {
+    setShown({});
+    setShownValues({});
+  }, [list.data]);
   // Kinds the owner made (saved objects S1, part 5).
   const kinds = useLoad(() => get<KindList>(savedKindsBase(mine)), [mine]);
   const made = kinds.data?.kinds ?? [];
@@ -249,6 +255,12 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
                 testid="saved-row"
                 attrs={{ "data-name": x.name }}
               >
+                {/* A file opens for whoever sees it, staff too. */}
+                {x.kind === "file" && (
+                  <a className="button small" href={savedFileURL(x.owner, x.id)} target="_blank" rel="noreferrer">
+                    Open<span className="sr-only"> @{x.name}</span>
+                  </a>
+                )}
                 {x.to_change && (
                   <>
                     <button
@@ -258,11 +270,6 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
                     >
                       Change<span className="sr-only"> @{x.name}</span>
                     </button>
-                    {x.kind === "file" && (
-                      <a className="button small" href={savedFileURL(x.owner, x.id)} target="_blank" rel="noreferrer">
-                        Open<span className="sr-only"> @{x.name}</span>
-                      </a>
-                    )}
                     {hidden && !open && (
                       <button type="button" className="small" disabled={act.busy} onClick={() => reveal(x)}>
                         Show hidden<span className="sr-only"> of @{x.name}</span>

@@ -32,6 +32,9 @@ export interface SavedThing {
   hint: string;
   details: SavedDetails;
   check: SavedCheck;
+  /** Sharing it shares what is sensitive, so the sender is asked first
+   * (the server's rule, made-up kinds' sensitive fields included). */
+  share_sensitive?: boolean;
   to_change: boolean;
   created_at: string;
   updated_at: string;
@@ -397,9 +400,11 @@ export function savedSuggestions(mine: SavedThing[], business: SavedThing[], tex
   }));
 }
 
-/** saved.MakeCard's rule: an account's number, a person's phone or email,
- * a place's phone. */
-export function savedSensitive(x: Pick<SavedThing, "kind" | "details">): boolean {
+/** Whether sharing x asks first: the server's share_sensitive when it
+ * says; else saved.MakeCard's rule (an account's number, a person's phone
+ * or email, a place's phone). */
+export function savedSensitive(x: Pick<SavedThing, "kind" | "details"> & { share_sensitive?: boolean }): boolean {
+  if (x.share_sensitive !== undefined) return x.share_sensitive;
   const d = x.details;
   if (x.kind === "bank_account") return true;
   if (x.kind === "person") return !!(d.phone || d.email);
@@ -424,7 +429,9 @@ export interface SavedCard {
   title: string;
   /** The sender's @name for it. */
   name: string;
-  lines: { label: string; value: string }[];
+  /** sensitive: the line holds what is sensitive; its sender sees it
+   * masked. */
+  lines: { label: string; value: string; sensitive?: boolean }[];
   details: SavedDetails;
   sensitive: boolean;
 }
