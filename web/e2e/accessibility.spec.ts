@@ -400,6 +400,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route(/\/v1\/me\/saved(\?|$)/, (r) => r.fulfill(json({ saved: [], limit: 500 })));
+      await page.route(/\/v1\/me\/saved-kinds(\?|$)/, (r) => r.fulfill(json({ kinds: [], starters: [], limit: 40, to_change: true })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
       );
@@ -518,6 +519,7 @@ for (const scheme of ["light", "dark"] as const)
       const order = { business_id: b1, business: "Mama's Kitchen", reference: "MK-1", kind: "order", state: "awaiting_payment", summary: "2 × Jollof rice", total_kobo: 900_000, due_kobo: 900_000, pay: true, made_at: now, chat_id: "c1" };
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
       await page.route(/\/v1\/me\/saved(\?|$)/, (r) => r.fulfill(json({ saved: [{ id: "s1", owner: "mine", name: "mum", title: "Mum", kind: "bank_account", hint: "GTBank ••6789", details: { bank_name: "Guaranty Trust Bank", account_number: "••6789", note: "For her birthday" }, check: { state: "unchecked", account_name: null, via: null, at: null }, to_change: true, created_at: now, updated_at: now }], limit: 500 })));
+      await page.route(/\/v1\/me\/saved-kinds(\?|$)/, (r) => r.fulfill(json({ kinds: [], starters: [], limit: 40, to_change: true })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       const earlier = { ...order, reference: "MK-E", state: "completed", summary: "", due_kobo: 0, pay: false, earlier: true };
       await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [order, { ...order, reference: "MK-0", state: "completed", due_kobo: 0, pay: false }, earlier], next: "x", waiting_count: 1 })));
@@ -604,6 +606,7 @@ for (const scheme of ["light", "dark"] as const)
         ),
       );
       await page.route(/\/v1\/me\/saved(\?|$)/, (r) => r.fulfill(json({ saved: [], limit: 500 })));
+      await page.route(/\/v1\/me\/saved-kinds(\?|$)/, (r) => r.fulfill(json({ kinds: [], starters: [], limit: 40, to_change: true })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));

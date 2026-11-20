@@ -14,7 +14,11 @@ import {
   savedBase,
   savedSub,
   showConnectStep,
+  kindProblem,
+  shownValue,
+  valuesProblem,
   type BankList,
+  type KindField,
   type SavedThing,
 } from "./saved";
 
@@ -125,5 +129,30 @@ describe("saved things in the picker", () => {
   });
   it("offers texts only where nothing else can be shared yet", () => {
     expect(savedSuggestions([], [text, bayo], true).map((x) => x.id)).toEqual(["t"]);
+  });
+});
+
+describe("kinds the owner makes", () => {
+  const fields: KindField[] = [
+    { key: "plate_number", label: "Plate number", type: "text", required: true },
+    { key: "value", label: "Value", type: "money" },
+    { key: "insurance_due", label: "Insurance due", type: "date" },
+    { key: "chassis_number", label: "Chassis number", type: "text", required: true, sensitive: true },
+  ];
+  it("shows money as naira, a date as a day, and leaves a masked value as it is", () => {
+    expect(shownValue(fields[1]!, "4500000")).toBe("₦4,500,000");
+    expect(shownValue(fields[2]!, "2027-03-03")).toBe("3 Mar 2027");
+    expect(shownValue(fields[3]!, "••3456")).toBe("••3456");
+  });
+  it("asks for each required field, a sensitive one kept counting", () => {
+    expect(valuesProblem(fields, { plate_number: "" })).toBe("Give it plate number.");
+    expect(valuesProblem(fields, { plate_number: "LND 1", chassis_number: "" }, { chassis_number: "••3456" })).toBeNull();
+  });
+  it("checks a kind before it is sent", () => {
+    expect(kindProblem("", fields)).toMatch(/name/);
+    expect(kindProblem("Car", [])).toMatch(/at least one field/);
+    expect(kindProblem("Car", [{ label: "A", type: "text" }, { label: "a", type: "text" }])).toMatch(/Two fields are called/);
+    expect(kindProblem("Car", [{ label: "Fuel", type: "choice", options: ["Petrol", " "] }])).toMatch(/at least 2 choices/);
+    expect(kindProblem("Car", fields)).toBeNull();
   });
 });

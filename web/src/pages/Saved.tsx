@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { assert } from "../passkeys";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
+import { CustomSheet, KindSheet } from "./SavedKinds";
 import {
   BANK_SEARCH_FROM,
   bankFields,
@@ -25,7 +26,11 @@ import {
   numberProblem,
   providerLine,
   savedBase,
+  savedKindsBase,
   savedSub,
+  shownValue,
+  type KindList,
+  type MadeKind,
   showConnectStep,
   type BankList,
   type SavedCard,
@@ -98,14 +103,22 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
   const base = savedBase(mine);
   const list = useLoad(() => get<SavedList>(base), [base]);
   const [editing, setEditing] = useState<SavedThing | SavedKind | "choose">();
-  const [kind, setKind] = useState<SavedKind | "">("");
+  // A filter: all, a kind Taskiem knows, or one of the owner's (k:<id>).
+  const [kind, setKind] = useState<string>("");
   const [shown, setShown] = useState<Record<string, string>>({});
+  const [shownValues, setShownValues] = useState<Record<string, Record<string, string>>>({});
+  // Kinds the owner made (saved objects S1, part 5).
+  const kinds = useLoad(() => get<KindList>(savedKindsBase(mine)), [mine]);
+  const made = kinds.data?.kinds ?? [];
+  const [thingOf, setThingOf] = useState<{ kind: MadeKind; thing?: SavedThing }>();
+  const [kindEditing, setKindEditing] = useState<MadeKind | "new">();
   const [news, setNews] = useState("");
   const act = useAction();
   const sure = useConfirm();
   const every = list.data?.saved ?? [];
-  const all = kind ? every.filter((x) => x.kind === kind) : every;
+  const all = kind ? every.filter((x) => (kind.startsWith("k:") ? x.kind_id === kind.slice(2) : x.kind === kind)) : every;
   const kindsHeld = SAVED_KINDS.filter((k) => every.some((x) => x.kind === k));
+  const madeHeld = made.filter((k) => every.some((x) => x.kind_id === k.id));
   const { can } = useAuth();
   const manage = mine || can("saved.manage");
 
@@ -135,9 +148,18 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
   const reveal = (x: SavedThing) =>
     void act.run(async () => {
       const passkey = await assert(`${base}/step-up/options`, { operation: "saved.reveal", target: x.id });
-      const r = await post<{ account_number: string }>(`${base}/${encodeURIComponent(x.id)}/reveal`, { passkey });
-      setShown((s) => ({ ...s, [x.id]: r.account_number }));
+      const r = await post<{ account_number?: string; values?: Record<string, string> }>(`${base}/${encodeURIComponent(x.id)}/reveal`, { passkey });
+      if (r.values) setShownValues((s) => ({ ...s, [x.id]: r.values ?? {} }));
+      else setShown((s) => ({ ...s, [x.id]: r.account_number ?? "" }));
     }, false);
+  const removeKind = async (k: MadeKind) => {
+    const yes = await sure.confirm({ title: `Remove the kind ${k.name}?`, body: "Things of it are not removed with it: it is only removed once none are left.", ok: "Remove", danger: true });
+    if (!yes) return;
+    await act.run(async () => {
+      await del(`${savedKindsBase(mine)}/${encodeURIComponent(k.id)}`);
+      kinds.reload();
+    }, `${k.name} removed`);
+  };
 
   const title = mine ? "Your saved things" : "Saved things";
   const line = providerLine(provider);
@@ -158,7 +180,7 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           ? "Accounts, people, places and texts of your own, like @mum. Only you see them: no business you work in sees this list."
           : "Accounts, people, places and texts your business uses, called up by name, like @bayo. Everyone in the business sees them, account numbers masked."}
       </p>
-      {kindsHeld.length > 1 && (
+      {kindsHeld.length + madeHeld.length > 1 && (
         <div className="segmented" role="group" aria-label="Kinds" data-testid="saved-kinds">
           <button type="button" aria-pressed={kind === ""} onClick={() => setKind("")}>
             All
@@ -166,6 +188,11 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           {kindsHeld.map((k) => (
             <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>
               {KIND_WORDS[k].many}
+            </button>
+          ))}
+          {madeHeld.map((k) => (
+            <button key={k.id} type="button" aria-pressed={kind === `k:${k.id}`} onClick={() => setKind(`k:${k.id}`)}>
+              {k.name}
             </button>
           ))}
         </div>
@@ -184,10 +211,13 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
           {all.map((x) => {
             const bank = x.kind === "bank_account";
             const c = checkLine(x);
+            const def = x.kind === "custom" ? made.find((k) => k.id === x.kind_id) : undefined;
+            const hidden = !!def && def.fields.some((f) => f.sensitive && x.values?.[f.key ?? ""]);
+            const open = shownValues[x.id];
             return (
               <Row
                 key={x.id}
-                icon={KIND_WORDS[x.kind].icon}
+                icon={x.kind === "custom" ? "box" : KIND_WORDS[x.kind].icon}
                 tone={bank && c.tone === "warn" ? "warn" : undefined}
                 title={x.title}
                 side={bank ? <span className={`badge sf-status ${c.tone}`}>{c.tone === "ok" ? "Checked" : "Not checked"}</span> : undefined}
@@ -204,6 +234,14 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
                         Account number: <strong>{shown[x.id]}</strong>
                       </span>
                     )}
+                    {def && (
+                      <span className="block" data-testid="saved-values">
+                        {def.fields
+                          .filter((f) => x.values?.[f.key ?? ""])
+                          .map((f) => `${f.label}: ${open?.[f.key ?? ""] ?? shownValue(f, x.values?.[f.key ?? ""] ?? "")}`)
+                          .join(" · ")}
+                      </span>
+                    )}
                     {x.details.note && <span className="block">{x.details.note}</span>}
                   </span>
                 }
@@ -212,9 +250,18 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
               >
                 {x.to_change && (
                   <>
-                    <button type="button" className="small" onClick={() => setEditing(x)}>
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() => (x.kind === "custom" ? def && setThingOf({ kind: def, thing: x }) : setEditing(x))}
+                    >
                       Change<span className="sr-only"> @{x.name}</span>
                     </button>
+                    {hidden && !open && (
+                      <button type="button" className="small" disabled={act.busy} onClick={() => reveal(x)}>
+                        Show hidden<span className="sr-only"> of @{x.name}</span>
+                      </button>
+                    )}
                     {bank && !shown[x.id] && (
                       <button type="button" className="small" disabled={act.busy} onClick={() => reveal(x)}>
                         Show number<span className="sr-only"> of @{x.name}</span>
@@ -232,9 +279,83 @@ export function SavedCard({ mine, provider }: { mine: boolean; provider?: SavedP
       )}
       {list.data && every.length >= list.data.limit && <p className="hint">You have {list.data.limit} saved things, the most you can keep.</p>}
       {!mine && list.data && !manage && every.length > 0 && <p className="hint">The business's owners and admins add and change them.</p>}
+      {kinds.data && (made.length > 0 || manage) && (
+        <section aria-labelledby={`kinds-h-${mine ? "mine" : "biz"}`} data-testid="saved-made-kinds">
+          <div className="toolbar">
+            <h3 id={`kinds-h-${mine ? "mine" : "biz"}`} className="grow" style={{ margin: 0 }}>
+              {mine ? "Your own kinds" : "The business's own kinds"}
+            </h3>
+            {manage && made.length < kinds.data.limit && (
+              <button type="button" className="small" onClick={() => setKindEditing("new")} data-testid="kind-make">
+                <Icon name="plus" /> Make a kind
+              </button>
+            )}
+          </div>
+          {made.length === 0 ? (
+            <p className="hint">When none of the kinds above fits, make one: a car, a generator, a tenant, with the fields you need.</p>
+          ) : (
+            <Items label={mine ? "Your own kinds" : "The business's own kinds"}>
+              {made.map((k) => (
+                <Row key={k.id} icon="box" title={k.name} sub={`${k.fields.length} ${k.fields.length === 1 ? "field" : "fields"} · ${k.count} saved`} testid="kind-row">
+                  {manage && (
+                    <>
+                      <button type="button" className="small" onClick={() => setKindEditing(k)}>
+                        Change<span className="sr-only"> {k.name}</span>
+                      </button>
+                      <button type="button" className="small danger" disabled={act.busy} onClick={() => void removeKind(k)}>
+                        Remove<span className="sr-only"> {k.name}</span>
+                      </button>
+                    </>
+                  )}
+                </Row>
+              ))}
+            </Items>
+          )}
+        </section>
+      )}
+      {kindEditing && kinds.data && (
+        <KindSheet
+          mine={mine}
+          kind={kindEditing === "new" ? undefined : kindEditing}
+          starters={kinds.data.starters.filter((st) => !made.some((k) => k.name.toLowerCase() === st.name.toLowerCase()))}
+          onClose={() => setKindEditing(undefined)}
+          onSaved={() => {
+            setKindEditing(undefined);
+            kinds.reload();
+            list.reload();
+          }}
+        />
+      )}
+      {thingOf && (
+        <CustomSheet
+          mine={mine}
+          kind={thingOf.kind}
+          thing={thingOf.thing}
+          onClose={() => setThingOf(undefined)}
+          onSaved={() => {
+            setThingOf(undefined);
+            list.reload();
+            kinds.reload();
+          }}
+        />
+      )}
       {editing === "choose" && (
         <Modal title="Save something" onClose={() => setEditing(undefined)}>
           <Items label="What to save">
+            {made.map((k) => (
+              <Row key={k.id} icon="box" title={`A ${k.name.toLowerCase()}`} sub="One of your own kinds" testid="saved-kind">
+                <button
+                  type="button"
+                  className="small"
+                  onClick={() => {
+                    setEditing(undefined);
+                    setThingOf({ kind: k });
+                  }}
+                >
+                  Choose<span className="sr-only"> a {k.name.toLowerCase()}</span>
+                </button>
+              </Row>
+            ))}
             {SAVED_KINDS.map((k) => (
               <Row key={k} icon={KIND_WORDS[k].icon} title={kindChoice(k)} testid="saved-kind">
                 <button type="button" className="small" onClick={() => setEditing(k)}>

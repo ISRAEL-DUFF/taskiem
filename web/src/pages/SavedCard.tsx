@@ -15,7 +15,7 @@ import { AccountSheet, ThingSheet } from "./Saved";
 export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard; mine: boolean; saveTo?: "mine" | "business" }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const icon = KIND_WORDS[card.kind]?.icon ?? "note";
+  const icon = card.kind === "custom" ? "box" : (KIND_WORDS[card.kind]?.icon ?? "note");
   const label = `${card.title}, shared`;
   if (!open)
     return (
@@ -73,7 +73,15 @@ export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard
         (card.kind === "bank_account" ? (
           <AccountSheet mine={saveTo === "mine"} checks={false} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
         ) : (
-          <ThingSheet mine={saveTo === "mine"} kind={card.kind} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
+          // A made-up kind's card is kept as a text of its lines: the
+          // receiver has no such kind.
+          <ThingSheet
+            mine={saveTo === "mine"}
+            kind={card.kind === "custom" ? "text" : card.kind}
+            start={card.kind === "custom" ? { ...card, kind: "text" } : card}
+            onClose={() => setSaving(false)}
+            onSaved={() => setSaving(false)}
+          />
         ))}
     </article>
   );

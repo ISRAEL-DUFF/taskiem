@@ -349,3 +349,60 @@ test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is check
   await axeBoth(page, "/settings/saved (kinds)");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+// Kinds the owner makes (saved objects S1, part 5): a Car from its
+// starter, a van saved as one with its chassis number kept sealed (never
+// on the page in full), the kinds filter with it, and the kind not
+// removed while the van is of it.
+test("an owner makes a Car kind from its starter and saves the van as one", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+  await page.goto("/settings/saved");
+  const saved = page.getByTestId("saved");
+  const made = page.getByTestId("saved-made-kinds").first();
+  await expect(made).toContainText("When none of the kinds above fits");
+
+  await made.getByTestId("kind-make").click();
+  const kindForm = page.getByTestId("kind-form");
+  await kindForm.getByRole("button", { name: "Car", exact: true }).click();
+  await expect(kindForm.getByTestId("kind-name")).toHaveValue("Car");
+  await expect(kindForm.getByTestId("kind-field")).toHaveCount(6);
+  await axeBoth(page, "making a kind");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await kindForm.getByTestId("kind-save").click();
+  await expect(made.getByTestId("kind-row")).toContainText("Car");
+  await expect(made.getByTestId("kind-row")).toContainText("6 fields · 0 saved");
+
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a car" }).click();
+  const form = page.getByTestId("saved-custom-form");
+  await form.getByLabel("Name to call it up by").fill("van");
+  await form.getByLabel("Title").fill("Delivery van");
+  await form.getByLabel("Plate number").fill("LND 123 XY");
+  await form.getByLabel("Insurance due").fill("2027-03-03");
+  await form.getByLabel("Chassis number").fill("JTDBR32E720123456");
+  await axeBoth(page, "saving a thing of a made-up kind");
+  await form.getByTestId("saved-custom-save").click();
+  const row = saved.getByTestId("saved-row").filter({ hasText: "Delivery van" });
+  await expect(row).toContainText("@van · LND 123 XY · 3 Mar 2027");
+  await expect(row.getByTestId("saved-values")).toContainText("Chassis number: ••3456");
+  await expect(page.locator("body")).not.toContainText("JTDBR32E720123456");
+  await expect(row.getByRole("button", { name: "Show hidden of @van" })).toBeVisible();
+
+  // Changing the van keeps the chassis number unless it is typed again.
+  await row.getByRole("button", { name: "Change @van" }).click();
+  await expect(form.getByLabel("Chassis number")).toHaveValue("");
+  await expect(form).toContainText("Kept as ••3456");
+  await form.getByLabel("Colour").fill("White");
+  await form.getByTestId("saved-custom-save").click();
+  await expect(row.getByTestId("saved-values")).toContainText("Colour: White");
+  await expect(row.getByTestId("saved-values")).toContainText("Chassis number: ••3456");
+
+  // In use: not removed.
+  await made.getByRole("button", { name: "Remove Car" }).click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByText("1 saved thing is of this kind")).toBeVisible();
+  await axeBoth(page, "/settings/saved (a made-up kind)");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});

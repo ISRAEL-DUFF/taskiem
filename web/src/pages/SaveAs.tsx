@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { post } from "../api";
+import { get, post } from "../api";
 import { useAuth } from "../auth";
 import { Items, Modal, Row } from "../ui";
-import { KIND_WORDS, SAVED_KINDS, kindChoice, type SavedCard, type SavedDetails, type SavedKind } from "../lib/saved";
+import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type KindList, type MadeKind, type SavedCard, type SavedDetails, type SavedKind } from "../lib/saved";
 import { PopItem } from "./BubbleShell";
 import { AccountSheet, ThingSheet } from "./Saved";
+import { CustomSheet } from "./SavedKinds";
 
 // Saving from a message, and from the picker (saved objects S1, part 4;
 // saved-objects §9): Save as… on a message reads its words (POST
@@ -32,6 +33,9 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
   const [start, setStart] = useState<SavedCard>();
   const [naming, setNaming] = useState<string>();
   const [said, setSaid] = useState<string>();
+  // The owner's own kinds, read when Save "@mum"… asks what kind.
+  const [made, setMade] = useState<MadeKind[]>([]);
+  const [custom, setCustom] = useState<{ kind: MadeKind; name: string }>();
 
   /** Save as… on a message: its words read, the sheet opened. */
   const fromWords = (text: string) =>
@@ -41,7 +45,13 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
     );
 
   /** Save "mum"… in the picker: what kind, then its sheet. */
-  const named = (name: string) => setNaming(name);
+  const named = (name: string) => {
+    setNaming(name);
+    void get<KindList>(savedKindsBase(mine)).then(
+      (r) => setMade(r.kinds),
+      () => setMade([]),
+    );
+  };
 
   const done = (words: string) => {
     setStart(undefined);
@@ -53,6 +63,20 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
       {naming !== undefined && (
         <Modal title={`Save @${naming}`} onClose={() => setNaming(undefined)}>
           <Items label="What to save">
+            {made.map((k) => (
+              <Row key={k.id} icon="box" title={`A ${k.name.toLowerCase()}`} sub="One of your own kinds" testid="save-as-kind">
+                <button
+                  type="button"
+                  className="small"
+                  onClick={() => {
+                    setCustom({ kind: k, name: naming });
+                    setNaming(undefined);
+                  }}
+                >
+                  Choose<span className="sr-only"> a {k.name.toLowerCase()}</span>
+                </button>
+              </Row>
+            ))}
             {SAVED_KINDS.map((k) => (
               <Row key={k} icon={KIND_WORDS[k].icon} title={kindChoice(k)} testid="save-as-kind">
                 <button
@@ -74,8 +98,20 @@ export function useSaveAs({ business = false }: { business?: boolean } = {}) {
         (start.kind === "bank_account" ? (
           <AccountSheet mine={mine} checks={false} start={start} onClose={() => setStart(undefined)} onSaved={(problem) => done(problem ? `Saved. ${problem}` : "Saved")} />
         ) : (
-          <ThingSheet mine={mine} kind={start.kind} start={start} onClose={() => setStart(undefined)} onSaved={() => done("Saved")} />
+          <ThingSheet mine={mine} kind={start.kind === "custom" ? "text" : start.kind} start={start} onClose={() => setStart(undefined)} onSaved={() => done("Saved")} />
         ))}
+      {custom && (
+        <CustomSheet
+          mine={mine}
+          kind={custom.kind}
+          startName={custom.name}
+          onClose={() => setCustom(undefined)}
+          onSaved={() => {
+            setCustom(undefined);
+            setSaid("Saved");
+          }}
+        />
+      )}
       {said && (
         <p className="sr-only" role="status" data-testid="save-as-done">
           {said}

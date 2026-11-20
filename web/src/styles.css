@@ -2458,3 +2458,12 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .address-form .switch-line { margin: 4px 0 12px; }
 .you-tabs { max-width: 100%; }
 .you-order-actions { margin: 12px 0; }
+
+/* A kind the owner makes (saved objects S1, part 5): its fields, each a
+   panel with its label and type, its flags, and its buttons. */
+.kind-fields { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.kind-field { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+.kind-field-top { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
+@media (min-width: 560px) { .kind-field-top { grid-template-columns: 2fr 1fr; } }
+.kind-field-flags { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 8px; font-size: 14px; color: var(--text); }
+.kind-field-flags label { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; }

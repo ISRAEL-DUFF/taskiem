@@ -21,7 +21,12 @@ export interface SavedThing {
   owner: "mine" | "business";
   name: string;
   title: string;
-  kind: SavedKind;
+  /** custom: one of the owner's own kinds (kind_id, kind_name). */
+  kind: SavedKind | "custom";
+  kind_id?: string;
+  kind_name?: string;
+  /** A made-up kind's values by field key, each sensitive one masked. */
+  values?: Record<string, string>;
   hint: string;
   details: SavedDetails;
   check: SavedCheck;
@@ -112,6 +117,89 @@ export function detailsProblem(kind: Exclude<SavedKind, "bank_account">, d: Save
   }
   if (kind === "provider_account" && !d.type) return "Choose what the provider is.";
   if (kind === "text" && (d.body ?? "").length > 4000) return "A text is up to 4,000 characters.";
+  return null;
+}
+
+/** A field of a kind the owner makes (saved objects S1, part 5). */
+export type FieldType = "text" | "number" | "money" | "date" | "phone" | "email" | "choice";
+
+export interface KindField {
+  /** Made from the label once by the server, then kept. */
+  key?: string;
+  label: string;
+  type: FieldType;
+  required?: boolean;
+  /** Sealed, masked in lists, shown in full only with a passkey. */
+  sensitive?: boolean;
+  /** Kept out of every card. */
+  never_share?: boolean;
+  options?: string[];
+}
+
+/** A kind the owner made: "Car", its fields, how many things are of it. */
+export interface MadeKind {
+  id: string;
+  name: string;
+  fields: KindField[];
+  count: number;
+}
+
+export interface KindList {
+  kinds: MadeKind[];
+  starters: { name: string; fields: KindField[] }[];
+  limit: number;
+  to_change: boolean;
+}
+
+export const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: "text", label: "Words" },
+  { value: "number", label: "A number" },
+  { value: "money", label: "Money (₦)" },
+  { value: "date", label: "A date" },
+  { value: "phone", label: "A phone" },
+  { value: "email", label: "An email" },
+  { value: "choice", label: "A choice from a list" },
+];
+
+/** The kinds a person's own or a business's are made at. */
+export const savedKindsBase = (mine: boolean) => (mine ? "/v1/me/saved-kinds" : "/v1/saved-kinds");
+
+/** A value as a person reads it: money as naira, a date as a day; a
+ * sensitive one as the server masked it. */
+export function shownValue(f: KindField, v: string): string {
+  if (v.startsWith("••")) return v;
+  if (f.type === "money") {
+    const [whole, frac] = v.split(".");
+    return `₦${(whole ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${frac ? `.${frac}` : ""}`;
+  }
+  if (f.type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return new Date(`${v}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  }
+  return v;
+}
+
+/** What is wrong with a made-up kind's values in a form, or null: each
+ * required field filled (a sensitive one kept as it was counts). */
+export function valuesProblem(fields: KindField[], v: Record<string, string>, had: Record<string, string> = {}): string | null {
+  for (const f of fields) {
+    if (f.required && !(v[f.key ?? ""] ?? "").trim() && !had[f.key ?? ""]) return `Give it ${f.label.charAt(0).toLowerCase()}${f.label.slice(1)}.`;
+  }
+  return null;
+}
+
+/** What is wrong with a kind in its form, or null. */
+export function kindProblem(name: string, fields: KindField[]): string | null {
+  if (!name.trim()) return "Give the kind a name, such as Car or Generator.";
+  if (fields.length === 0) return "Give the kind at least one field.";
+  if (fields.length > 30) return "A kind has up to 30 fields.";
+  const seen = new Set<string>();
+  for (const f of fields) {
+    const l = f.label.trim().toLowerCase();
+    if (!l) return "Give each field a label.";
+    if (seen.has(l)) return `Two fields are called ${f.label.trim()}: give each its own label.`;
+    seen.add(l);
+    if (f.type === "choice" && (f.options ?? []).filter((o) => o.trim()).length < 2) return `Give ${f.label.trim()} at least 2 choices.`;
+  }
   return null;
 }
 
@@ -297,7 +385,9 @@ export function shareQuestion(s: { words?: string; name: string; savedKind?: str
  * saved.Card): a copy of it as it was sent, its lines to copy, and its
  * fields for Save this. */
 export interface SavedCard {
-  kind: SavedKind;
+  kind: SavedKind | "custom";
+  /** A made-up kind's name ("Car"). */
+  kind_name?: string;
   title: string;
   /** The sender's @name for it. */
   name: string;
@@ -318,6 +408,6 @@ export interface SavedShare {
 /** A card's line under its title, folded: its kind and first detail
  * ("Bank account · Guaranty Trust Bank"). */
 export function cardSub(c: SavedCard): string {
-  const kind = KIND_WORDS[c.kind]?.one ?? "a saved thing";
+  const kind = c.kind === "custom" ? (c.kind_name ?? "a saved thing") : (KIND_WORDS[c.kind]?.one ?? "a saved thing");
   return [kind.charAt(0).toUpperCase() + kind.slice(1), c.lines[0]?.label === "Text" ? "" : c.lines[0]?.value].filter(Boolean).join(" · ");
 }
