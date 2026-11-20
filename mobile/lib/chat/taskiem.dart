@@ -1195,8 +1195,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
             if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
           ],
         ),
-        // Yours on pine: white words in the light theme, as a conversation's.
-        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).

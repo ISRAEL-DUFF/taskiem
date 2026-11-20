@@ -888,32 +888,6 @@ List<Widget> gapped(List<Widget> list, double gap) => [
 /// two lines: taken off a bubble's padding above and below.
 const bubbleLineDrift = 0.31;
 
-/// Your own bubble's words: white on pine in the light (the dark's deep
-/// green keeps the light words it has), lime where the web tints.
-Widget ownWords(BuildContext context, bool on, Widget child) {
-  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
-  const white = Color(0xFFFFFFFF);
-  return TkTheme.recolour(
-    context,
-    (t) => t.copyWith(
-      text: white,
-      muted: const Color(0xB3FFFFFF),
-      accent: const Color(0xFFC8F169),
-      tintText: const Color(0xFFC8F169),
-      tint: const Color(0x1AFFFFFF),
-      accentSoft: const Color(0x1AFFFFFF),
-      panel: const Color(0x1AFFFFFF),
-      panel2: const Color(0x1AFFFFFF),
-      border: const Color(0x33FFFFFF),
-      tkSoft: const Color(0x1AFFFFFF),
-    ),
-    child,
-    // Pills and a tag's letters in the bright inks (as main's copy in
-    // conversation.dart): the light's dark green ink on a faint lime did
-    // not show on pine.
-    look: tkLookOnPine,
-  );
-}
 
 /// `.bubble`: a message's bubble, as wide as what it holds up to 84% of the
 /// thread (560 px at most), the tail's corner on the first of a run, its
@@ -926,7 +900,8 @@ class BubbleFrame extends StatelessWidget {
 
   /// In the app's own chat look (docs/spec/mobile-app-look.md, "The chat"):
   /// 20 px round, the run's last bubble with its corner on the sender's
-  /// side tucked in, and your own words white on pine. Null: as the web's.
+  /// side tucked in, in the web chat's (WhatsApp's) colours. Null: as the
+  /// web's.
   final bool? last;
   final Widget stamp;
   final List<Widget> children;
@@ -963,7 +938,7 @@ class BubbleFrame extends StatelessWidget {
                   borderRadius: radius,
                   boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                 ),
-                child: ownWords(context, mine, Stack(
+                child: Stack(
                   children: [
                     Padding(
                       // `padding: 8px 12px 6px`; on the right 11.5, as Chrome
@@ -981,7 +956,7 @@ class BubbleFrame extends StatelessWidget {
                     // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
                     if (inline) Positioned(right: 9, bottom: 5, child: stamp),
                   ],
-                )),
+                ),
               ),
             ),
           ),
