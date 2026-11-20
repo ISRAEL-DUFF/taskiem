@@ -686,6 +686,10 @@ test("live: a message, typing and presence without a reload; search, starred, a 
   const ada = st.ada as NonNullable<typeof st.ada>;
   const bola = st.bola as NonNullable<typeof st.bola>;
 
+  // The tests before sent Ada's messages to Bola under a minute ago (the
+  // saved things' among them): the chat's messages a minute, a new
+  // account's halved, start afresh before Ada writes here.
+  await ada.page.waitForTimeout(61_000);
   // Bola's Chats list, then nothing read again but by the live connection.
   await bola.page.goto("/you");
   const adaRow = bola.page.getByTestId("people-chat").filter({ hasText: "Ada Obi" });
