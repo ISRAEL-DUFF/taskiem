@@ -69,7 +69,7 @@ case "$*" in
   "network inspect "*) grep -qx "network create $3" "$CALLS" 2>/dev/null ;;
   "network create "*) echo "$*" >>"$CALLS" ;;
   "exec "*wget*) echo '{"match":[{"host":["app.example.com"]}]}' ;;
-  "exec "*) echo "$*" >>"$CALLS" ;;
+  "exec "*) echo "$*" >>"$CALLS"; case "$*" in *"caddy reload"*) [ -z "${RELOAD_FAIL:-}" ] ;; esac ;;
   inspect*Networks*) echo '{"taskiem_default":{},"cohost":{}}' ;;
   *" stop openbao"*) echo "stop openbao" >>"$CALLS" ;;
   *"ps -q"*) echo cid ;;
@@ -609,6 +609,47 @@ func TestVPSExternalProxyKeepsItsSetup(t *testing.T) {
 	}
 	if v.read(override) != o {
 		t.Error("the update changed the external-proxy Compose file")
+	}
+
+	// A reload that fails puts the files Xenibase's Caddy had back, and
+	// reloads it again: on its next start (every Xenibase upgrade) it would
+	// otherwise load files it refuses, and fail to start.
+	siteFile, globalFile := filepath.Join(caddyD, "taskiem.caddy"), filepath.Join(caddyD, "taskiem.global")
+	before := v.read(siteFile)
+	beforeGlobal := v.read(globalFile)
+	conf := v.read(etc)
+	v.write(etc, strings.Replace(conf, "shops.example.net", "stores.example.net", 1)+"\n")
+	v.env = []string{"RELOAD_FAIL=1"}
+	reloads := strings.Count(calls(), "caddy reload")
+	if out, err := v.run("taskiem:other-channel", "update", "--now"); err != nil || !strings.Contains(out, "putting back") {
+		t.Fatalf("update with a reload that fails: %v: %s", err, out)
+	}
+	if v.read(siteFile) != before || v.read(globalFile) != beforeGlobal {
+		t.Errorf("after a failed reload, taskiem.caddy is\n%s", v.read(siteFile))
+	}
+	if n := strings.Count(calls(), "caddy reload") - reloads; n != 2 {
+		t.Errorf("%d reloads, want 2: the new files, then the ones put back", n)
+	}
+	if left, _ := os.ReadDir(caddyD); len(left) != 2 {
+		t.Errorf("files left in Xenibase's caddy.d: %v", left)
+	}
+	v.env = nil
+	v.write(etc, conf+"\n")
+	if out, err := v.run("", "check"); err != nil || !strings.Contains(out, "all checks pass") {
+		t.Errorf("check against the files put back: %v: %s", err, out)
+	}
+	// With none before, a failed reload leaves none.
+	for _, f := range []string{siteFile, globalFile} {
+		if err := os.Remove(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v.env = []string{"RELOAD_FAIL=1"}
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil {
+		t.Fatalf("update: %v: %s", err, out)
+	}
+	if left, _ := os.ReadDir(caddyD); len(left) != 0 {
+		t.Errorf("a failed reload left files where there were none: %v", left)
 	}
 }
 

@@ -188,7 +188,7 @@ Taskiem and Xenibase can run on one server (production: one Whogohost VDS M, 4 v
 | `PROXY_CONTAINER` | `xenibase-caddy-1` | Xenibase's Caddy container |
 | `PROXY_NETWORK` | `cohost` | The Docker network Taskiem's web containers and Xenibase's Caddy share |
 
-**Install Xenibase first**, with its Caddyfile importing `caddy.d/*.global` in its global options and `caddy.d/*.caddy` among its sites, and its Caddy on the `cohost` network. Then install Taskiem with the mode on:
+**Install Xenibase first**, with its Caddyfile importing `caddy.d/*.global` in its global options and `caddy.d/*.caddy` among its sites, and its Caddy on the `cohost` network. Xenibase's guide for its side is `docs/cohosting.md` in the Xenibase repository ("Xenibase and Taskiem on one server"). Then install Taskiem with the mode on:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/install.sh |
@@ -204,17 +204,19 @@ curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/
 - It writes `taskiem.global`, the on-demand certificate check (`ask http://taskiem-public:9090/tls/ask`), which Xenibase's Caddy imports into its global options.
 - It reloads Xenibase's Caddy (`docker exec xenibase-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`), and stops if the reload fails: Xenibase's Caddyfile must import both files.
 
+Each file is written under a temporary name in `caddy.d` and renamed into place, `taskiem.global` first: Caddy refuses `taskiem.caddy`'s on-demand certificates without the check in `taskiem.global`. If the reload fails, the files Xenibase's Caddy had before are put back (or removed, if there were none) and it is reloaded again. A failed reload leaves Caddy running on its old configuration, but Xenibase's Caddy is recreated on every Xenibase upgrade, and with files it refuses it would not start, taking Xenibase's UI and every site down.
+
 The settings are kept in `/etc/taskiem/vps.conf`. Upgrades replace the release's Compose file and keep the server's own; they, rollbacks and restores write the two files again when they differ, and reload Xenibase's Caddy then. A release from before this mode is refused by update and rollback (it would start Taskiem's Caddy on Xenibase's ports).
 
 `taskiem-vps check` also reports: either file missing or changed, the `cohost` network missing, Taskiem or Xenibase's Caddy not on it, and Xenibase's Caddy not having Taskiem's site loaded (read from its admin API inside the container). `https://<domain>/readyz` is checked through Xenibase's Caddy, as before.
 
-**Firewall.** The installer's `ufw` lets in SSH, 80 and 443 (443/udp too, which Xenibase's Caddy does not use); with `TASKIEM_VPS_PROXY=external` it also opens 5432 and 6543, Xenibase's database poolers, as Xenibase's install guide does. Ports Docker publishes are reached through Docker's own firewall rules, which come before ufw's, so ufw does not close them either way; the rules keep ufw's list true and matter if Docker's are turned off. Taskiem's containers reach the database at its public host name, which is this server: Docker forwards it to Xenibase's pooler.
+**Firewall.** The installer's `ufw` lets in SSH, 80 and 443 (443/udp too, for HTTP/3); with `TASKIEM_VPS_PROXY=external` it also opens 5432 and 6543, Xenibase's database poolers, as Xenibase's install guide does. Ports Docker publishes are reached through Docker's own firewall rules, which come before ufw's, so ufw does not close them either way; the rules keep ufw's list true and matter if Docker's are turned off. Taskiem's containers reach the database at its public host name, which is this server: Docker forwards it to Xenibase's pooler.
 
 **Memory.** Taskiem's limits add up to about 6 GiB (Taskiem 2 GiB, ClamAV 2.5 GiB); the rest of 32 GB is Xenibase's and its projects'. Raise a limit in `/opt/taskiem/.env` if needed ([Public pages](#public-pages-storefronts-and-forms)).
 
-**Not the same as with Taskiem's own Caddy:**
-- A plain-HTTP visit to a business's own domain (not a preview address) goes to Xenibase's web UI instead of to HTTPS, since Xenibase's `http://` site answers every name no site claims. Links and DNS checks use HTTPS, which works. Xenibase's catch-all redirecting to `https://{host}{uri}` would close this.
-- HTTP/3 (UDP 443) is not offered: Xenibase's Caddy publishes TCP only.
+**Compared with Taskiem's own Caddy:**
+- Plain-HTTP visits to businesses' own domains: with co-hosting on, Xenibase's port-80 catch-all redirects to `https://{host}{uri}` (308), so they are upgraded on their own name, as before. Xenibase releases from before `docs/cohosting.md` sent them to Xenibase's web UI instead; HTTPS worked either way. Preview addresses are redirected by `taskiem.caddy` itself.
+- HTTP/3 (UDP 443) is published by Xenibase's Caddy, from the same Xenibase release; earlier ones publish TCP only.
 - Certificates are in Xenibase's Caddy's storage, not Taskiem's `caddy_data` volume; Taskiem's own Caddy volumes are left unused.
 
 ## Security notes

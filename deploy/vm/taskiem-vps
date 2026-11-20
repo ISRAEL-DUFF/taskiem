@@ -220,16 +220,46 @@ proxy_reload() { # CONTAINER
 }
 
 # Write the two files into the other Caddy's directory and reload it when
-# they changed (always with "force"). Fails if it would not reload.
+# they changed (always with "force"). Each new file is written under a
+# temporary name in that directory and renamed into place, taskiem.global
+# first: the other Caddy refuses taskiem.caddy's on-demand certificates
+# without the check in taskiem.global, so there is never a moment with the
+# site but not the check. If the reload fails, the files it had before are
+# put back (or removed, if there were none) and it is reloaded again, so
+# the directory never holds files that Caddy refuses: it is recreated on
+# every Xenibase upgrade, and would then fail to start, taking every site
+# down. Fails if the new files would not load.
 proxy_publish() { # [force]
-  local dir changed=${1:-}
-  dir=$(conf PROXY_DIR)
+  local dir container changed=${1:-} f tmp new_global new_site
+  dir=$(conf PROXY_DIR) container=$(conf PROXY_CONTAINER)
   [ -d "$dir" ] || { log "$dir, the other Caddy's site directory, does not exist"; return 1; }
-  write_if_changed "$dir/taskiem.global" "$(proxy_global)" && changed=1
-  write_if_changed "$dir/taskiem.caddy" "$(proxy_site)" && changed=1
+  new_global=$(proxy_global) new_site=$(proxy_site)
+  [ "$(cat "$dir/taskiem.global" 2>/dev/null)" = "$new_global" ] || changed=1
+  [ "$(cat "$dir/taskiem.caddy" 2>/dev/null)" = "$new_site" ] || changed=1
   [ -n "$changed" ] || return 0
-  log "reloading the Caddy in $(conf PROXY_CONTAINER)"
-  proxy_reload "$(conf PROXY_CONTAINER)"
+  # The files as they are, kept under names the other Caddy does not import.
+  for f in global caddy; do
+    rm -f "$dir/taskiem.$f.previous"
+    [ ! -e "$dir/taskiem.$f" ] || cp -p "$dir/taskiem.$f" "$dir/taskiem.$f.previous"
+  done
+  for f in global caddy; do
+    tmp=$(mktemp "$dir/.taskiem.$f.XXXXXX")
+    if [ "$f" = global ]; then printf '%s\n' "$new_global" >"$tmp"; else printf '%s\n' "$new_site" >"$tmp"; fi
+    chmod 644 "$tmp" && mv -f "$tmp" "$dir/taskiem.$f"
+  done
+  log "reloading the Caddy in $container"
+  if proxy_reload "$container"; then
+    rm -f "$dir/taskiem.global.previous" "$dir/taskiem.caddy.previous"
+    return 0
+  fi
+  # Back as they were: the site before the check, so the site is never
+  # there without its check.
+  log "putting back the files the Caddy in $container had, and reloading it"
+  for f in caddy global; do
+    if [ -e "$dir/taskiem.$f.previous" ]; then mv -f "$dir/taskiem.$f.previous" "$dir/taskiem.$f"; else rm -f "$dir/taskiem.$f"; fi
+  done
+  proxy_reload "$container" || true
+  return 1
 }
 
 # Taskiem's files out of a directory it no longer uses (setup moved the
@@ -237,7 +267,9 @@ proxy_publish() { # [force]
 proxy_unpublish() { # DIR CONTAINER
   [ -n "$1" ] || return 0
   [ -e "$1/taskiem.caddy" ] || [ -e "$1/taskiem.global" ] || return 0
-  rm -f "$1/taskiem.caddy" "$1/taskiem.global"
+  # The site before its check, so the site is never there without it.
+  rm -f "$1/taskiem.caddy"
+  rm -f "$1/taskiem.global"
   proxy_reload "$2" || true
 }
 
