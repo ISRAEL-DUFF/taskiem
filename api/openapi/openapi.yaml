@@ -25615,7 +25615,8 @@ paths:
       - You
       summary: Your saved addresses
       description: The person's saved addresses (§13), the default first. Kept on their side only; a business sees only
-        the address copied onto an order placed with one (`address_id`). Deleted with the account.
+        the address copied onto an order placed with one (`address_id`). Deleted with the account. Since saved objects S1
+        they are the person's own place objects (GET /v1/me/saved, kind place), the label their title.
       security:
       - sessionCookie: []
       - sessionToken: []

@@ -103,7 +103,7 @@ func TestDeleteAccount(t *testing.T) {
 	var deleted *time.Time
 	var phones, addresses, chats, messages, settings, sessions int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT name, email, status, deleted_at,
-		(SELECT count(*) FROM user_phones WHERE user_id = $1), (SELECT count(*) FROM person_addresses WHERE person_id = $1),
+		(SELECT count(*) FROM user_phones WHERE user_id = $1), (SELECT count(*) FROM saved_objects WHERE person_id = $1 AND kind = 'place'),
 		(SELECT count(*) FROM person_conversations WHERE person_id = $1), (SELECT count(*) FROM person_messages WHERE person_id = $1),
 		(SELECT count(*) FROM person_notify WHERE person_id = $1), (SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL)
 		FROM users WHERE id = $1`, toluID).Scan(&name, &email, &status, &deleted, &phones, &addresses, &chats, &messages, &settings, &sessions); err != nil {

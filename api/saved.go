@@ -750,9 +750,19 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		where, owner := ownerWhere(o)
 		var name string
-		if err := tx.QueryRow(ctx, `UPDATE saved_objects SET archived_at = now(), updated_by = $3, updated_at = now() WHERE `+where+` AND id = $2 RETURNING name`,
+		var wasDefault bool
+		if err := tx.QueryRow(ctx, `SELECT default_place FROM saved_objects WHERE `+where+` AND id = $2 FOR UPDATE`, owner, id).Scan(&wasDefault); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `UPDATE saved_objects SET archived_at = now(), default_place = false, updated_by = $3, updated_at = now() WHERE `+where+` AND id = $2 RETURNING name`,
 			owner, id, o.by).Scan(&name); err != nil {
 			return err
+		}
+		// A person's default address gone: their newest place is it now.
+		if wasDefault {
+			if err := newestPlaceDefaultTx(ctx, tx, o.person); err != nil {
+				return err
+			}
 		}
 		return s.savedEvent(r, tx, o, id, "removed", map[string]any{"name": name})
 	})

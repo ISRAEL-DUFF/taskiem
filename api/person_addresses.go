@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,12 +15,16 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	phonenum "github.com/israel-duff/taskiem/engine/phone"
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
 // A person's saved addresses (docs/spec/taskiem-for-everyone.md §13, §14;
-// migration 00465). They are the person's own rows (person_addresses),
-// read and written in their own scope only; once a door names a business
-// in a transaction, the list cannot be read there. One is offered when
+// migration 00465). Since saved objects S1 (part 6; migration 00494) they
+// are the person's own place objects: the same rows the Saved page lists,
+// called up by @name, the label their title, the default marked
+// (default_place). /v1/me/addresses reads and writes them as it always
+// did. They are read and written in the person's own scope only; once a
+// door names a business in a transaction, the list cannot be read there. One is offered when
 // ordering: POST /v1/me/chats/{id}/orders takes address_id and copies the
 // address into the order, so a business sees only the address on its
 // order, never the saved list. Deleted with the account.
@@ -67,7 +73,11 @@ func (a savedAddress) deliverTo() deliverTo {
 	return out
 }
 
-const savedAddressCols = `id, label, line, area, landmark, phone, is_default, created_at, updated_at`
+// savedAddressCols are a place object's columns as an address.
+const savedAddressCols = `id, title, details->>'line', coalesce(details->>'area', ''), coalesce(details->>'landmark', ''), details->>'phone', default_place, created_at, updated_at`
+
+// placesWhere names the person's live places ($1 the person).
+const placesWhere = `person_id = $1 AND kind = 'place' AND archived_at IS NULL`
 
 func scanSavedAddress(r pgx.Row) (savedAddress, error) {
 	var a savedAddress
@@ -86,7 +96,7 @@ func (s *Server) personAddressRoutes(r chi.Router) {
 // addressesTx are the person's saved addresses, the default first, then
 // the oldest first.
 func addressesTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) ([]savedAddress, error) {
-	rows, err := tx.Query(ctx, `SELECT `+savedAddressCols+` FROM person_addresses WHERE person_id = $1 ORDER BY is_default DESC, created_at, id`, person)
+	rows, err := tx.Query(ctx, `SELECT `+savedAddressCols+` FROM saved_objects WHERE `+placesWhere+` ORDER BY default_place DESC, created_at, id`, person)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +116,7 @@ func (s *Server) savedAddress(ctx context.Context, person, id uuid.UUID) (savedA
 	var a savedAddress
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		var err error
-		a, err = scanSavedAddress(tx.QueryRow(ctx, `SELECT `+savedAddressCols+` FROM person_addresses WHERE person_id = $1 AND id = $2`, person, id))
+		a, err = scanSavedAddress(tx.QueryRow(ctx, `SELECT `+savedAddressCols+` FROM saved_objects WHERE `+placesWhere+` AND id = $2`, person, id))
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -230,27 +240,45 @@ func (s *Server) addAddress(w http.ResponseWriter, r *http.Request) {
 		s.addressFail(w, r, err)
 		return
 	}
+	o := savedOwner{person: person, by: person}
+	c, err := a.place()
+	if err != nil {
+		s.addressFail(w, r, err)
+		return
+	}
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		if err := lockAddressesTx(ctx, tx, person); err != nil {
 			return err
 		}
+		if err := lockSavedTx(ctx, tx, o); err != nil {
+			return err
+		}
 		var n int
 		var hasDefault bool
-		if err := tx.QueryRow(ctx, `SELECT count(*), COALESCE(bool_or(is_default), false) FROM person_addresses WHERE person_id = $1`, person).Scan(&n, &hasDefault); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT count(*), COALESCE(bool_or(default_place), false) FROM saved_objects WHERE `+placesWhere, person).Scan(&n, &hasDefault); err != nil {
 			return err
 		}
 		if n >= maxAddresses {
 			return customerSendErr{http.StatusConflict, "You can keep up to 20 addresses. Delete one you no longer use first."}
 		}
+		name, err := placeNameTx(ctx, tx, person, a.Label)
+		if err != nil {
+			return err
+		}
+		if err := savedRoomTx(ctx, tx, o, name); err != nil {
+			return err
+		}
 		a.Default = !hasDefault || (in.Default != nil && *in.Default)
 		if a.Default && hasDefault {
-			if _, err := tx.Exec(ctx, `UPDATE person_addresses SET is_default = false, updated_at = now() WHERE person_id = $1 AND is_default`, person); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE saved_objects SET default_place = false WHERE `+placesWhere+` AND default_place`, person); err != nil {
 				return err
 			}
 		}
-		a, err = scanSavedAddress(tx.QueryRow(ctx, `INSERT INTO person_addresses (id, person_id, label, line, area, landmark, phone, is_default)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING `+savedAddressCols, a.ID, person, a.Label, a.Line, a.Area, a.Landmark, a.Phone, a.Default))
-		return err
+		if a, err = scanSavedAddress(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, name, title, kind, details, sealed, hint, check_state, default_place, created_by, updated_by)
+			VALUES ($1, $2, $3, $4, 'place', $5, '{}', $6, 'none', $7, $2, $2) RETURNING `+savedAddressCols, a.ID, person, name, a.Label, c.Details, c.Hint, a.Default)); err != nil {
+			return err
+		}
+		return savedEventBy(ctx, tx, savedWhoOf(r), o, a.ID, "added", map[string]any{"name": name, "kind": saved.KindPlace, "from": "addresses"})
 	})
 	if err != nil {
 		s.addressFail(w, r, err)
@@ -285,21 +313,27 @@ func (s *Server) editAddress(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var err error
-		if a, err = scanSavedAddress(tx.QueryRow(ctx, `SELECT `+savedAddressCols+` FROM person_addresses WHERE person_id = $1 AND id = $2`, person, id)); err != nil {
+		if a, err = scanSavedAddress(tx.QueryRow(ctx, `SELECT `+savedAddressCols+` FROM saved_objects WHERE `+placesWhere+` AND id = $2 FOR UPDATE`, person, id)); err != nil {
 			return err
 		}
 		if err := in.apply(&a); err != nil {
 			return err
 		}
+		c, err := a.place()
+		if err != nil {
+			return err
+		}
 		if in.Default != nil && *in.Default && !a.Default {
-			if _, err := tx.Exec(ctx, `UPDATE person_addresses SET is_default = false, updated_at = now() WHERE person_id = $1 AND is_default`, person); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE saved_objects SET default_place = false WHERE `+placesWhere+` AND default_place`, person); err != nil {
 				return err
 			}
 			a.Default = true
 		}
-		a, err = scanSavedAddress(tx.QueryRow(ctx, `UPDATE person_addresses SET label = $3, line = $4, area = $5, landmark = $6, phone = $7, is_default = $8, updated_at = now()
-			WHERE person_id = $1 AND id = $2 RETURNING `+savedAddressCols, person, id, a.Label, a.Line, a.Area, a.Landmark, a.Phone, a.Default))
-		return err
+		if a, err = scanSavedAddress(tx.QueryRow(ctx, `UPDATE saved_objects SET title = $3, details = $4, hint = $5, default_place = $6, updated_by = $1, updated_at = now()
+			WHERE `+placesWhere+` AND id = $2 RETURNING `+savedAddressCols, person, id, a.Label, c.Details, c.Hint, a.Default)); err != nil {
+			return err
+		}
+		return savedEventBy(ctx, tx, savedWhoOf(r), savedOwner{person: person, by: person}, id, "changed", map[string]any{"from": "addresses"})
 	})
 	if err != nil {
 		s.addressFail(w, r, err)
@@ -327,19 +361,69 @@ func (s *Server) deleteAddress(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		var wasDefault bool
-		if err := tx.QueryRow(ctx, `DELETE FROM person_addresses WHERE person_id = $1 AND id = $2 RETURNING is_default`, person, id).Scan(&wasDefault); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT default_place FROM saved_objects WHERE `+placesWhere+` AND id = $2 FOR UPDATE`, person, id).Scan(&wasDefault); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE saved_objects SET archived_at = now(), default_place = false, updated_by = $1 WHERE `+placesWhere+` AND id = $2`, person, id); err != nil {
+			return err
+		}
+		if err := savedEventBy(ctx, tx, savedWhoOf(r), savedOwner{person: person, by: person}, id, "removed", map[string]any{"from": "addresses"}); err != nil {
 			return err
 		}
 		if !wasDefault {
 			return nil
 		}
-		_, err := tx.Exec(ctx, `UPDATE person_addresses SET is_default = true, updated_at = now()
-			WHERE id = (SELECT id FROM person_addresses WHERE person_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)`, person)
-		return err
+		return newestPlaceDefaultTx(ctx, tx, person)
 	})
 	if err != nil {
 		s.addressFail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// newestPlaceDefaultTx makes the person's newest place the default, when
+// the default went.
+func newestPlaceDefaultTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE saved_objects SET default_place = true
+		WHERE id = (SELECT id FROM saved_objects WHERE `+placesWhere+` ORDER BY created_at DESC, id DESC LIMIT 1)`, person)
+	return err
+}
+
+// place is the address as a place object keeps it.
+func (a savedAddress) place() (saved.Cleaned, error) {
+	d := map[string]any{"line": a.Line, "area": a.Area, "landmark": a.Landmark}
+	if a.Phone != nil {
+		d["phone"] = *a.Phone
+	}
+	return saved.Clean(saved.KindPlace, d)
+}
+
+var placeNameNot = regexp.MustCompile(`[^a-z0-9]+`)
+
+// placeNameTx is a name to call a new address up by, made from its label
+// ("Mum's place" is @mums-place), with -2, -3 when the person has the
+// name already.
+func placeNameTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, label string) (string, error) {
+	base := strings.NewReplacer("'", "", "’", "").Replace(strings.ToLower(label))
+	base = strings.Trim(placeNameNot.ReplaceAllString(base, "-"), "-")
+	if len(base) > 28 {
+		base = strings.Trim(base[:28], "-")
+	}
+	if len(base) < 2 {
+		base = "place"
+	}
+	for n := 1; ; n++ {
+		name := base
+		if n > 1 {
+			name = fmt.Sprintf("%s-%d", base, n)
+		}
+		var taken bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM saved_objects WHERE person_id = $1 AND name = $2 AND archived_at IS NULL)`, person, name).Scan(&taken); err != nil {
+			return "", err
+		}
+		if !taken {
+			return name, nil
+		}
+	}
 }

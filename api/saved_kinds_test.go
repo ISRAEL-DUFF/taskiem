@@ -77,3 +77,37 @@ func TestSavedMadeUpKinds(t *testing.T) {
 		t.Fatalf("removed: %d", n)
 	}
 }
+
+// Saved addresses are the person's own places (saved objects S1, part 6):
+// one added on /v1/me/addresses is on Saved as @home; changed on Saved, it
+// is changed as an address; the default removed on Saved, the newest place
+// is the default; @home in a message to Taskiem tells it.
+func TestSavedAddressesArePlaces(t *testing.T) {
+	w := ordersWorld(t)
+	tolu, _ := w.personIn(t, "+2348031100777")
+	home := tolu.must(201, "POST", "/v1/me/addresses", map[string]any{"label": "Home", "line": "12 Allen Avenue", "area": "Ikeja"})
+	tolu.must(201, "POST", "/v1/me/addresses", map[string]any{"label": "Home", "line": "4 Bode Thomas Street"})
+	var place map[string]any
+	names := []string{}
+	for _, x := range tolu.must(200, "GET", "/v1/me/saved", nil)["saved"].([]any) {
+		m := x.(map[string]any)
+		names = append(names, m["name"].(string))
+		if m["id"] == home["id"] {
+			place = m
+		}
+	}
+	if place == nil || place["kind"] != "place" || place["name"] != "home" || place["title"] != "Home" || strings.Join(names, ",") != "home,home-2" {
+		t.Fatalf("on Saved: %v %v", place, names)
+	}
+	tolu.must(200, "PUT", "/v1/me/saved/"+home["id"].(string), map[string]any{"title": "Our house", "details": map[string]any{"landmark": "by the blue gate"}})
+	list := tolu.must(200, "GET", "/v1/me/addresses", nil)["addresses"].([]any)
+	first := list[0].(map[string]any)
+	if first["id"] != home["id"] || first["label"] != "Our house" || first["landmark"] != "by the blue gate" || first["default"] != true {
+		t.Fatalf("as an address: %v", list)
+	}
+	tolu.must(204, "DELETE", "/v1/me/saved/"+home["id"].(string), nil)
+	list = tolu.must(200, "GET", "/v1/me/addresses", nil)["addresses"].([]any)
+	if len(list) != 1 || list[0].(map[string]any)["default"] != true {
+		t.Fatalf("the default moved: %v", list)
+	}
+}
