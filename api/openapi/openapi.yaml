@@ -25995,6 +25995,53 @@ paths:
                     type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/saved/read:
+    post:
+      operationId: readSavedWords
+      tags:
+      - Saved
+      summary: Read a message for what can be saved
+      description: 'Save as… on a message (saved objects S1): an account number and its bank, a phone, an email, an address (its street, area and landmark) and a name written as one, with the kind they make: a bank account when there is an account number, a place when there is an address, a person when there is a phone or an email, else a text of the words. Nothing is kept, and nothing goes to the AI.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+      responses:
+        '200':
+          description: What the words hold
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, title, details]
+                properties:
+                  kind:
+                    type: string
+                    enum: [bank_account, person, place, text]
+                  title:
+                    type: string
+                    description: 'A name the words give ("Account name: Ada Obi"), or empty.'
+                  details:
+                    type: object
+                    description: 'The kind''s fields (bank_name and account_number for an account; phone, email; line, area, landmark; body for a text).'
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/banks:
     get:
       operationId: listMyBanks

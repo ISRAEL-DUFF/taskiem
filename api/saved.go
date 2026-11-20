@@ -210,6 +210,7 @@ func (s *Server) personSavedRoutes(r chi.Router) {
 	r.Delete("/me/saved/{id}", s.savedHandler(true, s.removeSaved))
 	r.Post("/me/saved/{id}/reveal", s.savedHandler(true, s.revealSaved))
 	r.Get("/me/banks", s.listMyBanks)
+	r.Post("/me/saved/read", s.readSavedWords)
 }
 
 // savedHandler finds the owner, then hands over.
@@ -466,65 +467,7 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 		writeErr(w, http.StatusBadRequest, "Give the account a name to call it up by, a title, its bank and its 10-digit number.")
 		return
 	}
-	name, err := saved.Name(*in.Name)
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	title, err := saved.Title(*in.Title)
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	acct, err := in.account(saved.BankAccount{})
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	if acct, err = s.settleBank(ctx, o, acct); err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	// A name taken or the limit reached is told before the bank is asked.
-	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error { return savedRoomTx(ctx, tx, o, name) }); err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	// The name check, outside the transaction: a business's account the
-	// bank does not know is never saved.
-	var check *savedCheckResult
-	var problem savedProblem
-	if !o.mine() {
-		check, problem, err = s.checkSavedAccount(ctx, o.tenant, acct)
-		if err != nil {
-			s.savedFail(w, r, err)
-			return
-		}
-	}
-	id := uuid.Must(uuid.NewV7())
-	var x savedRow
-	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
-		if err := lockSavedTx(ctx, tx, o); err != nil {
-			return err
-		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
-			return err
-		}
-		sealed, err := s.sealSaved(ctx, tx, o, id, acct.AccountNumber)
-		if err != nil {
-			return err
-		}
-		person, tenant := nullable(o.person), nullable(o.tenant)
-		state, cname, cvia, cat := checkCols(check)
-		if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint,
-				check_state, checked_name, checked_via, checked_at, check_problem, created_by, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15) RETURNING `+savedCols,
-			id, person, tenant, name, title, saved.KindBankAccount, acct.Details(), sealed, acct.Hint(), state, cname, cvia, cat, problem.lasting(), o.by)); err != nil {
-			return err
-		}
-		detail := map[string]any{"name": name, "kind": saved.KindBankAccount, "bank": acct.BankName, "account_last4": saved.Last4(acct.AccountNumber), "check": state}
-		return s.savedEvent(r, tx, o, id, "added", detail)
-	})
+	x, problem, err := s.addSavedNew(ctx, savedWhoOf(r), o, in)
 	if err != nil {
 		s.savedFail(w, r, err)
 		return
@@ -872,13 +815,7 @@ func savedRowKey(id uuid.UUID) string { return "saved:" + id.String() }
 // for theirs, in the business's audit chain for its own (as saved.<action>).
 // detail never holds a full account number.
 func (s *Server) savedEvent(r *http.Request, tx pgx.Tx, o savedOwner, id uuid.UUID, action string, detail map[string]any) error {
-	if !o.mine() {
-		return auditTx(r, tx, "saved."+action, id.String(), detail)
-	}
-	raw, _ := json.Marshal(detail)
-	_, err := tx.Exec(r.Context(), `INSERT INTO saved_object_events (id, person_id, object_id, action, detail) VALUES ($1, $2, $3, $4, $5)`,
-		uuid.Must(uuid.NewV7()), o.person, id, action, raw)
-	return err
+	return savedEventBy(r.Context(), tx, savedWhoOf(r), o, id, action, detail)
 }
 
 // --- step-up: a passkey for one object ---
@@ -987,39 +924,7 @@ func (s *Server) savedPasskey(w http.ResponseWriter, r *http.Request, o savedOwn
 // provider (saved.Clean): nothing sealed, no name check, recorded as every
 // object is (without its details, which may be a person's data).
 func (s *Server) addSavedThing(w http.ResponseWriter, r *http.Request, o savedOwner, in savedIn) {
-	ctx := r.Context()
-	name, err := saved.Name(*in.Name)
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	title, err := saved.Title(*in.Title)
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	c, err := saved.Clean(in.Kind, in.Details)
-	if err != nil {
-		s.savedFail(w, r, err)
-		return
-	}
-	id := uuid.Must(uuid.NewV7())
-	var x savedRow
-	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
-		if err := lockSavedTx(ctx, tx, o); err != nil {
-			return err
-		}
-		if err := savedRoomTx(ctx, tx, o, name); err != nil {
-			return err
-		}
-		if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint,
-				check_state, created_by, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, '{}', $8, $9, $10, $10) RETURNING `+savedCols,
-			id, nullable(o.person), nullable(o.tenant), name, title, in.Kind, c.Details, c.Hint, saved.NoCheck, o.by)); err != nil {
-			return err
-		}
-		return s.savedEvent(r, tx, o, id, "added", map[string]any{"name": name, "kind": in.Kind})
-	})
+	x, _, err := s.addSavedNew(r.Context(), savedWhoOf(r), o, in)
 	if err != nil {
 		s.savedFail(w, r, err)
 		return

@@ -1774,6 +1774,61 @@
       "reviewed": true,
       "context": "Before two saved things of one name, the person's own and their business's"
     },
+    "button.keep_mine": {
+      "text": "Keep it to myself",
+      "reviewed": true,
+      "context": "A button: save what was said in words as the person's own saved thing, not the business's (at most 20 characters)"
+    },
+    "button.save": {
+      "text": "Save",
+      "reviewed": true,
+      "context": "A button: save what was said in words as a saved thing"
+    },
+    "wa.saved.need_bank": {
+      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "reviewed": true,
+      "context": "Saving an account in words named no bank"
+    },
+    "wa.saved.not_saved": {
+      "text": "Not saved: {reason}",
+      "reviewed": true,
+      "context": "A saved thing said in words could not be saved; the reason follows"
+    },
+    "wa.saved.save_ask": {
+      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "reviewed": true,
+      "context": "Saving in words: what was understood, then where it will be kept; Save, Keep it to myself and Cancel follow"
+    },
+    "wa.saved.save_left": {
+      "text": "Not saved.",
+      "reviewed": true,
+      "context": "The person said no to saving what they said in words"
+    },
+    "wa.saved.save_reminder": {
+      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "reviewed": true,
+      "context": "A reply to the save question that was neither Save nor Cancel"
+    },
+    "wa.saved.saved": {
+      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "reviewed": true,
+      "context": "A thing said in words was saved"
+    },
+    "wa.saved.taken": {
+      "text": "You already have something called @{name}. Choose another name.",
+      "reviewed": true,
+      "context": "Saving in words used a name already taken"
+    },
+    "wa.saved.where_business": {
+      "text": "{org}'s saved things",
+      "reviewed": true,
+      "context": "Where a saved thing goes: the business's, which its team can use"
+    },
+    "wa.saved.where_mine": {
+      "text": "your own saved things, which only you see",
+      "reviewed": true,
+      "context": "Where a saved thing goes: the person's own"
+    },
     "wa.saved.yours": {
       "text": "Your own:",
       "reviewed": true,

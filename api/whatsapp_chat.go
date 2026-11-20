@@ -257,6 +257,8 @@ type chatData struct {
 	Pick  []uuid.UUID    `json:"pick,omitempty"`
 	// Booking is a booking change being confirmed (whatsapp_bookings.go).
 	Booking *chatBooking `json:"booking,omitempty"`
+	// Save is a saved thing said in words, waiting for Save (saved_words.go).
+	Save *chatSave `json:"save,omitempty"`
 	// Shop is the storefront being set up, or a change to it being
 	// confirmed (whatsapp_storefront.go).
 	Shop *chatShop `json:"shop,omitempty"`
@@ -920,6 +922,9 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 		return s.waCollect(ctx, c, text)
 	case stateConfirming:
+		if c.data.Save != nil {
+			return s.waSaveReply(ctx, c, cmd)
+		}
 		if c.data.Booking != nil {
 			switch cmd {
 			case "yes", "y", "confirm":
@@ -956,8 +961,12 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		// What the business turned off is not a command here: its words pass
 		// on as ordinary chat (docs/spec/business-areas.md).
 		on := s.chatAreas(ctx, c)
-		// A saved thing by its name alone (saved_chat.go): "@mum".
+		// A saved thing by its name alone (saved_chat.go): "@mum"; one
+		// saved in words (saved_words.go): "save mum: GTBank 0123456789".
 		if done, err := s.waSavedName(ctx, c, text); done || err != nil {
+			return err
+		}
+		if done, err := s.waSaveWords(ctx, c, text); done || err != nil {
 			return err
 		}
 		if !on.On(areas.Storefront) {
