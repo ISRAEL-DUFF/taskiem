@@ -271,8 +271,26 @@ export function savedSuggestions(mine: SavedThing[], business: SavedThing[], tex
     words: x.title,
     savedKind: x.kind,
     savedOwner: x.owner,
+    savedSensitive: savedSensitive(x),
     body: x.kind === "text" ? (x.details.body ?? "") : undefined,
   }));
+}
+
+/** saved.MakeCard's rule: an account's number, a person's phone or email,
+ * a place's phone. */
+export function savedSensitive(x: Pick<SavedThing, "kind" | "details">): boolean {
+  const d = x.details;
+  if (x.kind === "bank_account") return true;
+  if (x.kind === "person") return !!(d.phone || d.email);
+  if (x.kind === "place") return !!d.phone;
+  return false;
+}
+
+/** The server's question before sharing what is sensitive (shareQuestion):
+ * "Share Mum's account details with Bola Stores?". */
+export function shareQuestion(s: { words?: string; name: string; savedKind?: string }, to: string): string {
+  const what = s.savedKind === "bank_account" ? "account details" : s.savedKind === "person" || s.savedKind === "place" ? "phone number and details" : "details";
+  return `Share ${s.words || s.name}'s ${what} with ${to || "them"}?`;
 }
 
 /** A saved thing shared in a chat (saved objects S1, part 3; the server's

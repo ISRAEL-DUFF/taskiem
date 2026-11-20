@@ -33,3 +33,16 @@ describe("sendSaved", () => {
     await expect(sendSaved(async () => Promise.reject(gone), async () => true)).rejects.toBe(gone);
   });
 });
+
+describe("sharing a saved thing between businesses", () => {
+  it("asks only for what is sensitive, as the server does", async () => {
+    const { savedSensitive, shareQuestion } = await import("../lib/saved");
+    expect(savedSensitive({ kind: "bank_account", details: {} })).toBe(true);
+    expect(savedSensitive({ kind: "person", details: { email: "a@b.ng" } })).toBe(true);
+    expect(savedSensitive({ kind: "person", details: { address: "4 Allen Avenue" } })).toBe(false);
+    expect(savedSensitive({ kind: "place", details: { line: "4 Allen Avenue", phone: "+2348031234567" } })).toBe(true);
+    expect(savedSensitive({ kind: "text", details: { body: "No refunds" } })).toBe(false);
+    expect(shareQuestion({ name: "our-account", words: "Our account", savedKind: "bank_account" }, "Ada's Kitchen")).toBe("Share Our account's account details with Ada's Kitchen?");
+    expect(shareQuestion({ name: "home", savedKind: "place" }, "")).toBe("Share home's phone number and details with them?");
+  });
+});

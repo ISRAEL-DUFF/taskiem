@@ -1,5 +1,7 @@
 import type { ToolKey } from "../lib/tools";
 import { useSavedPicks } from "./SavedPicks";
+import { shareQuestion } from "../lib/saved";
+import { SavedCardView } from "./SavedCard";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import {
@@ -969,6 +971,9 @@ function Bubble({
                 openTool={refs.openTool}
               />
             ))}
+          {(m.mentions ?? []).map((x) =>
+            x.kind === "saved" && x.saved ? <SavedCardView key={`saved:${x.name}`} card={x.saved} mine={m.mine} saveTo="business" /> : null,
+          )}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
@@ -1317,7 +1322,9 @@ export function ConversationPane({
           : []),
       ]
     : [];
-  const savedTexts = useSavedPicks("texts");
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest named as tags, each shared as a card with the message.
+  const savedTexts = useSavedPicks("share");
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1365,7 +1372,7 @@ export function ConversationPane({
           ? undefined
           : [],
       // Saved texts (saved objects S1): their words into the box.
-      saved: savedTexts.saved, wantSaved: savedTexts.want,
+      saved: savedTexts.saved, wantSaved: savedTexts.want, savedAsTags: true,
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],
@@ -1389,7 +1396,7 @@ export function ConversationPane({
         post(`${path}/typing`).catch(() => undefined);
       }
     },
-    onSend: (s) => sendMessage(s),
+    onSend: (s) => void shareThenSend(s),
   });
   openOrder.current = (start) =>
     c.openTool("order", undefined, { order: start });
@@ -1627,6 +1634,22 @@ export function ConversationPane({
       }),
     [conv.link, onChanged],
   );
+  // A message naming saved things: what is sensitive in them is shared only
+  // after a yes, asked here (the server's question, the server refusing
+  // without it) since the outbox sends later; on a no, the words come back.
+  const shareThenSend = async (s: Sending<LinkMessage>) => {
+    const refs = (s.mentions ?? []) as { kind: string; saved?: { id: string; owner: string; confirm: boolean } }[];
+    for (const r of refs) {
+      if (r.kind !== "saved" || !r.saved) continue;
+      const pick = (savedTexts.saved ?? []).find((x) => x.id === r.saved?.id);
+      if (pick?.savedSensitive && !(await confirm({ title: shareQuestion(pick, conv.name), ok: "Share" }))) {
+        c.setText((cur) => (cur === "" ? s.text : cur));
+        return;
+      }
+      r.saved.confirm = true;
+    }
+    sendMessage(s);
+  };
   const sendMessage = (s: Sending<LinkMessage>) => {
     const { file, reply } = s;
     const o: Outgoing = {

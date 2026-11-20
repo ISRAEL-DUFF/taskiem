@@ -701,6 +701,7 @@ export function CustomerPane({
               <AppCardView
                 card={m.card}
                 mine={m.mine}
+                saveTo="business"
                 actions={
                   cardLink(m.card) ? (
                     <Link className="tk-btn soft" to={cardLink(m.card) ?? "/"}>

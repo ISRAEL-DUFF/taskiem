@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
 import { useAuth } from "../auth";
@@ -533,12 +535,34 @@ export function PersonChatPage() {
     }
   };
 
-  const savedTexts = useSavedPicks("texts");
+  const savedTexts = useSavedPicks("share-mine");
+  // One's own saved thing other than a text, picked: shared with the
+  // business as a card (saved objects S1), after a yes to sharing what is
+  // sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setSendError(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<PersonMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergeMessages(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const closedNow = e instanceof ApiError ? erasedWords(e.status, e.message, "person") : null;
+        if (closedNow) setErased(closedNow);
+        else setSendError(e);
+        reloadChat();
+      }
+    })();
   const composer = useComposer<never>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    // Saved texts (saved objects S1): their words into the box.
-    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want },
+    // Saved things (saved objects S1): a text's words into the box; the
+    // rest shared as cards.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, wantSaved: savedTexts.want, shareSaved },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);

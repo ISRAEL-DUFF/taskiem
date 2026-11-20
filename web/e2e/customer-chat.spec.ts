@@ -140,6 +140,21 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await person.getByLabel(`Message ${name}`).press("Enter");
   await expect(person.getByTestId("person-message").filter({ hasText: "Is the jollof ready?" })).toBeVisible();
   await expect(person.getByTestId("person-message").filter({ hasText: "Is the jollof ready?" }).getByRole("img", { name: "Delivered" })).toBeVisible();
+  // Their own saved place by @name (saved objects S1): asked first (a
+  // phone for the rider), then shared with the business as a card.
+  const home = await person.request.post("/v1/me/saved", {
+    headers: H,
+    data: { kind: "place", name: "home", title: "Home", details: { line: "4 Allen Avenue", area: "Ikeja", phone: "+2348031120099" } },
+  });
+  expect(home.status(), await home.text()).toBe(201);
+  const box = person.getByLabel(`Message ${name}`);
+  await box.click();
+  await box.pressSequentially("@ho");
+  await person.getByTestId("mention-list").getByRole("button", { name: /home/ }).click();
+  await expect(person.getByRole("dialog").filter({ hasText: `Share Home's phone number and details with ${name}?` })).toBeVisible();
+  await person.getByTestId("confirm-ok").click();
+  await expect(box).toHaveValue("");
+  await expect(person.getByTestId("saved-card").filter({ hasText: "Home" })).toBeVisible();
 
   // The business: the thread is in the app, with no 24-hour window.
   const chats = (await (await biz.request.get("/v1/customer-chats", { headers: H })).json()) as { chats: { id: string; line: string; name: string }[] };
@@ -148,6 +163,11 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await biz.goto(`/chat?with=c-${thread?.id}`);
   const pane = biz.getByTestId("customer-pane");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Is the jollof ready?" })).toBeVisible();
+  // The customer's place, opened: its lines, and Save this for the business.
+  const homeCard = pane.getByTestId("saved-card").filter({ hasText: "Home" });
+  await homeCard.getByRole("button", { name: /Show details/ }).click();
+  await expect(homeCard.getByTestId("saved-card-line").first()).toContainText("4 Allen Avenue");
+  await expect(homeCard.getByTestId("saved-card-save")).toBeVisible();
   // They were typing a moment ago; then they are a customer in the app.
   await expect(pane.getByText("Customer in the app")).toBeVisible({ timeout: 20_000 });
   await expect(biz.getByTestId("in-the-app")).toBeVisible();

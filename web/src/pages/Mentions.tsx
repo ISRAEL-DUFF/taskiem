@@ -63,6 +63,9 @@ export function useMentions(
     /** A saved thing other than a text, picked where the chat shares it as
      * a card: what was typed for it goes, and the chat sends the card. */
     shareSaved?: (s: Suggestion) => void;
+    /** Saved things other than texts kept as tags, sent with the message
+     * (a business's chat with another business; saved objects S1). */
+    savedAsTags?: boolean;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -176,7 +179,7 @@ export function useMentions(
     // frame later would land the next key typed at the end of the box.
     flushSync(() => {
       setText(next.text);
-      if (s.kind !== "taskiem" && s.kind !== "saved")
+      if (s.kind !== "taskiem" && (s.kind !== "saved" || (sources.savedAsTags && s.body === undefined)))
         setPicked((cur) => [...cur, s]);
       setQ(null);
     });
@@ -210,7 +213,9 @@ export function useMentions(
       // A customer is named in words only: never sent to another business.
       .filter((p) => p.kind !== "customer")
       .map((p) =>
-        p.kind === "business"
+        p.kind === "saved"
+          ? { kind: p.kind, saved: { id: p.id, owner: p.savedOwner ?? "business", confirm: false } }
+          : p.kind === "business"
           ? { kind: p.kind, link: p.id }
           : p.kind === "service"
             ? { kind: p.kind, service_id: p.id }

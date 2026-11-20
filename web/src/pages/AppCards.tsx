@@ -23,9 +23,9 @@ const ICON: Record<AppCard["type"], string> = {
 };
 
 /** A card in a conversation; `actions` are the side's own buttons. */
-export function AppCardView({ card, actions, mine = false }: { card: AppCard; actions?: ReactNode; mine?: boolean }) {
+export function AppCardView({ card, actions, mine = false, saveTo }: { card: AppCard; actions?: ReactNode; mine?: boolean; saveTo?: "mine" | "business" }) {
   // A saved thing shared (saved objects S1): its own card, with Copy and Save this.
-  if (card.type === "saved" && card.saved) return <SavedCardView card={card.saved} mine={mine} />;
+  if (card.type === "saved" && card.saved) return <SavedCardView card={card.saved} mine={mine} saveTo={saveTo} />;
   const st = cardState(card);
   const step = card.type === "delivery" && card.status ? deliveryStep({ status: card.status as "accepted" }) : 0;
   const figure = cardFigure(card);

@@ -10,7 +10,9 @@ import { AccountSheet, ThingSheet } from "./Saved";
 // opening to each detail with Copy beside it, and Save this for whoever
 // received it, as a saved thing of their own.
 
-export function SavedCardView({ card, mine }: { card: SavedCard; mine: boolean }) {
+/** saveTo: where Save this keeps it, the person's own (mine) or, read in
+ * a business's chat, the business's. */
+export function SavedCardView({ card, mine, saveTo = "mine" }: { card: SavedCard; mine: boolean; saveTo?: "mine" | "business" }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const icon = KIND_WORDS[card.kind]?.icon ?? "note";
@@ -69,9 +71,9 @@ export function SavedCardView({ card, mine }: { card: SavedCard; mine: boolean }
       )}
       {saving &&
         (card.kind === "bank_account" ? (
-          <AccountSheet mine checks={false} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
+          <AccountSheet mine={saveTo === "mine"} checks={false} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
         ) : (
-          <ThingSheet mine kind={card.kind} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
+          <ThingSheet mine={saveTo === "mine"} kind={card.kind} start={card} onClose={() => setSaving(false)} onSaved={() => setSaving(false)} />
         ))}
     </article>
   );

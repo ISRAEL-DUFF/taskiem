@@ -1,4 +1,5 @@
 import type { ExploreCard } from "./explore";
+import type { SavedCard } from "./saved";
 // Mentions in the composer (business links L4, §5.5): "@" suggests linked
 // businesses, "#" items with their unit and price; a pick puts the name
 // in the text and, in a conversation, a structured reference beside it.
@@ -38,11 +39,14 @@ export interface Suggestion {
   body?: string;
   /** Whose saved thing it is: the person's own, or their business's. */
   savedOwner?: "mine" | "business";
+  /** A saved thing that holds what is sensitive (saved.MakeCard's rule):
+   * sharing it asks first. */
+  savedSensitive?: boolean;
 }
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase";
+  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase" | "saved";
   name: string;
   link?: string;
   item_id?: string;
@@ -55,6 +59,8 @@ export interface Mention {
    * (on our copy only), and its status when it was named. */
   ref?: string;
   status?: string;
+  /** A saved thing shared (saved objects S1), as it was when sent. */
+  saved?: SavedCard;
 }
 
 /** What "/" picks to tag (phase 2 additions): "/invoice" (invoices and
