@@ -88,6 +88,10 @@ func (s *Server) addSavedNew(ctx context.Context, who savedWho, o savedOwner, in
 	if in.Kind == saved.KindCustom {
 		return s.addSavedCustom(ctx, who, o, id, name, title, in)
 	}
+	if in.Kind == saved.KindFile {
+		x, err := s.addSavedFileObject(ctx, who, o, id, name, title, in)
+		return x, savedProblem{}, err
+	}
 	if in.Kind != saved.KindBankAccount {
 		c, err := saved.Clean(in.Kind, in.Details)
 		if err != nil {

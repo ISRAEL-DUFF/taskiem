@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"net/mail"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	phonenum "github.com/israel-duff/taskiem/engine/phone"
 )
@@ -91,6 +94,15 @@ func Clean(kind string, in map[string]any) (Cleaned, error) {
 	}
 	put(d, "note", note)
 	switch kind {
+	case KindFile:
+		// The file itself is kept apart (the API's saved_files): here, what
+		// it is, as the API found it when it was uploaded.
+		f, err := FileOf(in)
+		if err != nil {
+			return Cleaned{}, err
+		}
+		d["file"], d["file_name"], d["file_type"], d["file_size"] = f.ID, f.Name, f.Type, f.Size
+		return Cleaned{Details: d, Hint: clip(f.Hint(), 120)}, nil
 	case KindPerson:
 		ph, err := phone(in, "phone", "phone number")
 		if err != nil {
@@ -239,3 +251,55 @@ func clip(s string, n int) string {
 
 // ProviderWord is a provider type as a list shows it.
 func ProviderWord(typ string) string { return providerWords[typ] }
+
+// FileMeta is a saved file as lists and cards name it.
+type FileMeta struct {
+	ID   string `json:"file"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Size int64  `json:"size"`
+}
+
+// FileOf is a file object's details (file, file_name, file_type,
+// file_size).
+func FileOf(in map[string]any) (FileMeta, error) {
+	id, _ := in["file"].(string)
+	if _, err := uuid.Parse(id); err != nil {
+		return FileMeta{}, invalid("Choose the photo or document to save.")
+	}
+	f := FileMeta{ID: id}
+	f.Name, _ = in["file_name"].(string)
+	f.Type, _ = in["file_type"].(string)
+	switch n := in["file_size"].(type) {
+	case float64:
+		f.Size = int64(n)
+	case int64:
+		f.Size = n
+	case int:
+		f.Size = int64(n)
+	}
+	return f, nil
+}
+
+// Hint is what a list shows for a file: "PDF · 240 KB", "Photo · 1.2 MB".
+func (f FileMeta) Hint() string {
+	what := "File"
+	switch {
+	case strings.HasPrefix(f.Type, "image/"):
+		what = "Photo"
+	case f.Type == "application/pdf":
+		what = "PDF"
+	}
+	return what + " · " + SizeWords(f.Size)
+}
+
+// SizeWords is a size as people read it: 240 KB, 1.2 MB.
+func SizeWords(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return strconv.FormatFloat(float64(n)/(1<<20), 'f', 1, 64) + " MB"
+	case n >= 1<<10:
+		return strconv.FormatInt((n+512)>>10, 10) + " KB"
+	}
+	return strconv.FormatInt(n, 10) + " bytes"
+}

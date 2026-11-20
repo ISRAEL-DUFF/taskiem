@@ -230,7 +230,7 @@ func (s *Server) resealKindTx(ctx context.Context, tx pgx.Tx, o savedOwner, k sa
 		if err != nil {
 			return err
 		}
-		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, x.ID, k.Name, k.Fields, all, x.Details)
+		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, x.ID, k.Name, k.Fields, all, x.Details, filesOf(x.Details))
 		if err != nil {
 			return err
 		}
@@ -313,9 +313,12 @@ func (s *Server) customValuesTx(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 // customStoreTx is how an object of a made-up kind is kept: its details
 // (the note kept from was, the plain values, the sealed ones masked), its
 // sealed values, and its hint.
-func (s *Server) customStoreTx(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid.UUID, kindName string, fields []saved.Field, all map[string]string, was map[string]any) (map[string]any, map[string]any, string, error) {
+func (s *Server) customStoreTx(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid.UUID, kindName string, fields []saved.Field, all map[string]string, was map[string]any, files map[string]saved.FileMeta) (map[string]any, map[string]any, string, error) {
 	plain, secret, masked := saved.SplitValues(fields, all)
 	details := map[string]any{"values": plain, "masked": masked}
+	if len(files) > 0 {
+		details["files"] = files
+	}
 	if note, _ := was["note"].(string); note != "" {
 		details["note"] = note
 	}
@@ -327,7 +330,44 @@ func (s *Server) customStoreTx(ctx context.Context, tx pgx.Tx, o savedOwner, id 
 			return nil, nil, "", err
 		}
 	}
-	return details, sealed, saved.CustomHint(kindName, fields, all), nil
+	return details, sealed, saved.CustomHint(kindName, fields, all, files), nil
+}
+
+// filesOf are an object's file fields as it keeps them: each one's name,
+// type and size.
+func filesOf(details map[string]any) map[string]saved.FileMeta {
+	out := map[string]saved.FileMeta{}
+	raw, _ := json.Marshal(details["files"])
+	_ = json.Unmarshal(raw, &out)
+	return out
+}
+
+// customFilesTx are an object's file fields after a save: those kept as
+// they were, and each new upload checked as one the object may take; and
+// which to claim ("" lets one go).
+func customFilesTx(ctx context.Context, tx pgx.Tx, o savedOwner, object uuid.UUID, fields []saved.Field, all, before map[string]string, had map[string]saved.FileMeta) (map[string]saved.FileMeta, map[string]string, error) {
+	files, claims := map[string]saved.FileMeta{}, map[string]string{}
+	for _, f := range fields {
+		if f.Type != "file" {
+			continue
+		}
+		v := all[f.Key]
+		switch v {
+		case "":
+			if before[f.Key] != "" {
+				claims[f.Key] = ""
+			}
+		case before[f.Key]:
+			files[f.Key] = had[f.Key]
+		default:
+			meta, err := fileToClaimTx(ctx, tx, o, v, object, f.Key)
+			if err != nil {
+				return nil, nil, err
+			}
+			files[f.Key], claims[f.Key] = meta, v
+		}
+	}
+	return files, claims, nil
 }
 
 // addSavedCustom adds an object of one of the owner's made-up kinds.
@@ -358,7 +398,11 @@ func (s *Server) addSavedCustom(ctx context.Context, who savedWho, o savedOwner,
 		if err := savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
 		}
-		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, id, k.Name, k.Fields, all, note)
+		files, claims, err := customFilesTx(ctx, tx, o, id, k.Fields, all, nil, nil)
+		if err != nil {
+			return err
+		}
+		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, id, k.Name, k.Fields, all, note, files)
 		if err != nil {
 			return err
 		}
@@ -366,6 +410,10 @@ func (s *Server) addSavedCustom(ctx context.Context, who savedWho, o savedOwner,
 				check_state, created_by, updated_by)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12) RETURNING `+savedCols,
 			id, nullable(o.person), nullable(o.tenant), name, title, saved.KindCustom, k.ID, details, sealed, hint, saved.NoCheck, o.by)); err != nil {
+			return err
+		}
+		// The object is there: its files are claimed for it.
+		if _, err := claimFilesTx(ctx, tx, o, id, claims); err != nil {
 			return err
 		}
 		return savedEventBy(ctx, tx, who, o, id, "added", map[string]any{"name": name, "kind": k.Name})
@@ -405,7 +453,7 @@ func (s *Server) changeSavedCustom(w http.ResponseWriter, r *http.Request, o sav
 		keep["note"] = *in.Note
 	}
 	var x savedRow
-	var changed []string
+	var changed, gone []string
 	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		cur, err := savedRowTx(ctx, tx, o, was.ID, true)
 		if err != nil {
@@ -427,8 +475,15 @@ func (s *Server) changeSavedCustom(w http.ResponseWriter, r *http.Request, o sav
 				changed = append(changed, f.Label)
 			}
 		}
-		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, cur.ID, cur.KindName, cur.Fields, all, keep)
+		files, claims, err := customFilesTx(ctx, tx, o, cur.ID, cur.Fields, all, before, filesOf(cur.Details))
 		if err != nil {
+			return err
+		}
+		details, sealed, hint, err := s.customStoreTx(ctx, tx, o, cur.ID, cur.KindName, cur.Fields, all, keep, files)
+		if err != nil {
+			return err
+		}
+		if gone, err = claimFilesTx(ctx, tx, o, cur.ID, claims); err != nil {
 			return err
 		}
 		where, owner := ownerWhere(o)
@@ -442,5 +497,6 @@ func (s *Server) changeSavedCustom(w http.ResponseWriter, r *http.Request, o sav
 		s.savedFail(w, r, err)
 		return
 	}
+	s.dropSavedPaths(ctx, o, gone)
 	writeJSON(w, http.StatusOK, map[string]any{"saved": x.view(o, true)})
 }

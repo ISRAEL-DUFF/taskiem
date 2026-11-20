@@ -20,19 +20,20 @@ import (
 )
 
 // Kinds Taskiem knows (saved-objects §4.1): the bank account (S0), and,
-// from S1, a person, a place, a text and an account with a provider. Files
-// and kinds an owner makes come later in S1.
+// from S1, a person, a place, a text, an account with a provider and a
+// file (a photo or a document, sent as itself in a chat).
 const (
 	KindBankAccount     = "bank_account"
 	KindPerson          = "person"
 	KindPlace           = "place"
 	KindText            = "text"
 	KindProviderAccount = "provider_account"
+	KindFile            = "file"
 )
 
 // Kinds are the kinds an object may be, in the order the Saved page lists
 // them.
-var Kinds = []string{KindBankAccount, KindPerson, KindPlace, KindText, KindProviderAccount}
+var Kinds = []string{KindBankAccount, KindPerson, KindPlace, KindText, KindProviderAccount, KindFile}
 
 // Check states: the bank's name for an account was given by a payments
 // connection (checked), or has not been yet (unchecked).

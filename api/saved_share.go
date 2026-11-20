@@ -80,13 +80,15 @@ func (s *Server) savedCardFor(r *http.Request, person, tenant uuid.UUID, sh save
 				return err
 			}
 			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
+		case saved.KindFile:
+			return customerSendErr{http.StatusBadRequest, "A file is sent as itself: attach it to the message."}
 		case saved.KindCustom:
 			// A made-up kind's: its fields but those never shared.
 			all, err := s.customValuesTx(ctx, tx, o, x)
 			if err != nil {
 				return err
 			}
-			card = saved.MakeCustomCard(x.KindName, x.Name, x.Title, x.Fields, all)
+			card = saved.MakeCustomCard(x.KindName, x.Name, x.Title, x.Fields, all, filesOf(x.Details))
 		default:
 			card = saved.MakeCard(x.Kind, x.Name, x.Title, x.Details, number)
 		}

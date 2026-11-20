@@ -109,6 +109,9 @@ type savedView struct {
 	KindID   *uuid.UUID        `json:"kind_id,omitempty"`
 	KindName string            `json:"kind_name,omitempty"`
 	Values   map[string]string `json:"values,omitempty"`
+	// Files are a made-up kind's file fields: each file's name, type and
+	// size (its value the file's id; GET …/file?field= opens it).
+	Files map[string]saved.FileMeta `json:"files,omitempty"`
 	// ToChange says whether the person may change or remove it.
 	ToChange  bool      `json:"to_change"`
 	CreatedAt time.Time `json:"created_at"`
@@ -198,6 +201,10 @@ func (o savedRow) view(owner savedOwner, toChange bool) savedView {
 	if o.Kind == saved.KindCustom {
 		delete(d, "values")
 		delete(d, "masked")
+		delete(d, "files")
+		if f := filesOf(o.Details); len(f) > 0 {
+			v.Files = f
+		}
 		v.KindID, v.KindName, v.Values = o.KindID, o.KindName, map[string]string{}
 		for _, part := range []string{"values", "masked"} {
 			m, _ := o.Details[part].(map[string]any)
@@ -619,6 +626,10 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		s.changeSavedCustom(w, r, o, was, in)
 		return
 	}
+	if was.Kind == saved.KindFile {
+		s.changeSavedFileObject(w, r, o, was, in)
+		return
+	}
 	if was.Kind != saved.KindBankAccount {
 		s.changeSavedThing(w, r, o, was, in)
 		return
@@ -747,6 +758,7 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+	var gone []string
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		where, owner := ownerWhere(o)
 		var name string
@@ -764,12 +776,18 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 				return err
 			}
 		}
+		// Its files go with it.
+		var err error
+		if gone, err = dropObjectFilesTx(ctx, tx, o, id); err != nil {
+			return err
+		}
 		return s.savedEvent(r, tx, o, id, "removed", map[string]any{"name": name})
 	})
 	if err != nil {
 		s.savedFail(w, r, err)
 		return
 	}
+	s.dropSavedPaths(ctx, o, gone)
 	w.WriteHeader(http.StatusNoContent)
 }
 

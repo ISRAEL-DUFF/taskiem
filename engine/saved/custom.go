@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	phonenum "github.com/israel-duff/taskiem/engine/phone"
 )
 
@@ -34,9 +36,11 @@ const (
 	MaxOptions     = 30
 )
 
-// The types a made-up kind's field may have. Places, bank accounts and
-// files as fields come later; a place's words fit a text for now.
-var FieldTypes = []string{"text", "number", "money", "date", "phone", "email", "choice"}
+// The types a made-up kind's field may have: a place is its address in one
+// line; a bank account its bank and 10-digit number (always sensitive); a
+// file a photo or document of the owner's (its upload's id, the file kept
+// apart).
+var FieldTypes = []string{"text", "number", "money", "date", "phone", "email", "choice", "place", "bank_account", "file"}
 
 // Field is one field of a made-up kind.
 type Field struct {
@@ -117,7 +121,7 @@ func CleanKind(name string, fields []Field) (string, []Field, error) {
 		}
 		labels[strings.ToLower(f.Label)] = true
 		if !slices.Contains(FieldTypes, f.Type) {
-			return "", nil, invalid(fmt.Sprintf("Choose what %s is: text, a number, money, a date, a phone, an email or a choice.", f.Label))
+			return "", nil, invalid(fmt.Sprintf("Choose what %s is: text, a number, money, a date, a phone, an email, a choice, a place, a bank account or a file.", f.Label))
 		}
 		if f.Key == "" {
 			f.Key = keyOf(f.Label)
@@ -144,9 +148,15 @@ func CleanKind(name string, fields []Field) (string, []Field, error) {
 		} else {
 			f.Options = nil
 		}
-		// What is never shared is sensitive too: sealed and masked.
-		if f.NeverShare {
+		// What is never shared is sensitive too, and an account number
+		// always is: sealed and masked.
+		if f.NeverShare || f.Type == "bank_account" {
 			f.Sensitive = true
+		}
+		// A file is shown only to whoever reaches the saved thing; it is
+		// not sealed with the values (the file is kept apart).
+		if f.Type == "file" {
+			f.Sensitive = false
 		}
 		out = append(out, f)
 	}
@@ -198,6 +208,23 @@ func cleanValue(f Field, v string) (string, error) {
 			return "", invalid(fmt.Sprintf("Choose %s from its list.", f.Label))
 		}
 		return v, nil
+	case "place":
+		v = strings.Join(strings.Fields(v), " ")
+		if utf8.RuneCountInString(v) > MaxLine {
+			return "", invalid(fmt.Sprintf("%s is up to %d characters.", f.Label, MaxLine))
+		}
+		return v, nil
+	case "bank_account":
+		bank, number := SplitBankValue(v)
+		if bank == "" || len(number) != 10 {
+			return "", invalid(f.Label + " should be a bank and its 10-digit account number.")
+		}
+		return bank + " · " + number, nil
+	case "file":
+		if _, err := uuid.Parse(v); err != nil {
+			return "", invalid("Choose the photo or document for " + f.Label + ".")
+		}
+		return v, nil
 	}
 	return "", invalid("That field's type is not known.")
 }
@@ -246,6 +273,25 @@ func CleanValues(fields []Field, in map[string]any, was map[string]string) (map[
 	return out, nil
 }
 
+var lastDigits = regexp.MustCompile(`(\d[\d \-]*\d)\s*$`)
+
+// SplitBankValue is a bank account field's bank and account number, from
+// "Zenith Bank · 0123456789" (or the number after the bank, spaced).
+func SplitBankValue(v string) (bank, number string) {
+	m := lastDigits.FindStringSubmatchIndex(v)
+	if m == nil {
+		return "", ""
+	}
+	number = strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, v[m[2]:m[3]])
+	bank = strings.Trim(strings.TrimSpace(v[:m[2]]), "·,:- ")
+	return strings.Join(strings.Fields(bank), " "), number
+}
+
 // MaskValue is a sensitive value as lists show it: its last four, or dots.
 func MaskValue(v string) string {
 	r := []rune(v)
@@ -265,9 +311,19 @@ func SplitValues(fields []Field, all map[string]string) (plain, secret, masked m
 	for _, f := range fields {
 		sensitive[f.Key] = f.Sensitive
 	}
+	bankField := map[string]bool{}
+	for _, f := range fields {
+		bankField[f.Key] = f.Type == "bank_account"
+	}
 	for k, v := range all {
 		if sensitive[k] {
 			secret[k], masked[k] = v, MaskValue(v)
+			if bankField[k] {
+				// "GTBank ••6789": the bank stays readable.
+				if bank, number := SplitBankValue(v); bank != "" {
+					masked[k] = ShortBank(bank) + " " + Masked(number)
+				}
+			}
 		} else {
 			plain[k] = v
 		}
@@ -305,17 +361,24 @@ func groupThousands(v string) string {
 }
 
 // CustomHint is what a list shows for an object of a made-up kind: its
-// first two filled fields, a sensitive one masked.
-func CustomHint(kindName string, fields []Field, all map[string]string) string {
+// first two filled fields, a sensitive one masked, a file by its name.
+func CustomHint(kindName string, fields []Field, all map[string]string, files map[string]FileMeta) string {
+	_, _, masked := SplitValues(fields, all)
 	parts := []string{}
 	for _, f := range fields {
 		v := all[f.Key]
 		if v == "" {
 			continue
 		}
-		if f.Sensitive {
-			v = MaskValue(v)
-		} else {
+		switch {
+		case f.Type == "file":
+			v = files[f.Key].Name
+			if v == "" {
+				continue
+			}
+		case f.Sensitive:
+			v = masked[f.Key]
+		default:
 			v = ShownValue(f, v)
 		}
 		parts = append(parts, v)
@@ -336,14 +399,22 @@ func CustomHint(kindName string, fields []Field, all map[string]string) string {
 // MakeCustomCard is the card for an object of a made-up kind: each filled
 // field but those never shared, sensitive ones in full (the sender says
 // yes first).
-func MakeCustomCard(kindName, name, title string, fields []Field, all map[string]string) Card {
+func MakeCustomCard(kindName, name, title string, fields []Field, all map[string]string, files map[string]FileMeta) Card {
 	c := Card{Kind: KindCustom, KindName: kindName, Title: title, Name: name, Details: map[string]any{}}
 	for _, f := range fields {
 		v := all[f.Key]
 		if v == "" || f.NeverShare {
 			continue
 		}
-		c.Lines = append(c.Lines, CardLine{Label: f.Label, Value: ShownValue(f, v)})
+		if f.Type == "file" {
+			// A file goes by its name on a card; it is sent as itself.
+			if v = files[f.Key].Name; v == "" {
+				continue
+			}
+		} else {
+			v = ShownValue(f, v)
+		}
+		c.Lines = append(c.Lines, CardLine{Label: f.Label, Value: v})
 		if f.Sensitive {
 			c.Sensitive = true
 		}

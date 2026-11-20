@@ -25723,6 +25723,99 @@ paths:
           description: Deleted
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/saved/uploads:
+    post:
+      operationId: uploadMySavedFile
+      tags:
+      - Saved
+      summary: Upload a file to save
+      description: 'A photo or document (a form with `file`), checked as a chat''s file is: scanned (409 with no scanner), a photo''s metadata cleaned, a PDF without scripts; up to 25 MB. Saved by giving its id as a file object''s `details.file` or a made-up kind''s file field; one never saved goes after a day.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [upload]
+                properties:
+                  upload:
+                    $ref: '#/components/schemas/SavedFileMeta'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}/file:
+    get:
+      operationId: getMySavedFile
+      tags:
+      - Saved
+      summary: A saved file
+      description: 'A file object''s file, or with `field` a made-up kind''s file field''s.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/saved-kinds:
     get:
       operationId: listMySavedKinds
@@ -25842,7 +25935,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account, person, place, text, provider_account, custom]
+          enum: [bank_account, person, place, text, provider_account, file, custom]
       - name: q
         in: query
         schema:
@@ -33500,6 +33593,101 @@ paths:
                     format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved/uploads:
+    post:
+      operationId: uploadSavedFile
+      tags:
+      - Saved
+      summary: Upload a file to save
+      description: 'A photo or document (a form with `file`), checked as a chat''s file is: scanned (409 with no scanner), a photo''s metadata cleaned, a PDF without scripts; up to 25 MB. Saved by giving its id as a file object''s `details.file` or a made-up kind''s file field; one never saved goes after a day.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [upload]
+                properties:
+                  upload:
+                    $ref: '#/components/schemas/SavedFileMeta'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}/file:
+    get:
+      operationId: getSavedFile
+      tags:
+      - Saved
+      summary: A saved file
+      description: 'A file object''s file, or with `field` a made-up kind''s file field''s.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved-kinds:
     get:
       operationId: listSavedKinds
@@ -33625,7 +33813,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [bank_account, person, place, text, provider_account, custom]
+          enum: [bank_account, person, place, text, provider_account, file, custom]
       - name: q
         in: query
         schema:
@@ -46443,7 +46631,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account, custom]
+          enum: [bank_account, person, place, text, provider_account, file, custom]
           description: custom is one of the owner's own kinds (kind_id).
         kind_id:
           type: string
@@ -46501,6 +46689,21 @@ components:
               type: string
             name_on_it:
               type: string
+            file:
+              type: string
+              format: uuid
+              description: A file's (GET …/saved/{id}/file opens it).
+            file_name:
+              type: string
+            file_type:
+              type: string
+            file_size:
+              type: integer
+        files:
+          type: object
+          description: A made-up kind's file fields, each its file's name, type and size (GET …/saved/{id}/file?field= opens it).
+          additionalProperties:
+            $ref: '#/components/schemas/SavedFileMeta'
         check:
           type: object
           additionalProperties: false
@@ -46531,6 +46734,21 @@ components:
         updated_at:
           type: string
           format: date-time
+    SavedFileMeta:
+      type: object
+      additionalProperties: false
+      required: [file, name, type, size]
+      description: A saved file as lists name it.
+      properties:
+        file:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        size:
+          type: integer
     SavedKindField:
       type: object
       additionalProperties: false
@@ -46544,7 +46762,8 @@ components:
           maxLength: 60
         type:
           type: string
-          enum: [text, number, money, date, phone, email, choice]
+          enum: [text, number, money, date, phone, email, choice, place, bank_account, file]
+          description: A place is an address in one line; a bank account its bank and 10-digit number (always sensitive); a file the id of an upload (POST …/saved/uploads).
         required:
           type: boolean
         sensitive:
@@ -46652,7 +46871,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account, custom]
+          enum: [bank_account, person, place, text, provider_account, file, custom]
         kind_name:
           type: string
           description: A made-up kind's name ("Car").
@@ -46699,7 +46918,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [bank_account, person, place, text, provider_account, custom]
+          enum: [bank_account, person, place, text, provider_account, file, custom]
         kind_id:
           type: string
           format: uuid

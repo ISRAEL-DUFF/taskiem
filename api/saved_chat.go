@@ -117,6 +117,10 @@ func (s *Server) savedLines(c *chat, x savedRow) string {
 	case saved.KindProviderAccount:
 		add(str("provider") + ": " + str("number"))
 		add(str("name_on_it"))
+	case saved.KindFile:
+		// What it is; the file is opened from Saved, or sent from a chat.
+		f, _ := saved.FileOf(x.Details)
+		add(f.Name + " (" + f.Hint() + ")")
 	case saved.KindCustom:
 		// A made-up kind's fields, the sensitive ones masked.
 		v := x.view(savedOwner{}, false).Values

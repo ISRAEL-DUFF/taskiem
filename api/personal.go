@@ -37,7 +37,7 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	// Orders on You and saved addresses (person_orders.go, person_addresses.go, stage 3).
 	`GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
 	// The person's own saved things (saved.go, saved objects S0).
-	`(GET|POST) /v1/me/saved|GET /v1/me/saved/resolve|POST /v1/me/saved/step-up/options|(GET|PUT|DELETE) /v1/me/saved/[^/]+|POST /v1/me/saved/[^/]+/reveal|GET /v1/me/banks|POST /v1/me/saved/read|(GET|POST) /v1/me/saved-kinds|(PUT|DELETE) /v1/me/saved-kinds/[^/]+|` +
+	`(GET|POST) /v1/me/saved|GET /v1/me/saved/resolve|POST /v1/me/saved/step-up/options|(GET|PUT|DELETE) /v1/me/saved/[^/]+|POST /v1/me/saved/[^/]+/reveal|GET /v1/me/banks|POST /v1/me/saved/read|POST /v1/me/saved/uploads|GET /v1/me/saved/[^/]+/file|(GET|POST) /v1/me/saved-kinds|(PUT|DELETE) /v1/me/saved-kinds/[^/]+|` +
 	// The person's account: deleting it, their photo, pushes, privacy (person_account.go).
 	`POST /v1/me/delete(/start|/passkey/options)?|(GET|PUT|DELETE) /v1/me/photo|(GET|PUT) /v1/me/notifications|GET /v1/me/privacy|` +
 	// Finding people: privacy towards people, contacts, the person's link,
