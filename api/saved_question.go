@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -26,7 +28,7 @@ import (
 // read before the words to a linked business ("@Dangote how much…", which
 // starts with the business), and an @name no saved thing has passes on.
 
-var savedQuestion = regexp.MustCompile(`(?i)^\s*(?:what(?:'s|’s| is| are| was)?|when(?:'s|’s| is| was| does| do)?|where(?:'s|’s| is)?|which|who(?:'s|’s| is)?|whose|how|is|does|do|show(?: me)?|tell me|give me)\b.*@([a-z0-9][a-z0-9_-]{0,31})`)
+var savedQuestion = regexp.MustCompile(`(?i)^\s*(?:what(?:'s|’s| is| are| was)?|when(?:'s|’s| is| was| does| do)?|where(?:'s|’s| is)?|which|who(?:'s|’s| is)?|whose|how|is|does|do|show(?: me)?|tell me|give me)\b.*?@([a-z0-9][a-z0-9_-]{0,31})`)
 
 // savedFieldWords are the words a known kind's fields go by, each with
 // the detail it names; longer phrases first, so "account number" is not
@@ -61,6 +63,21 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 	}
 	// The words about the thing: what follows its name, and before it.
 	asked := strings.ToLower(text)
+	// A name a linked business goes by too, with no field of the thing
+	// asked about ("how much is cement @Dangote?"): the words are the
+	// business's.
+	named := false
+	for _, f := range got {
+		if _, _, ok := savedFieldAsked(f.row, asked); ok {
+			named = true
+		}
+	}
+	if !named {
+		linked, err := s.namesLinked(ctx, c, name)
+		if err != nil || linked {
+			return err != nil, err
+		}
+	}
 	return true, s.sayFound(ctx, c, name, got, func(f savedFound) string {
 		label, value, ok := savedFieldAsked(f.row, asked)
 		switch {
@@ -75,6 +92,29 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 		}
 		return said
 	})
+}
+
+// namesLinked says whether a linked business's name starts with name, as
+// the words to linked businesses read an @name.
+func (s *Server) namesLinked(ctx context.Context, c *chat, name string) (bool, error) {
+	if c.tenant.ID == uuid.Nil {
+		return false, nil
+	}
+	var list []links.Link
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		list, _, err = links.ListTx(ctx, tx)
+		return err
+	}); err != nil {
+		return false, err
+	}
+	want := strings.ReplaceAll(name, "-", " ")
+	for _, l := range list {
+		if strings.HasPrefix(strings.ToLower(l.Name), want) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // savedFieldAsked is the field of x the words ask about: its label and its

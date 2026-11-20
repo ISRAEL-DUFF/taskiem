@@ -639,6 +639,10 @@ func (s *Server) changeSavedCustom(w http.ResponseWriter, r *http.Request, o sav
 			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, cur.ID, name, title, details, sealed, hint, o.by)); err != nil {
 			return err
 		}
+		// Its reminders follow its dates as they are now.
+		if err := resetRemindersTx(ctx, tx, x, remindDay(s.staffNow())); err != nil {
+			return err
+		}
 		detail := map[string]any{"changed": append(changedFields(was, x), changed...)}
 		if len(moved) > 0 {
 			detail["accounts"], detail["confirmed"] = moved, confirmed

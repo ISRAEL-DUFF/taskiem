@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/saved"
@@ -34,6 +35,11 @@ var (
 	remindersList = regexp.MustCompile(`(?i)^\s*(?:my\s+)?reminders\s*\??\s*$`)
 	remindStop    = regexp.MustCompile(`(?i)^\s*(?:stop|cancel)\s+(?:reminding\s+(?:me|us)|(?:the\s+)?reminders?)\s+(?:about|for|of|on)?\s*@([a-z0-9][a-z0-9_-]{0,31})`)
 	remindOnce    = regexp.MustCompile(`(?i)\b(?:just|only)\s+once\b|\bthis\s+(?:time|year)\s+only\b`)
+	// Words of a schedule ("every Friday", "at 9", "tomorrow"): a workflow
+	// to build, not a date a saved thing holds.
+	remindSchedule = regexp.MustCompile(`(?i)\b(?:every|each|daily|weekly|monthly|tomorrow|tonight|today|at\s+\d|in\s+\d+\s+(?:minutes?|hours?|days?|weeks?)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+	// Words that say a date is meant: due, a birthday, an end.
+	remindDue = regexp.MustCompile(`(?i)\b(?:due|birthday|expires?|expiry|ends?|renew(?:al|s)?|anniversary)\b`)
 )
 
 // remindHour is when a reminder is told on its day, Lagos time.
@@ -71,7 +77,9 @@ func nextOccurrence(v time.Time, yearly bool, after time.Time) (time.Time, bool)
 	}
 	d := time.Date(after.Year(), v.Month(), v.Day(), 0, 0, 0, 0, time.UTC)
 	if !d.After(after) {
-		d = d.AddDate(1, 0, 0)
+		// Built again for the next year, not added to: 29 Feb, a 1 Mar in
+		// a year without one, is 29 Feb again in a year with one.
+		d = time.Date(after.Year()+1, v.Month(), v.Day(), 0, 0, 0, 0, time.UTC)
 	}
 	if d.Before(v) {
 		d = v
@@ -126,6 +134,10 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 	if err != nil {
 		return false, nil //nolint:nilerr // not a saved thing's name: not this
 	}
+	// "remind me every Friday to pay @landlord" is a workflow to build.
+	if remindSchedule.MatchString(text) {
+		return false, nil
+	}
 	got, err := s.savedFind(ctx, c, name)
 	if err != nil || len(got) == 0 {
 		// No saved thing by the name: the words go on (a workflow, maybe).
@@ -148,6 +160,10 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 	}
 	if f == nil {
 		f = dateNamed(asked, dates)
+	}
+	// Neither a date's label nor "due" in the words: not about its dates.
+	if f == nil && !remindDue.MatchString(text) {
+		return false, nil
 	}
 	if f == nil && len(dates) == 1 {
 		f = &dates[0]
@@ -177,7 +193,9 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 		_, err := tx.Exec(ctx, `INSERT INTO saved_reminders (id, person_id, tenant_id, object_id, field, remind_on, yearly, tell_tenant, tell_user)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (object_id, field, tell_user) DO UPDATE SET remind_on = EXCLUDED.remind_on, yearly = EXCLUDED.yearly,
-				tell_tenant = EXCLUDED.tell_tenant, last_sent = NULL`,
+				tell_tenant = EXCLUDED.tell_tenant,
+				-- Set again: what was told already is not told again.
+				last_sent = CASE WHEN saved_reminders.last_sent >= EXCLUDED.remind_on THEN saved_reminders.last_sent ELSE EXCLUDED.remind_on - 1 END`,
 			uuid.Must(uuid.NewV7()), nullable(o.person), nullable(o.tenant), x.ID, f.key, on, yearly, c.tenant.ID, c.p.UserID)
 		return err
 	})
@@ -334,8 +352,16 @@ func (s *Server) SavedRemindersTick(ctx context.Context) error {
 		} else if d.tenant != nil {
 			o.tenant = *d.tenant
 		}
-		if err := s.savedReminderDue(ctx, o, d.id, d.tellTenant, d.tellUser, today); err != nil && ctx.Err() == nil {
+		if err := s.savedReminderDue(ctx, o, d.id, today); err != nil && ctx.Err() == nil {
 			errs = append(errs, err)
+			// Tried again tomorrow, so one that keeps failing never keeps the
+			// others waiting behind it.
+			if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `UPDATE saved_reminders SET remind_on = $2 WHERE id = $1`, d.id, today.AddDate(0, 0, 1))
+				return err
+			}); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -344,17 +370,17 @@ func (s *Server) SavedRemindersTick(ctx context.Context) error {
 // savedReminderDue tells one reminder if its date is today (read again
 // from the field), and moves it to its next day; a reminder whose thing
 // or date is gone ends.
-func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id, tellTenant, tellUser uuid.UUID, today time.Time) error {
+func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUID, today time.Time) error {
 	var title, body string
+	var tellUser, tellTenant uuid.UUID
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		var object uuid.UUID
 		var field string
 		var yearly bool
-		// Counted from the day after it was last told, or from the day it
-		// was set (Lagos).
+		// Counted from the day after it was last told, or from its day.
 		var after time.Time
-		err := tx.QueryRow(ctx, `SELECT object_id, field, yearly, COALESCE(last_sent, (created_at AT TIME ZONE 'Africa/Lagos')::date - 1)
-			FROM saved_reminders WHERE id = $1 FOR UPDATE`, id).Scan(&object, &field, &yearly, &after)
+		err := tx.QueryRow(ctx, `SELECT object_id, field, yearly, COALESCE(last_sent, remind_on - 1), tell_user, tell_tenant
+			FROM saved_reminders WHERE id = $1 FOR UPDATE`, id).Scan(&object, &field, &yearly, &after, &tellUser, &tellTenant)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -364,6 +390,17 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id, tellTen
 		end := func() error {
 			_, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE id = $1`, id)
 			return err
+		}
+		// A business's reminder is for its members: one who left hears no
+		// more of the business's things.
+		if !o.mine() {
+			var member bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, o.tenant, tellUser).Scan(&member); err != nil {
+				return err
+			}
+			if !member || tellTenant != o.tenant {
+				return end()
+			}
 		}
 		x, err := savedRowTx(ctx, tx, o, object, false)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -411,6 +448,14 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id, tellTen
 	})
 	if err != nil || title == "" {
 		return err
+	}
+	if o.mine() {
+		// One's own: to one's own devices only, never through a business
+		// (no notice, message or history of the business holds it: §5.3).
+		if _, err := s.PersonPusher().PushPerson(ctx, tellUser, chatlinks.PersonPush{Title: title, Body: body, Link: "/you", Tag: "saved-reminder:" + id.String()}); err != nil {
+			s.Logger.Warn("saved: pushing a reminder", "err", err)
+		}
+		return nil
 	}
 	s.tellSavedReminder(ctx, tellTenant, tellUser, title, body)
 	return nil
@@ -482,4 +527,52 @@ func dateNamed(asked string, dates []savedDateField) *savedDateField {
 		return nil
 	}
 	return &dates[best]
+}
+
+// resetRemindersTx moves the reminders on a saved thing to its dates as
+// they are now (it was just changed): a date moved earlier is told on its
+// new day, not on the old one; a date gone ends them.
+func resetRemindersTx(ctx context.Context, tx pgx.Tx, x savedRow, today time.Time) error {
+	rows, err := tx.Query(ctx, `SELECT id, field, yearly, last_sent FROM saved_reminders WHERE object_id = $1 FOR UPDATE`, x.ID)
+	if err != nil {
+		return err
+	}
+	type rem struct {
+		id       uuid.UUID
+		field    string
+		yearly   bool
+		lastSent *time.Time
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rem, error) {
+		var m rem
+		return m, r.Scan(&m.id, &m.field, &m.yearly, &m.lastSent)
+	})
+	if err != nil || len(list) == 0 {
+		return err
+	}
+	dates := map[string]string{}
+	for _, d := range savedDates(x) {
+		dates[d.key] = d.value
+	}
+	for _, m := range list {
+		v, err := time.Parse(time.DateOnly, dates[m.field])
+		after := today.AddDate(0, 0, -1)
+		if m.lastSent != nil && m.lastSent.After(after) {
+			after = *m.lastSent
+		}
+		on, ok := time.Time{}, false
+		if err == nil {
+			on, ok = nextOccurrence(v, m.yearly, after)
+		}
+		if !ok {
+			if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE id = $1`, m.id); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.Exec(ctx, `UPDATE saved_reminders SET remind_on = $2 WHERE id = $1`, m.id, on); err != nil {
+			return err
+		}
+	}
+	return nil
 }

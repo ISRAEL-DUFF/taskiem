@@ -1122,6 +1122,10 @@ func (s *Server) changeSavedThing(w http.ResponseWriter, r *http.Request, o save
 			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, was.ID, name, title, c.Details, savedHint(o, was.Kind, c), o.by)); err != nil {
 			return err
 		}
+		// A person's birthday changed: its reminders follow it.
+		if err := resetRemindersTx(ctx, tx, x, remindDay(s.staffNow())); err != nil {
+			return err
+		}
 		return s.savedEvent(r, tx, o, was.ID, "changed", map[string]any{"changed": changedFields(was, x)})
 	})
 	if err != nil {

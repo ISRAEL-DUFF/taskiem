@@ -262,8 +262,9 @@ func (s *Server) waInvoiceConfirm(ctx context.Context, c *chat, inv *chatInvoice
 // business's own saved thing is taken over one's own of the same name;
 // one's own gives the business only the copy on the invoice (§5.3). A
 // thing of another kind says it cannot be invoiced; one with no email or
-// phone asks for one, as a typed name does. false when nothing is saved
-// by the name (the words are read as a typed name).
+// phone asks for one, as a typed name does. A name nothing is saved by is
+// said (an @ is never a customer's name); false only when the words after
+// the @ are no saved thing's name at all (read as a typed name).
 func (s *Server) waInvoiceSaved(ctx context.Context, c *chat, typed string, kobo int64, what string) (bool, error) {
 	name, err := saved.Name(typed)
 	if err != nil {
