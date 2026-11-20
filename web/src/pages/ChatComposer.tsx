@@ -193,8 +193,8 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     start?: ToolStart;
   }>();
   const { can, me } = useAuth();
-  // "/invoice/" and the like pick a thing to tag, not a tool; "/mum" a
-  // saved thing, when one has that name (else it is a tool's search).
+  // "/invoice/" and the like pick a thing to tag, not a tool; "/" and a
+  // saved thing's name pick that thing, when one has it (else "/" searches tools).
   const tagging = mentions.q?.mark === "/" && (!!mentions.q.kind || mentions.shown.length > 0);
   const slash = o.tools && !tagging ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);

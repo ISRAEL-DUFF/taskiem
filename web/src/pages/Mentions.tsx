@@ -133,7 +133,7 @@ export function useMentions(
             },
           ]
         : q?.mark === "/"
-          ? // "/mum": the saved things by that name, if any (§15 1).
+          ? // "/" and a name: the saved things by that name, if any (§15 1).
             sources.saved
             ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }].filter((g) => g.items.length > 0)
             : []
