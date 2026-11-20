@@ -94,6 +94,31 @@ func TestSavedReminders(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT remind_on FROM saved_reminders WHERE field = 'birthday'`).Scan(&next); err != nil || next.Format(time.DateOnly) != "2028-03-02" {
 		t.Errorf("next year: %v %v", next, err)
 	}
+	// A thing with no date, with words that are not about a date: a
+	// workflow's words, not "holds no date".
+	if r := w.say(t, on, "remind me to pay @terms on the 1st"); strings.Contains(r, "holds no date") {
+		t.Errorf("not about a date taken: %q", r)
+	}
+	// A sensitive date can be reminded; its date is never said.
+	sec := owner.must(201, "POST", "/v1/saved-kinds", map[string]any{"name": "Licence", "fields": []map[string]any{{"label": "Expires", "type": "date", "sensitive": true}}})["kind"].(map[string]any)
+	lic := owner.must(201, "POST", "/v1/saved", map[string]any{"name": "licence", "title": "Driving licence", "kind": "custom", "kind_id": sec["id"], "values": map[string]any{"expires": "2027-06-01"}})["saved"].(map[string]any)
+	if r := w.say(t, on, "remind me when @licence expires"); !strings.Contains(r, "I'll remind you on 1 Jun 2027") {
+		t.Fatalf("a sensitive date: %q", r)
+	}
+	if got := tick(time.Date(2027, 6, 1, 9, 0, 0, 0, lagos)); len(got) != 1 || !strings.Contains(got[0], "Driving licence: Expires is due.") || strings.Contains(got[0], "2027") {
+		t.Fatalf("a sensitive date told: %v", got)
+	}
+	// Removed: its reminders go with it.
+	owner.must(204, "DELETE", "/v1/saved/"+lic["id"].(string), nil)
+	var left int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_reminders WHERE object_id = $1`, lic["id"]).Scan(&left); err != nil || left != 0 {
+		t.Errorf("reminders of a removed thing: %d %v", left, err)
+	}
+	// One's own reminder is tied to no business.
+	var tied int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM saved_reminders WHERE person_id IS NOT NULL AND tell_tenant IS NOT NULL`).Scan(&tied); err != nil || tied != 0 {
+		t.Errorf("one's own tied to a business: %d %v", tied, err)
+	}
 	if r := w.say(t, on, "stop reminding me about @car"); !strings.Contains(r, "No more reminders about @car") {
 		t.Errorf("stop: %q", r)
 	}

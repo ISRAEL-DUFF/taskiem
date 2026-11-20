@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -40,7 +41,7 @@ var savedFieldWords = []struct{ words, key string }{
 	{"email address", "email"}, {"email", "email"},
 	{"birthday", "birthday"}, {"date of birth", "birthday"},
 	{"landmark", "landmark"}, {"street", "line"}, {"area", "area"},
-	{"address", "address"}, {"where", "address"},
+	{"address", "address"},
 	{"bank", "bank_name"}, {"provider", "provider"},
 	{"meter", "number"}, {"smartcard", "number"}, {"number", "number"},
 	{"note", "note"},
@@ -61,11 +62,12 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 	if err != nil || len(got) == 0 {
 		return err != nil, err
 	}
-	// The words about the thing: what follows its name, and before it.
-	asked := strings.ToLower(text)
-	// A name a linked business goes by too, with no field of the thing
-	// asked about ("how much is cement @Dangote?"): the words are the
-	// business's.
+	// The words about the thing: the rest once the question word and its
+	// name are taken out (so "@phone-shop" asks for no phone, and "where"
+	// for no address unless nothing else is asked).
+	qw := savedQuestionWord.FindString(text)
+	asked := withoutName(strings.TrimPrefix(text, qw), name)
+	where := strings.HasPrefix(strings.ToLower(strings.TrimSpace(qw)), "where")
 	named := false
 	for _, f := range got {
 		if _, _, ok := savedFieldAsked(f.row, asked); ok {
@@ -73,6 +75,15 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 		}
 	}
 	if !named {
+		// Neither a field nor only the thing itself ("tell me about @car",
+		// "where is @warehouse?"): another question that happens to name it
+		// ("how many customers does @acme have"), which Taskiem's own
+		// commands, then the words to linked businesses, read.
+		if !onlyAbout(asked) {
+			return false, nil
+		}
+		// A name a linked business goes by too: the words are the
+		// business's.
 		linked, err := s.namesLinked(ctx, c, name)
 		if err != nil || linked {
 			return err != nil, err
@@ -80,6 +91,9 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 	}
 	return true, s.sayFound(ctx, c, name, got, func(f savedFound) string {
 		label, value, ok := savedFieldAsked(f.row, asked)
+		if !ok && where {
+			label, value, ok = savedFieldAsked(f.row, "address")
+		}
 		switch {
 		case !ok:
 			return s.savedLines(c, f.row)
@@ -92,6 +106,26 @@ func (s *Server) waSavedQuestion(ctx context.Context, c *chat, text string) (boo
 		}
 		return said
 	})
+}
+
+// savedQuestionWord is the question word a question about a saved thing
+// starts with.
+var savedQuestionWord = regexp.MustCompile(`(?i)^\s*(?:what(?:'s|’s| is| are| was)?|when(?:'s|’s| is| was| does| do)?|where(?:'s|’s| is| are)?|which|who(?:'s|’s| is)?|whose|how(?: is| are)?|is|does|do|show(?: me)?|tell me(?: about)?|give me)\b`)
+
+// aboutWords say nothing but which thing: "the details of", "everything
+// about".
+var aboutWords = map[string]bool{"the": true, "a": true, "an": true, "of": true, "about": true, "details": true, "detail": true, "info": true,
+	"information": true, "everything": true, "all": true, "its": true, "it": true, "is": true, "are": true, "saved": true, "please": true, "me": true,
+	"on": true, "for": true, "my": true, "our": true}
+
+// onlyAbout says whether the words ask about nothing but the thing.
+func onlyAbout(asked string) bool {
+	for _, w := range strings.FieldsFunc(asked, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if !aboutWords[w] {
+			return false
+		}
+	}
+	return true
 }
 
 // namesLinked says whether a linked business's name starts with name, as

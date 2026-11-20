@@ -328,6 +328,14 @@ func (s *Server) resealKindTx(r *http.Request, tx pgx.Tx, o savedOwner, k savedK
 		if _, err := tx.Exec(ctx, `UPDATE saved_objects SET details = $3, sealed = $4, hint = $5 WHERE `+where+` AND id = $2`, owner, x.ID, details, sealed, hint); err != nil {
 			return nil, err
 		}
+		// Its reminders follow its date fields as the kind now has them.
+		now, err := savedRowTx(ctx, tx, o, x.ID, false)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.resetRemindersTx(ctx, tx, o, now, remindDay(s.staffNow())); err != nil {
+			return nil, err
+		}
 		paths, err := claimFilesTx(ctx, tx, o, x.ID, claims)
 		if err != nil {
 			return nil, err
@@ -640,7 +648,7 @@ func (s *Server) changeSavedCustom(w http.ResponseWriter, r *http.Request, o sav
 			return err
 		}
 		// Its reminders follow its dates as they are now.
-		if err := resetRemindersTx(ctx, tx, x, remindDay(s.staffNow())); err != nil {
+		if err := s.resetRemindersTx(ctx, tx, o, x, remindDay(s.staffNow())); err != nil {
 			return err
 		}
 		detail := map[string]any{"changed": append(changedFields(was, x), changed...)}

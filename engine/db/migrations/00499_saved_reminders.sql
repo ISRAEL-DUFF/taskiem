@@ -3,9 +3,10 @@
 -- that day (in the morning, Lagos time) to the person who asked, in the
 -- business they asked in, and again each year after when yearly. It is
 -- the owner's, as the saved thing is: a person's own (person_id, read
--- only in their own scope, never once a door names a business) or a
--- business's (tenant_id). tell_tenant and tell_user say who hears it and
--- through which business's chats. The date is read again from the field
+-- only in their own scope, never once a door names a business; told to
+-- their own devices and chats, tied to no business) or a business's
+-- (tenant_id; told through that business's chats, tell_tenant, to a
+-- member). tell_user is who hears it. The date is read again from the field
 -- when it is due, so a changed date moves it; a removed thing takes its
 -- reminders with it.
 -- +goose Up
@@ -17,11 +18,12 @@ CREATE TABLE saved_reminders (
   field       text NOT NULL CHECK (length(field) BETWEEN 1 AND 40),
   remind_on   date NOT NULL,
   yearly      boolean NOT NULL DEFAULT true,
-  tell_tenant uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tell_tenant uuid REFERENCES tenants(id) ON DELETE CASCADE,
   tell_user   uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   last_sent   date,
   created_at  timestamptz NOT NULL DEFAULT now(),
   CHECK ((person_id IS NULL) <> (tenant_id IS NULL)),
+  CHECK ((tenant_id IS NULL) = (tell_tenant IS NULL)),
   UNIQUE (object_id, field, tell_user)
 );
 CREATE INDEX saved_reminders_due ON saved_reminders (remind_on);

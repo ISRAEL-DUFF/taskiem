@@ -37,7 +37,7 @@ var (
 	remindOnce    = regexp.MustCompile(`(?i)\b(?:just|only)\s+once\b|\bthis\s+(?:time|year)\s+only\b`)
 	// Words of a schedule ("every Friday", "at 9", "tomorrow"): a workflow
 	// to build, not a date a saved thing holds.
-	remindSchedule = regexp.MustCompile(`(?i)\b(?:every|each|daily|weekly|monthly|tomorrow|tonight|today|at\s+\d|in\s+\d+\s+(?:minutes?|hours?|days?|weeks?)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
+	remindSchedule = regexp.MustCompile(`(?i)\b(?:every|each|daily|weekly|monthly|yearly|tomorrow|tonight|today|later|soon|noon|midnight|morning|afternoon|evening|night|next\s+(?:week|month|year|time)|this\s+(?:week|month)|month\s+end|end\s+of\s+(?:the\s+)?(?:week|month)|at\s+\d|on\s+the\s+\d|\d{1,2}(?:st|nd|rd|th)\b|\d{1,2}\s*(?:am|pm)|\d{1,2}:\d{2}|o'?clock|in\s+(?:\d+|a|an|one|two|three|a\s+few|few)\s+(?:minutes?|hours?|days?|weeks?|months?)|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b`)
 	// Words that say a date is meant: due, a birthday, an end.
 	remindDue = regexp.MustCompile(`(?i)\b(?:due|birthday|expires?|expiry|ends?|renew(?:al|s)?|anniversary)\b`)
 )
@@ -46,24 +46,32 @@ var (
 const remindHour = 8
 
 // savedDateField is a date a saved thing holds: its field's key, its label
-// and its value (2027-03-03).
-type savedDateField struct{ key, label, value string }
+// and its value (2027-03-03), and whether it is sensitive (its date is
+// then never said: "is due today").
+type savedDateField struct {
+	key, label, value string
+	sensitive         bool
+}
 
-// savedDates are the dates x holds: a made-up kind's date fields, a
-// person's birthday.
-func savedDates(x savedRow) []savedDateField {
+// savedDates are the dates x holds: a made-up kind's date fields (all, the
+// sensitive ones opened: values from customValuesTx; nil gives what lists
+// show, the sensitive masked), a person's birthday.
+func savedDates(x savedRow, all map[string]string) []savedDateField {
 	var out []savedDateField
 	switch x.Kind {
 	case saved.KindCustom:
-		values := x.view(savedOwner{}, false).Values
+		values := all
+		if values == nil {
+			values = x.view(savedOwner{}, false).Values
+		}
 		for _, f := range x.Fields {
 			if f.Type == "date" {
-				out = append(out, savedDateField{f.Key, f.Label, values[f.Key]})
+				out = append(out, savedDateField{f.Key, f.Label, values[f.Key], f.Sensitive})
 			}
 		}
 	case saved.KindPerson:
 		v, _ := x.Details["birthday"].(string)
-		out = append(out, savedDateField{"birthday", "Birthday", v})
+		out = append(out, savedDateField{"birthday", "Birthday", v, false})
 	}
 	return out
 }
@@ -93,13 +101,33 @@ func remindDay(now time.Time) time.Time {
 	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, time.UTC)
 }
 
+// datesTx are x's dates in full (a sensitive one opened), read in the
+// owner's transaction.
+func (s *Server) datesTx(ctx context.Context, tx pgx.Tx, o savedOwner, x savedRow) ([]savedDateField, error) {
+	if x.Kind != saved.KindCustom {
+		return savedDates(x, nil), nil
+	}
+	all, err := s.customValuesTx(ctx, tx, o, x)
+	if err != nil {
+		return nil, err
+	}
+	return savedDates(x, all), nil
+}
+
+// withoutName is the words with "@name" (and "@name's") taken out, so a
+// field's words are not read in a name ("@phone-shop").
+func withoutName(text, name string) string {
+	re := regexp.MustCompile(`(?i)@` + regexp.QuoteMeta(name) + `(?:'s|’s)?`)
+	return strings.ToLower(re.ReplaceAllString(text, " "))
+}
+
 // sayDay is a date as the chat says it: 3 Mar 2027.
 func sayDay(d time.Time) string { return d.Format("2 Jan 2006") }
 
 // waSavedReminders answers the reminder words; false when the words are
 // none of them.
 func (s *Server) waSavedReminders(ctx context.Context, c *chat, text string) (bool, error) {
-	if c.p == nil || c.p.UserID == uuid.Nil || c.tenant.ID == uuid.Nil {
+	if c.p == nil || c.p.UserID == uuid.Nil {
 		return false, nil
 	}
 	switch {
@@ -144,12 +172,24 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 		return err != nil, err
 	}
 	x, o := remindOwner(c, got)
-	dates := savedDates(x)
+	var dates []savedDateField
+	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		var err error
+		dates, err = s.datesTx(ctx, tx, o, x)
+		return err
+	}); err != nil {
+		return true, err
+	}
 	if len(dates) == 0 {
+		// Not about a date at all: a workflow to build, maybe.
+		if !remindDue.MatchString(text) {
+			return false, nil
+		}
 		return true, c.say(ctx, s, c.t("wa.remind.no_dates", "name", x.Name))
 	}
-	// The date the words name, by its label; the only one when they name none.
-	asked := strings.ToLower(text)
+	// The date the words name, by its label (not in the thing's own name);
+	// the only one when they name none.
+	asked := withoutName(text, x.Name)
 	sort.SliceStable(dates, func(i, j int) bool { return len(dates[i].label) > len(dates[j].label) })
 	var f *savedDateField
 	for i := range dates {
@@ -190,13 +230,14 @@ func (s *Server) waRemindSet(ctx context.Context, c *chat, text, typed string) (
 		return true, c.say(ctx, s, c.t("wa.remind.passed", "name", x.Name, "label", f.label, "date", sayDay(v)))
 	}
 	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		// One's own is told to one's own devices, tied to no business.
 		_, err := tx.Exec(ctx, `INSERT INTO saved_reminders (id, person_id, tenant_id, object_id, field, remind_on, yearly, tell_tenant, tell_user)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $8)
 			ON CONFLICT (object_id, field, tell_user) DO UPDATE SET remind_on = EXCLUDED.remind_on, yearly = EXCLUDED.yearly,
 				tell_tenant = EXCLUDED.tell_tenant,
 				-- Set again: what was told already is not told again.
 				last_sent = CASE WHEN saved_reminders.last_sent >= EXCLUDED.remind_on THEN saved_reminders.last_sent ELSE EXCLUDED.remind_on - 1 END`,
-			uuid.Must(uuid.NewV7()), nullable(o.person), nullable(o.tenant), x.ID, f.key, on, yearly, c.tenant.ID, c.p.UserID)
+			uuid.Must(uuid.NewV7()), nullable(o.person), nullable(o.tenant), x.ID, f.key, on, yearly, c.p.UserID)
 		return err
 	})
 	if err != nil {
@@ -247,7 +288,7 @@ func (s *Server) remindersOf(ctx context.Context, c *chat) ([]savedReminderView,
 					return err
 				}
 				r.v.name = x.Name
-				for _, d := range savedDates(x) {
+				for _, d := range savedDates(x, nil) {
 					if d.key == r.v.label {
 						r.v.label = d.label
 					}
@@ -334,8 +375,9 @@ func (s *Server) SavedRemindersTick(ctx context.Context) error {
 		return err
 	}
 	type due struct {
-		id, tellTenant, tellUser uuid.UUID
-		person, tenant           *uuid.UUID
+		id, tellUser   uuid.UUID
+		tellTenant     *uuid.UUID
+		person, tenant *uuid.UUID
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (due, error) {
 		var d due
@@ -357,7 +399,9 @@ func (s *Server) SavedRemindersTick(ctx context.Context) error {
 			// Tried again tomorrow, so one that keeps failing never keeps the
 			// others waiting behind it.
 			if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
-				_, err := tx.Exec(ctx, `UPDATE saved_reminders SET remind_on = $2 WHERE id = $1`, d.id, today.AddDate(0, 0, 1))
+				// Kept counted from before its day, so it is told late, not
+				// moved to its next year.
+				_, err := tx.Exec(ctx, `UPDATE saved_reminders SET last_sent = COALESCE(last_sent, remind_on - 1), remind_on = $2 WHERE id = $1`, d.id, today.AddDate(0, 0, 1))
 				return err
 			}); err != nil {
 				errs = append(errs, err)
@@ -372,7 +416,8 @@ func (s *Server) SavedRemindersTick(ctx context.Context) error {
 // or date is gone ends.
 func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUID, today time.Time) error {
 	var title, body string
-	var tellUser, tellTenant uuid.UUID
+	var tellUser uuid.UUID
+	var tellTenant *uuid.UUID
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		var object uuid.UUID
 		var field string
@@ -398,7 +443,7 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUI
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, o.tenant, tellUser).Scan(&member); err != nil {
 				return err
 			}
-			if !member || tellTenant != o.tenant {
+			if !member || tellTenant == nil || *tellTenant != o.tenant {
 				return end()
 			}
 		}
@@ -409,8 +454,12 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUI
 		if err != nil {
 			return err
 		}
+		dates, err := s.datesTx(ctx, tx, o, x)
+		if err != nil {
+			return err
+		}
 		var f *savedDateField
-		for _, d := range savedDates(x) {
+		for _, d := range dates {
 			if d.key == field {
 				f = &d
 			}
@@ -441,7 +490,11 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUI
 		}
 		title = "@" + x.Name + ": " + f.label
 		body = x.Title + ": " + f.label + " is " + sayDay(on) + "."
-		if on.Equal(today) {
+		switch {
+		case f.sensitive:
+			// A sensitive date is never said, only that it has come.
+			body = x.Title + ": " + f.label + " is due."
+		case on.Equal(today):
 			body = x.Title + ": " + f.label + " is today (" + sayDay(on) + ")."
 		}
 		return nil
@@ -457,7 +510,9 @@ func (s *Server) savedReminderDue(ctx context.Context, o savedOwner, id uuid.UUI
 		}
 		return nil
 	}
-	s.tellSavedReminder(ctx, tellTenant, tellUser, title, body)
+	if tellTenant != nil {
+		s.tellSavedReminder(ctx, *tellTenant, tellUser, title, body)
+	}
 	return nil
 }
 
@@ -532,7 +587,7 @@ func dateNamed(asked string, dates []savedDateField) *savedDateField {
 // resetRemindersTx moves the reminders on a saved thing to its dates as
 // they are now (it was just changed): a date moved earlier is told on its
 // new day, not on the old one; a date gone ends them.
-func resetRemindersTx(ctx context.Context, tx pgx.Tx, x savedRow, today time.Time) error {
+func (s *Server) resetRemindersTx(ctx context.Context, tx pgx.Tx, o savedOwner, x savedRow, today time.Time) error {
 	rows, err := tx.Query(ctx, `SELECT id, field, yearly, last_sent FROM saved_reminders WHERE object_id = $1 FOR UPDATE`, x.ID)
 	if err != nil {
 		return err
@@ -550,8 +605,12 @@ func resetRemindersTx(ctx context.Context, tx pgx.Tx, x savedRow, today time.Tim
 	if err != nil || len(list) == 0 {
 		return err
 	}
+	all, err := s.datesTx(ctx, tx, o, x)
+	if err != nil {
+		return err
+	}
 	dates := map[string]string{}
-	for _, d := range savedDates(x) {
+	for _, d := range all {
 		dates[d.key] = d.value
 	}
 	for _, m := range list {

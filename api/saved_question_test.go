@@ -48,6 +48,15 @@ func TestSavedQuestions(t *testing.T) {
 	if said := taskiemSays(t, owner, "what is @generator's serial"); strings.Contains(said, "SN-99887766") {
 		t.Errorf("serial in full: %q", said)
 	}
+	// Another question that names it is not about it: it goes on.
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "phone-shop", "title": "Phone shop", "kind": "place", "details": map[string]any{"line": "3 Broad Street", "phone": "0803 112 0011"}})
+	if said := taskiemSays(t, owner, "how many customers does @generator have"); strings.Contains(said, "@generator") {
+		t.Errorf("another question taken: %q", said)
+	}
+	// A field's word in the name is not a field asked.
+	if said := taskiemSays(t, owner, "what's @phone-shop?"); !strings.Contains(said, "3 Broad Street") || strings.Contains(said, "@phone-shop: Phone:") {
+		t.Errorf("name read as a field: %q", said)
+	}
 	// No saved thing by the name: not this.
 	if said := taskiemSays(t, owner, "what's @nobody's phone?"); strings.Contains(said, "@nobody:") {
 		t.Errorf("nobody: %q", said)

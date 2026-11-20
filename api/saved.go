@@ -805,6 +805,10 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 			owner, id, o.by).Scan(&name); err != nil {
 			return err
 		}
+		// Its reminders go with it (removal archives; the row stays).
+		if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE object_id = $1`, id); err != nil {
+			return err
+		}
 		// A person's default address gone: their newest place is it now.
 		if wasDefault {
 			if err := newestPlaceDefaultTx(ctx, tx, o.person); err != nil {
@@ -1123,7 +1127,7 @@ func (s *Server) changeSavedThing(w http.ResponseWriter, r *http.Request, o save
 			return err
 		}
 		// A person's birthday changed: its reminders follow it.
-		if err := resetRemindersTx(ctx, tx, x, remindDay(s.staffNow())); err != nil {
+		if err := s.resetRemindersTx(ctx, tx, o, x, remindDay(s.staffNow())); err != nil {
 			return err
 		}
 		return s.savedEvent(r, tx, o, was.ID, "changed", map[string]any{"changed": changedFields(was, x)})

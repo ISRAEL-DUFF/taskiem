@@ -372,6 +372,9 @@ func (s *Server) deleteAddress(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.Exec(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $1 WHERE `+placesWhere+` AND id = $2`, person, id); err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE object_id = $1`, id); err != nil {
+			return err
+		}
 		if err := savedEventBy(ctx, tx, savedWhoOf(r), savedOwner{person: person, by: person}, id, "removed", map[string]any{"from": "addresses"}); err != nil {
 			return err
 		}

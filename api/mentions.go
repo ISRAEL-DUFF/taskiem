@@ -238,14 +238,22 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 		return false, nil
 	}
 	if len(mo.Unknown) > 0 {
-		// A saved thing's name is not a business that is not linked: the
+		// A saved thing's name is not a business that is not linked: said
+		// for the names that are neither; when all are saved things, the
 		// words go on to what reads saved things (saved objects S2).
-		if n, err := saved.Name(mo.Unknown[0]); err == nil && c.p != nil {
-			if got, err := s.savedFind(ctx, c, n); err != nil || len(got) > 0 {
-				return err != nil, err
+		for _, u := range mo.Unknown {
+			if n, err := saved.Name(u); err == nil && c.p != nil {
+				got, err := s.savedFind(ctx, c, n)
+				if err != nil {
+					return true, err
+				}
+				if len(got) > 0 {
+					continue
+				}
 			}
+			return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(u)))
 		}
-		return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
+		return false, nil
 	}
 	for _, part := range mo.Parts {
 		// Two businesses the mention names: never one picked in silence.
