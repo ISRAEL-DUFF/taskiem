@@ -859,6 +859,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waDirect(ctx, c); done || err != nil {
 		return err
 	}
+	// A question about a saved thing ("what's @generator's last service
+	// date?"): read before the words to linked businesses, since it starts
+	// with its question word, not a business (saved_question.go).
+	if c.state == stateIdle && c.in.Reply == "" {
+		if done, err := s.waSavedQuestion(ctx, c, c.in.Text); done || err != nil {
+			return err
+		}
+	}
 	// With chat tools, a message naming linked businesses is for them,
 	// unless it calls Taskiem (chat_tools.go).
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {

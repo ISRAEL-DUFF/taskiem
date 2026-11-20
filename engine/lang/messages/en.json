@@ -1849,6 +1849,21 @@
       "reviewed": true,
       "context": "A button: share the saved thing (at most 20 characters)"
     },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": true,
+      "context": "A question about a saved thing's field, answered: its name, the field's label and value (masked when sensitive)"
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": true,
+      "context": "A question about a saved thing's field that holds nothing"
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": true,
+      "context": "After a saved thing's masked detail in the chat: where to see it in full"
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": true,

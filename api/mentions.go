@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -237,6 +238,13 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 		return false, nil
 	}
 	if len(mo.Unknown) > 0 {
+		// A saved thing's name is not a business that is not linked: the
+		// words go on to what reads saved things (saved objects S2).
+		if n, err := saved.Name(mo.Unknown[0]); err == nil && c.p != nil {
+			if got, err := s.savedFind(ctx, c, n); err != nil || len(got) > 0 {
+				return err != nil, err
+			}
+		}
 		return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
 	}
 	for _, part := range mo.Parts {

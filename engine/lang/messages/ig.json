@@ -1480,6 +1480,18 @@
       "text": "Share",
       "reviewed": false
     },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": false
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": false
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": false
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": false

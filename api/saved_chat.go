@@ -45,11 +45,24 @@ func (s *Server) waSavedName(ctx context.Context, c *chat, text string) (bool, e
 	if name == "" || c.p == nil || c.p.UserID == uuid.Nil {
 		return false, nil
 	}
-	type found struct {
-		row  savedRow
-		mine bool
+	got, err := s.savedFind(ctx, c, name)
+	if err != nil || len(got) == 0 {
+		return err != nil, err
 	}
-	var got []found
+	return true, s.sayFound(ctx, c, name, got, func(f savedFound) string { return s.savedLines(c, f.row) })
+}
+
+// savedFound is a saved thing a message named, and whose it is.
+type savedFound struct {
+	row  savedRow
+	mine bool
+}
+
+// savedFind is what @name names for the person in the chat: their own
+// (not on a business's own app: ownAppChat), then their business's; none
+// when nothing has the name.
+func (s *Server) savedFind(ctx context.Context, c *chat, name string) ([]savedFound, error) {
+	var got []savedFound
 	look := func(o savedOwner) error {
 		return s.savedTx(ctx, o, func(tx pgx.Tx) error {
 			where, owner := ownerWhere(o)
@@ -58,41 +71,39 @@ func (s *Server) waSavedName(ctx context.Context, c *chat, text string) (bool, e
 				return nil
 			}
 			if err == nil {
-				got = append(got, found{x, o.mine()})
+				got = append(got, savedFound{x, o.mine()})
 			}
 			return err
 		})
 	}
-	// Not the person's own on a business's own app (ownAppChat).
 	if !ownAppChat(c) {
 		if err := look(savedOwner{person: c.p.UserID, by: c.p.UserID}); err != nil {
-			return true, err
+			return nil, err
 		}
 	}
 	if c.tenant.ID != uuid.Nil {
 		if err := look(savedOwner{tenant: c.tenant.ID, by: c.p.UserID}); err != nil {
-			return true, err
+			return nil, err
 		}
 	}
-	if len(got) == 0 {
-		return false, nil
+	return got, nil
+}
+
+// sayFound answers about what @name named: one thing told as block says;
+// two (one's own and the business's) both told, each said whose.
+func (s *Server) sayFound(ctx context.Context, c *chat, name string, got []savedFound, block func(savedFound) string) error {
+	if len(got) == 1 {
+		return c.say(ctx, s, block(got[0]))
 	}
 	parts := make([]string, 0, len(got))
 	for _, f := range got {
-		block := s.savedLines(c, f.row)
-		if len(got) > 1 {
-			whose := c.t("wa.saved.yours")
-			if !f.mine {
-				whose = c.t("wa.saved.business", "org", c.tenant.Name)
-			}
-			block = whose + "\n" + block
+		whose := c.t("wa.saved.yours")
+		if !f.mine {
+			whose = c.t("wa.saved.business", "org", c.tenant.Name)
 		}
-		parts = append(parts, block)
+		parts = append(parts, whose+"\n"+block(f))
 	}
-	if len(got) > 1 {
-		return true, c.say(ctx, s, c.t("wa.saved.two", "name", name)+"\n\n"+strings.Join(parts, "\n\n"))
-	}
-	return true, c.say(ctx, s, parts[0])
+	return c.say(ctx, s, c.t("wa.saved.two", "name", name)+"\n\n"+strings.Join(parts, "\n\n"))
 }
 
 // savedLines is a saved thing in lines for a chat: its name and title,
@@ -136,8 +147,10 @@ func (s *Server) savedLines(c *chat, x savedRow) string {
 			}
 		}
 	default:
+		// A phone or an email masked, as a question about one is
+		// answered (savedChatValue): never in full in a message.
 		for _, k := range []string{"line", "area", "landmark", "phone", "email", "address", "birthday"} {
-			add(str(k))
+			add(savedChatValue(k, str(k)))
 		}
 	}
 	add(str("note"))
