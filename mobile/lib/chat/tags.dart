@@ -14,7 +14,23 @@ import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore, this.savedKind, this.body, this.savedOwner, this.savedSensitive = false, this.fileName, this.fileType});
+
+  /// A saved thing (kind "saved", saved objects S1): its kind, and a
+  /// text's words, which a pick puts in the box in place of what was typed.
+  final String? savedKind;
+
+  /// A saved thing's: mine (the person's own) or business.
+  final String? savedOwner;
+
+  /// A saved thing that holds what is sensitive (saved.MakeCard's rule):
+  /// sharing it asks first.
+  final bool savedSensitive;
+
+  /// A saved file's name and type: picked, it is attached as itself.
+  final String? fileName;
+  final String? fileType;
+  final String? body;
 
   /// A short word on the right ("Invoice").
   final String? badge;
@@ -71,6 +87,13 @@ TagQuery? tagQuery(String text, int caret) {
     if (ch == '/' && after) {
       final m = RegExp(r'^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$', caseSensitive: false).firstMatch(before.substring(i + 1));
       if (m != null) return (mark: '/', query: m[2] ?? '', start: i, kind: m[1]!.toLowerCase());
+      // "/mum": a word that names no document looks for a saved thing
+      // (saved objects §15 1); "/invoice" alone stays the tool's.
+      final word = before.substring(i + 1);
+      if (RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$', caseSensitive: false).hasMatch(word) &&
+          !RegExp(r'^(invoice|bill|order|purchase|product|customer)s?$', caseSensitive: false).hasMatch(word)) {
+        return (mark: '/', query: word, start: i, kind: null);
+      }
       continue;
     }
     if (before.length - i > 41) continue;
@@ -115,6 +138,7 @@ List<TagGroup> groupTags(
   required List<TagSuggestion> businesses,
   required bool taskiem,
   List<TagSuggestion> unlinked = const [],
+  List<TagSuggestion> saved = const [],
 }) {
   final out = <TagGroup>[];
   void add(String label, List<TagSuggestion> list, int n, [List<TagSuggestion> more = const []]) {
@@ -126,6 +150,8 @@ List<TagGroup> groupTags(
 
   add('Products', items, 4);
   add('Services', services, 3);
+  // The person's saved things, then the business's (saved objects S1).
+  add('Saved', saved, 4);
   // Found in Explore for these words: not linked, after the linked.
   add('Businesses', businesses, 4, unlinked);
   if (taskiem) out.add((label: '', items: const [taskiemTag]));
@@ -135,8 +161,16 @@ List<TagGroup> groupTags(
 /// mentions.ts insertMention: the query replaced by the picked name and a
 /// space; the text and where the caret goes.
 ({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name) {
-  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
-  final head = '${text.substring(0, q.start)}${q.mark == '/' ? '#' : q.mark}$name ';
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
+  // a saved thing found with "/mum" as its "@mum".
+  final head = '${text.substring(0, q.start)}${q.mark == '/' ? (q.kind == null ? '@' : '#') : q.mark}$name ';
+  return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
+}
+
+/// mentions.ts insertWords: the query replaced by words (a saved text's),
+/// nothing of the "@" left; the text and where the caret goes.
+({String text, int caret}) insertWords(String text, TagQuery q, int caret, String words) {
+  final head = '${text.substring(0, q.start)}$words';
   return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
 }
 
@@ -162,6 +196,7 @@ List<SendLinkMessageRequestMentionsItem> tagRefs(String text, List<TagSuggestion
         'business' => SendLinkMessageRequestMentionsItem(kind: p.kind, link: p.id),
         'service' => SendLinkMessageRequestMentionsItem(kind: p.kind, serviceId: p.id),
         'invoice' || 'bill' || 'order' || 'purchase' => SendLinkMessageRequestMentionsItem(kind: p.kind, ref: p.id),
+        'saved' => SendLinkMessageRequestMentionsItem(kind: p.kind, saved: SavedShare(id: p.id, owner: p.savedOwner ?? 'business', confirm: false)),
         _ => SendLinkMessageRequestMentionsItem(kind: p.kind, itemId: p.id),
       },
 ];

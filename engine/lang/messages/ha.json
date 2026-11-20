@@ -1396,6 +1396,126 @@
       "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
       "reviewed": false
     },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": false
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": false
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": false
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": false
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": false
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": false
+    },
+    "button.keep_mine": {
+      "text": "Keep it to myself",
+      "reviewed": false
+    },
+    "button.save": {
+      "text": "Save",
+      "reviewed": false
+    },
+    "wa.saved.need_bank": {
+      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "reviewed": false
+    },
+    "wa.saved.own_app": {
+      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "reviewed": false
+    },
+    "wa.saved.share_ask": {
+      "text": "{question}",
+      "reviewed": false
+    },
+    "wa.saved.share_plain": {
+      "text": "Share @{name} with {to}?",
+      "reviewed": false
+    },
+    "wa.saved.share_which": {
+      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "reviewed": false
+    },
+    "wa.saved.share_nobody": {
+      "text": "No linked business or customer is called {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_none": {
+      "text": "You have nothing saved as @{name}.",
+      "reviewed": false
+    },
+    "wa.saved.shared": {
+      "text": "Shared @{name} with {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_left": {
+      "text": "Not shared.",
+      "reviewed": false
+    },
+    "wa.saved.share_reminder": {
+      "text": "Share @{name}? Tap Share or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.share_not": {
+      "text": "Not shared: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_quoted_none": {
+      "text": "Reply to a message from a linked business to save it.",
+      "reviewed": false
+    },
+    "button.share": {
+      "text": "Share",
+      "reviewed": false
+    },
+    "wa.saved.not_saved": {
+      "text": "Not saved: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_ask": {
+      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "reviewed": false
+    },
+    "wa.saved.save_left": {
+      "text": "Not saved.",
+      "reviewed": false
+    },
+    "wa.saved.save_reminder": {
+      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.saved": {
+      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "reviewed": false
+    },
+    "wa.saved.taken": {
+      "text": "You already have something called @{name}. Choose another name.",
+      "reviewed": false
+    },
+    "wa.saved.where_business": {
+      "text": "{org}'s saved things",
+      "reviewed": false
+    },
+    "wa.saved.where_mine": {
+      "text": "your own saved things, which only you see",
+      "reviewed": false
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": false
+    },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
       "reviewed": false

@@ -35,6 +35,7 @@ render and compare.
 | The card at the top | `TkTopCard`; `MyPhotoCard` for the person |
 | Fields | `TkFormGroup(title:, children: [TkKitField(label:, child:)])` |
 | A code | `CodeBoxes` (from `screens/sign_in.dart`), inside a `TkFormGroup` |
+| A field chosen, not typed (a bank, a class, a date) | `TkKitField(field: false, child: TkPickBox(label:, shown:, onTap:))`, opening `pickOneOf` or a date |
 | The page's main button | `TkCta(label:)`; `danger: true` to delete |
 | Two buttons side by side | `TkButtonRow([...])` |
 | A small button in a row or under a list | `TkSmallButton` (`primary:` / `danger:`) |
@@ -44,7 +45,7 @@ render and compare.
 | Search | `TkSearchBox` |
 | A status mark | `CardPill(words, CardTone.x)` |
 | A sheet with a form | `TkFormSheet(title:, action:, onAction:, children:)` |
-| Pick one of a few | `pickOneOf` (`chat/groups.dart`) |
+| Pick one of a few | `pickOneOf` (`chat/groups.dart`); of many (banks), with `searchHint:` for a search box over them |
 | A menu of actions | `pickAction` |
 | "Are you sure?" | `askSure(danger: true)` |
 | Text that is several lines of facts | `TkLines` |

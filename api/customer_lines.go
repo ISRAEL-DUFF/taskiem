@@ -875,7 +875,7 @@ func (s *Server) checkLinkTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UU
 // templateWords is what a reply sent as the taskiem_customer_reply
 // template says on WhatsApp: the person's copy shows what was delivered.
 func templateWords(business, text string) string {
-	return whatsapp.TplCustomerReply.Render(map[string]string{"business": business, "message": strings.Join(strings.Fields(text), " ")})
+	return whatsapp.TplCustomerReply.Render(map[string]string{"business": business, "message": templateLine(text)})
 }
 
 // partErasedLines parts the lines of the customers the business just

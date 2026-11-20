@@ -38,6 +38,7 @@ Kit notes that explain most tags:
 | Saved addresses | `chat/addresses.dart` `SavedAddressesPage`, `AddressSheet` | You › Settings, a shop's check step | Saved delivery addresses | [fine] |
 | Links on You | `screens/you_links.dart` | App links | Routing only | n/a |
 | Home tabs (changes) | `screens/home_tabs.dart` | Signed in | Orders tab kept in place, re-read when shown | [fine] |
+| Saved things (a business's) | `chat/saved_accounts.dart` `SavedAccountsPage(mine: false)`, `OpenWalletSheet` | A business's Settings › Saved | The business's saved things, a filter by kind; its bank accounts the bank's name checked through its payments account; for an owner with none, the step to connect one (Open a Taskiem wallet here, or an account it has on the web) | [done 20 Nov] built in the new look: the step a callout over its rows; staff see the list without the step or Save |
 | Settings in a business (changes) | `screens/signed_in.dart` | A business's Settings | Switch row, Customers section, Discover, devices | [fine] |
 
 ## 3. Chats with businesses on You (stage 2) and the customer's side
@@ -96,6 +97,7 @@ Kit notes that explain most tags:
 | Blocked people | `chat/people_settings.dart` `BlockedPeopleScreen` | You › Settings | Blocked list, Unblock | [fine] |
 | Share and split cards in a chat | `chat/people_cards.dart` `PeopleCardView`, `_LiveCardSheet`, `_CardPicker`, `_SplitForm` | A people chat's + › Share | Business, product, order, delivery, your share | [fine] |
 | Forward / share-with picker | `chat/people_cards.dart` `_PeoplePicker` | Forward, Share with someone | Chats to pick | [off] web radio and checkbox rows with a hand-laid face (`TkListRow` has `face:` and a tick box) |
+| Saved things (yours) | `chat/saved_accounts.dart` `SavedAccountsPage(mine: true)`, `SavedAccountSheet`, `SavedThingSheet` | You › Settings | Your own saved accounts, people, places, texts and accounts with a provider (saved objects S0, S1): a filter by kind; a bank account masked, Change and Show the number with a passkey; Remove | [done 20 Nov] built in the new look: rows with a Checked or Not checked pill, the bank and its masked number kept on one line; actions from pickAction; the sheet's bank a TkPickBox |
 | Bank account for shares | `chat/people_cards.dart` `PayoutAccountPage` | You › Settings | Bank, number, name | [done 18 Nov] large-title page; the account in a form group; Save a TkCta; Remove it a red row |
 | Your standing | `chat/people_standing.dart` `YourStandingScreen` | You › Settings, a push, a refused send | State, decisions, appeals | [done 18 Nov] where you stand on a top card; each decision a row with its state, its story and Appeal in a sheet |
 | Appeal | `chat/people_standing.dart` `_AppealSheet` | Your standing | Your words | [done 18 Nov] TkFormSheet |

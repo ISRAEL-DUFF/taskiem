@@ -146,6 +146,7 @@ import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
+import { SavedPage } from "./pages/Saved";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -997,6 +998,7 @@ function SignedIn() {
                     path="/settings/payments"
                     element={<PaymentsSettings />}
                   />
+                  <Route path="/settings/saved" element={<SavedPage />} />
                   <Route path="/settings/keys" element={<Keys />} />
                   <Route
                     path="/settings/notifications"

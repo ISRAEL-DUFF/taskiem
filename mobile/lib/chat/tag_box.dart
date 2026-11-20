@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import 'saved_picks.dart';
 import 'tag_picker.dart';
 import 'tags.dart';
 
@@ -23,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed, this.onAttachSaved});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -41,6 +42,26 @@ class TagBox {
   /// A business not linked, picked: its card.
   final ValueChanged<ExploreCard>? onExplore;
 
+  /// Saved things "@" offers (saved objects S1; saved_picks.dart), read
+  /// the first time "@" is typed.
+  final SavedPicks? saved;
+
+  /// A saved thing other than a text picked: shared as a card (S1 part 3),
+  /// what was typed for it taken out of the box.
+  final void Function(TagSuggestion)? onShareSaved;
+
+  /// Saved things other than texts kept as tags, sent with the message (a
+  /// business's chat with another business; S1 part 3).
+  final bool savedAsTags;
+
+  /// Save "@mum"… when nothing saved has the name typed (saved objects S1,
+  /// part 4): the name, to save something as.
+  final void Function(String name)? onSaveNamed;
+
+  /// A saved file picked: attached to the message as itself (S1), what was
+  /// typed for it taken out of the box.
+  final void Function(TagSuggestion)? onAttachSaved;
+
   TagQuery? query;
   final picked = <TagSuggestion>[];
   final overlay = OverlayPortalController();
@@ -53,6 +74,12 @@ class TagBox {
   Timer? _soon;
 
   void dispose() => _soon?.cancel();
+
+  /// The floating picker shut, when it is open: a box with no floating
+  /// picker (a chat offering only saved texts) never placed it.
+  void _hideFloating() {
+    if (overlay.isShowing) overlay.hide();
+  }
 
   /// Floating over the thread (the tools' picker), not the plain list.
   bool get floats => query != null && grouped() && (query!.mark == '@' || query!.mark == '/');
@@ -67,12 +94,13 @@ class TagBox {
     final q = tagQuery(v.text, caret);
     if (q == query) return;
     query = q;
+    if (q?.mark == '@' || (q?.mark == '/' && q?.kind == null)) saved?.want();
     _ask();
     onChange();
     if (floats) {
       overlay.show();
     } else {
-      overlay.hide();
+      _hideFloating();
     }
   }
 
@@ -98,6 +126,11 @@ class TagBox {
     final q = query;
     if (q == null) return const [];
     final src = sources();
+    if (q.mark == '/' && q.kind == null) {
+      // "/mum": the saved things by that name, if any.
+      final found = suggest(saved?.list ?? const [], q.query).take(4).toList();
+      return [if (found.isNotEmpty) (label: 'Saved', items: found)];
+    }
     if (q.mark == '/') {
       final kind = q.kind ?? '';
       return [(label: refLabel[kind] ?? '', items: suggest(src.refs[kind] ?? const [], q.query))];
@@ -105,16 +138,36 @@ class TagBox {
     if (grouped() && q.mark == '@') {
       final words = _words;
       final found = _found;
-      return groupTags(
+      return _withSaveNew(q, groupTags(
         q.query,
         items: src.items,
         services: src.services,
         businesses: src.businesses,
         taskiem: taskiem,
         unlinked: found != null && words.length >= 2 && found.q == words ? found.list : const [],
-      );
+        saved: saved?.list ?? const [],
+      ));
     }
-    return [(label: '', items: suggest(q.mark == '@' ? src.businesses : src.items, q.query))];
+    return _withSaveNew(q, [
+      for (final g in <TagGroup>[
+        (label: '', items: suggest(q.mark == '@' ? src.businesses : src.items, q.query)),
+        if (q.mark == '@' && saved != null) (label: 'Saved', items: suggest(saved!.list, q.query).take(4).toList()),
+      ])
+        if (g.items.isNotEmpty) g,
+    ]);
+  }
+
+  /// Save "@mum"… under Saved, once the saved things are read and none
+  /// (nor anything else offered) has the name typed.
+  List<TagGroup> _withSaveNew(TagQuery q, List<TagGroup> groups) {
+    final name = q.query.toLowerCase();
+    final picks = saved;
+    if (q.mark != '@' || onSaveNamed == null || picks == null || !picks.loaded || !picks.complete || !RegExp(r'^[a-z0-9][a-z0-9_-]{0,31}$').hasMatch(name)) return groups;
+    if (picks.list.any((s) => s.name.toLowerCase() == name) || groups.any((g) => g.items.any((s) => s.name.toLowerCase() == name))) return groups;
+    final row = TagSuggestion(kind: 'save-new', id: 'save-new:$name', name: name, sub: 'Save something by this name');
+    final i = groups.indexWhere((g) => g.label == 'Saved');
+    if (i < 0) return [...groups, (label: 'Saved', items: [row])];
+    return [for (var j = 0; j < groups.length; j++) j == i ? (label: groups[j].label, items: [...groups[j].items, row]) : groups[j]];
   }
 
   /// What Enter would take: the first; the Taskiem row only when "Taskiem"
@@ -122,7 +175,7 @@ class TagBox {
   TagSuggestion? first(List<TagGroup> groups) {
     final q = query;
     return [for (final g in groups) ...g.items]
-        .where((s) => s.kind != 'taskiem' || (q != null && q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase())))
+        .where((s) => s.kind != 'save-new' && (s.kind != 'taskiem' || (q != null && q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase()))))
         .firstOrNull;
   }
 
@@ -133,7 +186,7 @@ class TagBox {
     if (explored != null) {
       // Not linked: its card, with Connect; the words stay as typed.
       query = null;
-      overlay.hide();
+      _hideFloating();
       onChange();
       onExplore?.call(explored);
       return;
@@ -143,21 +196,80 @@ class TagBox {
     // Where what was typed for it ends: the mark, "invoice " for "/", the words.
     final head = q.mark == '/' ? RegExp(r'^[a-z]+[/ ]', caseSensitive: false).firstMatch(v.text.substring(q.start + 1))?.end ?? 0 : 0;
     final end = q.start + 1 + head + q.query.length;
-    final next = insertTag(v.text, q, caret < end ? end : caret, s.name);
-    if (s.kind != 'taskiem') picked.add(s);
+    // A saved text's words in place of what was typed, to change before
+    // sending; any other saved thing as its @name, which the words carry.
+    final body = s.body;
+    final attach = onAttachSaved;
+    if (s.kind == 'saved' && s.fileName != null && attach != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      attach(s);
+      return;
+    }
+    final named = onSaveNamed;
+    if (s.kind == 'save-new' && named != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      named(s.name);
+      return;
+    }
+    final share = onShareSaved;
+    if (s.kind == 'saved' && body == null && share != null) {
+      final out = insertWords(v.text, q, caret < end ? end : caret, '');
+      _picking = true;
+      text.value = TextEditingValue(text: out.text, selection: TextSelection.collapsed(offset: out.caret));
+      _picking = false;
+      query = null;
+      _hideFloating();
+      onChange();
+      share(s);
+      return;
+    }
+    final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name);
+    if (s.kind != 'taskiem' && (s.kind != 'saved' || (savedAsTags && body == null))) picked.add(s);
     _picking = true;
     text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
     _picking = false;
     query = null;
-    overlay.hide();
+    _hideFloating();
     onChange();
   }
 
-  /// What the message sends of its tags, and the picks forgotten.
+  /// What the message sends of its tags, and the picks forgotten (kept in
+  /// [taken], to give back if the message does not go).
   List<SendLinkMessageRequestMentionsItem> take(String words) {
     final out = tagRefs(words, picked);
+    taken = [...picked];
     picked.clear();
     return out;
+  }
+
+  /// The picks of the last message taken.
+  List<TagSuggestion> taken = const [];
+
+  /// A message not sent after all: its picks back, with its words.
+  void giveBack() {
+    picked
+      ..clear()
+      ..addAll(taken);
+  }
+
+  /// Whether "/" is picking a thing to tag (a document, or a saved thing
+  /// that has the name typed), not a tool.
+  bool get tagging {
+    final q = query;
+    if (q == null || q.mark != '/') return false;
+    return q.kind != null || groups().isNotEmpty;
   }
 
   /// The plain list above the box, when it is the one shown.
@@ -166,7 +278,9 @@ class TagBox {
     if (q == null || floats) return const SizedBox.shrink();
     final shown = [for (final g in groups()) ...g.items];
     if (shown.isEmpty) return const SizedBox.shrink();
-    return TagList(mark: q.mark, items: shown, onPick: pick);
+    // Only saved things to offer (a chat with no one else to name).
+    final onlySaved = shown.every((s) => s.kind == 'saved' || s.kind == 'save-new');
+    return TagList(mark: q.mark, items: shown, onPick: pick, label: onlySaved ? 'Saved things' : null);
   }
 
   /// The floating picker's place: put just above the box; it hangs 8 px

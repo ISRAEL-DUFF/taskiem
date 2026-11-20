@@ -17,6 +17,7 @@
 // says so plainly (people.dart, peopleKeptWords) and nothing says they are
 // end-to-end encrypted.
 
+import 'saved_picks.dart';
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
 
@@ -52,9 +53,12 @@ import 'people_live.dart';
 import 'people_place.dart';
 import 'people_search.dart';
 import 'people_standing.dart';
+import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
 import 'pick_problem.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -539,6 +543,32 @@ class PeopleChatData extends ChangeNotifier {
     }
   }
 
+  /// One of the person's own saved things, shared as a card (saved objects
+  /// S1), with [ask]'s yes when the server wants one first. False when it
+  /// failed (error says why); true when sent or the sender said no.
+  Future<bool> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final what = 'saved:$saved';
+    final client = _clientFor(what);
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: SendPeopleMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client)),
+        ask,
+      );
+      if (sent == null || _disposed) return true;
+      messages = _merge(messages ?? const [], [PeopleLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_chat());
+      return true;
+    } on Object catch (e) {
+      _keepUnsure(e, what, client);
+      error = sendFailure(e);
+      toStanding = pointsToStanding(e);
+      _changed();
+      return false;
+    }
+  }
+
   /// A card (a business, a product, an order, a delivery, your share).
   Future<bool> sendCard(SendPeopleMessageRequestCard card) async {
     final what = 'card:${jsonEncode(card.toJson())}';
@@ -750,6 +780,21 @@ class PeopleChatScreen extends StatefulWidget {
 
 class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    // Anything else of one's own: shared as a card (S1 part 3).
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
+  );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
   String? _paying;
@@ -774,6 +819,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       _text.text = w;
     });
     _text.addListener(_typed);
+    _text.addListener(_saved.typed);
     // Put away with words in the box: they no longer see "typing…".
     _life = AppLifecycleListener(
       onStateChange: (s) {
@@ -798,6 +844,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     widget.notify?.unshow(this);
     _back?.cancel();
     _life?.dispose();
+    _saved.dispose();
     // Closed with words in the box: they no longer see "typing…".
     d.stopTyping();
     _text.dispose();
@@ -989,6 +1036,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       items: [
         if (write && m.deleted != true) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         if (m.deleted != true && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (m.deleted != true) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
@@ -1116,6 +1164,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                     busy: _paying == m.id,
                                     onOpenCard: m.card == null || m.card!.type == 'split'
                                         ? null
+                                        : m.card!.type == 'saved'
+                                        ? (m.card!.saved == null ? null : () => saveSavedCard(context, d.auth, m.card!.saved!))
                                         : m.card!.type == 'basket'
                                         ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
                                         : () => showPeopleCard(context, auth: d.auth, chat: d.id, message: m.id, openBusiness: _openBusiness, openOrder: widget.openOrder),
@@ -1138,8 +1188,10 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                   if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),
                   if (c != null && !c.gone && c.suspended == true) const _Note(text: '$suspendedWords You can read the chat, but not write to it now.'),
                   if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: _unblock),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,
@@ -1227,6 +1279,7 @@ class PeopleBubble extends StatelessWidget {
   /// It answers a message no longer shown (older, or deleted for you).
   final bool quoteMissing;
   final bool readTicks;
+  /// The card opened live; a saved thing's card: Save this.
   final VoidCallback? onOpenCard;
   final ValueChanged<bool>? onPaid;
 
@@ -1276,7 +1329,10 @@ class PeopleBubble extends StatelessWidget {
                 ?head,
                 ?forwarded,
                 ?q,
-                PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
+                if (c.type == 'saved' && c.saved != null)
+                  SavedCardView(card: c.saved!, mine: mine, onSave: onOpenCard)
+                else
+                  PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
                 if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
                 Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
               ],

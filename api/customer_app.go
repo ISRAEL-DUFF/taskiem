@@ -24,6 +24,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -45,7 +46,7 @@ const lineApp = "app"
 // its state; Pay when due), a pay link, a booking offer (a service), a
 // product, or the business's closed reply.
 type customerCard struct {
-	Type      string `json:"type"` // order | pay | booking | product | invoice | delivery
+	Type      string `json:"type"` // order | pay | booking | product | invoice | delivery | saved
 	Reference string `json:"reference,omitempty"`
 	// InvoiceID is an invoice card's invoice (Reference is its number).
 	InvoiceID string `json:"invoice_id,omitempty"`
@@ -61,6 +62,13 @@ type customerCard struct {
 	Minutes   int               `json:"minutes,omitempty"`
 	// URL is a pay link's page (the order's status page, where it is paid).
 	URL string `json:"url,omitempty"`
+	// Saved is a saved thing shared, as it was when sent (saved objects S1).
+	Saved *saved.Card `json:"saved,omitempty"`
+	// Sealed is, in the business's copy only, a card the customer shared
+	// (its title and Saved) sealed under their subject as their words are,
+	// so it goes when they are erased; opened (openCustomerCard) before it
+	// is shown, never sent.
+	Sealed json.RawMessage `json:"sealed,omitempty"`
 }
 
 // chatAttachment is a photo, voice note or file of an app message, as
@@ -226,13 +234,23 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 		v := m.personFile.view()
 		personAtt, _ = json.Marshal(map[string]any{"kind": v.Kind, "type": v.Type, "size": v.Size, "name": v.Name, "file": fileID})
 	}
-	var card []byte
+	var card, bizCard []byte
 	if m.card != nil {
 		card, _ = json.Marshal(m.card)
+		bizCard = card
+		if m.fromPerson && m.card.Saved != nil {
+			// The customer's own details: sealed in the business's copy.
+			sealed, err := pii.SealText(ctx, s.Store.PII, tx, m.tenant, m.subject, "other", string(card))
+			if err != nil {
+				return at, conv, err
+			}
+			env, _ := json.Marshal(sealed)
+			bizCard, _ = json.Marshal(customerCard{Type: m.card.Type, Sealed: env})
+		}
 	}
 	if err := tx.QueryRow(ctx, `INSERT INTO customer_messages (id, tenant_id, conversation_id, mine, kind, body, sender_id, sender_name, client_id, delivery, card, attachment, offer)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING created_at`,
-		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, card, bizAtt, m.offer).Scan(&at); err != nil {
+		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, bizCard, bizAtt, m.offer).Scan(&at); err != nil {
 		return at, conv, err
 	}
 	// Made here only when the business writes first: not one of the
@@ -506,6 +524,9 @@ type cardAsk struct {
 	ItemID    string `json:"item_id"`
 	ServiceID string `json:"service_id"`
 	InvoiceID string `json:"invoice_id"`
+	// Saved is a saved thing (type saved; saved objects S1): the
+	// business's or the member's own, shared as a copy of it now.
+	Saved *savedShare `json:"saved"`
 }
 
 // cardFor makes a card from the business's own data: an order of this
@@ -843,7 +864,10 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 func serveChatFile(w http.ResponseWriter, data []byte, ctype, name, kind string) {
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// A caller's own policy kept (a saved file is never cached).
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, max-age=86400")
+	}
 	disp := "inline"
 	if kind == "file" {
 		disp = "attachment"

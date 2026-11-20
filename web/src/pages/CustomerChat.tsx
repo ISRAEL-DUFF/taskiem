@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, del, get, post, put, upload } from "../api";
+import { ApiError, del, get, getBlob, post, put, upload } from "../api";
+import { savedFileURL } from "../lib/saved";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { naira } from "../lib/billing";
@@ -28,7 +29,7 @@ import { useAutoGrow } from "../lib/useAutoGrow";
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -37,6 +38,11 @@ import { CardSheet } from "./CustomerCards";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { CustomerOrders } from "./CustomerOrders";
+import { MentionList, useMentions } from "./Mentions";
+import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import type { Suggestion } from "../lib/mentions";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
 // phase 1): the list's Customers section and a customer's thread. A reply
@@ -404,6 +410,56 @@ export function CustomerPane({
   const filePick = useRef<HTMLInputElement>(null);
   const sure = useConfirm();
   const lastTyped = useRef(0);
+  // Saved texts by @name (saved objects S1): "@bank-details" puts the
+  // business's words in the box, to change before sending.
+  const savedTexts = useSavedPicks("share");
+  // Save "mum"… in the picker (saved objects S1, part 4): the business's
+  // for whoever may manage them, else one's own.
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedTexts.reload() });
+  // A saved thing other than a text, picked: shared with the customer
+  // (saved objects S1), after a yes to sharing what is sensitive in it; a
+  // card in the app, its lines on WhatsApp, by the line replies go on.
+  const shareSaved = (pick: Suggestion) => {
+    // Picked, never dropped without a word.
+    if (!canSend) {
+      setSendError(new Error(`@${pick.name} was not shared: this chat can't take a message now.`));
+      return;
+    }
+    setSendError(undefined);
+    void (async () => {
+      try {
+        const out = await sendSaved(
+          (confirm) =>
+            post<CustomerMessage>(`/v1/customer-chats/${id}/messages`, {
+              card: { type: "saved", saved: { id: pick.id, owner: pick.savedOwner ?? "business", confirm } },
+              client_id: `${Date.now()}-${++localN}`,
+              ...(c ? replyLineBody(c, replyLine) : {}),
+            }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergeCustomer(cur ?? [], [out]));
+        changed.current();
+      } catch (e) {
+        setSendError(e);
+        chat.reload();
+      }
+    })();
+  };
+  const mentions = useMentions(text, setText, box, { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
+    // A saved file: sent as itself, in the app (saved objects S1).
+    // Only the file goes: the words in the box stay there, theirs to send.
+    attachSaved: (s) => {
+      if (!appOpen) {
+        setSendError(new Error(`@${s.name} was not sent: photos and documents go in the app, and this customer isn't chatting in it.`));
+        return;
+      }
+      void getBlob(savedFileURL(s.savedOwner ?? "business", s.id)).then(
+        (b) => send({ file: new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type }), fileWords: "" }),
+        (e: unknown) => setSendError(e),
+      );
+    },
+  });
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
@@ -413,8 +469,8 @@ export function CustomerPane({
   };
   // Each send is its own (its own client_id): a card or a file chosen while
   // another message is on its way goes too, never dropped.
-  const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File }) => {
-    const words = extra?.card ? (extra.cardWords ?? "") : text.trim();
+  const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File; fileWords?: string }) => {
+    const words = extra?.card ? (extra.cardWords ?? "") : extra?.fileWords !== undefined ? extra.fileWords : text.trim();
     const plain = !extra?.card && !extra?.file;
     // Cards and files go in the app whatever line is chosen.
     if ((!words && !extra?.file && !extra?.card) || !(plain ? canSend : appOpen)) return;
@@ -601,6 +657,7 @@ export function CustomerPane({
         }
       />
       {sure.node}
+      {saveAs.node}
       <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
       <ChatStream
         items={messages}
@@ -633,6 +690,30 @@ export function CustomerPane({
             testid="customer-message"
             className={m.card ? "card-bubble" : m.kind === "media" && !m.attachment ? "media-note" : ""}
             what={(m.card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
+            menu={(() => {
+              // Copy and Save as… (saved objects S1): the words, or a photo or
+              // document as a file thing.
+              const words = !m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && m.kind !== "media" ? m.body : "";
+              const file = m.attachment && m.attachment.kind !== "voice" && !m.local ? m.attachment : undefined;
+              if (m.local || (!words && !file)) return undefined;
+              return (close: () => void) => ({
+                actions: (
+                  <>
+                    {words && <CopyItem text={words} />}
+                    {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
+                    {file && (
+                      <PopItem
+                        icon="note"
+                        disabled={saveAs.fileBusy}
+                        onClick={() => (close(), saveAs.fromFile(`/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`, file.name ?? "File", file.type))}
+                      >
+                        {words ? "Save the file as…" : "Save as…"}
+                      </PopItem>
+                    )}
+                  </>
+                ),
+              });
+            })()}
             after={
               <span className={m.card || m.attachment ? "stamp" : "stamp inline"}>
                 {m.mine && m.sent_as === "template" && (
@@ -666,6 +747,8 @@ export function CustomerPane({
             {m.card && (
               <AppCardView
                 card={m.card}
+                mine={m.mine}
+                saveTo="business"
                 actions={
                   cardLink(m.card) ? (
                     <Link className="tk-btn soft" to={cardLink(m.card) ?? "/"}>
@@ -787,6 +870,7 @@ export function CustomerPane({
               />
             </>
           )}
+          <MentionList m={mentions} />
           <div className="composer-pill">
             <label className="sr-only" htmlFor="customer-text">
               Reply to {c ? customerTitle(c) : "the customer"}
@@ -800,8 +884,12 @@ export function CustomerPane({
               maxLength={2000}
               placeholder={both ? `Reply ${lineWords(replyLine)}` : "Reply"}
               value={text}
-              onChange={(e) => typed(e.target.value)}
+              onChange={(e) => {
+                typed(e.target.value);
+                mentions.update(e.target.value, e.target.selectionStart);
+              }}
               onKeyDown={(e) => {
+                if (mentions.onKeyDown(e)) return;
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send();

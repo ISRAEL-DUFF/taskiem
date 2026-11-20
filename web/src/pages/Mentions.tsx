@@ -14,6 +14,7 @@ import { initialsOf } from "./ChatAvatar";
 import {
   groupSuggestions,
   insertMention,
+  insertWords,
   mentionParts,
   mentionQuery,
   stillNamed,
@@ -30,6 +31,7 @@ import {
 import { formatPrice } from "../lib/storefront";
 import { exploreLogo, type ExploreCard, type ExploreResult } from "../lib/explore";
 import { BusinessCardSheet } from "./BusinessCardSheet";
+import { savedIcon } from "../lib/saved";
 
 // Mentions in the composer (business links L4, §5.5): typing "@" offers
 // linked businesses, "#" items with their unit and price. Enter or Tab
@@ -53,6 +55,25 @@ export function useMentions(
     categories?: { name: string; count: number }[];
     /** What "/invoice", "/product", "/order" and "/customer" offer. */
     refs?: Partial<Record<RefKind, Suggestion[]>>;
+    /** Saved things "@" offers (saved objects S1): a text's words go in the
+     * box; any other is written as its @name. wantSaved is called when "@"
+     * is typed, so they are read only then. */
+    saved?: Suggestion[];
+    /** The saved things were all read: Save "mum"… is offered only then. */
+    savedComplete?: boolean;
+    wantSaved?: () => void;
+    /** A saved thing other than a text, picked where the chat shares it as
+     * a card: what was typed for it goes, and the chat sends the card. */
+    shareSaved?: (s: Suggestion) => void;
+    /** A saved file picked: attached to the message as itself (saved
+     * objects S1), what was typed for it taken out of the box. */
+    attachSaved?: (s: Suggestion) => void;
+    /** Save "mum"… when nothing saved has the name typed (saved objects
+     * S1, part 4): the name, to save something as. */
+    saveNamed?: (name: string) => void;
+    /** Saved things other than texts kept as tags, sent with the message
+     * (a business's chat with another business; saved objects S1). */
+    savedAsTags?: boolean;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -100,6 +121,7 @@ export function useMentions(
             businesses: sources["@"],
             unlinked,
             categories: sources.categories,
+            saved: sources.saved,
           },
           grouped.taskiem,
         )
@@ -110,20 +132,47 @@ export function useMentions(
               items: suggest(sources.refs?.[q.kind] ?? [], q.query),
             },
           ]
-        : q && q.mark !== "/"
-          ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
+        : q?.mark === "/"
+          ? // "/" and a name: the saved things by that name, if any (§15 1).
+            sources.saved
+            ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }].filter((g) => g.items.length > 0)
+            : []
+          : q
+          ? [
+              { label: "", items: suggest(sources[q.mark], q.query) },
+              ...(q.mark === "@" && sources.saved ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }] : []),
+            ].filter((g) => g.items.length > 0)
           : [];
+  // Save "mum"… (saved objects S1, part 4): offered under Saved once the
+  // saved things are read and none has the name typed.
+  const newName = q?.mark === "@" ? q.query.toLowerCase() : "";
+  if (
+    sources.saveNamed &&
+    sources.saved &&
+    sources.savedComplete !== false &&
+    /^[a-z0-9][a-z0-9_-]{0,31}$/.test(newName) &&
+    !sources.saved.some((x) => x.name.toLowerCase() === newName) &&
+    !groups.some((g) => g.items.some((x) => x.name.toLowerCase() === newName))
+  ) {
+    const row: Suggestion = { kind: "save-new", id: `save-new:${newName}`, name: newName, sub: "Save something by this name" };
+    const saved = groups.find((g) => g.label === "Saved");
+    if (saved) saved.items = [...saved.items, row];
+    else groups.push({ label: "Saved", items: [row] });
+  }
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
   // only when "Taskiem" is what is being typed ("@4500" stays as typed).
   // A category is not a tag: Enter tags an item, a tap opens the category.
   const enterPick = shown.find(
     (s) =>
-      (s.kind !== "taskiem" && s.kind !== "category") ||
+      (s.kind !== "taskiem" && s.kind !== "category" && s.kind !== "save-new") ||
       (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
   );
-  const update = (value: string, caret: number | null) =>
-    setQ(mentionQuery(value, caret ?? value.length));
+  const update = (value: string, caret: number | null) => {
+    const next = mentionQuery(value, caret ?? value.length);
+    if (next?.mark === "@" || (next?.mark === "/" && !next.kind)) sources.wantSaved?.();
+    setQ(next);
+  };
   const pick = (s: Suggestion, from?: DOMRect) => {
     if (!q) return;
     const el = box.current;
@@ -142,17 +191,36 @@ export function useMentions(
       grouped?.onCategory?.(s.name);
       return;
     }
-    const next = insertMention(
-      text,
-      q,
-      Math.max(caret, q.start + 1 + q.query.length),
-      s.name,
-    );
+    const end = Math.max(caret, q.start + 1 + q.query.length);
+    if (s.kind === "saved" && s.savedFile && sources.attachSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.attachSaved(s);
+      return;
+    }
+    if (s.kind === "save-new") {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.saveNamed?.(s.name);
+      return;
+    }
+    if (s.kind === "saved" && s.body === undefined && sources.shareSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.shareSaved(s);
+      return;
+    }
+    // A saved text's words in place of what was typed, to change before
+    // sending; any other saved thing as its @name, which the words carry.
+    const next =
+      s.kind === "saved" && s.body !== undefined
+        ? insertWords(text, q, end, s.body)
+        : insertMention(text, q, end, s.name);
     // The words and the caret move together, at once: a caret put back a
     // frame later would land the next key typed at the end of the box.
     flushSync(() => {
       setText(next.text);
-      if (s.kind !== "taskiem")
+      if (s.kind !== "taskiem" && (s.kind !== "saved" || (sources.savedAsTags && s.body === undefined)))
         setPicked((cur) => [...cur, s]);
       setQ(null);
     });
@@ -186,7 +254,9 @@ export function useMentions(
       // A customer is named in words only: never sent to another business.
       .filter((p) => p.kind !== "customer")
       .map((p) =>
-        p.kind === "business"
+        p.kind === "saved"
+          ? { kind: p.kind, saved: { id: p.id, owner: p.savedOwner ?? "business", confirm: false } }
+          : p.kind === "business"
           ? { kind: p.kind, link: p.id }
           : p.kind === "service"
             ? { kind: p.kind, service_id: p.id }
@@ -205,7 +275,12 @@ export function useMentions(
     setQ(null);
   };
   return {
-    atLabel: sources.atLabel,
+    /** What was picked, kept to give back to a message not sent. */
+    picked: () => picked,
+    /** Picks given back, with the words they were picked in. */
+    restore: (ps: Suggestion[]) => setPicked(ps),
+    // Only saved things to offer (a chat with no one else to name).
+    atLabel: sources.atLabel ?? (sources["@"].length === 0 && sources.saved ? "Saved things" : undefined),
     q,
     shown,
     enterPick,
@@ -334,6 +409,12 @@ function PickIcon({ s }: { s: Suggestion }) {
         {initialsOf(s.name)}
       </span>
     );
+  if (s.kind === "saved" || s.kind === "save-new")
+    return (
+      <span className="pick-icon soft" aria-hidden="true">
+        <Icon name={savedIcon(s.savedKind)} />
+      </span>
+    );
   if (s.kind === "taskiem")
     return (
       <span className="pick-icon round pine" aria-hidden="true">
@@ -452,7 +533,7 @@ function Picker({
               >
                 <PickIcon s={s} />
                 <span className="pick-words">
-                  <span className="pick-name">{s.name}</span>
+                  <span className="pick-name">{s.kind === "save-new" ? `Save "@${s.name}"…` : s.name}</span>
                   {s.sub && <span className="pick-sub">{s.sub}</span>}
                 </span>
                 {s.explore && <span className="sr-only">: see their card</span>}
@@ -500,7 +581,7 @@ function PlainList({ m }: { m: Mentions }) {
         mark === "@"
           ? (m.atLabel ?? "Businesses to mention")
           : mark === "/"
-            ? "Things to tag"
+            ? m.q?.kind ? "Things to tag" : "Saved things"
             : "Items to mention"
       }
       data-testid="mention-list"
@@ -509,8 +590,14 @@ function PlainList({ m }: { m: Mentions }) {
         <li key={`${s.kind}:${s.id}`}>
           <button type="button" onClick={() => m.pick(s)} onKeyDown={move}>
             <span className="name">
-              {mark === "/" ? "#" : mark}
-              {s.name}
+              {s.kind === "save-new" ? (
+                `Save "@${s.name}"…`
+              ) : (
+                <>
+                  {mark === "/" ? (s.kind === "saved" ? "@" : "#") : mark}
+                  {s.name}
+                </>
+              )}
             </span>
             {s.sub && <span className="hint">{s.sub}</span>}
           </button>

@@ -4,6 +4,7 @@
 
 import '../chat/chat_link_page.dart' show ChatLinkPage;
 import '../chat/discover_settings.dart' show DiscoverSettingsPage;
+import '../chat/saved_accounts.dart' show SavedAccountsPage;
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -257,6 +258,22 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   trailing: slack.linked ? quiet('Linked') : null,
                   onTap: () => _open(SettingsPage(title: 'Slack', children: [SlackCard(auth: widget.auth)])),
                 ),
+            ],
+          ),
+        // Saved accounts (saved objects S0): everyone in the business sees
+        // them, masked; those who manage them add and change them.
+        if (!widget.auth.personal)
+          TkSection(
+            title: 'Saved',
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'Saved things',
+                sub: 'Accounts, people, places and texts, by name',
+                icon: 'b-bank',
+                square: look.lime,
+                onTap: () => _open(SavedAccountsPage(auth: widget.auth, mine: false)),
+              ),
             ],
           ),
         // Customers chatting in the app (taskiem-for-everyone §8.2): the chat

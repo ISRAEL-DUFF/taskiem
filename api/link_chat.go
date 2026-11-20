@@ -384,15 +384,36 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var ments []links.Mention
-	if len(in.Mentions) > 0 {
+	// The shares saved things make, recorded once the message is sent.
+	var shares []*savedShareRecord
+	// Saved things shared (S1 part 3) apart: asked first before what is
+	// sensitive, each share recorded.
+	others := slices.DeleteFunc(slices.Clone(in.Mentions), func(m mentionRef) bool { return m.Kind == "saved" })
+	if len(others) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, in.Mentions)
+			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, others)
 			return err
 		}); err != nil {
 			s.fail(w, r, linkMessageErr(err))
 			return
 		}
+	}
+	if len(others) < len(in.Mentions) {
+		var shared []links.Mention
+		shared, shares, err = s.linkSavedMentions(r, link, in.Text, in.Mentions)
+		if err != nil {
+			if !shareConfirmFail(w, err) {
+				var se customerSendErr
+				if errors.As(err, &se) {
+					writeErr(w, se.code, se.msg)
+				} else {
+					s.fail(w, r, linkMessageErr(err))
+				}
+			}
+			return
+		}
+		ments = append(ments, shared...)
 	}
 	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
 	if errors.Is(err, links.ErrDuplicate) {
@@ -406,11 +427,58 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	for _, rec := range shares {
+		s.recordShare(r, rec)
+	}
 	out := linkMessageOut{Message: m}
 	if tools {
 		out.Also = s.sendAlso(r.Context(), p, link, in.Text, ments)
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// linkSavedMentions makes the cards of the saved things a message to a
+// linked business shares (saved objects S1, part 3): the business's own or
+// the sender's, each named in the words by its @name; the question, before
+// what is sensitive, names the other business.
+func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, []*savedShareRecord, error) {
+	p := principalFrom(r.Context())
+	person, err := personOf(r)
+	if err != nil {
+		return nil, nil, customerSendErr{http.StatusForbidden, "Saved things are shared by a person, not a key."}
+	}
+	var name string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := links.GetTx(r.Context(), tx, link)
+		name = l.Name
+		return err
+	}); err != nil {
+		return nil, nil, err
+	}
+	var out []links.Mention
+	var recs []*savedShareRecord
+	seen := map[uuid.UUID]bool{}
+	for _, ref := range refs {
+		if ref.Kind != "saved" {
+			continue
+		}
+		if ref.Saved == nil {
+			return nil, nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+		}
+		if seen[ref.Saved.ID] {
+			continue
+		}
+		seen[ref.Saved.ID] = true
+		sh := *ref.Saved
+		sh.namedIn = text // named in the words before anything is asked
+		c, rec, err := s.savedCardFor(r, person, p.TenantID, sh, name)
+		if err != nil {
+			return nil, nil, err
+		}
+		out = append(out, links.Mention{Kind: "saved", Name: c.Name, Saved: &c})
+		recs = append(recs, rec)
+	}
+	return out, recs, nil
 }
 
 // sendAlso sends a message to the other linked businesses it names, with

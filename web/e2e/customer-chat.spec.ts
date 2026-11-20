@@ -87,6 +87,12 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   const biz = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   const name = `Mama Kitchen ${letters()}`;
   await owner(biz, name);
+  // The business's saved text, dropped into a customer chat below (saved objects S1).
+  const savedText = await biz.request.post("/v1/saved", {
+    headers: H,
+    data: { kind: "text", name: "bank-details", title: "Our bank details", details: { body: "Pay to Mama Kitchen, Zenith Bank 1234567890" } },
+  });
+  expect(savedText.status(), await savedText.text()).toBe(201);
   const link = (await (await biz.request.get("/v1/customers/chat-link", { headers: H })).json()) as { code: string; url: string; words: string };
   expect(link.words).toBe(`Chat with ${name} on Taskiem: ${link.url}`);
 
@@ -134,6 +140,21 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await person.getByLabel(`Message ${name}`).press("Enter");
   await expect(person.getByTestId("person-message").filter({ hasText: "Is the jollof ready?" })).toBeVisible();
   await expect(person.getByTestId("person-message").filter({ hasText: "Is the jollof ready?" }).getByRole("img", { name: "Delivered" })).toBeVisible();
+  // Their own saved place by @name (saved objects S1): asked first (a
+  // phone for the rider), then shared with the business as a card.
+  const home = await person.request.post("/v1/me/saved", {
+    headers: H,
+    data: { kind: "place", name: "home", title: "Home", details: { line: "4 Allen Avenue", area: "Ikeja", phone: "+2348031120099" } },
+  });
+  expect(home.status(), await home.text()).toBe(201);
+  const box = person.getByLabel(`Message ${name}`);
+  await box.click();
+  await box.pressSequentially("@ho");
+  await person.getByTestId("mention-list").getByRole("button", { name: /home/ }).click();
+  await expect(person.getByRole("dialog").filter({ hasText: `Share Home's phone number and details with ${name}?` })).toBeVisible();
+  await person.getByTestId("confirm-ok").click();
+  await expect(box).toHaveValue("");
+  await expect(person.getByTestId("saved-card").filter({ hasText: "Home" })).toBeVisible();
 
   // The business: the thread is in the app, with no 24-hour window.
   const chats = (await (await biz.request.get("/v1/customer-chats", { headers: H })).json()) as { chats: { id: string; line: string; name: string }[] };
@@ -142,13 +163,34 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await biz.goto(`/chat?with=c-${thread?.id}`);
   const pane = biz.getByTestId("customer-pane");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Is the jollof ready?" })).toBeVisible();
+  // The customer's place, opened: its lines, and Save this for the business.
+  const homeCard = pane.getByTestId("saved-card").filter({ hasText: "Home" });
+  await homeCard.getByRole("button", { name: /Show details/ }).click();
+  await expect(homeCard.getByTestId("saved-card-line").first()).toContainText("4 Allen Avenue");
+  await expect(homeCard.getByTestId("saved-card-save")).toBeVisible();
   // They were typing a moment ago; then they are a customer in the app.
   await expect(pane.getByText("Customer in the app")).toBeVisible({ timeout: 20_000 });
   await expect(biz.getByTestId("in-the-app")).toBeVisible();
   await expect(pane.getByTestId("customer-note")).toHaveCount(0);
+  // Save as… on the customer's words: their text, to change before saving.
+  const asked = pane.getByTestId("customer-message").filter({ hasText: "Is the jollof ready?" });
+  await asked.hover();
+  await asked.locator(".bubble-chevron").click({ force: true });
+  await biz.getByTestId("chat-more").getByRole("button", { name: "Save as…", exact: true }).click();
+  await expect(biz.getByTestId("saved-thing-form").getByLabel("The text")).toHaveValue("Is the jollof ready?");
+  await biz.getByTestId("saved-thing-form").getByRole("button", { name: "Cancel" }).click();
   await pane.getByLabel("Reply to Tolu Bello").fill("Yes, come at 4");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Yes, come at 4" })).toBeVisible();
+  // A saved text by @name: its words go in the box, to change before sending.
+  const reply = pane.getByLabel("Reply to Tolu Bello");
+  await reply.fill("@bank");
+  const picks = pane.getByRole("list", { name: "Saved things" });
+  await expect(picks).toContainText("@bank-details");
+  await picks.getByRole("button", { name: /bank-details/ }).click();
+  await expect(reply).toHaveValue("Pay to Mama Kitchen, Zenith Bank 1234567890");
+  await reply.press("Enter");
+  await expect(pane.getByTestId("customer-message").filter({ hasText: "Pay to Mama Kitchen" })).toBeVisible();
   // A message asking for a transfer to an account: the person is warned.
   await pane.getByLabel("Reply to Tolu Bello").fill("Or send it to 0123456789 at GTBank");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
@@ -534,4 +576,82 @@ test("a link that no longer works, and a business not taking chats, pass axe in 
     await expect(page.getByText("Ikeja · Closed now")).toBeVisible();
     await check(page, "not taking chats", width);
   }
+});
+
+// Saved things in a person's chat with a business (saved objects S1): Save
+// as… on the business's words (an account read from them) and on its
+// Menu.pdf (kept as a file of their own); a saved photo picked with "@"
+// attached to the message as itself.
+test("a person's chat: Save as… on words and on a file, and a saved photo attached from @", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 800 });
+  const w = world();
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  const now = new Date().toISOString();
+  const logo = {
+    id: "f1", owner: "mine", name: "logo", title: "Our logo", kind: "file", hint: "Photo · 1 KB",
+    details: { file: "0192e2e0-0000-7000-8000-0000000000f1", file_name: "logo.png", file_type: "image/png", file_size: 900 },
+    check: { state: "none", account_name: null, via: null, at: null, problem: null }, to_change: true, created_at: now, updated_at: now,
+  };
+  const posted: unknown[] = [];
+  await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
+  await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+  await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
+  await page.route(/\/v1\/me\/(chats|conversations)(\/|$|\?)/, w.handle);
+  await page.route(/\/v1\/me\/saved(\?|$)/, (r) => {
+    if (r.request().method() === "POST") {
+      posted.push(r.request().postDataJSON());
+      return r.fulfill(json({ saved: logo }, 201));
+    }
+    return r.fulfill(json({ saved: [logo], limit: 500 }));
+  });
+  await page.route(/\/v1\/me\/saved-kinds(\?|$)/, (r) => r.fulfill(json({ kinds: [], starters: [], limit: 40, to_change: true })));
+  await page.route("**/v1/me/banks", (r) => r.fulfill(json({ banks: [{ code: "", name: "Guaranty Trust Bank" }], from: "" })));
+  await page.route("**/v1/me/saved/read", (r) =>
+    r.fulfill(json({ kind: "bank_account", title: "Ngozi", details: { bank_name: "Guaranty Trust Bank", account_number: "0123456789" } })),
+  );
+  await page.route("**/v1/me/saved/uploads", (r) => r.fulfill(json({ upload: { file: "0192e2e0-0000-7000-8000-0000000000f2", name: "Menu.pdf", type: "application/pdf", size: 120_000 } }, 201)));
+  await page.route("**/v1/me/saved/f1/file", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
+
+  await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [], next: null, waiting_count: 0 })));
+  await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
+  await page.goto("/you");
+  await page.getByTestId("person-chat").click();
+  await expect(page.getByTestId("person-message").filter({ hasText: "We have jollof" })).toBeVisible();
+  const menuOf = async (text: string, entry = "Save as…") => {
+    const bubble = page.getByTestId("person-message").filter({ hasText: text }).last();
+    await bubble.hover();
+    await bubble.locator(".bubble-chevron").click({ force: true });
+    await page.getByTestId("chat-more").getByRole("button", { name: entry, exact: true }).click();
+  };
+
+  // The business's words: an account read from them.
+  await menuOf("Or pay to 0123456789");
+  const form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-number-input")).toHaveValue("0123456789");
+  await expect(form.getByLabel("Title")).toHaveValue("Ngozi");
+  await form.getByRole("button", { name: "Cancel" }).click();
+
+  // Its menu: kept as a file of the person's own.
+  await menuOf("Menu", "Save the file as…");
+  const file = page.getByTestId("saved-file-form");
+  await expect(file.getByTestId("saved-file-pick")).toContainText("Menu.pdf · 117 KB");
+  await expect(file.getByLabel("Title")).toHaveValue("Menu");
+  await file.getByLabel("Name to call it up by").fill("menu");
+  await check(page, "saving a file from a chat", 390);
+  await file.getByTestId("saved-file-save").click();
+  await expect(file).toHaveCount(0);
+  expect(posted.at(-1)).toEqual({ name: "menu", title: "Menu", kind: "file", details: { note: "", file: "0192e2e0-0000-7000-8000-0000000000f2" } });
+
+  // A saved photo from "@": attached as itself, to send.
+  const box = page.getByLabel("Message Mama's Kitchen");
+  await box.click();
+  // "/log" finds it too (a word that names no document).
+  await box.pressSequentially("/log");
+  await expect(page.getByTestId("mention-list").getByRole("button", { name: /logo/ })).toBeVisible();
+  await box.fill("");
+  await box.pressSequentially("@log");
+  await page.getByTestId("mention-list").getByRole("button", { name: /logo/ }).click();
+  await expect(box).toHaveValue("");
+  await expect(page.getByText("logo.png")).toBeVisible();
 });

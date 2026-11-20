@@ -352,7 +352,7 @@ func TestSavedAddresses(t *testing.T) {
 	// none, and neither does the person's transaction once a door is open.
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_addresses`).Scan(&n); err != nil || n != 0 {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_objects WHERE person_id IS NOT NULL`).Scan(&n); err != nil || n != 0 {
 			return fmt.Errorf("the business read %d saved addresses (%w)", n, err)
 		}
 		return nil
@@ -364,7 +364,7 @@ func TestSavedAddresses(t *testing.T) {
 			return err
 		}
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_addresses`).Scan(&n); err != nil || n != 0 {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_objects WHERE person_id IS NOT NULL`).Scan(&n); err != nil || n != 0 {
 			return fmt.Errorf("saved addresses through the door: %d (%w)", n, err)
 		}
 		return nil
@@ -386,7 +386,7 @@ func TestSavedAddresses(t *testing.T) {
 	}
 	var addresses, kept, indexed int
 	var person *uuid.UUID
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM person_addresses WHERE person_id = $1),
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM saved_objects WHERE person_id = $1 AND kind = 'place'),
 		(SELECT count(*) FROM storefront_orders WHERE reference = $2), (SELECT person_id FROM storefront_orders WHERE reference = $2),
 		(SELECT count(*) FROM customer_phone_index i JOIN storefront_orders o ON o.id = i.order_id WHERE o.reference = $2)`, toluID, ref).
 		Scan(&addresses, &kept, &person, &indexed); err != nil {

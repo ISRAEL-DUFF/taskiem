@@ -82,6 +82,16 @@ test.beforeAll(async () => {
           banks: [
             { code: "058", name: "GTBank" },
             { code: "044", name: "Access Bank" },
+            // The bank's full name, as a saved account chosen by name
+            // before the wallet was open names it (saved.spec below).
+            { code: "000013", name: "Guaranty Trust Bank" },
+            // Enough banks that the Saved form offers a search.
+            { code: "000015", name: "Zenith Bank" },
+            { code: "000016", name: "First Bank of Nigeria" },
+            { code: "000003", name: "First City Monument Bank" },
+            { code: "000004", name: "United Bank for Africa" },
+            { code: "090267", name: "Kuda Microfinance Bank" },
+            { code: "000017", name: "Wema Bank" },
           ],
         });
       if (req.method === "POST" && url === "/v1/name-enquiry") {
@@ -236,4 +246,178 @@ test("a business with no payments account receives money with Taskiem and withdr
   await expect(page.getByTestId("onboarding-progress")).toBeVisible();
   await expect(page.getByTestId("receive-offer")).toHaveCount(0);
   expect(wallets).toBe(1);
+});
+
+// Saved accounts, S0 (docs/spec/saved-objects.md; build plan S0's "done
+// when"): an owner with no payments account saves a supplier's account as
+// @bayo, kept "Name not checked yet"; opens a Taskiem wallet from the
+// Saved page's step to connect; back on Saved, the bank's name is checked
+// through the wallet, and a new account shows the bank's name before it is
+// saved. The number is never on the page in full. It shares this file's
+// fake iswallet (one port).
+test("an owner saves @bayo, opens a Taskiem wallet, and the bank's name is checked", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Open saved accounts" }).click();
+  await expect(page).toHaveURL(/\/settings\/saved$/);
+  const connect = page.getByTestId("saved-connect");
+  await expect(connect).toContainText("Check names with the bank");
+  const saved = page.getByTestId("saved");
+  await expect(saved).toContainText("Nothing saved yet.");
+  await axeBoth(page, "/settings/saved (no payments account)");
+
+  // Saved with no payments account: kept, not checked yet, as the form says.
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a bank account" }).click();
+  let form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-form-connect")).toContainText("not checked until your business connects a payments account");
+  await form.getByLabel("Name to call it up by").fill("@Bayo");
+  await form.getByLabel("Title").fill("Bayo (rice)");
+  await form.getByTestId("saved-bank").selectOption({ label: "Guaranty Trust Bank" });
+  await form.getByLabel("Account number").fill("0123456789");
+  await form.getByRole("button", { name: "Save account" }).click();
+  let row = saved.getByTestId("saved-row").filter({ hasText: "Bayo (rice)" });
+  await expect(row).toContainText("@bayo · GTBank ••6789");
+  await expect(row.getByTestId("saved-check")).toHaveText("Name not checked yet");
+  await expect(page.locator("body")).not.toContainText("0123456789");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
+  // The step to connect leads to opening a Taskiem wallet.
+  await connect.getByRole("link", { name: "Open a Taskiem wallet" }).click();
+  await expect(page).toHaveURL(/\/settings\/payments$/);
+  const off = page.getByTestId("receive-money-off");
+  await off.getByLabel("Your business email").fill("ada@obi.test");
+  await off.getByLabel("The director's BVN").fill("22212345678");
+  await off.getByRole("button", { name: "Turn it on" }).click();
+  await expect(page.getByTestId("receive-hero")).toBeVisible();
+
+  // Back on Saved: no step to connect; @bayo is checked through the wallet.
+  await page.goto("/settings/saved");
+  await expect(saved).toContainText("Names are checked with the bank through your Taskiem wallet.");
+  await expect(page.getByTestId("saved-connect")).toHaveCount(0);
+  row = saved.getByTestId("saved-row").filter({ hasText: "Bayo (rice)" });
+  await expect(row.getByTestId("saved-check")).toHaveText("Bank's name: ADA OBI STORES");
+  await axeBoth(page, "/settings/saved (checked)");
+
+  // A new account shows the bank's name before it is saved.
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a bank account" }).click();
+  form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-form-connect")).toHaveCount(0);
+  await form.getByLabel("Name to call it up by").fill("landlord");
+  await form.getByLabel("Title").fill("Landlord");
+  // The wallet lists many banks: a search narrows them.
+  await form.getByTestId("saved-bank-search").fill("acc");
+  await expect(form.getByTestId("saved-bank").locator("option")).toHaveText(["Choose the bank", "Access Bank"]);
+  await form.getByTestId("saved-bank").selectOption({ label: "Access Bank" });
+  await form.getByLabel("Account number").fill("1111 111 111");
+  await expect(form.getByTestId("saved-bank-name")).toContainText("ADA OBI STORES");
+  await form.getByRole("button", { name: "Save account" }).click();
+  await expect(saved.getByTestId("saved-row").filter({ hasText: "Landlord" }).getByTestId("saved-check")).toHaveText("Bank's name: ADA OBI STORES");
+
+  // Changing the account asks for a passkey, which this owner has not added yet.
+  row = saved.getByTestId("saved-row").filter({ hasText: "Bayo (rice)" });
+  await row.getByRole("button", { name: "Change @bayo" }).click();
+  form = page.getByTestId("saved-form");
+  await expect(form.getByTestId("saved-bank")).toHaveValue("c:000013");
+  await form.getByLabel("Account number").fill("0123456780");
+  await expect(form).toContainText("Changing the account asks for your passkey.");
+  await form.getByRole("button", { name: "Save changes" }).click();
+  await expect(form).toContainText("Add a passkey first");
+  await form.getByRole("button", { name: "Cancel" }).click();
+  await expect(row).toContainText("GTBank ••6789");
+
+  // Other kinds (S1): a text, saved with no passkey; the kinds filter.
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a text" }).click();
+  const thing = page.getByTestId("saved-thing-form");
+  await thing.getByLabel("Name to call it up by").fill("bank-details");
+  await thing.getByLabel("Title").fill("Our bank details");
+  await thing.getByLabel("The text").fill("Pay to Ada Obi Stores\nGTBank 0123456789");
+  await thing.getByRole("button", { name: "Save" }).click();
+  await expect(saved.getByTestId("saved-row").filter({ hasText: "Our bank details" })).toContainText("@bank-details · 2 lines of text");
+  const kinds = saved.getByTestId("saved-kinds");
+  await kinds.getByRole("button", { name: "Texts" }).click();
+  await expect(saved.getByTestId("saved-row")).toHaveCount(1);
+  await kinds.getByRole("button", { name: "All" }).click();
+  await expect(saved.getByTestId("saved-row")).toHaveCount(3);
+  await axeBoth(page, "/settings/saved (kinds)");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+// Kinds the owner makes (saved objects S1, part 5): a Car from its
+// starter, a van saved as one with its chassis number kept sealed (never
+// on the page in full), the kinds filter with it, and the kind not
+// removed while the van is of it.
+test("an owner makes a Car kind from its starter and saves the van as one", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+  await page.goto("/settings/saved");
+  const saved = page.getByTestId("saved");
+  const made = page.getByTestId("saved-made-kinds").first();
+  await expect(made).toContainText("When none of the kinds above fits");
+
+  await made.getByTestId("kind-make").click();
+  const kindForm = page.getByTestId("kind-form");
+  await kindForm.getByRole("button", { name: "Car", exact: true }).click();
+  await expect(kindForm.getByTestId("kind-name")).toHaveValue("Car");
+  await expect(kindForm.getByTestId("kind-field")).toHaveCount(6);
+  await axeBoth(page, "making a kind");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await kindForm.getByTestId("kind-save").click();
+  await expect(made.getByTestId("kind-row")).toContainText("Car");
+  await expect(made.getByTestId("kind-row")).toContainText("6 fields · 0 saved");
+
+  await saved.getByRole("button", { name: "Save something" }).click();
+  await page.getByRole("button", { name: "Choose a car" }).click();
+  const form = page.getByTestId("saved-custom-form");
+  await form.getByLabel("Name to call it up by").fill("van");
+  await form.getByLabel("Title").fill("Delivery van");
+  await form.getByLabel("Plate number").fill("LND 123 XY");
+  await form.getByLabel("Insurance due").fill("2027-03-03");
+  await form.getByLabel("Chassis number").fill("JTDBR32E720123456");
+  await axeBoth(page, "saving a thing of a made-up kind");
+  await form.getByTestId("saved-custom-save").click();
+  const row = saved.getByTestId("saved-row").filter({ hasText: "Delivery van" });
+  await expect(row).toContainText("@van · LND 123 XY · 3 Mar 2027");
+  await expect(row.getByTestId("saved-values")).toContainText("Chassis number: ••3456");
+  await expect(page.locator("body")).not.toContainText("JTDBR32E720123456");
+  await expect(row.getByRole("button", { name: "Show hidden of @van" })).toBeVisible();
+
+  // Changing the van keeps the chassis number unless it is typed again.
+  await row.getByRole("button", { name: "Change @van" }).click();
+  await expect(form.getByLabel("Chassis number")).toHaveValue("");
+  await expect(form).toContainText("Kept as ••3456");
+  await form.getByLabel("Colour").fill("White");
+  await form.getByTestId("saved-custom-save").click();
+  await expect(row.getByTestId("saved-values")).toContainText("Colour: White");
+  await expect(row.getByTestId("saved-values")).toContainText("Chassis number: ••3456");
+
+  // Changing the kind: a field removed warns its values go with it; an
+  // account is always sensitive; a file is never sealed.
+  await made.getByRole("button", { name: "Change Car" }).click();
+  const change = page.getByTestId("kind-form");
+  await change.getByRole("button", { name: "Remove Colour" }).click();
+  await expect(change.getByTestId("kind-gone")).toContainText("Colour");
+  await change.getByTestId("kind-add-field").click();
+  const added = change.getByTestId("kind-field").last();
+  await added.getByLabel("What it is").selectOption("bank_account");
+  await expect(added.getByLabel("Sensitive")).toBeChecked();
+  await expect(added.getByLabel("Sensitive")).toBeDisabled();
+  await added.getByLabel("What it is").selectOption("file");
+  await expect(added.getByLabel("Sensitive")).toHaveCount(0);
+  await change.getByRole("button", { name: "Cancel" }).click();
+
+  // In use: not removed.
+  await made.getByRole("button", { name: "Remove Car" }).click();
+  await page.getByTestId("confirm-ok").click();
+  await expect(page.getByText("1 saved thing is of this kind")).toBeVisible();
+  await axeBoth(page, "/settings/saved (a made-up kind)");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

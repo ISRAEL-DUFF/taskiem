@@ -19,6 +19,7 @@ import 'attachments.dart';
 import 'bookings_page.dart' show orderStatus;
 import 'cards.dart' show CardButton, CardPill, CardProgress, CardViewRow, cardDecoration;
 import 'chats.dart' show ChatAvatar;
+import 'saved_card.dart' show SavedCardView;
 import 'thread.dart';
 import 'words.dart';
 
@@ -302,7 +303,10 @@ class DoorBubble extends StatelessWidget {
               children: [
                 ?name,
                 if (offer) const OfferMark(),
-                DoorCard(card: c, action: cardAction, onAction: onCard),
+                if (c.type == 'saved' && c.saved != null)
+                  SavedCardView(card: c.saved!, mine: mine, onSave: onCard)
+                else
+                  DoorCard(card: c, action: cardAction, onAction: onCard),
                 if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
                 Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
               ],

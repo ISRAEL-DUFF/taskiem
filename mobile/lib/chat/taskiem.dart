@@ -35,6 +35,7 @@ import 'live.dart';
 import 'explore.dart' show showExploreCard;
 import 'menu.dart';
 import 'ref_card.dart';
+import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
@@ -53,6 +54,8 @@ import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 import '../kit/mobile.dart' show TkRoute;
 import '../school/school_chasing.dart' show DebtorsPage;
 import '../school/school_clearance.dart' show ClearancePage;
@@ -511,7 +514,18 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
+    // Saved things by @name (saved objects S1): Taskiem reads any of them.
+    saved: SavedPicks(
+      auth: widget.data.chats.auth,
+      textsOnly: false,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    ),
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    onAttachSaved: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
 
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
@@ -647,7 +661,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     _text.addListener(_tags.typed);
     // "/" and a word as the whole message: the panel, filtered by it.
-    _text.addListener(() => _tools.typed(_tags.query?.mark == '/' ? '' : _text.text));
+    _text.addListener(() => _tools.typed(_tags.tagging ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
@@ -711,6 +725,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
                 ),
                 Composer(
+                  key: _composer,
                   tools: d.chats.chatTools ? _tools : null,
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
@@ -1194,7 +1209,11 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
               bubble: at,
               mine: mine,
               what: m.text.split('\n').first.length > 60 ? m.text.split('\n').first.substring(0, 60) : m.text.split('\n').first,
-              items: [MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied')],
+              items: [
+                MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied'),
+                // Save as… (saved objects S1, part 4): in a business, its saved things for whoever may manage them.
+                if (widget.auth != null) MenuItem('note', 'Save as…', () => saveFromWords(context, widget.auth!, m.text, business: true)),
+              ],
             )
           : null,
       child: BubbleFrame(

@@ -22,11 +22,10 @@ import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkModalChoices;
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField, showTkSheet;
+import '../kit/sheet.dart' show TkKitField, TkPickBox, showTkSheet;
 import '../theme/look.dart';
 import '../chat/words.dart' show CardTone;
 import '../kit/forms.dart' show TkSwitch;
-import '../kit/icon.dart';
 import '../kit/list.dart' show TkPill;
 import '../theme/theme.dart';
 import 'school_chasing.dart' show PromiseSheet, RemindSheet, PlanSheet;
@@ -285,7 +284,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
             TkKitField(
               label: 'Class',
               field: false,
-              child: _PickBox(
+              child: TkPickBox(
                 label: 'Class',
                 shown: className,
                 onTap: () async {
@@ -297,7 +296,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
             TkKitField(
               label: 'Date of birth (optional)',
               field: false,
-              child: _PickBox(
+              child: TkPickBox(
                 label: 'Date of birth',
                 shown: _born == null ? 'Not given' : dayWords(dayKey(_born!)),
                 onTap: () async {
@@ -331,40 +330,6 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
 }
 
 /// A field that opens a choice, with a chevron (as drawn).
-class _PickBox extends StatelessWidget {
-  const _PickBox({required this.label, required this.shown, required this.onTap});
-  final String label;
-  final String shown;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: label,
-      value: shown,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 46),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(14)),
-          child: Row(
-            children: [
-              Expanded(child: Text(shown, style: tkText(size: 15, color: t.text))),
-              TkIcon('chevron', size: 18, color: t.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // --- One student ---
 
 class StudentPage extends StatefulWidget {

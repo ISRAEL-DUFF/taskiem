@@ -127,6 +127,9 @@ tags:
 - name: You
   description: 'A person''s own side: their chats with businesses, and the tools of each through the customer door (taskiem-for-everyone §7, §8).'
   x-taskiem-guide: spec/taskiem-for-everyone
+- name: Saved
+  description: 'Saved things a person or a business keeps and calls up by @name (saved objects, S0: saved bank accounts), with the bank list and the name check payments share.'
+  x-taskiem-guide: spec/saved-objects
 - name: People
   description: 'Chats between people, one to one (people-chatting, stage 5a): kept by Taskiem, sealed under each person''s own key and readable by Taskiem''s servers (not end-to-end encrypted); requests, blocks, reports, shared business cards and share cards; and You''s one Chats list.'
   x-taskiem-guide: spec/people-chatting
@@ -7501,7 +7504,7 @@ paths:
                 mentions:
                   type: array
                   maxItems: 10
-                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}), one of your own services ({kind: service, service_id}), or an invoice, bill, order or purchase between you and this business ({kind, ref}: one of /link-chats/{link}/refs), named in the text as @Name (any but a business also #Name); one the text does not name is left out.'
+                  description: 'Each a business you are linked with ({kind: business, link}), an item of this conversation''s price list ({kind: item, item_id}), one of your own services ({kind: service, service_id}), or an invoice, bill, order or purchase between you and this business ({kind, ref}: one of /link-chats/{link}/refs), named in the text as @Name (any but a business also #Name); one the text does not name is left out. A saved thing ({kind: saved, saved}: the business''s or your own; saved objects S1) is shared as a card, its @name in the text (400 without it), after 409 `confirm_share` (its error the question) until `saved.confirm` when it holds what is sensitive.'
                   items:
                     type: object
                     additionalProperties: false
@@ -7509,7 +7512,7 @@ paths:
                     properties:
                       kind:
                         type: string
-                        enum: [business, item, service, invoice, bill, order, purchase]
+                        enum: [business, item, service, invoice, bill, order, purchase, saved]
                       link:
                         type: string
                         format: uuid
@@ -7520,6 +7523,8 @@ paths:
                       ref:
                         type: string
                         description: An invoice's or an order's id, from /link-chats/{link}/refs
+                      saved:
+                        $ref: '#/components/schemas/SavedShare'
       responses:
         '201':
           description: Sent
@@ -9814,8 +9819,8 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [order, pay, booking, product, invoice, delivery]
-                      description: 'invoice: one of this customer''s sent invoices (`invoice_id`); delivery: the rider''s progress on this customer''s order (`reference`), once a rider holds it.'
+                      enum: [order, pay, booking, product, invoice, delivery, saved]
+                      description: 'invoice: one of this customer''s sent invoices (`invoice_id`); delivery: the rider''s progress on this customer''s order (`reference`), once a rider holds it; saved: a saved thing of the business''s or the member''s own (`saved`), a card in the app and plain lines on WhatsApp, 409 `confirm_share` until `saved.confirm` when it holds what is sensitive.'
                     reference:
                       type: string
                     item_id:
@@ -9824,6 +9829,8 @@ paths:
                       type: string
                     invoice_id:
                       type: string
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
                 offer:
                   type: boolean
                 line:
@@ -20688,7 +20695,7 @@ paths:
       tags:
       - You
       summary: Write to the business
-      description: 'Kept in both copies in one transaction, through the door (the business''s sealed under the customer''s subject); the people who handle orders are told (the owner when nobody does). While the business is closed by its hours, it answers once a day in its own name (its closed reply). A repeat of client_id answers the first message (200). Messages per chat a minute are limited, lower in an account''s first week (429). 409 `you_blocked` after blocking the business; 403 `blocked` when it blocked the person.'
+      description: 'Kept in both copies in one transaction, through the door (the business''s sealed under the customer''s subject); the people who handle orders are told (the owner when nobody does). While the business is closed by its hours, it answers once a day in its own name (its closed reply). A repeat of client_id answers the first message (200). Messages per chat a minute are limited, lower in an account''s first week (429). 409 `you_blocked` after blocking the business; 403 `blocked` when it blocked the person. With `card` instead of `text`, one of the person''s own saved things (saved objects S1) is shared as a card, a copy as it is now, sealed in the business''s copy as the words are; 409 `confirm_share`, its error the question, until `saved.confirm` when it holds what is sensitive.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -20708,7 +20715,6 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [text]
               properties:
                 text:
                   type: string
@@ -20716,6 +20722,16 @@ paths:
                 client_id:
                   type: string
                   maxLength: 80
+                card:
+                  type: object
+                  additionalProperties: false
+                  required: [type, saved]
+                  properties:
+                    type:
+                      type: string
+                      enum: [saved]
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
       responses:
         '201':
           description: Sent
@@ -23220,7 +23236,7 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [product, business, order, delivery, split]
+                      enum: [product, business, order, delivery, split, saved]
                     business_id:
                       type: string
                       format: uuid
@@ -23242,6 +23258,8 @@ paths:
                           type: string
                         account_name:
                           type: string
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
                 mentions:
                   type: array
                   maxItems: 256
@@ -24978,7 +24996,7 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [product, business, order, delivery, split]
+                      enum: [product, business, order, delivery, split, saved]
                     business_id:
                       type: string
                       format: uuid
@@ -24994,6 +25012,8 @@ paths:
                       maxLength: 120
                     pay_to:
                       $ref: '#/components/schemas/PayoutAccount'
+                    saved:
+                      $ref: '#/components/schemas/SavedShare'
       responses:
         '201':
           description: Sent
@@ -25595,7 +25615,8 @@ paths:
       - You
       summary: Your saved addresses
       description: The person's saved addresses (§13), the default first. Kept on their side only; a business sees only
-        the address copied onto an order placed with one (`address_id`). Deleted with the account.
+        the address copied onto an order placed with one (`address_id`). Deleted with the account. Since saved objects S1
+        they are the person's own place objects (GET /v1/me/saved, kind place), the label their title.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -25700,6 +25721,564 @@ paths:
       responses:
         '204':
           description: Deleted
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/uploads:
+    post:
+      operationId: uploadMySavedFile
+      tags:
+      - Saved
+      summary: Upload a file to save
+      description: 'A photo or document (a form with `file`), checked as a chat''s file is: scanned (409 with no scanner), a photo''s metadata cleaned, a PDF without scripts; up to 25 MB. Saved by giving its id as a file object''s `details.file` or a made-up kind''s file field; one never saved goes after a day.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [upload]
+                properties:
+                  upload:
+                    $ref: '#/components/schemas/SavedFileMeta'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}/file:
+    get:
+      operationId: getMySavedFile
+      tags:
+      - Saved
+      summary: A saved file
+      description: 'A file object''s file, or with `field` a made-up kind''s file field''s.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved-kinds:
+    get:
+      operationId: listMySavedKinds
+      tags:
+      - Saved
+      summary: Kinds of your own
+      description: 'The kinds made (saved objects S1, part 5), by name, with the starters to copy and the limit (40).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The kinds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMySavedKind
+      tags:
+      - Saved
+      summary: Make a kind
+      description: 'A name and its fields (up to 30, each a label and a type; required, sensitive, never shared; a choice''s options). 409 `name_taken`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved-kinds/{id}:
+    put:
+      operationId: changeMySavedKind
+      tags:
+      - Saved
+      summary: Change a kind
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field removed has its values deleted; a field made sensitive moves its values at once. Showing what was kept hidden (a field with values made not sensitive or shareable, or a sensitive one given another type) needs a passkey: 403 `step_up` (operation saved.kind, target the kind), then again with `passkey`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeMySavedKind
+      tags:
+      - Saved
+      summary: Remove a kind
+      description: 'Only once nothing live is of it (409 `in_use`, how many).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved:
+    get:
+      operationId: listMySaved
+      tags:
+      - Saved
+      summary: Your saved things
+      description: 'The person''s own saved things (Mine), private to them: no business sees the list. Each account number masked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [bank_account, person, place, text, provider_account, file, custom]
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Part of a name or title.
+      responses:
+        '200':
+          description: The saved things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [saved, limit]
+                properties:
+                  saved:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+                  limit:
+                    type: integer
+                  can_check:
+                    type: boolean
+                    description: A payments connection can check the names not checked yet (POST /v1/saved/check).
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMySaved
+      tags:
+      - Saved
+      summary: Save an account of your own
+      description: 'As POST /v1/saved, on the person''s side, sealed under their own key. Not checked with a bank in S0: a person has no payments connection of their own. Up to 500.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/resolve:
+    get:
+      operationId: resolveMySaved
+      tags:
+      - Saved
+      summary: What one of your @names stands for
+      description: 'The person''s own saved thing of that name (`matches: []` when none).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The name, with or without @.
+      responses:
+        '200':
+          description: What the name stands for
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [name, matches]
+                properties:
+                  name:
+                    type: string
+                    description: The name as kept (lowercase, without @); empty when it is not a name.
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/step-up/options:
+    post:
+      operationId: mySavedStepUpOptions
+      tags:
+      - Saved
+      summary: A passkey challenge for one of your saved things
+      description: 'As POST /v1/saved/step-up/options, for the person''s own.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operation, target]
+              properties:
+                operation:
+                  type: string
+                  enum: [saved.change, saved.reveal, saved.kind]
+                target:
+                  type: string
+                  format: uuid
+                  description: The saved thing's id.
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}:
+    get:
+      operationId: getMySaved
+      tags:
+      - Saved
+      summary: One of your saved things
+      description: 'Masked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The saved thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: changeMySaved
+      tags:
+      - Saved
+      summary: Change one of your saved things
+      description: 'As PUT /v1/saved/{id}: changing the account needs a passkey; recorded in the person''s own log.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeMySaved
+      tags:
+      - Saved
+      summary: Remove one of your saved things
+      description: 'Archived, its name free again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/{id}/reveal:
+    post:
+      operationId: revealMySaved
+      tags:
+      - Saved
+      summary: See one of your account numbers in full
+      description: 'For a passkey asked for `saved.reveal` on it; in the person''s own log.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The account number in full
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                description: 'A bank account''s number; or a made-up kind''s sensitive values by field key (saved objects S1).'
+                properties:
+                  account_number:
+                    type: string
+                  values:
+                    type: object
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/saved/read:
+    post:
+      operationId: readSavedWords
+      tags:
+      - Saved
+      summary: Read a message for what can be saved
+      description: 'Save as… on a message (saved objects S1): an account number and its bank, a phone, an email, an address (its street, area and landmark) and a name written as one, with the kind they make: a bank account when there is an account number, a place when there is an address, a person when there is a phone or an email, else a text of the words. Nothing is kept, and nothing goes to the AI.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+      responses:
+        '200':
+          description: What the words hold
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [kind, title, details]
+                properties:
+                  kind:
+                    type: string
+                    enum: [bank_account, person, place, text]
+                  title:
+                    type: string
+                    description: 'A name the words give ("Account name: Ada Obi"), or empty.'
+                  details:
+                    type: object
+                    description: 'The kind''s fields (bank_name and account_number for an account; phone, email; line, area, landmark; body for a text).'
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/banks:
+    get:
+      operationId: listMyBanks
+      tags:
+      - Saved
+      summary: The banks by name
+      description: 'For a person''s own accounts: the banks by name alone (`from: ""`).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The banks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks, from]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                          description: The bank's code in this list; empty in the list by name alone.
+                        name:
+                          type: string
+                  from:
+                    type: string
+                    description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
         default:
           $ref: '#/components/responses/Error'
   /v1/me/delete/start:
@@ -33012,6 +33591,678 @@ paths:
                   at:
                     type: string
                     format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/uploads:
+    post:
+      operationId: uploadSavedFile
+      tags:
+      - Saved
+      summary: Upload a file to save
+      description: 'A photo or document (a form with `file`), checked as a chat''s file is: scanned (409 with no scanner), a photo''s metadata cleaned, a PDF without scripts; up to 25 MB. Saved by giving its id as a file object''s `details.file` or a made-up kind''s file field; one never saved goes after a day.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [upload]
+                properties:
+                  upload:
+                    $ref: '#/components/schemas/SavedFileMeta'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}/file:
+    get:
+      operationId: getSavedFile
+      tags:
+      - Saved
+      summary: A saved file
+      description: 'A file object''s file, or with `field` a made-up kind''s file field''s.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: field
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved-kinds:
+    get:
+      operationId: listSavedKinds
+      tags:
+      - Saved
+      summary: Kinds of the business's
+      description: 'The kinds made (saved objects S1, part 5), by name, with the starters to copy and the limit (40).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The kinds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSavedKind
+      tags:
+      - Saved
+      summary: Make a kind
+      description: 'A name and its fields (up to 30, each a label and a type; required, sensitive, never shared; a choice''s options). Needs saved.manage; in the audit chain. 409 `name_taken`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved-kinds/{id}:
+    put:
+      operationId: changeSavedKind
+      tags:
+      - Saved
+      summary: Change a kind
+      description: 'The kind as it is to be: fields kept by their key keep what objects had, new ones start empty; a field removed has its values deleted; a field made sensitive moves its values at once. Showing what was kept hidden (a field with values made not sensitive or shareable, or a sensitive one given another type) needs a passkey: 403 `step_up` (operation saved.kind, target the kind), then again with `passkey`, and is recorded. Needs saved.manage; in the audit chain.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedKindIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedKindResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeSavedKind
+      tags:
+      - Saved
+      summary: Remove a kind
+      description: 'Only once nothing live is of it (409 `in_use`, how many). Needs saved.manage; in the audit chain.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved:
+    get:
+      operationId: listSaved
+      tags:
+      - Saved
+      summary: The business's saved things
+      description: 'Everyone in the business sees its saved things, each account number masked (••6789), by title. `can_check` when a payments connection can check the names not checked yet.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: kind
+        in: query
+        schema:
+          type: string
+          enum: [bank_account, person, place, text, provider_account, file, custom]
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Part of a name or title.
+      responses:
+        '200':
+          description: The saved things
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [saved, limit]
+                properties:
+                  saved:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+                  limit:
+                    type: integer
+                  can_check:
+                    type: boolean
+                    description: A payments connection can check the names not checked yet (POST /v1/saved/check).
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addSaved
+      tags:
+      - Saved
+      summary: Save an account for the business
+      description: 'A saved bank account: a name to call it up by (@bayo), a title, its bank (from GET /v1/banks: `bank_code` and `code_from` with it) and its 10-digit number. Checked with the bank at once through the business''s payments connection when it has one: 400 when the bank has no such account; kept unchecked, with `check_problem`, when it could not be checked just now. With no connection it is kept unchecked ("Name not checked yet"). 409 `name_taken`, or past the limit (2,000).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/resolve:
+    get:
+      operationId: resolveSaved
+      tags:
+      - Saved
+      summary: What an @name stands for
+      description: 'The person''s own saved thing of that name and the business''s, the person''s first; both when both have it, for the person to choose ("Which @mum?"). None: `matches: []`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+        description: The name, with or without @.
+      responses:
+        '200':
+          description: What the name stands for
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [name, matches]
+                properties:
+                  name:
+                    type: string
+                    description: The name as kept (lowercase, without @); empty when it is not a name.
+                  matches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/provider:
+    get:
+      operationId: savedProvider
+      tags:
+      - Saved
+      summary: What names are checked through
+      description: 'The business''s payments connection names are checked through (the Taskiem wallet first). For an owner of a business with none, the step to connect one: open a Taskiem wallet, or connect an account with Paystack, Flutterwave, Moniepoint or Anchor. Others are told only what is connected.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: What names are checked through
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [owner]
+                properties:
+                  connected:
+                    description: The payments connection names are checked through; null when there is none.
+                    type: [object, 'null']
+                    additionalProperties: false
+                    required: [channel, name, wallet]
+                    properties:
+                      channel:
+                        type: string
+                      name:
+                        type: string
+                      wallet:
+                        type: boolean
+                        description: It is the business's Taskiem wallet.
+                  owner:
+                    type: boolean
+                  wallet:
+                    type: object
+                    additionalProperties: false
+                    required: [available, plan]
+                    description: Open a Taskiem wallet (POST /v1/settings/receive-money); for an owner of a business with no connection.
+                    properties:
+                      available:
+                        type: boolean
+                      plan:
+                        type: boolean
+                      plan_note:
+                        type: string
+                  providers:
+                    type: array
+                    description: '"I already have an account with…": connected under Connections.'
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/step-up/options:
+    post:
+      operationId: savedStepUpOptions
+      tags:
+      - Saved
+      summary: A passkey challenge for one saved thing
+      description: 'WebAuthn assertion options for the person''s passkeys, good only for one operation on one saved thing: `saved.change` (its account) or `saved.reveal` (its number in full). 409 `no_passkey` without one; 403 without saved.manage.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [operation, target]
+              properties:
+                operation:
+                  type: string
+                  enum: [saved.change, saved.reveal, saved.kind]
+                target:
+                  type: string
+                  format: uuid
+                  description: The saved thing's id.
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/check:
+    post:
+      operationId: checkAllSaved
+      tags:
+      - Saved
+      summary: Check the names not checked yet
+      description: 'Up to 25 of the business''s accounts not checked yet, checked now through its payments connection; an account the bank does not know stays unchecked, in `problems`. 409 `no_provider` without a connection.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      responses:
+        '200':
+          description: Checked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [checked, unchecked, problems, via]
+                properties:
+                  checked:
+                    type: integer
+                  unchecked:
+                    type: integer
+                    description: How many are left not checked.
+                  problems:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, problem]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        problem:
+                          type: string
+                  via:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}:
+    get:
+      operationId: getSaved
+      tags:
+      - Saved
+      summary: One saved thing
+      description: 'Masked, as the list shows it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The saved thing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObject'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: changeSaved
+      tags:
+      - Saved
+      summary: Change a saved thing
+      description: 'What is given is changed. Changing the account itself (its bank or number) needs `passkey`, for a challenge asked for `saved.change` on it (403 `step_up` otherwise), checks the name again, and is in the audit with the account before and after, masked; its title, name and note do not.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedObjectResult'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeSaved
+      tags:
+      - Saved
+      summary: Remove a saved thing
+      description: 'It is archived and its name is free again; what was done with it stays in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/saved/{id}/reveal:
+    post:
+      operationId: revealSaved
+      tags:
+      - Saved
+      summary: See an account number in full
+      description: 'For `passkey`, a challenge asked for `saved.reveal` on it (403 `step_up` otherwise); in the audit.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: The account number in full
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                description: 'A bank account''s number; or a made-up kind''s sensitive values by field key (saved objects S1).'
+                properties:
+                  account_number:
+                    type: string
+                  values:
+                    type: object
+                    additionalProperties:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/banks:
+    get:
+      operationId: listBanks
+      tags:
+      - Saved
+      summary: The banks to choose an account's bank from
+      description: 'The business''s payments connection''s own list, each bank with its code (`from`: the connection); without a connection, or when it does not answer, the banks by name alone (`from: ""`), found by name in a connection''s list when the account is checked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: saved.manage
+      responses:
+        '200':
+          description: The banks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks, from]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                          description: The bank's code in this list; empty in the list by name alone.
+                        name:
+                          type: string
+                  from:
+                    type: string
+                    description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/name-check:
+    post:
+      operationId: nameCheck
+      tags:
+      - Saved
+      summary: The bank's name for an account
+      description: 'Through the business''s payments connection, before an account is saved or paid. 409 `no_provider` without one; 400 when the bank has no such account; 502 when it could not check just now.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedObjectIn'
+      responses:
+        '200':
+          description: The bank's name for the account
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [account_name, via]
+                properties:
+                  account_name:
+                    type: string
+                  via:
+                    type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/receive-money/banks:
@@ -43201,9 +44452,11 @@ components:
       properties:
         kind:
           type: string
-          enum: [business, item, service, invoice, bill, order, purchase]
+          enum: [business, item, service, invoice, bill, order, purchase, saved]
         name:
           type: string
+        saved:
+          $ref: '#/components/schemas/SavedCard'
         link:
           type: string
           format: uuid
@@ -43886,7 +45139,9 @@ components:
       properties:
         type:
           type: string
-          enum: [order, pay, booking, product, invoice, delivery]
+          enum: [order, pay, booking, product, invoice, delivery, saved]
+        saved:
+          $ref: '#/components/schemas/SavedCard'
         reference:
           type: string
         invoice_id:
@@ -44769,9 +46024,11 @@ components:
       properties:
         type:
           type: string
-          enum: [product, business, order, delivery, split, basket]
+          enum: [product, business, order, delivery, split, basket, saved]
         title:
           type: string
+        saved:
+          $ref: '#/components/schemas/SavedCard'
         business_id:
           type: string
           format: uuid
@@ -45355,6 +46612,348 @@ components:
         offers:
           type: boolean
           description: Offers from businesses they said yes to.
+    SavedObject:
+      type: object
+      additionalProperties: false
+      description: A saved thing (saved objects S0), as its owner's people see it. A bank account's number is only ever masked here.
+      required: [id, owner, name, title, kind, hint, details, check, to_change, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          type: string
+          enum: [mine, business]
+        name:
+          type: string
+          description: What it is called up by after @, lowercase.
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [bank_account, person, place, text, provider_account, file, custom]
+          description: custom is one of the owner's own kinds (kind_id).
+        share_sensitive:
+          type: boolean
+          description: Sharing it in a chat shares what is sensitive (an account number, a phone, an email), so the sender is asked first.
+        kind_id:
+          type: string
+          format: uuid
+        kind_name:
+          type: string
+          description: A made-up kind's name ("Car").
+        values:
+          type: object
+          description: A made-up kind's values by field key; each sensitive one masked (••3456), in full only by reveal.
+          additionalProperties:
+            type: string
+        hint:
+          type: string
+          description: What a list shows ("GTBank ••6789").
+        details:
+          description: The kind's fields that are not sensitive. A bank account's (bank_name, bank_code, code_from, account_number masked); a person's (phone, email, address, birthday); a place's (line, area, landmark, phone); a text's (body); an account with a provider's (type, provider, number, name_on_it); and every kind's note.
+          type: object
+          additionalProperties: false
+          properties:
+            bank_name:
+              type: string
+            bank_code:
+              type: string
+            code_from:
+              type: string
+            note:
+              type: string
+            account_number:
+              type: string
+              description: Masked (••6789).
+            phone:
+              type: string
+            email:
+              type: string
+            address:
+              type: string
+            birthday:
+              type: string
+              format: date
+            line:
+              type: string
+            area:
+              type: string
+            landmark:
+              type: string
+            body:
+              type: string
+            type:
+              type: string
+              enum: [electricity, tv, phone, internet, water, school, other]
+            provider:
+              type: string
+            number:
+              type: string
+            name_on_it:
+              type: string
+            file:
+              type: string
+              format: uuid
+              description: A file's (GET …/saved/{id}/file opens it).
+            file_name:
+              type: string
+            file_type:
+              type: string
+            file_size:
+              type: integer
+        files:
+          type: object
+          description: A made-up kind's file fields, each its file's name, type and size (GET …/saved/{id}/file?field= opens it).
+          additionalProperties:
+            $ref: '#/components/schemas/SavedFileMeta'
+        check:
+          type: object
+          additionalProperties: false
+          required: [state, account_name, via, at, problem]
+          properties:
+            state:
+              type: string
+              enum: [checked, unchecked, none]
+              description: A bank account's name check; none for every other kind.
+            problem:
+              type: [string, 'null']
+              description: Why it will not be checked until the account changes (the bank has no such account; the payments account does not list its bank by that name). Null while checked or only waiting.
+            account_name:
+              type: [string, 'null']
+              description: The bank's name for the account.
+            via:
+              type: [string, 'null']
+              description: The payments connection that gave it ("iswallet/taskiem").
+            at:
+              type: [string, 'null']
+              format: date-time
+        to_change:
+          type: boolean
+          description: The person may change or remove it.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SavedFileMeta:
+      type: object
+      additionalProperties: false
+      required: [file, name, type, size]
+      description: A saved file as lists name it.
+      properties:
+        file:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        size:
+          type: integer
+    SavedKindField:
+      type: object
+      additionalProperties: false
+      required: [label, type]
+      description: One field of a made-up kind. Its key is made from its label once and kept; never_share makes it sensitive too.
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+          maxLength: 60
+        type:
+          type: string
+          enum: [text, number, money, date, phone, email, choice, place, bank_account, file]
+          description: A place is an address in one line; a bank account its bank and 10-digit number (always sensitive); a file the id of an upload (POST …/saved/uploads).
+        required:
+          type: boolean
+        sensitive:
+          type: boolean
+          description: Sealed, masked in lists, shown in full only on a fresh unlock, asked before sharing.
+        never_share:
+          type: boolean
+          description: Kept out of every card.
+        options:
+          type: array
+          description: A choice's options, 2 to 30.
+          items:
+            type: string
+    SavedKind:
+      type: object
+      additionalProperties: false
+      required: [id, name, fields, count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedKindField'
+        count:
+          type: integer
+          description: How many live saved things are of it.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SavedKindIn:
+      type: object
+      additionalProperties: false
+      required: [name, fields]
+      properties:
+        name:
+          type: string
+          maxLength: 40
+        fields:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/SavedKindField'
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
+          description: Confirms a change that shows what was kept hidden (a field with values made not sensitive, made shareable, or a sensitive one given another type); asked for with 403 step_up, operation saved.kind.
+    SavedKindList:
+      type: object
+      additionalProperties: false
+      required: [kinds, starters, limit, to_change]
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: '#/components/schemas/SavedKind'
+        starters:
+          type: array
+          description: Kinds to start from (a car, a generator, a pet, a medical card).
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, fields]
+            properties:
+              name:
+                type: string
+              fields:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedKindField'
+        limit:
+          type: integer
+        to_change:
+          type: boolean
+          description: The person may add, change and remove kinds.
+    SavedKindResult:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          $ref: '#/components/schemas/SavedKind'
+    SavedShare:
+      type: object
+      additionalProperties: false
+      required: [id, owner]
+      description: 'A saved thing a message shares (saved objects S1): the sender''s own (mine) or their business''s; confirm says yes to sharing what is sensitive in it (an account number, a phone, an email), asked first by a 409 `confirm_share` whose error is the question.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        owner:
+          type: string
+          enum: [mine, business]
+        confirm:
+          type: boolean
+    SavedCard:
+      type: object
+      additionalProperties: false
+      required: [kind, title, name, lines, details, sensitive]
+      description: A saved thing as shared in a chat, a copy of it as it was when sent (never a link); details are its fields for Save this, an account number in full; a made-up kind's are its lines as a text's body.
+      properties:
+        kind:
+          type: string
+          enum: [bank_account, person, place, text, provider_account, file, custom]
+        kind_name:
+          type: string
+          description: A made-up kind's name ("Car").
+        title:
+          type: string
+        name:
+          type: string
+          description: The sender's @name for it.
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [label, value]
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+              sensitive:
+                type: boolean
+                description: The line holds what is sensitive (an account number, a phone, an email); its sender sees it masked.
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        sensitive:
+          type: boolean
+    SavedObjectResult:
+      type: object
+      additionalProperties: false
+      required: [saved]
+      properties:
+        saved:
+          $ref: '#/components/schemas/SavedObject'
+        check_problem:
+          type: string
+          description: Why the name could not be checked just now; it stays unchecked.
+    SavedObjectIn:
+      type: object
+      additionalProperties: false
+      description: A saved thing as its owner writes it; on a change, what is left out stays as it was. A bank account by its own fields, every other kind by details.
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [bank_account, person, place, text, provider_account, file, custom]
+        kind_id:
+          type: string
+          format: uuid
+          description: Which of the owner's kinds, for kind custom.
+        values:
+          type: object
+          description: A made-up kind's values by field key; on a change, those given replace those kept, and null removes one.
+          additionalProperties:
+            type: [string, 'null']
+        bank_name:
+          type: string
+        bank_code:
+          type: string
+        code_from:
+          type: string
+        account_number:
+          type: string
+        note:
+          type: string
+        details:
+          type: object
+          description: 'The fields of a kind other than the bank account (see SavedObject.details); on a change, those given replace those kept, and null removes one.'
+          additionalProperties:
+            type: [string, 'null']
+        passkey:
+          $ref: '#/components/schemas/PasskeyCredential'
     SavedAddress:
       type: object
       additionalProperties: false
@@ -48427,6 +50026,9 @@ components:
             commonly written before subject ids were canonical (`0803 123 4567` beside `+2348031234567`).
           items:
             type: string
+        saved:
+          type: integer
+          description: By a phone or an email, how many of the business's saved things held it (a person, a place, a field of its own kind) and were removed with what they held.
       additionalProperties: false
     BillingInterval:
       type: string
@@ -48764,6 +50366,9 @@ components:
         link_messages_daily:
           type: integer
           description: Messages to linked businesses per UTC day (0 no limit).
+        max_saved_objects:
+          type: integer
+          description: Saved things a business keeps (2,000 by default; 0 no limit).
       additionalProperties: false
     Usage:
       type: object

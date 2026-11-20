@@ -1744,6 +1744,156 @@
       "reviewed": true,
       "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
     },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": true,
+      "context": "A saved bank account's bank and its account number, masked"
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": true,
+      "context": "The name the bank gave for a saved account"
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": true,
+      "context": "Labels the business's saved thing when two share a name"
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": true,
+      "context": "A saved thing asked for by its name: its name and title, before its details"
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": true,
+      "context": "A saved bank account whose name has not been checked"
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": true,
+      "context": "Before two saved things of one name, the person's own and their business's"
+    },
+    "button.keep_mine": {
+      "text": "Keep it to myself",
+      "reviewed": true,
+      "context": "A button: save what was said in words as the person's own saved thing, not the business's (at most 20 characters)"
+    },
+    "button.save": {
+      "text": "Save",
+      "reviewed": true,
+      "context": "A button: save what was said in words as a saved thing"
+    },
+    "wa.saved.need_bank": {
+      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "reviewed": true,
+      "context": "Saving an account in words named no bank"
+    },
+    "wa.saved.own_app": {
+      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "reviewed": true,
+      "context": "On a business's own WhatsApp number, a person's own saved things are not saved or looked up; {org} is the business"
+    },
+    "wa.saved.share_ask": {
+      "text": "{question}",
+      "reviewed": true,
+      "context": "Sharing a saved thing from the chat: the question asked first (\"Share Our account's account details with Ada's Kitchen?\"); Share and Cancel follow"
+    },
+    "wa.saved.share_plain": {
+      "text": "Share @{name} with {to}?",
+      "reviewed": true,
+      "context": "Sharing a saved thing with nothing sensitive in it: asked first; Share and Cancel follow"
+    },
+    "wa.saved.share_which": {
+      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: the name given fits more than one business or customer; their names follow"
+    },
+    "wa.saved.share_nobody": {
+      "text": "No linked business or customer is called {to}.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: no one by the name given"
+    },
+    "wa.saved.share_none": {
+      "text": "You have nothing saved as @{name}.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: no saved thing by that name"
+    },
+    "wa.saved.shared": {
+      "text": "Shared @{name} with {to}.",
+      "reviewed": true,
+      "context": "A saved thing was shared from the chat"
+    },
+    "wa.saved.share_left": {
+      "text": "Not shared.",
+      "reviewed": true,
+      "context": "The person said no to sharing a saved thing"
+    },
+    "wa.saved.share_reminder": {
+      "text": "Share @{name}? Tap Share or Cancel.",
+      "reviewed": true,
+      "context": "Sharing a saved thing: the answer was neither yes nor no"
+    },
+    "wa.saved.share_not": {
+      "text": "Not shared: {reason}",
+      "reviewed": true,
+      "context": "A saved thing could not be shared from the chat; the reason follows"
+    },
+    "wa.saved.save_quoted_none": {
+      "text": "Reply to a message from a linked business to save it.",
+      "reviewed": true,
+      "context": "Save this as @name sent without quoting a message Taskiem can read"
+    },
+    "button.share": {
+      "text": "Share",
+      "reviewed": true,
+      "context": "A button: share the saved thing (at most 20 characters)"
+    },
+    "wa.saved.not_saved": {
+      "text": "Not saved: {reason}",
+      "reviewed": true,
+      "context": "A saved thing said in words could not be saved; the reason follows"
+    },
+    "wa.saved.save_ask": {
+      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "reviewed": true,
+      "context": "Saving in words: what was understood, then where it will be kept; Save, Keep it to myself and Cancel follow"
+    },
+    "wa.saved.save_left": {
+      "text": "Not saved.",
+      "reviewed": true,
+      "context": "The person said no to saving what they said in words"
+    },
+    "wa.saved.save_reminder": {
+      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "reviewed": true,
+      "context": "A reply to the save question that was neither Save nor Cancel"
+    },
+    "wa.saved.saved": {
+      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "reviewed": true,
+      "context": "A thing said in words was saved"
+    },
+    "wa.saved.taken": {
+      "text": "You already have something called @{name}. Choose another name.",
+      "reviewed": true,
+      "context": "Saving in words used a name already taken"
+    },
+    "wa.saved.where_business": {
+      "text": "{org}'s saved things",
+      "reviewed": true,
+      "context": "Where a saved thing goes: the business's, which its team can use"
+    },
+    "wa.saved.where_mine": {
+      "text": "your own saved things, which only you see",
+      "reviewed": true,
+      "context": "Where a saved thing goes: the person's own"
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": true,
+      "context": "Labels the person's own saved thing when two share a name"
+    },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
       "reviewed": true,

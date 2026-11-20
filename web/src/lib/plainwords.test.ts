@@ -37,6 +37,8 @@ export const GLOSSARY: RegExp[] = [
 /** The owner's path: the pages of the gate's five tasks. */
 const OWNER_FILES = [
   "pages/Start.tsx",
+  "pages/Saved.tsx",
+  "lib/saved.ts",
   "pages/Storefront.tsx",
   "pages/StorefrontForms.tsx",
   "pages/StorefrontFronts.tsx",
