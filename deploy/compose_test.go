@@ -68,7 +68,9 @@ func mebibytes(t *testing.T, v string) int {
 // picks its own victim: ClamAV's signatures alone take gigabytes, and the
 // victim could be OpenBao or Taskiem. Every service has a memory and a
 // process limit, the same as the chart's where the chart has one, and
-// ClamAV is the one to go first.
+// ClamAV is the one to go first. Each limit can be changed in the server's
+// .env (<SERVICE>_MEM_LIMIT), which updates keep, so a server with room
+// (one shared with Xenibase has 32 GB) is not held to the defaults.
 func TestVMComposeCapsEveryService(t *testing.T) {
 	b, err := os.ReadFile("vm/docker-compose.yml")
 	if err != nil {
@@ -90,7 +92,18 @@ func TestVMComposeCapsEveryService(t *testing.T) {
 			t.Errorf("%s: mem_limit %q, pids_limit %d: both must be set", name, s.MemLimit, s.PidsLimit)
 			continue
 		}
-		total += mebibytes(t, s.MemLimit)
+		want := strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "_MEM_LIMIT"
+		m := regexp.MustCompile(`^\$\{([A-Z_]+):-([^}]+)\}$`).FindStringSubmatch(s.MemLimit)
+		if m == nil || m[1] != want {
+			t.Errorf("%s: mem_limit %q: want ${%s:-<default>}, so the server's .env can change it", name, s.MemLimit, want)
+			continue
+		}
+		f.Services[name] = struct {
+			MemLimit  string `json:"mem_limit"`
+			PidsLimit int    `json:"pids_limit"`
+			OOMScore  int    `json:"oom_score_adj"`
+		}{m[2], s.PidsLimit, s.OOMScore}
+		total += mebibytes(t, m[2])
 	}
 	v, err := os.ReadFile("helm/taskiem/values.yaml")
 	if err != nil {
