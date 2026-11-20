@@ -43,13 +43,19 @@ CREATE TABLE saved_objects (
   checked_name text CHECK (checked_name IS NULL OR length(checked_name) <= 200),
   checked_via  text,
   checked_at   timestamptz,
+  -- Why the name could not be checked, when it will not be until the
+  -- account changes (the connection does not list the bank by that name;
+  -- the bank has no such account): shown on the account, which is not
+  -- asked about again. NULL when it is checked or only waiting.
+  check_problem text CHECK (check_problem IS NULL OR length(check_problem) <= 300),
   created_by   uuid,
   updated_by   uuid,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   archived_at  timestamptz,
   CHECK ((person_id IS NULL) <> (tenant_id IS NULL)),
-  CHECK ((check_state = 'checked') = (checked_name IS NOT NULL AND checked_at IS NOT NULL))
+  CHECK ((check_state = 'checked') = (checked_name IS NOT NULL AND checked_at IS NOT NULL)),
+  CHECK (check_problem IS NULL OR check_state = 'unchecked')
 );
 CREATE UNIQUE INDEX saved_objects_person_name ON saved_objects (person_id, name) WHERE person_id IS NOT NULL AND archived_at IS NULL;
 CREATE UNIQUE INDEX saved_objects_tenant_name ON saved_objects (tenant_id, name) WHERE tenant_id IS NOT NULL AND archived_at IS NULL;

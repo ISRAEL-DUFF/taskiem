@@ -118,30 +118,35 @@ type savedCheckView struct {
 	AccountName *string    `json:"account_name"`
 	Via         *string    `json:"via"`
 	At          *time.Time `json:"at"`
+	// Problem: why it will not be checked until the account changes (the
+	// bank has no such account; the connection does not list the bank by
+	// that name). Null while it is checked, or only waiting.
+	Problem *string `json:"problem"`
 }
 
 // savedRow is a row of saved_objects.
 type savedRow struct {
-	ID          uuid.UUID
-	Name        string
-	Title       string
-	Kind        string
-	Details     map[string]any
-	Sealed      map[string]any
-	Hint        string
-	CheckState  string
-	CheckedName *string
-	CheckedVia  *string
-	CheckedAt   *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID           uuid.UUID
+	Name         string
+	Title        string
+	Kind         string
+	Details      map[string]any
+	Sealed       map[string]any
+	Hint         string
+	CheckState   string
+	CheckedName  *string
+	CheckedVia   *string
+	CheckedAt    *time.Time
+	CheckProblem *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
-const savedCols = `id, name, title, kind, details, sealed, hint, check_state, checked_name, checked_via, checked_at, created_at, updated_at`
+const savedCols = `id, name, title, kind, details, sealed, hint, check_state, checked_name, checked_via, checked_at, check_problem, created_at, updated_at`
 
 func scanSaved(r pgx.Row) (savedRow, error) {
 	var o savedRow
-	err := r.Scan(&o.ID, &o.Name, &o.Title, &o.Kind, &o.Details, &o.Sealed, &o.Hint, &o.CheckState, &o.CheckedName, &o.CheckedVia, &o.CheckedAt, &o.CreatedAt, &o.UpdatedAt)
+	err := r.Scan(&o.ID, &o.Name, &o.Title, &o.Kind, &o.Details, &o.Sealed, &o.Hint, &o.CheckState, &o.CheckedName, &o.CheckedVia, &o.CheckedAt, &o.CheckProblem, &o.CreatedAt, &o.UpdatedAt)
 	return o, err
 }
 
@@ -164,7 +169,7 @@ func (o savedRow) view(owner savedOwner, toChange bool) savedView {
 		d["account_number"] = "••" + last4
 	}
 	return savedView{ID: o.ID, Owner: owner.label(), Name: o.Name, Title: o.Title, Kind: o.Kind, Hint: o.Hint, Details: d,
-		Check:    savedCheckView{State: o.CheckState, AccountName: o.CheckedName, Via: o.CheckedVia, At: o.CheckedAt},
+		Check:    savedCheckView{State: o.CheckState, AccountName: o.CheckedName, Via: o.CheckedVia, At: o.CheckedAt, Problem: o.CheckProblem},
 		ToChange: toChange, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
 }
 
@@ -236,7 +241,8 @@ func (s *Server) savedFail(w http.ResponseWriter, r *http.Request, err error) {
 
 // listSaved is GET /v1/saved and /v1/me/saved (?kind=, ?q=): the owner's
 // objects by title. can_check: a payments connection is there to check
-// the names not checked yet (POST /v1/saved/check).
+// names not checked yet (POST /v1/saved/check), other than those with a
+// lasting problem.
 func (s *Server) listSaved(w http.ResponseWriter, r *http.Request, o savedOwner) {
 	ctx := r.Context()
 	kind, q := r.URL.Query().Get("kind"), strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
@@ -263,7 +269,8 @@ func (s *Server) listSaved(w http.ResponseWriter, r *http.Request, o savedOwner)
 		out = make([]savedView, 0, len(list))
 		for _, x := range list {
 			out = append(out, x.view(o, toChange))
-			if x.Kind == saved.KindBankAccount && x.CheckState == saved.Unchecked {
+			// Those with a lasting problem wait for a change, not a check.
+			if x.Kind == saved.KindBankAccount && x.CheckState == saved.Unchecked && x.CheckProblem == nil {
 				unchecked++
 			}
 		}
@@ -389,9 +396,8 @@ type savedIn struct {
 	Passkey *credentialJSON `json:"passkey,omitempty"`
 }
 
-// account is the bank account in, over what it was (was), and whether
-// the account itself (bank or number) changed.
-func (in savedIn) account(was saved.BankAccount) (saved.BankAccount, bool, error) {
+// account is the bank account in, over what it was (was).
+func (in savedIn) account(was saved.BankAccount) (saved.BankAccount, error) {
 	b := was
 	if in.BankName != nil {
 		b.BankName = *in.BankName
@@ -410,14 +416,18 @@ func (in savedIn) account(was saved.BankAccount) (saved.BankAccount, bool, error
 	if in.Note != nil {
 		b.Note = *in.Note
 	}
-	b, err := b.Clean()
-	if err != nil {
-		return b, false, err
-	}
-	// Any change to where money would go is a change of the account: its
-	// number, its bank, or the bank's code (a code is a bank).
-	changed := b.AccountNumber != was.AccountNumber || b.BankName != was.BankName || b.BankCode != was.BankCode || b.CodeFrom != was.CodeFrom
-	return b, changed, nil
+	return b.Clean()
+}
+
+// bankGiven says whether the request names a bank (its name or its code).
+func (in savedIn) bankGiven() bool {
+	return in.BankName != nil || in.BankCode != nil || in.CodeFrom != nil
+}
+
+// accountMoved says whether b sends money elsewhere than was: another
+// number, another bank, or another bank code (a code is a bank).
+func accountMoved(was, b saved.BankAccount) bool {
+	return b.AccountNumber != was.AccountNumber || b.BankName != was.BankName || b.BankCode != was.BankCode || b.CodeFrom != was.CodeFrom
 }
 
 // addSaved is POST /v1/saved and /v1/me/saved {name, title, kind:
@@ -454,15 +464,24 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 		s.savedFail(w, r, err)
 		return
 	}
-	acct, _, err := in.account(saved.BankAccount{})
+	acct, err := in.account(saved.BankAccount{})
 	if err != nil {
 		s.savedFail(w, r, err)
 		return
 	}
-	// The name check first, outside the transaction: a business's account
-	// the bank does not know is never saved.
+	if acct, err = s.settleBank(ctx, o, acct); err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	// A name taken or the limit reached is told before the bank is asked.
+	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error { return savedRoomTx(ctx, tx, o, name) }); err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	// The name check, outside the transaction: a business's account the
+	// bank does not know is never saved.
 	var check *savedCheckResult
-	var problem string
+	var problem savedProblem
 	if !o.mine() {
 		check, problem, err = s.checkSavedAccount(ctx, o.tenant, acct)
 		if err != nil {
@@ -476,13 +495,8 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 		if err := lockSavedTx(ctx, tx, o); err != nil {
 			return err
 		}
-		where, owner := ownerWhere(o)
-		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM saved_objects WHERE `+where, owner).Scan(&n); err != nil {
+		if err := savedRoomTx(ctx, tx, o, name); err != nil {
 			return err
-		}
-		if n >= savedLimit(o) {
-			return customerSendErr{http.StatusConflict, fmt.Sprintf("You can keep up to %d saved things. Remove one you no longer use first.", savedLimit(o))}
 		}
 		sealed, err := s.sealSaved(ctx, tx, o, id, acct.AccountNumber)
 		if err != nil {
@@ -491,9 +505,9 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 		person, tenant := nullable(o.person), nullable(o.tenant)
 		state, cname, cvia, cat := checkCols(check)
 		if x, err = scanSaved(tx.QueryRow(ctx, `INSERT INTO saved_objects (id, person_id, tenant_id, name, title, kind, details, sealed, hint,
-				check_state, checked_name, checked_via, checked_at, created_by, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $14) RETURNING `+savedCols,
-			id, person, tenant, name, title, saved.KindBankAccount, acct.Details(), sealed, acct.Hint(), state, cname, cvia, cat, o.by)); err != nil {
+				check_state, checked_name, checked_via, checked_at, check_problem, created_by, updated_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $15) RETURNING `+savedCols,
+			id, person, tenant, name, title, saved.KindBankAccount, acct.Details(), sealed, acct.Hint(), state, cname, cvia, cat, problem.lasting(), o.by)); err != nil {
 			return err
 		}
 		detail := map[string]any{"name": name, "kind": saved.KindBankAccount, "bank": acct.BankName, "account_last4": saved.Last4(acct.AccountNumber), "check": state}
@@ -504,10 +518,37 @@ func (s *Server) addSaved(w http.ResponseWriter, r *http.Request, o savedOwner) 
 		return
 	}
 	out := map[string]any{"saved": x.view(o, true)}
-	if problem != "" {
-		out["check_problem"] = problem
+	if problem.Words != "" {
+		out["check_problem"] = problem.Words
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// lasting is the problem as an account keeps it: its words when it lasts
+// until the account changes, else nil.
+func (p savedProblem) lasting() *string {
+	if !p.Lasting || p.Words == "" {
+		return nil
+	}
+	return &p.Words
+}
+
+// savedRoomTx refuses a new object whose name the owner already uses, or
+// past the owner's limit.
+func savedRoomTx(ctx context.Context, tx pgx.Tx, o savedOwner, name string) error {
+	where, owner := ownerWhere(o)
+	var n int
+	var taken bool
+	if err := tx.QueryRow(ctx, `SELECT count(*), COALESCE(bool_or(name = $2), false) FROM saved_objects WHERE `+where, owner, name).Scan(&n, &taken); err != nil {
+		return err
+	}
+	if taken {
+		return &pgconn.PgError{Code: "23505"}
+	}
+	if n >= savedLimit(o) {
+		return customerSendErr{http.StatusConflict, fmt.Sprintf("You can keep up to %d saved things. Remove one you no longer use first.", savedLimit(o))}
+	}
+	return nil
 }
 
 // checkCols are a check's columns: unchecked without one.
@@ -574,11 +615,20 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		s.savedFail(w, r, err)
 		return
 	}
-	acct, accountChanged, err := in.account(wasAcct)
+	acct, err := in.account(wasAcct)
 	if err != nil {
 		s.savedFail(w, r, err)
 		return
 	}
+	// A bank chosen again is named as the payments connection names it; a
+	// bank left as it was keeps its code.
+	if in.bankGiven() {
+		if acct, err = s.settleBank(ctx, o, acct); err != nil {
+			s.savedFail(w, r, err)
+			return
+		}
+	}
+	accountChanged := accountMoved(wasAcct, acct)
 	name, title := was.Name, was.Title
 	if in.Name != nil {
 		if name, err = saved.Name(*in.Name); err != nil {
@@ -592,9 +642,18 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 			return
 		}
 	}
-	// Changing where money would go is confirmed with a passkey, after
-	// everything else is checked, so nobody is asked to confirm a change
-	// that would be refused.
+	// A changed account is checked again (a business's), before the
+	// passkey: an account the bank does not have is refused without asking
+	// anyone to confirm it.
+	var check *savedCheckResult
+	var problem savedProblem
+	if accountChanged && !o.mine() {
+		if check, problem, err = s.checkSavedAccount(ctx, o.tenant, acct); err != nil {
+			s.savedFail(w, r, err)
+			return
+		}
+	}
+	// Changing where money would go is confirmed with a passkey, last.
 	confirmed := ""
 	if accountChanged {
 		if !s.savedPasskey(w, r, o, in.Passkey, savedOpChange, id) {
@@ -602,21 +661,16 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		}
 		confirmed = "passkey"
 	}
-	// A changed account is checked again (a business's); its earlier check
-	// was for the account it was.
-	var check *savedCheckResult
-	var problem string
-	if accountChanged && !o.mine() {
-		if check, problem, err = s.checkSavedAccount(ctx, o.tenant, acct); err != nil {
-			s.savedFail(w, r, err)
-			return
-		}
-	}
 	var x savedRow
 	err = s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		cur, err := savedRowTx(ctx, tx, o, id, true)
 		if err != nil {
 			return err
+		}
+		// Changed by someone else since it was read: what is written here
+		// was worked out from the account as it was, so nothing is.
+		if !cur.UpdatedAt.Equal(was.UpdatedAt) {
+			return errSavedChanged
 		}
 		sealed := cur.Sealed
 		if accountChanged {
@@ -629,8 +683,8 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		args := []any{owner, id, name, title, acct.Details(), sealed, acct.Hint(), o.by}
 		if accountChanged {
 			state, cname, cvia, cat := checkCols(check)
-			set += `, check_state = $9, checked_name = $10, checked_via = $11, checked_at = $12`
-			args = append(args, state, cname, cvia, cat)
+			set += `, check_state = $9, checked_name = $10, checked_via = $11, checked_at = $12, check_problem = $13`
+			args = append(args, state, cname, cvia, cat, problem.lasting())
 		}
 		if x, err = scanSaved(tx.QueryRow(ctx, `UPDATE saved_objects SET `+set+` WHERE `+where+` AND id = $2 RETURNING `+savedCols, args...)); err != nil {
 			return err
@@ -648,11 +702,15 @@ func (s *Server) changeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 		return
 	}
 	out := map[string]any{"saved": x.view(o, true)}
-	if problem != "" {
-		out["check_problem"] = problem
+	if problem.Words != "" {
+		out["check_problem"] = problem.Words
 	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+// errSavedChanged is a change to an object someone else changed since it
+// was read.
+var errSavedChanged = customerSendErr{http.StatusConflict, "Someone changed this account just now. Open it again to see it, then make your change."}
 
 // changedFields names what changed between two rows, without values that
 // are sensitive.

@@ -12373,11 +12373,15 @@ class SavedObject {
 }
 
 class SavedObjectCheck {
-  const SavedObjectCheck({this.accountName, this.at, required this.state, this.via});
+  const SavedObjectCheck({this.accountName, this.at, this.problem, required this.state, this.via});
 
   /// The bank's name for the account.
   final Object? accountName;
   final Object? at;
+  /// Why it will not be checked until the account changes (the bank has no such
+  /// account; the payments account does not list its bank by that name). Null
+  /// while checked or only waiting.
+  final Object? problem;
   final String state;
   /// The payments connection that gave it ("iswallet/taskiem").
   final Object? via;
@@ -12385,6 +12389,7 @@ class SavedObjectCheck {
   factory SavedObjectCheck.fromJson(Map<String, dynamic> j) => SavedObjectCheck(
         accountName: j['account_name'],
         at: j['at'],
+        problem: j['problem'],
         state: j['state'] as String,
         via: j['via'],
       );
@@ -12392,6 +12397,7 @@ class SavedObjectCheck {
   Map<String, dynamic> toJson() => {
         'account_name': ?accountName,
         'at': ?at,
+        'problem': ?problem,
         'state': state,
         'via': ?via,
       };

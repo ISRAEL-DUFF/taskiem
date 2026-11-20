@@ -22,26 +22,41 @@ type savedRails struct {
 	names map[string]string
 	asked []map[string]any
 	down  bool
+	// listing, when set, is the wallet's own list_banks capability (with
+	// the world's BillBanks taken away), as a rail that maps it answers.
+	listing []any
 }
 
 var savedRail = invoicing.Rail{Connector: "iswallet", Connection: "taskiem", Name: "iswallet", Events: map[string]bool{},
 	Caps: map[string]connector.CapabilityMap{"resolve_account": {}, "pay_bank": {}}}
 
-func (f *savedRails) Capable(_ context.Context, _ uuid.UUID, capability string) ([]invoicing.Rail, error) {
-	if !savedRail.Maps(capability) {
-		return nil, nil
+func (f *savedRails) rail() invoicing.Rail {
+	if f.listing == nil {
+		return savedRail
 	}
-	return []invoicing.Rail{savedRail}, nil
+	rl := savedRail
+	rl.Caps = map[string]connector.CapabilityMap{"resolve_account": {}, "pay_bank": {}, "list_banks": {}}
+	return rl
+}
+
+func (f *savedRails) Capable(_ context.Context, _ uuid.UUID, capability string) ([]invoicing.Rail, error) {
+	if rl := f.rail(); rl.Maps(capability) {
+		return []invoicing.Rail{rl}, nil
+	}
+	return nil, nil
 }
 
 func (f *savedRails) ResolveChannel(_ context.Context, _ uuid.UUID, channel, _ string) (invoicing.Rail, error) {
 	if channel == savedRail.Channel() {
-		return savedRail, nil
+		return f.rail(), nil
 	}
 	return invoicing.Rail{}, invoicing.ErrNoRail
 }
 
 func (f *savedRails) Call(_ context.Context, _ uuid.UUID, _ invoicing.Rail, capability string, in map[string]any, _ effects.KeyInput) (map[string]any, error) {
+	if capability == "list_banks" && f.listing != nil {
+		return map[string]any{"banks": f.listing}, nil
+	}
 	if capability != "resolve_account" {
 		return nil, fmt.Errorf("not mapped: %w", effects.ErrFatal)
 	}
@@ -49,7 +64,7 @@ func (f *savedRails) Call(_ context.Context, _ uuid.UUID, _ invoicing.Rail, capa
 	if f.down {
 		return nil, fmt.Errorf("timeout: %w", effects.ErrRetryable)
 	}
-	if in["bank_code"] != "000013" {
+	if in["bank_code"] != "000013" && in["bank_code"] != "000015" {
 		return nil, fmt.Errorf("no such bank: %w", effects.ErrFatal)
 	}
 	name, ok := f.names[in["account_number"].(string)]
@@ -353,5 +368,101 @@ func TestSavedMine(t *testing.T) {
 	}
 	if b := owner.must(200, "GET", "/v1/me/banks", nil); b["from"] != "" || len(b["banks"].([]any)) < 20 {
 		t.Fatalf("banks: %v", b)
+	}
+}
+
+// The review's fixes: a bank code is the bank its connection's list says
+// (one the list lacks is refused); the list is the checking connection's
+// own; a change made from a stale read is refused; the bank is asked before
+// the passkey; a lasting problem is kept, shown and not asked about again;
+// a taken name never reaches the bank.
+func TestSavedReviewFixes(t *testing.T) {
+	ctx := context.Background()
+	w, owner := savedWorld(t)
+	rails := &savedRails{names: map[string]string{"0123456789": "BAYO ADEWALE", "2222222222": "ZENITH ACCOUNT", "3333333333": "KUDA ACCOUNT"}}
+	w.srv.AccountRails = rails
+
+	// A code from the wallet's list names its bank, whatever name is sent.
+	x := owner.must(201, "POST", "/v1/saved", map[string]any{"name": "zee", "title": "Zee", "bank_name": "Guaranty Trust Bank", "bank_code": "000015",
+		"code_from": "iswallet/taskiem", "account_number": "2222222222"})["saved"].(map[string]any)
+	if d := x["details"].(map[string]any); d["bank_name"] != "Zenith Bank" || d["bank_code"] != "000015" || x["hint"] != "Zenith Bank ••2222" {
+		t.Fatalf("bank from its code: %v", x)
+	}
+	zee := x["id"].(string)
+	// A code the list does not have is refused; one from another list is
+	// dropped and the bank found by name.
+	owner.must(400, "POST", "/v1/saved", map[string]any{"name": "nope", "title": "Nope", "bank_name": "Guaranty Trust Bank", "bank_code": "999999",
+		"code_from": "iswallet/taskiem", "account_number": "0123456789"})
+	x = owner.must(201, "POST", "/v1/saved", map[string]any{"name": "bayo", "title": "Bayo", "bank_name": "Guaranty Trust Bank", "bank_code": "058",
+		"code_from": "paystack/main", "account_number": "0123456789"})["saved"].(map[string]any)
+	if d := x["details"].(map[string]any); d["bank_code"] != nil || x["check"].(map[string]any)["account_name"] != "BAYO ADEWALE" {
+		t.Fatalf("a code from another list: %v", x)
+	}
+	bayo := x["id"].(string)
+
+	// A taken name is refused before the bank is asked.
+	asked := len(rails.asked)
+	owner.must(409, "POST", "/v1/saved", map[string]any{"name": "bayo", "title": "Again", "bank_name": "Zenith Bank", "account_number": "2222222222"})
+	if len(rails.asked) != asked {
+		t.Fatalf("the bank was asked about a taken name")
+	}
+
+	// The bank is asked before the passkey: an account it does not have is
+	// refused without one.
+	if e := owner.must(400, "PUT", "/v1/saved/"+bayo, map[string]any{"account_number": "9999999999"}); !strings.Contains(fmt.Sprint(e["error"]), "has no account") {
+		t.Fatalf("refused before the passkey: %v", e)
+	}
+
+	// A change worked out from a read someone else's change has overtaken
+	// is refused (the bank list is read between the two, as a slow request
+	// would be overtaken).
+	list := w.srv.BillBanks
+	w.srv.BillBanks = func(ctx context.Context, tenant uuid.UUID, c string) ([]map[string]any, error) {
+		if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE saved_objects SET updated_at = updated_at + interval '1 second' WHERE id = $1`, zee); err != nil {
+			return nil, err
+		}
+		return list(ctx, tenant, c)
+	}
+	// The same bank sent again (as the forms send it): not a change of the
+	// account, so no passkey, but refused all the same.
+	if e := owner.must(409, "PUT", "/v1/saved/"+zee, map[string]any{"title": "Zee Rice", "bank_name": "Zenith Bank", "bank_code": "000015",
+		"code_from": "iswallet/taskiem"}); !strings.Contains(fmt.Sprint(e["error"]), "changed this account just now") {
+		t.Fatalf("a stale change: %v", e)
+	}
+	w.srv.BillBanks = list
+	if got := owner.must(200, "GET", "/v1/saved/"+zee, nil); got["title"] != "Zee" {
+		t.Fatalf("the stale change was written: %v", got)
+	}
+
+	// A bank the wallet does not list by that name: saved, with why, kept
+	// until it changes and not asked about again.
+	x = owner.must(201, "POST", "/v1/saved", map[string]any{"name": "kuda", "title": "Kuda", "bank_name": "Kuda Microfinance Bank", "account_number": "3333333333"})
+	k := x["saved"].(map[string]any)
+	if p := k["check"].(map[string]any)["problem"]; p == nil || !strings.Contains(fmt.Sprint(p), "does not list Kuda Microfinance Bank") {
+		t.Fatalf("lasting problem: %v", x)
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil); l["can_check"] != false {
+		t.Fatalf("an account with a lasting problem is offered for checking: %v", l)
+	}
+	asked = len(rails.asked)
+	owner.must(200, "POST", "/v1/saved/check", nil)
+	if len(rails.asked) != asked {
+		t.Fatalf("a lasting problem was asked about again")
+	}
+	// Changing its bank is a change of the account: checked, then a passkey.
+	if e := owner.must(403, "PUT", "/v1/saved/"+k["id"].(string), map[string]any{"bank_name": "Zenith Bank"}); e["step_up"] != "passkey" {
+		t.Fatalf("a bank change without a passkey: %v", e)
+	}
+
+	// The list is the checking connection's own (its list_banks), with no
+	// stand-in.
+	w.srv.BillBanks = nil
+	rails.listing = []any{map[string]any{"code": "000013", "name": "Guaranty Trust Bank"}}
+	if b := owner.must(200, "GET", "/v1/banks", nil); b["from"] != "iswallet/taskiem" || len(b["banks"].([]any)) != 1 {
+		t.Fatalf("the wallet's own list: %v", b)
+	}
+	var problem *string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT check_problem FROM saved_objects WHERE id = $1`, k["id"]).Scan(&problem); err != nil || problem == nil {
+		t.Fatalf("problem kept: %v %v", problem, err)
 	}
 }

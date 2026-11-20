@@ -46175,11 +46175,14 @@ components:
         check:
           type: object
           additionalProperties: false
-          required: [state, account_name, via, at]
+          required: [state, account_name, via, at, problem]
           properties:
             state:
               type: string
               enum: [checked, unchecked]
+            problem:
+              type: [string, 'null']
+              description: Why it will not be checked until the account changes (the bank has no such account; the payments account does not list its bank by that name). Null while checked or only waiting.
             account_name:
               type: [string, 'null']
               description: The bank's name for the account.
