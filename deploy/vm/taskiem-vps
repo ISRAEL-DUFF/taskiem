@@ -426,6 +426,53 @@ scram_verifier() { # IMAGE PASSWORD
   printf '%s' "$v"
 }
 
+# psql (libpq) checks a verify-full certificate against
+# ~/.postgresql/root.crt unless told to use the system's roots, which is
+# what a managed service's certificate from a public CA (Xenibase's) needs.
+# Taskiem itself (pgx) uses the system's roots already.
+psql_dsn() { # URL
+  case $1 in
+  *sslrootcert=*) printf '%s' "$1" ;;
+  *sslmode=verify-full* | *sslmode=verify-ca*) printf '%s&sslrootcert=system' "$1" ;;
+  *) printf '%s' "$1" ;;
+  esac
+}
+
+# Ask Xenibase to sync the owner's new logins to its poolers now, instead
+# of at its next 30-second sweep: only with TASKIEM_VPS_XENIBASE_URL,
+# _XENIBASE_TOKEN (an API token) and _XENIBASE_PROJECT (the project's id)
+# in the environment. Nothing is kept. The token goes on standard input,
+# not the command line.
+xenibase_sync() {
+  local url=${TASKIEM_VPS_XENIBASE_URL:-} token=${TASKIEM_VPS_XENIBASE_TOKEN:-} project=${TASKIEM_VPS_XENIBASE_PROJECT:-}
+  [ -n "$url" ] && [ -n "$token" ] && [ -n "$project" ] || return 0
+  if printf 'Authorization: Bearer %s\n' "$token" |
+    curl -fsS --max-time 30 -X POST -H @- "${url%/}/api/v1/projects/$project/manage-roles/sync" >/dev/null; then
+    log "Xenibase synced the database's logins to its poolers"
+  else
+    log "WARNING: Xenibase's sync did not answer; waiting for its 30-second sweep instead"
+  fi
+}
+
+# The first sign-in as a login setup just made. A pooler takes a new login
+# only once it knows it: a Xenibase dedicated project syncs its owner's
+# logins every 30 seconds. So wait for it, up to TASKIEM_VPS_LOGIN_WAIT
+# seconds (90), and say why.
+wait_for_login() { # ROLE URL
+  local role=$1 dsn wait=${TASKIEM_VPS_LOGIN_WAIT:-90} deadline said=""
+  dsn=$(psql_dsn "$2")
+  deadline=$((SECONDS + wait))
+  until echo 'SELECT 1' | docker run --rm -i --network host -e DSN="$dsn" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' >/dev/null 2>&1; do
+    [ $SECONDS -lt $deadline ] || die "$role cannot sign in to the database after $wait seconds. On a Xenibase dedicated project: role management must be on (Project Settings > Compute > Database roles), the URL must be the session pooler's (port 5432), and POST /api/v1/projects/<id>/manage-roles/sync says why a login is not synced. On another server: its pg_hba.conf must let $role in"
+    if [ -z "$said" ]; then
+      log "waiting for the database to accept $role (a pooler takes a new login when it is synced: on Xenibase within 30 seconds)"
+      said=1
+    fi
+    sleep "${TASKIEM_VPS_LOGIN_POLL:-5}"
+  done
+  [ -z "$said" ] || log "$role signs in"
+}
+
 set_image() { # REF
   env_set "$KIT/.env" TASKIEM_IMAGE "$1"
   printf '%s\n' "$1" >"$STATE/current"
@@ -560,7 +607,7 @@ cmd_setup() {
   ask DOMAIN "Public host name (DNS must point here)" "$(conf DOMAIN)"
   ask OWNER_EMAIL "Owner's email (receives the set-your-password link)" "$(conf OWNER_EMAIL)"
   ask ORG "Organisation name" "$(conf ORG)"
-  ask_secret DATABASE_URL "Postgres 16 URL of an empty database, as its owner (needs CREATEROLE)" "$(env_get "$KIT/migrate.env" TASKIEM_DATABASE_URL)"
+  ask_secret DATABASE_URL "Postgres 16+ URL of an empty database, as its owner (needs CREATEROLE; on Xenibase, a dedicated project's session pooler URL)" "$(env_get "$KIT/migrate.env" TASKIEM_DATABASE_URL)"
   ask_secret SMTP_URL "SMTP URL (smtps://user:pass@host:465)" "$(env_get "$KIT/taskiem.env" TASKIEM_SMTP_URL)"
   ask MAIL_FROM "Sender address for email" "$(env_get "$KIT/taskiem.env" TASKIEM_ALERT_FROM)"
   ask_secret TELEGRAM_BOT_TOKEN "Telegram bot token from @BotFather (empty: no Telegram)" "$(env_get "$KIT/taskiem.env" TASKIEM_TELEGRAM_BOT_TOKEN)"
@@ -637,6 +684,9 @@ cmd_setup() {
   case $CHANNEL in staging | production) ;; *) die "channel must be staging or production" ;; esac
   [[ $DATABASE_URL =~ ^(postgres(ql)?://)([^@/]*@)?([^/?]+)/([A-Za-z0-9_]+)(\?.*)?$ ]] || die "database URL must look like postgres://user:password@host:5432/dbname?sslmode=verify-full"
   local dsn_scheme=${BASH_REMATCH[1]} dsn_host=${BASH_REMATCH[4]} dbname=${BASH_REMATCH[5]} dsn_query=${BASH_REMATCH[6]}
+  # Taskiem LISTENs for notifications, which needs a session of its own: a
+  # transaction pooler (6543, Xenibase's and others') cannot carry it.
+  case $dsn_host in *:6543) die "port 6543 is a transaction pooler's: Taskiem needs a session (it LISTENs); give the session pooler's URL (port 5432)" ;; esac
   # Its logins are named <database>_app and <database>_public: for a
   # database named taskiem those are Taskiem's own group roles, which the
   # migrations make and nothing may sign in as.
@@ -763,7 +813,9 @@ cmd_setup() {
   fi
 
   log "checking the database"
-  echo 'SELECT 1' | docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' >/dev/null ||
+  local owner_dsn
+  owner_dsn=$(psql_dsn "$DATABASE_URL")
+  echo 'SELECT 1' | docker run --rm -i --network host -e DSN="$owner_dsn" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' >/dev/null ||
     die "cannot reach the database with that URL"
 
   # The release: the channel's newest signed image (or a local test image).
@@ -821,7 +873,7 @@ cmd_setup() {
   # text, and the password is never in it.
   local appver pubver
   appver=$(scram_verifier "$ref" "$apppw")
-  docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+  docker run --rm -i --network host -e DSN="$owner_dsn" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$approle') THEN
     CREATE ROLE "$approle" LOGIN PASSWORD '$appver';
@@ -837,7 +889,7 @@ SQL
   if [ "$PUBLIC" = yes ] || [ -n "$MAIL_DOMAIN" ]; then
     log "creating the database role the public host signs in as ($pubrole)"
     pubver=$(scram_verifier "$ref" "$pubpw")
-    docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+    docker run --rm -i --network host -e DSN="$owner_dsn" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN
     CREATE ROLE "$pubrole" LOGIN NOINHERIT PASSWORD '$pubver';
@@ -848,7 +900,7 @@ END \$\$;
 GRANT taskiem_public TO "$pubrole";
 SQL
   else
-    docker run --rm -i --network host -e DSN="$DATABASE_URL" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
+    docker run --rm -i --network host -e DSN="$owner_dsn" "$PSQL_IMAGE" sh -c 'psql "$DSN" -qAt -v ON_ERROR_STOP=1' <<SQL >/dev/null
 DO \$\$ BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = '$pubrole') THEN ALTER ROLE "$pubrole" NOLOGIN; END IF;
 END \$\$;
@@ -856,6 +908,14 @@ SQL
     compose rm -sf taskiem-public >/dev/null 2>&1 || true
   fi
   [ "$PUBLIC" = yes ] || compose rm -sf taskiem-public >/dev/null 2>&1 || true
+
+  # The logins reach the database before Taskiem signs in as them: through
+  # a pooler, such as a Xenibase project's, only once it has synced them.
+  xenibase_sync
+  wait_for_login "$approle" "$(env_get "$t" TASKIEM_DATABASE_URL)"
+  if [ "$PUBLIC" = yes ] || [ -n "$MAIL_DOMAIN" ]; then
+    wait_for_login "$pubrole" "${dsn_scheme}${pubrole}:${pubpw}@${dsn_host}/${dbname}${dsn_query}"
+  fi
 
   # Taskiem's own Caddy, if this server had it until now.
   [ "$PROXY" != external ] || docker compose --project-directory "$KIT" -f "$KIT/docker-compose.yml" rm -sf caddy >/dev/null 2>&1 || true
@@ -1097,9 +1157,9 @@ cmd_backup() {
 # Rebuild on a new server: settings, OpenBao's storage and Taskiem's data
 # from the newest backup, the unseal key from the recovery sheet. The
 # database is the provider's (restore it with point-in-time recovery first
-# if it was lost too); the restored settings point at it. Beside Xenibase,
-# its Caddy's files for Taskiem are written again: they are Xenibase's,
-# not in the backup.
+# if it was lost too; on Xenibase, Xenibase's backups and recovery); the
+# restored settings point at it. Beside Xenibase, its Caddy's files for
+# Taskiem are written again: they are Xenibase's, not in the backup.
 cmd_restore() {
   need_root restore
   [ ! -s "$KIT/openbao.env" ] || [ -n "${TASKIEM_VPS_FORCE:-}" ] ||

@@ -2,7 +2,7 @@
 
 [Decision 0032](decisions/0032-deployment-target.md) runs staging and the first production environment on one VM until a trigger moves them to [Kubernetes](kubernetes.md). Installing, upgrading, backing up and watching that VM is automated by `taskiem-vps` (in `deploy/vm`): you answer a few questions once, and the server then keeps itself on the newest signed release of its channel, rolls back a release that fails, backs itself up every night and alerts you when something is wrong.
 
-What runs: Taskiem with every role in one process, OpenBao (auto-unsealed) for the key that wraps every secret, and Caddy for HTTPS. Postgres is a managed service, outside the VM. Container steps are off (their only safe runner is Kubernetes).
+What runs: Taskiem with every role in one process, OpenBao (auto-unsealed) for the key that wraps every secret, and Caddy for HTTPS. Postgres is a managed service, outside the VM, such as a [Xenibase dedicated project](#a-database-on-xenibase-dedicated-project). Container steps are off (their only safe runner is Kubernetes).
 
 The server can also be shared with Xenibase: Xenibase's Caddy then serves Taskiem's sites, and Taskiem runs without its own (see [Sharing the server with Xenibase](#sharing-the-server-with-xenibase)).
 
@@ -14,7 +14,7 @@ Taskiem's own staging is set up with this kit step by step in the [staging runbo
 | --- | --- |
 | A VPS | Ubuntu 22.04 or 24.04 (or Debian 12), x86_64, hosted in Nigeria (P4-C1). At least 2 vCPU and 4 GiB; 4 vCPU and 8 GiB is comfortable, and is what to use with public pages or mail on (their malware scanner alone may take 2.5 GiB) |
 | A DNS name | An A record pointing at the VPS, so Caddy can get a certificate |
-| A Postgres 16 database | Managed, with point-in-time recovery turned on. An empty database and its owner, who must have `CREATEROLE` (managed services' admin users usually do) |
+| A Postgres 16 or newer database | Managed, with point-in-time recovery turned on. An empty database and its owner, who must have `CREATEROLE` (managed services' admin users usually do). The server must be Taskiem's alone, since roles belong to the whole server: a **Xenibase dedicated project with role management on** is one ([A database on Xenibase](#a-database-on-xenibase-dedicated-project)); a shared platform's project database (a Xenibase shared project included) is not |
 | SMTP | For the owner's set-your-password link, invitations, password resets and alerts |
 | Backup storage | Any S3-compatible bucket (restic repository), with an access key limited to it. Optional, but without it nothing on the VM survives losing the VM |
 | Once per repository | In GitHub: make the `taskiem` package public (Packages → taskiem → Package settings), and create the `production` environment with required reviewers (Settings → Environments). See [Releases](#releases) |
@@ -50,7 +50,7 @@ Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every sec
 
 The three timers' units have a time limit (update 45 minutes, backup 6 hours, check 4 minutes), so a hung Docker call cannot hold the update lock for ever.
 
-**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, `_PROXY` (`own` or `external`) with `_PROXY_DIR`, `_PROXY_CONTAINER` and `_PROXY_NETWORK` ([Sharing the server with Xenibase](#sharing-the-server-with-xenibase)), with `TASKIEM_VPS_NONINTERACTIVE=1`.
+**Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, `_PROXY` (`own` or `external`) with `_PROXY_DIR`, `_PROXY_CONTAINER` and `_PROXY_NETWORK` ([Sharing the server with Xenibase](#sharing-the-server-with-xenibase)), with `TASKIEM_VPS_NONINTERACTIVE=1`. Read by setup only, never kept: `TASKIEM_VPS_XENIBASE_URL`, `_XENIBASE_TOKEN` and `_XENIBASE_PROJECT` ([A database on Xenibase](#a-database-on-xenibase-dedicated-project)), and `TASKIEM_VPS_LOGIN_WAIT` (how long to wait for a new login to reach the database, 90 seconds).
 
 With no SMTP there is no email to carry the owner's set-your-password link. At a terminal the first password is shown once; on an unattended install it is written to `/root/taskiem-owner-password-<date>.txt`, readable by root only, and only the file's path is printed, so the password is not in cloud-init or CI logs. Give it to the owner, then delete the file (`shred -u`); the health checks remind you until you do.
 
@@ -100,7 +100,7 @@ Each upgrade, successful or rolled back, is reported too.
 
 ## Backups and restore
 
-Every night, encrypted with restic into the bucket: OpenBao's storage, Taskiem's archive and audit anchors, and the server's settings, kept 14 daily, 8 weekly and 12 monthly. The unseal key is left out on purpose: it is on the recovery sheet. The database is backed up by its provider (point-in-time recovery). OpenBao keeps its keys in an integrated (Raft) database, which is copied with OpenBao stopped for a few seconds so the copy is consistent; anything needing a secret in those seconds waits for its retry.
+Every night, encrypted with restic into the bucket: OpenBao's storage, Taskiem's archive and audit anchors, and the server's settings, kept 14 daily, 8 weekly and 12 monthly. The unseal key is left out on purpose: it is on the recovery sheet. The database is backed up by its provider (point-in-time recovery); on a [Xenibase dedicated project](#a-database-on-xenibase-dedicated-project) its backups and point-in-time recovery are Xenibase's, and Taskiem's own backups (OpenBao, the archive and anchors, the settings) still go to this bucket, off the server. OpenBao keeps its keys in an integrated (Raft) database, which is copied with OpenBao stopped for a few seconds so the copy is consistent; anything needing a secret in those seconds waits for its retry.
 
 **To rebuild on a new VPS** (the old one is gone): restore the database first if it was lost too, then on the new VPS
 
@@ -110,7 +110,7 @@ curl -fsSL https://raw.githubusercontent.com/ISRAEL-DUFF/taskiem/main/deploy/vm/
 
 It asks for the bucket and its key, and from the recovery sheet the backup password and the unseal key; restores the newest backup; starts the release that was running; and turns the timers back on. Point the DNS name at the new VPS. CI rehearses this on every change.
 
-On a server shared with Xenibase, install and restore Xenibase first, then restore Taskiem with `TASKIEM_VPS_PROXY=external` given to the installer as well (for its firewall rules); the restore writes `taskiem.caddy` and `taskiem.global` again, since they are Xenibase's files and not in Taskiem's backup.
+With the database on Xenibase, a lost database is restored by Xenibase (the project's backups, or point-in-time recovery to a moment before a mistake) and keeps its name, roles and logins: the restored settings still point at it. On a server shared with Xenibase, install and restore Xenibase first, then restore Taskiem with `TASKIEM_VPS_PROXY=external` given to the installer as well (for its firewall rules); the restore writes `taskiem.caddy` and `taskiem.global` again, since they are Xenibase's files and not in Taskiem's backup.
 
 ## Public pages: storefronts and forms
 
@@ -161,6 +161,21 @@ Emptying the answer later stops `taskiem-mail`. Published email triggers then re
 `taskiem-vps check` alerts when the mail server is unhealthy. Senders retry for days, so mail is delayed, not lost, while it is down.
 
 **Upgrading a server from before email triggers:** the upgrade itself (automatic, or `taskiem-vps update --now`) adds the database tables and the `taskiem-mail` service but turns nothing on. Do the four steps above when you want it.
+
+## A database on Xenibase (dedicated project)
+
+A Xenibase **dedicated** project is a Postgres server of its own, and with **role management** on its owner may create roles, which Taskiem's migrations need (Xenibase's `docs/database-roles.md`). A shared project cannot host Taskiem: its roles would be the whole cluster's.
+
+1. **Create the project**: dedicated, Postgres 18 (16 or newer works), the smallest size; a larger one later if Taskiem needs it. Its database has a name Xenibase chooses (never `taskiem`, which setup refuses).
+2. **Turn on role management** (an organisation owner, with a fresh step-up): Project Settings → Compute → Database roles → **Let the owner create roles**, or `PUT /api/v1/projects/{id}/manage-roles` with `{"enabled":true}`. The owner then has `CREATEROLE`, limited by Postgres 16+ to the roles it creates.
+3. **Copy the session pooler's URL** (port **5432**), as the owner, with TLS checked: `postgres://<database>_owner:<password>@<database host>:5432/<database>?sslmode=verify-full&sslrootcert=system`. Not the transaction pooler (6543), which setup refuses: Taskiem `LISTEN`s, which needs a session. (`sslrootcert=system` checks the certificate against the system's roots; setup adds it for its own checks if it is missing, and Taskiem itself does without it.)
+4. **Run setup** with it as the database URL (`TASKIEM_VPS_DATABASE_URL` for an unattended install).
+
+The migrations, as the owner, create Taskiem's group roles; setup then creates the logins `<database>_app` and, with public pages or mail, `<database>_public`. Xenibase lets a login through its poolers only once it has synced it: every 30 seconds it syncs the owner's logins named `<database>_<name>`. So setup tries each login for up to 90 seconds before starting Taskiem, saying it is waiting (`TASKIEM_VPS_LOGIN_WAIT` changes the time). To have them synced at once, give setup a Xenibase API token too: `TASKIEM_VPS_XENIBASE_URL` (`https://xenibase.example.com`), `TASKIEM_VPS_XENIBASE_TOKEN` and `TASKIEM_VPS_XENIBASE_PROJECT` (the project's id); setup then calls `POST /api/v1/projects/{id}/manage-roles/sync` once, and keeps none of them. Each synced login gets the project's connection limit.
+
+Xenibase backs the database up and offers point-in-time recovery; Taskiem's own backups (OpenBao, archives and anchors, settings) still go to the bucket ([Backups and restore](#backups-and-restore)). A move or major upgrade of the project keeps the roles and logins; branches do not have them.
+
+If a login never gets through, setup stops and says what to check: role management on, the session pooler's URL, and Xenibase's answer to the sync call, which says why a login is not synced.
 
 ## Sharing the server with Xenibase
 

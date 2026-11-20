@@ -611,3 +611,80 @@ func TestVPSExternalProxyKeepsItsSetup(t *testing.T) {
 		t.Error("the update changed the external-proxy Compose file")
 	}
 }
+
+// TestVPSWaitsForANewLoginToReachThePooler: on a Xenibase dedicated
+// project the logins setup makes reach the poolers only when Xenibase syncs
+// them, every 30 seconds. The first sign-in as each is retried, saying why,
+// and gives up with what to check. With a Xenibase API token, setup asks
+// for the sync at once; the token is not on a command line. psql is told
+// to check a verify-full certificate against the system's roots.
+func TestVPSWaitsForANewLoginToReachThePooler(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	script, err := filepath.Abs("vm/taskiem-vps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := t.TempDir()
+	calls := filepath.Join(d, "calls")
+	if err := os.MkdirAll(filepath.Join(d, "stubs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// docker run: the login is refused until the third try.
+	stubs := map[string]string{
+		"docker": `n=$(( $(cat "$D/n" 2>/dev/null || echo 0) + 1 )); echo $n >"$D/n"
+for a in "$@"; do case $a in DSN=*) echo "docker $a" >>"$D/calls" ;; esac; done
+[ "$n" -ge "${OK_AT:-3}" ]
+`,
+		"curl": `echo "curl $* stdin=$(cat)" >>"$D/calls"
+`,
+		"sleep": `:
+`,
+	}
+	for name, body := range stubs {
+		if err := os.WriteFile(filepath.Join(d, "stubs", name), []byte("#!/usr/bin/env bash\n"+body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(env ...string) (string, error) {
+		_ = os.Remove(filepath.Join(d, "n"))
+		_ = os.Remove(calls)
+		cmd := exec.Command("bash", "-c", `set -Eeuo pipefail
+PSQL_IMAGE=psql
+source <(sed -n '/^log() /p; /^die() /p; /^psql_dsn() /,/^}/p; /^xenibase_sync() /,/^}/p; /^wait_for_login() /,/^}/p' "$0")
+xenibase_sync
+wait_for_login db1_app 'postgres://db1_app:pw@db.example.com:5432/db1?sslmode=verify-full'`, script)
+		cmd.Env = append(os.Environ(), append([]string{"PATH=" + filepath.Join(d, "stubs") + ":" + os.Getenv("PATH"), "D=" + d}, env...)...)
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	out, err := run()
+	if err != nil || !strings.Contains(out, "waiting for the database to accept db1_app") || !strings.Contains(out, "within 30 seconds") || !strings.Contains(out, "db1_app signs in") {
+		t.Fatalf("a login synced on the third try: %v: %s", err, out)
+	}
+	b, _ := os.ReadFile(calls)
+	if strings.Count(string(b), "docker DSN=postgres://db1_app:pw@db.example.com:5432/db1?sslmode=verify-full&sslrootcert=system\n") != 3 {
+		t.Errorf("tries: %s", b)
+	}
+	if strings.Contains(string(b), "curl") {
+		t.Errorf("Xenibase was asked to sync without a token: %s", b)
+	}
+
+	out, err = run("OK_AT=99", "TASKIEM_VPS_LOGIN_WAIT=0")
+	if err == nil || !strings.Contains(out, "db1_app cannot sign in to the database") || !strings.Contains(out, "role management") {
+		t.Errorf("a login never synced: %v: %s", err, out)
+	}
+
+	out, err = run("OK_AT=1", "TASKIEM_VPS_XENIBASE_URL=https://xenibase.example.com/", "TASKIEM_VPS_XENIBASE_TOKEN=xb_secret", "TASKIEM_VPS_XENIBASE_PROJECT=prj1")
+	b, _ = os.ReadFile(calls)
+	if err != nil || strings.Contains(out, "waiting") {
+		t.Errorf("a synced login: %v: %s", err, out)
+	}
+	if !strings.Contains(string(b), "-X POST -H @- https://xenibase.example.com/api/v1/projects/prj1/manage-roles/sync stdin=Authorization: Bearer xb_secret") {
+		t.Errorf("the sync call: %s", b)
+	}
+	if strings.Contains(strings.SplitN(string(b), "stdin=", 2)[0], "xb_secret") {
+		t.Errorf("the token is on curl's command line: %s", b)
+	}
+}
