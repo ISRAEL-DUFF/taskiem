@@ -52,5 +52,6 @@ describe("typed requests", () => {
     expect(parseRequest("how much is rice 50kg?", products, orders)).toBeNull();
     expect(mightBeRequest("Morning! How are you?")).toBe(false);
     expect(mightBeRequest("change the price of rice to 80k")).toBe(true);
+    expect(mightBeRequest("what's @generator's last service date?")).toBe(false);
   });
 });

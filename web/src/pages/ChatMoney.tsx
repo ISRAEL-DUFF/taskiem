@@ -270,6 +270,8 @@ export function InvoiceAdd({
 }) {
   const [name, setName] = useState(to?.name ?? "");
   const [phone, setPhone] = useState("");
+  const [noPhone, setNoPhone] = useState("");
+  const nameBox = useRef<HTMLInputElement>(null);
   const [what, setWhat] = useState("");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -315,13 +317,18 @@ export function InvoiceAdd({
               label="the customer"
               inSheet
               onPick={(x) => {
+                // A pick replaces the whole customer; a person with no
+                // phone is said so, not left at a Send that does nothing.
                 const f = personFill(x);
                 setName(f.name);
-                if (f.phone) setPhone(f.phone);
+                setPhone(f.phone);
+                setNoPhone(f.phone ? "" : `${f.name} has no phone saved: type one.`);
+                nameBox.current?.focus();
               }}
             />
             <KitField label="Customer's name">
               <input
+                ref={nameBox}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="off"
@@ -335,10 +342,16 @@ export function InvoiceAdd({
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setNoPhone("");
+                }}
                 placeholder="0803 000 0000"
               />
             </KitField>
+            <p className="tk-form-now saved-fill-note" role="status" data-testid="saved-fill-note">
+              {noPhone}
+            </p>
           </>
         )}
         <KitField label="What it is for">

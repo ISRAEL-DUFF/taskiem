@@ -19,6 +19,7 @@ import {
 } from "../lib/riders";
 import { Copy } from "./Forms";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
 
 /** The business's own riders (dispatch D1): who delivers its orders, the
  * areas they cover, where Taskiem reaches them and whether they are free. */
@@ -201,6 +202,11 @@ function RiderModal({
         <Field label="Name">
           <input value={f.name} maxLength={RIDER_LIMITS.name} onChange={(e) => set({ name: e.target.value })} autoFocus autoComplete="off" />
         </Field>
+        {adding && (
+          <div className="saved-fill-line">
+            <SavedFill kind="phone" label="their mobile number" onPick={(_, p) => set({ phone: p })} />
+          </div>
+        )}
         {adding ? (
           <Field label="Mobile number" hint="They get the link to your deliveries by SMS on this number.">
             <input value={f.phone} type="tel" inputMode="tel" placeholder="0803 123 4567" onChange={(e) => set({ phone: e.target.value })} />

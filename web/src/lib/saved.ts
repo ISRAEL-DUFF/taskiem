@@ -1,4 +1,5 @@
 import type { Suggestion } from "./mentions";
+import { dateLabel } from "./invoices";
 
 // Saved things (docs/spec/saved-objects.md; build plan S0, S1): a person's
 // own and a business's saved accounts, people, places, texts and accounts
@@ -463,12 +464,92 @@ export function placeAddress(d: Pick<SavedDetails, "line" | "area" | "landmark">
   return landmark ? (line ? `${line} (${landmark})` : landmark) : line;
 }
 
+/** A saved place as one address line of at most max letters: the landmark
+ * left out to fit, then the area, and only then the line cut; with a short
+ * hint that says what was left out ("" when it all fits). */
+export function placeAddressFit(d: Pick<SavedDetails, "line" | "area" | "landmark">, max: number): { address: string; hint: string } {
+  const whole = placeAddress(d);
+  if (whole.length <= max) return { address: whole, hint: "" };
+  const noLandmark = placeAddress({ line: d.line, area: d.area });
+  if (noLandmark && noLandmark.length <= max) return { address: noLandmark, hint: "The landmark was left out to fit." };
+  const line = (d.line ?? "").trim();
+  if (line && line.length <= max) return { address: line, hint: "The area and landmark were left out to fit." };
+  return { address: (line || whole).slice(0, max), hint: `The address was cut to ${max} letters to fit: check it.` };
+}
+
 /** What a saved person fills in a customer's fields: the name from its
- * title, and its phone and email only when it has them (a field it has
- * none for is left as it was). The full phone and email are in details;
- * a business's list masks only the hint. */
-export function personFill(x: Pick<SavedThing, "title" | "details">): { name: string; phone?: string; email?: string } {
-  const phone = (x.details.phone ?? "").trim();
-  const email = (x.details.email ?? "").trim();
-  return { name: x.title, ...(phone ? { phone } : {}), ...(email ? { email } : {}) };
+ * title, its phone and email, empty when it has none, so a pick replaces
+ * the whole customer and nothing of one picked before is left. The full
+ * phone and email are in details; a business's list masks only the hint. */
+export function personFill(x: Pick<SavedThing, "title" | "details">): { name: string; phone: string; email: string } {
+  return { name: x.title, phone: (x.details.phone ?? "").trim(), email: (x.details.email ?? "").trim() };
+}
+
+/** A saved person's or place's phone, whole, or "" (none, or masked). */
+export function savedPhone(x: Pick<SavedThing, "kind" | "details">): string {
+  if (x.kind !== "person" && x.kind !== "place") return "";
+  const p = (x.details.phone ?? "").trim();
+  return p.includes("•") ? "" : p;
+}
+
+/** One date saved on a thing, as a Saved button offers it: a person's
+ * birthday, or a date field of one of the owner's own kinds. */
+export interface SavedDate {
+  key: string;
+  thing: SavedThing;
+  label: string;
+  /** YYYY-MM-DD. */
+  date: string;
+}
+
+const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/** The dates saved on things, in the things' order: a person's birthday,
+ * and each date field of a kind the owner made (kinds give the fields'
+ * types). A sensitive date is masked in lists and cannot be used, so it is
+ * left out, as is anything that is not a whole day. */
+export function savedDates(things: SavedThing[], kinds: MadeKind[]): SavedDate[] {
+  const out: SavedDate[] = [];
+  for (const x of things) {
+    if (x.kind === "person") {
+      const b = (x.details.birthday ?? "").trim();
+      if (isDay(b)) out.push({ key: `${x.id}:birthday`, thing: x, label: "Birthday", date: b });
+    } else if (x.kind === "custom") {
+      const kind = kinds.find((k) => k.id === x.kind_id);
+      for (const f of kind?.fields ?? []) {
+        const v = (x.values?.[f.key ?? ""] ?? "").trim();
+        if (f.type !== "date" || f.sensitive || !f.key || !isDay(v)) continue;
+        out.push({ key: `${x.id}:${f.key}`, thing: x, label: f.label, date: v });
+      }
+    }
+  }
+  return out;
+}
+
+/** A saved date's line in a list: "@car · Insurance due · 3 Mar 2027". */
+export const savedDateSub = (d: SavedDate) => `@${d.thing.name} · ${d.label} · ${dateLabel(d.date)}`;
+
+/** The code, in a list of banks with codes (a select by code), of the bank
+ * a saved account names: by its name (case and "Bank"/"PLC" set aside),
+ * else by its code; "" when the list does not have it. */
+export function bankCodeFor(banks: { code: string; name: string }[], d: Pick<SavedDetails, "bank_name" | "bank_code">): string {
+  const key = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w && !["bank", "plc", "limited", "ltd"].includes(w))
+      .join(" ");
+  const name = key(d.bank_name ?? "");
+  const byName = name ? banks.find((b) => key(b.name) === name) : undefined;
+  if (byName) return byName.code;
+  return d.bank_code ? (banks.find((b) => b.code === d.bank_code)?.code ?? "") : "";
+}
+
+/** Why a saved account's number was not filled, in a few words: no
+ * passkey to show it with, or none used. */
+export function revealProblem(e: unknown): string {
+  const x = e as { body?: Record<string, unknown>; name?: string; message?: string } | null;
+  if (x?.body?.no_passkey) return "Add a passkey to use a saved account here.";
+  if (x?.name === "NotAllowedError" || x?.name === "AbortError" || x?.message === "No passkey was used") return "No passkey was used: type the account number.";
+  return "The account number could not be filled: type it.";
 }

@@ -29,7 +29,7 @@ import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 import { SavedFill } from "./SavedFill";
-import { placeAddress } from "../lib/saved";
+import { placeAddressFit } from "../lib/saved";
 
 /** The business's suppliers (docs/stock.md "Suppliers and purchase
  * orders"): who it buys from, where their orders reach them, and what is
@@ -265,6 +265,8 @@ function DeliverToForm({
 }) {
   const [address, setAddress] = useState(initial.address);
   const [phone, setPhone] = useState(initial.phone);
+  // What a saved place left out to fit the address's 300 letters.
+  const [fitHint, setFitHint] = useState("");
   const act = useAction();
   return (
     <section
@@ -278,7 +280,9 @@ function DeliverToForm({
           kind="place"
           label="the address"
           onPick={(x) => {
-            setAddress(placeAddress(x.details).slice(0, 300));
+            const fit = placeAddressFit(x.details, 300);
+            setAddress(fit.address);
+            setFitHint(fit.hint);
             if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
           }}
         />
@@ -307,10 +311,16 @@ function DeliverToForm({
             value={address}
             maxLength={300}
             placeholder="12 Admiralty Way, Lekki"
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setFitHint("");
+            }}
             autoComplete="street-address"
           />
         </Field>
+        <p className="hint saved-fill-note" role="status" data-testid="saved-fill-note">
+          {fitHint}
+        </p>
         <Field label="Number the rider calls at the door">
           <input
             value={phone}

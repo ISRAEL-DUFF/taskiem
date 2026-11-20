@@ -19,8 +19,15 @@ import {
   shownValue,
   valuesProblem,
   placeAddress,
+  placeAddressFit,
   personFill,
+  savedPhone,
+  savedDates,
+  savedDateSub,
+  bankCodeFor,
+  revealProblem,
   type BankList,
+  type MadeKind,
   type KindField,
   type SavedThing,
 } from "./saved";
@@ -176,9 +183,67 @@ describe("filling a form from a saved thing (§6.4)", () => {
     expect(placeAddress({ landmark: "Opposite the church" })).toBe("Opposite the church");
     expect(placeAddress({})).toBe("");
   });
-  it("fills a customer from a saved person, leaving what it has none of", () => {
+  it("fits a long place into the limit: the landmark goes first, then the area", () => {
+    const line = "12 Allen Avenue";
+    const area = "Ikeja GRA, Lagos";
+    expect(placeAddressFit({ line, area, landmark: "By the blue gate" }, 300)).toEqual({ address: "12 Allen Avenue, Ikeja GRA, Lagos (By the blue gate)", hint: "" });
+    const long = "x".repeat(290);
+    expect(placeAddressFit({ line, area, landmark: long }, 300)).toEqual({ address: "12 Allen Avenue, Ikeja GRA, Lagos", hint: "The landmark was left out to fit." });
+    expect(placeAddressFit({ line, area: "y".repeat(290), landmark: "gate" }, 300)).toEqual({ address: line, hint: "The area and landmark were left out to fit." });
+    const cut = placeAddressFit({ line: "z".repeat(310) }, 300);
+    expect(cut.address).toHaveLength(300);
+    expect(cut.hint).toMatch(/cut to 300 letters/);
+  });
+  it("fills the whole customer from a saved person: what it has none of is emptied", () => {
     expect(personFill({ title: "Bisi Okafor", details: { phone: "08031234567", email: "bisi@example.com" } })).toEqual({ name: "Bisi Okafor", phone: "08031234567", email: "bisi@example.com" });
-    expect(personFill({ title: "Tunde", details: { phone: "08030000000" } })).toEqual({ name: "Tunde", phone: "08030000000" });
-    expect(personFill({ title: "Kemi", details: { email: " " } })).toEqual({ name: "Kemi" });
+    expect(personFill({ title: "Tunde", details: { phone: "08030000000" } })).toEqual({ name: "Tunde", phone: "08030000000", email: "" });
+    expect(personFill({ title: "Kemi", details: { email: " " } })).toEqual({ name: "Kemi", phone: "", email: "" });
+  });
+  it("offers a person's or a place's phone, never a masked one", () => {
+    expect(savedPhone({ kind: "person", details: { phone: " 0803 123 4567 " } })).toBe("0803 123 4567");
+    expect(savedPhone({ kind: "place", details: { phone: "08037654321" } })).toBe("08037654321");
+    expect(savedPhone({ kind: "person", details: { phone: "•••4567" } })).toBe("");
+    expect(savedPhone({ kind: "text", details: { phone: "08030000000" } })).toBe("");
+  });
+  it("lists the dates saved on things, leaving out sensitive and partial ones", () => {
+    const car: MadeKind = {
+      id: "k1",
+      name: "Car",
+      count: 1,
+      fields: [
+        { key: "insurance_due", label: "Insurance due", type: "date" },
+        { key: "bought", label: "Bought", type: "date", sensitive: true },
+        { key: "plate", label: "Plate", type: "text" },
+        { key: "service", label: "Service", type: "date" },
+      ],
+    };
+    const thing = (x: Partial<SavedThing>): SavedThing => ({ ...bayo, ...x });
+    const things = [
+      thing({ id: "c", name: "car", title: "The car", kind: "custom", kind_id: "k1", details: {}, values: { insurance_due: "2027-03-03", bought: "••••", plate: "2027-01-01", service: "soon" } }),
+      thing({ id: "m", name: "mum", title: "Mum", kind: "person", details: { birthday: "1970-03-21" } }),
+      thing({ id: "t", name: "tunde", title: "Tunde", kind: "person", details: { birthday: "March" } }),
+    ];
+    const ds = savedDates(things, [car]);
+    expect(ds.map((d) => [d.key, d.label, d.date])).toEqual([
+      ["c:insurance_due", "Insurance due", "2027-03-03"],
+      ["m:birthday", "Birthday", "1970-03-21"],
+    ]);
+    expect(ds.map(savedDateSub)[0]).toBe("@car · Insurance due · 3 Mar 2027");
+    expect(savedDates(things, [])).toHaveLength(1);
+  });
+  it("finds a saved account's bank in a list by name, else by code", () => {
+    const banks = [
+      { code: "000013", name: "GTBank Plc" },
+      { code: "000014", name: "Access Bank" },
+    ];
+    expect(bankCodeFor(banks, { bank_name: "GTBank", bank_code: "058" })).toBe("000013");
+    expect(bankCodeFor(banks, { bank_name: "Somewhere", bank_code: "000014" })).toBe("000014");
+    expect(bankCodeFor(banks, { bank_name: "Somewhere" })).toBe("");
+  });
+  it("says why a saved account's number was not filled", () => {
+    expect(revealProblem({ body: { no_passkey: true } })).toBe("Add a passkey to use a saved account here.");
+    expect(revealProblem(new Error("No passkey was used"))).toMatch(/No passkey was used/);
+    expect(revealProblem({ name: "NotAllowedError" })).toMatch(/No passkey was used/);
+    expect(revealProblem(new Error("boom"))).toMatch(/could not be filled/);
   });
 });

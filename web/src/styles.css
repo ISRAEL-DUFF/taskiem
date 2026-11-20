@@ -2485,3 +2485,13 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .saved-fill-sheet .saved-fill-list ul { list-style: none; margin: 0; padding: 0; }
 .saved-fill-row, .saved-fill-row:hover:not(:disabled) { width: 100%; min-height: 0; border: 0; box-shadow: none; background: none; text-align: left; font: inherit; font-weight: inherit; color: var(--text); }
 .saved-fill-row:hover:not(:disabled), .saved-fill-row:focus-visible { background: var(--tk-soft); }
+/* Above a single field (a phone, an account, a date): the button at the
+   field's end, on its own line. */
+.saved-fill-line { display: flex; justify-content: flex-end; margin: 0 0 4px; }
+/* What a pick left out or could not fill; empty, it takes no room. */
+.saved-fill-note:empty { margin: 0; }
+.saved-fill-note.error-text:not(:empty) { margin: 0 0 12px; }
+/* Big enough to tap on a touch screen. */
+@media (pointer: coarse) {
+  .saved-fill-button, .saved-fill-use { min-height: 44px; padding-left: 14px; padding-right: 14px; }
+}
