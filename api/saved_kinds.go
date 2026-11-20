@@ -65,11 +65,7 @@ func savedKindTx(ctx context.Context, tx pgx.Tx, o savedOwner, id uuid.UUID, loc
 	if lock {
 		q += ` FOR UPDATE`
 	}
-	k, err := scanSavedKind(tx.QueryRow(ctx, q, owner, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return k, saved.ErrInvalid
-	}
-	return k, err
+	return scanSavedKind(tx.QueryRow(ctx, q, owner, id))
 }
 
 // savedKindRoutes are a business's kinds; personSavedKindRoutes a
@@ -167,10 +163,6 @@ func (s *Server) addSavedKind(w http.ResponseWriter, r *http.Request, o savedOwn
 func (s *Server) kindFail(w http.ResponseWriter, r *http.Request, err error) {
 	if isUnique(err) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "You have a kind by that name: choose another.", "name_taken": true})
-		return
-	}
-	if errors.Is(err, saved.ErrInvalid) && saved.Plain(err) == "" {
-		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
 	s.savedFail(w, r, err)
@@ -350,7 +342,7 @@ func (s *Server) addSavedCustom(ctx context.Context, who savedWho, o savedOwner,
 	}
 	err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 		k, err := savedKindTx(ctx, tx, o, *in.KindID, false)
-		if errors.Is(err, saved.ErrInvalid) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return saved.Refuse("That kind is gone. Choose another.")
 		}
 		if err != nil {
