@@ -1492,6 +1492,10 @@
       "text": "In full on the Saved page.",
       "reviewed": false
     },
+    "wa.invoice.saved_kind": {
+      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "reviewed": false
+    },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
       "reviewed": false

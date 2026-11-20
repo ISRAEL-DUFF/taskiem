@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -184,6 +185,13 @@ func (s *Server) waInvoiceStart(ctx context.Context, c *chat, name string, kobo 
 	if !ok {
 		return c.say(ctx, s, c.t("wa.invoice.how"))
 	}
+	// "invoice @acme 250k": a saved person, its name and its email or
+	// phone (saved objects S2, §6.3).
+	if strings.HasPrefix(name, "@") {
+		if done, err := s.waInvoiceSaved(ctx, c, strings.TrimPrefix(name, "@"), kobo, what); done || err != nil {
+			return err
+		}
+	}
 	inv := &chatInvoice{AmountKobo: kobo, For: what}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		var err error
@@ -234,6 +242,104 @@ func (s *Server) waInvoiceConfirmLinked(ctx context.Context, c *chat, inv *chatI
 		"for", whatsapp.SafeText(what)), confirmButtons(c)...)
 }
 
+// waInvoiceConfirm shows an invoice to a customer's address and waits for
+// Yes.
+func (s *Server) waInvoiceConfirm(ctx context.Context, c *chat, inv *chatInvoice, name, addr string) error {
+	data := chatData{Invoice: inv, Nonce: uuid.NewString()}
+	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
+		return err
+	}
+	what := inv.For
+	if what == "" {
+		what = c.t("wa.invoice.amount_due")
+	}
+	return c.say(ctx, s, c.t("wa.invoice.confirm", "name", whatsapp.SafeText(name), "to", maskAddress(addr), "amount", invoicing.Naira(inv.AmountKobo),
+		"for", whatsapp.SafeText(what)), confirmButtons(c)...)
+}
+
+// waInvoiceSaved starts an invoice to a saved person: its title as the
+// customer's name, its email (else its phone) where it goes. The
+// business's own saved thing is taken over one's own of the same name;
+// one's own gives the business only the copy on the invoice (§5.3). A
+// thing of another kind says it cannot be invoiced; one with no email or
+// phone asks for one, as a typed name does. false when nothing is saved
+// by the name (the words are read as a typed name).
+func (s *Server) waInvoiceSaved(ctx context.Context, c *chat, typed string, kobo int64, what string) (bool, error) {
+	name, err := saved.Name(typed)
+	if err != nil {
+		return false, nil //nolint:nilerr // not a saved thing's name: a typed one
+	}
+	got, err := s.savedFind(ctx, c, name)
+	if err != nil {
+		return true, err
+	}
+	if len(got) == 0 {
+		return true, c.say(ctx, s, c.t("wa.saved.share_none", "name", name))
+	}
+	x := got[0].row
+	for _, f := range got {
+		if !f.mine {
+			x = f.row
+		}
+	}
+	if x.Kind != saved.KindPerson {
+		return true, c.say(ctx, s, c.t("wa.invoice.saved_kind", "name", x.Name, "kind", savedKindWords(x)))
+	}
+	str := func(k string) string { v, _ := x.Details[k].(string); return v }
+	addr, isEmail := str("email"), true
+	if addr == "" {
+		addr, isEmail = str("phone"), false
+	}
+	inv := &chatInvoice{AmountKobo: kobo, For: what}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+		var err error
+		if inv.Name, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, "name", sender.CleanName(x.Title)); err != nil || addr == "" {
+			return err
+		}
+		cat := "phone"
+		if isEmail {
+			cat = "email"
+		}
+		inv.Contact, err = s.Store.PII.SealTx(ctx, tx, c.tenant.ID, cat, addr)
+		return err
+	}); err != nil {
+		return true, err
+	}
+	if addr == "" {
+		if err := s.saveSession(ctx, c, stateCollecting, chatData{Invoice: inv}, waPendingTTL); err != nil {
+			return true, err
+		}
+		return true, c.say(ctx, s, c.t("wa.invoice.contact", "name", whatsapp.SafeText(x.Title)))
+	}
+	inv.Email = isEmail
+	return true, s.waInvoiceConfirm(ctx, c, inv, x.Title, addr)
+}
+
+// savedKindWords is what a saved thing is, as a sentence names it: "a
+// place", "a bank account", "a car".
+func savedKindWords(x savedRow) string {
+	switch x.Kind {
+	case saved.KindCustom:
+		if x.KindName != "" {
+			return "a " + strings.ToLower(x.KindName)
+		}
+		return "one of your own kinds"
+	case saved.KindBankAccount:
+		return "a bank account"
+	case saved.KindPerson:
+		return "a person"
+	case saved.KindPlace:
+		return "a place"
+	case saved.KindText:
+		return "a text"
+	case saved.KindFile:
+		return "a photo or document"
+	case saved.KindProviderAccount:
+		return "an account with a provider"
+	}
+	return "a saved thing"
+}
+
 // waInvoiceReply takes the customer's address, then Yes or No.
 func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) error {
 	inv := c.data.Invoice
@@ -269,16 +375,7 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 			return err
 		}
 		inv.Email = isEmail
-		data := chatData{Invoice: inv, Nonce: uuid.NewString()}
-		if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
-			return err
-		}
-		what := inv.For
-		if what == "" {
-			what = c.t("wa.invoice.amount_due")
-		}
-		return c.say(ctx, s, c.t("wa.invoice.confirm", "name", whatsapp.SafeText(name), "to", maskAddress(addr), "amount", invoicing.Naira(inv.AmountKobo),
-			"for", whatsapp.SafeText(what)), confirmButtons(c)...)
+		return s.waInvoiceConfirm(ctx, c, inv, name, addr)
 	}
 	switch cmd {
 	case "yes", "y", "send", "confirm":
