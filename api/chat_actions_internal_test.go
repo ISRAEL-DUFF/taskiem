@@ -125,3 +125,13 @@ func TestCatalogueWordsInTheLanguageFiles(t *testing.T) {
 		}
 	}
 }
+
+// A form's order chosen from its chips ("TK-A1B2C3 · Ada") is taken as its
+// number, as the questions take it (review fix).
+func TestTakenValuesReadAnOrdersChip(t *testing.T) {
+	a, _ := chatActionByID("riders.give")
+	got := takenValues(a, map[string]string{"ref": "TK-A1B2C3 · Ada", "rider": "Musa"})
+	if got["ref"] != "TK-A1B2C3" || got["rider"] != "Musa" {
+		t.Fatalf("%v", got)
+	}
+}

@@ -75,22 +75,33 @@ const ICON: Record<string, string> = {
 };
 export const menuIcon = (name: string) => ICON[name] ?? "more";
 
-let catalogue: Promise<ChatTopic[]> | undefined;
+let catalogue: { at: number; topics: Promise<ChatTopic[]> } | undefined;
 
-/** The person's catalogue, read once a page. */
-export function useCatalogue(): ChatTopic[] | undefined {
-  const [topics, setTopics] = useState<ChatTopic[]>();
+/** How long a read catalogue serves new menus: a part of the business
+ * turned off, a role changed or the most used reordered shows within it. */
+const FRESH_MS = 60_000;
+
+/** The person's catalogue, read again once a minute old; undefined while
+ * it comes, null when it could not be read (with a way to try again). */
+export function useCatalogue(): { topics: ChatTopic[] | undefined | null; retry: () => void } {
+  const [topics, setTopics] = useState<ChatTopic[] | null>();
+  const [tries, setTries] = useState(0);
   useEffect(() => {
-    catalogue ??= get<{ topics: ChatTopic[] }>("/v1/chat/actions").then((r) => r.topics ?? []);
+    if (!catalogue || Date.now() - catalogue.at > FRESH_MS)
+      catalogue = { at: Date.now(), topics: get<{ topics: ChatTopic[] }>("/v1/chat/actions").then((r) => r.topics ?? []) };
     let live = true;
-    catalogue.then((t) => live && setTopics(t)).catch(() => {
-      catalogue = undefined;
-    });
+    catalogue.topics.then(
+      (t) => live && setTopics(t),
+      () => {
+        catalogue = undefined;
+        if (live) setTopics(null);
+      },
+    );
     return () => {
       live = false;
     };
-  }, []);
-  return topics;
+  }, [tries]);
+  return { topics, retry: () => (setTopics(undefined), setTries((n) => n + 1)) };
 }
 
 /** A topic's actions, the picked one first. */
@@ -120,7 +131,7 @@ export function MenuCard({
   openTool: (k: ToolKey, from?: DOMRect, start?: { add?: boolean }) => void;
   onFold?: () => void;
 }) {
-  const topics = useCatalogue();
+  const { topics, retry } = useCatalogue();
   const navigate = useNavigate();
   const [topic, setTopic] = useState(menu.topic);
   const [chosen, setChosen] = useState<string>();
@@ -129,11 +140,26 @@ export function MenuCard({
   const [form, setForm] = useState<{ action: ChatAction; values: Record<string, string> }>();
   useEffect(() => setShown(open && !chosen), [open, chosen]);
 
+  if (topics === null)
+    return (
+      <div className="tk-menu tk-menu-folded" data-msg={id} data-testid="taskiem-menu">
+        <span className="tk-menu-folded-words">The menu could not be loaded.</span>
+        <button type="button" className="link" onClick={retry}>
+          Try again
+        </button>
+      </div>
+    );
   if (!topics) return <div className="tk-menu tk-menu-loading" data-msg={id} aria-busy="true" />;
   const t = topic ? topics.find((x) => x.id === topic) : undefined;
 
   const press = (a: ChatAction, from?: DOMRect) => {
     setAll(false);
+    // The row Taskiem picked with values it took from the message: the form
+    // with them in it, even for an action with a tool of its own, whose
+    // form would start empty.
+    const picked = a.id === menu.pick && topic === menu.topic;
+    if (picked && a.fields?.length && Object.keys(menu.values ?? {}).length > 0)
+      return setForm({ action: a, values: { ...menu.values } });
     if (a.opens === "form" && a.tool) {
       setChosen(a.title);
       onFold?.();

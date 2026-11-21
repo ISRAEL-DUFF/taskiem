@@ -68,12 +68,13 @@ Future<void> showToolSheet(
   Widget? footer,
   String? openId,
   void Function(String words)? onSaved,
+  bool add = false,
 }) {
   tools.chats.prefs?.rememberTool(tool.key);
   return showTkSheet<void>(
     context,
     // Back from the list: the tools panel again (kit.tsx ToolSheet onTools).
-    (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId, onSaved: onSaved, onTools: tools.toggle),
+    (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId, onSaved: onSaved, onTools: tools.toggle, add: add),
   );
 }
 
@@ -100,7 +101,11 @@ class ToolHost {
 bool _plain(ToolRow r) => r.data != null && ((r.data!['choices'] as List?)?.length ?? 0) == 0 && r.data!['variant_of'] == null;
 
 class ToolSheet extends StatefulWidget {
-  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved, this.onTools});
+  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved, this.onTools, this.add = false});
+
+  /// Opens on the tool's "add one" form (a menu's "Add a product"), where
+  /// the tool has one.
+  final bool add;
 
   /// Back from the list: the sheet goes and the tools panel opens again.
   final VoidCallback? onTools;
@@ -138,7 +143,7 @@ class _ToolSheetState extends State<ToolSheet> {
   final _search = TextEditingController();
   late String? _chip = widget.chip;
   ToolRow? _open;
-  bool _adding = false;
+  late bool _adding = widget.add && widget.tool.add != null;
 
   // Make one product with sizes and colours: choosing, then its form.
   bool _picking = false;

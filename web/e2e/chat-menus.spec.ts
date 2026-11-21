@@ -97,3 +97,58 @@ for (const width of [390, 360])
     await expect(menus(page).last()).toHaveAttribute("data-topic", "");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
+
+// Review fixes: a menu whose catalogue could not be read says so and tries
+// again; the row Taskiem picked with values it took opens its form with
+// them in it, even for an action with a tool of its own.
+test("a failed menu tries again; a picked row's values reach its form", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await signUp(page);
+  let fail = true;
+  await page.route("**/v1/chat/actions", (r) =>
+    fail
+      ? r.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "try again" }) })
+      : r.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            topics: [
+              {
+                id: "sales", name: "Sales", icon: "sell", color: "lime",
+                actions: [{
+                  id: "sales.sell", title: "Record a sale", line: "Items, amount, and how they paid", icon: "sell", does: "changes", opens: "form", tool: "sell",
+                  fields: [
+                    { key: "what", label: "What did you sell?", kind: "text" },
+                    { key: "amount", label: "For how much in all?", kind: "money" },
+                  ],
+                }],
+              },
+            ],
+          }),
+        }),
+  );
+  await page.route("**/v1/taskiem-chat", (r) =>
+    r.request().method() !== "POST"
+      ? r.continue()
+      : r.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            messages: [{
+              id: "22222222-0000-4000-8000-000000000001", channel: "web", inbound: false, kind: "menu", created_at: new Date().toISOString(),
+              text: JSON.stringify({ topic: "sales", pick: "sales.sell", values: { what: "3 bags of rice" }, line: "About Sales." }),
+            }],
+          }),
+        }),
+  );
+  await page.goto("/chat?with=taskiem");
+  await send(page, "I sold 3 bags of rice");
+  const card = menus(page).last();
+  await expect(card.getByText("The menu could not be loaded.")).toBeVisible();
+  fail = false;
+  await card.getByRole("button", { name: "Try again" }).click();
+  await card.getByRole("button", { name: /Record a sale/ }).click();
+  const form = page.getByTestId("taskiem-action-form");
+  await expect(form.getByLabel("What did you sell?")).toHaveValue("3 bags of rice");
+});

@@ -549,7 +549,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     return true;
   }
 
-  void _openTool(Tool tool, {String? openId}) {
+  void _openTool(Tool tool, {String? openId, bool add = false}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
@@ -594,6 +594,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       tool: tool,
       detail: toolDetail(widget.data.chats.auth),
       openId: openId,
+      add: add,
       // Saved: its diary line here at once, and the alerts read again.
       onSaved: (_) {
         unawaited(widget.data.pull().catchError((Object _) {}));
@@ -995,7 +996,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 onTool: (key, add) {
                   final tool = tools.where((t) => t.key == key).firstOrNull;
                   if (tool == null) return false;
-                  _openTool(tool);
+                  _openTool(tool, add: add);
                   return true;
                 },
                 onPage: (path) => _openPage(path),

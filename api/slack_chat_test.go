@@ -1,11 +1,11 @@
 package api_test
 
 import (
-	"fmt"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"

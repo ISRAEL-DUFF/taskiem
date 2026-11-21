@@ -12,11 +12,11 @@ package api
 
 import (
 	"context"
-	"sort"
-	"time"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -47,7 +48,7 @@ const (
 type chatField struct {
 	Key  string
 	Ask  string // the question
-	Kind string // text, phone, money, number, signed, order, booking, rider, item, zone, or a choice
+	Kind string // text, phone, money, number, signed, order, booking, rider, item, product, zone, or a choice
 	// Choices are the fixed choices of a "choice" field.
 	Choices  []string
 	Optional bool
@@ -126,10 +127,19 @@ func both(fs ...func(*Server, *chat, areas.State) bool) func(*Server, *chat, are
 	}
 }
 
+// ridersMay is who may use a riders action, as the chat's riders
+// commands decide (whatsapp_riders.go): the riders themselves are the
+// storefront's to manage, offering and releasing orders a cashier's too;
+// the deliveries need the dispatch running; all in the Storefront part.
+func ridersMay(p string, dispatch bool) func(*Server, *chat, areas.State) bool {
+	return func(s *Server, c *chat, on areas.State) bool {
+		return s.Riders.Ready() && (!dispatch || s.Dispatch.Ready()) && c.p.Can(p) && on.On(areas.Storefront)
+	}
+}
+
 var (
 	stockOn     = func(s *Server, _ *chat, _ areas.State) bool { return s.Stock.Ready() }
 	ordersOn    = func(s *Server, _ *chat, _ areas.State) bool { return s.Orders != nil }
-	ridersOn    = func(s *Server, _ *chat, _ areas.State) bool { return s.Riders.Ready() }
 	purchasesOn = func(s *Server, _ *chat, _ areas.State) bool { return s.Purchases.Ready() }
 	invoicesOn  = func(s *Server, _ *chat, _ areas.State) bool { return s.Invoices != nil }
 	aiOn        = func(s *Server, _ *chat, _ areas.State) bool { return s.AI != nil }
@@ -185,7 +195,7 @@ var chatActions = []chatAction{
 	{ID: "stock.add", Topic: "stock", Title: "Add stock that came in", Line: "What came, how many, at what cost", Icon: "stock", Does: doesChanges, Opens: opensForm,
 		Shortcut: "add 50 cartons of Indomie at 8,500", Tool: "stock", Add: true,
 		Fields: []chatField{f("what", "What came in? Say how many, like 50 cartons of Indomie.", "text"), opt(f("cost", "What did each cost? Send skip if you'd rather not say.", "money"))},
-		Make: fill("add {what}[ at {cost}]"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
+		Make:   fill("add {what}[ at {cost}]"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
 	{ID: "stock.adjust", Topic: "stock", Title: "Correct a count", Line: "Spoilt, missing, or counted wrong", Icon: "stock", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "adjust rice -2 spoilt",
 		Fields: []chatField{f("item", "Which item?", "item"), f("by", "By how many? Use a minus for less, like -2.", "signed"),
@@ -201,19 +211,19 @@ var chatActions = []chatAction{
 	{ID: "products.add", Topic: "products", Title: "Add a product", Line: "Name, price, photo, sizes", Icon: "products", Does: doesChanges, Opens: opensForm,
 		Shortcut: "add product Jollof rice 2000", Tool: "products", Add: true,
 		Fields: []chatField{f("name", "What's the product called?", "text"), f("price", "What's its price?", "money")},
-		Make: fill("add product {name} {price}"), may: perm(PermStorefrontManage)},
+		Make:   fill("add product {name} {price}"), may: perm(PermStorefrontManage)},
 	{ID: "products.price", Topic: "products", Title: "Change a price", Line: "A new price for one product", Icon: "products", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "price jollof rice 2500",
-		Fields: []chatField{f("name", "Which product?", "item"), f("price", "What's the new price?", "money")},
-		Make: fill("price {name} {price}"), may: perm(PermStorefrontManage)},
+		Fields:   []chatField{f("name", "Which product?", "product"), f("price", "What's the new price?", "money")},
+		Make:     fill("price {name} {price}"), may: perm(PermStorefrontManage)},
 	{ID: "products.hide", Topic: "products", Title: "Hide or show a product", Line: "Off your page for now, or back", Icon: "products", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "hide jollof rice",
-		Fields: []chatField{choice("do", "Hide it, or show it again?", "hide", "show"), f("name", "Which product?", "item")},
-		Make: fill("{do} {name}"), may: perm(PermStorefrontManage)},
+		Fields:   []chatField{choice("do", "Hide it, or show it again?", "hide", "show"), f("name", "Which product?", "product")},
+		Make:     fill("{do} {name}"), may: perm(PermStorefrontManage)},
 	{ID: "products.service", Topic: "products", Title: "Add a service", Line: "A haircut, a fitting, a session", Icon: "services", Does: doesChanges, Opens: opensForm,
 		Shortcut: "add service Haircut 30 2000", Tool: "services", Add: true,
 		Fields: []chatField{f("name", "What's the service called?", "text"), f("minutes", "How many minutes does it take?", "number"), f("price", "What's its price?", "money")},
-		Make: fill("add service {name} {minutes} {price}"), may: both(perm(PermStorefrontManage), ordersOn)},
+		Make:   fill("add service {name} {minutes} {price}"), may: both(perm(PermStorefrontManage), ordersOn)},
 	{ID: "products.prices", Topic: "products", Title: "Price lists", Line: "Prices for your trade buyers", Icon: "prices", Does: doesShow, Opens: opensForm,
 		Shortcut: "/prices", Tool: "prices", may: perm(PermStorefrontManage)},
 
@@ -235,45 +245,47 @@ var chatActions = []chatAction{
 	{ID: "orders.one", Topic: "orders", Title: "One order", Line: "Find it by its number", Icon: "orders", Does: doesShow, Opens: opensQuestions,
 		Shortcut: "order TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
 		Make: fill("order {ref}"), may: both(permIn(PermOrders, areas.Orders), ordersOn)},
+	// "ready" and "delivered" are the shop page's words (chatIntentOn), so
+	// this row is the Storefront part's, as the command is.
 	{ID: "orders.move", Topic: "orders", Title: "Mark ready or delivered", Line: "Move an order on", Icon: "orders", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "order TK-A1B2C3 ready",
-		Fields: []chatField{f("ref", "Which order?", "order"), choice("to", "Ready, or delivered?", "ready", "delivered")},
-		Make: fill("order {ref} {to}"), may: both(permIn(PermOrders, areas.Storefront), ordersOn)},
+		Fields:   []chatField{f("ref", "Which order?", "order"), choice("to", "Ready, or delivered?", "ready", "delivered")},
+		Make:     fill("order {ref} {to}"), may: both(permIn(PermOrders, areas.Storefront), ordersOn)},
 	{ID: "orders.refund", Topic: "orders", Title: "Refund an order", Line: "Money back to the customer", Icon: "orders", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "refund TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
 		Make: fill("refund {ref}"), may: both(perm(PermStorefrontManage), ordersOn)},
 
 	// Riders
 	{ID: "riders.list", Topic: "riders", Title: "Your riders, and who's free", Line: "Who is out, who can go now", Icon: "rider", Does: doesShow, Opens: opensShow,
-		Shortcut: "riders", may: both(perm(PermOrders), ridersOn)},
+		Shortcut: "riders", may: ridersMay(PermStorefrontManage, false)},
 	{ID: "riders.add", Topic: "riders", Title: "Add a rider", Line: "Name, phone, and the areas they cover", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "add rider Musa 0803 123 4567 Ikeja",
 		Fields: []chatField{f("name", "What's the rider's name?", "text"), f("phone", "What's {name}'s phone number?", "phone"),
 			opt(f("areas", "Which areas does {name} cover? Send skip for anywhere.", "zone"))},
-		Make: fill("add rider {name} {phone}[ {areas}]"), may: both(perm(PermOrders), ridersOn)},
+		Make: fill("add rider {name} {phone}[ {areas}]"), may: ridersMay(PermStorefrontManage, false)},
 	{ID: "riders.give", Topic: "riders", Title: "Give an order to a rider", Line: "Pick the order, then the rider", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "order TK-A1B2C3 to Musa",
-		Fields: []chatField{f("ref", "Which order?", "order"), f("rider", "Which rider?", "rider")},
-		Make: fill("order {ref} to {rider}"), may: both(perm(PermOrders), ridersOn)},
+		Fields:   []chatField{f("ref", "Which order?", "order"), f("rider", "Which rider?", "rider")},
+		Make:     fill("order {ref} to {rider}"), may: ridersMay(PermOrders, true)},
 	{ID: "riders.today", Topic: "riders", Title: "Today's deliveries", Line: "Out, done, and waiting", Icon: "rider", Does: doesShow, Opens: opensShow,
-		Shortcut: "deliveries", may: both(perm(PermOrders), ridersOn)},
+		Shortcut: "deliveries", may: ridersMay(PermOrders, true)},
 	{ID: "riders.back", Topic: "riders", Title: "Take an order back", Line: "From a rider who can't go", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "release TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
-		Make: fill("release {ref}"), may: both(perm(PermOrders), ridersOn)},
-	{ID: "riders.auto", Topic: "riders", Title: "Offer every order to riders", Line: "Riders take them as they come", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
-		Shortcut: "turn on deliveries", Make: fill("turn on deliveries"), may: both(perm(PermOrders), ridersOn)},
+		Make: fill("release {ref}"), may: ridersMay(PermOrders, true)},
+	{ID: "riders.auto", Topic: "riders", Title: "Offer every order to riders", Line: "Riders take them as they come", Icon: "rider", Does: doesAsks, Opens: opensQuestions,
+		Shortcut: "turn on deliveries", Make: fill("turn on deliveries"), may: ridersMay(PermStorefrontManage, true)},
 
 	// Bookings
 	{ID: "bookings.today", Topic: "bookings", Title: "Today's bookings", Line: "Who is coming, and when", Icon: "bookings", Does: doesShow, Opens: opensShow,
 		Shortcut: "bookings", may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
-	{ID: "bookings.move", Topic: "bookings", Title: "Move a booking", Line: "A new day or time", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
+	{ID: "bookings.move", Topic: "bookings", Title: "Move a booking", Line: "A new day or time", Icon: "bookings", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "move TK-A1B2C3 to Sat 11:00",
-		Fields: []chatField{f("ref", "Which booking?", "booking"), f("when", "To when? Like Sat 11:00.", "text")},
-		Make: fill("move {ref} to {when}"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
-	{ID: "bookings.cancel", Topic: "bookings", Title: "Cancel a booking", Line: "The customer is told", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
+		Fields:   []chatField{f("ref", "Which booking?", "booking"), f("when", "To when? Like Sat 11:00.", "text")},
+		Make:     fill("move {ref} to {when}"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
+	{ID: "bookings.cancel", Topic: "bookings", Title: "Cancel a booking", Line: "The customer is told", Icon: "bookings", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "booking TK-A1B2C3 cancel", Fields: []chatField{f("ref", "Which booking?", "booking")},
 		Make: fill("booking {ref} cancel"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
-	{ID: "bookings.off", Topic: "bookings", Title: "Take a day off", Line: "No bookings that day", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
+	{ID: "bookings.off", Topic: "bookings", Title: "Take a day off", Line: "No bookings that day", Icon: "bookings", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "off 25 Dec", Fields: []chatField{f("day", "Which day? Like 25 Dec.", "text")},
 		Make: fill("off {day}"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
 
@@ -288,8 +300,8 @@ var chatActions = []chatAction{
 		Make: fill("received {what}"), may: both(perm(PermStorefrontManage), purchasesOn)},
 	{ID: "buying.pay", Topic: "buying", Title: "Pay a supplier", Line: "Against their bill", Icon: "purchases", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "paid Dangote 425,000 transfer",
-		Fields: []chatField{f("who", "Which supplier?", "text"), f("amount", "How much?", "money"), choice("how", "How did you pay?", "cash", "transfer")},
-		Make: fill("paid {who} {amount} {how}"), may: both(perm(PermStorefrontManage), purchasesOn)},
+		Fields:   []chatField{f("who", "Which supplier?", "text"), f("amount", "How much?", "money"), choice("how", "How did you pay?", "cash", "transfer")},
+		Make:     fill("paid {who} {amount} {how}"), may: both(perm(PermStorefrontManage), purchasesOn)},
 	{ID: "buying.add", Topic: "buying", Title: "Add a supplier", Line: "Name, phone, what they sell", Icon: "purchases", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "add supplier Dangote Depot 0803 123 4567 for rice",
 		Fields: []chatField{f("name", "What's the supplier called?", "text"), f("phone", "What's their phone number?", "phone"),
@@ -301,16 +313,16 @@ var chatActions = []chatAction{
 	// Money
 	{ID: "money.spent", Topic: "money", Title: "Record money spent", Line: "Diesel, rent, transport", Icon: "money", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "spent 12,000 on diesel",
-		Fields: []chatField{f("amount", "How much did you spend?", "money"), f("what", "On what?", "text")},
-		Make: fill("spent {amount} on {what}"), may: permIn(PermInvoiceManage, areas.Money)},
+		Fields:   []chatField{f("amount", "How much did you spend?", "money"), f("what", "On what?", "text")},
+		Make:     fill("spent {amount} on {what}"), may: permIn(PermInvoiceManage, areas.Money)},
 	{ID: "money.invoice", Topic: "money", Title: "Send an invoice", Line: "To a customer, from the chat", Icon: "invoices", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "invoice Ada 25,000 for 5 bags of rice",
-		Fields: []chatField{f("who", "Who is it for?", "text"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
-		Make: fill("invoice {who} {amount} for {for}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
+		Fields:   []chatField{f("who", "Who is it for?", "text"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
+		Make:     fill("invoice {who} {amount} for {for}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 	{ID: "money.cash", Topic: "money", Title: "Cash in or out", Line: "The till, the safe", Icon: "money", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "cash in 20,000 till",
-		Fields: []chatField{choice("dir", "Cash in, or cash out?", "cash in", "cash out"), f("amount", "How much?", "money"), opt(f("what", "What for? Send skip if nothing.", "text"))},
-		Make: fill("{dir} {amount}[ {what}]"), may: permIn(PermInvoiceManage, areas.Money)},
+		Fields:   []chatField{choice("dir", "Cash in, or cash out?", "cash in", "cash out"), f("amount", "How much?", "money"), opt(f("what", "What for? Send skip if nothing.", "text"))},
+		Make:     fill("{dir} {amount}[ {what}]"), may: permIn(PermInvoiceManage, areas.Money)},
 	{ID: "money.week", Topic: "money", Title: "Your money", Line: "In, out, and what is left", Icon: "money", Does: doesShow, Opens: opensPage,
 		Shortcut: "/money", Tool: "money", Page: "/money", may: permIn(PermInvoiceRead, areas.Money)},
 	{ID: "money.invoices", Topic: "money", Title: "Your invoices", Line: "Sent, paid, and late", Icon: "invoices", Does: doesShow, Opens: opensPage,
@@ -321,13 +333,13 @@ var chatActions = []chatAction{
 		Shortcut: "who owes me", may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 	{ID: "owe.add", Topic: "owe", Title: "Someone owes you", Line: "Write it in the book", Icon: "customers", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "Ada owes 5,000",
-		Fields: []chatField{f("who", "Who owes you?", "text"), f("amount", "How much?", "money"), opt(f("for", "For what? Send skip if nothing.", "text"))},
-		Make: fill("{who} owes {amount}[ for {for}]"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
+		Fields:   []chatField{f("who", "Who owes you?", "text"), f("amount", "How much?", "money"), opt(f("for", "For what? Send skip if nothing.", "text"))},
+		Make:     fill("{who} owes {amount}[ for {for}]"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 	{ID: "owe.paid", Topic: "owe", Title: "Someone paid", Line: "Counted against what they owe", Icon: "customers", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "Ada paid 2,000 cash",
-		Fields: []chatField{f("who", "Who paid?", "text"), f("amount", "How much?", "money"), choice("how", "Cash, or transfer?", "cash", "transfer")},
-		Make: fill("{who} paid {amount} {how}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
-	{ID: "owe.send", Topic: "owe", Title: "Send a customer their balance", Line: "A friendly reminder", Icon: "customers", Does: doesChanges, Opens: opensQuestions,
+		Fields:   []chatField{f("who", "Who paid?", "text"), f("amount", "How much?", "money"), choice("how", "Cash, or transfer?", "cash", "transfer")},
+		Make:     fill("{who} paid {amount} {how}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
+	{ID: "owe.send", Topic: "owe", Title: "Send a customer their balance", Line: "A friendly reminder", Icon: "customers", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "send Ada her balance", Fields: []chatField{f("who", "Which customer?", "text")},
 		Make: fill("send {who} their balance"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 
@@ -336,8 +348,8 @@ var chatActions = []chatAction{
 		Shortcut: "my tasks", may: anyone},
 	{ID: "staff.give", Topic: "staff", Title: "Give someone a task", Line: "With a time it should be done by", Icon: "tasks", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "@Tunde count the float by 7am",
-		Fields: []chatField{f("who", "Who is it for? Their name as on the team.", "text"), f("what", "What should they do, and by when? Like count the float by 7am.", "text")},
-		Make: fill("@{who} {what}"), may: perm(PermTaskGive)},
+		Fields:   []chatField{f("who", "Who is it for? Their name as on the team.", "text"), f("what", "What should they do, and by when? Like count the float by 7am.", "text")},
+		Make:     fill("@{who} {what}"), may: perm(PermTaskGive)},
 	{ID: "staff.approvals", Topic: "staff", Title: "Waiting for your approval", Line: "Cash, discounts, payments", Icon: "approvals", Does: doesShow, Opens: opensShow,
 		Shortcut: "approvals", may: perm(PermApprovalDecide)},
 
@@ -346,8 +358,8 @@ var chatActions = []chatAction{
 		Shortcut: "tables", may: perm(PermTableRead)},
 	{ID: "lists.find", Topic: "lists", Title: "Look something up", Line: "In one of your lists", Icon: "tables", Does: doesShow, Opens: opensQuestions,
 		Shortcut: "find customers Ada",
-		Fields: []chatField{f("list", "In which list?", "text"), f("words", "What should I look for?", "text")},
-		Make: fill("find {list} {words}"), may: perm(PermTableRead)},
+		Fields:   []chatField{f("list", "In which list?", "text"), f("words", "What should I look for?", "text")},
+		Make:     fill("find {list} {words}"), may: perm(PermTableRead)},
 	{ID: "lists.add", Topic: "lists", Title: "Add to a list", Line: "One new entry", Icon: "tables", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "add to customers", Fields: []chatField{f("list", "To which list?", "text")},
 		Make: fill("add to {list}"), may: perm(PermTableEdit)},
@@ -359,8 +371,8 @@ var chatActions = []chatAction{
 		Shortcut: "status", may: anyone},
 	{ID: "auto.build", Topic: "auto", Title: "Automate something new", Line: "Say it, Taskiem sets it up", Icon: "workflows", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "build every Friday text my customers who owe me",
-		Fields: []chatField{f("goal", "What should happen, and when? Like every Friday text my customers who owe me.", "text")},
-		Make: fill("build {goal}"), may: both(perm(PermWorkflowEdit), aiOn)},
+		Fields:   []chatField{f("goal", "What should happen, and when? Like every Friday text my customers who owe me.", "text")},
+		Make:     fill("build {goal}"), may: both(perm(PermWorkflowEdit), aiOn)},
 	{ID: "auto.run", Topic: "auto", Title: "Run an automation", Line: "One you already have", Icon: "workflows", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "run Salary reminders", Fields: []chatField{f("name", "Which one? Its name.", "text")},
 		Make: fill("run {name}"), may: perm(PermRunStart)},
@@ -370,8 +382,8 @@ var chatActions = []chatAction{
 		Page: "/settings/saved", may: anyone},
 	{ID: "saved.add", Topic: "saved", Title: "Save something", Line: "Call it up later by its name", Icon: "saved", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "save mum: GTBank 0123456789",
-		Fields: []chatField{f("name", "What name should it have? Like mum.", "text"), f("what", "What should I keep? Like GTBank 0123456789.", "text")},
-		Make: fill("save {name}: {what}"), may: anyone},
+		Fields:   []chatField{f("name", "What name should it have? Like mum.", "text"), f("what", "What should I keep? Like GTBank 0123456789.", "text")},
+		Make:     fill("save {name}: {what}"), may: anyone},
 
 	// School
 	{ID: "school.students", Topic: "school", Title: "Students", Line: "By class, with what they owe", Icon: "school", Does: doesShow, Opens: opensPage,
@@ -409,9 +421,9 @@ func word(l lang.Tag, id, english string) string {
 }
 
 // Ids of the catalogue's words.
-func topicWordID(t chatTopic) string            { return "menu.topic." + t.ID }
-func titleWordID(a chatAction) string           { return "menu." + a.ID }
-func lineWordID(a chatAction) string            { return "menu." + a.ID + ".line" }
+func topicWordID(t chatTopic) string             { return "menu.topic." + t.ID }
+func titleWordID(a chatAction) string            { return "menu." + a.ID }
+func lineWordID(a chatAction) string             { return "menu." + a.ID + ".line" }
 func askWordID(a chatAction, f chatField) string { return "menu." + a.ID + ".ask." + f.Key }
 
 // chatActionByID finds an action.
@@ -604,6 +616,29 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 				label += refSep + n[0]
 			}
 			out = append(out, label)
+			if len(out) == 5 {
+				break
+			}
+		}
+		return out
+	case "product":
+		// The page's products, whether or not their stock is counted.
+		if !s.Stock.Ready() {
+			return nil
+		}
+		cat, ok := s.Stock.Table.(stock.Catalogue)
+		if !ok {
+			return nil
+		}
+		rows, m, err := cat.Rows(ctx, c.tenant.ID)
+		if err != nil || m.Name == "" {
+			return nil
+		}
+		var out []string
+		for _, r := range rows {
+			if n, _ := r[m.Name].(string); strings.TrimSpace(n) != "" {
+				out = append(out, n)
+			}
 			if len(out) == 5 {
 				break
 			}

@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/menu_card.dart' show ActionFormSheet;
+import 'package:taskiem/chat/tool_sheet.dart' show ToolSheet;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
@@ -179,5 +180,82 @@ void main() {
     expect(jsonDecode((said.last['reply'] as String).substring('form:riders.add:'.length)), {'name': 'Musa Bello', 'phone': '08031234567', 'areas': 'Yaba'});
     expect(said.last['text'], 'Add a rider: Musa Bello, 08031234567, Yaba');
     expect(find.text('Show again'), findsNWidgets(2));
+  });
+
+  testWidgets('review fixes: a failed menu tries again; a picked row keeps its values; an add row opens the add form', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    var fail = true;
+    final catalogue = {
+      'topics': [
+        {
+          'id': 'sales', 'name': 'Sales', 'icon': 'sell', 'color': 'lime',
+          'actions': [
+            {
+              ..._a('sales.sell', 'Record a sale', 'Items, amount, and how they paid', 'sell', opens: 'form', tool: 'sell'),
+              'fields': [
+                {'key': 'what', 'label': 'What did you sell?', 'kind': 'text'},
+                {'key': 'amount', 'label': 'For how much in all?', 'kind': 'money'},
+              ],
+            },
+            {..._a('products.add', 'Add a product', 'Name, price, photo, sizes', 'products', opens: 'form', tool: 'products'), 'add': true},
+          ],
+        },
+      ],
+    };
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions') {
+          return fail ? http.Response(jsonEncode({'error': 'try again'}), 503) : http.Response(jsonEncode(catalogue), 200);
+        }
+        if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                _menu('p1', {'topic': 'sales', 'pick': 'sales.sell', 'values': {'what': '3 bags of rice'}, 'line': 'About Sales.'}, '2026-11-11T13:40:00Z'),
+              ],
+            }),
+            200,
+          );
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), 'I sold 3 bags of rice');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+
+    // The catalogue could not be read: said, and tried again.
+    expect(find.text('The menu could not be loaded.'), findsOneWidget);
+    fail = false;
+    await t.tap(find.text('Try again'));
+    await settle(t);
+    expect(find.text('Record a sale'), findsOneWidget);
+
+    // The picked row with values: its form with them in, not the sell tool.
+    await t.ensureVisible(find.text('Record a sale'));
+    await settle(t);
+    await t.tap(find.text('Record a sale'));
+    await settle(t);
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.byType(ActionFormSheet), findsOneWidget);
+    expect(find.text('3 bags of rice'), findsOneWidget);
+    Navigator.of(t.element(find.byType(ActionFormSheet))).pop();
+    await settle(t);
+    await t.pump(const Duration(milliseconds: 600));
+
+    // An add row: the tool's sheet, opened on its add form (the form above
+    // was let go unsent, so the card is still open).
+    await t.ensureVisible(find.text('Add a product'));
+    await settle(t);
+    await t.tap(find.text('Add a product'));
+    await settle(t);
+    expect(find.byWidgetPredicate((w) => w is ToolSheet && w.add), findsOneWidget);
   });
 }

@@ -32,7 +32,7 @@ type Sent struct {
 	// A list message: its button's words and rows.
 	ListButton string
 	List       []whatsapp.ListRow
-	Payloads []string          // template quick-reply payloads
+	Payloads   []string // template quick-reply payloads
 	// URLParams are the suffixes sent for a template's dynamic url buttons
 	// (and the code of an authentication template's copy button).
 	URLParams []string

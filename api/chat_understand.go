@@ -326,6 +326,10 @@ func takenValues(a chatAction, given map[string]string) map[string]string {
 			continue
 		}
 		v = strings.TrimSpace(v)
+		// An order or a booking chosen as "TK-A1B2C3 · Ada": its number.
+		if ref, _, ok := strings.Cut(v, refSep); ok && (f.Kind == "order" || f.Kind == "booking") {
+			v = strings.TrimSpace(ref)
+		}
 		if f.Kind == "choice" {
 			match := ""
 			for _, ch := range f.Choices {

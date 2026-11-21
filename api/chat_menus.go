@@ -524,7 +524,8 @@ func (s *Server) actionUsed(ctx context.Context, c *chat, id string) {
 	if c.p == nil || c.p.UserID == uuid.Nil || c.tenant.ID == uuid.Nil {
 		return
 	}
-	err := chatTx(context.WithoutCancel(ctx), s, c, func(tx pgx.Tx) error {
+	ctx = context.WithoutCancel(ctx)
+	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO chat_action_uses (tenant_id, user_id, action, day) VALUES ($1, $2, $3, current_date)
 			ON CONFLICT (tenant_id, user_id, action, day) DO UPDATE SET uses = chat_action_uses.uses + 1`, c.tenant.ID, c.p.UserID, id); err != nil {
 			return err

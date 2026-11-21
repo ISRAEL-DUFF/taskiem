@@ -10,8 +10,10 @@ import (
 	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -63,6 +65,7 @@ func TestChatMenusInTheTaskiemChat(t *testing.T) {
 	w := newWAWorld(t)
 	book := &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
 	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: book, PageBase: "https://" + reachFormHost}
+	w.srv.Dispatch = &dispatch.Dispatch{Pool: w.env.DB.App, Riders: w.srv.Riders, Orders: &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault}}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
 
 	// The catalogue: the person's own topics, each with its actions.
@@ -357,6 +360,7 @@ func TestChatMenusForms(t *testing.T) {
 	w := newWAWorld(t)
 	book := &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
 	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: book, PageBase: "https://" + reachFormHost}
+	w.srv.Dispatch = &dispatch.Dispatch{Pool: w.env.DB.App, Riders: w.srv.Riders, Orders: &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault}}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
 
 	var add map[string]any
@@ -394,5 +398,39 @@ func TestChatMenusForms(t *testing.T) {
 	viewer.must(404, "GET", "/v1/chat/actions/riders.give/choices", nil)
 	if r := textOf(taskiemAll(t, viewer, map[string]any{"text": "x", "reply": `form:riders.add:{"name":"A","phone":"0803 123 4567"}`})); !strings.Contains(r, "isn't something you can do here") {
 		t.Fatalf("viewer: %q", r)
+	}
+}
+
+// A riders row is offered only where its command works (review fix): the
+// deliveries need the dispatch running; without it, giving an order to a
+// rider, taking it back and the day's deliveries are not in the menu,
+// while the riders themselves are.
+func TestChatMenusRidersNeedTheDispatch(t *testing.T) {
+	w := newWAWorld(t)
+	book := &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: book, PageBase: "https://" + reachFormHost}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	ids := map[string]bool{}
+	for _, x := range owner.must(200, "GET", "/v1/chat/actions", nil)["topics"].([]any) {
+		for _, a := range x.(map[string]any)["actions"].([]any) {
+			ids[a.(map[string]any)["id"].(string)] = true
+		}
+	}
+	if !ids["riders.add"] || !ids["riders.list"] || ids["riders.give"] || ids["riders.back"] || ids["riders.today"] || ids["riders.auto"] {
+		t.Fatalf("riders: %v", ids)
+	}
+}
+
+// "Which product?" offers the page's products (review fix), not only the
+// items whose stock is counted.
+func TestChatMenusProductChoices(t *testing.T) {
+	w := newTablesWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Mama Put Stores", "ada@mama.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 50}, "Idempotency-Key", "i1")
+	ch := owner.must(200, "GET", "/v1/chat/actions/products.price/choices", nil)["fields"].(map[string]any)
+	if got, _ := ch["name"].([]any); len(got) != 1 || got[0] != "Indomie" {
+		t.Fatalf("choices: %v", ch)
 	}
 }

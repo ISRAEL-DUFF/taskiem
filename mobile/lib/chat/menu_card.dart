@@ -72,15 +72,19 @@ Color topicColor(TkLook look, String color) => switch (color) {
   _ => look.teal,
 };
 
-final _catalogues = Expando<Future<List<ChatTopic>>>();
+final _catalogues = Expando<({DateTime at, Future<List<ChatTopic>> topics})>();
 final _read = Expando<List<ChatTopic>>();
 
-/// The person's catalogue, read once for a sign-in.
+/// How long a read catalogue serves new menus: a part of the business
+/// turned off, a role changed or the most used reordered shows within it.
+const _fresh = Duration(minutes: 1);
+
+/// The person's catalogue, read again once a minute old.
 Future<List<ChatTopic>> catalogueOf(Auth auth) {
   final had = _catalogues[auth];
-  if (had != null) return had;
+  if (had != null && DateTime.now().difference(had.at) < _fresh) return had.topics;
   final f = auth.api.chatActions().then((r) => _read[auth] = r.topics);
-  _catalogues[auth] = f;
+  _catalogues[auth] = (at: DateTime.now(), topics: f);
   f.catchError((Object _) {
     _catalogues[auth] = null;
     return <ChatTopic>[];
@@ -143,9 +147,17 @@ class _MenuCardState extends State<MenuCard> {
     super.initState();
     _topic = widget.menu.topic;
     if (_topics != null) return;
+    _load();
+  }
+
+  bool _failed = false;
+
+  void _load() {
     unawaited(catalogueOf(widget.auth).then((t) {
       if (mounted) setState(() => _topics = t);
-    }, onError: (Object _) {}));
+    }, onError: (Object _) {
+      if (mounted) setState(() => _failed = true);
+    }));
   }
 
   @override
@@ -160,13 +172,17 @@ class _MenuCardState extends State<MenuCard> {
   });
 
   Future<void> _press(ChatAction a) async {
-    if (a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a);
+    final fields = a.fields ?? const [];
+    final picked = a.id == widget.menu.pick && _topic == widget.menu.topic;
+    // The row Taskiem picked with values it took from the message: the form
+    // with them in it, even for an action with a tool of its own, whose
+    // form would start empty.
+    final carry = picked && widget.menu.values.isNotEmpty && fields.isNotEmpty;
+    if (!carry && a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a);
     if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return _fold(a);
     // An action that takes values: its form here (M4), filled with what
     // Taskiem took from the message.
-    final fields = a.fields ?? const [];
     if (fields.isNotEmpty) {
-      final picked = a.id == widget.menu.pick && _topic == widget.menu.topic;
       final values = await showTkSheet<Map<String, String>>(
         context,
         (_) => ActionFormSheet(auth: widget.auth, action: a, initial: picked ? widget.menu.values : const {}),
@@ -236,6 +252,30 @@ class _MenuCardState extends State<MenuCard> {
         child: child,
       ),
     );
+    if (topics == null && _failed) {
+      return card(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+          child: Row(
+            children: [
+              Expanded(child: Text('The menu could not be loaded.', style: tkText(size: 13.5, color: t.muted))),
+              TkPress(
+                onTap: () => setState(() {
+                  _failed = false;
+                  _load();
+                }),
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('Try again', style: tkText(size: 13, weight: 600, color: dark ? t.brandDark : t.brand)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (topics == null) return card(const SizedBox(height: 96));
     final topic = _topic == null ? null : topics.where((x) => x.id == _topic).firstOrNull;
     Widget square(String icon, Color color, {double size = 36}) => Container(

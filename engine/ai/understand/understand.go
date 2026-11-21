@@ -46,8 +46,8 @@ const (
 
 // Bounds on what goes to the model and what comes back.
 const (
-	MaxValues  = 10  // values for an action
-	MaxValue   = 200 // one value
+	MaxValues  = 10   // values for an action
+	MaxValue   = 200  // one value
 	MaxText    = 1000 // the person's message
 	MaxCommand = 300  // a command, one line
 	MaxReply   = 500  // a question or a "cannot"
