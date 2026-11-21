@@ -583,6 +583,111 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A question's answer that is not an order's or booking's number"
     },
+    "menu.buying.deliver": {
+      "text": "Deliver to a saved place",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.place": {
+      "text": "Where to? A saved place's name, like warehouse.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.ref": {
+      "text": "Which order? Its number, like P-7QX4KD.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.line": {
+      "text": "Where one order goes, like @warehouse",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.saved": {
+      "text": "That isn't a saved thing's name. Names are letters, numbers and -, like mum or our-account.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a saved thing's name"
+    },
+    "menu.saved.ask": {
+      "text": "Ask about a saved thing",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.name": {
+      "text": "Which saved thing? Its name, like mum.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.what": {
+      "text": "What do you want to know? Like phone, or the insurance date. Send skip for all of it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.line": {
+      "text": "A detail, like @mum's phone",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.import": {
+      "text": "Import from a file",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.import.line": {
+      "text": "A spreadsheet of accounts, people, places",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.remind": {
+      "text": "Remind me of a date",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.name": {
+      "text": "Which saved thing? Its name, like car.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.what": {
+      "text": "Which of its dates? Like insurance or birthday. Send skip if it has one.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.line": {
+      "text": "A saved date, told on its day",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders": {
+      "text": "Your reminders",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders.line": {
+      "text": "The dates you asked to be told of",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.share": {
+      "text": "Share a saved thing",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.name": {
+      "text": "Which saved thing? Its name, like our-account.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.to": {
+      "text": "Who with? A linked business or a customer, by name.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.line": {
+      "text": "With a linked business or a customer",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
     "menu.check.signed": {
       "text": "Send a number, like -2 or 3.",
       "reviewed": false,
@@ -709,7 +814,7 @@
       "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.ask.who": {
-      "text": "Who is it for?",
+      "text": "Who is it for? A name, or a saved person like @acme.",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
     },

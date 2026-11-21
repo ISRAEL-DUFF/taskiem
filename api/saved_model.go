@@ -7,29 +7,35 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/ai/intent"
-	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
-// The model reads @name (saved objects S2, after its review): in a
-// language other than English, the model that routes a message is told the
-// person's saved things by @name and kind, never a title or anything they
-// hold, so "wetin be mama number?" can be "what is @mum's phone"; what it
-// returns is read as the English words are, with the person's own reach.
+// The model reads @name (saved objects S2, folded into the chat menus'
+// model in S3): the model that reads a message nothing recognised
+// (chat_understand.go) is told the person's saved things by @name and
+// kind, never a title or anything they hold, so "wetin be mama number?"
+// can be the saved.ask action for @mum; what it picks is done as the
+// catalogue's actions are, with the person's own reach.
+
+// savedName is a saved thing as the model is told it.
+type savedName struct{ name, kind string }
+
+// maxSavedNamed bounds the saved things the model is told.
+const maxSavedNamed = 100
 
 // savedNamed are the saved things the person in the chat reaches, by name
 // and kind only: their own (not on a business's own app) and their
 // business's, the most recently changed first.
-func (s *Server) savedNamed(ctx context.Context, c *chat) []intent.Named {
+func (s *Server) savedNamed(ctx context.Context, c *chat) []savedName {
 	if c.p == nil || c.p.UserID == uuid.Nil {
 		return nil
 	}
-	var out []intent.Named
+	var out []savedName
 	seen := map[string]bool{}
 	read := func(o savedOwner) {
 		err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
 			where, owner := ownerWhere(o)
-			rows, err := tx.Query(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE `+where+` ORDER BY updated_at DESC LIMIT $2`, owner, intent.MaxNamed)
+			rows, err := tx.Query(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE `+where+` ORDER BY updated_at DESC LIMIT $2`, owner, maxSavedNamed)
 			if err != nil {
 				return err
 			}
@@ -41,7 +47,7 @@ func (s *Server) savedNamed(ctx context.Context, c *chat) []intent.Named {
 				}
 				if !seen[x.Name] {
 					seen[x.Name] = true
-					out = append(out, intent.Named{Name: x.Name, Kind: strings.TrimPrefix(strings.TrimPrefix(savedKindWords(x), "an "), "a ")})
+					out = append(out, savedName{x.Name, strings.TrimPrefix(strings.TrimPrefix(savedKindWords(x), "an "), "a ")})
 				}
 			}
 			return rows.Err()
@@ -56,29 +62,69 @@ func (s *Server) savedNamed(ctx context.Context, c *chat) []intent.Named {
 	if c.tenant.ID != uuid.Nil {
 		read(savedOwner{tenant: c.tenant.ID, by: c.p.UserID})
 	}
-	if len(out) > intent.MaxNamed {
-		out = out[:intent.MaxNamed]
+	if len(out) > maxSavedNamed {
+		out = out[:maxSavedNamed]
 	}
 	return out
 }
 
-// waSavedEnglish does what the model's English words about a saved thing
-// ask, as the typed words would; false when they are none of them.
-func (s *Server) waSavedEnglish(ctx context.Context, c *chat, text string) (bool, error) {
-	for _, try := range []func(context.Context, *chat, string) (bool, error){
-		s.waSavedQuestion, s.waSavedName, s.waShareSaved, s.waSavedReminders,
-	} {
-		if done, err := try(ctx, c, text); done || err != nil {
-			return true, err
+// savedNamesLine is the line the model is told the saved things in: names
+// and kinds, nothing they hold; "" when there are none.
+func (s *Server) savedNamesLine(ctx context.Context, c *chat) string {
+	named := s.savedNamed(ctx, c)
+	if len(named) == 0 {
+		return ""
+	}
+	list := make([]string, len(named))
+	for i, n := range named {
+		kind := n.kind
+		if r := []rune(kind); len(r) > 40 {
+			kind = string(r[:40])
 		}
+		list[i] = "@" + n.name + " (" + kind + ")"
 	}
-	if s.Purchases.Ready() && s.Stock.Ready() {
-		if done, err := s.waDeliverToSaved(ctx, c, text); done || err != nil {
-			return true, err
-		}
+	return "Things they saved, by @name (kind), for the saved actions' values and for @name in the other commands: " + strings.Join(list, ", ")
+}
+
+// savedChoices are the saved things offered for a menu's field (chat
+// menus' choices; saved objects): the most recently changed of the kind
+// the field takes, as @name, the person's own (not on a business's own
+// app) and the business's, five at most.
+func (s *Server) savedChoices(ctx context.Context, c *chat, kind string) []string {
+	if c.p == nil || c.p.UserID == uuid.Nil {
+		return nil
 	}
-	if s.chatAreas(ctx, c).On(areas.Money) {
-		return s.waInvoiceCommand(ctx, c, text, normalizeCommand(text))
+	want := map[string]string{"saved_place": saved.KindPlace, "person": saved.KindPerson}[kind]
+	var out []string
+	seen := map[string]bool{}
+	read := func(o savedOwner) {
+		_ = s.savedTx(ctx, o, func(tx pgx.Tx) error {
+			where, owner := ownerWhere(o)
+			q := `SELECT name FROM saved_objects WHERE ` + where
+			args := []any{owner}
+			if want != "" {
+				q += ` AND kind = $2`
+				args = append(args, want)
+			}
+			rows, err := tx.Query(ctx, q+` ORDER BY updated_at DESC LIMIT 5`, args...)
+			if err != nil {
+				return err
+			}
+			names, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			for _, n := range names {
+				if !seen[n] && len(out) < 5 {
+					seen[n] = true
+					out = append(out, "@"+n)
+				}
+			}
+			return err
+		})
 	}
-	return false, nil
+	if c.tenant.ID != uuid.Nil {
+		read(savedOwner{tenant: c.tenant.ID, by: c.p.UserID})
+	}
+	if !ownAppChat(c) {
+		read(savedOwner{person: c.p.UserID, by: c.p.UserID})
+	}
+	return out
 }

@@ -37,9 +37,6 @@ type ChatCase struct {
 	Message  string   `json:"message"`
 	// Tables names the fixture's table set a spec case is asked over.
 	Tables string `json:"tables,omitempty"`
-	// Saved are the person's saved things a route case is asked with, by
-	// name and kind only, as the API tells the model (saved objects S2).
-	Saved  []intent.Named `json:"saved,omitempty"`
 	Expect struct {
 		// Intent is the intent a route case must give; Arg words its
 		// argument must contain (case-insensitive), when given.
@@ -211,7 +208,7 @@ func runChat(ctx context.Context, prov ai.Provider, c ChatCase, tables []datatab
 	switch c.Kind {
 	case "route":
 		r.Expected = c.Expect.Intent + " " + c.Expect.Arg
-		res, rsp, err := (&intent.Classifier{Provider: prov, Saved: c.Saved}).Classify(ctx, c.Message, info)
+		res, rsp, err := (&intent.Classifier{Provider: prov}).Classify(ctx, c.Message, info)
 		resp = rsp
 		if err != nil && !errors.Is(err, intent.ErrUnusable) {
 			r.Status, r.Error = statusError, err.Error()
@@ -434,11 +431,6 @@ func chatHeuristic(req ai.Request) (*ai.Response, error) {
 		return answer(heuristicSpec(q, tables))
 	}
 	msg, _ := between(prompt, "<message>\n", "\n</message>")
-	if names, ok := between(prompt, "The things they saved, by @name (kind): ", "\n"); ok {
-		if arg := heuristicSaved(msg, names); arg != "" {
-			return answer(map[string]string{"intent": "saved", "argument": arg})
-		}
-	}
 	i, arg := heuristicRoute(msg)
 	return answer(map[string]string{"intent": i, "argument": arg})
 }
@@ -464,19 +456,6 @@ func hasAny(s string, words ...string) bool {
 		}
 	}
 	return false
-}
-
-// heuristicSaved is "@name" when the message names one of the saved
-// things, by @name or by its name alone.
-func heuristicSaved(msg, names string) string {
-	f := " " + lang.Fold(msg) + " "
-	for _, n := range strings.Split(names, ", ") {
-		name, _, _ := strings.Cut(strings.TrimPrefix(n, "@"), " (")
-		if name != "" && (strings.Contains(f, "@"+name) || strings.Contains(f, " "+name+" ") || strings.Contains(f, " "+name+"'")) {
-			return "@" + name
-		}
-	}
-	return ""
 }
 
 // heuristicRoute routes by the words of the five languages.

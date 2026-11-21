@@ -1399,13 +1399,6 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 			return false, nil
 		}
 		return true, s.waAsk(ctx, c, arg)
-	// A saved thing, as the model routes it: its English words, read as
-	// the typed ones are (saved_model.go).
-	case lang.IntentSaved:
-		if !strings.Contains(arg, "@") || c.state != stateIdle {
-			return false, nil
-		}
-		return s.waSavedEnglish(ctx, c, arg)
 	}
 	return false, nil
 }

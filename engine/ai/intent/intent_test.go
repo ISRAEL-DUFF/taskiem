@@ -95,24 +95,3 @@ func TestClassifyWithoutProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-// The saved things are told by @name and kind only, and only when the
-// saved intent may be answered.
-func TestRequestTellsSavedNames(t *testing.T) {
-	pcm, _ := lang.Lookup(lang.PCM)
-	named := []intent.Named{{Name: "mum", Kind: "person"}, {Name: "car", Kind: strings.Repeat("k", 60)}}
-	p := ai.PromptText(intent.RequestWith("wetin be mama number?", pcm, 0, intent.Allowed, named))
-	if !strings.Contains(p, "The things they saved, by @name (kind): @mum (person), @car ("+strings.Repeat("k", 40)+")") {
-		t.Fatalf("names not told: %s", p)
-	}
-	if p := ai.PromptText(intent.RequestWith("x", pcm, 0, intent.Stranger, named)); strings.Contains(p, "@mum") {
-		t.Fatalf("told to a stranger's routing: %s", p)
-	}
-	many := make([]intent.Named, intent.MaxNamed+5)
-	for i := range many {
-		many[i] = intent.Named{Name: "n", Kind: "text"}
-	}
-	if p := ai.PromptText(intent.RequestWith("x", pcm, 0, intent.Allowed, many)); strings.Count(p, "@n (text)") != intent.MaxNamed {
-		t.Fatalf("not bounded")
-	}
-}
