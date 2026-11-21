@@ -588,6 +588,11 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a number up or down"
     },
+    "menu.choose": {
+      "text": "Choose",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The button that opens a menu's list on WhatsApp; at most 20 characters"
+    },
     "menu.choose_one": {
       "text": "Choose one of: {choices}.",
       "reviewed": false,
@@ -747,6 +752,16 @@
       "text": "In, out, and what is left",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.more": {
+      "text": "More…",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+    },
+    "menu.more_line": {
+      "text": "The other topics",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under the More… row, and heading the rest of the topics"
     },
     "menu.need_answer": {
       "text": "I need an answer to go on. Send *cancel* to stop.",
@@ -1492,6 +1507,11 @@
       "text": "Stock",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topics": {
+      "text": "Topics",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The title over the topics in a WhatsApp list; at most 24 characters"
     },
     "menu.what_do": {
       "text": "What would you like to do?",

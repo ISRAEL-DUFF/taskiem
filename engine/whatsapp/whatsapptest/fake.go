@@ -29,6 +29,9 @@ type Sent struct {
 	Image    string // an image's link
 	Template string
 	Buttons  []whatsapp.Button // interactive reply buttons
+	// A list message: its button's words and rows.
+	ListButton string
+	List       []whatsapp.ListRow
 	Payloads []string          // template quick-reply payloads
 	// URLParams are the suffixes sent for a template's dynamic url buttons
 	// (and the code of an authentication template's copy button).
@@ -418,6 +421,15 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 				Buttons []struct {
 					Reply struct{ ID, Title string } `json:"reply"`
 				} `json:"buttons"`
+				Button   string `json:"button"`
+				Sections []struct {
+					Title string `json:"title"`
+					Rows  []struct {
+						ID          string `json:"id"`
+						Title       string `json:"title"`
+						Description string `json:"description"`
+					} `json:"rows"`
+				} `json:"sections"`
 				Parameters struct {
 					Version string `json:"flow_message_version"`
 					Token   string `json:"flow_token"`
@@ -476,6 +488,28 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		s.Text = m.Interactive.Body.Text
 		for _, b := range m.Interactive.Action.Buttons {
 			s.Buttons = append(s.Buttons, whatsapp.Button{ID: b.Reply.ID, Title: b.Reply.Title})
+		}
+		if m.Interactive.Type == "list" {
+			// WhatsApp's limits: a button of 20, ten rows, titles of 24, descriptions of 72.
+			a := m.Interactive.Action
+			if a.Button == "" || len([]rune(a.Button)) > 20 || len(a.Sections) == 0 || (len(a.Sections) > 1 && a.Sections[0].Title == "") {
+				refuse(w, http.StatusBadRequest, 131009, "Parameter value is not valid")
+				return
+			}
+			s.ListButton = a.Button
+			for _, sec := range a.Sections {
+				for _, r := range sec.Rows {
+					if r.ID == "" || len([]rune(r.Title)) > 24 || len([]rune(r.Description)) > 72 {
+						refuse(w, http.StatusBadRequest, 131009, "Parameter value is not valid")
+						return
+					}
+					s.List = append(s.List, whatsapp.ListRow{ID: r.ID, Title: r.Title, Description: r.Description})
+				}
+			}
+			if len(s.List) == 0 || len(s.List) > 10 {
+				refuse(w, http.StatusBadRequest, 131009, "Parameter value is not valid")
+				return
+			}
 		}
 		if m.Interactive.Type == "flow" {
 			p := m.Interactive.Action.Parameters
@@ -623,6 +657,11 @@ func Document(mediaID, mime, filename, caption string) map[string]any {
 // Text is an inbound text message.
 func Text(body string) map[string]any {
 	return map[string]any{"type": "text", "text": map[string]any{"body": body}}
+}
+
+// ListReply is a row chosen from a list message.
+func ListReply(id, title string) map[string]any {
+	return map[string]any{"type": "interactive", "interactive": map[string]any{"type": "list_reply", "list_reply": map[string]any{"id": id, "title": title}}}
 }
 
 // ButtonReply is a tapped interactive reply button.

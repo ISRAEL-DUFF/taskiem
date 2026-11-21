@@ -1,6 +1,6 @@
 # Menus in the chat: showing people what they can do
 
-Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 and M2 are built** (21 November 2026; see "What M1 built" and "What M2 built" at the end); M3 and M4 are not. It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
+Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1, M2 and M3 are built** (21 November 2026; see "What M1 built", "What M2 built" and "What M3 built" at the end); M4 is not. It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
 
 Builds on: [chat tools](chat-tools.md) (the tools panel, the tool sheets, the forms), [business chat tools](business-chat-tools.md), [the phone app's look](mobile-app-look.md) (Direction B), [saved objects](saved-objects.md) (`@name`), [Schools in the chat](schools-in-the-chat.md), [languages](../languages.md) (the word lists, the model's routing).
 
@@ -329,3 +329,12 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 - The message reaches the model redacted, as before: a phone number or an account number in it is never a value the model can give, so it is asked.
 - **Topics by their words** when no model can read the message (§8.3): each topic has words, English and Pidgin, matched as the start of a word ("okada", "carton", "owe"); the one topic with the most, and no tie, shows its menu, on every channel. The words are in the catalogue (`topicHints`), not yet in each language's word lists.
 - **The most used first** (§6.1): a row pressed, or an action the model picked, is counted per person and business by day (`chat_action_uses`, migration 00499: the action's id and a count, nothing else; days past thirty deleted as the next use is counted). Each topic's actions, and the topics, come most used first in the last thirty days, in the menus, the catalogue and what the model is told. A command typed in full is not counted yet.
+
+## What M3 built (21 November 2026)
+
+- **WhatsApp list messages** (`whatsapp.List`, `Client.SendList`): a menu is the head line, with a "Choose" button opening its rows (a title of 24 characters, its line of 72 under it). A row chosen comes back as its id (`act:<id>`, `topic:<id>`), read as the Taskiem chat's press is. The topics list holds ten rows: with more topics, nine and "More…", the rest in a second list. A question with more than three choices is a list too; three or fewer stay reply buttons.
+- **Telegram**: a menu's rows are buttons under the message, one to a row; **Slack**: buttons in the message (Block Kit), every row (Slack takes 25).
+- **Numbers** still work everywhere: a menu's row by its place, among the rows as sent.
+- The test WhatsApp server checks WhatsApp's own limits on a list (ten rows, a button of 20, titles of 24, lines of 72).
+
+Not done: two buttons to a row on Telegram for the topics (one to a row for now); Slack shows every row rather than five and "More…".

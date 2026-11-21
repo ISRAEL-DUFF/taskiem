@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -65,7 +66,7 @@ func TestSlackConversation(t *testing.T) {
 		t.Fatalf("dm: %d", st)
 	}
 	got := w.fake.to("U0OWNER")[before:]
-	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Reply with a number") {
+	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Pick a topic") || !strings.Contains(fmt.Sprint(got[0]["blocks"]), "value:topic:staff") {
 		t.Fatalf("help: %v", got)
 	}
 	// Slack retried it: nothing twice.

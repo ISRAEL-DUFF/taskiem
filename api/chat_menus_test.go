@@ -12,6 +12,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // taskiemAll posts to the Taskiem chat (text, or a press's reply) and
@@ -172,34 +173,65 @@ func TestChatMenusInTheTaskiemChat(t *testing.T) {
 	}
 }
 
-// On WhatsApp "help staff" is a numbered menu, answered by a number.
-func TestChatMenusNumbered(t *testing.T) {
+// On WhatsApp a menu is a list message (M3): its rows the topic's actions,
+// chosen from the list or by a number; the topics are a list too, nine and
+// More when there are more than ten; a choice with more than three choices
+// is a list as well.
+func TestChatMenusOnWhatsApp(t *testing.T) {
 	w := newWAWorld(t)
 	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
 	const on = "+2348010000071"
 	w.bind(t, owner, on)
-	r := w.say(t, on, "help staff")
-	if !strings.Contains(r, "*Staff and tasks*") || !strings.Contains(r, "2. Give someone a task") {
-		t.Fatalf("menu: %q", r)
+	list := func(text string) whatsapptest.Sent {
+		t.Helper()
+		got := w.send(t, on, whatsapptest.Text(text))
+		if len(got) != 1 || got[0].ListButton != "Choose" {
+			t.Fatalf("%q: %+v", text, got)
+		}
+		return got[0]
 	}
-	if r := w.say(t, on, "2"); !strings.Contains(r, "Who is it for?") {
+	m := list("help staff")
+	if !strings.Contains(m.Text, "*Staff and tasks*") || len(m.List) != 3 || m.List[1].ID != "act:staff.give" || m.List[1].Title != "Give someone a task" ||
+		m.List[1].Description != "With a time it should be done by" {
+		t.Fatalf("menu: %+v", m)
+	}
+	// Chosen from the list.
+	got := w.send(t, on, whatsapptest.ListReply("act:staff.give", "Give someone a task"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Who is it for?") {
+		t.Fatalf("chosen: %+v", got)
+	}
+	w.say(t, on, "cancel")
+	// Or by its number (it is first now: the most used come first).
+	m = list("help staff")
+	if m.List[0].ID != "act:staff.give" {
+		t.Fatalf("most used first: %+v", m.List)
+	}
+	if r := w.say(t, on, "1"); !strings.Contains(r, "Who is it for?") {
 		t.Fatalf("number: %q", r)
 	}
 	w.say(t, on, "cancel")
 	// A message that is not a number lets the menu go.
-	w.say(t, on, "help staff")
+	list("help staff")
 	if r := w.say(t, on, "status"); !strings.Contains(r, "No runs") {
 		t.Fatalf("let go: %q", r)
 	}
-	// Words that point to a topic: its numbered menu.
-	if r := w.say(t, on, "who is the worker on duty"); !strings.Contains(r, "*Staff and tasks*") {
-		t.Fatalf("words: %q", r)
+	// Words that point to a topic: its list.
+	if m := list("who is the worker on duty"); !strings.Contains(m.Text, "*Staff and tasks*") {
+		t.Fatalf("words: %+v", m)
 	}
 	w.say(t, on, "cancel")
-	// help: the topics, numbered; help all: every command in words.
-	if r := w.say(t, on, "help"); !strings.Contains(r, "Staff and tasks") || strings.Contains(r, "You can send:") {
-		t.Fatalf("help: %q", r)
+	// help: the topics; more than ten, nine and More, the rest behind it.
+	m = list("help")
+	if len(m.List) > 10 {
+		t.Fatalf("topics: %d rows", len(m.List))
 	}
+	if n := len(m.List); n == 10 && m.List[9].ID == "topic:more" {
+		rest := w.send(t, on, whatsapptest.ListReply("topic:more", "More…"))
+		if len(rest) != 1 || len(rest[0].List) == 0 {
+			t.Fatalf("more: %+v", rest)
+		}
+	}
+	// help all: every command in words.
 	if r := w.say(t, on, "help all"); !strings.Contains(r, "You can send:") {
 		t.Fatalf("help all: %q", r)
 	}

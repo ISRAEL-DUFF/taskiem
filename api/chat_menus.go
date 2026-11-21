@@ -46,6 +46,8 @@ const menuRows = 5
 // the topics), what Taskiem understood, the row it picked with what it
 // took from the message, and the picked row's command as a tip.
 type chatMenuMsg struct {
+	// from is where a list of the topics starts (WhatsApp's second page).
+	from   int
 	Topic  string            `json:"topic,omitempty"`
 	Line   string            `json:"line,omitempty"`
 	Pick   string            `json:"pick,omitempty"`
@@ -56,6 +58,7 @@ type chatMenuMsg struct {
 // chatMenuState is a numbered menu waiting for a number (the channels
 // without cards).
 type chatMenuState struct {
+	From  int      `json:"from,omitempty"`
 	Topic string   `json:"topic,omitempty"`
 	Items []string `json:"items"` // action ids, or topic ids for the topics
 }
@@ -94,37 +97,74 @@ func (s *Server) sayMenu(ctx context.Context, c *chat, m chatMenuMsg) error {
 		}
 		return nil
 	}
-	var lines []string
-	st := chatMenuState{Topic: m.Topic}
+	// Elsewhere: a list on WhatsApp, buttons on Telegram and Slack (M3);
+	// a number from it is read too.
+	type row struct{ id, item, title, line string }
+	var rows []row
+	head, section := m.Line, ""
 	if m.Topic == "" {
-		lines = append(lines, c.t("menu.what_do")+" "+c.t("menu.reply_number"))
-		for i, t := range s.topicsFor(ctx, c) {
-			st.Items = append(st.Items, t.ID)
-			lines = append(lines, strconv.Itoa(i+1)+". "+word(c.lang.Tag, topicWordID(t), t.Name))
-		}
-	} else {
-		t, _ := chatTopicByID(m.Topic)
-		head := m.Line
 		if head == "" {
 			head = c.t("menu.what_do")
 		}
-		lines = append(lines, "*"+word(c.lang.Tag, topicWordID(t), t.Name)+"*: "+head+" "+c.t("menu.reply_number"))
-		for i, a := range s.orderedActions(ctx, c, m.Topic, m.Pick) {
-			st.Items = append(st.Items, a.ID)
-			lines = append(lines, strconv.Itoa(i+1)+". "+word(c.lang.Tag, titleWordID(a), a.Title))
+		section = c.t("menu.topics")
+		for _, t := range s.topicsFor(ctx, c)[min(m.from, len(s.topicsFor(ctx, c))):] {
+			var first []string
+			for _, a := range s.actionsOf(ctx, c, t.ID) {
+				if len(first) < 3 {
+					first = append(first, word(c.lang.Tag, titleWordID(a), a.Title))
+				}
+			}
+			rows = append(rows, row{topicPrefix + t.ID, t.ID, word(c.lang.Tag, topicWordID(t), t.Name), strings.Join(first, ", ")})
+		}
+	} else {
+		t, _ := chatTopicByID(m.Topic)
+		section = word(c.lang.Tag, topicWordID(t), t.Name)
+		if head == "" {
+			head = c.t("menu.what_do")
+		}
+		head = "*" + section + "*: " + head
+		for _, a := range s.orderedActions(ctx, c, m.Topic, m.Pick) {
+			rows = append(rows, row{actPrefix + a.ID, a.ID, word(c.lang.Tag, titleWordID(a), a.Title), word(c.lang.Tag, lineWordID(a), a.Line)})
 		}
 	}
-	if len(st.Items) == 0 {
+	if len(rows) == 0 {
 		return c.say(ctx, s, notUnderstood(c))
 	}
+	// WhatsApp lists hold ten rows: more topics than that, nine and More.
+	if c.ch.Name() == "whatsapp" && len(rows) > 10 {
+		rows = append(rows[:9:9], row{topicPrefix + topicsMore, topicsMore, c.t("menu.more"), c.t("menu.more_line")})
+	}
+	st := chatMenuState{Topic: m.Topic, From: m.from}
+	for _, r := range rows {
+		st.Items = append(st.Items, r.item)
+	}
+	text := head
 	if m.Tip != "" {
-		lines = append(lines, "", c.t("menu.tip", "command", m.Tip))
+		text += "\n\n" + c.t("menu.tip", "command", m.Tip)
 	}
 	if err := s.saveSession(ctx, c, stateCollecting, chatData{Menu: &st}, waPendingTTL); err != nil {
 		return err
 	}
-	return c.say(ctx, s, strings.Join(lines, "\n"))
+	if c.ch.Name() == "whatsapp" {
+		l := &whatsapp.List{Button: c.t("menu.choose"), Sections: []whatsapp.ListSection{{Title: section}}}
+		for _, r := range rows {
+			l.Sections[0].Rows = append(l.Sections[0].Rows, whatsapp.ListRow{ID: r.id, Title: r.title, Description: r.line})
+		}
+		if c.note != "" {
+			text, c.note = c.note+"\n\n"+text, ""
+		}
+		_, err := c.ch.Send(ctx, c.addr, whatsapp.Message{Text: c.ch.Prefix(c.tenant.Name) + text, List: l})
+		return err
+	}
+	var bs []whatsapp.Button
+	for _, r := range rows {
+		bs = append(bs, whatsapp.Button{ID: r.id, Title: r.title})
+	}
+	return c.say(ctx, s, text, bs...)
 }
+
+// topicsMore is the topics list's last row on WhatsApp, for the rest.
+const topicsMore = "more"
 
 // orderedActions are a topic's actions, the picked one first.
 func (s *Server) orderedActions(ctx context.Context, c *chat, topic, pick string) []chatAction {
@@ -160,6 +200,9 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 		return true, s.menuAct(ctx, c, id)
 	}
 	if id, ok := strings.CutPrefix(c.in.Reply, topicPrefix); ok {
+		if id == topicsMore {
+			return true, s.sayMenu(ctx, c, chatMenuMsg{from: 9, Line: c.t("menu.more_line")})
+		}
 		return true, s.topicMenu(ctx, c, id)
 	}
 	if c.data.Steps != nil && c.state != stateIdle {
@@ -177,6 +220,9 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 		// A number from it picks; anything else is read as a new message.
 		if n, err := strconv.Atoi(strings.Trim(cmd, " #.")); err == nil && n >= 1 && n <= len(st.Items) {
 			if st.Topic == "" {
+				if st.Items[n-1] == topicsMore {
+					return true, s.sayMenu(ctx, c, chatMenuMsg{from: st.From + 9, Line: c.t("menu.more_line")})
+				}
 				return true, s.topicMenu(ctx, c, st.Items[n-1])
 			}
 			return true, s.menuAct(ctx, c, st.Items[n-1])
@@ -297,25 +343,24 @@ func (s *Server) stepsNext(ctx context.Context, c *chat, a chatAction, st *chatS
 	if len(st.Offered) == 0 {
 		return c.say(ctx, s, ask)
 	}
-	// The choices: buttons where there are few enough (three on
-	// WhatsApp); else numbered. Anything else may be typed.
-	limit := 5
-	if c.ch.Name() == "whatsapp" {
-		limit = 3
-	}
-	if len(st.Offered) <= limit {
-		var bs []whatsapp.Button
+	// The choices: buttons; on WhatsApp, which shows three, a list beyond
+	// that. Anything else may be typed, a number among them too.
+	if c.ch.Name() == "whatsapp" && len(st.Offered) > 3 {
+		l := &whatsapp.List{Button: c.t("menu.choose"), Sections: []whatsapp.ListSection{{}}}
 		for _, o := range st.Offered {
-			bs = append(bs, whatsapp.Button{ID: ansPrefix + o, Title: clipTitle(o)})
+			l.Sections[0].Rows = append(l.Sections[0].Rows, whatsapp.ListRow{ID: ansPrefix + o, Title: o})
 		}
-		return c.say(ctx, s, ask, bs...)
+		if c.note != "" {
+			ask, c.note = c.note+"\n\n"+ask, ""
+		}
+		_, err := c.ch.Send(ctx, c.addr, whatsapp.Message{Text: c.ch.Prefix(c.tenant.Name) + ask, List: l})
+		return err
 	}
-	lines := []string{ask}
-	for i, o := range st.Offered {
-		lines = append(lines, strconv.Itoa(i+1)+". "+o)
+	var bs []whatsapp.Button
+	for _, o := range st.Offered {
+		bs = append(bs, whatsapp.Button{ID: ansPrefix + o, Title: clipTitle(o)})
 	}
-	lines = append(lines, c.t("menu.reply_or_type"))
-	return c.say(ctx, s, strings.Join(lines, "\n"))
+	return c.say(ctx, s, ask, bs...)
 }
 
 func clipTitle(s string) string {
