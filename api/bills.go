@@ -422,7 +422,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 			// is not the buyer's to see).
 			if a.Kind == "transfer" && a.AccountNumber != "" && (a.Status == "open" || a.Status == "paid") {
 				bill.Transfer = &links.BillTransfer{Seq: a.Seq, BankName: a.BankName, AccountNumber: a.AccountNumber, AccountName: a.AccountName,
-					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, CreatedAt: a.CreatedAt}
+					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, PaidAt: x.PaidAt, CreatedAt: a.CreatedAt}
 				break
 			}
 		}

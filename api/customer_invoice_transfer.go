@@ -30,6 +30,7 @@ type customerTransfer struct {
 	AccountName   string     `json:"account_name,omitempty"`
 	AmountKobo    int64      `json:"amount_kobo,omitempty"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	PaidAt        *time.Time `json:"paid_at,omitempty"`
 }
 
 // customerInvoiceTx is the person's own invoice from the business of chat
@@ -56,7 +57,7 @@ func (s *Server) customerInvoiceTx(ctx context.Context, tx pgx.Tx, c personChat,
 
 // customerTransferOf is the invoice's newest account number, in its state.
 func customerTransferOf(ctx context.Context, tx pgx.Tx, x invoicing.Invoice) (customerTransfer, error) {
-	out := customerTransfer{Invoice: x.ID.String(), Reference: x.Number, DueKobo: x.DueKobo, State: "none"}
+	out := customerTransfer{Invoice: x.ID.String(), Reference: x.Number, DueKobo: x.DueKobo, State: "none", PaidAt: x.PaidAt}
 	if x.Status != "paid" && !x.Payable() {
 		// Voided or cancelled: no number to pay into.
 		return out, nil

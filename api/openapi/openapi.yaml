@@ -49785,6 +49785,9 @@ components:
         expires_at:
           type: string
           format: date-time
+        paid_at:
+          type: string
+          format: date-time
     Bill:
       type: object
       additionalProperties: false
@@ -49811,6 +49814,10 @@ components:
             expires_at:
               type: string
               format: date-time
+            paid_at:
+              type: string
+              format: date-time
+              description: When the bill was paid in full
             problem:
               type: string
               description: Why a number could not be had, in plain words

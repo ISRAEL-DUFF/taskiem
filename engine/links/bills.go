@@ -89,7 +89,9 @@ type BillTransfer struct {
 	AmountKobo    int64      `json:"amount_kobo"`
 	Status        string     `json:"status"` // requested, open, failed, paid, returned, unavailable
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	// PaidAt: when the invoice was paid in full.
+	PaidAt    *time.Time `json:"paid_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // Mirror is what a bill takes from its invoice.

@@ -43,6 +43,7 @@ type billTransferView struct {
 	AmountKobo    int64      `json:"amount_kobo,omitempty"`
 	ReceivedKobo  int64      `json:"received_kobo,omitempty"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	PaidAt        *time.Time `json:"paid_at,omitempty"`
 	// Problem: why a number could not be had, in plain words.
 	Problem string `json:"problem,omitempty"`
 	// Next: the same seller's next bill still to pay, once this is paid.
@@ -75,7 +76,7 @@ func transferOf(b links.Bill, now time.Time) *billTransferView {
 	case t == nil:
 		return nil
 	}
-	v := &billTransferView{BankName: t.BankName, AccountNumber: t.AccountNumber, AccountName: t.AccountName, AmountKobo: t.AmountKobo, ExpiresAt: t.ExpiresAt}
+	v := &billTransferView{BankName: t.BankName, AccountNumber: t.AccountNumber, AccountName: t.AccountName, AmountKobo: t.AmountKobo, ExpiresAt: t.ExpiresAt, PaidAt: t.PaidAt}
 	status := t.Status
 	if b.Status == "paid" {
 		// Paid in full, by this number or otherwise: nothing more to send.

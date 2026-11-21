@@ -50,12 +50,26 @@ function useNow(on: boolean): number {
 }
 
 /** One line of the account: what it is, the value, Copy. */
-function CopyLine({ label, shown, value, onCopied }: { label: string; shown: string; value: string; onCopied: (what: string) => void }) {
+function CopyLine({
+  label,
+  shown,
+  value,
+  onCopied,
+}: {
+  label: string;
+  shown: string;
+  value: string;
+  onCopied: (what: string) => void;
+}) {
   return (
     <div className="xfer-line">
       <dt>{label}</dt>
       <dd>
-        <span className={label === "Account number" ? "xfer-number" : undefined}>{shown}</span>
+        <span
+          className={label === "Account number" ? "xfer-number" : undefined}
+        >
+          {shown}
+        </span>
         <button
           type="button"
           className="xfer-copy"
@@ -112,12 +126,20 @@ export function TransferCard({
     return () => window.clearTimeout(x);
   }, [copied]);
   return (
-    <section className={`xfer xfer-${state}`} aria-label="Pay by transfer" data-testid={testid} data-state={state}>
+    <section
+      className={`xfer xfer-${state}`}
+      aria-label="Pay by transfer"
+      data-testid={testid}
+      data-state={state}
+    >
       <div className="xfer-top">
         <span className="tk-kicker">Pay by transfer</span>
         <Pill tone={pill.tone}>{pill.word}</Pill>
       </div>
-      <p className={`xfer-head${state === "paid" ? " ok" : ""}`} data-testid="transfer-head">
+      <p
+        className={`xfer-head${state === "paid" ? " ok" : ""}`}
+        data-testid="transfer-head"
+      >
         {state === "paid" && <Icon name="tick" />}
         {transferHead(t, state, paidAt, fmtTime)}
       </p>
@@ -130,23 +152,48 @@ export function TransferCard({
       {state === "open" && (
         <>
           <dl className="xfer-account">
-            <CopyLine label="Bank" shown={t.bank_name ?? ""} value={t.bank_name ?? ""} onCopied={setCopied} />
-            <CopyLine label="Account number" shown={spacedNumber(t.account_number ?? "")} value={bareNumber(t.account_number ?? "")} onCopied={setCopied} />
-            <CopyLine label="Account name" shown={t.account_name ?? ""} value={t.account_name ?? ""} onCopied={setCopied} />
+            <CopyLine
+              label="Bank"
+              shown={t.bank_name ?? ""}
+              value={t.bank_name ?? ""}
+              onCopied={setCopied}
+            />
+            <CopyLine
+              label="Account number"
+              shown={spacedNumber(t.account_number ?? "")}
+              value={bareNumber(t.account_number ?? "")}
+              onCopied={setCopied}
+            />
+            <CopyLine
+              label="Account name"
+              shown={t.account_name ?? ""}
+              value={t.account_name ?? ""}
+              onCopied={setCopied}
+            />
           </dl>
           {left && (
-            <p className={`xfer-time${left.warn ? " warn" : ""}`} data-testid="transfer-time">
+            <p
+              className={`xfer-time${left.warn ? " warn" : ""}`}
+              data-testid="transfer-time"
+            >
               <Icon name="clock" />
               {left.words}
             </p>
           )}
-          <p className="xfer-next">We'll mark it paid here as soon as it lands.</p>
+          <p className="xfer-next">
+            We'll mark it paid here as soon as it lands.
+          </p>
           <p className="xfer-wait">
             <span className="xfer-dot" aria-hidden="true" />
             Waiting for your transfer
           </p>
           {onLonger && (
-            <button type="button" className="link xfer-longer" disabled={busy} onClick={onLonger}>
+            <button
+              type="button"
+              className="link xfer-longer"
+              disabled={busy}
+              onClick={onLonger}
+            >
               I need longer
             </button>
           )}
@@ -157,14 +204,22 @@ export function TransferCard({
       </span>
       {state === "paid" && next && (
         <div className="xfer-acts">
-          <Link className="tk-btn primary" to={`/bills/${encodeURIComponent(next)}?pay=1`}>
+          <Link
+            className="tk-btn primary"
+            to={`/bills/${encodeURIComponent(next)}?pay=1`}
+          >
             Pay the next one
           </Link>
         </div>
       )}
       {(state === "part" || state === "expired") && onAgain && (
         <div className="xfer-acts">
-          <button type="button" className="tk-btn primary" disabled={busy} onClick={onAgain}>
+          <button
+            type="button"
+            className="tk-btn primary"
+            disabled={busy}
+            onClick={onAgain}
+          >
             {state === "part" ? "Pay the rest" : "Get a new number"}
           </button>
         </div>
@@ -172,7 +227,12 @@ export function TransferCard({
       {state === "failed" && (others || onAgain) && (
         <div className="xfer-acts">
           {onAgain && (
-            <button type="button" className="tk-btn soft" disabled={busy} onClick={onAgain}>
+            <button
+              type="button"
+              className="tk-btn soft"
+              disabled={busy}
+              onClick={onAgain}
+            >
               Try again
             </button>
           )}
@@ -204,7 +264,11 @@ export function WayChoices({
         const inner = (
           <>
             <span className="tk-row-tile" aria-hidden="true">
-              <Icon name={w === "transfer" ? "money" : w === "taskiem" ? "bolt" : "card"} />
+              <Icon
+                name={
+                  w === "transfer" ? "money" : w === "taskiem" ? "bolt" : "card"
+                }
+              />
             </span>
             <span className="xfer-way-words">
               <span className="xfer-way-name">{WAY_WORDS[w]}</span>
@@ -216,12 +280,23 @@ export function WayChoices({
         return (
           <li key={w}>
             {w === "checkout" && payLink ? (
-              <a className={`xfer-way${i === 0 ? " first" : ""}`} href={payLink} target="_blank" rel="noreferrer" onClick={() => onPick(w)}>
+              <a
+                className={`xfer-way${i === 0 ? " first" : ""}`}
+                href={payLink}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onPick(w)}
+              >
                 {inner}
                 <span className="sr-only"> (opens a new tab)</span>
               </a>
             ) : (
-              <button type="button" className={`xfer-way${i === 0 ? " first" : ""}`} disabled={busy} onClick={() => onPick(w)}>
+              <button
+                type="button"
+                className={`xfer-way${i === 0 ? " first" : ""}`}
+                disabled={busy}
+                onClick={() => onPick(w)}
+              >
                 {inner}
               </button>
             )}
@@ -233,14 +308,22 @@ export function WayChoices({
 }
 
 function refusal(e: unknown): BillTransfer {
-  const code = e instanceof ApiError ? (e.body.code as string | undefined) : undefined;
-  return { state: "failed", problem: refusalWords(code, e instanceof Error ? e.message : undefined) };
+  const code =
+    e instanceof ApiError ? (e.body.code as string | undefined) : undefined;
+  return {
+    state: "failed",
+    problem: refusalWords(code, e instanceof Error ? e.message : undefined),
+  };
 }
 
 /** A bill with its account number, followed: asked for, read again every
  * few seconds while it is coming or open. `ref` is the bill's id or "Seller
  * INV-0042". */
-export function useBillTransfer(ref: string, initial?: Bill, onSettled?: () => void) {
+export function useBillTransfer(
+  ref: string,
+  initial?: Bill,
+  onSettled?: () => void,
+) {
   const [bill, setBill] = useState<Bill | undefined>(initial);
   const [failed, setFailed] = useState<BillTransfer>();
   const [busy, setBusy] = useState(false);
@@ -274,7 +357,8 @@ export function useBillTransfer(ref: string, initial?: Bill, onSettled?: () => v
           const was = state;
           setBill(b);
           const now = b.transfer?.state;
-          if (now !== was && (now === "paid" || now === "part")) settled.current?.();
+          if (now !== was && (now === "paid" || now === "part"))
+            settled.current?.();
         },
         () => live && setBill((b) => (b ? { ...b } : b)),
       );
@@ -289,7 +373,12 @@ export function useBillTransfer(ref: string, initial?: Bill, onSettled?: () => v
     setFailed(undefined);
     setBill((b) => (b ? { ...b, transfer: { state: "asking" } } : b));
     try {
-      setBill(await post<Bill>(`${billPath(id)}/transfer`, longer ? { longer: true } : {}));
+      setBill(
+        await post<Bill>(
+          `${billPath(id)}/transfer`,
+          longer ? { longer: true } : {},
+        ),
+      );
     } catch (e) {
       setFailed(refusal(e));
     } finally {
@@ -302,10 +391,17 @@ export function useBillTransfer(ref: string, initial?: Bill, onSettled?: () => v
 /** Pay on a bill: the ways (or straight to the only one), the transfer
  * card, the way chosen remembered for this seller. `onTaskiem` pays from
  * Taskiem (the caller's own, as its page does it). */
-export function useBillPay(bill: Bill, onTaskiem: () => void, onSettled?: () => void) {
+export function useBillPay(
+  bill: Bill,
+  onTaskiem: () => void,
+  onSettled?: () => void,
+) {
   // From Taskiem pays to the account the seller gave this business (canPay).
   const ways = useMemo(
-    () => orderWays(waysOf(bill), lastWay(bill.supplier)).filter((w) => w !== "taskiem" || canPay(bill)),
+    () =>
+      orderWays(waysOf(bill), lastWay(bill.supplier)).filter(
+        (w) => w !== "taskiem" || canPay(bill),
+      ),
     [bill],
   );
   const [step, setStep] = useState<"choose" | "transfer" | null>(null);
@@ -329,12 +425,21 @@ export function useBillPay(bill: Bill, onTaskiem: () => void, onSettled?: () => 
   };
   const others = (exclude: WayToPay) => {
     const rest = ways.filter((w) => w !== exclude);
-    return rest.length > 0 ? <WayChoices ways={rest} who={bill.supplier_name} payLink={bill.pay_link} onPick={pick} /> : undefined;
+    return rest.length > 0 ? (
+      <WayChoices
+        ways={rest}
+        who={bill.supplier_name}
+        payLink={bill.pay_link}
+        onPick={pick}
+      />
+    ) : undefined;
   };
   const card = x.t ? (
     <TransferCard
       t={x.t}
-      paidAt={x.t.state === "paid" ? x.bill?.mirrored_at : undefined}
+      paidAt={
+        x.t.state === "paid" ? (x.t.paid_at ?? x.bill?.mirrored_at) : undefined
+      }
       busy={x.busy}
       onAgain={() => void x.ask(false)}
       onLonger={longer ? undefined : () => (setLonger(true), void x.ask(true))}
@@ -344,14 +449,21 @@ export function useBillPay(bill: Bill, onTaskiem: () => void, onSettled?: () => 
   ) : null;
   const content =
     step === "choose" ? (
-      <WayChoices ways={ways} who={bill.supplier_name} payLink={bill.pay_link} onPick={pick} busy={x.busy} />
+      <WayChoices
+        ways={ways}
+        who={bill.supplier_name}
+        payLink={bill.pay_link}
+        onPick={pick}
+        busy={x.busy}
+      />
     ) : step === "transfer" ? (
       (card ?? <TransferCard t={{ state: "asking" }} />)
     ) : null;
   return {
     ways,
     /** Pay is a link straight to their checkout: their only way. */
-    checkoutOnly: ways.length === 1 && ways[0] === "checkout" ? bill.pay_link : undefined,
+    checkoutOnly:
+      ways.length === 1 && ways[0] === "checkout" ? bill.pay_link : undefined,
     start,
     step,
     close: () => setStep(null),
@@ -364,25 +476,40 @@ export function useBillPay(bill: Bill, onTaskiem: () => void, onSettled?: () => 
 
 /** A bill's card in a business chat, once a number was given: the number
  * as it is now, followed. */
-export function BillTransferLive({ seller, reference }: { seller: string; reference: string }) {
+export function BillTransferLive({
+  seller,
+  reference,
+}: {
+  seller: string;
+  reference: string;
+}) {
   const x = useBillTransfer(`${seller} ${reference}`);
   if (!x.t || !x.bill) return null;
   const b = x.bill;
   return (
     <TransferCard
       t={x.t}
-      paidAt={x.t.state === "paid" ? b.mirrored_at : undefined}
+      paidAt={x.t.state === "paid" ? (x.t.paid_at ?? b.mirrored_at) : undefined}
       busy={x.busy}
       onAgain={() => void x.ask(false)}
       next={x.t.next}
       testid="chat-transfer-card"
       others={
         b.pay_link ? (
-          <a className="tk-btn soft" href={b.pay_link} target="_blank" rel="noreferrer">
-            Pay on their checkout<span className="sr-only"> (opens a new tab)</span>
+          <a
+            className="tk-btn soft"
+            href={b.pay_link}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Pay on their checkout
+            <span className="sr-only"> (opens a new tab)</span>
           </a>
         ) : (
-          <Link className="tk-btn soft" to={`/bills/${encodeURIComponent(b.id)}`}>
+          <Link
+            className="tk-btn soft"
+            to={`/bills/${encodeURIComponent(b.id)}`}
+          >
             Other ways to pay
           </Link>
         )
@@ -396,7 +523,17 @@ const customerPath = (chat: string, invoice: string) =>
 
 /** A customer's invoice card in their chat with a business: Pay (by
  * transfer first, or on the invoice's page), and the number once given. */
-export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: string; business: string; card: AppCard; mine: boolean }) {
+export function CustomerInvoiceCard({
+  chat,
+  business,
+  card,
+  mine,
+}: {
+  chat: string;
+  business: string;
+  card: AppCard;
+  mine: boolean;
+}) {
   const invoice = card.invoice_id ?? "";
   const [c, setC] = useState<CustomerTransfer>();
   const [failed, setFailed] = useState<BillTransfer>();
@@ -423,7 +560,8 @@ export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: stri
       get<CustomerTransfer>(customerPath(chat, invoice)).then(
         (n) => {
           if (!live) return;
-          if (n.state === "paid") setPaidAt(new Date(serverNow()).toISOString());
+          if (n.state === "paid")
+            setPaidAt(new Date(serverNow()).toISOString());
           setC(n);
         },
         () => live && setC((o) => (o ? { ...o } : o)),
@@ -434,18 +572,35 @@ export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: stri
       window.clearTimeout(x);
     };
   }, [state, chat, invoice, failed, c]);
-  const ways: WayToPay[] = orderWays(card.url ? ["transfer", "checkout"] : ["transfer"], lastWay(business));
+  const ways: WayToPay[] = orderWays(
+    card.url ? ["transfer", "checkout"] : ["transfer"],
+    lastWay(business),
+  );
   const ask = async (more = false) => {
     rememberWay(business, "transfer");
     setChoosing(false);
     setBusy(true);
     setFailed({ state: "asking" });
     try {
-      const n = await post<CustomerTransfer>(customerPath(chat, invoice), more ? { longer: true } : {});
+      const n = await post<CustomerTransfer>(
+        customerPath(chat, invoice),
+        more ? { longer: true } : {},
+      );
       setC(n);
-      setFailed(n.state === "none" ? { state: "failed", problem: "We couldn't get an account number just now. Try again, or pay on the invoice's page." } : undefined);
+      setFailed(
+        n.state === "none"
+          ? {
+              state: "failed",
+              problem:
+                "We couldn't get an account number just now. Try again, or pay on the invoice's page.",
+            }
+          : undefined,
+      );
     } catch (e) {
-      setFailed({ state: "failed", problem: e instanceof Error ? e.message : undefined });
+      setFailed({
+        state: "failed",
+        problem: e instanceof Error ? e.message : undefined,
+      });
     } finally {
       setBusy(false);
     }
@@ -453,12 +608,19 @@ export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: stri
   const t = failed ?? (c ? fromCustomer(c) : null);
   const due = c ? c.due_kobo > 0 && c.state !== "paid" : card.status !== "paid";
   const checkout = card.url ? (
-    <a className="tk-btn soft" href={card.url} target="_blank" rel="noopener noreferrer" onClick={() => rememberWay(business, "checkout")}>
+    <a
+      className="tk-btn soft"
+      href={card.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => rememberWay(business, "checkout")}
+    >
       Pay on their page<span className="sr-only"> (opens a new tab)</span>
     </a>
   ) : undefined;
   // A number open or coming: the card is the way to pay.
-  const showPay = invoice && due && !(t && (t.state === "open" || t.state === "asking"));
+  const showPay =
+    invoice && due && !(t && (t.state === "open" || t.state === "asking"));
   return (
     <>
       <AppCardView
@@ -470,13 +632,20 @@ export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: stri
               type="button"
               className="tk-btn primary"
               disabled={busy}
-              onClick={() => (ways.length === 1 ? void ask() : setChoosing(true))}
+              onClick={() =>
+                ways.length === 1 ? void ask() : setChoosing(true)
+              }
             >
               Pay{c && c.due_kobo > 0 ? ` ${naira(c.due_kobo)}` : ""}
               <span className="sr-only"> {card.title}</span>
             </button>
           ) : !invoice && card.url ? (
-            <a className="tk-btn primary" href={card.url} target="_blank" rel="noopener noreferrer">
+            <a
+              className="tk-btn primary"
+              href={card.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Pay<span className="sr-only"> {card.title}</span>
             </a>
           ) : undefined
@@ -485,21 +654,31 @@ export function CustomerInvoiceCard({ chat, business, card, mine }: { chat: stri
       {t && (
         <TransferCard
           t={t}
-          paidAt={paidAt}
+          paidAt={c?.paid_at ?? paidAt}
           busy={busy}
           onAgain={() => void ask()}
-          onLonger={longer ? undefined : () => (setLonger(true), void ask(true))}
+          onLonger={
+            longer ? undefined : () => (setLonger(true), void ask(true))
+          }
           others={checkout}
           testid="customer-transfer-card"
         />
       )}
       {choosing && (
-        <Sheet title={`Pay ${card.title}`} onClose={() => setChoosing(false)} testid="pay-sheet">
+        <Sheet
+          title={`Pay ${card.title}`}
+          onClose={() => setChoosing(false)}
+          testid="pay-sheet"
+        >
           <WayChoices
             ways={ways}
             who="the business"
             payLink={card.url}
-            onPick={(w) => (w === "transfer" ? void ask() : (rememberWay(business, w), setChoosing(false)))}
+            onPick={(w) =>
+              w === "transfer"
+                ? void ask()
+                : (rememberWay(business, w), setChoosing(false))
+            }
           />
         </Sheet>
       )}
