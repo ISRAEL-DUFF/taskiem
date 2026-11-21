@@ -657,6 +657,7 @@ func (s *Server) Handler() http.Handler {
 			s.exploreRoutes(r)      // finding a business by browsing (explore.go)
 			s.billRoutes(r)         // their bills (bills.go)
 			s.paymentRoutes(r)      // paying people (payments.go)
+			s.paymentBatchRoutes(r) // paying several (payment_batches.go)
 			s.linkOrderRoutes(r)    // their orders (link_orders.go)
 			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)

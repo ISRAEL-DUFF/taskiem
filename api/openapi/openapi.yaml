@@ -6679,6 +6679,325 @@ paths:
                       at: {type: string, format: date-time}
         default:
           $ref: '#/components/responses/Error'
+  /v1/payment-batches:
+    get:
+      operationId: listPaymentBatches
+      tags:
+      - Payments
+      summary: Batches of payments, the newest first
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: Batches
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batches]
+                properties:
+                  batches:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPaymentBatch
+      tags:
+      - Payments
+      summary: Prepare a batch of payments
+      description: 'Paying several people (phase 3): each row prepared as one payment is (up to 100), those failing a check held out with why (`held`). Nothing is sent: it is confirmed with one passkey. `copy_of` prepares last times rows again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                  maxLength: 80
+                kind:
+                  type: string
+                  enum: [list, riders, messages]
+                rows:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    description: A row as one payment is prepared (POST /v1/payments)
+                copy_of:
+                  type: string
+                  format: uuid
+                  description: Last time's batch, its rows again
+                from:
+                  type: string
+                  enum: [tools, chat, message, card, workflow]
+      responses:
+        '201':
+          description: Prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/read:
+    post:
+      operationId: readPaymentList
+      tags:
+      - Payments
+      summary: Read a pasted list for a batch
+      description: 'One person a line ("Chidi 0123456789 GTBank 45k"): each line read for a row to check (number, bank, amount, name, the saved account with that number); a line that cannot be read is given back with why. Nothing is prepared.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: {type: string}
+      responses:
+        '200':
+          description: Each line
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lines]
+                properties:
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      required: [line, text]
+                      properties:
+                        line: {type: integer}
+                        text: {type: string}
+                        account_number: {type: string}
+                        bank_name: {type: string}
+                        amount_kobo: {type: integer}
+                        name: {type: string}
+                        payee: {type: string}
+                        problem: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/{id}:
+    get:
+      operationId: getPaymentBatch
+      tags:
+      - Payments
+      summary: A batch, a row per person
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The batch
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/{id}/confirm:
+    post:
+      operationId: confirmPaymentBatch
+      tags:
+      - Payments
+      summary: Send a batch, with one passkey
+      description: 'One passkey (or authenticator code) asked for `money.pay.batch` on `batch:{id}`; each row still prepared is then claimed and sent as one payment is, within the payers limit at once, else waiting for the owners OK. A row refused now stays prepared and is said in `results`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  type: object
+                totp:
+                  type: string
+                again:
+                  type: boolean
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/{id}/approve:
+    post:
+      operationId: approvePaymentBatch
+      tags:
+      - Payments
+      summary: The owner''s OK for every row waiting, with one passkey
+      description: 'An owner only, with a passkey asked for `money.pay.approve` on `batch:{id}`: each row waiting for the OK is approved; one the owner confirmed themselves is left for another owner.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  type: object
+                totp:
+                  type: string
+                again:
+                  type: boolean
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/{id}/cancel:
+    post:
+      operationId: cancelPaymentBatch
+      tags:
+      - Payments
+      summary: Let a batch not sent go
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payment-batches/{id}/again:
+    post:
+      operationId: payBatchAgain
+      tags:
+      - Payments
+      summary: Pay the failed rows again
+      description: 'The rows that failed, prepared again as a new batch.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: A new batch
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills:
     get:
       operationId: listBills
@@ -43076,6 +43395,7 @@ components:
           - pii.erase
           - money.pay
           - money.pay.approve
+          - money.pay.batch
         target:
           type: string
           maxLength: 200
@@ -45141,6 +45461,51 @@ components:
         again:
           type: boolean
           description: The same amount to the same payee in the last day.
+    PaymentBatch:
+      type: object
+      required: [id, title, kind, status, created_by, created_at, payments, total_kobo, count, paid_kobo, waiting, failed]
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string}
+        kind:
+          type: string
+          enum: [list, riders, messages]
+        status:
+          type: string
+          enum: [prepared, sent, cancelled]
+        created_by: {type: string}
+        created_at: {type: string, format: date-time}
+        confirmed_at:
+          type: [string, 'null']
+          format: date-time
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        total_kobo: {type: integer}
+        count: {type: integer}
+        paid_kobo: {type: integer}
+        waiting: {type: integer}
+        failed: {type: integer}
+        held:
+          type: array
+          description: Rows held out when it was prepared, with why
+          items:
+            type: object
+            properties:
+              row: {type: integer}
+              payee: {type: string}
+              code: {type: string}
+              problem: {type: string}
+        results:
+          type: array
+          description: What became of each row when it was sent or approved
+          items:
+            type: object
+            properties:
+              payment: {type: string, format: uuid}
+              code: {type: string}
+              problem: {type: string}
     PayLimit:
       type: object
       additionalProperties: false

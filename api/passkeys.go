@@ -532,7 +532,7 @@ var stepUpOps = map[string]bool{
 	keyOpRotate: true, keyOpEnable: true, keyOpCredentials: true, keyOpDisable: true,
 	riderOpBank:  true,
 	"pii.erase":  true,
-	payOpConfirm: true, payOpApprove: true,
+	payOpConfirm: true, payOpApprove: true, payOpBatch: true,
 }
 
 // stepUpScope is what a step-up challenge is bound to.
