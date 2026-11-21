@@ -134,6 +134,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **P3. Pay several people** (paying people phase 3). Needs: P2.
 - Batches: picking (saved accounts as a list), collecting from messages, pasting and photographing a list, last time's again; a check per row, held-out rows, one confirmation, results per person, paying the failed ones again.
 - Done when: 12 riders are paid in one batch, a bad account is held out before anything moves, and the others are paid.
+- **Status (21 November 2026): built against fakes, not yet on a real wallet.** Done: `payment_batches` (migration 00506): a batch is a list of up to 100 payments, each prepared, checked and sent as one payment is (its own run, its own key, the run's check); rows that fail a check held out with why before anything moves, and kept with the batch; one passkey sends exactly the rows the person saw (`money.pay.batch`); **Pay again** said per row; the owner's one passkey gives the OK for every row waiting, except an account changed since it was last paid, approved alone; a row per person; **Pay the failed ones again**; **Same as last time** (the rows that went); a pasted list read a line at a time; **Pay all riders** from what is due; staff send saved accounts and riders only. On the web and in the app. **Save as…** beside a message's **Pay this account** chip (P2) is also built. Reviewed; its fixes made. Not yet: collecting rows from several messages ("3 to pay" at the foot of the chat), a photo of a handwritten list (Taskiem reads no text from photos yet), the balance after and fees at the foot (the provider's balance and fee are not asked yet), and the one diary line for a batch in the chat.
 
 **P4. Payroll and the chat apps** (paying people phase 4). Needs: P3.
 - The Payroll tile over `run-payroll`; adjustments; its approval card in the chat; payslips to each person's chat; payslips with the full breakdown; the WhatsApp, Telegram and Slack words with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
@@ -228,7 +229,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 - [ ] S0 · [ ] S1
 - [ ] S2 · [ ] S3
 - [ ] F1 (built, in review) · [ ] P1 (built, in review)
-- [ ] P2 (built, in review) · [ ] P3 · [ ] P4
+- [ ] P2 (built, in review) · [ ] P3 (built, in review) · [ ] P4
 - [ ] M0 · [ ] M1 · [ ] D0
 - [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
 - [ ] M5 · [ ] G2 · [ ] G3 · [ ] D2
