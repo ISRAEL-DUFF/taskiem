@@ -38687,7 +38687,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role, field]
+          enum: [connection, variable, secret, table, role, field, saved]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.

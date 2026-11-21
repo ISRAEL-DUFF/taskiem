@@ -520,6 +520,29 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	if err := rows.Err(); err != nil {
 		return c, err
 	}
+	// Saved things by name, title and kind, never what they hold (saved
+	// objects S3).
+	rows, err = tx.Query(ctx, `SELECT name, title, kind, COALESCE((SELECT k.name FROM saved_kinds k WHERE k.id = kind_id), '') FROM saved_objects
+		WHERE person_id IS NULL AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 200`)
+	if err != nil {
+		return c, err
+	}
+	for rows.Next() {
+		var x builder.SavedThing
+		var made string
+		if err := rows.Scan(&x.Name, &x.Title, &x.Kind, &made); err != nil {
+			rows.Close()
+			return c, err
+		}
+		if made != "" {
+			x.Kind = made
+		}
+		c.Saved = append(c.Saved, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return c, err
+	}
 	// Roles by how many hold them, never who.
 	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT m.user_id) FROM memberships m JOIN users u ON u.id = m.user_id WHERE u.status = 'active'`).Scan(&c.Members); err != nil {
 		return c, err

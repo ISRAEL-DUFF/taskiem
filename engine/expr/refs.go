@@ -9,7 +9,7 @@ import (
 )
 
 func refsOf(a *cel.Ast) Refs {
-	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}, Secrets: map[string]bool{}, Env: map[string]bool{}}
+	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}, Secrets: map[string]bool{}, Env: map[string]bool{}, Saved: map[string]bool{}}
 	root := a.NativeRep().Expr()
 	celast.PreOrderVisit(root, celast.NewExprVisitor(func(e celast.Expr) {
 		switch e.Kind() {
@@ -25,6 +25,8 @@ func refsOf(a *cel.Ast) Refs {
 					r.Secrets[s.FieldName()] = true
 				case "env":
 					r.Env[s.FieldName()] = true
+				case "saved":
+					r.Saved[s.FieldName()] = true
 				}
 			}
 		case celast.CallKind:
@@ -41,6 +43,8 @@ func refsOf(a *cel.Ast) Refs {
 								r.Secrets[s] = true
 							case "env":
 								r.Env[s] = true
+							case "saved":
+								r.Saved[s] = true
 							}
 						}
 					}

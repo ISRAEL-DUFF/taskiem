@@ -69,6 +69,9 @@ type Store struct {
 	// the base of callback steps' addresses. Empty, a workflow with
 	// callback steps cannot start.
 	HooksURL string
+	// Saved reads the business's saved things a run's workflow names, when
+	// it starts (saved.go); nil reads none.
+	Saved SavedResolver
 	// WakeInterval is the least time between two wake-ups this process
 	// sends for one queue (TASKIEM_WAKE_INTERVAL); zero is
 	// DefaultWakeInterval. WakeInTx leaves wake-ups to the task trigger,
@@ -334,6 +337,12 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
+		saved, savedPaths, err := s.savedInputs(ctx, tx, req.TenantID, def)
+		if err != nil {
+			return err
+		}
+		payload.Saved = saved
+		paths = append(paths, savedPaths...)
 		for _, p := range req.TriggerPII {
 			paths = append(paths, pii.Path{Segments: append([]string{"trigger"}, p.Segments...), Category: p.Category})
 		}

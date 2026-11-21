@@ -472,6 +472,10 @@
       "text": "Tinye uru nzuzo {name}.",
       "reviewed": false
     },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": false
+    },
     "ready.table": {
       "text": "Mee tebụl {name}.",
       "reviewed": false

@@ -589,6 +589,11 @@
       "reviewed": true,
       "context": "Readiness: a secret the workflow reads is not stored"
     },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": true,
+      "context": "Readiness: a business saved thing the workflow reads (saved.<name>) does not exist"
+    },
     "ready.table": {
       "text": "Make the table {name}.",
       "reviewed": true,

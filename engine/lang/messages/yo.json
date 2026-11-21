@@ -472,6 +472,10 @@
       "text": "Ẹ fi iye àṣírí {name} kún un.",
       "reviewed": false
     },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": false
+    },
     "ready.table": {
       "text": "Ẹ ṣe tábìlì {name}.",
       "reviewed": false

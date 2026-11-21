@@ -1,0 +1,70 @@
+package api_test
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+const savedFlow = `{"schema":"wd/v1","id":"wf_saved","version":1,"name":"prices","trigger":{"type":"manual"},
+  "steps":[{"id":"send","type":"transform","config":{"output":{
+    "prices":"=saved.price_list.body",
+    "pay":"=saved[\"supplier\"].bank_name + ' ' + saved[\"supplier\"].account_number",
+    "kind":"=saved.supplier.kind"}}}]}`
+
+// A business's saved things as a workflow's inputs (saved objects S3,
+// §6.4): read when the run starts, so a change is used from the next run;
+// an account number sealed in the run's history, shown only when revealed;
+// a person's own saved thing of the name is never read.
+func TestSavedReadByRuns(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada Foods", "ada@savedruns.test")
+	prices := owner.must(201, "POST", "/v1/saved", map[string]any{"name": "price-list", "title": "Price list", "kind": "text",
+		"details": map[string]any{"body": "Rice 50kg: 78,000"}})["saved"].(map[string]any)
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "supplier", "title": "Dangote", "kind": "bank_account",
+		"bank_name": "GTBank", "account_number": "0123456789"})
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "secret", "title": "Mine", "kind": "text", "details": map[string]any{"body": "my own"}})
+
+	out := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "prices", "definition": json.RawMessage(savedFlow)})
+	if probs := out["problems"].([]any); len(probs) > 0 {
+		t.Fatalf("problems: %v", probs)
+	}
+	wf := out["id"].(string)
+	// Ready: what it reads is saved; a name nothing has is a need.
+	if r := owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(savedFlow)}); strings.Contains(toJSON(r), `"saved"`) {
+		t.Fatalf("ready: %s", toJSON(r))
+	}
+	missing := strings.Replace(savedFlow, "saved.price_list.body", "saved.price_lists.body", 1)
+	if r := toJSON(owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(missing)})); !strings.Contains(r, `"kind":"saved"`) || !strings.Contains(r, "Save @price-lists on the Saved page") {
+		t.Fatalf("a missing one: %s", r)
+	}
+	// One's own of the name is not the business's.
+	own := strings.Replace(savedFlow, "saved.price_list.body", "saved.secret.body", 1)
+	if r := toJSON(owner.must(200, "POST", "/v1/readiness", map[string]any{"definition": json.RawMessage(own)})); !strings.Contains(r, "Save @secret") {
+		t.Fatalf("one's own: %s", r)
+	}
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+
+	run := func() (string, map[string]any) {
+		t.Helper()
+		id := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+		w.env.Drain(t)
+		got := owner.must(200, "GET", "/v1/runs/"+id, nil)
+		if st := got["run"].(map[string]any)["status"]; st != "completed" {
+			t.Fatalf("run: %v\n%s", st, toJSON(got["events"]))
+		}
+		return id, got
+	}
+	id, got := run()
+	if ev := toJSON(got["events"]); !strings.Contains(ev, "Rice 50kg: 78,000") || strings.Contains(ev, "0123456789") || !strings.Contains(ev, "bank_account") {
+		t.Fatalf("the first run: %s", ev)
+	}
+	if open := toJSON(owner.must(200, "GET", "/v1/runs/"+id+"?reveal=true", nil)); !strings.Contains(open, "GTBank 0123456789") {
+		t.Fatalf("revealed: %s", open)
+	}
+	// Changed: the next run reads it as it is now.
+	owner.must(200, "PUT", "/v1/saved/"+prices["id"].(string), map[string]any{"details": map[string]any{"body": "Rice 50kg: 80,500"}})
+	if _, got := run(); !strings.Contains(toJSON(got["events"]), "Rice 50kg: 80,500") {
+		t.Fatalf("the next run: %s", toJSON(got["events"]))
+	}
+}

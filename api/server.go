@@ -380,7 +380,10 @@ func (s *Server) Handler() http.Handler {
 		s.Logger = slog.Default()
 	}
 	s.initCodeLeases() // the per-tenant code share across replicas (codegate.go)
-	s.chatHooks()      // what the channels send is kept in the history (chat_history.go)
+	if s.Store != nil && s.Store.Saved == nil {
+		s.Store.Saved = s.savedForRuns // saved things a run reads (saved_runs.go)
+	}
+	s.chatHooks() // what the channels send is kept in the history (chat_history.go)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })

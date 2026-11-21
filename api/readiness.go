@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -138,6 +140,7 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		service         string
 	}
 	vars, secs := map[string][]*wd.Step{}, map[string][]*wd.Step{}
+	savedUse := map[string][]*wd.Step{} // saved things by expression (saved objects S3)
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
 	var policies []use
@@ -152,6 +155,9 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 			for n := range refs.Secrets {
 				secs[n] = append(secs[n], st)
+			}
+			for n := range refs.Saved {
+				savedUse[n] = append(savedUse[n], st)
 			}
 		})
 	}
@@ -309,6 +315,24 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 				add(key{"table", u.name, "", env}, n, u.step)
 			}
 		}
+		// The business's saved things it reads, by name ("price_list" is
+		// @price-list); a person's own are never a run's.
+		for _, n := range slices.Sorted(maps.Keys(savedUse)) {
+			name, err := saved.Name(n)
+			ok := false
+			if err == nil {
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM saved_objects WHERE tenant_id = $1 AND person_id IS NULL AND archived_at IS NULL AND name = $2)`, tenant, name).Scan(&ok); err != nil {
+					return nil, err
+				}
+			} else {
+				name = n
+			}
+			if !ok {
+				for _, st := range savedUse[n] {
+					add(key{"saved", name, "", env}, readyNeed{Problem: "missing", Blocking: true, Message: needMessage(l, "saved", "missing", "", name)}, st)
+				}
+			}
+		}
 	}
 	// Roles are the business's, not an environment's: reported once, for
 	// the environment that blocks (or the first). So are form fields.
@@ -445,6 +469,8 @@ func needMessage(l lang.Tag, kind, problem, service, name string) string {
 		return tr(l, "ready.secret", "name", humanName(name))
 	case "table":
 		return tr(l, "ready.table", "name", humanName(name))
+	case "saved":
+		return tr(l, "ready.saved", "name", name)
 	case "role":
 		return tr(l, "ready.role", "role", humanName(name))
 	}
