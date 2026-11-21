@@ -1,6 +1,6 @@
 # Menus in the chat: showing people what they can do
 
-Status: **plan, settled** (21 November 2026), written with the founder, who took every recommendation in §2. Nothing here is built. It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
+Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 is built** (21 November 2026; see "What M1 built" at the end); M2 to M4 are not. It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
 
 Builds on: [chat tools](chat-tools.md) (the tools panel, the tool sheets, the forms), [business chat tools](business-chat-tools.md), [the phone app's look](mobile-app-look.md) (Direction B), [saved objects](saved-objects.md) (`@name`), [Schools in the chat](schools-in-the-chat.md), [languages](../languages.md) (the word lists, the model's routing).
 
@@ -313,3 +313,17 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 - **A row's last values** ("Add stock: 50 cartons of Indomie, again?").
 - **A menu in a customer's own chat with a business** (order, book, pay, my orders): customers have the door's buttons today ([Taskiem for everyone](taskiem-for-everyone.md) §8.4); a menu there is its own plan.
 - **Voice**: a voice note's transcript is read as typed, so it gets menus already; a spoken menu is not planned.
+
+## What M1 built (21 November 2026)
+
+- **The catalogue** (`api/chat_actions.go`), as §4 less the rows with no command yet in a topic that has others; `GET /v1/chat/actions`; a test that holds it together (`api/chat_actions_internal_test.go`): ids, limits, what each opens, and that a question's answers make a whole command.
+- **The menu card** in the Taskiem chat on the web (`web/src/pages/ChatMenu.tsx`) and in the app (`mobile/lib/chat/menu_card.dart`), kept in the history as a message of kind `menu` (migration 00498): the topics as tiles; a topic's five rows, "All N" in a sheet and "All topics"; folded once a row is pressed or a newer menu comes.
+- **When it shows**: *help* and *menu* in the Taskiem chat; *help riders* (and any topic's word after *help*) everywhere; a topic's word alone when no command reads it ("sales", "staff"); and, in the Taskiem chat, with the short answer when nothing understood a message, or when the model says Taskiem cannot do it.
+- **Rows**: an answer, read as the command typed; a form (the app's and the web's tool sheets) or a page opened in place; questions in the chat (§7) with choices as buttons from the business's own riders, their areas and its stock items, answers checked, the command made and read as typed, a Yes first when it changes something.
+- **Elsewhere** (WhatsApp, Telegram, Slack): *help riders* is a numbered menu answered by a number; rows that open a form or a page answer with their link.
+
+Not yet, as planned for later phases or left for now:
+- *help* alone on WhatsApp, Telegram and Slack still sends the list in words, until their own menus (M3).
+- A topic's word that is already a command ("riders", "stock", "orders") answers as before, without the menu under it.
+- The catalogue's words are English in every language until they are translated.
+- Choices for an order or a booking are typed (its number), not offered.

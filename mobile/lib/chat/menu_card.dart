@@ -1,0 +1,382 @@
+// Menus in the Taskiem chat (docs/spec/chat-menus.md §6; the web's
+// pages/ChatMenu.tsx): a message of kind "menu" drawn as a card from the
+// person's own catalogue (GET /v1/chat/actions). A topic's menu shows its
+// first five actions as rows, the rest behind "All N" in a sheet; the
+// topics are tiles. A row shows its answer or asks step by step (sent back
+// as "act:<id>"), or opens its tool or its page here. Once a row is
+// pressed, or a newer menu comes, the card folds to one line.
+
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart';
+
+import '../api/api.g.dart';
+import '../app/auth.dart';
+import '../kit/kit.dart';
+import '../kit/mobile.dart';
+import '../kit/sheet.dart';
+import '../kit/icon.dart';
+import '../theme/look.dart';
+import '../theme/theme.dart';
+
+/// At most this many of a topic's rows show in the chat (§6.1).
+const menuRows = 5;
+
+/// A menu message: a topic's (null for the topics), what Taskiem
+/// understood, the row it picked with what it took from the message, and
+/// that row's command as a tip.
+class MenuMessage {
+  const MenuMessage({this.topic, this.line, this.pick, this.values = const {}, this.tip});
+  final String? topic;
+  final String? line;
+  final String? pick;
+  final Map<String, String> values;
+  final String? tip;
+
+  static MenuMessage? parse(String text) {
+    try {
+      final j = jsonDecode(text);
+      if (j is! Map<String, dynamic>) return null;
+      return MenuMessage(
+        topic: j['topic'] as String?,
+        line: j['line'] as String?,
+        pick: j['pick'] as String?,
+        values: {for (final e in ((j['values'] as Map?) ?? const {}).entries) '${e.key}': '${e.value}'},
+        tip: j['tip'] as String?,
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+// The catalogue's icons, as the app draws them.
+const _icons = {
+  'sell': 'b-cart', 'stock': 'b-box', 'products': 'b-bag', 'services': 'b-clock', 'prices': 'b-fees', 'orders': 'b-receipt',
+  'tables': 'b-table', 'purchases': 'b-truck', 'bills': 'b-receipt', 'invoices': 'b-receipt', 'money': 'b-money', 'rider': 'b-bike',
+  'storefront': 'b-store', 'bookings': 'b-calendar', 'customers': 'b-hand', 'tasks': 'b-check', 'approvals': 'b-check-ring',
+  'workflows': 'b-flow', 'saved': 'b-pin', 'school': 'b-school', 'you': 'b-person', 'handover': 'b-cash',
+};
+String menuIcon(String name) => _icons[name] ?? 'b-more';
+
+/// A topic's colour, from the look.
+Color topicColor(TkLook look, String color) => switch (color) {
+  'lime' => look.lime,
+  'teal' => look.teal,
+  'orange' => look.orange,
+  'violet' => look.violet,
+  'blue' => look.blue,
+  'red' => look.red,
+  _ => look.teal,
+};
+
+final _catalogues = Expando<Future<List<ChatTopic>>>();
+final _read = Expando<List<ChatTopic>>();
+
+/// The person's catalogue, read once for a sign-in.
+Future<List<ChatTopic>> catalogueOf(Auth auth) {
+  final had = _catalogues[auth];
+  if (had != null) return had;
+  final f = auth.api.chatActions().then((r) => _read[auth] = r.topics);
+  _catalogues[auth] = f;
+  f.catchError((Object _) {
+    _catalogues[auth] = null;
+    return <ChatTopic>[];
+  });
+  return f;
+}
+
+/// A topic's actions, the picked one first.
+List<ChatAction> orderedActions(ChatTopic t, String? pick) {
+  final i = t.actions.indexWhere((a) => a.id == pick);
+  if (i <= 0) return t.actions;
+  return [t.actions[i], ...t.actions.take(i), ...t.actions.skip(i + 1)];
+}
+
+class MenuCard extends StatefulWidget {
+  const MenuCard({
+    super.key,
+    required this.auth,
+    required this.menu,
+    required this.open,
+    required this.onAct,
+    required this.onTool,
+    required this.onPage,
+    this.busy = false,
+  });
+  final Auth auth;
+  final MenuMessage menu;
+
+  /// The newest menu: open; any other is folded.
+  final bool open;
+  final bool busy;
+
+  /// A row sent back to Taskiem, as a button's press.
+  final void Function(ChatAction a) onAct;
+
+  /// A form's tool opened here; false when the app has no such tool.
+  final bool Function(String tool, bool add) onTool;
+
+  /// A page opened here; false when the app has no such screen.
+  final bool Function(String path) onPage;
+
+  @override
+  State<MenuCard> createState() => _MenuCardState();
+}
+
+class _MenuCardState extends State<MenuCard> {
+  // Drawn whole at once when the catalogue was read before (it is read as
+  // the conversation opens), so the chat does not jump as it comes.
+  late List<ChatTopic>? _topics = _read[widget.auth];
+  String? _topic;
+  String? _chosen;
+  late bool _shown = widget.open;
+
+  @override
+  void initState() {
+    super.initState();
+    _topic = widget.menu.topic;
+    if (_topics != null) return;
+    unawaited(catalogueOf(widget.auth).then((t) {
+      if (mounted) setState(() => _topics = t);
+    }, onError: (Object _) {}));
+  }
+
+  @override
+  void didUpdateWidget(MenuCard old) {
+    super.didUpdateWidget(old);
+    if (old.open && !widget.open) _shown = false;
+  }
+
+  void _press(ChatAction a) {
+    setState(() {
+      _chosen = a.title;
+      _shown = false;
+    });
+    if (a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return;
+    if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return;
+    widget.onAct(a);
+  }
+
+  Future<void> _all(ChatTopic t, List<ChatAction> acts) => showTkSheet<void>(
+    context,
+    (sheet) => TkSheet(
+      title: t.name,
+      count: acts.length,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (final a in acts) _row(t, a, close: () => Navigator.of(sheet).pop())],
+      ),
+    ),
+  );
+
+  Widget _row(ChatTopic t, ChatAction a, {VoidCallback? close}) {
+    final look = TkLook.of(context);
+    final picked = a.id == widget.menu.pick && _topic == widget.menu.topic;
+    final name = picked ? widget.menu.values['name'] : null;
+    return TkListRow(
+      title: name == null ? a.title : '${a.title}: $name',
+      sub: a.line,
+      subLines: 1,
+      titleLines: 1,
+      icon: menuIcon(a.icon),
+      square: topicColor(look, t.color),
+      semanticsLabel: '${a.title}. ${a.line}.',
+      onTap: widget.busy && a.opens != 'form' && a.opens != 'page'
+          ? null
+          : () {
+              close?.call();
+              _press(a);
+            },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final topics = _topics;
+    final box = BoxDecoration(
+      color: t.panel,
+      borderRadius: BorderRadius.circular(20),
+      border: dark ? Border.all(color: t.border) : null,
+      boxShadow: dark ? null : [BoxShadow(color: cssMix(t.brand, const Color(0x00000000), 0.35), offset: const Offset(0, 8), blurRadius: 24, spreadRadius: -16)],
+    );
+    Widget card(Widget child) => Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: box,
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      ),
+    );
+    if (topics == null) return card(const SizedBox(height: 96));
+    final topic = _topic == null ? null : topics.where((x) => x.id == _topic).firstOrNull;
+    Widget square(String icon, Color color, {double size = 36}) => Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(size * 0.3)),
+      alignment: Alignment.center,
+      child: TkIcon(icon, size: size * 0.48, stroke: 2.2, color: const Color(0xFFFFFFFF)),
+    );
+    Widget head(String title, String? line, Widget lead) => Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      child: Row(
+        children: [
+          lead,
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: tkText(size: 16, weight: 700, color: t.text)),
+                if (line != null && line.isNotEmpty) Text(line, style: tkText(size: 13, color: t.muted, lineHeight: 1.35)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    Widget footButton(String label, VoidCallback onTap) => Expanded(
+      child: TkPress(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(label, textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 600, color: dark ? t.brandDark : t.brand)),
+        ),
+      ),
+    );
+
+    if (!_shown) {
+      return Semantics(
+        container: true,
+        child: card(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: Row(
+              children: [
+                square(topic == null ? 'b-tools' : menuIcon(topic.icon), topic == null ? look.lime : topicColor(look, topic.color), size: 28),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: topic?.name ?? 'Topics', style: tkText(size: 13.5, weight: 700, color: t.text)),
+                        if (_chosen != null) TextSpan(text: ' · $_chosen', style: tkText(size: 13.5, color: t.muted)),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TkPress(
+                  onTap: () => setState(() => _shown = true),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('Show again', style: tkText(size: 13, weight: 600, color: dark ? t.brandDark : t.brand)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (topic == null) {
+      return card(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            head('What would you like to do?', widget.menu.line, square('b-tools', look.lime)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final w = c.maxWidth / 4;
+                  return Wrap(
+                    children: [
+                      for (final x in topics)
+                        SizedBox(
+                          width: w,
+                          child: TkPress(
+                            onTap: () => setState(() => _topic = x.id),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                              child: Column(
+                                children: [
+                                  square(menuIcon(x.icon), topicColor(look, x.color), size: 38),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    x.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    style: tkText(size: 11.5, weight: 500, color: t.text, lineHeight: 1.2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final acts = orderedActions(topic, _topic == widget.menu.topic ? widget.menu.pick : null);
+    final tip = widget.menu.tip;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        card(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              head(
+                topic.name,
+                (_topic == widget.menu.topic ? widget.menu.line : null) ?? 'What would you like to do?',
+                square(menuIcon(topic.icon), topicColor(look, topic.color)),
+              ),
+              for (final a in acts.take(menuRows)) _row(topic, a),
+              Container(
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+                child: Row(
+                  children: [
+                    if (acts.length > menuRows) footButton('All ${acts.length} for ${topic.name}', () => unawaited(_all(topic, acts))),
+                    footButton('All topics', () => setState(() => _topic = null)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (tip != null && tip.isNotEmpty && _topic == widget.menu.topic)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(text: 'Next time you can type: '),
+                  TextSpan(text: tip, style: tkText(size: 12.5, weight: 600, color: t.text)),
+                ],
+              ),
+              style: tkText(size: 12.5, color: t.muted),
+            ),
+          ),
+      ],
+    );
+  }
+}
