@@ -11042,6 +11042,51 @@ paths:
                       $ref: '#/components/schemas/StorefrontOrderPayment'
                   revealed:
                     type: boolean
+                  customer_orders:
+                    type: integer
+                    description: How many orders its customer has made with the business, this one with them (1 is a new customer's first).
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/save-customer:
+    post:
+      operationId: saveOrderCustomer
+      tags:
+      - Saved
+      summary: Save an order's customer as a saved person
+      description: 'The order''s customer kept as one of the business''s saved people (their name as its title, their phone, email and address, read on the server so the page never holds them in full); the name given, else made from theirs. 409 when the name is taken.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle,saved.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saved]
+                properties:
+                  saved:
+                    $ref: '#/components/schemas/SavedObject'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders/{reference}/refund:

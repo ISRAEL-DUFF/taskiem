@@ -61,3 +61,23 @@ func TestSavedImport(t *testing.T) {
 		t.Fatalf("a bad line: %v", bad)
 	}
 }
+
+// After a new customer's first order (saved objects S3): the order says it
+// is their first, and its customer is saved as a person, their details read
+// on the server; again, the name is taken.
+func TestSavedFromOrderCustomer(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	ref := w.order(t, "none")
+	if got := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil); got["customer_orders"] != float64(1) {
+		t.Fatalf("first order: %v", got["customer_orders"])
+	}
+	x := ada.must(201, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{})["saved"].(map[string]any)
+	if x["name"] != "bola-ade" || x["title"] != "Bola Ade" || x["kind"] != "person" {
+		t.Fatalf("saved: %v", x)
+	}
+	if r := stringOf(ada.must(200, "GET", "/v1/saved/resolve?name=bola-ade", nil)); !strings.Contains(r, "12 Admiralty Way") {
+		t.Errorf("its address: %s", r)
+	}
+	ada.must(409, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{})
+	ada.must(201, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{"name": "bola"})
+}

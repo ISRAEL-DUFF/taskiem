@@ -668,6 +668,7 @@ func (s *Server) Handler() http.Handler {
 			s.schoolRoutes(r)       // the Schools area (schools.go)
 			r.With(s.need(PermOrders)).Get("/storefront/orders", s.listStorefrontOrders)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}", s.getStorefrontOrder)
+			r.With(s.need(PermOrders), s.need(PermSavedManage), s.tenantWide).Post("/storefront/orders/{reference}/save-customer", s.saveOrderCustomer)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refund", s.refundStorefrontOrder)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/refunded", s.markStorefrontRefunded)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/orders/{reference}/quote", s.quoteStorefrontOrder)

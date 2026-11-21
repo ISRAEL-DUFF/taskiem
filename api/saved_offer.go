@@ -2,9 +2,16 @@ package api
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/storefront"
 
 	"github.com/israel-duff/taskiem/engine/saved"
 )
@@ -67,4 +74,72 @@ func saveOfferWord(cmd string) bool {
 		return true
 	}
 	return false
+}
+
+// saveOrderCustomer is POST /v1/storefront/orders/{reference}/save-customer
+// {name?}: the order's customer kept as one of the business's saved people
+// (saved objects S3: after a new customer's first order), with their name
+// as its title, their phone, email and address; read here, so the page
+// that offers it never holds them in full. The name is the one given, else
+// made from theirs. 409 when it is taken.
+func (s *Server) saveOrderCustomer(w http.ResponseWriter, r *http.Request) {
+	if s.Orders == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	p := principalFrom(r.Context())
+	var o storefront.Order
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		o, err = s.Orders.GetOrder(r.Context(), tx, p.TenantID, chi.URLParam(r, "reference"))
+		if errors.Is(err, storefront.ErrNoOrder) {
+			return pgx.ErrNoRows
+		}
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	cu := o.Customer
+	title := strings.TrimSpace(cu.Name)
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = saved.NameFor(title)
+	}
+	address := strings.TrimSpace(cu.Address)
+	if l := strings.TrimSpace(cu.Landmark); l != "" && address != "" {
+		address += " (" + l + ")"
+	}
+	details := map[string]any{}
+	for k, v := range map[string]string{"phone": cu.Phone, "email": cu.Email, "address": address} {
+		if v = strings.TrimSpace(v); v != "" {
+			details[k] = v
+		}
+	}
+	if a, ok := details["address"].(string); ok && len([]rune(a)) > saved.MaxLine {
+		details["address"] = string([]rune(a)[:saved.MaxLine])
+	}
+	ow := savedOwner{tenant: p.TenantID, by: p.UserID}
+	x, _, err := s.addSavedNew(r.Context(), savedWhoOf(r), ow, savedIn{Name: &name, Title: &title, Kind: saved.KindPerson, Details: details})
+	if err != nil {
+		s.savedFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"saved": x.view(ow, true)})
+}
+
+// customerOrdersTx is how many orders the customer of the order with ref
+// has made with the business, this one with them.
+func customerOrdersTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref string) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders o WHERE o.tenant_id = $1
+		AND o.subject_id = (SELECT subject_id FROM storefront_orders WHERE tenant_id = $1 AND reference = $2)`, tenant, ref).Scan(&n)
+	return n, err
 }
