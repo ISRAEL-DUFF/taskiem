@@ -302,9 +302,14 @@ web's pictures (the parity test still builds and drives them).
   `web/public/chat/wallpaper-light.svg`, `-dark.svg` (the lines in each
   theme's `--chat-doodle`) and `mobile/assets/chat/wallpaper.svg` (black,
   tinted with `chatDoodle` by `WallpaperBox`). Web and app the same.
-- **The conversation.** The head on the ground: Back, the face, the name in
-  Inter Tight, who they are or "typing…" in lime, Search and ⋯ as round
-  buttons, a hairline under it. Bubbles 20 px round; a run from one side
+- **The conversation.** The head on a bar of its own, as WhatsApp's (the
+  founder, 21 November 2026): white (`panel`; its dark in the dark, as the
+  web's `.chat-head`), apart from the wallpaper, under the phone's status
+  bar too. Back, the face, the name in Inter Tight, who they are or
+  "typing…" in lime; Search and ⋯ as plain icons, no circles; a hairline
+  under it. The face and the name pressed together open who this is (a
+  business's profile, a person's or a group's info; a customer's chat and
+  Taskiem's have none), as WhatsApp's; ⋯ still has it too. Bubbles 20 px round; a run from one side
   tucks one corner, at its end. A quote with a lime bar and the sender's
   name; reactions as pills on the card's colour; the day and "unread" as
   pills; a voice note with a lime play button and bars that fill as it

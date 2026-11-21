@@ -1103,7 +1103,9 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -1111,7 +1113,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                         onMore: c == null ? null : _menu,
                         onAvatar: c == null ? null : _info,
                         // As a group's head: Search as its own round button.
-                        actions: [ChatHeadBar.iconButton('Search this chat', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), c == null ? null : _search)],
+                        actions: [ChatHeadBar.headButton('Search this chat', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), c == null ? null : _search)],
                         avatar: PersonFace(name: name, transport: d.auth.transport, photo: c?.person?.photo, size: 40, letterSize: 15),
                         title: name,
                         typing: d.typingNow && !d.offline,

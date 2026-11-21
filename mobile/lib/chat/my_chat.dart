@@ -974,8 +974,9 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    // The head on the conversation's own ground.
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(

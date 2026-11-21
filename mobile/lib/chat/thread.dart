@@ -131,14 +131,27 @@ class ChatHeadBar extends StatelessWidget {
     ),
   );
 
+  /// A button of the chat's own head: the icon alone, no circle, as
+  /// WhatsApp's (docs/spec/mobile-app-look.md, "The chat"), 40 px to press.
+  static Widget headButton(String label, Widget icon, VoidCallback? onTap) => TapArea(
+    child: Semantics(
+      button: true,
+      label: label,
+      child: TkPress(
+        onTap: onTap ?? () {},
+        child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final sub = typing ? 'typing…' : subtitle;
     return Container(
-      // The head on the page's ground, a hairline under it.
-      padding: const EdgeInsets.fromLTRB(8, 6, 12, 10),
+      // The head on its own bar (the screen colours it), a hairline under it.
+      padding: const EdgeInsets.fromLTRB(8, 6, 6, 8),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: look.line))),
       child: Row(
         children: [
@@ -148,54 +161,60 @@ class ChatHeadBar extends StatelessWidget {
               label: 'Back to the chats',
               child: TkPress(
                 onTap: onBack ?? () => Navigator.of(context).maybePop(),
-                child: SizedBox(width: 34, height: 40, child: Center(child: TkIcon('back', size: 24, stroke: 2, color: look.on))),
+                child: SizedBox(width: 34, height: 40, child: Center(child: TkIcon('back', size: 24, stroke: 2, color: t.text))),
               ),
             ),
           ),
-          if (onAvatar != null)
-            TapArea(child: Semantics(
-              button: true,
-              label: 'About $title',
-              child: GestureDetector(onTap: onAvatar, child: avatar),)
-            )
-          else
-            avatar,
-          const SizedBox(width: 10),
+          // The face and the name together, as WhatsApp's: pressed, who
+          // this is (their profile, the group's info), where there is one.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tkDisplay(size: 17, lineHeight: 1.25, letterSpacing: -0.3, color: t.text),
+            child: _HeadWho(
+              onTap: onAvatar,
+              label: 'About $title',
+              value: sub,
+              child: Row(
+                children: [
+                  avatar,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tkDisplay(size: 17, lineHeight: 1.25, letterSpacing: -0.3, color: t.text),
+                          ),
+                        ),
+                        if (sub != null)
+                          Text(
+                            sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: typing
+                                ? tkText(size: 12.5, weight: 600, lineHeight: 1.3, color: look.limeInk)
+                                : tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                if (sub != null)
-                  Text(
-                    sub,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: typing
-                        ? tkText(size: 12.5, weight: 600, lineHeight: 1.3, color: look.limeInk)
-                        : tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          for (final a in actions) ...[const SizedBox(width: 8), a],
+          for (final a in actions) ...[const SizedBox(width: 2), a],
           // With no menu of its own (Taskiem's), no ⋯ on a phone: the web's
           // holds only Keyboard there, which a phone hides.
           if (onMore != null) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 2),
           Builder(
-            builder: (context) => iconButton(
+            builder: (context) => headButton(
               'More about this conversation',
-              TkIcon('b-more', size: 18, stroke: 2.4, color: t.text),
+              TkIcon('b-more', size: 22, stroke: 2.4, color: t.text),
               onMore == null
                   ? null
                   : () {
@@ -206,6 +225,33 @@ class ChatHeadBar extends StatelessWidget {
           ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The head's face and name, pressed as one: [onTap] where there is a
+/// profile to open; else only shown.
+class _HeadWho extends StatelessWidget {
+  const _HeadWho({required this.child, required this.label, this.value, this.onTap});
+  final Widget child;
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return TapArea(
+      // One button to a screen reader: "About …", what they are doing now
+      // (typing…, last seen) as its value.
+      child: Semantics(
+        container: true,
+        button: true,
+        label: label,
+        value: value,
+        excludeSemantics: true,
+        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
       ),
     );
   }
