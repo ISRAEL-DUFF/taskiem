@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cardLine } from "./linkchat";
+import { cardLine, cardSub, transferExpired } from "./linkchat";
+import { isGoodMoment, isNews } from "./moments";
 import { cardStatus, isDiary } from "./cardframe";
 import {
   bareNumber,
@@ -113,6 +114,52 @@ describe("the chat's cards", () => {
     expect(cardLine({ ...card, doc: "bill" }, true, "Dangote")).toBe("You are paying by transfer");
     expect(cardStatus(card).word).toBe("By transfer");
     expect(isDiary({ ...card, doc: "bill" }, true)).toBe(false);
+  });
+  it("says the number was paid into, on each side", () => {
+    const paid = { doc: "bill" as const, event: "transfer_paid", reference: "INV-0042", amount_kobo: 8_300_000 };
+    expect(cardLine(paid, true, "Dangote")).toBe("Paid ₦83,000 by transfer");
+    expect(cardLine({ ...paid, doc: "invoice" }, false, "Ada's Kitchen")).toBe("Ada's Kitchen paid ₦83,000 by transfer");
+    const part = { ...paid, event: "transfer_part", amount_kobo: 5_000_000 };
+    expect(cardLine(part, true, "Dangote")).toBe("Part paid by transfer: ₦50,000 so far");
+    expect(cardLine({ ...part, doc: "invoice" }, false, "Ada's Kitchen")).toBe("Ada's Kitchen paid part by transfer");
+    expect(cardStatus(paid).word).toBe("Paid");
+    expect(cardStatus(part).word).toBe("Part paid");
+    // Cards, never diary lines; no second line repeating the amount.
+    expect(isDiary(paid, true)).toBe(false);
+    expect(isDiary(part, true)).toBe(false);
+    expect(cardSub(paid)).toBe("");
+    // A payment for the seller: heard, and a good moment.
+    expect(isNews({ ...paid, doc: "invoice" }, false)).toBe(true);
+    expect(isGoodMoment({ ...paid, doc: "invoice" }, false, false)).toBe(true);
+  });
+  it("stops saying paying once paid into", () => {
+    const card = { doc: "invoice" as const, event: "transfer", reference: "INV-0042", amount_kobo: 8_300_000, note: plus(60 * 60_000) };
+    expect(cardLine(card, false, "Ada", { now: at })).toBe("Ada is paying by transfer");
+    expect(cardLine(card, false, "Ada", { now: at, settled: { event: "transfer_paid" } })).toBe("Ada paid by transfer");
+    expect(cardLine(card, false, "Ada", { now: at, settled: { event: "transfer_part" } })).toBe("Ada paid part by transfer");
+    expect(cardLine({ ...card, doc: "bill" }, true, "Dangote", { now: at, settled: { event: "transfer_paid" } })).toBe("You paid by transfer");
+  });
+  it("reads the number's expiry from the card's note", () => {
+    const card = { doc: "invoice" as const, event: "transfer", reference: "INV-0042", amount_kobo: 8_300_000, note: plus(60_000) };
+    expect(transferExpired(card, at)).toBe(false);
+    expect(cardStatus(card, at).word).toBe("By transfer");
+    expect(cardSub(card, at)).toMatch(/^₦83,000 · Good until /);
+    expect(cardSub(card, at)).not.toContain("“");
+    // After it: the seller's invoice is to pay again; the buyer's number expired.
+    const later = at + 2 * 60_000;
+    expect(transferExpired(card, later)).toBe(true);
+    expect(cardLine(card, false, "Ada", { now: later })).toBe("Ada's account number expired");
+    expect(cardStatus(card, later)).toEqual({ word: "To pay", tone: "lime" });
+    expect(cardLine({ ...card, doc: "bill" }, true, "Dangote", { now: later })).toBe("Your account number expired");
+    expect(cardStatus({ ...card, doc: "bill" }, later).word).toBe("Expired");
+    expect(cardSub(card, later)).toBe("₦83,000 · Number expired");
+    // An older card with no expiry keeps saying paying.
+    expect(transferExpired({ ...card, note: undefined }, later)).toBe(false);
+    expect(cardLine({ ...card, note: undefined }, false, "Ada", { now: later })).toBe("Ada is paying by transfer");
+  });
+  it("offers I need longer only where the provider gives it", () => {
+    expect(fromCustomer({ invoice: "i", reference: "INV-1", due_kobo: 1, state: "open", longer: true })?.longer).toBe(true);
+    expect(fromCustomer({ invoice: "i", reference: "INV-1", due_kobo: 1, state: "open" })?.longer).toBeUndefined();
   });
 });
 

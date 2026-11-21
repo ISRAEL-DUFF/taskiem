@@ -26,6 +26,7 @@ import {
   dayLabel,
   fileSize,
   fileURL,
+  isTransferPaid,
   merge,
   previewLine,
   REACTIONS,
@@ -636,6 +637,7 @@ function Bubble({
   canReply,
   latest = false,
   current,
+  settled,
   onDone = () => undefined,
   onForward,
   onSaveAs,
@@ -661,6 +663,8 @@ function Bubble({
   latest?: boolean;
   /** The newest card of the same document: where it is now. */
   current?: DocCard;
+  /** A number given for a bill: the later card saying it was paid into. */
+  settled?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
   /** Save as… on its words (saved objects S1, part 4). */
@@ -705,7 +709,9 @@ function Bubble({
       canReply ||
       (!card && !!(onForward || onHide || m.body)));
   const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
-  const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
+  const what = card
+    ? cardLine(card, m.mine, other, { settled })
+    : previewLine(m, other);
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
@@ -917,7 +923,7 @@ function Bubble({
         <CardFrame
           card={card}
           now={current}
-          title={cardLine(card, m.mine, other)}
+          title={what}
         >
           {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
             <button
@@ -1848,9 +1854,17 @@ export function ConversationPane({
   // status): an order accepted since it arrived no longer reads "New".
   const newest = new Set<string>();
   const now = new Map<string, DocCard>();
+  // A number given for a bill stops reading "paying" once a later card
+  // says it was paid into (in full or in part).
+  const paidLater = new Map<string, DocCard>();
+  const settled = new Map<string, DocCard>();
   for (const m of [...(messages ?? [])].reverse()) {
     if (m.kind !== "card" || !m.card) continue;
     const key = `${m.card.doc}:${m.card.reference}`;
+    if (isTransferPaid(m.card) && !paidLater.has(key))
+      paidLater.set(key, m.card);
+    const paid = paidLater.get(key);
+    if (m.card.event === "transfer" && paid) settled.set(m.id, paid);
     if (now.has(key)) continue;
     now.set(key, m.card);
     newest.add(m.id);
@@ -2005,6 +2019,7 @@ export function ConversationPane({
               flash={flashId === m.id}
               latest={newest.has(m.id)}
               current={m.card && now.get(`${m.card.doc}:${m.card.reference}`)}
+              settled={settled.get(m.id)}
               onDone={() => pull(last).catch(setError)}
               onForward={
                 write && others.some((o) => o.state === "active")

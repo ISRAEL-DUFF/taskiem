@@ -106,7 +106,8 @@ export function TransferCard({
   busy?: boolean;
   /** Get a new number, or one for what is left. */
   onAgain?: () => void;
-  /** I need longer: a number good for longer. */
+  /** I need longer: a number good for longer (offered only where the
+   * provider gives longer, `t.longer`). */
   onLonger?: () => void;
   /** Paid: where the next bill to pay opens. */
   next?: string;
@@ -187,7 +188,7 @@ export function TransferCard({
             <span className="xfer-dot" aria-hidden="true" />
             Waiting for your transfer
           </p>
-          {onLonger && (
+          {onLonger && t.longer && (
             <button
               type="button"
               className="link xfer-longer"

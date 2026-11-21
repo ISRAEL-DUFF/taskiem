@@ -4,6 +4,7 @@
 
 import { naira } from "./invoices";
 import { cmpTime } from "./stamp";
+import { whenWords } from "./time";
 import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
 
@@ -189,17 +190,82 @@ export function isDelivery(card: Pick<DocCard, "doc">): boolean {
   return card.doc === "delivery" || card.doc === "dispatch";
 }
 
+/** The events of paying a bill by transfer (the payments flow, part 1):
+ * a number given, and the money landing in full or in part. */
+export const TRANSFER_EVENTS = ["transfer", "transfer_paid", "transfer_part"];
+
+/** Whether a card is about a bill's money landing by transfer. */
+export const isTransferPaid = (card: Pick<DocCard, "event">) =>
+  card.event === "transfer_paid" || card.event === "transfer_part";
+
+/** When a transfer card's number stops taking money: its note is the
+ * number's expiry (older cards carry none). */
+export function transferUntil(card: Pick<DocCard, "event" | "note">): number | null {
+  if (card.event !== "transfer" || !card.note) return null;
+  const t = Date.parse(card.note);
+  return Number.isNaN(t) ? null : t;
+}
+
+/** A transfer card's number has run out (nothing landed in time). */
+export function transferExpired(
+  card: Pick<DocCard, "event" | "note">,
+  now: number = Date.now(),
+): boolean {
+  const t = transferUntil(card);
+  return t !== null && t <= now;
+}
+
+/** What a card's line knows beyond the card: the clock, and the later
+ * card that says the number was paid into. */
+export interface CardContext {
+  now?: number;
+  /** A later transfer_paid or transfer_part card for the same bill. */
+  settled?: Pick<DocCard, "event">;
+}
+
+/** Paying by transfer in words: the buyer's side (a bill) and the
+ * seller's (an invoice). */
+function transferLine(card: DocCard, mine: boolean, other: string, ctx: CardContext): string {
+  const buyer = card.doc === "bill";
+  const amount = card.amount_kobo !== undefined ? naira(card.amount_kobo) : "";
+  switch (card.event) {
+    case "transfer_paid":
+      return `${buyer ? "Paid" : `${other} paid`}${amount ? ` ${amount}` : ""} by transfer`;
+    case "transfer_part":
+      return buyer
+        ? `Part paid by transfer${amount ? `: ${amount} so far` : ""}`
+        : `${other} paid part by transfer`;
+  }
+  // A number given: paying, until money lands or the number runs out.
+  if (ctx.settled)
+    return ctx.settled.event === "transfer_paid"
+      ? buyer
+        ? "You paid by transfer"
+        : `${other} paid by transfer`
+      : buyer
+        ? "You paid part by transfer"
+        : `${other} paid part by transfer`;
+  if (transferExpired(card, ctx.now))
+    return buyer
+      ? "Your account number expired"
+      : `${other}'s account number expired`;
+  return mine ? "You are paying by transfer" : `${other} is paying by transfer`;
+}
+
 /** A card in words: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042". */
-export function cardLine(card: DocCard, mine: boolean, other: string): string {
+export function cardLine(
+  card: DocCard,
+  mine: boolean,
+  other: string,
+  ctx: CardContext = {},
+): string {
   const who = mine ? "You" : other;
   if (isDelivery(card)) {
     const verb = DELIVERY_VERB[card.event] ?? card.event.replaceAll("_", " ");
     return `${who} ${verb} ${card.reference}`;
   }
-  // Paying by transfer (the payments flow, part 1): a number was given for
-  // the bill; the seller's card says who is paying.
-  if (card.event === "transfer" && (card.doc === "invoice" || card.doc === "bill"))
-    return mine ? "You are paying by transfer" : `${other} is paying by transfer`;
+  if (TRANSFER_EVENTS.includes(card.event) && (card.doc === "invoice" || card.doc === "bill"))
+    return transferLine(card, mine, other, ctx);
   const verb =
     VERB[card.event] ??
     `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;
@@ -225,7 +291,18 @@ export function cardHref(card: DocCard): string {
 }
 
 /** A card's second line: the amount, and a word. */
-export function cardSub(card: DocCard): string {
+export function cardSub(card: DocCard, now: number = Date.now()): string {
+  // Paid by transfer: the line says the amount already.
+  if (isTransferPaid(card)) return "";
+  // A number given: its note is when it runs out, not words to quote.
+  const until = transferUntil(card);
+  if (until !== null)
+    return [
+      card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
+      until <= now ? "Number expired" : `Good until ${whenWords(new Date(until), new Date(now))}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   return [
     card.amount_kobo !== undefined ? naira(card.amount_kobo) : "",
     card.was_kobo !== undefined && card.was_kobo > (card.amount_kobo ?? 0)

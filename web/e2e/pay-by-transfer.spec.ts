@@ -105,7 +105,8 @@ test("Pay a bill by transfer: the ways, the number, and each state", async ({ pa
   // Pay by transfer: asked (202), then the number arrives within seconds.
   state.ask = () => {
     state.bill = bill({ transfer: { state: "asking" } });
-    setTimeout(() => (state.bill = bill({ transfer: { state: "open", ...OPEN, expires_at: at(29 * 60_000 + 30_000) } })), 1500);
+    // The seller's provider gives longer: I need longer is offered.
+    setTimeout(() => (state.bill = bill({ transfer: { state: "open", ...OPEN, longer: true, expires_at: at(29 * 60_000 + 30_000) } })), 1500);
     return { status: 202, body: state.bill };
   };
   await sheet.getByRole("button", { name: /Pay by transfer/ }).click();
@@ -201,6 +202,8 @@ test("with one way to pay, Pay goes straight to it; the last way chosen comes fi
   const sheet = page.getByRole("dialog");
   await expect(sheet.getByTestId("pay-ways")).toHaveCount(0);
   await expect(sheet.getByTestId("transfer-head")).toHaveText("Send exactly ₦83,000");
+  // Their provider gives no longer than the default: no I need longer.
+  await expect(sheet.getByRole("button", { name: "I need longer" })).toHaveCount(0);
 
   // The checkout chosen last time for this seller leads next time.
   state.bill = bill();
@@ -265,6 +268,7 @@ test("a customer pays an invoice by transfer from their chat with a business", a
   await card.getByRole("button", { name: "Copy the account number" }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("0123456789");
   expect(asked).toEqual([{}]);
+  await expect(card.getByRole("button", { name: "I need longer" })).toHaveCount(0);
   await axeBoth(page, "a customer's account number");
   await page.setViewportSize({ width: 360, height: 800 });
   await axeBoth(page, "a customer's account number");
@@ -273,11 +277,15 @@ test("a customer pays an invoice by transfer from their chat with a business", a
   transfer = { ...transfer, expires_at: at(-1000), state: "expired" };
   await page.reload();
   await expect(page.getByTestId("customer-transfer-card").getByTestId("transfer-head")).toHaveText("This number has expired. Don't send to it");
+  // This time the business's provider gives longer: I need longer is offered.
+  transfer = { ...transfer, longer: true };
   await page.getByRole("button", { name: "Get a new number" }).click();
   await expect(page.getByTestId("customer-transfer-card").getByTestId("transfer-head")).toHaveText("Send exactly ₦45,000");
+  await page.getByTestId("customer-transfer-card").getByRole("button", { name: "I need longer" }).click();
+  await expect.poll(() => asked.at(-1)).toEqual({ longer: true });
 });
 
-test("the chat's cards: the buyer's number, and the seller's 'is paying by transfer'", async ({ browser }) => {
+test("the chat's cards: the buyer's number, the seller's 'is paying by transfer', expired, and paid", async ({ browser }) => {
   test.setTimeout(120_000);
   const stamp = letters();
   const sellerName = `Dangote Depot ${stamp}`;
@@ -296,17 +304,26 @@ test("the chat's cards: the buyer's number, and the seller's 'is paying by trans
 
   // The cards the server posts when a number is given, added to what each
   // side's conversation answers.
-  const now = new Date().toISOString();
-  const withCard = async (page: Page, card: Record<string, unknown>, mine: boolean) =>
+  // Each card is [card, mine], oldest first; the list can change between
+  // loads. A transfer card's note is when its number expires.
+  type Cards = [Record<string, unknown>, boolean][];
+  const withCards = async (page: Page, cards: { now: Cards }) =>
     page.route(new RegExp(`/v1/link-chats/${link}/messages(\\?|$)`), async (r) => {
       if (r.request().method() !== "GET") return r.continue();
       const res = await r.fetch();
       const body = (await res.json()) as { messages: unknown[] };
-      body.messages = [...(body.messages ?? []), { id: "0192e2e0-0000-7000-8000-00000000c0de", link, mine, kind: "card", card, created_at: now }];
+      const t0 = Date.now() - 60_000;
+      body.messages = [
+        ...(body.messages ?? []),
+        ...cards.now.map(([card, mine], i) => ({ id: `0192e2e0-0000-7000-8000-00000000c0d${i}`, link, mine, kind: "card", card, created_at: new Date(t0 + i * 1000).toISOString() })),
+      ];
       return r.fulfill({ response: res, json: body });
     });
-  await withCard(buyer, { doc: "bill", event: "transfer", reference: "INV-0042", id: "INV-0042", amount_kobo: 8_300_000 }, true);
-  await withCard(seller, { doc: "invoice", event: "transfer", reference: "INV-0042", id: "INV-0042", amount_kobo: 8_300_000 }, false);
+  const given = { reference: "INV-0042", id: "INV-0042", amount_kobo: 8_300_000, event: "transfer" };
+  const buyerCards = { now: [[{ ...given, doc: "bill", note: at(60 * 60_000) }, true]] as Cards };
+  const sellerCards = { now: [[{ ...given, doc: "invoice", note: at(60 * 60_000) }, false]] as Cards };
+  await withCards(buyer, buyerCards);
+  await withCards(seller, sellerCards);
   let asks = 0;
   await buyer.route(/\/v1\/bills\/[^/]+\/transfer$/, (r) => {
     // Read by the seller's name and the number, then by the bill's id.
@@ -330,4 +347,42 @@ test("the chat's cards: the buyer's number, and the seller's 'is paying by trans
   await expect(seller.getByText(`${buyerName} is paying by transfer`, { exact: true })).toBeVisible();
   await expect(seller.getByTestId("chat-transfer-card")).toHaveCount(0);
   await axeBoth(seller, "the seller's card in the chat");
+
+  const sellerCard = seller.getByRole("article", { name: "Invoice · INV-0042" });
+  // The number's time passed with nothing in: back to To pay.
+  sellerCards.now = [[{ ...given, doc: "invoice", note: at(-1000) }, false]];
+  await seller.reload();
+  await expect(seller.getByText(`${buyerName}'s account number expired`, { exact: true })).toBeVisible();
+  await expect(sellerCard.locator(".tk-pill")).toHaveText("To pay");
+  await expect(sellerCard).toContainText("Number expired");
+
+  // Paid in full: the earlier card stops saying paying; the paid card says how much.
+  sellerCards.now = [
+    [{ ...given, doc: "invoice", note: at(60 * 60_000) }, false],
+    [{ ...given, doc: "invoice", event: "transfer_paid" }, false],
+  ];
+  await seller.reload();
+  await expect(seller.getByText(`${buyerName} paid ₦83,000 by transfer`, { exact: true })).toBeVisible();
+  await expect(seller.getByText(`${buyerName} paid by transfer`, { exact: true })).toBeVisible();
+  await expect(seller.getByText(`${buyerName} is paying by transfer`, { exact: true })).toHaveCount(0);
+  await expect(sellerCard.locator(".tk-pill")).toHaveText(["Paid", "Paid"]);
+  await axeBoth(seller, "the seller's paid card in the chat");
+
+  // The buyer, part paid: a card, not a diary line, and no live number under the old card.
+  buyerCards.now = [
+    [{ ...given, doc: "bill", note: at(60 * 60_000) }, true],
+    [{ ...given, doc: "bill", event: "transfer_part", amount_kobo: 5_000_000 }, true],
+  ];
+  await buyer.reload();
+  await expect(buyer.getByText("Part paid by transfer: ₦50,000 so far", { exact: true })).toBeVisible();
+  await expect(buyer.getByText("You paid part by transfer", { exact: true })).toBeVisible();
+  await expect(buyer.getByText("You are paying by transfer", { exact: true })).toHaveCount(0);
+  await expect(buyer.getByTestId("chat-transfer-card")).toHaveCount(0);
+  await axeBoth(buyer, "the buyer's part-paid card in the chat");
+
+  // The buyer's number ran out: its card says so.
+  buyerCards.now = [[{ ...given, doc: "bill", note: at(-1000) }, true]];
+  await buyer.reload();
+  await expect(buyer.getByText("Your account number expired", { exact: true })).toBeVisible();
+  await expect(buyer.getByRole("article", { name: "Invoice · INV-0042" }).locator(".tk-pill")).toHaveText("Expired");
 });

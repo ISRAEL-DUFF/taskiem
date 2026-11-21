@@ -33,6 +33,9 @@ export interface BillTransfer {
   problem?: string;
   /** Paid: the same seller's next bill to pay. */
   next?: string;
+  /** The seller's provider gives longer than the default: "I need longer"
+   * is offered only then. */
+  longer?: boolean;
 }
 
 /** An invoice's account number as its customer sees it, in their chat with
@@ -48,6 +51,8 @@ export interface CustomerTransfer {
   amount_kobo?: number;
   expires_at?: string;
   paid_at?: string;
+  /** The business's provider gives longer than the default. */
+  longer?: boolean;
 }
 
 /** A customer's invoice number in the bill's shape, so one card shows both. */
@@ -65,6 +70,7 @@ export function fromCustomer(c: CustomerTransfer): BillTransfer | null {
       c.state === "part" ? Math.max(0, amount - c.due_kobo) : undefined,
     expires_at: c.expires_at,
     paid_at: c.paid_at,
+    longer: c.longer,
   };
 }
 
