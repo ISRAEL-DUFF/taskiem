@@ -1567,6 +1567,12 @@ class TaskiemApi {
     await _t.send('DELETE', '/v1/saved-kinds/${Uri.encodeComponent(id)}');
   }
 
+  /// Import saved things from a file (`POST /v1/saved/import`)
+  Future<SavedImport> importSaved({required ImportSavedRequest body}) async {
+    final j = await _t.send('POST', '/v1/saved/import', body: body.toJson());
+    return SavedImport.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The banks by name (`GET /v1/me/banks`)
   Future<ListMyBanksResponse> listMyBanks() async {
     final j = await _t.send('GET', '/v1/me/banks');
@@ -13291,6 +13297,104 @@ class SavedKindResult {
 
   Map<String, dynamic> toJson() => {
         'kind': kind.toJson(),
+      };
+}
+
+class ImportSavedRequest {
+  const ImportSavedRequest({this.confirm, required this.csv});
+
+  /// The plan's hash, to save it.
+  final String? confirm;
+  final String csv;
+
+  factory ImportSavedRequest.fromJson(Map<String, dynamic> j) => ImportSavedRequest(
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
+        csv: j['csv'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': ?confirm,
+        'csv': csv,
+      };
+}
+
+class SavedImport {
+  const SavedImport({this.added, this.failed, required this.hash, this.rows, required this.saved, required this.total});
+
+  /// The names saved.
+  final List<String>? added;
+  /// Lines that could not be saved after all (a bank that does not know the
+  /// account), each with why.
+  final List<SavedImportFailedItem>? failed;
+  final String hash;
+  /// The plan's things.
+  final List<SavedImportRowsItem>? rows;
+  /// false for the plan; true once saved.
+  final bool saved;
+  final int total;
+
+  factory SavedImport.fromJson(Map<String, dynamic> j) => SavedImport(
+        added: j['added'] == null ? null : (j['added'] as List).map((e) => e as String).toList(),
+        failed: j['failed'] == null ? null : (j['failed'] as List).map((e) => SavedImportFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        hash: j['hash'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => SavedImportRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        saved: j['saved'] as bool,
+        total: (j['total'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': ?added?.map((e) => e).toList(),
+        'failed': ?failed?.map((e) => e.toJson()).toList(),
+        'hash': hash,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'saved': saved,
+        'total': total,
+      };
+}
+
+class SavedImportFailedItem {
+  const SavedImportFailedItem({required this.line, required this.message, required this.name});
+
+  final int line;
+  final String message;
+  final String name;
+
+  factory SavedImportFailedItem.fromJson(Map<String, dynamic> j) => SavedImportFailedItem(
+        line: (j['line'] as num).toInt(),
+        message: j['message'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'message': message,
+        'name': name,
+      };
+}
+
+class SavedImportRowsItem {
+  const SavedImportRowsItem({required this.hint, required this.kind, required this.line, required this.name, required this.title});
+
+  final String hint;
+  final String kind;
+  final int line;
+  final String name;
+  final String title;
+
+  factory SavedImportRowsItem.fromJson(Map<String, dynamic> j) => SavedImportRowsItem(
+        hint: j['hint'] as String,
+        kind: j['kind'] as String,
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'hint': hint,
+        'kind': kind,
+        'line': line,
+        'name': name,
+        'title': title,
       };
 }
 

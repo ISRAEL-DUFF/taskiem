@@ -336,4 +336,5 @@ listSavedKinds
 addSavedKind
 changeSavedKind
 removeSavedKind
+importSaved
 listMyBanks
