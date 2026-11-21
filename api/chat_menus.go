@@ -40,9 +40,6 @@ const (
 // refSep parts an order's number from its customer's name in a choice.
 const refSep = " · "
 
-// menuRows is how many of a topic's actions show in the chat (§6.1).
-const menuRows = 5
-
 // chatMenuMsg is a menu as a message (kind "menu"): a topic's ("" for
 // the topics), what Taskiem understood, the row it picked with what it
 // took from the message, and the picked row's command as a tip.
@@ -240,10 +237,10 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 	if c.state != stateIdle || c.understood {
 		return false, nil
 	}
-	switch {
-	case cmd == "help", cmd == "menu", cmd == "topics":
+	switch cmd {
+	case "help", "menu", "topics":
 		return true, s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.pick_topic")})
-	case cmd == "help all":
+	case "help all":
 		return true, c.say(ctx, s, s.waHelp(c))
 	}
 	// In the Taskiem chat, a topic's word that is a command ("riders",
