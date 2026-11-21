@@ -38,8 +38,10 @@ class _Api {
   final calls = <http.Request>[];
   final routes = <String, Object? Function(http.Request r)>{};
 
-  List<Map<String, dynamic>> sent(String method, String path) =>
-      [for (final c in calls.where((c) => c.method == method && c.url.path == path)) c.body.isEmpty ? <String, dynamic>{} : jsonDecode(c.body) as Map<String, dynamic>];
+  List<Map<String, dynamic>> sent(String method, String path) => [
+    for (final c in calls.where((c) => c.method == method && c.url.path == path))
+      c.body.isEmpty ? <String, dynamic>{} : jsonDecode(c.body) as Map<String, dynamic>,
+  ];
 
   Auth auth({bool owner = true}) {
     final a = Auth(
@@ -129,7 +131,12 @@ final _payPerson = ChatAction.fromJson({
   'fields': [
     {'key': 'who', 'label': 'Who are you paying?', 'hint': 'One of your saved accounts, like @chidi.', 'kind': 'payee'},
     {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
-    {'key': 'for', 'label': 'What is it for?', 'kind': 'choice', 'choices': ['a bill', 'wages', 'a delivery', 'a refund', 'stock bought', 'other']},
+    {
+      'key': 'for',
+      'label': 'What is it for?',
+      'kind': 'choice',
+      'choices': ['a bill', 'wages', 'a delivery', 'a refund', 'stock bought', 'other'],
+    },
     {'key': 'note', 'label': 'A few words for their bank statement?', 'kind': 'text', 'optional': true},
   ],
 });
@@ -148,7 +155,12 @@ final _payAccount = ChatAction.fromJson({
     {'key': 'number', 'label': 'What is the account number?', 'hint': '10 digits.', 'kind': 'account'},
     {'key': 'bank', 'label': 'Which bank is it with?', 'kind': 'bank'},
     {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
-    {'key': 'for', 'label': 'What is it for?', 'kind': 'choice', 'choices': ['a bill', 'wages', 'a delivery', 'a refund', 'stock bought', 'other']},
+    {
+      'key': 'for',
+      'label': 'What is it for?',
+      'kind': 'choice',
+      'choices': ['a bill', 'wages', 'a delivery', 'a refund', 'stock bought', 'other'],
+    },
   ],
 });
 
@@ -204,10 +216,28 @@ void main() {
       },
     };
     api.routes['POST /v1/payments'] = (_) => {'payment': payment('p1', first: true)};
-    api.routes['POST /v1/me/step-up/options'] = (_) => {'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'}};
-    api.routes['POST /v1/payments/p1/confirm'] = (_) => http.Response(jsonEncode({'payment': payment('p1', status: 'sending', first: true)}), 202, headers: _json);
+    api.routes['POST /v1/me/step-up/options'] = (_) => {
+      'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
+    };
+    // Asked first with no proof: the server asks for the passkey.
+    api.routes['POST /v1/payments/p1/confirm'] = (r) => (jsonDecode(r.body) as Map).containsKey('passkey')
+        ? http.Response(jsonEncode({'payment': payment('p1', status: 'sending', first: true)}), 202, headers: _json)
+        : http.Response(
+            jsonEncode({
+              'error': 'confirm with your passkey',
+              'step_up': 'required',
+              'methods': ['passkey'],
+            }),
+            403,
+            headers: _json,
+          );
     final closed = <Object?>[];
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: _payPerson)), closed)));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: _payPerson)), closed),
+      ),
+    );
     await settle(t);
 
     expect(find.text('Pay someone'), findsWidgets);
@@ -235,7 +265,10 @@ void main() {
     await settle(t);
     expect(api.sent('POST', '/v1/me/step-up/options').single, {'operation': 'money.pay', 'target': 'payment:p1'});
     expect(fake.asked, hasLength(1));
-    final confirm = api.sent('POST', '/v1/payments/p1/confirm').single;
+    final confirms = api.sent('POST', '/v1/payments/p1/confirm');
+    expect(confirms, hasLength(2));
+    expect(confirms.first.containsKey('passkey'), isFalse);
+    final confirm = confirms.last;
     expect(confirm['passkey'], isA<Map<String, dynamic>>());
     expect(confirm.containsKey('again'), isFalse);
     expect(find.text('Sent to the bank'), findsWidgets);
@@ -254,7 +287,9 @@ void main() {
     addTearDown(() => passkeys = was);
     final api = _Api();
     var tries = 0;
-    api.routes['POST /v1/me/step-up/options'] = (_) => {'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'}};
+    api.routes['POST /v1/me/step-up/options'] = (_) => {
+      'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
+    };
     api.routes['POST /v1/payments/p2/confirm'] = (r) {
       tries++;
       final b = jsonDecode(r.body) as Map<String, dynamic>;
@@ -263,7 +298,12 @@ void main() {
     };
     final closed = <Object?>[];
     final auth = api.auth(owner: false);
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: auth, payment: Payment.fromJson(payment('p2', changed: true)))), closed)));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: auth, payment: Payment.fromJson(payment('p2', changed: true)))), closed),
+      ),
+    );
     await settle(t);
     expect(find.text('The account changed since they were last paid'), findsOneWidget);
     expect(find.text('Cancel it'), findsOneWidget);
@@ -287,7 +327,12 @@ void main() {
     addTearDown(() => passkeys = was);
     final api = _Api();
     api.routes['POST /v1/payments/p3/confirm'] = (_) => http.Response(jsonEncode({'payment': payment('p3', status: 'sending')}), 202, headers: _json);
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: api.auth(), payment: Payment.fromJson(payment('p3')))), [])));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: api.auth(), payment: Payment.fromJson(payment('p3')))), []),
+      ),
+    );
     await settle(t);
     await t.tap(find.text('Pay ₦45,000'));
     await settle(t);
@@ -304,7 +349,7 @@ void main() {
   testWidgets('Pay an account number: 10 digits, the bank from the list, its name checked as it is prepared', (t) async {
     phone(t);
     final api = _Api();
-    api.routes['GET /v1/banks'] = (_) => {
+    api.routes['GET /v1/payments/banks'] = (_) => {
       'banks': [
         {'code': '044', 'name': 'Access Bank'},
         {'code': '058', 'name': 'Guaranty Trust Bank'},
@@ -312,7 +357,12 @@ void main() {
       'from': 'iswallet/taskiem',
     };
     api.routes['POST /v1/payments'] = (_) => {'payment': payment('p4', payee: 'Account ••6789', name: 'Chidi Okeke', purpose: 'stock')};
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: _payAccount)), [])));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: _payAccount)), []),
+      ),
+    );
     await settle(t);
     final boxes = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
     await t.enterText(boxes.at(0), '01234');
@@ -351,7 +401,18 @@ void main() {
     final api = _Api();
     api.routes['POST /v1/payments'] = (_) => _err(409, 'no_provider', 'Connect a payments account first: people are paid from it.');
     api.routes['GET /v1/chat/actions/pay.person/choices'] = (_) => {'fields': {}};
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: api.auth(), action: _payPerson, initial: const {'who': '@bayo', 'amount': '45000', 'for': 'wages'})), [])));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host(
+          (c) => showTkSheet<Payment>(
+            c,
+            (_) => PaySheet(auth: api.auth(), action: _payPerson, initial: const {'who': '@bayo', 'amount': '45000', 'for': 'wages'}),
+          ),
+          [],
+        ),
+      ),
+    );
     await settle(t);
     await t.tap(find.text('Next'));
     await settle(t);
@@ -364,13 +425,48 @@ void main() {
     final api = _Api();
     final list = [
       payment('a1', at: '2026-11-21T10:00:00Z'),
-      payment('a2', status: 'waiting_ok', payee: 'Ngozi, supplier', name: 'Ngozi Eze Ventures', bank: 'Access Bank', account: '••1234', kobo: 18000000, purpose: 'stock', at: '2026-11-20T15:00:00Z'),
-      payment('a3', status: 'paid', payee: 'Musa', name: 'Musa Bello', bank: 'Opay', account: '••4321', kobo: 1250000, purpose: 'wages', at: '2026-11-19T08:00:00Z'),
-      payment('a4', status: 'failed', payee: 'Account ••0001', name: 'Tunde Ade', bank: 'Kuda', account: '••0001', kobo: 500000, purpose: 'refund', at: '2026-11-18T12:00:00Z'),
+      payment(
+        'a2',
+        status: 'waiting_ok',
+        payee: 'Ngozi, supplier',
+        name: 'Ngozi Eze Ventures',
+        bank: 'Access Bank',
+        account: '••1234',
+        kobo: 18000000,
+        purpose: 'stock',
+        at: '2026-11-20T15:00:00Z',
+      ),
+      payment(
+        'a3',
+        status: 'paid',
+        payee: 'Musa',
+        name: 'Musa Bello',
+        bank: 'Opay',
+        account: '••4321',
+        kobo: 1250000,
+        purpose: 'wages',
+        at: '2026-11-19T08:00:00Z',
+      ),
+      payment(
+        'a4',
+        status: 'failed',
+        payee: 'Account ••0001',
+        name: 'Tunde Ade',
+        bank: 'Kuda',
+        account: '••0001',
+        kobo: 500000,
+        purpose: 'refund',
+        at: '2026-11-18T12:00:00Z',
+      ),
     ];
     api.routes['GET /v1/payments'] = (r) {
       final s = r.url.queryParameters['status'];
-      return {'payments': [for (final p in list) if (s == null || p['status'] == s) p]};
+      return {
+        'payments': [
+          for (final p in list)
+            if (s == null || p['status'] == s) p,
+        ],
+      };
     };
     api.routes['GET /v1/pay-limits'] = (_) => {
       'limits': [
@@ -386,7 +482,12 @@ void main() {
     };
     api.routes['POST /v1/payments/a1/cancel'] = (_) => {'payment': payment('a1', status: 'cancelled')};
     api.routes['PUT /v1/pay-limits/cashier'] = (r) => {'role': 'cashier', ...jsonDecode(r.body) as Map<String, dynamic>};
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SentPaymentsPage(auth: api.auth(), follow: false)));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: SentPaymentsPage(auth: api.auth(), follow: false),
+      ),
+    );
     await settle(t);
     expect(find.text('Payments'), findsWidgets);
     expect(find.text('Not sent yet'), findsWidgets);
@@ -443,7 +544,12 @@ void main() {
       'payments': [payment('b1', status: 'paid')],
     };
     api.routes['GET /v1/payments/b1'] = (_) => {'payment': payment('b1', status: 'paid')};
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SentPaymentsPage(auth: api.auth(owner: false), follow: false, open: 'b1')));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: SentPaymentsPage(auth: api.auth(owner: false), follow: false, open: 'b1'),
+      ),
+    );
     await settle(t);
     expect(find.byType(PaymentSheet), findsOneWidget);
     expect(find.text('Fee'), findsOneWidget);
@@ -474,13 +580,33 @@ void main() {
       ],
     };
     final auth = api.auth();
-    await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: auth, action: _payPerson)), [])), drive: settle);
     await expectLargeText(
       t,
-      TaskiemApp(mode: TkMode.dark, home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: auth, payment: Payment.fromJson(payment('c1', first: true, changed: true, again: true)))), [])),
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaySheet(auth: auth, action: _payPerson)), []),
+      ),
       drive: settle,
     );
-    await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: SentPaymentsPage(auth: auth, follow: false)), drive: settle);
+    await expectLargeText(
+      t,
+      TaskiemApp(
+        mode: TkMode.dark,
+        home: _Host(
+          (c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: auth, payment: Payment.fromJson(payment('c1', first: true, changed: true, again: true)))),
+          [],
+        ),
+      ),
+      drive: settle,
+    );
+    await expectLargeText(
+      t,
+      TaskiemApp(
+        mode: TkMode.light,
+        home: SentPaymentsPage(auth: auth, follow: false),
+      ),
+      drive: settle,
+    );
   });
 
   test('a link to a payment opens it over Payments', () {

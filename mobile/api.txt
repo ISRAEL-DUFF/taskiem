@@ -344,6 +344,7 @@ listMyBanks
 
 # Pay one person (P1, docs/spec/chat-pay-people.md)
 listPayments
+listPayBanks
 createPayment
 getPayment
 confirmPayment

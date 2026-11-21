@@ -1603,6 +1603,12 @@ class TaskiemApi {
     return ListPaymentsResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The banks to pay an account number at (`GET /v1/payments/banks`)
+  Future<ListPayBanksResponse> listPayBanks() async {
+    final j = await _t.send('GET', '/v1/payments/banks');
+    return ListPayBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Prepare a payment (`POST /v1/payments`)
   Future<CreatePaymentResponse> createPayment({required CreatePaymentRequest body}) async {
     final j = await _t.send('POST', '/v1/payments', body: body.toJson());
@@ -13830,6 +13836,43 @@ class Payment {
         'saved_id': ?savedId,
         'started_from': startedFrom,
         'status': status,
+      };
+}
+
+class ListPayBanksResponse {
+  const ListPayBanksResponse({required this.banks, required this.from});
+
+  final List<ListPayBanksResponseBanksItem> banks;
+  /// The payments connection the list is from ("iswallet/taskiem"), to send
+  /// back as `code_from`; empty for the list by name alone.
+  final String from;
+
+  factory ListPayBanksResponse.fromJson(Map<String, dynamic> j) => ListPayBanksResponse(
+        banks: (j['banks'] as List).map((e) => ListPayBanksResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+        from: j['from'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'banks': banks.map((e) => e.toJson()).toList(),
+        'from': from,
+      };
+}
+
+class ListPayBanksResponseBanksItem {
+  const ListPayBanksResponseBanksItem({required this.code, required this.name});
+
+  /// The bank's code in this list; empty in the list by name alone.
+  final String code;
+  final String name;
+
+  factory ListPayBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListPayBanksResponseBanksItem(
+        code: j['code'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
       };
 }
 

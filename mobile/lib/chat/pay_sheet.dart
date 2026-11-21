@@ -83,14 +83,21 @@ String paymentSentWords(Payment p) => p.status == 'waiting_ok' ? 'Sent for the o
 /// The prepared payment confirmed: with a code from the person's
 /// authenticator when one is typed, else the phone's passkey for this
 /// payment (money.pay on `payment:<id>`). [again] says yes to the same
-/// payment made in the last day.
+/// payment made in the last day. Without a code the server is asked first,
+/// with no proof, so what stops the payment (the same payment again) is
+/// said before the passkey is asked for, and the passkey is not wasted.
 Future<Payment> confirmPaymentWithProof(Auth auth, Payment p, {bool again = false, String code = ''}) async {
-  final passkey = code.isEmpty ? await passkeyProof(auth, 'money.pay', 'payment:${p.id}') : null;
-  final r = await auth.api.confirmPayment(
+  Future<Payment> send(Map<String, dynamic>? passkey, String? totp) async => (await auth.api.confirmPayment(
     id: p.id,
-    body: ConfirmPaymentRequest(passkey: passkey, totp: code.isEmpty ? null : code, again: again ? true : null),
-  );
-  return r.payment;
+    body: ConfirmPaymentRequest(passkey: passkey, totp: totp, again: again ? true : null),
+  )).payment;
+  if (code.isNotEmpty) return send(null, code);
+  try {
+    return await send(null, null);
+  } on ApiError catch (e) {
+    if (e.status != 403 || e.body['step_up'] == null) rethrow;
+  }
+  return send(await passkeyProof(auth, 'money.pay', 'payment:${p.id}'), null);
 }
 
 /// The Pay sheet over the chat (an action with `confirm: "passkey"`): its
@@ -135,10 +142,16 @@ class _PaySheetState extends State<PaySheet> {
       b.addListener(() => setState(() {}));
     }
     if (_fields.any((f) => !_typed.contains(f.kind))) {
-      unawaited(widget.auth.api.chatActionChoices(id: widget.action.id).then((r) {
-        if (!mounted) return;
-        setState(() => _choices = {for (final e in r.fields.entries) e.key: [for (final x in (e.value as List)) '$x']});
-      }, onError: (Object _) {}));
+      unawaited(
+        widget.auth.api.chatActionChoices(id: widget.action.id).then((r) {
+          if (!mounted) return;
+          setState(
+            () => _choices = {
+              for (final e in r.fields.entries) e.key: [for (final x in (e.value as List)) '$x'],
+            },
+          );
+        }, onError: (Object _) {}),
+      );
     }
   }
 
@@ -175,7 +188,7 @@ class _PaySheetState extends State<PaySheet> {
     if (_banks == null) {
       setState(() => _error = null);
       try {
-        final r = await widget.auth.api.listBanks();
+        final r = await widget.auth.api.listPayBanks();
         _banks = [for (final b in r.banks) b.name];
       } on Object catch (e) {
         if (mounted) setState(() => _error = errorWords(e));
@@ -280,13 +293,7 @@ class _PaySheetState extends State<PaySheet> {
   Widget build(BuildContext context) {
     final p = _payment;
     if (p != null) {
-      return PaymentSheet(
-        key: ValueKey(p.id),
-        auth: widget.auth,
-        payment: p,
-        fresh: true,
-        onBack: () => setState(() => _payment = null),
-      );
+      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, onBack: () => setState(() => _payment = null));
     }
     final problem = _problem;
     final look = TkLook.of(context);
@@ -300,8 +307,19 @@ class _PaySheetState extends State<PaySheet> {
       children: [
         TkFormGroup(children: [for (final f in _fields) _field(f)]),
         if (problem != null && problem.isNotEmpty && _fields.every((f) => f.optional == true || _value(f).isNotEmpty))
-          TkCallout(leading: TkSquare('b-alert', color: look.orange), title: problem, color: look.orange),
-        if (_error != null) TkCallout(leading: TkSquare('b-x', color: look.red), title: 'Not ready to pay', sub: _error, subLines: 4, color: look.red),
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: problem,
+            color: look.orange,
+          ),
+        if (_error != null)
+          TkCallout(
+            leading: TkSquare('b-x', color: look.red),
+            title: 'Not ready to pay',
+            sub: _error,
+            subLines: 4,
+            color: look.red,
+          ),
       ],
     );
   }
@@ -476,7 +494,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
           const SizedBox(height: 4),
           Text(paymentWhere(p), style: tkText(size: 14, lineHeight: 1.35, color: t.muted)),
           const SizedBox(height: 14),
-          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(amount, style: tkFigure(context, size: 34))),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(amount, style: tkFigure(context, size: 34)),
+          ),
         ],
       ),
     );
@@ -495,8 +517,17 @@ class _PaymentSheetState extends State<PaymentSheet> {
           ],
         ),
       if (prepared && !_useCode)
-        Center(child: TkLink(label: 'Use a code from your authenticator instead', bold: true, onTap: () => setState(() => _useCode = true))),
-      if (_error != null) TkCallout(leading: TkSquare('b-x', color: look.red), title: 'Not paid', sub: _error, subLines: 4, color: look.red),
+        Center(
+          child: TkLink(label: 'Use a code from your authenticator instead', bold: true, onTap: () => setState(() => _useCode = true)),
+        ),
+      if (_error != null)
+        TkCallout(
+          leading: TkSquare('b-x', color: look.red),
+          title: 'Not paid',
+          sub: _error,
+          subLines: 4,
+          color: look.red,
+        ),
     ];
     final overlay = _sent ? TkSavedTick(words: paymentSentWords(p)) : null;
     if (!prepared) {
