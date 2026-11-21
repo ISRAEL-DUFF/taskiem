@@ -7,7 +7,10 @@
 // message gives, the business's saved account with that number, and its
 // last payment to it. Tapping opens the Pay sheet filled in: the bank and
 // number for an owner, the saved account for staff (who pay saved accounts
-// only). A chip already paid says so, and pays again.
+// only). A chip already paid says so, and pays again. An account not
+// saved yet has "Save as…" beside it, for those who may manage the
+// business's saved things (pay_save.dart): once saved, the chip says
+// "Pay @name" and pays by it.
 
 import 'dart:async';
 
@@ -24,6 +27,7 @@ import '../kit/sheet.dart' show showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'menu_card.dart' show catalogueOf;
+import 'pay_save.dart' show PaySaveSheet, PaySaved, maySaveFromMessages;
 import 'pay_sheet.dart' show PaySheet;
 import 'words.dart' show naira;
 
@@ -92,6 +96,7 @@ class _PayChipState extends State<PayChip> {
   ChatAction? _account;
   ChatAction? _person;
   bool _opening = false;
+  bool _savedHere = false;
 
   @override
   void initState() {
@@ -121,7 +126,11 @@ class _PayChipState extends State<PayChip> {
     final payee = (r.payee ?? '').trim();
     final ChatAction action;
     final Map<String, String> initial;
-    if (_account case final a?) {
+    // Saved from here: paid by its @name.
+    if (_savedHere && _person != null && payee.isNotEmpty) {
+      action = _person!;
+      initial = _personInitial(action, payee, amount);
+    } else if (_account case final a?) {
       action = a;
       initial = {
         for (final f in a.fields ?? const <ChatField>[])
@@ -134,13 +143,7 @@ class _PayChipState extends State<PayChip> {
       };
     } else if (_person != null && payee.isNotEmpty) {
       action = _person!;
-      initial = {
-        for (final f in action.fields ?? const <ChatField>[])
-          if (f.kind == 'payee')
-            f.key: '@$payee'
-          else if (f.kind == 'money' && amount.isNotEmpty)
-            f.key: amount,
-      };
+      initial = _personInitial(action, payee, amount);
     } else {
       showTkToast(context, 'Ask an owner to save this account: then you can pay it.');
       return;
@@ -158,6 +161,39 @@ class _PayChipState extends State<PayChip> {
     if (mounted && again != null) setState(() => _r = again);
   }
 
+  Map<String, String> _personInitial(ChatAction action, String payee, String amount) => {
+    for (final f in action.fields ?? const <ChatField>[])
+      if (f.kind == 'payee')
+        f.key: '@$payee'
+      else if (f.kind == 'money' && amount.isNotEmpty)
+        f.key: amount,
+  };
+
+  /// Save as…: the account kept in the business's saved things, and the
+  /// chip says its @name from then on (the reading kept with it).
+  Future<void> _save() async {
+    final r = _r;
+    if (r == null || _opening) return;
+    _opening = true;
+    final saved = await showTkSheet<PaySaved>(context, (_) => PaySaveSheet(auth: widget.auth, reading: r));
+    _opening = false;
+    if (saved == null || !mounted) return;
+    final now = ReadPaymentResponse(
+      found: r.found,
+      accountNumber: r.accountNumber,
+      amountKobo: r.amountKobo,
+      bankCode: r.bankCode,
+      bankName: r.bankName,
+      likely: r.likely,
+      name: r.name,
+      paid: r.paid,
+      payee: saved.name,
+    );
+    (_reads[widget.auth] ??= {})[widget.id] = Future.value(now);
+    setState(() => (_r = now, _savedHere = true));
+    showTkToast(context, 'Saved as @${saved.name}. ${saved.words}');
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = _r;
@@ -166,11 +202,13 @@ class _PayChipState extends State<PayChip> {
     final look = TkLook.of(context);
     final paid = r.paid;
     final staffAsk = _account == null && (r.payee ?? '').trim().isEmpty;
-    final words = paid != null ? paidWords(paid) : 'Pay this account';
+    final payee = (r.payee ?? '').trim();
+    final who = payee.isEmpty ? 'this account' : '@$payee';
+    final words = paid != null ? paidWords(paid) : 'Pay $who';
     final more = paid != null ? 'Pay again' : null;
     final semantics = [
       if (paid != null) '${paidWords(paid)}.',
-      paid != null ? 'Pay this account again' : 'Pay this account',
+      paid != null ? 'Pay $who again' : 'Pay $who',
       if ((r.accountNumber ?? '').length == 10) 'ending ${r.accountNumber!.substring(6)}',
     ].join(' ');
     final chip = Container(
@@ -212,22 +250,64 @@ class _PayChipState extends State<PayChip> {
         ],
       ),
     );
+    final pay = TapArea(
+      child: Semantics(
+        button: true,
+        label: staffAsk ? '$semantics. Ask an owner to save it first' : semantics,
+        excludeSemantics: true,
+        onTap: () => unawaited(_open()),
+        child: TkPress(
+          onTap: () => unawaited(_open()),
+          child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48), child: Center(widthFactor: 1, child: chip)),
+        ),
+      ),
+    );
+    final save = maySaveFromMessages(widget.auth, r)
+        ? TapArea(
+            child: Semantics(
+              button: true,
+              label: 'Save as… this account, to pay it by a name',
+              excludeSemantics: true,
+              onTap: () => unawaited(_save()),
+              child: TkPress(
+                onTap: () => unawaited(_save()),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 5, 14, 5),
+                      decoration: BoxDecoration(
+                        color: t.chatIn,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.08), blurRadius: 2, offset: const Offset(0, 1))],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(height: 26, child: Center(child: TkIcon('b-plus', size: 15, stroke: 2.3, color: t.accent))),
+                          const SizedBox(width: 6),
+                          Text('Save as…', style: tkText(size: 14, weight: 650, lineHeight: 1.3, color: t.accent)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null;
     return Align(
       alignment: widget.mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.only(top: 2, bottom: 4),
-        child: TapArea(
-          child: Semantics(
-            button: true,
-            label: staffAsk ? '$semantics. Ask an owner to save it first' : semantics,
-            excludeSemantics: true,
-            onTap: () => unawaited(_open()),
-            child: TkPress(
-              onTap: () => unawaited(_open()),
-              child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48), child: Center(widthFactor: 1, child: chip)),
-            ),
-          ),
-        ),
+        child: save == null
+            ? pay
+            : Wrap(
+                spacing: 6,
+                alignment: widget.mine ? WrapAlignment.end : WrapAlignment.start,
+                children: [pay, save],
+              ),
       ),
     );
   }

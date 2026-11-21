@@ -14,6 +14,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/bills_page.dart' show BillPage;
 import 'package:taskiem/chat/pay_chip.dart' show mayHoldAccount, paidWords;
+import 'package:taskiem/chat/pay_save.dart' show PaySaveSheet;
 import 'package:taskiem/chat/pay_sheet.dart' show PaySheet;
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
@@ -27,8 +28,8 @@ const _link = '3af349e2-b776-4306-bdb8-10df59687c55';
 void main() {
   setUpAll(loadFonts);
 
-  Widget app(ChatsData chats) => TaskiemApp(
-        mode: TkMode.light,
+  Widget app(ChatsData chats, {TkMode mode = TkMode.light}) => TaskiemApp(
+        mode: mode,
         home: Builder(
           builder: (context) => ChatsScreen(
             data: chats,
@@ -448,7 +449,7 @@ void main() {
     }
 
     await openChat();
-    await t.tap(find.bySemanticsLabel('Pay this account ending 6789'));
+    await t.tap(find.bySemanticsLabel('Pay @chidi ending 6789'));
     await settle(t);
     await settle(t);
     expect(find.text('Pay someone'), findsWidgets);
@@ -465,6 +466,133 @@ void main() {
     await t.pump();
     expect(find.text('Ask an owner to save this account: then you can pay it.'), findsOneWidget);
     expect(find.byType(PaySheet), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^Save as')), findsNothing, reason: 'staff may not manage the saved things');
     await t.pump(const Duration(seconds: 5));
   });
+  for (final mode in [TkMode.light, TkMode.dark]) {
+    testWidgets('pay from a message: Save as… keeps the account by a name, and the chip then pays @name (${mode.name})', (t) async {
+      t.view.physicalSize = const Size(360, 800);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final f = Fixture('chat-tunde');
+      final adds = <Map<String, dynamic>>[];
+      http.Response ok(Object b, [int status = 200]) => http.Response(jsonEncode(b), status, headers: {'content-type': 'application/json'});
+      final messages = f.json('/v1/link-chats/$_link/messages');
+      final list = [
+        ...(messages['messages'] as List),
+        {
+          'id': 'm-acct', 'link': _link, 'mine': false, 'kind': 'text', 'sender_name': 'Funke',
+          'body': 'My rider: 0123456789 Chidi Okafor', 'created_at': f.at.subtract(const Duration(minutes: 1)).toIso8601String(),
+        },
+      ];
+      final auth = f.auth(also: (req) async {
+        final p = req.url.path;
+        if (req.method == 'GET' && p == '/v1/link-chats/$_link/messages') return ok({'messages': list});
+        if (req.method == 'GET' && p == '/v1/chat/actions') {
+          return ok({
+            'topics': [
+              {
+                'id': 'pay', 'name': 'Pay', 'icon': 'money', 'color': 'lime',
+                'actions': [
+                  {'id': 'pay.person', 'title': 'Pay someone', 'line': 'From your balance', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey',
+                    'fields': [{'key': 'who', 'label': 'Who are you paying?', 'kind': 'payee'}, {'key': 'amount', 'label': 'How much?', 'kind': 'money'}]},
+                  {'id': 'pay.account', 'title': 'Pay an account number', 'line': 'Any bank', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey',
+                    'fields': [{'key': 'number', 'label': 'What is the account number?', 'kind': 'account'}, {'key': 'bank', 'label': 'Which bank is it with?', 'kind': 'bank'}]},
+                ],
+              },
+            ],
+          });
+        }
+        if (req.method == 'GET' && p == '/v1/chat/actions/pay.person/choices') return ok({'fields': {'who': ['@chidi-rider']}});
+        if (req.method == 'POST' && p == '/v1/payments/read') {
+          return ok({'found': true, 'account_number': '0123456789', 'name': 'Chidi Okafor', 'likely': [{'code': '058', 'name': 'Guaranty Trust Bank', 'likely': true}]});
+        }
+        if (req.method == 'GET' && p == '/v1/payments/banks') {
+          return ok({
+            'banks': [{'code': '044', 'name': 'Access Bank'}, {'code': '058', 'name': 'Guaranty Trust Bank', 'likely': true}, {'code': '057', 'name': 'Zenith Bank'}],
+            'from': 'iswallet/taskiem',
+          });
+        }
+        if (req.method == 'POST' && p == '/v1/saved') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          adds.add(body);
+          if (body['name'] == 'chidi-okafor') return ok({'error': 'That name is taken.', 'name_taken': true}, 409);
+          return ok({
+            'saved': {
+              'id': 's9', 'kind': 'bank_account', 'name': body['name'], 'title': body['title'], 'owner': 'business', 'hint': 'Guaranty Trust Bank ••6789',
+              'details': {'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'code_from': 'iswallet/taskiem', 'account_number': '••6789'},
+              'check': {'state': 'checked', 'account_name': 'CHIDI OKAFOR'}, 'to_change': false,
+              'created_at': f.at.toIso8601String(), 'updated_at': f.at.toIso8601String(),
+            },
+          }, 201);
+        }
+        return null;
+      });
+      // An owner who may pay and manage the business's saved things.
+      auth.me = Me.fromJson({...auth.me!.toJson(), 'permissions': [...auth.me!.permissions, 'money.pay', 'saved.manage']});
+      await t.pumpWidget(app(ChatsData(auth, now: () => f.at), mode: mode));
+      await settle(t);
+      await t.tap(find.text("Mama Tunde's Market"));
+      await settle(t);
+      await settle(t);
+      expect(find.bySemanticsLabel('Pay this account ending 6789'), findsOneWidget);
+      final saveAs = find.bySemanticsLabel('Save as… this account, to pay it by a name');
+      expect(saveAs, findsOneWidget);
+      await snap(t, 'pay-save-chip-${mode.name}');
+      await t.tap(saveAs);
+      await settle(t);
+      await settle(t);
+      // Filled in from the message: the name made from its name, the title,
+      // the number masked; no bank in the message, so one is picked.
+      expect(find.text('Save this account'), findsOneWidget);
+      final sheet = find.byType(PaySaveSheet);
+      final boxes = find.descendant(of: sheet, matching: find.byType(EditableText));
+      expect(t.widget<EditableText>(boxes.at(0)).controller.text, '@chidi-okafor');
+      expect(t.widget<EditableText>(boxes.at(1)).controller.text, 'Chidi Okafor');
+      expect(t.widget<EditableText>(boxes.at(2)).controller.text, '••••••6789');
+      expect(find.text('Choose the bank'), findsOneWidget);
+      await snap(t, 'pay-save-sheet-${mode.name}');
+      await t.tap(find.text('Save account'));
+      await settle(t);
+      expect(find.text('Choose the bank.'), findsOneWidget);
+      expect(adds, isEmpty);
+      await t.tap(find.text('Choose the bank'));
+      await settle(t);
+      // The Pay sheet's picker: the likely bank first.
+      expect(find.text('The banks this number can be at come first.'), findsOneWidget);
+      expect(t.getTopLeft(find.text('Guaranty Trust Bank')).dy, lessThan(t.getTopLeft(find.text('Access Bank')).dy));
+      await t.tap(find.text('Guaranty Trust Bank'));
+      await settle(t);
+      await t.tap(find.text('Save account'));
+      await settle(t);
+      // The name taken: said in plain words, and another typed.
+      expect(find.text('That name is taken: choose another.'), findsOneWidget);
+      await snap(t, 'pay-save-taken-${mode.name}');
+      await t.enterText(boxes.at(0), '@chidi rider');
+      await t.enterText(boxes.at(1), 'Chidi, rider');
+      await t.tap(find.text('Save account'));
+      await settle(t);
+      expect(adds.last, {
+        'kind': 'bank_account', 'name': 'chidi-rider', 'title': 'Chidi, rider',
+        'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'code_from': 'iswallet/taskiem', 'account_number': '0123456789',
+      });
+      expect(find.byType(PaySaveSheet), findsNothing);
+      expect(find.text('Saved as @chidi-rider. Bank’s name: CHIDI OKAFOR'), findsOneWidget);
+      // The chip says the name, Save as… is gone, and Pay goes by @name.
+      await t.pump(const Duration(seconds: 5));
+      expect(find.bySemanticsLabel(RegExp('^Save as')), findsNothing);
+      final chip = find.bySemanticsLabel('Pay @chidi-rider ending 6789');
+      expect(chip, findsOneWidget);
+      await snap(t, 'pay-save-done-${mode.name}');
+      await t.tap(chip);
+      await settle(t);
+      await settle(t);
+      expect(find.text('Pay someone'), findsWidgets);
+      final pay = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
+      expect(t.widget<EditableText>(pay.at(0)).controller.text, '@chidi-rider');
+      await t.tap(find.text('Cancel'));
+      await settle(t);
+      await t.pump(const Duration(seconds: 5));
+    });
+  }
 }

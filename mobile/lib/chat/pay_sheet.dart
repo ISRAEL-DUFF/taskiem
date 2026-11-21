@@ -134,6 +134,23 @@ Widget? nameDiffers(BuildContext context, String said, String bank) {
   );
 }
 
+/// The Pay sheet's bank picker over [list] (GET /v1/payments/banks): the
+/// banks a number can be at first, said so when [forNumber]; searchable
+/// when long. The bank's name chosen, or null.
+Future<String?> pickPayBank(BuildContext context, List<ListPayBanksResponseBanksItem> list, {String? value, bool forNumber = true}) {
+  final likely = forNumber && list.any((b) => b.likely == true);
+  // Likely first, as the server sends them; kept so if it does not.
+  if (likely) list = [...list.where((b) => b.likely == true), ...list.where((b) => b.likely != true)];
+  return pickOneOf(
+    context,
+    title: 'Bank',
+    value: value,
+    note: likely ? 'The banks this number can be at come first.' : null,
+    choices: [for (final b in list) (b.name, b.name, likely && b.likely == true ? 'Likely for this number' : '')],
+    searchHint: list.length > 8 ? 'Find the bank: guaranty, kuda…' : null,
+  );
+}
+
 /// The Pay sheet's form for one of the business's riders, paid to the bank
 /// account kept for their payouts: how much, what for (a delivery unless
 /// changed) and a note.
@@ -340,16 +357,7 @@ class _PaySheetState extends State<PaySheet> {
       }
     }
     if (!mounted) return;
-    final list = _banks!;
-    final likely = _number != null && list.any((b) => b.likely == true);
-    final v = await pickOneOf(
-      context,
-      title: 'Bank',
-      value: _banksChosen[f.key],
-      note: likely ? 'The banks this number can be at come first.' : null,
-      choices: [for (final b in list) (b.name, b.name, likely && b.likely == true ? 'Likely for this number' : '')],
-      searchHint: list.length > 8 ? 'Find the bank: guaranty, kuda…' : null,
-    );
+    final v = await pickPayBank(context, _banks!, value: _banksChosen[f.key], forNumber: _number != null);
     if (v != null && mounted) _choose(f, v);
   }
 
