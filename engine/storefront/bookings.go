@@ -552,3 +552,47 @@ func (o *Orders) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 	}
 	return errors.Join(errs...)
 }
+
+// RecentCustomers are the customers who ordered or booked in the last days
+// (saved objects S3: "send @price-list to the customers who ordered last
+// week"): each once, the newest first, with their name, phone and email
+// and how many of those orders were theirs. Orders declined, cancelled or
+// expired do not count; a customer erased since is left out.
+func (o *Orders) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int) ([]map[string]any, error) {
+	days = max(1, min(days, 31))
+	var out []map[string]any
+	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1
+			AND created_at >= now() - make_interval(days => $2) AND status NOT IN ('declined', 'cancelled', 'expired')
+			ORDER BY created_at DESC LIMIT 1000`, tenant, days)
+		if err != nil {
+			return err
+		}
+		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Order, error) { return scanOrder(r) })
+		if err != nil {
+			return err
+		}
+		at := map[string]int{}
+		for i := range list {
+			x := &list[i]
+			if err := o.open(ctx, tx, tenant, x); err != nil {
+				return err
+			}
+			if x.Customer.Phone == "" && x.Customer.Email == "" {
+				continue
+			}
+			if k, ok := at[x.subject]; ok {
+				out[k]["orders"] = out[k]["orders"].(int) + 1
+				continue
+			}
+			at[x.subject] = len(out)
+			out = append(out, map[string]any{"name": x.Customer.Name, "phone": x.Customer.Phone, "email": x.Customer.Email,
+				"orders": 1, "last_reference": x.Reference, "last_order_at": x.CreatedAt.UTC().Format(time.RFC3339)})
+		}
+		return nil
+	})
+	if out == nil {
+		out = []map[string]any{}
+	}
+	return out, err
+}

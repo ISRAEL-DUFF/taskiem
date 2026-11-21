@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 )
 
 const savedFlow = `{"schema":"wd/v1","id":"wf_saved","version":1,"name":"prices","trigger":{"type":"manual"},
@@ -66,5 +68,39 @@ func TestSavedReadByRuns(t *testing.T) {
 	owner.must(200, "PUT", "/v1/saved/"+prices["id"].(string), map[string]any{"details": map[string]any{"body": "Rice 50kg: 80,500"}})
 	if _, got := run(); !strings.Contains(toJSON(got["events"]), "Rice 50kg: 80,500") {
 		t.Fatalf("the next run: %s", toJSON(got["events"]))
+	}
+}
+
+// S3's done-when: "every Monday, send @price-list to the customers who
+// ordered last week": storefront@1 recent_customers lists them, each once,
+// and each is sent the saved text as it is when the run starts.
+func TestSavedPriceListToRecentCustomers(t *testing.T) {
+	w, ada := newDispatchWorld(t, "Ada Stores")
+	if err := w.env.Registry.Register(sfconn.New(w.orders)); err != nil {
+		t.Fatal(err)
+	}
+	w.order(t, "none")
+	w.order(t, "none")
+	ada.must(201, "POST", "/v1/saved", map[string]any{"name": "price-list", "title": "Price list", "kind": "text",
+		"details": map[string]any{"body": "Jollof rice: 2,500 a plate"}})
+	flow := `{"schema":"wd/v1","id":"wf_prices","version":1,"name":"weekly prices","trigger":{"type":"manual"},
+	  "steps":[{"id":"who","type":"connector","connector":"storefront@1","action":"recent_customers","input":{"days":7}},
+	    {"id":"each","type":"foreach","needs":["who"],"config":{"items":"=steps.who.output.customers","steps":[
+	      {"id":"send","type":"transform","config":{"output":{"to":"=item.phone","text":"=saved.price_list.body"}}}]}}]}`
+	out := ada.must(201, "POST", "/v1/workflows", map[string]any{"name": "weekly prices", "definition": json.RawMessage(flow)})
+	if probs := out["problems"].([]any); len(probs) > 0 {
+		t.Fatalf("problems: %v", probs)
+	}
+	wf := out["id"].(string)
+	ada.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	run := ada.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
+	w.env.Drain(t)
+	got := ada.must(200, "GET", "/v1/runs/"+run, nil)
+	ev := toJSON(got["events"])
+	if st := got["run"].(map[string]any)["status"]; st != "completed" || strings.Count(ev, "Jollof rice: 2,500 a plate") < 2 {
+		t.Fatalf("run %v: %s", st, ev)
+	}
+	if strings.Contains(ev, "+234803") {
+		t.Errorf("a customer's phone in the run's history: %s", ev)
 	}
 }

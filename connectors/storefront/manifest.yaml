@@ -175,6 +175,33 @@ actions:
         status:     { type: string }
         total_kobo: { type: integer }
         total:      { type: string }
+  recent_customers:
+    title: Customers who ordered lately
+    description: The customers who ordered or booked in the last days (7 unless days says, up to 31), each once, the newest first, with how many orders were theirs. Orders declined, cancelled or expired do not count. To send them something, such as a saved price list (saved.price_list.body), with notify@1 message in a foreach.
+    class: read
+    input:
+      type: object
+      properties:
+        days: { type: integer, minimum: 1, maximum: 31, default: 7 }
+    output:
+      type: object
+      properties:
+        count: { type: integer }
+        customers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:           { type: string }
+              phone:          { type: string }
+              email:          { type: string }
+              orders:         { type: integer }
+              last_reference: { type: string }
+              last_order_at:  { type: string, description: RFC 3339 }
+    pii:
+      - { field: output.customers.*.name, category: name }
+      - { field: output.customers.*.phone, category: phone }
+      - { field: output.customers.*.email, category: email }
   get_booking:
     title: Read a booking
     description: The booking's status, service and time, when its reminders fall, and its payment page. A booking moved by the customer or the owner starts a new run, so a run's times are the booking's.
