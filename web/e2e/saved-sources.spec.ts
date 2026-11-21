@@ -80,4 +80,32 @@ test("a saved thing's field is a value a step can use", async ({ page }) => {
   await expect(needs).toContainText("@price-list");
   await expect(needs.getByTestId("need-saved").getByRole("link", { name: /Open Saved/ })).toHaveAttribute("href", "/settings/saved");
   await shot(page, "saved-sources-need");
+
+  // A name no saved thing can have (stubbed until the server says so): its
+  // message only, nothing to open.
+  await page.route(/\/v1\/workflows\/[^/]+\/versions\/\d+\/publish$/, (q) =>
+    q.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Not ready",
+        code: "not_ready",
+        needs: [
+          {
+            kind: "saved",
+            name: "Price List!",
+            problem: "invalid",
+            environment: "prod",
+            steps: [{ id: "check", name: "Check" }],
+            blocking: true,
+            message: "@Price List! is not a name a saved thing can have: change the step to use one.",
+          },
+        ],
+      }),
+    }),
+  );
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(needs).toContainText("is not a name a saved thing can have");
+  await expect(needs.getByTestId("need-saved")).toHaveCount(0);
+  await expect(needs.getByRole("link", { name: /Open Saved/ })).toHaveCount(0);
 });

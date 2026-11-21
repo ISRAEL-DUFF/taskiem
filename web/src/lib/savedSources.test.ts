@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadSavedSources, savedExpr, savedSources, SAVED_GROUP } from "./savedSources";
+import { customFieldKey, loadSavedSources, savedExpr, savedSources, SAVED_GROUP } from "./savedSources";
 import { segmentsOf, valueOf } from "./fieldtext";
 import { rulesExpr, rulesOf } from "./plaincanvas";
 import type { MadeKind, SavedThing } from "./saved";
@@ -28,6 +28,8 @@ const car: MadeKind = {
     { key: "vin", label: "VIN", type: "text", sensitive: true },
     { key: "papers", label: "Papers", type: "file" },
     { key: "secret_code", label: "Secret code", type: "text", never_share: true },
+    { key: "payee", label: "Payee", type: "bank_account" },
+    { key: "note", label: "Its own note", type: "text" },
   ],
 };
 
@@ -46,8 +48,14 @@ describe("saved things as a step's values", () => {
       { label: "@price-list · Text", expr: "=saved.price_list.body", group: "Saved" },
       { label: "@price-list · Note", expr: "=saved.price_list.note", group: "Saved" },
     ]);
-    expect(out.map((s) => s.label)).toContain("@supplier · Account number");
-    expect(out.find((s) => s.label === "@supplier · Account number")?.expr).toBe("=saved.supplier.account_number");
+    // A bank account's number is never read by a run.
+    expect(out.filter((s) => s.label.startsWith("@supplier")).map((s) => s.expr)).toEqual([
+      "=saved.supplier.title",
+      "=saved.supplier.account_name",
+      "=saved.supplier.bank_name",
+      "=saved.supplier.bank_code",
+      "=saved.supplier.note",
+    ]);
   });
 
   it("gives a place, a person, a provider and a file their own fields", () => {
@@ -61,12 +69,17 @@ describe("saved things as a step's values", () => {
     expect(labels("file")).toEqual(["File name", "File type", "Note"]);
   });
 
-  it("gives a made-up kind's fields, but for files and those never shared", () => {
+  it("gives a made-up kind's fields, but for sensitive ones, files, bank accounts and those never shared", () => {
     const out = savedSources([thing({ name: "van", title: "Van", kind: "custom", kind_id: "k1" })], [car]);
-    expect(out.map((s) => s.expr)).toEqual(["=saved.van.title", "=saved.van.plate", "=saved.van.vin"]);
+    expect(out.map((s) => s.expr)).toEqual(["=saved.van.title", "=saved.van.plate", "=saved.van.field_note", "=saved.van.note"]);
     expect(out[1]?.label).toBe("@van · Plate");
-    // Its kind not read: its title only.
-    expect(savedSources([thing({ name: "van", kind: "custom", kind_id: "k9" })], [car])).toHaveLength(1);
+    expect(out[2]?.label).toBe("@van · Its own note");
+    // Its kind not read: its title and note only.
+    expect(savedSources([thing({ name: "van", kind: "custom", kind_id: "k9" })], [car]).map((s) => s.expr)).toEqual(["=saved.van.title", "=saved.van.note"]);
+  });
+
+  it("reads a made-up field keyed as every thing's field as field_<key>", () => {
+    expect(["name", "title", "kind", "note", "plate"].map(customFieldKey)).toEqual(["field_name", "field_title", "field_kind", "field_note", "plate"]);
   });
 
   it("never offers a person's own", () => {
@@ -90,11 +103,11 @@ describe("saved things as a step's values", () => {
       if (path === "/v1/saved") return Promise.resolve({ saved: [thing({ name: "van", kind: "custom", kind_id: "k1" })], limit: 50 } as T);
       return Promise.resolve({ kinds: [car], starters: [], limit: 10, to_change: true } as T);
     };
-    expect((await loadSavedSources(get)).map((s) => s.label)).toEqual(["@van · Title", "@van · Plate", "@van · VIN"]);
+    expect((await loadSavedSources(get)).map((s) => s.label)).toEqual(["@van · Title", "@van · Plate", "@van · Its own note", "@van · Note"]);
     expect(asked.sort()).toEqual(["/v1/saved", "/v1/saved-kinds"]);
     // The kinds fail: the things still show, with their titles.
     const noKinds = <T>(path: string): Promise<T> => (path === "/v1/saved" ? get<T>(path) : Promise.reject(new Error("no")));
-    expect(await loadSavedSources(noKinds)).toHaveLength(1);
+    expect(await loadSavedSources(noKinds)).toHaveLength(2);
     expect(await loadSavedSources(() => Promise.reject(new Error("offline")))).toEqual([]);
   });
 });
