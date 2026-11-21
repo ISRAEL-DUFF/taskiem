@@ -257,6 +257,9 @@ func (s *Server) eraseSavedContacts(r *http.Request, category string, value any)
 			if _, err := tx.Exec(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $3 WHERE tenant_id = $1 AND id = $2`, p.TenantID, id, o.by); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE object_id = $1`, id); err != nil {
+				return err
+			}
 			paths, err := dropObjectFilesTx(ctx, tx, o, id)
 			if err != nil {
 				return err

@@ -535,6 +535,78 @@ func SetDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, tenant uuid.UUID, d
 	return err
 }
 
+// purchaseDeliverToTx is where a purchase is delivered: its own place
+// (SetPurchaseDeliverToTx), else the business's default.
+func purchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) (DeliverTo, error) {
+	d, _, err := PurchaseDeliverToTx(ctx, tx, v, buyer, id)
+	return d, err
+}
+
+// PurchaseDeliverToTx is where a purchase is delivered, and whether it is
+// its own place (own) rather than the business's default.
+func PurchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) (DeliverTo, bool, error) {
+	var env map[string]any
+	if err := tx.QueryRow(ctx, `SELECT deliver_to FROM purchase_orders WHERE tenant_id = $1 AND id = $2`, buyer, id).Scan(&env); err != nil {
+		return DeliverTo{}, false, err
+	}
+	if env == nil {
+		d, err := DeliverToTx(ctx, tx, v, buyer)
+		return d, false, err
+	}
+	got, err := v.OpenTx(ctx, tx, buyer, env)
+	if errors.Is(err, pii.ErrErased) {
+		d, err := DeliverToTx(ctx, tx, v, buyer)
+		return d, false, err
+	}
+	if err != nil {
+		return DeliverTo{}, false, err
+	}
+	var d DeliverTo
+	raw, _ := json.Marshal(got)
+	_ = json.Unmarshal(raw, &d)
+	return d, true, nil
+}
+
+// SetPurchaseDeliverToTx says where one purchase from a linked supplier is
+// delivered (saved objects S2: "deliver order P-7QX4KD to @warehouse"),
+// sealed: only while it has not reached the supplier (drafted, or sent
+// and not yet received), since what the supplier holds is its own copy.
+func SetPurchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, tenant, id uuid.UUID, d DeliverTo) error {
+	d.Address = strings.Join(strings.Fields(d.Address), " ")
+	switch {
+	case d.Address == "":
+		return fmt.Errorf("%w: give the address", ErrInvalid)
+	case len([]rune(d.Address)) > 300:
+		return fmt.Errorf("%w: an address is up to 300 characters", ErrInvalid)
+	case d.Phone == "":
+		return fmt.Errorf("%w: give the number a rider calls at the door", ErrInvalid)
+	}
+	p, err := purchaseTx(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	// A drafted order takes its supplier's link when it is sent.
+	linked := p.Link != nil
+	if !linked {
+		if err := tx.QueryRow(ctx, `SELECT s.link_id IS NOT NULL FROM purchase_orders o JOIN suppliers s ON s.tenant_id = o.tenant_id AND s.id = o.supplier_id
+			WHERE o.tenant_id = $1 AND o.id = $2`, tenant, id).Scan(&linked); err != nil {
+			return err
+		}
+	}
+	if !linked {
+		return fmt.Errorf("%w: %s is to a supplier who is not linked: tell them where in your message to them", ErrState, p.Reference)
+	}
+	if p.Status != "drafted" && (p.Status != "sent" || p.SellerStatus != "") {
+		return fmt.Errorf("%w: %s has reached the supplier already: tell them in your conversation with them", ErrState, p.Reference)
+	}
+	env, err := v.SealTx(ctx, tx, tenant, "deliver_to", d)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE purchase_orders SET deliver_to = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, id, env)
+	return err
+}
+
 // --- the buyer's purchase order, as the link reads it ---
 
 type purchaseLine struct {
@@ -776,7 +848,7 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if err != nil {
 		return nil, err
 	}
-	deliver, err := DeliverToTx(ctx, tx, v, buyer)
+	deliver, err := purchaseDeliverToTx(ctx, tx, v, buyer, id)
 	if err != nil {
 		return nil, err
 	}
@@ -2060,7 +2132,7 @@ func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.U
 		seen[it.ID] = true
 		p.Lines[i].ItemID, p.Lines[i].Item, p.Lines[i].Unit = it.ID, it.Name, it.Unit
 	}
-	deliver, err := DeliverToTx(ctx, tx, v, buyer)
+	deliver, err := purchaseDeliverToTx(ctx, tx, v, buyer, id)
 	if err != nil {
 		return nil, err
 	}

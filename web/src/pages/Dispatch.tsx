@@ -46,6 +46,8 @@ import {
   type SettingsForm,
 } from "../lib/dispatch";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
+import { bankCodeFor } from "../lib/saved";
 import { useStepUp, type StepUpProof } from "../stepup";
 
 // Deliveries by the business's riders (dispatch D2 to D5; docs/dispatch.md):
@@ -942,6 +944,7 @@ function BankModal({
   );
   const [code, setCode] = useState("");
   const [number, setNumber] = useState("");
+  const [fillProblem, setFillProblem] = useState("");
   const act = useAction();
   const problem = bankProblem(code, number);
   return (
@@ -971,6 +974,22 @@ function BankModal({
           authenticator code. Their bank confirms the name before the first
           payout, and you see it when you approve.
         </p>
+        <div className="saved-fill-line">
+          <SavedFill
+            kind="bank_account"
+            label={`${line.rider}'s bank account`}
+            onPick={(x, n, why) => {
+              setCode(list.length > 0 ? bankCodeFor(list, x.details) : (x.details.bank_code ?? ""));
+              setNumber(n.replace(/\D/g, "").slice(0, 10));
+              setFillProblem(why ?? "");
+            }}
+          />
+        </div>
+        {fillProblem && (
+          <p className="error-text saved-fill-note" role="alert" data-testid="saved-fill-note">
+            {fillProblem}
+          </p>
+        )}
         {list.length > 0 ? (
           <Field label="Bank">
             <select value={code} onChange={(e) => setCode(e.target.value)}>

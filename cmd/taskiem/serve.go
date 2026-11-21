@@ -880,6 +880,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL,
 			WakeInterval: cfg.Wake.Interval, WakeInTx: cfg.Wake.InTx}}
+	// A business's saved things its workflows read, at each run's start
+	// (saved objects S3).
+	e.store.Saved = api.SavedResolver(e.store)
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)

@@ -240,4 +240,123 @@ for (const width of [390, 360]) {
     // "/invoice" is invoices and bills.
     await expect(picker.getByRole("button")).toHaveCount(3);
   });
+
+  // Saved objects S2 (docs/spec/saved-objects.md §6.4): a form's Saved
+  // button offers saved people for an invoice's customer and saved places
+  // for where linked suppliers deliver; picking one fills the fields. The
+  // lists are answered here (api/saved_test.go reads the real ones).
+  test(`Saved fills an invoice's customer and where suppliers deliver, at ${width} px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 844 });
+    await owner(page);
+    await answer(page);
+    const thing = (x: Record<string, unknown>) => ({
+      check: { state: "none", account_name: null, via: null, at: null, problem: null },
+      to_change: false, created_at: now, updated_at: now, ...x,
+    });
+    // The business's people come with their hint masked, their details whole.
+    // Each list is asked for one kind (?kind=).
+    const asked: string[] = [];
+    const ofKind = (r: Route, saved: Record<string, unknown>[]) => {
+      const kind = new URL(r.request().url()).searchParams.get("kind") ?? "";
+      asked.push(kind);
+      return r.fulfill(json({ limit: 500, saved: saved.filter((x) => !kind || x.kind === kind) }));
+    };
+    await page.route(/\/v1\/saved(\?.*)?$/, (r) =>
+      ofKind(r, [
+        thing({ id: "s1", owner: "business", kind: "person", name: "bisi", title: "Bisi Okafor", hint: "•••4567", details: { phone: "08031234567", email: "bisi@okafor.test" } }),
+        thing({ id: "s2", owner: "business", kind: "place", name: "shop", title: "The shop", hint: "Allen Avenue", details: { line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "08037654321" } }),
+        thing({ id: "s4", owner: "business", kind: "place", name: "farm", title: "The farm", hint: "Epe", details: { line: "Plot 7, Epe road", area: "Epe", landmark: "Past the second bridge, ".repeat(12) } }),
+        thing({ id: "s3", owner: "business", kind: "text", name: "thanks", title: "Thanks", hint: "", details: { body: "Thank you" } }),
+      ]),
+    );
+    await page.route(/\/v1\/me\/saved(\?.*)?$/, (r) =>
+      ofKind(r, [
+        thing({ id: "m1", owner: "mine", kind: "person", name: "tunde", title: "Tunde Bello", hint: "08030000000", details: { phone: "08030000000" } }),
+        thing({ id: "m2", owner: "mine", kind: "person", name: "kemi", title: "Kemi Ade", hint: "", details: {} }),
+      ]),
+    );
+    await page.route("**/v1/stock/deliver-to", (r) => r.fulfill(json({ address: "", phone: "" })));
+
+    // A new invoice: the business's person fills name, phone and email.
+    await page.goto("/invoices/new");
+    await page.getByRole("button", { name: "Saved people for the customer" }).click();
+    const picker = page.getByRole("dialog", { name: "Saved people" });
+    await expect(picker.getByTestId("saved-fill-row")).toHaveCount(3);
+    await expect(picker).toContainText("@bisi · •••4567");
+    expect(asked.filter((k) => k === "person")).toHaveLength(2);
+    await expect(picker).not.toContainText("The shop");
+    await axeBoth(page, "the Saved people picker");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await picker.getByRole("button", { name: "Use Bisi Okafor" }).click();
+    await expect(picker).toHaveCount(0);
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Bisi Okafor");
+    await expect(page.getByLabel("Phone number")).toHaveValue("08031234567");
+    await expect(page.getByLabel("Email")).toHaveValue("bisi@okafor.test");
+    // One's own person with no email: a pick replaces the whole customer,
+    // so Bisi's email does not stay with Tunde.
+    await page.getByRole("button", { name: "Saved people for the customer" }).click();
+    await picker.getByRole("button", { name: "Use Tunde Bello" }).click();
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Tunde Bello");
+    await expect(page.getByLabel("Phone number")).toHaveValue("08030000000");
+    await expect(page.getByLabel("Email")).toHaveValue("");
+
+    // Where linked suppliers deliver: a saved place fills the address and phone.
+    await page.goto("/storefront/suppliers");
+    await page.getByRole("button", { name: "Saved places for the address" }).click();
+    const places = page.getByRole("dialog", { name: "Saved places" });
+    await expect(places.getByTestId("saved-fill-row")).toHaveCount(2);
+    await axeBoth(page, "the Saved places picker");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await places.getByRole("button", { name: "Use The shop" }).click();
+    const deliver = page.getByTestId("deliver-to");
+    await expect(deliver.getByLabel("Address")).toHaveValue("12 Allen Avenue, Ikeja (By the blue gate)");
+    await expect(deliver.getByLabel("Number the rider calls at the door")).toHaveValue("08037654321");
+    await expect(deliver.getByTestId("saved-fill-note")).toHaveText("");
+    // A place too long for the 300 letters: its landmark is left out, and said so.
+    await page.getByRole("button", { name: "Saved places for the address" }).click();
+    await places.getByRole("button", { name: "Use The farm" }).click();
+    await expect(deliver.getByLabel("Address")).toHaveValue("Plot 7, Epe road, Epe");
+    await expect(deliver.getByTestId("saved-fill-note")).toHaveText("The landmark was left out to fit.");
+
+    // The chat's New invoice: the list opens in the sheet, under the button.
+    await page.goto("/chat?with=taskiem");
+    await page.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
+    await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Invoices/ }).click();
+    const sheet = page.getByTestId("tool-sheet");
+    await sheet.getByRole("button", { name: "New invoice" }).click();
+    const open = sheet.getByRole("button", { name: "Saved people for the customer" });
+    await open.click();
+    await expect(open).toHaveAttribute("aria-expanded", "true");
+    const list = await open.getAttribute("aria-controls");
+    expect(list).toBeTruthy();
+    await expect(page.locator(`[id="${list}"]`)).toHaveAttribute("data-testid", "saved-fill-list");
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(3);
+    await axeBoth(page, "the Saved people in the chat's new invoice");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Bisi Okafor" }).click();
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
+    await expect(sheet.getByLabel("Their phone number")).toHaveValue("08031234567");
+    // Focus goes to the customer's name, not lost to the page.
+    await expect(sheet.getByLabel("Customer's name")).toBeFocused();
+    // A person with no phone: the name is filled, the phone emptied, and
+    // the sheet says to type one.
+    await open.click();
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Kemi Ade" }).click();
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Kemi Ade");
+    await expect(sheet.getByLabel("Their phone number")).toHaveValue("");
+    await expect(sheet.getByRole("status").filter({ hasText: "no phone" })).toHaveText("Kemi Ade has no phone saved: type one.");
+    await sheet.getByLabel("Their phone number").fill("08035550000");
+    await expect(sheet.getByTestId("saved-fill-note")).toHaveText("");
+    await open.click();
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Bisi Okafor" }).click();
+    // Esc closes the list only: the sheet and what was typed stay.
+    await open.click();
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(3);
+    await page.keyboard.press("Escape");
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
+  });
 }

@@ -238,6 +238,7 @@ func (s *Server) savedRoutes(r chi.Router) {
 	r.Post("/saved/step-up/options", s.savedHandler(false, s.savedStepUpOptions))
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved", s.savedHandler(false, s.addSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/check", s.checkAllSaved)
+	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/import", s.savedHandler(false, s.importSaved))
 	r.Get("/saved/{id}", s.savedHandler(false, s.getSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Put("/saved/{id}", s.savedHandler(false, s.changeSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Delete("/saved/{id}", s.savedHandler(false, s.removeSaved))
@@ -805,6 +806,10 @@ func (s *Server) removeSaved(w http.ResponseWriter, r *http.Request, o savedOwne
 			owner, id, o.by).Scan(&name); err != nil {
 			return err
 		}
+		// Its reminders go with it (removal archives; the row stays).
+		if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE object_id = $1`, id); err != nil {
+			return err
+		}
 		// A person's default address gone: their newest place is it now.
 		if wasDefault {
 			if err := newestPlaceDefaultTx(ctx, tx, o.person); err != nil {
@@ -1120,6 +1125,10 @@ func (s *Server) changeSavedThing(w http.ResponseWriter, r *http.Request, o save
 		where, owner := ownerWhere(o)
 		if x, err = scanSaved(tx.QueryRow(ctx, `UPDATE saved_objects SET name = $3, title = $4, details = $5, hint = $6, updated_by = $7, updated_at = now()
 			WHERE `+where+` AND id = $2 RETURNING `+savedCols, owner, was.ID, name, title, c.Details, savedHint(o, was.Kind, c), o.by)); err != nil {
+			return err
+		}
+		// A person's birthday changed: its reminders follow it.
+		if err := s.resetRemindersTx(ctx, tx, o, x, remindDay(s.staffNow())); err != nil {
 			return err
 		}
 		return s.savedEvent(r, tx, o, was.ID, "changed", map[string]any{"changed": changedFields(was, x)})

@@ -9,12 +9,15 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/app/passkey.dart' show passkeys;
 import 'package:taskiem/chat/riders_page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
 import 'guidelines.dart';
+import 'passkey_test.dart' show FakePasskeys;
+import 'saved_stub.dart';
 import 'support.dart';
 
 final _riders = {
@@ -78,6 +81,7 @@ void main() {
     bool owedFails = false,
     List<String> methods = const ['totp'],
     bool noBanks = false,
+    SavedStub? stub,
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
@@ -90,6 +94,7 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             return switch (p) {
               '/v1/riders' => ok(_riders),
@@ -240,6 +245,59 @@ void main() {
       'PUT /v1/riders/R1/bank {"bank_code":"058","bank_name":"GTBank","account_number":"0123456789"}',
       'PUT /v1/riders/R1/bank {"bank_code":"058","bank_name":"GTBank","account_number":"0123456789","totp":"123456"}',
     ]);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a rider’s number from a saved person: the phone only', (t) async {
+    final stub = SavedStub(
+      mine: [savedThing('M1', 'mine', 'person', 'chidi', 'Chidi Obi', '••1234', {'phone': '08035551234', 'email': 'chidi@example.com'})],
+      business: [savedThing('B1', 'business', 'place', 'shop', 'The shop', 'Yaba', {'line': '3 Herbert Macaulay Way'})],
+    );
+    await open(t, (c) => RidersPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Add a rider'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    expect(find.text('The shop'), findsNothing, reason: 'a place with no phone has none to give');
+    await t.tap(find.text('Chidi Obi'));
+    await t.pumpAndSettle();
+    expect(find.text('08035551234'), findsOneWidget);
+    final name = find.descendant(of: find.bySemanticsLabel(RegExp('^Name')), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(name.first).controller.text, isEmpty, reason: 'the phone only');
+  });
+
+  testWidgets('a rider’s bank account from a saved one: the number shown with a passkey; put away, the bank only', (t) async {
+    final was = passkeys;
+    final fake = FakePasskeys();
+    passkeys = fake;
+    addTearDown(() => passkeys = was);
+    final stub = SavedStub(
+      mine: [savedThing('A1', 'mine', 'bank_account', 'musa-gt', 'Musa', 'GTBank ••6789', {'bank_name': 'GTBank', 'bank_code': '058', 'account_number': '••6789'})],
+      numbers: {'A1': '0123456789'},
+    );
+    await open(t, (c) => RidersPayPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel(RegExp('^Add bank account for Musa')));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Fill from a saved bank account'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved accounts'), findsOneWidget);
+    expect(find.text('@musa-gt · GTBank ••6789'), findsOneWidget, reason: 'the number masked in the list');
+    await t.tap(find.text('Musa').last);
+    await t.pumpAndSettle();
+    expect(stub.calls, contains('POST /v1/me/saved/A1/reveal'));
+    expect(find.bySemanticsLabel('Bank: GTBank'), findsOneWidget);
+    expect(find.text('0123456789'), findsOneWidget);
+    // The passkey put away: the bank, and the number left to type.
+    fake.cancel = true;
+    await t.tap(find.bySemanticsLabel('Fill from a saved bank account'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Musa').last);
+    await t.pump();
+    await t.pump();
+    expect(find.text('Only the bank is filled: the number needs your passkey.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Bank: GTBank'), findsOneWidget);
+    expect(find.text('0123456789'), findsNothing);
     await t.pump(const Duration(seconds: 5));
   });
 

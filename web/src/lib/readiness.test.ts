@@ -25,6 +25,10 @@ describe("readiness", () => {
     expect(fixFor(need({ kind: "secret", name: "api_key" }))).toEqual({ kind: "set_secret", environment: "prod", name: "api_key" });
     expect(fixFor(need({ kind: "table", name: "leave_requests" }))).toEqual({ kind: "make_table", name: "leave_requests" });
     expect(fixFor(need({ kind: "role", name: "credit_officer", problem: "nobody" }))).toEqual({ kind: "give_role", role: "credit_officer" });
+    // A business's saved thing the workflow reads: saved on the Saved page.
+    expect(fixFor(need({ kind: "saved", name: "price-list" }))).toEqual({ kind: "save_thing", name: "price-list" });
+    // A name no saved thing can have: its message only.
+    expect(fixFor(need({ kind: "saved", name: "x", problem: "invalid" }))).toEqual({ kind: "none" });
     // A feature the service turns on for the business: nothing to do here but ask.
     expect(fixFor(need({ problem: "support", blocking: false, capability: "collect_transfer" }))).toEqual({ kind: "ask_support", service: "Paystack" });
   });

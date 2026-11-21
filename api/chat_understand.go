@@ -240,6 +240,10 @@ func (s *Server) modelCatalogue(ctx context.Context, c *chat) string {
 		}
 	}
 	b.WriteString("\nOther commands:\n" + s.waHelp(c))
+	// The person's saved things, by name and kind only (saved objects).
+	if line := s.savedNamesLine(ctx, c); line != "" {
+		b.WriteString("\n" + line + "\n")
+	}
 	return b.String()
 }
 

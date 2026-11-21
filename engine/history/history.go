@@ -82,6 +82,10 @@ type RunStartedPayload struct {
 	// Policies are the approval policies the workflow names, as active when
 	// the run started (spec 9.1).
 	Policies map[string]PolicySnapshot `json:"policies,omitempty"`
+	// Saved are the business's saved things the workflow names (the saved
+	// root of expressions), as they were when the run started (saved
+	// objects S3): their personal and sensitive values sealed.
+	Saved map[string]any `json:"saved,omitempty"`
 }
 
 // PolicySnapshot is one approval policy version.

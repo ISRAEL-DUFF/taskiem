@@ -24,6 +24,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'storefront_orders_page.dart' show groupedPhone;
 import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, servicePrice, whenLabel;
+import 'saved_fill.dart' show SavedButton, pickSavedDate;
 import 'words.dart' show Tone;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -872,6 +873,20 @@ class _MoveFormState extends State<_MoveForm> {
     super.dispose();
   }
 
+  /// A date saved on one of the owner's things as the new date (saved
+  /// objects §6.4), one picker at a time.
+  bool _picking = false;
+  Future<void> _dayFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final d = await pickSavedDate(context, widget.auth);
+      if (d != null && mounted) _day.text = d;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   /// bookings.ts moveProblem.
   String? get _problem {
     final d = _day.text.trim();
@@ -930,6 +945,11 @@ class _MoveFormState extends State<_MoveForm> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SavedButton(label: 'A saved date', semantics: 'Pick a date from your saved things', picking: _picking, busy: _busy, onPressed: _dayFromSaved),
         ),
         if (_date.hasMatch(_day.text.trim()))
           Padding(

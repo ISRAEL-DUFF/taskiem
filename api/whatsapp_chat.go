@@ -222,6 +222,10 @@ type chat struct {
 	// tools is the business's chat tools switch (chat_tools.go), and
 	// toTaskiem that this message called Taskiem with "@Taskiem".
 	tools, toTaskiem bool
+	// savedChoice is which of two saved things of one name the person
+	// picked, "mine" or "business", while the command waiting for it is
+	// read again (saved_pick.go).
+	savedChoice string
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
@@ -296,6 +300,9 @@ type chatData struct {
 	// Direct is when a lone "..." was sent: the next message goes to the
 	// linked businesses it mentions (chat_direct.go).
 	Direct *time.Time `json:"direct,omitempty"`
+	// SavedPick is a command waiting for which of two saved things of one
+	// name (saved_pick.go).
+	SavedPick *chatSavedPick `json:"saved_pick,omitempty"`
 	// Understand is the model's help waiting on the person: a command to
 	// confirm, or a question it asked (chat_understand.go).
 	Understand *chatUnderstand `json:"understand,omitempty"`
@@ -847,6 +854,25 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Task != nil && c.state != stateIdle {
 		return s.waTaskReply(ctx, c, cmd)
 	}
+	// A save offered after an action: words that answer none of it let it
+	// go (saved_offer.go).
+	if c.data.Save != nil && c.data.Save.Offer && c.state != stateIdle {
+		switch {
+		case c.in.Reply == offerSave:
+			cmd = "yes"
+		case c.in.Reply == offerMine:
+			cmd = "mine"
+		case c.in.Reply != "" && cmd != "cancel":
+			// Another card's button (an earlier invoice's Send): not this.
+			cmd = ""
+		}
+		if !saveOfferWord(cmd) {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return err
+			}
+			c.state, c.data = stateIdle, chatData{}
+		}
+	}
 	// A menu's row pressed, a number for a numbered menu, an answer to a
 	// question, and help (chat_menus.go).
 	if done, err := s.waMenuWords(ctx, c, text, cmd); done || err != nil {
@@ -876,6 +902,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// mentions (chat_direct.go), read by no command and no model.
 	if done, err := s.waDirect(ctx, c); done || err != nil {
 		return err
+	}
+	// A question about a saved thing ("what's @generator's last service
+	// date?"): read before the words to linked businesses, since it starts
+	// with its question word, not a business (saved_question.go).
+	if c.state == stateIdle && c.in.Reply == "" {
+		if done, err := s.waSavedQuestion(ctx, c, c.in.Text); done || err != nil {
+			return err
+		}
 	}
 	// With chat tools, a message naming linked businesses is for them,
 	// unless it calls Taskiem (chat_tools.go).
@@ -936,6 +970,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.File != nil && c.state != stateIdle {
 		return s.waFileReply(ctx, c, text, cmd)
+	}
+	if c.data.SavedPick != nil && c.state != stateIdle {
+		if done, err := s.waSavedPickReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
 	}
 	if c.data.Found != nil && c.state != stateIdle {
 		// A message that is not about the rows found lets them go and is
@@ -1006,9 +1045,22 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waShareSaved(ctx, c, text); done || err != nil {
 			return err
 		}
+		// "remind me when @car insurance is due", "my reminders": before a
+		// workflow is built from "remind me" (saved_reminders.go).
+		if done, err := s.waSavedReminders(ctx, c, text); done || err != nil {
+			return err
+		}
 		// "save this as @name" with no message replied to: said how.
 		if done, err := s.waSaveQuoted(ctx, c, text); done || err != nil {
 			return err
+		}
+		// "deliver order P-7QX4KD to @warehouse": a saved place, whichever
+		// areas the business uses, since a purchase from a linked supplier
+		// is made from the links too (saved_deliver.go).
+		if s.Purchases.Ready() && s.Stock.Ready() {
+			if done, err := s.waDeliverToSaved(ctx, c, text); done || err != nil {
+				return err
+			}
 		}
 		if !on.On(areas.Storefront) {
 			// no booking words
@@ -1406,6 +1458,8 @@ func (s *Server) waHelp(c *chat) string {
 	if c.p.Can(PermChatTrade) {
 		lines = append(lines, c.t("wa.help.direct"))
 	}
+	// Saved things by @name, for everyone (saved objects S1, S2).
+	lines = append(lines, c.t("wa.help.saved"))
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))
 	}

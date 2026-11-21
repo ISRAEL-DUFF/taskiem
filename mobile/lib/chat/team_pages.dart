@@ -32,6 +32,7 @@ import '../kit/mobile.dart';
 import '../theme/look.dart';
 import 'storefront_orders_page.dart' show groupedPhone, whatsappLink;
 import 'pick_problem.dart';
+import 'saved_fill.dart' show SavedButton, pickSavedPhone;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -559,6 +560,20 @@ class _AddStaffState extends State<_AddStaff> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone (saved objects §6.4): the phone
+  /// only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _phone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -577,7 +592,13 @@ class _AddStaffState extends State<_AddStaff> {
         TkKitField(
           label: 'Their mobile number',
           hint: 'Taskiem sends them a WhatsApp message to join.',
-          child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
+          child: Row(
+            children: [
+              Expanded(child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567')),
+              const SizedBox(width: 8),
+              SavedButton(semantics: 'Pick a saved phone number', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         TkKitField(

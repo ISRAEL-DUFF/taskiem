@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import { ReceiveMoneyCard } from "./ReceiveMoney";
+import { SavedFill } from "./SavedFill";
 import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
@@ -956,6 +957,9 @@ export function MoneyEntries() {
             </label>
           ))}
         </fieldset>
+        <div className="saved-fill-line">
+          <SavedFill kind="date" label="the date" onPick={(_, d) => set({ date: d })} />
+        </div>
         <div className="row">
           <Field label="Amount (₦)">
             <input inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="12000" />

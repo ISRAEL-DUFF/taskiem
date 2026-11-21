@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"regexp"
 	"sort"
@@ -48,7 +49,9 @@ const (
 type chatField struct {
 	Key  string
 	Ask  string // the question
-	Kind string // text, phone, money, number, signed, order, booking, rider, item, product, zone, or a choice
+	Kind string // text, phone, money, number, signed, order, booking, rider, item, product, zone, a choice,
+	// or a saved thing (saved objects): saved (any, by its name), saved_place
+	// (a place), person (typed, or a saved person)
 	// Choices are the fixed choices of a "choice" field.
 	Choices  []string
 	Optional bool
@@ -144,6 +147,7 @@ var (
 	invoicesOn  = func(s *Server, _ *chat, _ areas.State) bool { return s.Invoices != nil }
 	aiOn        = func(s *Server, _ *chat, _ areas.State) bool { return s.AI != nil }
 	anyone      = func(*Server, *chat, areas.State) bool { return true }
+	inBusiness  = func(_ *Server, c *chat, _ areas.State) bool { return c.tenant.ID != uuid.Nil }
 )
 
 // fill puts values into a command: "{name}" by its value; "[ {areas}]"
@@ -167,6 +171,18 @@ func fill(tmpl string) func(map[string]string) string {
 }
 
 func f(key, ask, kind string) chatField { return chatField{Key: key, Ask: ask, Kind: kind} }
+
+// atNames is make with the named values' "@" taken off, as a saved thing's
+// name is written after the command's own "@".
+func atNames(mk func(map[string]string) string, keys ...string) func(map[string]string) string {
+	return func(v map[string]string) string {
+		w := maps.Clone(v)
+		for _, k := range keys {
+			w[k] = strings.TrimPrefix(strings.TrimSpace(w[k]), "@")
+		}
+		return mk(w)
+	}
+}
 
 func opt(fl chatField) chatField { fl.Optional = true; return fl }
 
@@ -307,6 +323,10 @@ var chatActions = []chatAction{
 		Fields: []chatField{f("name", "What's the supplier called?", "text"), f("phone", "What's their phone number?", "phone"),
 			opt(f("for", "What do you buy from them? Send skip if many things.", "text"))},
 		Make: fill("add supplier {name} {phone}[ for {for}]"), may: both(perm(PermStorefrontManage), purchasesOn)},
+	{ID: "buying.deliver", Topic: "buying", Title: "Deliver to a saved place", Line: "Where one order goes, like @warehouse", Icon: "purchases", Does: doesChanges, Opens: opensQuestions,
+		Shortcut: "deliver P-7QX4KD to @warehouse",
+		Fields:   []chatField{f("ref", "Which order? Its number, like P-7QX4KD.", "text"), f("place", "Where to? A saved place's name, like warehouse.", "saved_place")},
+		Make:     atNames(fill("deliver {ref} to @{place}"), "place"), may: both(perm(PermStorefrontManage), purchasesOn, stockOn)},
 	{ID: "buying.bills", Topic: "buying", Title: "Your bills", Line: "What you owe suppliers", Icon: "bills", Does: doesShow, Opens: opensPage,
 		Shortcut: "/bills", Tool: "bills", Page: "/bills", may: perm(PermInvoiceRead)},
 
@@ -317,7 +337,7 @@ var chatActions = []chatAction{
 		Make:     fill("spent {amount} on {what}"), may: permIn(PermInvoiceManage, areas.Money)},
 	{ID: "money.invoice", Topic: "money", Title: "Send an invoice", Line: "To a customer, from the chat", Icon: "invoices", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "invoice Ada 25,000 for 5 bags of rice",
-		Fields:   []chatField{f("who", "Who is it for?", "text"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
+		Fields:   []chatField{f("who", "Who is it for? A name, or a saved person like @acme.", "person"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
 		Make:     fill("invoice {who} {amount} for {for}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 	{ID: "money.cash", Topic: "money", Title: "Cash in or out", Line: "The till, the safe", Icon: "money", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "cash in 20,000 till",
@@ -384,6 +404,26 @@ var chatActions = []chatAction{
 		Shortcut: "save mum: GTBank 0123456789",
 		Fields:   []chatField{f("name", "What name should it have? Like mum.", "text"), f("what", "What should I keep? Like GTBank 0123456789.", "text")},
 		Make:     fill("save {name}: {what}"), may: anyone},
+	// What saved things do in the chat (saved objects S2, S3).
+	{ID: "saved.ask", Topic: "saved", Title: "Ask about a saved thing", Line: "A detail, like @mum's phone", Icon: "saved", Does: doesShow, Opens: opensQuestions,
+		Shortcut: "what's @mum's phone?",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like mum.", "saved"),
+			opt(f("what", "What do you want to know? Like phone, or the insurance date. Send skip for all of it.", "text"))},
+		Make: atNames(fill("what is @{name}[ {what}]"), "name"), may: anyone},
+	{ID: "saved.remind", Topic: "saved", Title: "Remind me of a date", Line: "A saved date, told on its day", Icon: "saved", Does: doesChanges, Opens: opensQuestions,
+		Shortcut: "remind me when @car insurance is due",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like car.", "saved"),
+			opt(f("what", "Which of its dates? Like insurance or birthday. Send skip if it has one.", "text"))},
+		Make: atNames(fill("remind me when @{name}[ {what}] is due"), "name"), may: anyone},
+	{ID: "saved.reminders", Topic: "saved", Title: "Your reminders", Line: "The dates you asked to be told of", Icon: "saved", Does: doesShow, Opens: opensShow,
+		Shortcut: "my reminders", may: anyone},
+	{ID: "saved.share", Topic: "saved", Title: "Share a saved thing", Line: "With a linked business or a customer", Icon: "saved", Does: doesAsks, Opens: opensQuestions,
+		Shortcut: "share @our-account with Ada's Kitchen",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like our-account.", "saved"),
+			f("to", "Who with? A linked business or a customer, by name.", "text")},
+		Make: atNames(fill("share @{name} with {to}"), "name"), may: inBusiness},
+	{ID: "saved.import", Topic: "saved", Title: "Import from a file", Line: "A spreadsheet of accounts, people, places", Icon: "saved", Does: doesChanges, Opens: opensPage,
+		Page: "/settings/saved", may: both(perm(PermSavedManage), inBusiness)},
 
 	// School
 	{ID: "school.students", Topic: "school", Title: "Students", Line: "By class, with what they owe", Icon: "school", Does: doesShow, Opens: opensPage,
@@ -564,6 +604,8 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 	switch fl.Kind {
 	case "choice":
 		return fl.Choices
+	case "saved", "saved_place", "person":
+		return s.savedChoices(ctx, c, fl.Kind)
 	case "rider", "zone":
 		if !s.Riders.Ready() {
 			return nil

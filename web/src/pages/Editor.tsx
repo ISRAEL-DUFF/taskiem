@@ -31,6 +31,7 @@ import { catalog, idFrom } from "../builder/catalog";
 import { TRIGGER_CHOICES } from "../builder/triggers";
 import { stepTitle } from "../builder/look";
 import { sourcesAnywhere, withStarted } from "../builder/sources";
+import { loadSavedSources } from "../lib/savedSources";
 import { useLeaveWarning } from "../lib/leave";
 import { dropDraft, keepDraft, keptDraft, type KeptDraft } from "../lib/keep";
 
@@ -88,6 +89,13 @@ export function Editor() {
   const [held, setHeld] = useState<{ version: number; words: string; name: string; canReplace: boolean; canNewAction: boolean; refused: string }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // The business's saved things as values, read once when a step is first
+  // opened and kept while the editor is open.
+  const [savedWanted, setSavedWanted] = useState(false);
+  useEffect(() => {
+    if (open) setSavedWanted(true);
+  }, [open]);
+  const saved = useLoad(() => (savedWanted ? loadSavedSources(get) : Promise.resolve(undefined)), [savedWanted]);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   // What keeps the JSON tab's text from being a definition the builder can draw.
@@ -324,6 +332,10 @@ export function Editor() {
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
   if (!wf.data || !def) return <Skeleton />;
+  const sourcesOf = (stepId: string) => [
+    ...withStarted(sourcesAnywhere(def, stepId, conns, [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])] as Parameters<typeof sourcesAnywhere>[3]), def.trigger, result),
+    ...(saved.data ?? []),
+  ];
   const current = wf.data.versions.find((v) => v.version === version);
   const managed = wf.data.workflow.git_path;
   const readOnly = !can("workflow.edit") || !!managed;
@@ -678,7 +690,7 @@ export function Editor() {
           key={openStep.id}
           step={openStep}
           connectors={conns}
-          sources={withStarted(sourcesAnywhere(def, openStep.id, conns, [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])] as Parameters<typeof sourcesAnywhere>[3]), def.trigger, result)}
+          sources={sourcesOf(openStep.id)}
           problems={stepProblemsOf(def, problems, openStep.id)}
           result={result}
           testing={testing.busy}

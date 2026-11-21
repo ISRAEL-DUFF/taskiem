@@ -18,7 +18,24 @@ import {
   kindProblem,
   shownValue,
   valuesProblem,
+  placeAddress,
+  placeAddressFit,
+  personFill,
+  savedPhone,
+  savedDates,
+  nextBirthday,
+  savedDateSub,
+  bankCodeFor,
+  revealProblem,
+  savedNameFor,
+  placeTitleFor,
+  placeOffer,
+  placeBody,
+  placeLine,
+  saveRefusal,
+  customerOffer,
   type BankList,
+  type MadeKind,
   type KindField,
   type SavedThing,
 } from "./saved";
@@ -163,5 +180,168 @@ describe("kinds the owner makes", () => {
     expect(kindProblem("Car", [{ label: "A", type: "text" }, { label: "a", type: "text" }])).toMatch(/Two fields are called/);
     expect(kindProblem("Car", [{ label: "Fuel", type: "choice", options: ["Petrol", " "] }])).toMatch(/at least 2 choices/);
     expect(kindProblem("Car", fields)).toBeNull();
+  });
+});
+
+describe("filling a form from a saved thing (§6.4)", () => {
+  it("words a place as one address line, the landmark in brackets", () => {
+    expect(placeAddress({ line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate" })).toBe("12 Allen Avenue, Ikeja (By the blue gate)");
+    expect(placeAddress({ line: "12 Allen Avenue", area: "Ikeja" })).toBe("12 Allen Avenue, Ikeja");
+    expect(placeAddress({ line: " 3 Bode Thomas ", area: " ", landmark: "" })).toBe("3 Bode Thomas");
+    expect(placeAddress({ landmark: "Opposite the church" })).toBe("Opposite the church");
+    expect(placeAddress({})).toBe("");
+  });
+  it("fits a long place into the limit: the landmark goes first, then the area", () => {
+    const line = "12 Allen Avenue";
+    const area = "Ikeja GRA, Lagos";
+    expect(placeAddressFit({ line, area, landmark: "By the blue gate" }, 300)).toEqual({ address: "12 Allen Avenue, Ikeja GRA, Lagos (By the blue gate)", hint: "" });
+    const long = "x".repeat(290);
+    expect(placeAddressFit({ line, area, landmark: long }, 300)).toEqual({ address: "12 Allen Avenue, Ikeja GRA, Lagos", hint: "The landmark was left out to fit." });
+    expect(placeAddressFit({ line, area: "y".repeat(290), landmark: "gate" }, 300)).toEqual({ address: line, hint: "The area and landmark were left out to fit." });
+    const cut = placeAddressFit({ line: "z".repeat(310) }, 300);
+    expect(cut.address).toHaveLength(300);
+    expect(cut.hint).toMatch(/cut to 300 letters/);
+  });
+  it("fills the whole customer from a saved person: what it has none of is emptied", () => {
+    expect(personFill({ title: "Bisi Okafor", details: { phone: "08031234567", email: "bisi@example.com" } })).toEqual({ name: "Bisi Okafor", phone: "08031234567", email: "bisi@example.com" });
+    expect(personFill({ title: "Tunde", details: { phone: "08030000000" } })).toEqual({ name: "Tunde", phone: "08030000000", email: "" });
+    expect(personFill({ title: "Kemi", details: { email: " " } })).toEqual({ name: "Kemi", phone: "", email: "" });
+  });
+  it("offers a person's or a place's phone, never a masked one", () => {
+    expect(savedPhone({ kind: "person", details: { phone: " 0803 123 4567 " } })).toBe("0803 123 4567");
+    expect(savedPhone({ kind: "place", details: { phone: "08037654321" } })).toBe("08037654321");
+    expect(savedPhone({ kind: "person", details: { phone: "•••4567" } })).toBe("");
+    expect(savedPhone({ kind: "text", details: { phone: "08030000000" } })).toBe("");
+  });
+  it("lists the dates saved on things, leaving out sensitive and partial ones", () => {
+    const car: MadeKind = {
+      id: "k1",
+      name: "Car",
+      count: 1,
+      fields: [
+        { key: "insurance_due", label: "Insurance due", type: "date" },
+        { key: "bought", label: "Bought", type: "date", sensitive: true },
+        { key: "plate", label: "Plate", type: "text" },
+        { key: "service", label: "Service", type: "date" },
+      ],
+    };
+    const thing = (x: Partial<SavedThing>): SavedThing => ({ ...bayo, ...x });
+    const things = [
+      thing({ id: "c", name: "car", title: "The car", kind: "custom", kind_id: "k1", details: {}, values: { insurance_due: "2027-03-03", bought: "••••", plate: "2027-01-01", service: "soon" } }),
+      thing({ id: "m", name: "mum", title: "Mum", kind: "person", details: { birthday: "1970-03-21" } }),
+      thing({ id: "t", name: "tunde", title: "Tunde", kind: "person", details: { birthday: "March" } }),
+    ];
+    const ds = savedDates(things, [car], new Date(2026, 10, 20));
+    expect(ds.map((d) => [d.key, d.label, d.date])).toEqual([
+      ["c:insurance_due", "Insurance due", "2027-03-03"],
+      ["m:birthday", "Birthday", "2027-03-21"],
+    ]);
+    expect(nextBirthday("1970-11-20", new Date(2026, 10, 20))).toBe("2026-11-20");
+    expect(nextBirthday("1960-02-29", new Date(2026, 10, 20))).toBe("2027-03-01");
+    expect(ds.map(savedDateSub)[0]).toBe("@car · Insurance due · 3 Mar 2027");
+    expect(savedDates(things, [])).toHaveLength(1);
+  });
+  it("finds a saved account's bank in a list by name, else by code", () => {
+    const banks = [
+      { code: "000013", name: "GTBank Plc" },
+      { code: "000014", name: "Access Bank" },
+    ];
+    expect(bankCodeFor(banks, { bank_name: "GTBank", bank_code: "058" })).toBe("000013");
+    expect(bankCodeFor(banks, { bank_name: "Somewhere", bank_code: "000014" })).toBe("000014");
+    expect(bankCodeFor(banks, { bank_name: "Somewhere" })).toBe("");
+  });
+  it("says why a saved account's number was not filled", () => {
+    expect(revealProblem({ body: { no_passkey: true } })).toBe("Add a passkey to use a saved account here.");
+    expect(revealProblem(new Error("No passkey was used"))).toMatch(/No passkey was used/);
+    expect(revealProblem({ name: "NotAllowedError" })).toMatch(/No passkey was used/);
+    expect(revealProblem(new Error("boom"))).toMatch(/could not be filled/);
+  });
+});
+
+describe("saving after an action", () => {
+  it("makes a name from a title as the server does", () => {
+    expect(savedNameFor("Bola Ade")).toBe("bola-ade");
+    expect(savedNameFor("  Mama Put's Kitchen!! ")).toBe("mama-put-s-kitchen");
+    expect(savedNameFor("Dangote Cement (Apapa) Nigeria Limited Ltd")).toBe("dangote-cement-apapa-nigeria-lim");
+    // Accents dropped, as the server does.
+    expect(savedNameFor("Chíoma Ọkafor")).toBe("chioma-okafor");
+    expect(savedNameFor("Ọlá Stores")).toBe("ola-stores");
+    expect(savedNameFor("Ìfẹ́")).toBe("ife");
+    expect(savedNameFor("İbrahim")).toBe("ibrahim");
+    expect(savedNameFor("--Ade--")).toBe("ade");
+    expect(savedNameFor("日本")).toBe("");
+    expect(savedNameFor("A")).toBe("");
+    expect(savedNameFor("•••")).toBe("");
+    expect(savedNameFor("abcdefghijklmnopqrstuvwxyzabcde f")).toBe("abcdefghijklmnopqrstuvwxyzabcde");
+  });
+
+  it("titles a typed place by its first part", () => {
+    expect(placeTitleFor("12 Admiralty Way, Lekki")).toBe("12 Admiralty Way");
+    expect(placeTitleFor("Shop 4 (Ikota Market)")).toBe("Shop 4");
+    expect(placeTitleFor(", Lekki")).toBe("Delivery place");
+  });
+
+  it("offers a typed, new place to one who may manage saved things", () => {
+    const base = { address: "12 Admiralty Way, Lekki", phone: " 0803 ", was: "", may: true };
+    expect(placeOffer(base)).toEqual({ address: "12 Admiralty Way, Lekki", phone: "0803", title: "12 Admiralty Way", name: "12-admiralty-way" });
+    expect(placeOffer({ ...base, may: false })).toBeNull();
+    expect(placeOffer({ ...base, was: "12 Admiralty Way, Lekki" })).toBeNull();
+    expect(placeOffer({ ...base, address: "  " })).toBeNull();
+    // A saved place picked: not offered, unless changed after.
+    expect(placeOffer({ ...base, picked: "12 Admiralty Way, Lekki" })).toBeNull();
+    expect(placeOffer({ ...base, picked: "12 Admiralty Way" })?.name).toBe("12-admiralty-way");
+    const offered = { address: "12 Admiralty Way, Lekki", phone: "0803", title: "12 Admiralty Way", name: "12-admiralty-way" };
+    expect(placeBody(offered, "home")).toEqual({
+      name: "home",
+      title: "12 Admiralty Way",
+      kind: "place",
+      details: { line: "12 Admiralty Way, Lekki", phone: "0803" },
+    });
+    expect(placeBody({ ...offered, phone: "" })).toEqual({ name: "12-admiralty-way", title: "12 Admiralty Way", kind: "place", details: { line: "12 Admiralty Way, Lekki" } });
+    // A long address is cut to the 200 a place's line takes, at a word.
+    const long = `12 Admiralty Way, ${"Lekki Phase One ".repeat(20)}`.trim();
+    const line = placeBody({ ...offered, address: long }).details.line;
+    expect(line.length).toBeLessThanOrEqual(200);
+    expect(long.startsWith(line)).toBe(true);
+    expect(long.charAt(line.length)).toBe(" ");
+  });
+
+  it("cuts a place's line at a word, and a comma off its end", () => {
+    expect(placeLine("12 Admiralty Way, Lekki")).toBe("12 Admiralty Way, Lekki");
+    expect(placeLine("12 Admiralty Way, Lekki", 18)).toBe("12 Admiralty Way");
+    expect(placeLine("12 Admiralty Way, Lekki", 16)).toBe("12 Admiralty Way");
+    expect(placeLine("abcdefghij", 4)).toBe("abcd");
+    expect(placeLine("x".repeat(250))).toHaveLength(200);
+  });
+
+  it("answers each refusal to save after an action", () => {
+    const e = (body: Record<string, unknown>, message = "No.", status = 409) => Object.assign(new Error(message), { status, body });
+    expect(saveRefusal(e({ name_taken: true }))).toEqual({ kind: "taken" });
+    expect(saveRefusal(e({ code: "name_needed", name_needed: true }))).toEqual({ kind: "name_needed" });
+    expect(saveRefusal(e({ code: "saved_already", saved_as: "ngozi" }))).toEqual({ kind: "saved_already", name: "ngozi" });
+    expect(saveRefusal(e({ code: "not_a_customer" }, "A linked business is not saved as a customer."))).toEqual({ kind: "gone", message: "A linked business is not saved as a customer." });
+    expect(saveRefusal(e({ code: "nothing_to_save" }, "Their details were erased."))).toEqual({ kind: "gone", message: "Their details were erased." });
+    expect(saveRefusal(e({ code: "something_else" }))).toBeNull();
+    expect(saveRefusal(e({ name_taken: true }, "No.", 400))).toBeNull();
+    expect(saveRefusal(new Error("offline"))).toBeNull();
+  });
+
+  it("offers to save a new customer on their first order only", () => {
+    const base = { customerOrders: 1, customerSaved: "", kind: "order", may: true, name: "Ngozi" };
+    expect(customerOffer(base)).toEqual({ title: "Save Ngozi for next time", sub: "As @ngozi, with their phone, email and address", name: "ngozi" });
+    // A name the server cannot make one from: its own, asked for if none.
+    expect(customerOffer({ ...base, name: "Ìfẹ́" })?.name).toBe("ife");
+    expect(customerOffer({ ...base, name: "日本" })?.name).toBe("");
+    expect(customerOffer({ ...base, name: "N•••" })).toEqual({
+      title: "Save this customer for next time",
+      sub: "Among your saved people, with their phone, email and address",
+      name: "",
+    });
+    expect(customerOffer({ ...base, customerOrders: 2 })).toBeNull();
+    expect(customerOffer({ ...base, customerOrders: undefined })).toBeNull();
+    expect(customerOffer({ ...base, customerSaved: "ngozi" })).toBeNull();
+    expect(customerOffer({ ...base, kind: "trade" })).toBeNull();
+    expect(customerOffer({ ...base, may: false })).toBeNull();
+    expect(customerOffer({ ...base, name: "" })).toBeNull();
   });
 });

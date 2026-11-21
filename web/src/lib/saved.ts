@@ -1,4 +1,5 @@
 import type { Suggestion } from "./mentions";
+import { dateLabel } from "./invoices";
 
 // Saved things (docs/spec/saved-objects.md; build plan S0, S1): a person's
 // own and a business's saved accounts, people, places, texts and accounts
@@ -450,4 +451,236 @@ export interface SavedShare {
 export function cardSub(c: SavedCard): string {
   const kind = c.kind === "custom" ? (c.kind_name ?? "a saved thing") : (KIND_WORDS[c.kind]?.one ?? "a saved thing");
   return [kind.charAt(0).toUpperCase() + kind.slice(1), c.lines[0]?.label === "Text" ? "" : c.lines[0]?.value].filter(Boolean).join(" · ");
+}
+
+/** A saved place as one address line, as a form's Address takes it
+ * (saved objects §6.4): "12 Allen Avenue, Ikeja (by the blue gate)". */
+export function placeAddress(d: Pick<SavedDetails, "line" | "area" | "landmark">): string {
+  const line = [d.line, d.area]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+  const landmark = (d.landmark ?? "").trim();
+  return landmark ? (line ? `${line} (${landmark})` : landmark) : line;
+}
+
+/** A saved place as one address line of at most max letters: the landmark
+ * left out to fit, then the area, and only then the line cut; with a short
+ * hint that says what was left out ("" when it all fits). */
+export function placeAddressFit(d: Pick<SavedDetails, "line" | "area" | "landmark">, max: number): { address: string; hint: string } {
+  const whole = placeAddress(d);
+  if (whole.length <= max) return { address: whole, hint: "" };
+  const noLandmark = placeAddress({ line: d.line, area: d.area });
+  if (noLandmark && noLandmark.length <= max) return { address: noLandmark, hint: "The landmark was left out to fit." };
+  const line = (d.line ?? "").trim();
+  if (line && line.length <= max) return { address: line, hint: "The area and landmark were left out to fit." };
+  return { address: (line || whole).slice(0, max), hint: `The address was cut to ${max} letters to fit: check it.` };
+}
+
+/** What a saved person fills in a customer's fields: the name from its
+ * title, its phone and email, empty when it has none, so a pick replaces
+ * the whole customer and nothing of one picked before is left. The full
+ * phone and email are in details; a business's list masks only the hint. */
+export function personFill(x: Pick<SavedThing, "title" | "details">): { name: string; phone: string; email: string } {
+  return { name: x.title, phone: (x.details.phone ?? "").trim(), email: (x.details.email ?? "").trim() };
+}
+
+/** A saved person's or place's phone, whole, or "" (none, or masked). */
+export function savedPhone(x: Pick<SavedThing, "kind" | "details">): string {
+  if (x.kind !== "person" && x.kind !== "place") return "";
+  const p = (x.details.phone ?? "").trim();
+  return p.includes("•") ? "" : p;
+}
+
+/** One date saved on a thing, as a Saved button offers it: a person's
+ * birthday, or a date field of one of the owner's own kinds. */
+export interface SavedDate {
+  key: string;
+  thing: SavedThing;
+  label: string;
+  /** YYYY-MM-DD. */
+  date: string;
+}
+
+const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/** A birthday's next day from today (today itself included), as the app
+ * and the chat's reminders offer it: "1970-03-21" is 21 March this year or
+ * next; 29 February is 1 March in a year without it. */
+export function nextBirthday(day: string, today: Date = new Date()): string {
+  const [, m = 1, d = 1] = day.split("-").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const at = (y: number) => {
+    const t = new Date(y, m - 1, d);
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+  };
+  const now = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const mine = at(today.getFullYear());
+  return mine >= now ? mine : at(today.getFullYear() + 1);
+}
+
+/** The dates saved on things, in the things' order: a person's birthday
+ * (its next day), and each date field of a kind the owner made (kinds give
+ * the fields' types). A sensitive date is masked in lists and cannot be
+ * used, so it is left out, as is anything that is not a whole day. */
+export function savedDates(things: SavedThing[], kinds: MadeKind[], today: Date = new Date()): SavedDate[] {
+  const out: SavedDate[] = [];
+  for (const x of things) {
+    if (x.kind === "person") {
+      const b = (x.details.birthday ?? "").trim();
+      if (isDay(b)) out.push({ key: `${x.id}:birthday`, thing: x, label: "Birthday", date: nextBirthday(b, today) });
+    } else if (x.kind === "custom") {
+      const kind = kinds.find((k) => k.id === x.kind_id);
+      for (const f of kind?.fields ?? []) {
+        const v = (x.values?.[f.key ?? ""] ?? "").trim();
+        if (f.type !== "date" || f.sensitive || !f.key || !isDay(v)) continue;
+        out.push({ key: `${x.id}:${f.key}`, thing: x, label: f.label, date: v });
+      }
+    }
+  }
+  return out;
+}
+
+/** A saved date's line in a list: "@car · Insurance due · 3 Mar 2027". */
+export const savedDateSub = (d: SavedDate) => `@${d.thing.name} · ${d.label} · ${dateLabel(d.date)}`;
+
+/** The code, in a list of banks with codes (a select by code), of the bank
+ * a saved account names: by its name (case and "Bank"/"PLC" set aside),
+ * else by its code; "" when the list does not have it. */
+export function bankCodeFor(banks: { code: string; name: string }[], d: Pick<SavedDetails, "bank_name" | "bank_code">): string {
+  const key = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w && !["bank", "plc", "limited", "ltd"].includes(w))
+      .join(" ");
+  const name = key(d.bank_name ?? "");
+  const byName = name ? banks.find((b) => key(b.name) === name) : undefined;
+  if (byName) return byName.code;
+  return d.bank_code ? (banks.find((b) => b.code === d.bank_code)?.code ?? "") : "";
+}
+
+/** Why a saved account's number was not filled, in a few words: no
+ * passkey to show it with, or none used. */
+export function revealProblem(e: unknown): string {
+  const x = e as { body?: Record<string, unknown>; name?: string; message?: string } | null;
+  if (x?.body?.no_passkey) return "Add a passkey to use a saved account here.";
+  if (x?.name === "NotAllowedError" || x?.name === "AbortError" || x?.message === "No passkey was used") return "No passkey was used: type the account number.";
+  return "The account number could not be filled: type it.";
+}
+
+// --- saving after an action (saved objects S3, §9.3: after a new
+// customer's first order, after a delivery to a new address): offered once,
+// quietly, saved with one click; suggested, never done for them. As the
+// app does it (mobile/lib/chat/save_after.dart).
+
+/** A name made from a title, as the server makes one (saved.NameFor):
+ * accents dropped ("Ọlá" → ola), lowercase ASCII letters and digits, every
+ * other run one "-", at most 32; "" when shorter than 2 ("Bola Ade" →
+ * bola-ade). */
+export function savedNameFor(title: string): string {
+  const n = title
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return n.length < 2 ? "" : n;
+}
+
+/** The longest street line a saved place takes (the server's limit; a
+ * typed address may be up to 300). */
+export const PLACE_LINE_MAX = 200;
+
+/** An address cut to max to be a place's line: at the last space (or
+ * ",") before max, so no word is cut in two; whole when it fits. */
+export function placeLine(address: string, max = PLACE_LINE_MAX): string {
+  const a = address.trim();
+  if (a.length <= max) return a;
+  const head = a.slice(0, max + 1);
+  const at = Math.max(head.lastIndexOf(" "), head.lastIndexOf(","));
+  return (at > 0 ? head.slice(0, at) : a.slice(0, max)).replace(/[\s,;]+$/, "");
+}
+
+/** A typed address as a place's title: its first part ("12 Admiralty Way"
+ * of "12 Admiralty Way, Lekki"), else "Delivery place". */
+export function placeTitleFor(address: string): string {
+  const first = (address.split(/[,\n(]/)[0] ?? "").trim();
+  if (!first || !savedNameFor(first)) return "Delivery place";
+  return first.length > 60 ? first.slice(0, 60).trimEnd() : first;
+}
+
+/** A place offered to save: the address and phone saved, its title and
+ * @name. */
+export interface PlaceOffer {
+  address: string;
+  phone: string;
+  title: string;
+  name: string;
+}
+
+/** The offer after an address is saved as where something is delivered:
+ * one typed (not a saved place's, unless changed after it was picked), new
+ * (not the one there before), for whoever may manage saved things; null
+ * otherwise. */
+export function placeOffer(o: { address: string; phone: string; was: string; picked?: string; may: boolean }): PlaceOffer | null {
+  const address = o.address.trim();
+  if (!address || !o.may || address === o.was.trim() || (o.picked !== undefined && address === o.picked.trim())) return null;
+  const title = placeTitleFor(address);
+  const name = savedNameFor(title);
+  if (!name) return null;
+  return { address, phone: o.phone.trim(), title, name };
+}
+
+/** The body a place offered is saved with (POST /v1/saved). */
+export const placeBody = (o: PlaceOffer, name = o.name) => ({
+  name,
+  title: o.title,
+  kind: "place" as const,
+  details: o.phone ? { line: placeLine(o.address), phone: o.phone } : { line: placeLine(o.address) },
+});
+
+/** Why saving after an action was refused (409s from POST /v1/saved and
+ * …/orders/{reference}/save-customer), as the offer answers it: taken and
+ * name_needed ask for a name (the second with the field empty), gone hides
+ * the offer and says the server's words, saved_already says what it was
+ * saved as; null for any other error, shown with the offer kept. */
+export type SaveRefusal = { kind: "taken" } | { kind: "name_needed" } | { kind: "gone"; message: string } | { kind: "saved_already"; name: string };
+
+export function saveRefusal(e: unknown): SaveRefusal | null {
+  const x = e as { status?: number; body?: Record<string, unknown>; message?: string } | null;
+  if (x?.status !== 409) return null;
+  const b = x.body ?? {};
+  if (b.name_taken) return { kind: "taken" };
+  if (b.name_needed || b.code === "name_needed") return { kind: "name_needed" };
+  if (b.code === "saved_already" && typeof b.saved_as === "string" && b.saved_as) return { kind: "saved_already", name: b.saved_as };
+  if (b.code === "not_a_customer" || b.code === "nothing_to_save") return { kind: "gone", message: x.message || "There is nothing of theirs to save." };
+  return null;
+}
+
+/** The offer on a new customer's first order to save them among the
+ * business's saved people: its words and the @name it is saved by ("" for
+ * the server's own, when their name is hidden or none fits); null for a
+ * repeat customer, one saved already, a linked business's order, or one who
+ * may not manage saved things and see personal data (may). */
+export function customerOffer(o: {
+  customerOrders?: number;
+  customerSaved?: string;
+  kind: string;
+  may: boolean;
+  /** The customer's name as shown (masked "N•••" until revealed). */
+  name: string;
+}): { title: string; sub: string; name: string } | null {
+  if (o.customerOrders !== 1 || (o.customerSaved ?? "") !== "" || o.kind === "trade" || !o.may) return null;
+  const shown = o.name.trim();
+  if (!shown) return null;
+  const known = !shown.includes("•••");
+  const name = known ? savedNameFor(shown) : "";
+  return {
+    title: known ? `Save ${shown} for next time` : "Save this customer for next time",
+    sub: name ? `As @${name}, with their phone, email and address` : "Among your saved people, with their phone, email and address",
+    name,
+  };
 }

@@ -11102,6 +11102,54 @@ paths:
                       $ref: '#/components/schemas/StorefrontOrderPayment'
                   revealed:
                     type: boolean
+                  customer_orders:
+                    type: integer
+                    description: How many orders its customer has made with the business, this one with them (1 is a new customer's first).
+                  customer_saved:
+                    type: string
+                    description: The business's saved person the customer is (the same phone, else email), by name; empty when none.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/save-customer:
+    post:
+      operationId: saveOrderCustomer
+      tags:
+      - Saved
+      summary: Save an order's customer as a saved person
+      description: 'The order''s customer kept as one of the business''s saved people (their name as its title, their phone, email and address, read on the server); the name given, else made from theirs. Needs the right to reveal personal data, as their details are kept in full: recorded as a reveal of the order. 409 `name_taken`; `name_needed` (none given and none can be made); `not_a_customer` (a linked business''s order); `nothing_to_save` (an erased customer); `saved_already` (with `saved_as`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle,saved.manage,pii.reveal'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [saved]
+                properties:
+                  saved:
+                    $ref: '#/components/schemas/SavedObject'
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders/{reference}/refund:
@@ -12865,6 +12913,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/stock/purchases/{id}/deliver-to:
+    get:
+      operationId: getPurchaseDeliverTo
+      tags:
+      - Stock
+      summary: Where one purchase is delivered
+      description: Its own place (own true; saved objects S2), else where linked suppliers deliver our orders.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The address and the number a rider calls
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseDeliverTo'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPurchaseDeliverTo
+      tags:
+      - Stock
+      summary: Say where one purchase is delivered
+      description: Sealed, and carried to the linked supplier's order in place of where our orders are delivered (a saved place, picked on the web and in the app). Only before the supplier has it (409 after); a supplier who is not linked, 409.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverTo'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseDeliverTo'
         default:
           $ref: '#/components/responses/Error'
   /v1/stock/settings:
@@ -34116,6 +34227,50 @@ paths:
                     type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved/import:
+    post:
+      operationId: importSaved
+      tags:
+      - Saved
+      summary: Import saved things from a file
+      description: 'A CSV of the business''s saved things (its first line names the columns: title or name, then kind and what each holds, such as bank and account_number, phone, street and area; separated by commas, semicolons or tabs). Without `confirm` it answers the plan with the file''s `hash`; with that hash it saves each thing as one added by hand is (a bank account checked with its bank), under a time limit of about 90 seconds. A thing saved already by its name and kind is marked `skip` and not saved again, so a file saved in part can be sent again. A file with any line that cannot be taken, a name saved already as another kind or past the plan''s limit saves nothing: 422 `import_unreadable` with each line and why (also for a file over 256 KB). 409 `import_changed` when `confirm` is not the file''s hash.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [csv]
+              properties:
+                csv:
+                  type: string
+                  maxLength: 262144
+                confirm:
+                  type: string
+                  description: The plan's hash, to save it.
+      responses:
+        '200':
+          description: The plan, or what was saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedImport'
+        '422':
+          description: The file cannot be taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedImportProblems'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved/{id}:
     get:
       operationId: getSaved
@@ -38640,7 +38795,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role, field]
+          enum: [connection, variable, secret, table, role, field, saved]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
@@ -44216,6 +44371,136 @@ components:
         at:
           type: string
           format: date-time
+    SavedImport:
+      type: object
+      additionalProperties: false
+      required: [saved, hash, total]
+      properties:
+        saved:
+          type: boolean
+          description: false for the plan; true once saved.
+        hash:
+          type: string
+        total:
+          type: integer
+          description: The things to save (the rows not skipped).
+        rows:
+          type: array
+          description: The plan's things, those to skip with them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, title, kind, hint]
+            properties:
+              line:
+                type: integer
+                description: Its line in the file, the column names' being 1.
+              name:
+                type: string
+              title:
+                type: string
+              kind:
+                type: string
+              hint:
+                type: string
+              warning:
+                type: string
+                description: What to know before saving it, which does not keep it from being saved (a bank Taskiem does not know by that name, its name not checked), or why it is skipped.
+              skip:
+                type: boolean
+                description: Saved already by this name and kind (an earlier send of the file); not saved again.
+        added:
+          type: array
+          description: The names saved.
+          items:
+            type: string
+        failed:
+          type: array
+          description: Lines that could not be saved after all (a bank that does not know the account), each with why.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, message]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+              message:
+                type: string
+        skipped:
+          type: array
+          description: The names not saved because they are saved already as the same kind.
+          items:
+            type: string
+        unchecked:
+          type: array
+          description: The bank accounts saved (in added) whose name the bank has not checked, each with why; Check names on the Saved page (POST /v1/saved/check) checks them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, problem]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+              problem:
+                type: string
+        check_words:
+          type: string
+          description: When some accounts are unchecked, how many and how to check them, in plain words.
+        left:
+          type: array
+          description: Lines not reached within the time limit; sending the file again saves them, skipping what is saved.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+        left_words:
+          type: string
+          description: When lines are left, what to do, in plain words.
+    SavedImportProblems:
+      type: object
+      additionalProperties: false
+      required: [error, code, total]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [import_unreadable]
+        total:
+          type: integer
+        problems:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, message]
+            properties:
+              line:
+                type: integer
+              message:
+                type: string
+    PurchaseDeliverTo:
+      type: object
+      additionalProperties: false
+      required: [address, phone, own]
+      properties:
+        address:
+          type: string
+        phone:
+          type: string
+        own:
+          type: boolean
+          description: The purchase's own place, not the business's default.
     DeliverTo:
       type: object
       additionalProperties: false

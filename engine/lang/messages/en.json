@@ -659,6 +659,111 @@
       "reviewed": true,
       "context": "A question's answer that is not an order's or booking's number"
     },
+    "menu.buying.deliver": {
+      "text": "Deliver to a saved place",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.place": {
+      "text": "Where to? A saved place's name, like warehouse.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.ref": {
+      "text": "Which order? Its number, like P-7QX4KD.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.line": {
+      "text": "Where one order goes, like @warehouse",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.saved": {
+      "text": "That isn't a saved thing's name. Names are letters, numbers and -, like mum or our-account.",
+      "reviewed": true,
+      "context": "A question's answer that is not a saved thing's name"
+    },
+    "menu.saved.ask": {
+      "text": "Ask about a saved thing",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.name": {
+      "text": "Which saved thing? Its name, like mum.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.what": {
+      "text": "What do you want to know? Like phone, or the insurance date. Send skip for all of it.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.line": {
+      "text": "A detail, like @mum's phone",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.import": {
+      "text": "Import from a file",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.import.line": {
+      "text": "A spreadsheet of accounts, people, places",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.remind": {
+      "text": "Remind me of a date",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.name": {
+      "text": "Which saved thing? Its name, like car.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.what": {
+      "text": "Which of its dates? Like insurance or birthday. Send skip if it has one.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.line": {
+      "text": "A saved date, told on its day",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders": {
+      "text": "Your reminders",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders.line": {
+      "text": "The dates you asked to be told of",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.share": {
+      "text": "Share a saved thing",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.name": {
+      "text": "Which saved thing? Its name, like our-account.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.to": {
+      "text": "Who with? A linked business or a customer, by name.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.line": {
+      "text": "With a linked business or a customer",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
     "menu.check.signed": {
       "text": "Send a number, like -2 or 3.",
       "reviewed": true,
@@ -785,7 +890,7 @@
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.ask.who": {
-      "text": "Who is it for?",
+      "text": "Who is it for? A name, or a saved person like @acme.",
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
@@ -1803,6 +1908,16 @@
       "text": "Add the private value {name}.",
       "reviewed": true,
       "context": "Readiness: a secret the workflow reads is not stored"
+    },
+    "ready.saved_invalid": {
+      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "reviewed": true,
+      "context": "Readiness: the workflow reads a saved thing by a name that is not valid"
+    },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": true,
+      "context": "Readiness: a business saved thing the workflow reads (saved.<name>) does not exist"
     },
     "ready.table": {
       "text": "Make the table {name}.",
@@ -2989,6 +3104,21 @@
       "reviewed": true,
       "context": "A saved bank account whose name has not been checked"
     },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": true,
+      "context": "A command acting on @name when the person's own and their business's both have the name: which, by number"
+    },
+    "wa.saved.offer": {
+      "text": "Save {title} as @{name} for next time?",
+      "reviewed": true,
+      "context": "After an invoice to a customer typed by hand: offers to save them as a business's saved person"
+    },
+    "wa.saved.suggest": {
+      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "reviewed": true,
+      "context": "After the third invoice to a customer typed by hand: suggests saving them as a saved person"
+    },
     "wa.saved.two": {
       "text": "You have two things called @{name}:",
       "reviewed": true,
@@ -3068,6 +3198,106 @@
       "text": "Share",
       "reviewed": true,
       "context": "A button: share the saved thing (at most 20 characters)"
+    },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": true,
+      "context": "A question about a saved thing's field, answered: its name, the field's label and value (masked when sensitive)"
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": true,
+      "context": "A question about a saved thing's field that holds nothing"
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": true,
+      "context": "After a saved thing's masked detail in the chat: where to see it in full"
+    },
+    "wa.invoice.saved_kind": {
+      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "reviewed": true,
+      "context": "An invoice was asked for a saved thing that is not a person (a place, an account\u2026); {kind} is what it is"
+    },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "An order to linked businesses ended with a saved place: where it will be delivered"
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": true,
+      "context": "An order to linked businesses named a saved thing in the middle: how to say where it goes"
+    },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "A purchase's delivery place was set from a saved place: its reference, the place's name and address"
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": true,
+      "context": "Delivering to a saved thing that is not a place; {kind} is what it is"
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": true,
+      "context": "A saved place has no phone, and the business has no delivery number"
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": true,
+      "context": "Where a purchase is delivered could not be set; the reason follows"
+    },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, yearly"
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, once"
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing that holds no dates"
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing with several dates and the words named none; {list} is their labels"
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": true,
+      "context": "A once-only reminder's date has passed"
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": true,
+      "context": "The person has no reminders"
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": true,
+      "context": "The person's reminders, one a line"
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": true,
+      "context": "After a reminder's date in the list: it repeats yearly"
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": true,
+      "context": "Stopping reminders on a saved thing that has none"
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": true,
+      "context": "The person's reminders on a saved thing were stopped"
     },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
@@ -3788,6 +4018,11 @@
       "text": "You can send:",
       "reviewed": true,
       "context": "Help: first line"
+    },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "reviewed": true,
+      "context": "Help line for saved things, for everyone; keep @, save, remind me and my reminders in English"
     },
     "wa.help.invoice": {
       "text": "• *invoice* with a name, an amount and what it is for (*invoice Ada 25,000 for 5 bags of rice*): sends your customer an invoice",

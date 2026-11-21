@@ -33,6 +33,7 @@ import 'groups.dart' show pickAction, pickOneOf, askSure;
 import 'my_chat.dart' show sayFailure;
 import 'composer.dart' show Pickers;
 import 'saved_files.dart';
+import 'saved_import.dart' show SavedImportSheet;
 import 'saved_kinds.dart';
 import 'words.dart' show CardTone;
 
@@ -319,6 +320,13 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
     await (k == 'bank_account' ? _edit() : _editThing(k));
   }
 
+  /// Import from a file: the business's things from a CSV.
+  Future<void> _import() async {
+    // Read again however it is closed: Done, or the cross after saving.
+    await showTkSheet<bool>(context, (_) => SavedImportSheet(auth: widget.auth));
+    if (mounted) await _load();
+  }
+
   /// Save a photo or document, or change one.
   Future<void> _editFile([SavedObject? x]) async {
     final saved = await showTkSheet<bool>(context, (_) => SavedFileSheet(api: _api, auth: widget.auth, thing: x, pickers: widget.pickers));
@@ -559,6 +567,8 @@ class _SavedAccountsPageState extends State<SavedAccountsPage> {
                   );
                 }(),
               if (_manage && !full) TkListRow(title: 'Save something', icon: 'b-plus', square: look.teal, onTap: _add),
+              // A business's things from a CSV (saved objects S3).
+              if (_manage && !full && !widget.mine) TkListRow(title: 'Import from a file', sub: 'A CSV of up to 200 things', icon: 'b-upload', square: look.teal, onTap: _import),
             ],
           ),
         // Kinds the owner made (saved objects S1, part 5).

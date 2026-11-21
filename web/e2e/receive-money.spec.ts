@@ -183,10 +183,11 @@ test("a business with no payments account receives money with Taskiem and withdr
   await form.getByLabel("Your account number").fill("0123456789");
   // Two owners need two owners: this business has one.
   await form.getByLabel("Two owners approve from (₦, optional)").fill("500000");
-  await form.getByRole("button", { name: "Save" }).click();
+  // "Save", not the Saved button above the bank (saved objects §6.4).
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   await expect(form.getByRole("alert")).toContainText("one owner");
   await form.getByLabel("Two owners approve from (₦, optional)").fill("");
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Save", exact: true }).click();
   const to = w.getByTestId("withdraw-to");
   await expect(to).toContainText("ADA OBI STORES");
   await expect(to).toContainText("GTBank · 0123 456 789");

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { del, get, post } from "../api";
 import { EmptyState, ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { toast } from "../toast";
+import { SavedFill } from "./SavedFill";
 import {
   STAFF_ROLES,
   emptyStaff,
@@ -198,6 +199,9 @@ function AddStaff({ own, onClose, onDone }: { own: string[]; onClose: () => void
         <Field label="Their name">
           <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoComplete="off" maxLength={80} />
         </Field>
+        <div className="saved-fill-line">
+          <SavedFill kind="phone" label="their mobile number" onPick={(_, p) => setF((x) => ({ ...x, phone: p }))} />
+        </div>
         <Field label="Their mobile number" hint="Taskiem sends them a WhatsApp message to join.">
           <input type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="0803 123 4567" />
         </Field>

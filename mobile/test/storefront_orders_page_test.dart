@@ -21,6 +21,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'guidelines.dart';
+import 'saved_stub.dart' show savedThing;
 import 'support.dart';
 
 final _now = DateTime.utc(2026, 11, 12, 12);
@@ -644,6 +645,176 @@ void main() {
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: StorefrontOrderPage(auth: chats.auth, reference: 'OR-5K2Q', now: () => _now)), drive: settle);
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: StorefrontOrdersPage(auth: chats.auth, now: () => _now)), drive: settle);
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: DeliveriesPage(auth: chats.auth)), drive: settle);
+  });
+
+  // A new customer's first order (saved objects S3): saved for next time.
+  Future<({List<String> sent, ChatsData chats})> firstOrder(WidgetTester t, {int orders = 1, String saved = '', String customer = 'Ngozi', List<String> perms = const ['storefront.manage', 'order.handle', 'saved.manage', 'pii.reveal'], List<Object> answers = const [201]}) {
+    var asked = 0;
+    http.Response json(Object b, int status) => http.Response(jsonEncode(b), status, headers: {'content-type': 'application/json'});
+    return serve(
+      t,
+      (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now),
+      perms: perms,
+      also: (req) async {
+        final p = req.url.path;
+        if (req.method == 'GET' && p == '/v1/storefront/orders/OR-5K2Q') {
+          return json({'order': {..._order(), 'customer': {'name': customer, 'phone': '•••4567'}}, 'revealed': false, 'payments': [], 'customer_orders': orders, 'customer_saved': saved}, 200);
+        }
+        if (req.method == 'POST' && p == '/v1/storefront/orders/OR-5K2Q/save-customer') {
+          final status = answers[asked < answers.length ? asked : answers.length - 1];
+          asked++;
+          if (status == 409) return json({'error': 'That name is taken: choose another.', 'name_taken': true}, 409);
+          if (status is Map) return json(status, 409);
+          final name = ((jsonDecode(req.body.isEmpty ? '{}' : req.body) as Map)['name'] as String?) ?? 'ngozi';
+          return json({'saved': savedThing('B9', 'business', 'person', name, 'Ngozi', '••4567', {'phone': '+2348031234567'})}, 201);
+        }
+        return null;
+      },
+    );
+  }
+
+  testWidgets('a new customer’s first order: saved with one tap, then said; not offered again on reopening', (t) async {
+    final r = await firstOrder(t);
+    expect(find.text('Save Ngozi for next time'), findsOneWidget);
+    expect(find.text('As @ngozi, with their phone, email and address'), findsOneWidget);
+    await t.tap(find.text('Save Ngozi for next time'));
+    await settle(t);
+    expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/save-customer {"name":"ngozi"}');
+    expect(find.text('Saved as @ngozi'), findsWidgets, reason: 'the row, and the toast');
+    expect(find.text('Save Ngozi for next time'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+    // Opened again by the same person: saved already, so not offered.
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: StorefrontOrderPage(auth: r.chats.auth, reference: 'OR-5K2Q', now: () => _now)));
+    await settle(t);
+    expect(find.text('Save Ngozi for next time'), findsNothing);
+    expect(find.text('Saved as @ngozi'), findsNothing);
+  });
+
+  testWidgets('a repeat customer, or someone who may not manage saved things: not offered', (t) async {
+    await firstOrder(t, orders: 2);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.textContaining('for next time'), findsNothing);
+    await firstOrder(t, perms: ['storefront.manage', 'order.handle', 'pii.reveal']);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.textContaining('for next time'), findsNothing);
+    // May manage saved things but not see a customer's details: not offered.
+    await firstOrder(t, perms: ['storefront.manage', 'order.handle', 'saved.manage']);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.textContaining('for next time'), findsNothing);
+    // Saved already (by phone or email, as the server says): not offered.
+    await firstOrder(t, saved: 'ngozi');
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.textContaining('for next time'), findsNothing);
+  });
+
+  testWidgets('a new customer whose name is hidden: saved with the name the server makes from theirs', (t) async {
+    final r = await firstOrder(t, customer: 'N•••');
+    expect(find.text('Save this customer for next time'), findsOneWidget);
+    expect(find.text('Among your saved people, with their phone, email and address'), findsOneWidget);
+    await t.tap(find.text('Save this customer for next time'));
+    await settle(t);
+    expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/save-customer {}');
+    expect(find.text('Saved as @ngozi'), findsWidgets);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a new customer’s name taken: another asked for, and saved with it', (t) async {
+    final r = await firstOrder(t, answers: [409, 409, 201]);
+    await t.tap(find.text('Save Ngozi for next time'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Another name'), findsOneWidget);
+    expect(find.text('@ngozi is taken'), findsOneWidget);
+    expect(find.text('@ngozi'), findsOneWidget, reason: 'the field, filled in to change');
+    final field = find.descendant(of: find.bySemanticsLabel(RegExp('^Name to call it up by')), matching: find.byType(EditableText));
+    await t.enterText(field, '@ngozi eze');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save').last);
+    await settle(t);
+    expect(find.text('That name is taken too: choose another.'), findsOneWidget);
+    await t.enterText(field, '@ngozi-yaba');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save').last);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(r.sent, [
+      'POST /v1/storefront/orders/OR-5K2Q/save-customer {"name":"ngozi"}',
+      'POST /v1/storefront/orders/OR-5K2Q/save-customer {"name":"ngozi-eze"}',
+      'POST /v1/storefront/orders/OR-5K2Q/save-customer {"name":"ngozi-yaba"}',
+    ]);
+    expect(find.text('Another name'), findsNothing);
+    expect(find.text('Saved as @ngozi-yaba'), findsWidgets);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a new customer no name can be made for: one asked for, the sheet empty', (t) async {
+    final r = await firstOrder(
+      t,
+      customer: 'N•••',
+      answers: [
+        {'error': 'Give them a name to call them up by.', 'code': 'name_needed', 'name_needed': true},
+        201,
+      ],
+    );
+    await t.tap(find.text('Save this customer for next time'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Give it a name to call\u00A0it\u00A0up\u00A0by'), findsOneWidget);
+    expect(find.text('Another name'), findsNothing);
+    expect(find.textContaining('is taken'), findsNothing);
+    final field = find.descendant(of: find.bySemanticsLabel(RegExp('^Name to call it up by')), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(field).controller.text, '');
+    await t.enterText(field, 'ngozi lekki');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save').last);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(r.sent, ['POST /v1/storefront/orders/OR-5K2Q/save-customer {}', 'POST /v1/storefront/orders/OR-5K2Q/save-customer {"name":"ngozi-lekki"}']);
+    expect(find.text('Saved as @ngozi-lekki'), findsWidgets);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a customer the server will not save: not a customer, or nothing to save: the offer goes, with its words', (t) async {
+    for (final code in ['not_a_customer', 'nothing_to_save']) {
+      await firstOrder(
+        t,
+        answers: [
+          {'error': 'Words for $code.', 'code': code},
+        ],
+      );
+      await t.tap(find.text('Save Ngozi for next time'));
+      await settle(t);
+      expect(find.text('Save Ngozi for next time'), findsNothing);
+      expect(find.text('Words for $code.'), findsOneWidget, reason: 'the toast');
+      await t.pump(const Duration(seconds: 5));
+    }
+  });
+
+  testWidgets('a customer saved already: said as saved; another failure keeps the offer', (t) async {
+    await firstOrder(
+      t,
+      answers: [
+        {'error': 'They are saved already, as @ngozi-o.', 'code': 'saved_already', 'saved_as': 'ngozi-o'},
+      ],
+    );
+    await t.tap(find.text('Save Ngozi for next time'));
+    await settle(t);
+    expect(find.text('Saved as @ngozi-o'), findsWidgets);
+    expect(find.text('Save Ngozi for next time'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+
+    await firstOrder(
+      t,
+      answers: [
+        {'error': 'Something else went wrong here.', 'code': 'other'},
+      ],
+    );
+    await t.tap(find.text('Save Ngozi for next time'));
+    await settle(t);
+    expect(find.text('Something else went wrong here.'), findsOneWidget);
+    expect(find.text('Save Ngozi for next time'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
   });
 }
 

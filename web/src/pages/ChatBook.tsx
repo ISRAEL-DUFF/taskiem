@@ -19,6 +19,7 @@ import {
 } from "../lib/linkbook";
 import { ErrorBox, useLoad } from "../ui";
 import { initialsOf } from "./ChatAvatar";
+import { SavedFill } from "./SavedFill";
 
 // Book in a business's conversation (docs/spec/business-chat-tools.md §3):
 // their services, a day and a time from their availability, and a booking
@@ -317,6 +318,7 @@ export function BookSheet({
             <p className="tk-form-now">{bookPayWords(business)}</p>
             {mayBook ? (
               <>
+                <SavedFill kind="phone" label="the phone number they can reach you on" inSheet onPick={(_, p) => setPhone(p)} />
                 <KitField
                   label="Phone number they can reach you on"
                   hint={`Given to ${business} with the booking.`}

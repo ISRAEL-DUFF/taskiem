@@ -224,6 +224,26 @@ export function purchaseSub(
 export const linkedOrder = (p: Pick<Purchase, "link_id" | "seller_status">) =>
   !!p.link_id && !!p.seller_status;
 
+/** Where one purchase is delivered (GET /v1/stock/purchases/{id}/deliver-to):
+ * its own place, or the business's (own false). */
+export interface PurchaseDeliverTo {
+  address: string;
+  phone: string;
+  own: boolean;
+}
+
+/** Whether where a purchase is delivered can still be changed: until the
+ * supplier has it (drafted, or sent and not yet seen by them). */
+export const deliverToOpen = (p: Pick<Purchase, "status" | "seller_status">) =>
+  p.status === "drafted" || (p.status === "sent" && !p.seller_status);
+
+/** The line under "Delivered to": whose place it is, or that it is picked
+ * up. */
+export function deliverToSub(d: PurchaseDeliverTo): string {
+  if (!d.address) return "Nowhere set: you pick it up.";
+  return d.own ? "This order's own place" : "Where your orders usually go";
+}
+
 /** Whether the buyer may say what came of a linked supplier's delivery:
  * All came, or Not all came (which stays open after the day, as a
  * dispute the supplier settles). */
