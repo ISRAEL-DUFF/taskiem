@@ -114,6 +114,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 - For linked businesses and for **customers**: a customer's invoice card pays the same way, and a customer on WhatsApp gets the number as plain lines.
 - Built on what exists (one-time numbers, matching, the bill mirror), so it ships early and alone.
 - Done when: a linked buyer pays a bill by transfer from the chat and both sides see it paid without a reload; a customer on WhatsApp is sent the number, pays, and is told it landed.
+- **Status (21 November 2026): built against fakes, not yet on a real wallet.** Done: a buyer asks for an account number for a bill (`POST`/`GET /v1/bills/{id}/transfer`, migration 00503): the request crosses the link to the seller's invoice (channel `bill`), so the seller's provider keys never leave the seller, and the number comes back on the bill with the link mirror; one open at a time, a new one once it has expired, **I need longer** for the longest the provider gives, 60 minutes by default (`AccountMinutes`, for every invoice); bills answer with `ways_to_pay` (transfer, taskiem, checkout) and the number, for those who may pay bills; a queried bill, or one with a payment from Taskiem under way, gets none; paid, **Pay the next one**; a transfer card in both chats ("is paying by transfer" on the seller's side). "pay INV-0042" on WhatsApp and Telegram answers with the number in plain lines. A customer pays their own invoice by transfer from their chat in the app (`/v1/me/chats/{id}/invoices/{invoice}/transfer`). The Pay sheet (the last way per seller remembered) and the transfer card (copy, countdown from the server's time, the last 5 minutes, paid, part paid, expired, could not get one) on the web and in the app. Reviewed; its fixes made. Not yet: card events for paid, part paid and expired (the transfer card checks by itself; the seller's card and the bill card's pill stay as they were until opened), the customer's invoice card updating when paid, telling the customer on WhatsApp when it lands beyond what invoices already do, and saying in advance where a provider gives one fixed time (I need longer is always offered).
 
 **P1. Pay one person, safely** (paying people phase 1, with saved objects phase 3). Needs: S0 to S3 (all of saved objects), D6; D7 before launch.
 - `payments`, `pay_limits`, `money.pay`; payees as bank account objects; the `pay-person` workflow; the `payments@1 prepare` action for workflows; the Pay tile and sheet, which leads to S0's step to connect where a business has no provider yet; the balance and **Add money**; "what for"; the fee shown before confirming; the passkey on confirm, with the PIN as the fallback; bank transfers, and Taskiem wallet to wallet where both have one; the card in the conversation for the person paid; the account-changed and first-payment warnings; limits and the owner's OK; diary lines, the receipt, the money log; the first-payment warning on payroll and supplier approvals.
@@ -225,7 +226,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 
 - [ ] S0 · [ ] S1
 - [ ] S2 · [ ] S3
-- [ ] F1 · [ ] P1
+- [ ] F1 (built, in review) · [ ] P1 (built, in review)
 - [ ] P2 · [ ] P3 · [ ] P4
 - [ ] M0 · [ ] M1 · [ ] D0
 - [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
