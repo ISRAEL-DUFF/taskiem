@@ -126,4 +126,20 @@ func TestPayFromAMessage(t *testing.T) {
 		t.Fatalf("a rider: %v", p)
 	}
 	owner.must(404, "POST", "/v1/payments", map[string]any{"rider_id": uuid.New(), "amount_kobo": 300000})
+
+	// The rider's account changed since they were last paid: said, and
+	// needs the owner's OK from staff (the first payment there too).
+	owner.must(202, "POST", "/v1/payments/"+p["id"].(string)+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+p["id"].(string))})
+	other := fitting(t, "035", "076543211")
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{biz}, func(tx pgx.Tx) error {
+		_, err := w.srv.Dispatch.SetBankTx(ctx, tx, biz, rider, dispatch.Bank{BankCode: "035", AccountNumber: other}, "user:ada", "passkey")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if q := owner.must(201, "POST", "/v1/payments", map[string]any{"rider_id": rider, "amount_kobo": 300000, "purpose": "delivery"})["payment"].(map[string]any); q["changed_account"] != true {
+		t.Fatalf("a rider's changed account: %v", q)
+	}
+	// Only owners check names at several banks.
+	owner.must(200, "POST", "/v1/payments/name-check", map[string]any{"account_number": gtb})
 }

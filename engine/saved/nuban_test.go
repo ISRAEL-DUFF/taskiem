@@ -12,17 +12,22 @@ func TestNUBANFits(t *testing.T) {
 	if fits, _ := NUBANFits("058", "0123456786"); fits {
 		t.Errorf("a wrong check digit fits")
 	}
-	// 999992 + 812345678 (15 digits): check worked the same way.
+	// A 5-digit code (other institutions): worked as "9" and the five.
 	sum := 0
-	for i, r := range "999992812345678" {
+	for i, r := range "950211812345678" {
 		sum += int(r-'0') * []int{3, 7, 3}[i%3]
 	}
 	n := "812345678" + string(rune('0'+(10-sum%10)%10))
-	if fits, known := NUBANFits("999992", n); !fits || !known {
-		t.Errorf("999992 %s: %v %v", n, fits, known)
+	if fits, known := NUBANFits("50211", n); !fits || !known {
+		t.Errorf("50211 %s: %v %v", n, fits, known)
 	}
-	if fits, known := NUBANFits("99992", n); !fits || !known {
-		t.Errorf("a 5-digit code: %v %v", fits, known)
+	// A provider's own six digits are not worked: the bank's CBN code is
+	// found by its name.
+	if _, known := NUBANFits("000014", "0123456785"); known {
+		t.Errorf("a NIP code was worked")
+	}
+	if CBNCode("000013", "Guaranty Trust Bank") != "058" || CBNCode("044", "x") != "044" || CBNCode("999992", "OPay Digital Services") != "" {
+		t.Errorf("CBN codes: %q %q %q", CBNCode("000013", "Guaranty Trust Bank"), CBNCode("044", "x"), CBNCode("999992", "OPay Digital Services"))
 	}
 	if _, known := NUBANFits("ABC", "0123456785"); known {
 		t.Errorf("a code that is not digits")

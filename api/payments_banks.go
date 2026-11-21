@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -55,7 +56,7 @@ func (s *Server) payBanks(ctx context.Context, tenant uuid.UUID, rl invoicing.Ra
 	}
 	if number, err := saved.AccountNumber(number); err == nil {
 		for i := range items {
-			fits, _ := saved.NUBANFits(items[i].Code, number)
+			fits, _ := saved.NUBANFits(saved.CBNCode(items[i].Code, items[i].Name), number)
 			items[i].Likely = fits
 		}
 	} else {
@@ -113,6 +114,17 @@ func (s *Server) payNameCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	// Only those who may pay an account number not saved look names up;
+	// each person a few at a time; each check recorded.
+	p := principalFrom(ctx)
+	if !slices.Contains(p.Roles, "owner") {
+		s.payFail(w, r, refusePay(http.StatusForbidden, "saved_only", "Only an owner checks an account number's name: staff pay saved accounts."))
+		return
+	}
+	if !s.limiter("pay-name-check:"+p.Actor(), time.Minute/10, 10).Allow() {
+		s.payFail(w, r, refusePay(http.StatusTooManyRequests, "too_many", "Too many checks: wait a minute."))
 		return
 	}
 	number, err := saved.AccountNumber(in.AccountNumber)
@@ -180,6 +192,16 @@ func (s *Server) payNameCheck(w http.ResponseWriter, r *http.Request) {
 				out[i].Problem = "The bank did not say just now."
 			}
 		}
+	}
+	codes := make([]string, len(out))
+	for i, a := range out {
+		codes[i] = a.BankCode
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		return auditTx(r, tx, "payment.name_check", saved.Masked(number), map[string]any{"banks": codes})
+	}); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"account": saved.Masked(number), "banks": out})
 }

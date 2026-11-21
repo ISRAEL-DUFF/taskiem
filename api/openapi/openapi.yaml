@@ -6572,7 +6572,7 @@ paths:
       tags:
       - Payments
       summary: Check the likely banks for an account number
-      description: 'The bank''s name for the account at up to three banks at once: those named (bank_codes), or the likely ones (its check digit fits their code, the business''s most-paid first). Each answers its name, or that it has no such account, or that it could not say just now. Nothing is chosen or paid: the person picks. 409 `no_provider`; 400 `no_banks` when none fits.'
+      description: 'For owners (staff pay saved accounts; 403 `saved_only`), a few at a time (429 `too_many`), each check recorded. The bank''s name for the account at up to three banks at once: those named (bank_codes), or the likely ones (its check digit fits their code, the business''s most-paid first). Each answers its name, or that it has no such account, or that it could not say just now. Nothing is chosen or paid: the person picks. 409 `no_provider`; 400 `no_banks` when none fits.'
       security:
       - sessionCookie: []
         csrfHeader: []
