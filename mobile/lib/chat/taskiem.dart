@@ -44,7 +44,9 @@ import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, showMatchSheet;
-import 'bills_page.dart' show openBill;
+import 'bills_page.dart' show BillsPage, openBill;
+import 'menu_card.dart';
+import 'money_page.dart' show MoneyPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
@@ -530,7 +532,24 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
 
-  void _openTool(Tool tool, {String? openId}) {
+  /// A menu row's page, where the app has it as a screen.
+  bool _openPage(String path) {
+    final auth = widget.data.chats.auth;
+    final Widget? page = switch (path) {
+      '/bills' => BillsPage(auth: auth),
+      '/invoices' => InvoicesPage(auth: auth),
+      '/money' => MoneyPage(auth: auth),
+      '/schools' || '/schools/payments' => StudentsPage(auth: auth),
+      '/schools/debtors' => DebtorsPage(auth: auth),
+      '/schools/clearance' => ClearancePage(auth: auth),
+      _ => null,
+    };
+    if (page == null) return false;
+    unawaited(Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page)));
+    return true;
+  }
+
+  void _openTool(Tool tool, {String? openId, bool add = false}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
@@ -575,6 +594,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       tool: tool,
       detail: toolDetail(widget.data.chats.auth),
       openId: openId,
+      add: add,
       // Saved: its diary line here at once, and the alerts read again.
       onSaved: (_) {
         unawaited(widget.data.pull().catchError((Object _) {}));
@@ -663,6 +683,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     // "/" and a word as the whole message: the panel, filtered by it.
     _text.addListener(() => _tools.typed(_tags.tagging ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
+    // The menus' catalogue, read now, so a menu is drawn whole at once.
+    unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
       if (_text.text.isEmpty) _text.text = words;
@@ -698,7 +720,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             builder: (context, _) => Column(
               children: [
                 ColoredBox(
-                  color: t.chatWallpaper,
+                  // The head on a bar of its own, as WhatsApp's (under the phone's
+                  // status bar too), apart from the wallpaper.
+                  color: t.panel,
                   child: Padding(
                     padding: EdgeInsets.only(top: pad.top),
                     child: ChatHeadBar(
@@ -798,6 +822,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       if (m.inbound) break;
       if (m.buttons?.any((b) => b.id != null) ?? false) {
         pressable = l[i].id;
+        break;
+      }
+    }
+    // The newest menu stays open; every other folds (chat-menus.md §6.1).
+    String? lastMenu;
+    for (final x in l.reversed) {
+      if (x.m.kind == 'menu') {
+        lastMenu = x.id;
         break;
       }
     }
@@ -951,6 +983,27 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         ),
         render: (x, prev) {
           final m = x.m;
+          if (m.kind == 'menu') {
+            final menu = MenuMessage.parse(m.text);
+            if (menu != null) {
+              return MenuCard(
+                key: ValueKey('menu-${x.id}'),
+                auth: d.chats.auth,
+                menu: menu,
+                open: x.id == lastMenu,
+                busy: d.busy,
+                onAct: (a) => d.say(reply: 'act:${a.id}', text: a.title),
+                onTool: (key, add) {
+                  final tool = tools.where((t) => t.key == key).firstOrNull;
+                  if (tool == null) return false;
+                  _openTool(tool, add: add);
+                  return true;
+                },
+                onPage: (path) => _openPage(path),
+                onForm: (reply, text) => d.say(reply: reply, text: text),
+              );
+            }
+          }
           if (m.kind == 'chart') {
             final chart = ChartData.parse(m.text);
             if (chart != null) return ChartCard(chart: chart);
@@ -1195,8 +1248,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
             if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
           ],
         ),
-        // Yours on pine: white words in the light theme, as a conversation's.
-        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).

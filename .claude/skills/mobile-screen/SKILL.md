@@ -70,9 +70,9 @@ behaviour, unless asked.
 3. Check each picture against the drawing and the screens around it:
    - the head: Back as "‹ Page", the title large, no paragraph under it;
    - spacing, rounded panels, rows of one or two lines, nothing cut off;
-   - **dark**: every word readable (your own pine bubble's words white in
-     light; nothing dark on dark), panels visible against the ground, code
-     boxes and fields visible;
+   - **dark**: every word readable (nothing dark on dark; in a chat, the
+     words, names and ticks in your own green bubble), panels visible
+     against the ground, code boxes and fields visible;
    - scrolled down (`-1.png`): the end of the page looks finished;
    - no "Something went wrong" (if there is, it is the preview's stand-in
      server missing an answer or a required field: fix `answer`).

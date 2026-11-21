@@ -383,3 +383,27 @@ func TestTelegramHandlesAClaimedUpdateToTheEnd(t *testing.T) {
 		t.Fatalf("the resend: %v, %d replies", err, len(bot.Sent(acct)))
 	}
 }
+
+// On Telegram a menu's rows are buttons (chat-menus.md M3), and a button
+// pressed does its row.
+func TestTelegramMenuButtons(t *testing.T) {
+	w := newTGWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const on = int64(7101)
+	w.link(t, owner, on, "ada")
+	m := w.say(t, on, "help staff")
+	if !strings.Contains(m.Text, "Staff and tasks") || len(m.Keyboard) != 3 || m.Keyboard[1][0].Text != "Give someone a task" {
+		t.Fatalf("menu: %+v", m)
+	}
+	data := m.Keyboard[1][0].Data
+	got := w.update(t, on, func(id int64) []byte { return telegramtest.Callback(id, on, m.MessageID, "q1", data) })
+	said := ""
+	for _, c := range got {
+		if c.Method == "sendMessage" {
+			said += c.Text
+		}
+	}
+	if !strings.Contains(said, "Who is it for?") {
+		t.Fatalf("pressed: %+v", got)
+	}
+}

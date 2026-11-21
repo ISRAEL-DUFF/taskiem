@@ -61,7 +61,7 @@ func TestWhatsAppBuild(t *testing.T) {
 	const on = "+2348010000021"
 	w.bind(t, owner, on)
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*build*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*build*") {
 		t.Errorf("help: %q", r)
 	}
 	// Natural phrasing, without "build".

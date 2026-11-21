@@ -281,15 +281,35 @@ chat's look for the app's own, as sleek as WhatsApp and Telegram. Its tools
 were drawn the day before. These screens are no longer compared with the
 web's pictures (the parity test still builds and drives them).
 
-- **Colours.** The chat's tokens are the app's (`tkAppLight`, `tkAppDark` in
-  `theme.dart`, over the web's): no wallpaper, the page's ground; their
-  bubbles white (#1A1B1A in the dark), yours pine with white words (a deep
-  green, #1D3A2D, in the dark); read ticks lime. The tokens have a
-  `copyWith` (generated) and `TkTheme.recolour` gives a part of a screen
-  colours of its own (your own bubble's words, a sheet's boxes).
-- **The conversation.** The head on the ground: Back, the face, the name in
-  Inter Tight, who they are or "typing…" in lime, Search and ⋯ as round
-  buttons, a hairline under it. Bubbles 20 px round; a run from one side
+- **Colours: WhatsApp's, as the web chat's** (the founder, 20 November
+  2026, after living with the pine bubbles from the 16th). The chat's
+  tokens are the web's (`tkAppLight`, `tkAppDark` in `theme.dart` are
+  `tkLight`, `tkDark`): the warm wallpaper with its doodles (#EFEAE2;
+  #0E1512 in the dark), their bubbles white (#1F2A26 in the dark), yours
+  light green (#D9FDD3; #0F4A37 in the dark) with the theme's own dark
+  words, names and quotes, read ticks blue. Only the colours went back:
+  the shapes, the head, the list and the tools below stay the app's own,
+  so these screens are still not compared with the web's pictures. The
+  tokens have a `copyWith` (generated) and `TkTheme.recolour` gives a part
+  of a screen colours of its own (a sheet's boxes).
+- **The wallpaper** (the founder, 20 November 2026): as WhatsApp's, a
+  texture of tiny doodles packed close, but of where business meets chat:
+  76 kinds (bubbles and ticks, a shop front, a POS, ₦, a receipt, an
+  invoice, a parcel, a keke, a danfo, an okada, a pot of jollof, a market
+  stall, a sewing machine, …), about 240 on a 400 px tile that repeats
+  without a seam. Drawn by `tools/chatwallpaper` (`go run
+  ./tools/chatwallpaper`; a test fails when its files are stale) into
+  `web/public/chat/wallpaper-light.svg`, `-dark.svg` (the lines in each
+  theme's `--chat-doodle`) and `mobile/assets/chat/wallpaper.svg` (black,
+  tinted with `chatDoodle` by `WallpaperBox`). Web and app the same.
+- **The conversation.** The head on a bar of its own, as WhatsApp's (the
+  founder, 21 November 2026): white (`panel`; its dark in the dark, as the
+  web's `.chat-head`), apart from the wallpaper, under the phone's status
+  bar too. Back, the face, the name in Inter Tight, who they are or
+  "typing…" in lime; Search and ⋯ as plain icons, no circles; a hairline
+  under it. The face and the name pressed together open who this is (a
+  business's profile, a person's or a group's info; a customer's chat and
+  Taskiem's have none), as WhatsApp's; ⋯ still has it too. Bubbles 20 px round; a run from one side
   tucks one corner, at its end. A quote with a lime bar and the sender's
   name; reactions as pills on the card's colour; the day and "unread" as
   pills; a voice note with a lime play button and bars that fill as it

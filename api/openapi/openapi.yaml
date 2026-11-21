@@ -8214,6 +8214,66 @@ paths:
                       $ref: '#/components/schemas/ChatRef'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat/actions:
+    get:
+      operationId: chatActions
+      tags:
+      - Account
+      summary: What the person can do from the Taskiem chat
+      description: 'The person''s own catalogue (docs/spec/chat-menus.md): the topics they can use, in order, each with its actions they may use here: what each shows or does, how it opens (an answer, a form, questions in the chat, or a page) and the typed command it stands for. The menus in the Taskiem chat are drawn from it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The catalogue
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [topics]
+                properties:
+                  topics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatTopic'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat/actions/{id}/choices:
+    get:
+      operationId: chatActionChoices
+      tags:
+      - Account
+      summary: The choices an action's form offers
+      description: 'For each of the action''s fields that takes one of the business''s own records (its riders and their areas, its stock items, its open orders and coming bookings), the five most likely, as the chat''s questions offer them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: The choices, by field
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [fields]
+                properties:
+                  fields:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-card:
     get:
       operationId: chatCard
@@ -44711,7 +44771,7 @@ components:
                 description: The person said it (else Taskiem did)
               kind:
                 type: string
-                enum: [text, button, voice, photo, form, location, diary, chart]
+                enum: [text, button, voice, photo, form, location, diary, chart, menu]
               text:
                 type: string
               buttons:
@@ -44975,6 +45035,51 @@ components:
               end:
                 type: string
                 pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    ChatTopic:
+      type: object
+      additionalProperties: false
+      required: [id, name, icon, color, actions]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        icon: {type: string}
+        color: {type: string}
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatAction'
+    ChatAction:
+      type: object
+      additionalProperties: false
+      required: [id, title, line, icon, does, opens]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        line: {type: string}
+        icon: {type: string}
+        does: {type: string, enum: [show, asks, changes]}
+        opens: {type: string, enum: [show, form, questions, page]}
+        shortcut: {type: string}
+        tool: {type: string}
+        add: {type: boolean}
+        page: {type: string}
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatField'
+    ChatField:
+      type: object
+      additionalProperties: false
+      required: [key, label, kind]
+      properties:
+        key: {type: string}
+        label: {type: string}
+        hint: {type: string}
+        kind: {type: string}
+        choices:
+          type: array
+          items: {type: string}
+        optional: {type: boolean}
     ChatRef:
       type: object
       additionalProperties: false

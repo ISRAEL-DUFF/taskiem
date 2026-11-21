@@ -305,7 +305,7 @@ func TestWhatsAppTenantsAndRateLimit(t *testing.T) {
 	if r := w.say(t, n, "status"); !strings.HasPrefix(r, "[Acme] ") || !strings.Contains(r, "No runs") {
 		t.Errorf("status in Acme: %q", r)
 	}
-	if r := w.say(t, n, "help"); !strings.Contains(r, "switch") {
+	if r := w.say(t, n, "help all"); !strings.Contains(r, "switch") {
 		t.Errorf("help for two tenants: %q", r)
 	}
 	if r := w.say(t, n, "switch"); !strings.Contains(r, "Beta") {

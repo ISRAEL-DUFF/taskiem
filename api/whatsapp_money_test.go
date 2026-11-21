@@ -27,7 +27,7 @@ func TestWhatsAppMoney(t *testing.T) {
 		return n
 	}
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*spent*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*spent*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, vn, "help"); strings.Contains(r, "*spent*") {

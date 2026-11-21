@@ -12,6 +12,7 @@ import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../kit/motion.dart';
 import '../kit/icon.dart';
@@ -22,55 +23,55 @@ import '../theme/theme.dart';
 import 'chats.dart' show UnreadCount;
 import 'words.dart';
 
-/// styles.css `--chat-pattern`: two grids of soft dots, 28 px apart, the
-/// second set 14 px in, over the wallpaper.
-class Wallpaper extends CustomPainter {
-  Wallpaper(this.ground, this.doodle);
-  final Color ground;
-  final Color doodle;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = ground);
-    // `radial-gradient(var(--chat-doodle) 1.2px, transparent 1.7px)`
-    // centred in each 28 px tile.
-    final clear = doodle.withValues(alpha: 0);
-    void dot(double x, double y) {
-      final c = Offset(x, y);
-      canvas.drawCircle(
-        c,
-        1.7,
-        Paint()..shader = RadialGradient(colors: [doodle, doodle, clear], stops: const [0, 1.2 / 1.7, 1]).createShader(Rect.fromCircle(center: c, radius: 1.7)),
-      );
-    }
-
-    for (var y = 0.0; y < size.height + 28; y += 28) {
-      for (var x = 0.0; x < size.width + 28; x += 28) {
-        dot(x + 14, y + 14);
-        dot(x, y);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(Wallpaper old) => old.ground != ground || old.doodle != doodle;
-}
-
-/// The chat's wallpaper under [child], drawn once in a layer of its own:
-/// nothing drawn over it (a caret blinking, a list scrolling) draws the
-/// dots again.
+/// The chat's wallpaper under [child] (styles.css `--chat-pattern`): the
+/// ground, and over it the doodles of where business meets chat
+/// (assets/chat/wallpaper.svg, drawn by tools/chatwallpaper), a 400 px tile
+/// repeated, its lines in [doodle]. Drawn in a layer of its own: nothing
+/// drawn over it (a caret blinking, a list scrolling) draws it again.
 class WallpaperBox extends StatelessWidget {
   const WallpaperBox({super.key, required this.ground, required this.doodle, required this.child});
   final Color ground;
   final Color doodle;
   final Widget child;
 
+  /// The tile's side, as the web's `400px 400px`.
+  static const tile = 400.0;
+
   @override
   Widget build(BuildContext context) => Stack(
     children: [
       Positioned.fill(
         child: RepaintBoundary(
-          child: CustomPaint(painter: Wallpaper(ground, doodle), isComplex: true),
+          child: ColoredBox(
+            color: ground,
+            child: ClipRect(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final across = (box.maxWidth / tile).ceil();
+                  final down = (box.maxHeight / tile).ceil();
+                  return Stack(
+                    children: [
+                      for (var r = 0; r < down; r++)
+                        for (var c = 0; c < across; c++)
+                          Positioned(
+                            left: c * tile,
+                            top: r * tile,
+                            width: tile,
+                            height: tile,
+                            child: SvgPicture.asset(
+                              'assets/chat/wallpaper.svg',
+                              width: tile,
+                              height: tile,
+                              colorFilter: ColorFilter.mode(doodle, BlendMode.srcIn),
+                              excludeFromSemantics: true,
+                            ),
+                          ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         ),
       ),
       child,
@@ -130,14 +131,27 @@ class ChatHeadBar extends StatelessWidget {
     ),
   );
 
+  /// A button of the chat's own head: the icon alone, no circle, as
+  /// WhatsApp's (docs/spec/mobile-app-look.md, "The chat"), 40 px to press.
+  static Widget headButton(String label, Widget icon, VoidCallback? onTap) => TapArea(
+    child: Semantics(
+      button: true,
+      label: label,
+      child: TkPress(
+        onTap: onTap ?? () {},
+        child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final sub = typing ? 'typing…' : subtitle;
     return Container(
-      // The head on the page's ground, a hairline under it.
-      padding: const EdgeInsets.fromLTRB(8, 6, 12, 10),
+      // The head on its own bar (the screen colours it), a hairline under it.
+      padding: const EdgeInsets.fromLTRB(8, 6, 6, 8),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: look.line))),
       child: Row(
         children: [
@@ -147,54 +161,60 @@ class ChatHeadBar extends StatelessWidget {
               label: 'Back to the chats',
               child: TkPress(
                 onTap: onBack ?? () => Navigator.of(context).maybePop(),
-                child: SizedBox(width: 34, height: 40, child: Center(child: TkIcon('back', size: 24, stroke: 2, color: look.on))),
+                child: SizedBox(width: 34, height: 40, child: Center(child: TkIcon('back', size: 24, stroke: 2, color: t.text))),
               ),
             ),
           ),
-          if (onAvatar != null)
-            TapArea(child: Semantics(
-              button: true,
-              label: 'About $title',
-              child: GestureDetector(onTap: onAvatar, child: avatar),)
-            )
-          else
-            avatar,
-          const SizedBox(width: 10),
+          // The face and the name together, as WhatsApp's: pressed, who
+          // this is (their profile, the group's info), where there is one.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tkDisplay(size: 17, lineHeight: 1.25, letterSpacing: -0.3, color: t.text),
+            child: _HeadWho(
+              onTap: onAvatar,
+              label: 'About $title',
+              value: sub,
+              child: Row(
+                children: [
+                  avatar,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tkDisplay(size: 17, lineHeight: 1.25, letterSpacing: -0.3, color: t.text),
+                          ),
+                        ),
+                        if (sub != null)
+                          Text(
+                            sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: typing
+                                ? tkText(size: 12.5, weight: 600, lineHeight: 1.3, color: look.limeInk)
+                                : tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                if (sub != null)
-                  Text(
-                    sub,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: typing
-                        ? tkText(size: 12.5, weight: 600, lineHeight: 1.3, color: look.limeInk)
-                        : tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          for (final a in actions) ...[const SizedBox(width: 8), a],
+          for (final a in actions) ...[const SizedBox(width: 2), a],
           // With no menu of its own (Taskiem's), no ⋯ on a phone: the web's
           // holds only Keyboard there, which a phone hides.
           if (onMore != null) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 2),
           Builder(
-            builder: (context) => iconButton(
+            builder: (context) => headButton(
               'More about this conversation',
-              TkIcon('b-more', size: 18, stroke: 2.4, color: t.text),
+              TkIcon('b-more', size: 22, stroke: 2.4, color: t.text),
               onMore == null
                   ? null
                   : () {
@@ -205,6 +225,33 @@ class ChatHeadBar extends StatelessWidget {
           ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The head's face and name, pressed as one: [onTap] where there is a
+/// profile to open; else only shown.
+class _HeadWho extends StatelessWidget {
+  const _HeadWho({required this.child, required this.label, this.value, this.onTap});
+  final Widget child;
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return TapArea(
+      // One button to a screen reader: "About …", what they are doing now
+      // (typing…, last seen) as its value.
+      child: Semantics(
+        container: true,
+        button: true,
+        label: label,
+        value: value,
+        excludeSemantics: true,
+        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: child),
       ),
     );
   }
@@ -888,32 +935,6 @@ List<Widget> gapped(List<Widget> list, double gap) => [
 /// two lines: taken off a bubble's padding above and below.
 const bubbleLineDrift = 0.31;
 
-/// Your own bubble's words: white on pine in the light (the dark's deep
-/// green keeps the light words it has), lime where the web tints.
-Widget ownWords(BuildContext context, bool on, Widget child) {
-  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
-  const white = Color(0xFFFFFFFF);
-  return TkTheme.recolour(
-    context,
-    (t) => t.copyWith(
-      text: white,
-      muted: const Color(0xB3FFFFFF),
-      accent: const Color(0xFFC8F169),
-      tintText: const Color(0xFFC8F169),
-      tint: const Color(0x1AFFFFFF),
-      accentSoft: const Color(0x1AFFFFFF),
-      panel: const Color(0x1AFFFFFF),
-      panel2: const Color(0x1AFFFFFF),
-      border: const Color(0x33FFFFFF),
-      tkSoft: const Color(0x1AFFFFFF),
-    ),
-    child,
-    // Pills and a tag's letters in the bright inks (as main's copy in
-    // conversation.dart): the light's dark green ink on a faint lime did
-    // not show on pine.
-    look: tkLookOnPine,
-  );
-}
 
 /// `.bubble`: a message's bubble, as wide as what it holds up to 84% of the
 /// thread (560 px at most), the tail's corner on the first of a run, its
@@ -926,7 +947,8 @@ class BubbleFrame extends StatelessWidget {
 
   /// In the app's own chat look (docs/spec/mobile-app-look.md, "The chat"):
   /// 20 px round, the run's last bubble with its corner on the sender's
-  /// side tucked in, and your own words white on pine. Null: as the web's.
+  /// side tucked in, in the web chat's (WhatsApp's) colours. Null: as the
+  /// web's.
   final bool? last;
   final Widget stamp;
   final List<Widget> children;
@@ -963,7 +985,7 @@ class BubbleFrame extends StatelessWidget {
                   borderRadius: radius,
                   boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                 ),
-                child: ownWords(context, mine, Stack(
+                child: Stack(
                   children: [
                     Padding(
                       // `padding: 8px 12px 6px`; on the right 11.5, as Chrome
@@ -981,7 +1003,7 @@ class BubbleFrame extends StatelessWidget {
                     // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
                     if (inline) Positioned(right: 9, bottom: 5, child: stamp),
                   ],
-                )),
+                ),
               ),
             ),
           ),

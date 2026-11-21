@@ -211,7 +211,7 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 	if out := owner.must(200, "POST", "/v1/stock/purchases/low", nil, "Idempotency-Key", "low-1"); len(out["purchases"].([]any)) != 0 {
 		t.Fatalf("low: %v", out)
 	}
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*order from Dangote*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*order from Dangote*") {
 		t.Errorf("help: %q", r)
 	}
 }
