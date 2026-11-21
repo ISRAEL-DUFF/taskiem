@@ -34119,6 +34119,50 @@ paths:
                     type: string
         default:
           $ref: '#/components/responses/Error'
+  /v1/saved/import:
+    post:
+      operationId: importSaved
+      tags:
+      - Saved
+      summary: Import saved things from a file
+      description: 'A CSV of the business''s saved things (its first line names the columns: title or name, then kind and what each holds, such as bank and account_number, phone, street and area). Without `confirm` it answers the plan with the file''s `hash`; with that hash it saves each thing as one added by hand is (a bank account checked with its bank). A file with any line that cannot be taken, a name saved already or past the plan''s limit saves nothing: 422 `import_unreadable` with each line and why. 409 `import_changed` when `confirm` is not the file''s hash.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: saved.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [csv]
+              properties:
+                csv:
+                  type: string
+                  maxLength: 262144
+                confirm:
+                  type: string
+                  description: The plan's hash, to save it.
+      responses:
+        '200':
+          description: The plan, or what was saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedImport'
+        '422':
+          description: The file cannot be taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedImportProblems'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/saved/{id}:
     get:
       operationId: getSaved
@@ -44219,6 +44263,79 @@ components:
         at:
           type: string
           format: date-time
+    SavedImport:
+      type: object
+      additionalProperties: false
+      required: [saved, hash, total]
+      properties:
+        saved:
+          type: boolean
+          description: false for the plan; true once saved.
+        hash:
+          type: string
+        total:
+          type: integer
+        rows:
+          type: array
+          description: The plan's things.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, title, kind, hint]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+              title:
+                type: string
+              kind:
+                type: string
+              hint:
+                type: string
+        added:
+          type: array
+          description: The names saved.
+          items:
+            type: string
+        failed:
+          type: array
+          description: Lines that could not be saved after all (a bank that does not know the account), each with why.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, message]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+              message:
+                type: string
+    SavedImportProblems:
+      type: object
+      additionalProperties: false
+      required: [error, code, total]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [import_unreadable]
+        total:
+          type: integer
+        problems:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, message]
+            properties:
+              line:
+                type: integer
+              message:
+                type: string
     PurchaseDeliverTo:
       type: object
       additionalProperties: false

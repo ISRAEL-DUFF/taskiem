@@ -238,6 +238,7 @@ func (s *Server) savedRoutes(r chi.Router) {
 	r.Post("/saved/step-up/options", s.savedHandler(false, s.savedStepUpOptions))
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved", s.savedHandler(false, s.addSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/check", s.checkAllSaved)
+	r.With(s.need(PermSavedManage), s.tenantWide).Post("/saved/import", s.savedHandler(false, s.importSaved))
 	r.Get("/saved/{id}", s.savedHandler(false, s.getSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Put("/saved/{id}", s.savedHandler(false, s.changeSaved))
 	r.With(s.need(PermSavedManage), s.tenantWide).Delete("/saved/{id}", s.savedHandler(false, s.removeSaved))

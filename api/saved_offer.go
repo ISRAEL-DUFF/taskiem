@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"strings"
-	"unicode"
 
 	"github.com/israel-duff/taskiem/engine/saved"
 )
@@ -13,41 +11,11 @@ import (
 // for next time?" with Save, Keep it to myself and Cancel; any other
 // message lets the offer go and is read as itself.
 
-// savedNameFor is a saved name made from a title: its words in lower case
-// joined by "-", as long as a name may be; "" when none fits.
-func savedNameFor(title string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(title) {
-		switch {
-		case r < unicode.MaxASCII && (unicode.IsLetter(r) || unicode.IsDigit(r)):
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			b.WriteRune(r)
-			dash = false
-		default:
-			dash = true
-		}
-		if b.Len() >= 32 {
-			break
-		}
-	}
-	n := strings.Trim(b.String(), "-")
-	if len(n) > 32 {
-		n = strings.TrimRight(n[:32], "-")
-	}
-	if _, err := saved.Name(n); err != nil {
-		return ""
-	}
-	return n
-}
-
 // offerSaveCustomer says what was done and offers to save its customer as
 // a business's saved person; false (nothing said) when no name fits or one
 // by the name is saved already.
 func (s *Server) offerSaveCustomer(ctx context.Context, c *chat, title, addr string, email bool, said string) (bool, error) {
-	name := savedNameFor(title)
+	name := saved.NameFor(title)
 	if name == "" || c.p == nil {
 		return false, nil
 	}
