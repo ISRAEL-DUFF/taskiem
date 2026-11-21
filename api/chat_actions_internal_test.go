@@ -1,9 +1,13 @@
 package api
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/israel-duff/taskiem/engine/lang"
 )
 
 // The catalogue holds together (docs/spec/chat-menus.md §3): ids unique,
@@ -84,5 +88,40 @@ func TestChatCatalogue(t *testing.T) {
 	// Optional values left out leave no gap.
 	if got := fill("add rider {name} {phone}[ {areas}]")(map[string]string{"name": "Musa", "phone": "0803"}); got != "add rider Musa 0803" {
 		t.Errorf("fill: %q", got)
+	}
+}
+
+// catalogueWords are the catalogue's words by message id, in English.
+func catalogueWords() map[string]string {
+	out := map[string]string{}
+	for _, t := range chatTopics {
+		out[topicWordID(t)] = t.Name
+	}
+	for _, a := range chatActions {
+		out[titleWordID(a)] = a.Title
+		out[lineWordID(a)] = a.Line
+		for _, f := range a.Fields {
+			out[askWordID(a, f)] = f.Ask
+		}
+	}
+	return out
+}
+
+// The catalogue's words are in en.json as written here, for translators:
+// a word changed in one place and not the other fails. With
+// TASKIEM_MENU_WORDS set to a path, the words are written there as JSON
+// (to add new ones to the language files).
+func TestCatalogueWordsInTheLanguageFiles(t *testing.T) {
+	words := catalogueWords()
+	if p := os.Getenv("TASKIEM_MENU_WORDS"); p != "" {
+		b, _ := json.MarshalIndent(words, "", "  ")
+		if err := os.WriteFile(p, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for id, english := range words {
+		if got := tr(lang.EN, id); got != english {
+			t.Errorf("%s: en.json has %q, the catalogue %q", id, got, english)
+		}
 	}
 }

@@ -46,7 +46,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 	if !strings.Contains(got2, yo("lang.switched", "language", "Yorùbá")) || !strings.Contains(got2, yo("lang.draft_note")) {
 		t.Fatalf("switched: %q", got2)
 	}
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
 		t.Fatalf("help in Yoruba: %q", got)
 	}
 	// Yoruba words work, and English ones still do.
@@ -83,7 +83,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 
 	// The tenant turns its languages off: English again, whatever was chosen.
 	owner.must(200, "PUT", "/v1/languages", map[string]any{"languages": []string{}})
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, "You can send:") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, "You can send:") {
 		t.Fatalf("off again: %q", got)
 	}
 	// Changes are audited.

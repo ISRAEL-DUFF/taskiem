@@ -110,8 +110,8 @@ func TestChatModelHelpsWithWhatItDoesNotRecognise(t *testing.T) {
 		t.Errorf("refusal recorded: %d %v", refused, err)
 	}
 
-	// The whole list comes for help.
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*invoice*") || !strings.Contains(r, "*status*") {
+	// The whole list comes for help all.
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*invoice*") || !strings.Contains(r, "*status*") {
 		t.Fatalf("help: %q", r)
 	}
 

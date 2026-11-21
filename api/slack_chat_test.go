@@ -65,7 +65,7 @@ func TestSlackConversation(t *testing.T) {
 		t.Fatalf("dm: %d", st)
 	}
 	got := w.fake.to("U0OWNER")[before:]
-	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "status") {
+	if len(got) != 1 || !strings.Contains(got[0]["text"].(string), "Reply with a number") {
 		t.Fatalf("help: %v", got)
 	}
 	// Slack retried it: nothing twice.

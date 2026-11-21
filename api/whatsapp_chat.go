@@ -1227,7 +1227,7 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if err := c.say(ctx, s, c.t("wa.not_understood")); err != nil {
 			return err
 		}
-		return s.sayMenu(ctx, c, chatMenuMsg{Line: "Pick a topic, or say it another way."})
+		return s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.say_another")})
 	}
 	return c.say(ctx, s, notUnderstood(c))
 }
@@ -1243,8 +1243,8 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 	arg := strings.TrimSpace(m.Arg)
 	switch m.Intent {
 	case lang.IntentHelp:
-		if c.cards() && arg == "" {
-			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: "Pick a topic, or just tell me what you want in your own words."})
+		if arg == "" {
+			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.pick_topic")})
 		}
 		return true, c.say(ctx, s, s.waHelp(c))
 	case lang.IntentStatus:

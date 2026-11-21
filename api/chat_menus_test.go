@@ -115,8 +115,14 @@ func TestChatMenusInTheTaskiemChat(t *testing.T) {
 		t.Fatalf("done: %q", r)
 	}
 
+	// A topic's word that is a command: its answer, and the menu under it.
+	msgs := taskiemAll(t, owner, map[string]any{"text": "riders"})
+	if m := menuOf(t, msgs); !strings.Contains(textOf(msgs), "Musa Bello") || m["topic"] != "riders" || m["line"] != "Anything else?" {
+		t.Fatalf("riders: %v", msgs)
+	}
+
 	// A choice from the business's own records, as a button: the riders.
-	msgs := taskiemAll(t, owner, map[string]any{"text": "Give an order to a rider", "reply": "act:riders.give"})
+	msgs = taskiemAll(t, owner, map[string]any{"text": "Give an order to a rider", "reply": "act:riders.give"})
 	if r := textOf(msgs); !strings.Contains(r, "Which order?") {
 		t.Fatalf("order question: %q", r)
 	}
@@ -177,8 +183,11 @@ func TestChatMenusNumbered(t *testing.T) {
 	if r := w.say(t, on, "status"); !strings.Contains(r, "No runs") {
 		t.Fatalf("let go: %q", r)
 	}
-	// help on WhatsApp stays the list in words until its menus come (M3).
-	if r := w.say(t, on, "help"); !strings.Contains(r, "You can send:") {
+	// help: the topics, numbered; help all: every command in words.
+	if r := w.say(t, on, "help"); !strings.Contains(r, "Staff and tasks") || strings.Contains(r, "You can send:") {
 		t.Fatalf("help: %q", r)
+	}
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "You can send:") {
+		t.Fatalf("help all: %q", r)
 	}
 }

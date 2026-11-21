@@ -150,7 +150,7 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 			if err := c.say(ctx, s, whatsapp.SafeText(res.Reply)); err != nil {
 				return true, err
 			}
-			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: "Here is what I can help with."})
+			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.here_help")})
 		}
 		return true, c.say(ctx, s, whatsapp.SafeText(res.Reply)+"\n\n"+c.t("wa.not_understood_help"))
 	}

@@ -196,7 +196,7 @@ func TestSlackInviteAndAskToJoin(t *testing.T) {
 	}
 	n := len(w.fake.to("U0BEN"))
 	w.event(t, dm("Ev3", "U0BEN", "help"), slackSecret)
-	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "status") {
+	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "Reply with a number") {
 		t.Fatalf("Ben's conversation: %v", s)
 	}
 

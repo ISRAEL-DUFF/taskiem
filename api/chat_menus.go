@@ -35,6 +35,9 @@ const (
 	ansPrefix   = "ans:"
 )
 
+// refSep parts an order's number from its customer's name in a choice.
+const refSep = " · "
+
 // menuRows is how many of a topic's actions show in the chat (§6.1).
 const menuRows = 5
 
@@ -93,28 +96,28 @@ func (s *Server) sayMenu(ctx context.Context, c *chat, m chatMenuMsg) error {
 	var lines []string
 	st := chatMenuState{Topic: m.Topic}
 	if m.Topic == "" {
-		lines = append(lines, "What would you like to do? Reply with a number:")
+		lines = append(lines, c.t("menu.what_do")+" "+c.t("menu.reply_number"))
 		for i, t := range s.topicsFor(ctx, c) {
 			st.Items = append(st.Items, t.ID)
-			lines = append(lines, strconv.Itoa(i+1)+". "+t.Name)
+			lines = append(lines, strconv.Itoa(i+1)+". "+word(c.lang.Tag, topicWordID(t), t.Name))
 		}
 	} else {
 		t, _ := chatTopicByID(m.Topic)
 		head := m.Line
 		if head == "" {
-			head = "What would you like to do?"
+			head = c.t("menu.what_do")
 		}
-		lines = append(lines, "*"+t.Name+"*: "+head+" Reply with a number:")
+		lines = append(lines, "*"+word(c.lang.Tag, topicWordID(t), t.Name)+"*: "+head+" "+c.t("menu.reply_number"))
 		for i, a := range s.orderedActions(ctx, c, m.Topic, m.Pick) {
 			st.Items = append(st.Items, a.ID)
-			lines = append(lines, strconv.Itoa(i+1)+". "+a.Title)
+			lines = append(lines, strconv.Itoa(i+1)+". "+word(c.lang.Tag, titleWordID(a), a.Title))
 		}
 	}
 	if len(st.Items) == 0 {
 		return c.say(ctx, s, notUnderstood(c))
 	}
 	if m.Tip != "" {
-		lines = append(lines, "", "Next time you can type: *"+m.Tip+"*")
+		lines = append(lines, "", c.t("menu.tip", "command", m.Tip))
 	}
 	if err := s.saveSession(ctx, c, stateCollecting, chatData{Menu: &st}, waPendingTTL); err != nil {
 		return err
@@ -170,23 +173,38 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return true, err
 		}
-		n, err := strconv.Atoi(strings.Trim(cmd, " #."))
-		if err != nil || n < 1 || n > len(st.Items) {
-			return false, nil // not a number from it: read as a new message
+		// A number from it picks; anything else is read as a new message.
+		if n, err := strconv.Atoi(strings.Trim(cmd, " #.")); err == nil && n >= 1 && n <= len(st.Items) {
+			if st.Topic == "" {
+				return true, s.topicMenu(ctx, c, st.Items[n-1])
+			}
+			return true, s.menuAct(ctx, c, st.Items[n-1])
 		}
-		if st.Topic == "" {
-			return true, s.topicMenu(ctx, c, st.Items[n-1])
-		}
-		return true, s.menuAct(ctx, c, st.Items[n-1])
 	}
 	if c.state != stateIdle || c.understood {
 		return false, nil
 	}
 	switch {
-	case cmd == "help" && c.cards(), cmd == "menu", cmd == "topics":
-		return true, s.sayMenu(ctx, c, chatMenuMsg{Line: "Pick a topic, or just tell me what you want in your own words."})
+	case cmd == "help", cmd == "menu", cmd == "topics":
+		return true, s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.pick_topic")})
 	case cmd == "help all":
 		return true, c.say(ctx, s, s.waHelp(c))
+	}
+	// In the Taskiem chat, a topic's word that is a command ("riders",
+	// "stock", "orders"): its answer as always, and the topic's menu under it.
+	if t, ok := chatTopicNamed(cmd); ok && c.cards() {
+		for _, a := range s.actionsOf(ctx, c, t.ID) {
+			if a.Opens != opensShow || normalizeCommand(a.Shortcut) != cmd {
+				continue
+			}
+			if err := s.waUnderstood(ctx, c, a.Shortcut); err != nil {
+				return true, err
+			}
+			if c.state != stateIdle {
+				return true, nil // the answer asks something: no menu over it
+			}
+			return true, s.sayMenu(ctx, c, chatMenuMsg{Topic: t.ID, Line: c.t("menu.anything_else")})
+		}
 	}
 	if rest, ok := strings.CutPrefix(cmd, "help "); ok {
 		if t, ok := chatTopicNamed(rest); ok {
@@ -212,7 +230,7 @@ func (s *Server) menuTopicWord(ctx context.Context, c *chat, cmd string) (bool, 
 func (s *Server) menuAct(ctx context.Context, c *chat, id string) error {
 	a, ok := chatActionByID(id)
 	if !ok || !s.mayAct(c, s.chatAreas(ctx, c), a) {
-		return c.say(ctx, s, "That isn't something you can do here. Send *help* to see what you can.")
+		return c.say(ctx, s, c.t("menu.not_yours"))
 	}
 	switch a.Opens {
 	case opensShow:
@@ -225,17 +243,17 @@ func (s *Server) menuAct(ctx context.Context, c *chat, id string) error {
 			return s.stepsStart(ctx, c, a, nil)
 		}
 		if a.Tool != "" && s.PublicURL != "" {
-			return c.say(ctx, s, a.Title+": "+s.toolLink(a.Tool, &toolRequest{Add: a.Add}))
+			return c.say(ctx, s, word(c.lang.Tag, titleWordID(a), a.Title)+": "+s.toolLink(a.Tool, &toolRequest{Add: a.Add}))
 		}
 		return s.stepsStart(ctx, c, a, nil)
 	case opensPage:
 		if s.PublicURL != "" {
-			return c.say(ctx, s, a.Title+": "+s.PublicURL+a.Page)
+			return c.say(ctx, s, word(c.lang.Tag, titleWordID(a), a.Title)+": "+s.PublicURL+a.Page)
 		}
 	case opensQuestions:
 		return s.stepsStart(ctx, c, a, nil)
 	}
-	return c.say(ctx, s, a.Title+": open it in Taskiem on the web.")
+	return c.say(ctx, s, c.t("menu.open_web", "title", word(c.lang.Tag, titleWordID(a), a.Title)))
 }
 
 // --- step by step (§7) ---
@@ -263,7 +281,7 @@ func (s *Server) stepsNext(ctx context.Context, c *chat, a chatAction, st *chatS
 	if next == nil {
 		return s.stepsDone(ctx, c, a, st)
 	}
-	ask := next.Ask
+	ask := word(c.lang.Tag, askWordID(a, *next), next.Ask)
 	for k, v := range st.Values {
 		ask = strings.ReplaceAll(ask, "{"+k+"}", v)
 	}
@@ -294,7 +312,7 @@ func (s *Server) stepsNext(ctx context.Context, c *chat, a chatAction, st *chatS
 	for i, o := range st.Offered {
 		lines = append(lines, strconv.Itoa(i+1)+". "+o)
 	}
-	lines = append(lines, "Reply with a number, or type it.")
+	lines = append(lines, c.t("menu.reply_or_type"))
 	return c.say(ctx, s, strings.Join(lines, "\n"))
 }
 
@@ -313,32 +331,33 @@ var (
 	refAnswer    = regexp.MustCompile(`(?i)^[a-z]{2}-[a-z0-9]{6}$`)
 )
 
-// stepsCheck says what is wrong with an answer, "" when it will do.
+// stepsCheck names what is wrong with an answer (a message's id), "" when
+// it will do.
 func stepsCheck(kind, v string) string {
 	switch kind {
 	case "phone":
 		if n := len(regexp.MustCompile(`\D`).ReplaceAllString(v, "")); n < 10 || n > 15 {
-			return "That doesn't look like a phone number. Try one like 0803 123 4567."
+			return "menu.check.phone"
 		}
 	case "money":
 		if !moneyAnswer.MatchString(strings.ReplaceAll(v, " ", "")) {
-			return "Send an amount, like 12,000 or 12k."
+			return "menu.check.money"
 		}
 	case "number":
 		if !numberAnswer.MatchString(v) {
-			return "Send a number, like 30."
+			return "menu.check.number"
 		}
 	case "signed":
 		if !signedAnswer.MatchString(strings.ReplaceAll(v, " ", "")) {
-			return "Send a number, like -2 or 3."
+			return "menu.check.signed"
 		}
-	case "ref":
+	case "order", "booking":
 		if !refAnswer.MatchString(v) {
-			return "That isn't an order's number. It looks like TK-A1B2C3."
+			return "menu.check.ref"
 		}
 	}
 	if utf8.RuneCountInString(v) > 150 {
-		return "That's too long. Say it in fewer words."
+		return "menu.check.long"
 	}
 	return ""
 }
@@ -364,6 +383,10 @@ func (s *Server) stepsAnswer(ctx context.Context, c *chat, text string) error {
 	if n, err := strconv.Atoi(strings.Trim(v, " #.")); err == nil && n >= 1 && n <= len(st.Offered) && fl.Kind != "number" && fl.Kind != "signed" {
 		v = st.Offered[n-1]
 	}
+	// An order or a booking offered as "TK-A1B2C3 · Ada": its number.
+	if ref, _, ok := strings.Cut(v, refSep); ok && (fl.Kind == "order" || fl.Kind == "booking") {
+		v = strings.TrimSpace(ref)
+	}
 	if strings.EqualFold(v, "skip") && fl.Optional {
 		st.Values[fl.Key] = ""
 		return s.stepsNext(ctx, c, a, st, "")
@@ -376,15 +399,15 @@ func (s *Server) stepsAnswer(ctx context.Context, c *chat, text string) error {
 			}
 		}
 		if match == "" {
-			return s.stepsWrong(ctx, c, a, st, "Choose one of: "+strings.Join(fl.Choices, ", ")+".")
+			return s.stepsWrong(ctx, c, a, st, c.t("menu.choose_one", "choices", strings.Join(fl.Choices, ", ")))
 		}
 		v = match
 	}
 	if why := stepsCheck(fl.Kind, v); why != "" {
-		return s.stepsWrong(ctx, c, a, st, why)
+		return s.stepsWrong(ctx, c, a, st, c.t(why))
 	}
 	if v == "" {
-		return s.stepsWrong(ctx, c, a, st, "I need an answer to go on. Send *cancel* to stop.")
+		return s.stepsWrong(ctx, c, a, st, c.t("menu.need_answer"))
 	}
 	st.Values[fl.Key], st.Tries = v, 0
 	return s.stepsNext(ctx, c, a, st, "")
@@ -397,7 +420,7 @@ func (s *Server) stepsWrong(ctx context.Context, c *chat, a chatAction, st *chat
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return err
 		}
-		if err := c.say(ctx, s, "Let's leave it for now."); err != nil {
+		if err := c.say(ctx, s, c.t("menu.leave")); err != nil {
 			return err
 		}
 		return s.topicMenu(ctx, c, a.Topic)
@@ -435,5 +458,5 @@ func (s *Server) stepsDone(ctx context.Context, c *chat, a chatAction, st *chatS
 		}
 		shown = a.Make(v)
 	}
-	return c.say(ctx, s, a.Title+": *"+whatsapp.SafeText(shown)+"*\nShall I do it?", understoodButtons(c)...)
+	return c.say(ctx, s, c.t("menu.shall", "title", word(c.lang.Tag, titleWordID(a), a.Title), "command", whatsapp.SafeText(shown)), understoodButtons(c)...)
 }

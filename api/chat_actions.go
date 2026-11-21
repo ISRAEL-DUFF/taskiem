@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"time"
 	"net/http"
 	"regexp"
 	"strings"
@@ -20,7 +21,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // What an action does.
@@ -42,7 +45,7 @@ const (
 type chatField struct {
 	Key  string
 	Ask  string // the question
-	Kind string // text, phone, money, number, signed, ref, rider, item, zone, or a choice
+	Kind string // text, phone, money, number, signed, order, booking, rider, item, zone, or a choice
 	// Choices are the fixed choices of a "choice" field.
 	Choices  []string
 	Optional bool
@@ -228,14 +231,14 @@ var chatActions = []chatAction{
 	{ID: "orders.open", Topic: "orders", Title: "Open orders", Line: "Waiting, being made, on the way", Icon: "orders", Does: doesShow, Opens: opensShow,
 		Shortcut: "orders", may: both(permIn(PermOrders, areas.Orders), ordersOn)},
 	{ID: "orders.one", Topic: "orders", Title: "One order", Line: "Find it by its number", Icon: "orders", Does: doesShow, Opens: opensQuestions,
-		Shortcut: "order TK-A1B2C3", Fields: []chatField{f("ref", "Which order? Send its number, like TK-A1B2C3.", "ref")},
+		Shortcut: "order TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
 		Make: fill("order {ref}"), may: both(permIn(PermOrders, areas.Orders), ordersOn)},
 	{ID: "orders.move", Topic: "orders", Title: "Mark ready or delivered", Line: "Move an order on", Icon: "orders", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "order TK-A1B2C3 ready",
-		Fields: []chatField{f("ref", "Which order? Send its number, like TK-A1B2C3.", "ref"), choice("to", "Ready, or delivered?", "ready", "delivered")},
+		Fields: []chatField{f("ref", "Which order?", "order"), choice("to", "Ready, or delivered?", "ready", "delivered")},
 		Make: fill("order {ref} {to}"), may: both(permIn(PermOrders, areas.Storefront), ordersOn)},
 	{ID: "orders.refund", Topic: "orders", Title: "Refund an order", Line: "Money back to the customer", Icon: "orders", Does: doesChanges, Opens: opensQuestions,
-		Shortcut: "refund TK-A1B2C3", Fields: []chatField{f("ref", "Which order? Send its number, like TK-A1B2C3.", "ref")},
+		Shortcut: "refund TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
 		Make: fill("refund {ref}"), may: both(perm(PermStorefrontManage), ordersOn)},
 
 	// Riders
@@ -248,12 +251,12 @@ var chatActions = []chatAction{
 		Make: fill("add rider {name} {phone}[ {areas}]"), may: both(perm(PermOrders), ridersOn)},
 	{ID: "riders.give", Topic: "riders", Title: "Give an order to a rider", Line: "Pick the order, then the rider", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "order TK-A1B2C3 to Musa",
-		Fields: []chatField{f("ref", "Which order? Send its number, like TK-A1B2C3.", "ref"), f("rider", "Which rider?", "rider")},
+		Fields: []chatField{f("ref", "Which order?", "order"), f("rider", "Which rider?", "rider")},
 		Make: fill("order {ref} to {rider}"), may: both(perm(PermOrders), ridersOn)},
 	{ID: "riders.today", Topic: "riders", Title: "Today's deliveries", Line: "Out, done, and waiting", Icon: "rider", Does: doesShow, Opens: opensShow,
 		Shortcut: "deliveries", may: both(perm(PermOrders), ridersOn)},
 	{ID: "riders.back", Topic: "riders", Title: "Take an order back", Line: "From a rider who can't go", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
-		Shortcut: "release TK-A1B2C3", Fields: []chatField{f("ref", "Which order? Send its number, like TK-A1B2C3.", "ref")},
+		Shortcut: "release TK-A1B2C3", Fields: []chatField{f("ref", "Which order?", "order")},
 		Make: fill("release {ref}"), may: both(perm(PermOrders), ridersOn)},
 	{ID: "riders.auto", Topic: "riders", Title: "Offer every order to riders", Line: "Riders take them as they come", Icon: "rider", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "turn on deliveries", Make: fill("turn on deliveries"), may: both(perm(PermOrders), ridersOn)},
@@ -263,10 +266,10 @@ var chatActions = []chatAction{
 		Shortcut: "bookings", may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
 	{ID: "bookings.move", Topic: "bookings", Title: "Move a booking", Line: "A new day or time", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "move TK-A1B2C3 to Sat 11:00",
-		Fields: []chatField{f("ref", "Which booking? Send its number, like TK-A1B2C3.", "ref"), f("when", "To when? Like Sat 11:00.", "text")},
+		Fields: []chatField{f("ref", "Which booking?", "booking"), f("when", "To when? Like Sat 11:00.", "text")},
 		Make: fill("move {ref} to {when}"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
 	{ID: "bookings.cancel", Topic: "bookings", Title: "Cancel a booking", Line: "The customer is told", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
-		Shortcut: "booking TK-A1B2C3 cancel", Fields: []chatField{f("ref", "Which booking? Send its number, like TK-A1B2C3.", "ref")},
+		Shortcut: "booking TK-A1B2C3 cancel", Fields: []chatField{f("ref", "Which booking?", "booking")},
 		Make: fill("booking {ref} cancel"), may: both(permIn(PermStorefrontManage, areas.Storefront), ordersOn)},
 	{ID: "bookings.off", Topic: "bookings", Title: "Take a day off", Line: "No bookings that day", Icon: "bookings", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "off 25 Dec", Fields: []chatField{f("day", "Which day? Like 25 Dec.", "text")},
@@ -389,6 +392,26 @@ var chatActions = []chatAction{
 		Shortcut: "plan", may: anyone},
 }
 
+// word is a catalogue word in a language: its message ("menu.<id>") where
+// the language's catalogue has it, else the English written here, which is
+// the source (en.json holds the same words for translators; a test keeps
+// them equal).
+func word(l lang.Tag, id, english string) string {
+	if l == "" || l == lang.EN {
+		return english
+	}
+	if t := tr(l, id); t != id && t != "" {
+		return t
+	}
+	return english
+}
+
+// Ids of the catalogue's words.
+func topicWordID(t chatTopic) string            { return "menu.topic." + t.ID }
+func titleWordID(a chatAction) string           { return "menu." + a.ID }
+func lineWordID(a chatAction) string            { return "menu." + a.ID + ".line" }
+func askWordID(a chatAction, f chatField) string { return "menu." + a.ID + ".ask." + f.Key }
+
 // chatActionByID finds an action.
 func chatActionByID(id string) (chatAction, bool) {
 	for _, a := range chatActions {
@@ -485,6 +508,36 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 			}
 		}
 		return out[:min(len(out), 5)]
+	case "order", "booking":
+		// The newest open orders, or the coming week's bookings, as "TK-A1B2C3 · Ada".
+		if s.Orders == nil {
+			return nil
+		}
+		var list []storefront.Order
+		if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+			var err error
+			if fl.Kind == "booking" {
+				from := time.Now().In(storefront.Lagos)
+				list, err = s.Orders.Bookings(ctx, tx, c.tenant.ID, from, from.AddDate(0, 0, 7))
+			} else {
+				list, err = s.Orders.ListOrders(ctx, tx, c.tenant.ID, "open", "order", 5)
+			}
+			return err
+		}); err != nil {
+			return nil
+		}
+		var out []string
+		for _, o := range list {
+			label := strings.ToUpper(o.Reference)
+			if n := strings.Fields(o.Customer.Name); len(n) > 0 {
+				label += refSep + n[0]
+			}
+			out = append(out, label)
+			if len(out) == 5 {
+				break
+			}
+		}
+		return out
 	case "item":
 		if !s.Stock.Ready() {
 			return nil
@@ -530,8 +583,9 @@ type chatTopicOut struct {
 	Actions []chatActionOut `json:"actions"`
 }
 
-func actionOut(a chatAction) chatActionOut {
-	return chatActionOut{ID: a.ID, Title: a.Title, Line: a.Line, Icon: a.Icon, Does: a.Does, Opens: a.Opens, Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page}
+func actionOut(l lang.Tag, a chatAction) chatActionOut {
+	return chatActionOut{ID: a.ID, Title: word(l, titleWordID(a), a.Title), Line: word(l, lineWordID(a), a.Line), Icon: a.Icon, Does: a.Does, Opens: a.Opens,
+		Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page}
 }
 
 // catalogueFor is the person's own catalogue: the topics and actions they
@@ -539,9 +593,9 @@ func actionOut(a chatAction) chatActionOut {
 func (s *Server) actionCatalogue(ctx context.Context, c *chat) []chatTopicOut {
 	out := []chatTopicOut{}
 	for _, t := range s.topicsFor(ctx, c) {
-		to := chatTopicOut{ID: t.ID, Name: t.Name, Icon: t.Icon, Color: t.Color}
+		to := chatTopicOut{ID: t.ID, Name: word(c.lang.Tag, topicWordID(t), t.Name), Icon: t.Icon, Color: t.Color}
 		for _, a := range s.actionsOf(ctx, c, t.ID) {
-			to.Actions = append(to.Actions, actionOut(a))
+			to.Actions = append(to.Actions, actionOut(c.lang.Tag, a))
 		}
 		out = append(out, to)
 	}
@@ -557,5 +611,6 @@ func (s *Server) chatActionsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), p: p, tenant: tenantRef{ID: p.TenantID}}
+	c.lang = s.chooseLang(r.Context(), p.TenantID, c.addr, "")
 	writeJSON(w, http.StatusOK, map[string]any{"topics": s.actionCatalogue(r.Context(), c)})
 }
