@@ -2521,3 +2521,19 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
 .card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
 @media (max-width: 480px) { .pay-check-name { font-size: 24px; } }
+/* Paying from a message (P2): the chip under a message, the likely banks
+   and their answers in the Pay sheet, who a rider's payment goes to. */
+.pay-chip-line { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 1px; }
+.pay-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 100%; padding: 0 12px; border-radius: 999px; border: 0; box-shadow: none; background: var(--tint); color: var(--tint-text); font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.pay-chip svg { width: 15px; height: 15px; flex: none; }
+button.pay-chip:hover { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.pay-chip.paid { color: color-mix(in srgb, var(--ok) 75%, var(--text)); background: color-mix(in srgb, var(--ok) 12%, var(--panel)); }
+.pay-chip.muted { background: var(--panel-2); color: var(--muted); font-weight: 500; }
+.pay-likely .tk-chips { flex-wrap: wrap; padding: 0; overflow: visible; }
+.pay-likely-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
+.pay-answers { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pay-answers button { width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 12px; text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+.pay-answers button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.pay-answer-none { display: block; padding: 8px 12px; border-radius: 12px; background: var(--panel-2); color: var(--muted); font-size: 14px; }
+.pay-likely .pay-warn { margin-top: 8px; }
+.pay-lead { margin: 0 0 4px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }

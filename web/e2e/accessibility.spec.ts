@@ -1339,3 +1339,56 @@ for (const scheme of ["light", "dark"] as const)
       }
       await expect(page.getByTestId("delete-steps-app")).toContainText("Delete your account");
     });
+
+// Pay on a rider (paying people, phase 2): the riders' pay page with a Pay
+// on each rider whose bank account is kept, and the Pay sheet it opens
+// (what for: a delivery), signed in as a new owner. The riders and pay
+// APIs are stood in for: the e2e server sends no rider messages.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Pay on a rider passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Rider Pay ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@riderpay.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const rider = "0192e2e0-0000-7000-8000-00000000e001";
+      await page.route("**/v1/riders/owed", (q) => q.fulfill(fulfil({ owed: [] })));
+      await page.route("**/v1/riders/pay", (q) =>
+        q.fulfill(fulfil({ workflow_id: null, payouts: [], lines: [{ rider_id: rider, rider: "Musa Bello", deliveries: 3, fees_kobo: 450_000, owed_kobo: 0, net_kobo: 450_000, bank: "GTBank ••6789" }] })),
+      );
+      let body: unknown;
+      await page.route("**/v1/payments", (q) => {
+        body = q.request().postDataJSON();
+        return q.fulfill(
+          fulfil({
+            payment: {
+              id: "0192e2e0-0000-7000-8000-00000000e002", saved_id: null, personal: false, payee: "Musa Bello", bank_name: "Guaranty Trust Bank", account: "••6789",
+              account_name: "MUSA BELLO", amount_kobo: 450_000, purpose: "delivery", purpose_note: "", note: "", first_payment: false, changed_account: false, needs_ok: "",
+              status: "prepared", reason: null, fee_kobo: null, started_from: "tools", prepared_by: "user:ada", confirmed_by: null,
+              created_at: new Date().toISOString(), confirmed_at: null, finished_at: null, again: false,
+            },
+          }),
+        );
+      });
+      await page.goto("/storefront/riders/pay");
+      const row = page.getByTestId("rider-due").filter({ hasText: "Musa Bello" });
+      await expect(row).toContainText("GTBank ••6789");
+      let vs = await axe(page);
+      expect(vs, describe("/storefront/riders/pay with Pay", vs)).toEqual([]);
+      await row.getByRole("button", { name: "Pay Musa Bello" }).click();
+      const sheet = page.getByTestId("pay-sheet");
+      await expect(sheet.getByTestId("pay-rider-lead")).toContainText("GTBank ••6789");
+      await expect(sheet.getByLabel("How much? in naira")).toHaveValue("4,500");
+      await expect(sheet.getByRole("group", { name: "What is it for?" }).getByRole("button", { name: "a delivery" })).toHaveAttribute("aria-pressed", "true");
+      vs = await axe(page);
+      expect(vs, describe("the Pay sheet for a rider", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await sheet.getByTestId("pay-prepare").click();
+      await expect(sheet.getByTestId("pay-name")).toHaveText("MUSA BELLO");
+      expect(body).toEqual({ from: "tools", rider_id: rider, amount_kobo: 450_000, purpose: "delivery" });
+    });

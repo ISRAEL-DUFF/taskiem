@@ -30,6 +30,7 @@ import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
+import { PayChip, PayFromMessages } from "./PayChip";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -552,6 +553,7 @@ export function CustomerPane({
 
   const owes = owesWords(c?.owes_kobo, c?.open_invoices, naira);
   return (
+    <PayFromMessages>
     <section
       className="chat-pane"
       aria-label={`Conversation with ${c ? customerTitle(c) : "a customer"}`}
@@ -775,6 +777,7 @@ export function CustomerPane({
                 {markLines && !m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
               </span>
             )}
+            {!m.mine && !m.local && !m.card && m.kind === "text" && <PayChip text={m.body} />}
             {m.mine && m.delivery === "failed" && (
               <span className="customer-failed" role="status">
                 Not delivered{m.failure ? `: ${m.failure}` : "."}
@@ -922,6 +925,7 @@ export function CustomerPane({
         />
       )}
     </section>
+    </PayFromMessages>
   );
 }
 

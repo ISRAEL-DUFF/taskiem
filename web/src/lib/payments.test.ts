@@ -101,6 +101,14 @@ describe("the body of a payment to prepare", () => {
       purpose: "stock",
     });
   });
+  it("pays a rider by their id, to the account kept for their pay", () => {
+    expect(payBody({ rider: "r1", amount: "2,500", for: "a delivery" }, "tools")).toEqual({
+      from: "tools",
+      rider_id: "r1",
+      amount_kobo: 250_000,
+      purpose: "delivery",
+    });
+  });
   it("keeps the word for other, and a typed reason that is not a choice", () => {
     expect(payBody({ who: "@bayo", amount: "1000", for: "other", for_note: "fuel" }, "chat")).toMatchObject({ purpose: "other", purpose_note: "fuel" });
     expect(payBody({ who: "@bayo", amount: "1000", for: "generator fuel" }, "chat")).toMatchObject({ purpose: "other", purpose_note: "generator fuel" });

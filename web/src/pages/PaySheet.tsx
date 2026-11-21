@@ -8,15 +8,23 @@
 // command, and the payment's own page (/payments/<id>, the link the chat
 // sends) confirms with the same parts.
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, get, post } from "../api";
+import { useAuth } from "../auth";
 import { KitField, Sheet } from "../kit";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
 import { ErrorBox } from "../ui";
 import { naira } from "../lib/invoices";
 import { BANK_SEARCH_FROM, filterBanks, type BankList } from "../lib/saved";
 import {
+  answerWords,
+  nameWarning,
+  type NameAnswer,
+
+} from "../lib/paymessage";
+import {
+  accountDigits,
   outcomeWords,
   payAmountKobo,
   payBody,
@@ -238,28 +246,49 @@ function Sent({ x }: { x: Payment }) {
 }
 
 /** The bank: picked from the banks the business's payments account pays
- * to; typed when that list cannot be read (it then matches by name). */
+ * to; typed when that list cannot be read (it then matches by name). For
+ * an account number with no bank, the banks it could be with come first
+ * (its check digit fits their code; those the business pays most ahead),
+ * the full list one tap away; and "Check the likely banks for me" asks
+ * the bank's name at up to three of them at once, to pick the right one. */
 function BankPicker({
   label,
   value,
   onChange,
+  account = "",
+  expectName,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  /** The account number typed (or read from the message). */
+  account?: string;
+  /** The name the message gave, to compare with the bank's. */
+  expectName?: string;
 }) {
+  const digits = accountDigits(account);
+  const number = /^\d{10}$/.test(digits) ? digits : "";
+  const owner = !!useAuth().me?.roles.includes("owner");
   const [list, setList] = useState<BankList | null>();
   const [search, setSearch] = useState("");
+  const [all, setAll] = useState(false);
+  const [answers, setAnswers] = useState<NameAnswer[]>();
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<unknown>();
   useEffect(() => {
     let live = true;
-    get<BankList>("/v1/payments/banks").then(
+    setAnswers(undefined);
+    setCheckError(undefined);
+    get<BankList>(
+      `/v1/payments/banks${number ? `?account=${number}` : ""}`,
+    ).then(
       (r) => live && setList(r.banks?.length ? r : null),
-      () => live && setList(null),
+      () => live && setList((cur) => (cur === undefined ? null : cur)),
     );
     return () => {
       live = false;
     };
-  }, []);
+  }, [number]);
   // A bank typed in the chat ("gtbank"): the list's first match chosen.
   const matched = useRef(false);
   useEffect(() => {
@@ -270,6 +299,7 @@ function BankPicker({
     setSearch(value);
     if (found[0]) onChange(found[0].name);
   }, [list, value, onChange]);
+  const checkId = useId();
   if (list === null)
     return (
       <KitField label={label} hint="Its name, such as GTBank or Opay.">
@@ -281,10 +311,123 @@ function BankPicker({
         />
       </KitField>
     );
+  const likely = number ? (list?.banks ?? []).filter((b) => b.likely) : [];
+  // Owners only (staff pay saved accounts, whose bank is known).
+  const canCheck = owner && !!list?.from && likely.some((b) => b.code);
+  const check = async () => {
+    setChecking(true);
+    setCheckError(undefined);
+    try {
+      const r = await post<{ banks: NameAnswer[] }>(
+        "/v1/payments/name-check",
+        { account_number: number },
+      );
+      setAnswers(r.banks ?? []);
+    } catch (e) {
+      setCheckError(e);
+    } finally {
+      setChecking(false);
+    }
+  };
+  const picked = answers?.find((a) => a.bank_name === value);
+  const differs = picked?.account_name
+    ? nameWarning(expectName, picked.account_name)
+    : null;
+  const full = all || likely.length === 0 || (!!value && !likely.some((b) => b.name === value));
   const shown = filterBanks(list?.banks ?? [], search);
   return (
     <>
-      {(list?.banks.length ?? 0) > BANK_SEARCH_FROM && (
+      {likely.length > 0 && (
+        <div className="tk-field pay-likely" data-testid="pay-likely">
+          <span className="tk-field-label">{label}</span>
+          <span
+            className="tk-chips tk-form-chips"
+            role="group"
+            aria-label="Banks this number could be with"
+          >
+            {likely.slice(0, 6).map((b) => (
+              <button
+                key={`${b.code}/${b.name}`}
+                type="button"
+                aria-pressed={value === b.name}
+                onClick={() => onChange(b.name)}
+              >
+                {b.name}
+              </button>
+            ))}
+          </span>
+          <span className="tk-field-hint">
+            The banks this number could be with, those you pay most first.
+          </span>
+          <span className="pay-likely-acts">
+            {canCheck && (
+              <button
+                type="button"
+                className="tk-btn soft"
+                onClick={() => void check()}
+                disabled={checking}
+                aria-describedby={checkId}
+                data-testid="pay-check-banks"
+              >
+                {checking ? "Asking the banks…" : "Check the likely banks for me"}
+              </button>
+            )}
+            {!full || all ? (
+              <button
+                type="button"
+                className="link"
+                aria-expanded={all}
+                onClick={() => setAll(!all)}
+                data-testid="pay-all-banks"
+              >
+                {all ? "Fewer banks" : "All banks"}
+              </button>
+            ) : null}
+          </span>
+          {canCheck && (
+            <span id={checkId} className="sr-only">
+              Asks up to three banks for their name on this account. Nothing
+              is paid.
+            </span>
+          )}
+          {answers && (
+            <ul
+              className="pay-answers"
+              aria-label="What the banks say"
+              data-testid="pay-answers"
+            >
+              {answers.map((a) => (
+                <li key={a.bank_code || a.bank_name}>
+                  {a.account_name ? (
+                    <button
+                      type="button"
+                      aria-pressed={value === a.bank_name}
+                      onClick={() => onChange(a.bank_name)}
+                      data-testid="pay-answer"
+                    >
+                      {answerWords(a)}
+                    </button>
+                  ) : (
+                    <span className="pay-answer-none" data-testid="pay-answer-none">
+                      {answerWords(a)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {answers && !picked && answers.some((a) => a.account_name) && (
+            <span className="tk-field-hint">Pick the one that is right.</span>
+          )}
+          {differs && (
+            <div className="pay-warn warn" role="note" data-testid="pay-name-differs">
+              {differs}
+            </div>
+          )}
+          <ErrorBox error={checkError} />
+        </div>
+      )}
+      {full && (list?.banks.length ?? 0) > BANK_SEARCH_FROM && (
         <KitField
           label="Find the bank"
           hint="Part of its name, such as guaranty or kuda."
@@ -298,30 +441,32 @@ function BankPicker({
           />
         </KitField>
       )}
-      <KitField label={label}>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={!list}
-          data-testid="pay-bank"
-        >
-          <option value="">
-            {!list
-              ? "Loading the banks…"
-              : shown.length === 0
-                ? "No bank has that name"
-                : "Choose the bank"}
-          </option>
-          {value && !shown.some((b) => b.name === value) && (
-            <option value={value}>{value}</option>
-          )}
-          {shown.map((b) => (
-            <option key={`${b.code}/${b.name}`} value={b.name}>
-              {b.name}
+      {full && (
+        <KitField label={likely.length > 0 ? "Or choose from all banks" : label}>
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={!list}
+            data-testid="pay-bank"
+          >
+            <option value="">
+              {!list
+                ? "Loading the banks…"
+                : shown.length === 0
+                  ? "No bank has that name"
+                  : "Choose the bank"}
             </option>
-          ))}
-        </select>
-      </KitField>
+            {value && !shown.some((b) => b.name === value) && (
+              <option value={value}>{value}</option>
+            )}
+            {shown.map((b) => (
+              <option key={`${b.code}/${b.name}`} value={b.name}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </KitField>
+      )}
     </>
   );
 }
@@ -334,6 +479,8 @@ export function PayFieldInput({
   offered,
   set,
   shown,
+  account,
+  expectName,
 }: {
   f: PayField;
   value: string;
@@ -341,6 +488,10 @@ export function PayFieldInput({
   set: (v: string) => void;
   /** Problems are said once the person has typed or tried to go on. */
   shown: boolean;
+  /** For the bank: the account number typed, for the likely banks. */
+  account?: string;
+  /** For the bank: the name a message gave, to compare with the bank's. */
+  expectName?: string;
 }) {
   const label = f.optional ? `${f.label} (optional)` : f.label;
   const problem = shown
@@ -399,7 +550,15 @@ export function PayFieldInput({
     );
   switch (f.kind) {
     case "bank":
-      return <BankPicker label={label} value={value} onChange={set} />;
+      return (
+        <BankPicker
+          label={label}
+          value={value}
+          onChange={set}
+          account={account}
+          expectName={expectName}
+        />
+      );
     case "money":
       return (
         <KitField
@@ -487,6 +646,8 @@ export function PaySheet({
   rect,
   onClose,
   onPaid,
+  lead,
+  expectName,
 }: {
   title: string;
   actionId: string;
@@ -498,6 +659,10 @@ export function PaySheet({
   onClose: () => void;
   /** Confirmed: sent, or sent for the owner's OK. */
   onPaid?: (x: Payment) => void;
+  /** Above the fields: who is paid when the form does not ask (a rider). */
+  lead?: ReactNode;
+  /** The name the message gave: said in amber when the bank's differs. */
+  expectName?: string;
 }) {
   const [values, setValues] = useState<Record<string, string>>(initial);
   const [choices, setChoices] = useState<Record<string, string[]>>({});
@@ -592,6 +757,15 @@ export function PaySheet({
       >
         <div className="tk-form-body">
           <PayCheck x={prepared} />
+          {nameWarning(expectName, prepared.account_name) && (
+            <div
+              className="pay-warn warn"
+              role="note"
+              data-testid="pay-name-differs"
+            >
+              {nameWarning(expectName, prepared.account_name)}
+            </div>
+          )}
           {pay.view}
         </div>
         <div className="tk-sheet-foot">
@@ -631,6 +805,7 @@ export function PaySheet({
         }}
       >
         <fieldset className="tk-sheet-list tk-form-body">
+          {lead}
           {fields.map((f) => (
             <PayFieldInput
               key={f.key}
@@ -639,6 +814,8 @@ export function PaySheet({
               offered={f.choices ?? choices[f.key] ?? []}
               set={(v) => set(f.key, v)}
               shown={tried || (values[f.key] ?? "") !== (initial[f.key] ?? "")}
+              account={values.number}
+              expectName={expectName}
             />
           ))}
           {other && (

@@ -248,6 +248,9 @@ export interface SavedList {
 export interface Bank {
   code: string;
   name: string;
+  /** For an account number (GET /v1/payments/banks?account=): its check
+   * digit fits this bank's code, so it could be with this bank. */
+  likely?: boolean;
 }
 
 export interface BankList {

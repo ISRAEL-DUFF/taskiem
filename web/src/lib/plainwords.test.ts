@@ -41,7 +41,9 @@ const OWNER_FILES = [
   "lib/saved.ts",
   "pages/Payments.tsx",
   "pages/PaySheet.tsx",
+  "pages/PayChip.tsx",
   "lib/payments.ts",
+  "lib/paymessage.ts",
   "pages/SavedImport.tsx",
   "lib/savedImport.ts",
   "lib/savedSources.ts",
@@ -195,6 +197,34 @@ describe("an owner never sees technical words", () => {
     it(f, () => {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");
       const bad = shownText(f, src).filter((t) => GLOSSARY.some((g) => g.test(t)));
+      expect(bad).toEqual([]);
+    });
+  }
+});
+
+/** Every string in a file's code (not its comments): a lib file's words
+ * are shown as they are returned. */
+function allStrings(file: string, src: string): string[] {
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const out: string[] = [];
+  const visit = (n: ts.Node) => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) out.push(n.text);
+    if (ts.isJsxText(n) && n.getText().trim()) out.push(n.getText().trim());
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+// Paying people (docs/spec/chat-pay-people.md, Tests and checks): "Pay",
+// "Send money", "Beneficiary", the words bank apps use; never "payout" or
+// "NUBAN" in the Pay sheet, the chip under a message, or their words.
+describe("paying people says Pay, never payout", () => {
+  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts"];
+  for (const f of PAY_FILES) {
+    it(f, () => {
+      const src = readFileSync(resolve(__dirname, "..", f), "utf8");
+      const bad = allStrings(f, src).filter((t) => /\bpayouts?\b|\bNUBAN\b/i.test(t));
       expect(bad).toEqual([]);
     });
   }

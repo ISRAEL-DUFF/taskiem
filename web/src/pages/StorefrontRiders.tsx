@@ -20,6 +20,9 @@ import {
 import { Copy } from "./Forms";
 import { StorefrontTabs } from "./Storefront";
 import { SavedFill } from "./SavedFill";
+import { useAuth } from "../auth";
+import { PaySheet } from "./PaySheet";
+import { RIDER_PAY_FIELDS, riderFill } from "../lib/paymessage";
 
 /** The business's own riders (dispatch D1): who delivers its orders, the
  * areas they cover, where Taskiem reaches them and whether they are free. */
@@ -28,6 +31,10 @@ export function StorefrontRiders() {
   const view = useLoad(() => get<RidersView>(`/v1/riders${retired ? "?retired=true" : ""}`), [retired]);
   const [editing, setEditing] = useState<Rider | "new" | null>(null);
   const act = useAction();
+  // Pay one rider, to the bank account kept for their pay.
+  const { can } = useAuth();
+  const mayPay = can("money.pay");
+  const [paying, setPaying] = useState<{ rider: Rider; from: DOMRect }>();
   const v = view.data;
   // Riders are reached by text message; a Taskiem without them has none.
   const off = view.error instanceof ApiError && view.error.status === 409;
@@ -104,12 +111,23 @@ export function StorefrontRiders() {
                     sub={
                       <span className="sub">
                         {r.phone} · {riderSub(r)}
+                        {r.bank && <span className="block">Paid to {r.bank}</span>}
                       </span>
                     }
                     testid="rider"
                   >
                     {!retired && (
                       <>
+                        {mayPay && r.bank && (
+                          <button
+                            type="button"
+                            className="small"
+                            onClick={(e) => setPaying({ rider: r, from: e.currentTarget.getBoundingClientRect() })}
+                            data-testid="rider-pay"
+                          >
+                            Pay<span className="sr-only"> {r.name}</span>
+                          </button>
+                        )}
                         <button type="button" className="small" onClick={() => setEditing(r)}>
                           Change<span className="sr-only"> {r.name}</span>
                         </button>
@@ -142,6 +160,22 @@ export function StorefrontRiders() {
             )}
           </section>
         </>
+      )}
+      {paying && (
+        <PaySheet
+          title={`Pay ${paying.rider.name}`}
+          actionId="pay.person"
+          fields={RIDER_PAY_FIELDS}
+          initial={riderFill(paying.rider.id, 0)}
+          from="tools"
+          rect={paying.from}
+          lead={
+            <p className="pay-lead" data-testid="pay-rider-lead">
+              To {paying.rider.name}'s bank account, the one kept for their pay: {paying.rider.bank}
+            </p>
+          }
+          onClose={() => setPaying(undefined)}
+        />
       )}
       {editing && v && (
         <RiderModal

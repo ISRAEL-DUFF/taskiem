@@ -6,6 +6,7 @@ import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import { BillTransferLive } from "./PayByTransfer";
+import { PayChip, PayFromMessages } from "./PayChip";
 import {
   useCallback,
   useEffect,
@@ -988,6 +989,7 @@ function Bubble({
               )}
             </span>
           )}
+          {!m.mine && !local && m.body && <PayChip text={m.body} />}
           {refs &&
             docMentions(m.mentions).map((x) => (
               <RefCard
@@ -1870,6 +1872,7 @@ export function ConversationPane({
     newest.add(m.id);
   }
   return (
+    <PayFromMessages>
     <section
       className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
@@ -2141,6 +2144,7 @@ export function ConversationPane({
       {confirmNode}
       {saveAs.node}
     </section>
+    </PayFromMessages>
   );
 }
 

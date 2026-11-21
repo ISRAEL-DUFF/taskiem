@@ -166,15 +166,18 @@ export function payFieldProblem(kind: string, value: string): string | null {
   }
 }
 
-/** A pay form's values as the body of POST /v1/payments: an account
- * number and its bank (pay.account), or a saved account by its @name. */
+/** A pay form's values as the body of POST /v1/payments: a rider (by
+ * id), an account number and its bank (pay.account), or a saved account
+ * by its @name. */
 export function payBody(
   values: Record<string, string>,
   from: string,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { from };
   const number = accountDigits(values.number ?? "");
-  if (number) {
+  // A rider: paid to the bank account kept for their pay.
+  if (values.rider) body.rider_id = values.rider;
+  else if (number) {
     body.account_number = number;
     body.bank_name = (values.bank ?? "").trim();
   } else {

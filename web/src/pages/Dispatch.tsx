@@ -49,6 +49,9 @@ import { StorefrontTabs } from "./Storefront";
 import { SavedFill } from "./SavedFill";
 import { bankCodeFor } from "../lib/saved";
 import { useStepUp, type StepUpProof } from "../stepup";
+import { useAuth } from "../auth";
+import { PaySheet } from "./PaySheet";
+import { RIDER_PAY_FIELDS, riderFill } from "../lib/paymessage";
 
 // Deliveries by the business's riders (dispatch D2 to D5; docs/dispatch.md):
 // an order's delivery on its page, the day's deliveries with how they are
@@ -639,6 +642,11 @@ export function RidersPayPage() {
   const pay = useLoad(() => get<RidersPay>("/v1/riders/pay"), []);
   const [remitting, setRemitting] = useState<Owed | null>(null);
   const [banking, setBanking] = useState<PayLine | null>(null);
+  // Pay one rider now, to the bank account kept for their pay (the Pay
+  // sheet, checked with the bank and confirmed with a passkey).
+  const { can } = useAuth();
+  const mayPay = can("money.pay");
+  const [paying, setPaying] = useState<{ line: PayLine; from: DOMRect }>();
   // A rider's bank account is where their money goes: changing it asks the
   // person to confirm it is them.
   const step = useStepUp();
@@ -773,6 +781,21 @@ export function RidersPayPage() {
                   }
                   testid="rider-due"
                 >
+                  {mayPay && l.bank && (
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={(e) =>
+                        setPaying({
+                          line: l,
+                          from: e.currentTarget.getBoundingClientRect(),
+                        })
+                      }
+                      data-testid="rider-pay"
+                    >
+                      Pay<span className="sr-only"> {l.rider}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="small"
@@ -850,6 +873,24 @@ export function RidersPayPage() {
         />
       )}
       {step.modal}
+      {paying && (
+        <PaySheet
+          title={`Pay ${paying.line.rider}`}
+          actionId="pay.person"
+          fields={RIDER_PAY_FIELDS}
+          initial={riderFill(paying.line.rider_id, paying.line.net_kobo)}
+          from="tools"
+          rect={paying.from}
+          lead={
+            <p className="pay-lead" data-testid="pay-rider-lead">
+              To {paying.line.rider}'s bank account, the one kept for their
+              pay: {paying.line.bank}
+            </p>
+          }
+          onClose={() => setPaying(undefined)}
+          onPaid={reload}
+        />
+      )}
       {setup && (
         <PaySetupModal
           onClose={() => setSetup(false)}
