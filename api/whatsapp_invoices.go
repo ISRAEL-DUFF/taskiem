@@ -436,7 +436,7 @@ func (s *Server) waInvoiceReply(ctx context.Context, c *chat, text, cmd string) 
 	// A customer typed, not saved: offered as @name for next time (saved
 	// objects S3's saving after an action, first for invoices).
 	if !inv.Saved && addr != "" {
-		if offered, err := s.offerSaveCustomer(ctx, c, name, addr, inv.Email, said); offered || err != nil {
+		if offered, err := s.offerSaveCustomer(ctx, c, x.CustomerID(), name, addr, inv.Email, said); offered || err != nil {
 			return err
 		}
 	}

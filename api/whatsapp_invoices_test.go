@@ -88,6 +88,7 @@ func TestWhatsAppInvoice(t *testing.T) {
 	if r := w.say(t, on, "@tolu"); !strings.Contains(r, "Tolu") || !strings.Contains(r, "4321") {
 		t.Errorf("@tolu: %q", r)
 	}
+
 }
 
 // "invoice @acme 250k for …" (saved objects S2): the saved person's name
@@ -145,5 +146,34 @@ func TestWhatsAppInvoiceSaved(t *testing.T) {
 	}
 	if r := w.say(t, on, "tolu@bello.ng"); !strings.Contains(r, "Send Tolu Bello (") {
 		t.Errorf("then confirmed: %q", r)
+	}
+}
+
+// Saving a customer typed by hand (saved objects S3): offered after the
+// first invoice to them; declined, nothing after the second; suggested
+// after the third (suggest, never surprise).
+func TestWhatsAppInvoiceSaveSuggested(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Ada Foods", "ada@suggest.test")
+	const on = "+2348010000039"
+	w.bind(t, owner, on)
+
+	invoice := func(amount string) string {
+		t.Helper()
+		w.say(t, on, "invoice Kemi Ade "+amount)
+		w.say(t, on, "0803 555 0001")
+		return w.say(t, on, "yes")
+	}
+	if r := invoice("5k"); !strings.Contains(r, "Save Kemi Ade as @kemi-ade for next time?") {
+		t.Fatalf("first: %q", r)
+	}
+	w.say(t, on, "no")
+	if r := invoice("6k"); strings.Contains(r, "@kemi-ade") {
+		t.Errorf("second: %q", r)
+	}
+	if r := invoice("7k"); !strings.Contains(r, "You've invoiced Kemi Ade 3 times. Save them as @kemi-ade for next time?") {
+		t.Errorf("third: %q", r)
 	}
 }

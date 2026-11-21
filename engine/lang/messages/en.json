@@ -1784,6 +1784,11 @@
       "reviewed": true,
       "context": "After an invoice to a customer typed by hand: offers to save them as a business's saved person"
     },
+    "wa.saved.suggest": {
+      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "reviewed": true,
+      "context": "After the third invoice to a customer typed by hand: suggests saving them as a saved person"
+    },
     "wa.saved.two": {
       "text": "You have two things called @{name}:",
       "reviewed": true,
