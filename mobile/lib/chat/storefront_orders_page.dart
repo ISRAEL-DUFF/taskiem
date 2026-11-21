@@ -10,7 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show OpenAppCustomerChatRequest;
+import '../api/api.g.dart' show OpenAppCustomerChatRequest, SaveOrderCustomerRequest;
 import '../api/transport.dart';
 import '../app/openers.dart';
 import '../app/auth.dart';
@@ -28,6 +28,7 @@ import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, whe
 import 'bookings_page.dart' show askCancelBooking, canChange, cancelBooking, moveBooking, orderStatus;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'riders_page.dart' show openRiders, openRidersPay;
+import 'save_after.dart' show saveOrAskName, savedNameFor, savedNow;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
 import 'words.dart' show CardTone, Tone, naira;
 import '../kit/look.dart';
@@ -498,8 +499,15 @@ class StorefrontOrderPage extends StatefulWidget {
   State<StorefrontOrderPage> createState() => _StorefrontOrderPageState();
 }
 
+/// The orders whose new customer was saved in this session, by who is
+/// signed in (and their session): the offer does not come back on reopening.
+final _customersSaved = Expando<Set<String>>();
+
 class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling {
   Map<String, dynamic>? _view;
+
+  /// The customer saved from here: the offer turned into "Saved as @name".
+  String? _savedAs;
   String? _error;
   Map<String, dynamic>? _revealed;
   String _changed = '';
@@ -626,6 +634,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       _top(t, o),
       if (_actError != null) TkErrorBox(_actError!),
       _customer(t, c),
+      ?_saveCustomer(c, kind),
       // Made in the Taskiem app: the customer's own conversation with you.
       if (o['in_app'] == true && _auth.can('storefront.manage|order.handle'))
         TkSection(
@@ -663,6 +672,64 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       TkSection(inset: 56, children: details),
       Text(decideWhere, style: tkHint(t)),
     ];
+  }
+
+  String get _savedKey => '${_auth.session}/${widget.reference}';
+
+  /// A new customer's first order (saved objects S3): "Save Ngozi for
+  /// next time", saved with one tap among the business's saved people, for
+  /// whoever may manage them; then "Saved as @ngozi". Never for a repeat
+  /// customer, a linked business's order, or once saved in this session.
+  Widget? _saveCustomer(Map<String, dynamic> shown, String kind) {
+    final look = TkLook.of(context);
+    final saved = _savedAs;
+    if (saved != null) {
+      return TkSection(
+        inset: 56,
+        children: [TkListRow(title: 'Saved as @$saved', sub: 'Among your saved people, for next time', icon: 'b-check', square: look.lime, chevron: false)],
+      );
+    }
+    if (_view?['customer_orders'] != 1 || kind == 'trade' || !_auth.can('saved.manage') || (_customersSaved[_auth]?.contains(_savedKey) ?? false)) return null;
+    final c = _revealed ?? shown;
+    final name = _str(c['name']);
+    if (name.isEmpty) return null;
+    // A masked name ("N•••") gives no name: the server makes it from theirs.
+    final known = !isMasked(name);
+    final at = known ? savedNameFor(name) : '';
+    final title = known ? 'Save $name for next time' : 'Save this customer for next time';
+    return TkSection(
+      inset: 56,
+      children: [
+        TkListRow(
+          title: title,
+          sub: at.isNotEmpty ? 'As @$at, with their phone and address' : 'Among your saved people, with their phone and address',
+          icon: 'b-person',
+          square: look.violet,
+          semanticsLabel: title,
+          onTap: _busy ? null : () => _saveTheCustomer(at),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveTheCustomer(String name) async {
+    setState(() => (_busy = true, _actError = null));
+    try {
+      final x = await saveOrAskName(
+        context,
+        name: name,
+        save: (n) async => (await _auth.api.saveOrderCustomer(reference: widget.reference, body: SaveOrderCustomerRequest(name: n))).saved,
+      );
+      if (x != null && mounted) {
+        (_customersSaved[_auth] ??= {}).add(_savedKey);
+        savedNow();
+        setState(() => _savedAs = x.name);
+        showTkToast(context, 'Saved as @${x.name}');
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+    if (mounted) setState(() => _busy = false);
   }
 
   /// The top card: where the order stands in its stage's colour, its total

@@ -27,6 +27,7 @@ import 'book_sheet.dart' show whenLabel;
 import 'doc_thread.dart' show DocThread;
 import 'product_form.dart' show formKey;
 import 'saved_fill.dart' show SavedButton, pickSavedPhone, pickSavedPlace;
+import 'save_after.dart' show placeTitleFor, saveOrAskName, savePlace, savedNameFor, savedNow;
 import 'purchase_view.dart' show answersDelivery, buyerSteps, sameName;
 import 'statement_page.dart' show openStatement;
 import 'stock_page.dart' show StockPage, feeInput, feeKobo;
@@ -1158,6 +1159,14 @@ class _SuppliersPageState extends State<SuppliersPage> {
   /// A Saved button's list is read and picked from: one picker at a time.
   bool _picking = false;
 
+  /// The address a saved place filled (not typed): no offer to save it.
+  String? _picked;
+
+  /// A typed address just saved as where they deliver (saved objects S3):
+  /// "Save this place for next time?" as @name, once, for whoever may
+  /// manage saved things.
+  ({String address, String phone, String title, String name})? _offer;
+
   Auth get _auth => widget.auth;
 
   @override
@@ -1189,6 +1198,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
       setState(() {
         if (x.address.isNotEmpty) _address.text = x.address;
         if (x.phone.isNotEmpty) _phone.text = x.phone;
+        _picked = _address.text;
       });
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -1234,6 +1244,35 @@ class _SuppliersPageState extends State<SuppliersPage> {
           }
         }(),
     ]);
+  }
+
+  /// The offer for an address saved: one typed (not a saved place's), new
+  /// (not the one there before), for whoever may manage saved things.
+  ({String address, String phone, String title, String name})? _offerFor(String address, String phone, String was) {
+    if (address.isEmpty || address == was || address == _picked?.trim() || !_auth.can('saved.manage')) return null;
+    final title = placeTitleFor(address);
+    final name = savedNameFor(title);
+    if (name.isEmpty) return null;
+    return (address: address, phone: phone, title: title, name: name);
+  }
+
+  Future<void> _savePlace(({String address, String phone, String title, String name}) o) async {
+    setState(() => _busy = true);
+    try {
+      final x = await saveOrAskName(
+        context,
+        name: o.name,
+        save: (n) => savePlace(_auth, name: n ?? o.name, title: o.title, address: o.address, phone: o.phone),
+      );
+      if (x != null && mounted) {
+        savedNow();
+        setState(() => _offer = null);
+        showTkToast(context, 'Saved as @${x.name}');
+      }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+    if (mounted) setState(() => _busy = false);
   }
 
   /// What is owed to a linked supplier is its open bills alone.
@@ -1404,12 +1443,25 @@ class _SuppliersPageState extends State<SuppliersPage> {
                   onPressed: _busy || (_address.text == _str(_deliver!['address']) && _phone.text == _str(_deliver!['phone']))
                       ? null
                       : () => _run(() async {
+                          final was = _str(_deliver!['address']);
                           final body = {'address': _address.text.trim(), 'phone': _phone.text.trim()};
                           await _auth.transport.send('PUT', '/v1/stock/deliver-to', body: body);
-                          if (mounted) setState(() => _deliver = body);
+                          if (mounted) setState(() => (_deliver = body, _offer = _offerFor(body['address']!, body['phone']!, was)));
                         }, 'Saved'),
                 ),
               ),
+              if (_offer case final o?) ...[
+                const SizedBox(height: 12),
+                TkCallout(
+                  leading: TkSquare('b-pin', color: look.violet),
+                  title: 'Save this place for next time?',
+                  sub: 'As @${o.name}, among your saved places',
+                  color: look.violet,
+                  button: 'Save',
+                  semantics: 'Save this place as @${o.name}',
+                  onPressed: _busy ? null : () => _savePlace(o),
+                ),
+              ],
             ],
           ),
       ],

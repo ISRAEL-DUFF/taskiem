@@ -1573,6 +1573,12 @@ class TaskiemApi {
     return SavedImport.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Save an order's customer as a saved person (`POST /v1/storefront/orders/{reference}/save-customer`)
+  Future<SaveOrderCustomerResponse> saveOrderCustomer({required SaveOrderCustomerRequest body, required String reference}) async {
+    final j = await _t.send('POST', '/v1/storefront/orders/${Uri.encodeComponent(reference)}/save-customer', body: body.toJson());
+    return SaveOrderCustomerResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The banks by name (`GET /v1/me/banks`)
   Future<ListMyBanksResponse> listMyBanks() async {
     final j = await _t.send('GET', '/v1/me/banks');
@@ -13395,6 +13401,34 @@ class SavedImportRowsItem {
         'line': line,
         'name': name,
         'title': title,
+      };
+}
+
+class SaveOrderCustomerRequest {
+  const SaveOrderCustomerRequest({this.name});
+
+  final String? name;
+
+  factory SaveOrderCustomerRequest.fromJson(Map<String, dynamic> j) => SaveOrderCustomerRequest(
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': ?name,
+      };
+}
+
+class SaveOrderCustomerResponse {
+  const SaveOrderCustomerResponse({required this.saved});
+
+  final SavedObject saved;
+
+  factory SaveOrderCustomerResponse.fromJson(Map<String, dynamic> j) => SaveOrderCustomerResponse(
+        saved: SavedObject.fromJson(j['saved'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'saved': saved.toJson(),
       };
 }
 

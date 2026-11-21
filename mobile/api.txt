@@ -337,4 +337,5 @@ addSavedKind
 changeSavedKind
 removeSavedKind
 importSaved
+saveOrderCustomer
 listMyBanks

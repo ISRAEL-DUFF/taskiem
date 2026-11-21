@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/purchases_page.dart';
 import 'package:taskiem/kit/page.dart';
@@ -96,7 +97,10 @@ void main() {
     bool savedFails = false,
     SavedStub? stub,
     bool deliverToFails = false,
+    List<String>? perms,
+    List<int> placeAnswers = const [201],
   }) async {
+    var placeAsked = 0;
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -108,6 +112,18 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          if (req.method == 'POST' && p == '/v1/saved') {
+            sent.add('${req.method} $p ${req.body}');
+            final status = placeAnswers[placeAsked < placeAnswers.length ? placeAsked : placeAnswers.length - 1];
+            placeAsked++;
+            if (status == 409) return http.Response(jsonEncode({'error': 'That name is taken: choose another.', 'name_taken': true}), 409, headers: {'content-type': 'application/json'});
+            final b = jsonDecode(req.body) as Map<String, dynamic>;
+            return http.Response(
+              jsonEncode({'saved': savedThing('B9', 'business', 'place', b['name'] as String, b['title'] as String, '', (b['details'] as Map).cast<String, dynamic>())}),
+              201,
+              headers: {'content-type': 'application/json'},
+            );
+          }
           if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             return switch (p) {
@@ -165,6 +181,7 @@ void main() {
       ),
       now: () => f.at,
     );
+    if (perms != null) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'permissions': perms});
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: home(chats)));
     await settle(t);
     return sent;
@@ -507,6 +524,75 @@ void main() {
       drive: settle,
     );
   });
+
+  // After a delivery to a new address (saved objects S3): the place typed
+  // is offered to save, once; a saved place picked is not.
+  const savedPerms = ['order.handle', 'storefront.manage', 'saved.manage'];
+  Finder field(String label) => find.descendant(of: find.bySemanticsLabel(RegExp('^$label')), matching: find.byType(EditableText));
+
+  testWidgets('where linked suppliers deliver: a typed address saved, then offered as a place, and saved', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms);
+    await t.enterText(field('Address'), '12 Admiralty Way, Lekki');
+    await t.enterText(field('Number the rider calls'), '+2348031120099');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/stock/deliver-to {"address":"12 Admiralty Way, Lekki","phone":"+2348031120099"}');
+    expect(find.text('Save this place for next time?'), findsOneWidget);
+    expect(find.text('As @12-admiralty-way, among your saved places'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.bySemanticsLabel('Save this place as @12-admiralty-way'));
+    await settle(t);
+    expect(
+      sent.last,
+      'POST /v1/saved {"details":{"line":"12 Admiralty Way, Lekki","phone":"+2348031120099"},"kind":"place","name":"12-admiralty-way","title":"12 Admiralty Way"}',
+    );
+    expect(find.text('Saved as @12-admiralty-way'), findsOneWidget);
+    expect(find.text('Save this place for next time?'), findsNothing, reason: 'offered once');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: the place’s name taken, another asked for', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms, placeAnswers: [409, 201]);
+    await t.enterText(field('Address'), 'Shop 4, Ikota Market');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.bySemanticsLabel('Save this place as @shop-4'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('@shop-4 is taken'), findsOneWidget);
+    await t.enterText(field('Name to call it up by'), '@ikota-shop');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save').last);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'POST /v1/saved {"details":{"line":"Shop 4, Ikota Market"},"kind":"place","name":"ikota-shop","title":"Shop 4"}');
+    expect(find.text('Saved as @ikota-shop'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: a saved place picked is not offered; nor to one who may not manage saved things', (t) async {
+    final stub = SavedStub(business: [savedThing('B1', 'business', 'place', 'warehouse', 'Warehouse', 'Lekki', {'line': '12 Admiralty Way', 'area': 'Lekki'})]);
+    await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms, stub: stub);
+    await t.tap(find.bySemanticsLabel('Pick from your saved places'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Warehouse'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    expect(find.textContaining('Save this place'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+    await open(t, (c) => SuppliersPage(auth: c.auth));
+    await t.enterText(field('Address'), '12 Admiralty Way, Lekki');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    expect(find.textContaining('Save this place'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+  });
+
 }
 
 Future<void> settle(WidgetTester t) async {
