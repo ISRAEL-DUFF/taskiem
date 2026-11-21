@@ -111,7 +111,7 @@ The question appears where the buyer is now asked which of its items a line is.
 
 ## 7. Data
 
-Migration numbers start at 00491.
+Migration numbers start at 00501.
 
 - **Purchase lines** gain:
   - `treatment` (`record` | `stock` | `track`);
