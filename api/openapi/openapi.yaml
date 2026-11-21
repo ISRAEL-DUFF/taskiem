@@ -6514,6 +6514,45 @@ paths:
                 $ref: '#/components/schemas/PayLimit'
         default:
           $ref: '#/components/responses/Error'
+  /v1/payments/banks:
+    get:
+      operationId: listPayBanks
+      tags:
+      - Payments
+      summary: The banks to pay an account number at
+      description: 'The list `/v1/banks` gives, for those who may pay (money.pay) but not manage saved things. The business''s payments connection''s own list, each bank with its code (`from`: the connection); without a connection, or when it does not answer, the banks by name alone (`from: ""`), found by name in a connection''s list when the account is checked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The banks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [banks, from]
+                properties:
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [code, name]
+                      properties:
+                        code:
+                          type: string
+                          description: The bank's code in this list; empty in the list by name alone.
+                        name:
+                          type: string
+                  from:
+                    type: string
+                    description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills:
     get:
       operationId: listBills

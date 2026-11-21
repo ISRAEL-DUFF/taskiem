@@ -245,7 +245,7 @@ test("the chat's Pay topic opens the Pay sheet, filled, and sends no words", asy
       }],
     });
   });
-  await page.route("**/v1/banks", (r) => json(r, 200, { from: "paystack", banks: [{ code: "058", name: "Guaranty Trust Bank" }, { code: "999992", name: "OPay Digital Services" }] }));
+  await page.route("**/v1/payments/banks", (r) => json(r, 200, { from: "paystack", banks: [{ code: "058", name: "Guaranty Trust Bank" }, { code: "999992", name: "OPay Digital Services" }] }));
   await page.goto("/chat?with=taskiem");
   await page.getByTestId("taskiem-pane").locator("#taskiem-text").fill("send 45k to 0123456789 opay");
   await page.getByTestId("taskiem-pane").locator("#taskiem-text").press("Enter");

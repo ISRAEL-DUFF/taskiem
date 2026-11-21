@@ -205,7 +205,7 @@ function BankPicker({ label, value, onChange }: { label: string; value: string; 
   const [search, setSearch] = useState("");
   useEffect(() => {
     let live = true;
-    get<BankList>("/v1/banks").then(
+    get<BankList>("/v1/payments/banks").then(
       (r) => live && setList(r.banks?.length ? r : null),
       () => live && setList(null),
     );

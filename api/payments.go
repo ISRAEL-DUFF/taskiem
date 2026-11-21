@@ -55,6 +55,9 @@ var paymentPurposes = []string{"bill", "wages", "delivery", "refund", "stock", "
 func (s *Server) paymentRoutes(r chi.Router) {
 	pay := s.need(PermMoneyPay)
 	r.With(pay).Get("/payments", s.listPayments)
+	// The banks to pay to, for those who may pay but not manage saved
+	// things: the list the Saved page offers.
+	r.With(pay).Get("/payments/banks", s.listSavedBanks)
 	r.With(pay, s.tenantWide).Post("/payments", s.createPayment)
 	r.With(pay).Get("/payments/{id}", s.getPayment)
 	r.With(pay, s.tenantWide).Post("/payments/{id}/confirm", s.confirmPayment)
@@ -381,12 +384,13 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 // paidAgainTx says whether the same amount went (or is going) to the same
 // payee in the last day.
 func paidAgainTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x payment) (bool, error) {
-	if x.SavedID == nil {
-		return false, nil
-	}
+	// The same payee: a saved account by its id; an account number not
+	// saved by its bank and last four digits (its number is sealed).
 	var again bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM payments WHERE tenant_id = $1 AND saved_id = $2 AND amount_kobo = $3 AND id <> $4
-		AND status IN ('sending', 'waiting_ok', 'paid', 'unknown') AND created_at > now() - interval '1 day')`, tenant, *x.SavedID, x.AmountKobo, x.ID).Scan(&again)
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM payments p WHERE p.tenant_id = $1 AND p.amount_kobo = $3 AND p.id <> $4
+		AND p.status IN ('sending', 'waiting_ok', 'paid', 'unknown') AND p.created_at > now() - interval '1 day'
+		AND CASE WHEN $2::uuid IS NOT NULL THEN p.saved_id = $2 ELSE p.saved_id IS NULL AND NOT p.personal AND p.bank_code = $5 AND p.last4 = $6 END)`,
+		tenant, x.SavedID, x.AmountKobo, x.ID, x.bankCode, strings.TrimPrefix(x.Account, "••")).Scan(&again)
 	return again, err
 }
 
