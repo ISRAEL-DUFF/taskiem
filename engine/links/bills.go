@@ -108,9 +108,10 @@ type Mirror struct {
 	// The way to pay: the account the seller issued the buyer, and the
 	// invoice's page.
 	PayAccountNumber, PayBankName, PayLink string
-	// PayByTransfer: the seller's provider gives one-time account numbers;
+	// PayByTransfer: the seller's provider gives one-time account numbers
+	// (nil: not known just now);
 	// Transfer the newest the invoice has (nil: none yet).
-	PayByTransfer bool
+	PayByTransfer *bool // nil: not known just now (kept as it was)
 	Transfer      *BillTransfer
 }
 
@@ -137,11 +138,11 @@ func MirrorBillTx(ctx context.Context, tx pgx.Tx, buyer uuid.UUID, m Mirror) (bo
 	var inserted bool
 	err := tx.QueryRow(ctx, `INSERT INTO bills (id, tenant_id, link_id, supplier_tenant, supplier_name, source_id, reference, lines, amount_kobo, paid_kobo,
 			due_on, voided, allow_part_payments, pay_account_number, pay_bank_name, pay_link, pay_by_transfer, transfer)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, $17, $18)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13, $14, $15, $16, COALESCE($17, false), $18)
 		ON CONFLICT (tenant_id, link_id, source_id) DO UPDATE SET supplier_name = EXCLUDED.supplier_name, reference = EXCLUDED.reference,
 			lines = EXCLUDED.lines, amount_kobo = EXCLUDED.amount_kobo, paid_kobo = EXCLUDED.paid_kobo, due_on = EXCLUDED.due_on,
 			voided = EXCLUDED.voided, allow_part_payments = EXCLUDED.allow_part_payments, pay_account_number = EXCLUDED.pay_account_number,
-			pay_bank_name = EXCLUDED.pay_bank_name, pay_link = EXCLUDED.pay_link, pay_by_transfer = EXCLUDED.pay_by_transfer,
+			pay_bank_name = EXCLUDED.pay_bank_name, pay_link = EXCLUDED.pay_link, pay_by_transfer = COALESCE($17, bills.pay_by_transfer),
 			transfer = COALESCE(EXCLUDED.transfer, bills.transfer), mirrored_at = now()
 		RETURNING xmax = 0`,
 		uuid.Must(uuid.NewV7()), buyer, m.Link, m.Supplier, m.SupplierName, m.Source, m.Reference, m.Lines, m.AmountKobo, m.PaidKobo,

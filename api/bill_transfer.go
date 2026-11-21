@@ -29,6 +29,9 @@ import (
 // bill's payments do. One number is open for a bill at a time; a new one
 // once it has expired, or for what is left after a part payment.
 
+// askingFor is how long a bill waits for the seller's side to answer.
+const askingFor = 3 * time.Minute
+
 // billTransferView is a bill's account number as the buyer sees it.
 type billTransferView struct {
 	// State: asking, open, paid, part (less than the number's amount
@@ -56,13 +59,19 @@ type billWithWays struct {
 // transferOf is the bill's account number in its state at now; nil when
 // none was asked for.
 func transferOf(b links.Bill, now time.Time) *billTransferView {
+	if b.Status == "void" {
+		return nil
+	}
 	t := b.Transfer
-	asked := b.TransferAskedAt != nil && (t == nil || b.TransferAskedAt.After(t.CreatedAt))
+	// Asked and not answered yet (the answer clears it); an answer that
+	// never came is given up on after a few minutes.
 	switch {
-	case asked && b.TransferProblem != "":
+	case b.TransferProblem != "":
 		return &billTransferView{State: "failed", Problem: b.TransferProblem}
-	case asked:
+	case b.TransferAskedAt != nil && b.TransferAskedAt.After(now.Add(-askingFor)):
 		return &billTransferView{State: "asking"}
+	case b.TransferAskedAt != nil && (t == nil || t.CreatedAt.Before(*b.TransferAskedAt)):
+		return &billTransferView{State: "failed", Problem: "Their bank did not answer. Try again, or pay another way."}
 	case t == nil:
 		return nil
 	}
@@ -172,7 +181,11 @@ func (s *Server) askTransferTx(ctx context.Context, tx pgx.Tx, p *Principal, ref
 	if err != nil {
 		return out, false, err
 	}
+	// Locked, then read again: two asks at once put one request.
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM bills WHERE id = $1 FOR UPDATE`, b.ID); err != nil {
+		return out, false, err
+	}
+	if b, err = links.GetBillTx(ctx, tx, b.ID.String()); err != nil {
 		return out, false, err
 	}
 	switch {
@@ -180,6 +193,8 @@ func (s *Server) askTransferTx(ctx context.Context, tx pgx.Tx, p *Principal, ref
 		return out, false, refusePay(http.StatusConflict, "nothing_due", "Nothing is left to pay on this bill.")
 	case b.Disputed:
 		return out, false, refusePay(http.StatusConflict, "disputed", "This bill is queried: pay once the query is settled.")
+	case b.PayingKobo > 0 || b.UncountedKobo > 0:
+		return out, false, refusePay(http.StatusConflict, "paying", "A payment from Taskiem to "+b.SupplierName+" is under way: wait until they have counted it.")
 	case !b.PayByTransfer:
 		return out, false, refusePay(http.StatusConflict, "no_transfer", b.SupplierName+" can't give an account number for one payment: pay on their checkout or from Taskiem.")
 	}
@@ -187,7 +202,7 @@ func (s *Server) askTransferTx(ctx context.Context, tx pgx.Tx, p *Principal, ref
 	if t := transferOf(b, now); t != nil && !longer {
 		// One number at a time: the open one again, or the one coming.
 		open := t.State == "open" && t.AmountKobo == b.DueKobo && t.ExpiresAt != nil && t.ExpiresAt.After(now.Add(time.Minute))
-		coming := t.State == "asking" && b.TransferAskedAt != nil && b.TransferAskedAt.After(now.Add(-2*time.Minute))
+		coming := t.State == "asking"
 		if open || coming {
 			out, err = s.billView(ctx, tx, p, b)
 			return out, coming, err
@@ -266,40 +281,57 @@ func (s *Server) billTransferAnswered(ctx context.Context, q invoicing.Request, 
 	if err1 != nil || err2 != nil || err3 != nil {
 		return nil //nolint:nilerr // not a bill's request: nothing to answer
 	}
-	if issueErr == nil && a.Status != "failed" {
+	tell, _ := uuid.Parse(str(q.ReplyTo["tell"]))
+	ok := issueErr == nil && a.Status != "failed" && a.Status != "unavailable"
+	problem := ""
+	if !ok {
+		problem = "Their bank did not give a number just now. Try again, or pay another way."
+		switch {
+		case errors.Is(issueErr, invoicing.ErrLimit):
+			problem = "Too many numbers asked for this bill. Try again in an hour, or pay on their checkout."
+		case errors.Is(issueErr, invoicing.ErrNoRail):
+			problem = "They can't give an account number just now: pay on their checkout or from Taskiem."
+		case errors.Is(issueErr, invoicing.ErrState):
+			problem = "Nothing is left to pay on this bill."
+		}
+	}
+	var ref string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT number FROM customer_invoices WHERE id = $1`, q.Invoice).Scan(&ref)
+	}); err != nil {
+		return err
+	}
+	if ok {
+		// The number reaches the bill with the mirror.
 		if _, err := s.mirrorInvoice(ctx, q.Tenant, q.Invoice); err != nil {
 			return err
 		}
-		var ref string
-		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT number FROM customer_invoices WHERE id = $1`, q.Invoice).Scan(&ref)
-		}); err != nil {
+	}
+	// The ask is answered: the bill stops waiting, with why when no number
+	// came.
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
+		if _, err := links.EnterTx(ctx, tx, link, "link.bill.transfer_answered", nil, links.Actor{Type: "system", ID: "invoices"}); err != nil {
 			return err
 		}
-		amount := a.AmountKobo
-		s.billCards(ctx, link, q.Tenant, buyer, ref, "transfer", false, &amount, "")
-		if who, err := uuid.Parse(str(q.ReplyTo["tell"])); err == nil && a.AccountNumber != "" {
-			s.tellAbout(ctx, buyer, []uuid.UUID{who}, "bill:"+bill.String(), "Pay "+ref+" by transfer",
-				transferWords(lang.EN, ref, a.AmountKobo, a.BankName, a.AccountNumber, a.AccountName, a.ExpiresAt), nil, nil)
+		_, err := tx.Exec(ctx, `UPDATE bills SET transfer_asked_at = NULL, transfer_problem = NULLIF($3, '') WHERE tenant_id = $1 AND id = $2`, buyer, bill, problem)
+		return err
+	}); err != nil {
+		// The link ended, or the buyer turned Money off: nothing is said.
+		return err
+	}
+	if !ok {
+		if tell != uuid.Nil {
+			s.tellAbout(ctx, buyer, []uuid.UUID{tell}, "bill:"+bill.String(), "Pay "+ref+" by transfer", problem, nil, nil)
 		}
 		return nil
 	}
-	words := "Their bank did not give a number just now. Try again, or pay another way."
-	switch {
-	case errors.Is(issueErr, invoicing.ErrLimit):
-		words = "Too many numbers asked for this bill. Try again in an hour, or pay on their checkout."
-	case errors.Is(issueErr, invoicing.ErrNoRail):
-		words = "They can't give an account number just now: pay on their checkout or from Taskiem."
-	case errors.Is(issueErr, invoicing.ErrState):
-		words = "Nothing is left to pay on this bill."
+	amount := a.AmountKobo
+	s.billCards(ctx, link, q.Tenant, buyer, ref, "transfer", false, &amount, "")
+	if tell != uuid.Nil && a.AccountNumber != "" {
+		s.tellAbout(ctx, buyer, []uuid.UUID{tell}, "bill:"+bill.String(), "Pay "+ref+" by transfer",
+			transferWords(lang.EN, ref, a.AmountKobo, a.BankName, a.AccountNumber, a.AccountName, a.ExpiresAt), nil, nil)
 	}
-	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{q.Tenant}, func(tx pgx.Tx) error {
-		if _, err := links.EnterTx(ctx, tx, link, "link.bill.transfer_failed", nil, links.Actor{Type: "system", ID: "invoices"}); err != nil {
-			return err
-		}
-		_, err := tx.Exec(ctx, `UPDATE bills SET transfer_problem = $3 WHERE tenant_id = $1 AND id = $2`, buyer, bill, words)
-		return err
-	})
+	return nil
 }
 
 func str(v any) string { s, _ := v.(string); return s }

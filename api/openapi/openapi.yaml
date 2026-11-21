@@ -6680,7 +6680,7 @@ paths:
       tags:
       - Links
       summary: An account number to pay a bill by transfer
-      description: 'Pay by transfer, in the chat (the payments flow, part 1): the bill''s open account number (200), or one asked of the supplier (202, `transfer.state` asking), issued by the supplier''s payments provider for what is due on their invoice and good for 60 minutes (`longer`: the longest the provider gives). One number is open for a bill at a time: asking again gives the same one, a new one only once it has expired or for what is left after a part payment. The number arrives on the bill within seconds (GET this path). 409 `nothing_due`, `disputed` (a queried bill waits for the query to be settled) or `no_transfer` (the supplier''s provider gives no such numbers); 429 `too_many`.'
+      description: 'Pay by transfer, in the chat (the payments flow, part 1): the bill''s open account number (200), or one asked of the supplier (202, `transfer.state` asking), issued by the supplier''s payments provider for what is due on their invoice and good for 60 minutes (`longer`: the longest the provider gives). One number is open for a bill at a time: asking again gives the same one, a new one only once it has expired or for what is left after a part payment. The number arrives on the bill within seconds (GET this path). 409 `nothing_due`, `disputed` (a queried bill waits for the query to be settled), `paying` (a payment from Taskiem is under way or not counted yet) or `no_transfer` (the supplier''s provider gives no such numbers); 429 `too_many`.'
       security:
       - sessionCookie: []
         csrfHeader: []

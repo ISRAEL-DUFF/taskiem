@@ -57,6 +57,10 @@ func (s *Server) customerInvoiceTx(ctx context.Context, tx pgx.Tx, c personChat,
 // customerTransferOf is the invoice's newest account number, in its state.
 func customerTransferOf(ctx context.Context, tx pgx.Tx, x invoicing.Invoice) (customerTransfer, error) {
 	out := customerTransfer{Invoice: x.ID.String(), Reference: x.Number, DueKobo: x.DueKobo, State: "none"}
+	if x.Status != "paid" && !x.Payable() {
+		// Voided or cancelled: no number to pay into.
+		return out, nil
+	}
 	all, err := invoicing.Accounts(ctx, tx, x.ID)
 	if err != nil {
 		return out, err

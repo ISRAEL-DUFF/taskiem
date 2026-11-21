@@ -405,9 +405,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		}
 		// Paying by transfer: whether the seller's provider gives a number
 		// for one payment, and the newest the invoice has.
+		// (A connection that could not be read just now keeps what the bill
+		// had.)
 		if s.Invoices.Rails != nil {
 			if rl, err := s.Invoices.Rails.Resolve(ctx, seller, x.Connection); err == nil {
-				bill.PayByTransfer = rl.Transfer != nil
+				on := rl.Transfer != nil
+				bill.PayByTransfer = &on
 			}
 		}
 		all, err := invoicing.Accounts(ctx, tx, x.ID)
@@ -415,7 +418,9 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 			return err
 		}
 		for _, a := range all {
-			if a.Kind == "transfer" {
+			// The newest number given (a failed ask on the seller's own page
+			// is not the buyer's to see).
+			if a.Kind == "transfer" && a.AccountNumber != "" && (a.Status == "open" || a.Status == "paid") {
 				bill.Transfer = &links.BillTransfer{Seq: a.Seq, BankName: a.BankName, AccountNumber: a.AccountNumber, AccountName: a.AccountName,
 					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, CreatedAt: a.CreatedAt}
 				break

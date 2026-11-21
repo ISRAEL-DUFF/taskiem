@@ -152,7 +152,8 @@ func (s *Invoices) IssueFor(ctx context.Context, tenant, invoice uuid.UUID, kind
 			if o.Kind != kind {
 				continue
 			}
-			if o.AmountKobo == amount && (o.Open(now) || o.Status == "requested" && o.CreatedAt.After(now.Add(-time.Minute))) {
+			// The open one again; "I need longer" (the longest) asks a new one.
+			if o.AmountKobo == amount && minutes != LongestMinutes && (o.Open(now) || o.Status == "requested" && o.CreatedAt.After(now.Add(-time.Minute))) {
 				a = o
 				return nil
 			}

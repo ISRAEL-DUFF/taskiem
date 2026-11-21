@@ -80,6 +80,12 @@ func TestBillByTransfer(t *testing.T) {
 	if got := buyer.must(200, "POST", "/v1/bills/"+id+"/transfer", map[string]any{})["transfer"].(map[string]any); got["account_number"] != "9900112233" || rails.calls != 1 {
 		t.Fatalf("again: %v (%d)", got, rails.calls)
 	}
+	// I need longer: a new number, and the bill shows it (not "asking").
+	buyer.must(202, "POST", "/v1/bills/"+id+"/transfer", map[string]any{"longer": true})
+	drain()
+	if got := buyer.must(200, "GET", "/v1/bills/"+id+"/transfer", nil)["transfer"].(map[string]any); got["state"] != "open" || rails.calls != 2 {
+		t.Fatalf("longer: %v (%d)", got, rails.calls)
+	}
 	// Those who may not pay bills see no number.
 	if got := viewer.must(200, "GET", "/v1/bills/"+id, nil); got["transfer"] != nil {
 		t.Errorf("a viewer saw the number: %v", got["transfer"])
@@ -96,8 +102,8 @@ func TestBillByTransfer(t *testing.T) {
 	}
 	buyer.must(202, "POST", "/v1/bills/"+id+"/transfer", map[string]any{"longer": true})
 	drain()
-	if rails.calls != 2 {
-		t.Fatalf("a new number: %d", rails.calls)
+	if got := buyer.must(200, "GET", "/v1/bills/"+id+"/transfer", nil)["transfer"].(map[string]any); got["state"] != "open" || rails.calls != 3 {
+		t.Fatalf("a new number: %v (%d)", got, rails.calls)
 	}
 
 	// Paid: the bill says so, and offers the next one.
@@ -153,5 +159,12 @@ func TestBillByTransfer(t *testing.T) {
 	}
 	if r := w.say(t, buyerOn, "pay INV-9999"); !strings.Contains(r, "No bill INV-9999") {
 		t.Errorf("no such bill: %q", r)
+	}
+
+	// Voided by the seller: no number shown.
+	seller.must(200, "POST", "/v1/invoices/"+fourth["id"].(string)+"/void", map[string]any{"reason": "Wrong price"})
+	tick()
+	if got := billOf(fourth); got["transfer"] != nil || len(got["ways_to_pay"].([]any)) != 0 {
+		t.Fatalf("voided: %v %v", got["transfer"], got["ways_to_pay"])
 	}
 }
