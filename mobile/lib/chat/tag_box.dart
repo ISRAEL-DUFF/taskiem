@@ -252,7 +252,8 @@ class TagBox {
   TagGroup _chipGroup(TagQuery q, String k) {
     final served = _served;
     final all = served != null ? served.list : suggest(_local(k, sources()), q.query, limit: null);
-    return (label: tagChipLabels[k] ?? '', items: all.take(6 * (_more + 1)).toList());
+    // Headed as "/invoice" heads it ("Invoices and bills", "Bills").
+    return (label: refLabel[_narrow ?? k] ?? tagChipLabels[k] ?? '', items: all.take(6 * (_more + 1)).toList());
   }
 
   /// Whether the chip has more than it shows.

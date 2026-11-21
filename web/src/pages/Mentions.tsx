@@ -191,7 +191,13 @@ export function useMentions(
   };
   const groups: SuggestionGroup[] =
     chips.length > 0 && chip !== "all"
-      ? [{ label: CHIPS[chip], items: chipAll.slice(0, 6 * (more + 1)) }]
+      ? [
+          {
+            // Headed as "/invoice" heads it ("Invoices and bills", "Bills").
+            label: (REF_LABEL as Partial<Record<string, string>>)[narrow ?? chip] ?? CHIPS[chip],
+            items: chipAll.slice(0, 6 * (more + 1)),
+          },
+        ]
       :
     q && grouped && q.mark === "@"
       ? groupSuggestions(

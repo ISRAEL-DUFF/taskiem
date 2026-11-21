@@ -253,6 +253,7 @@ void main() {
     expect(find.text('INVOICES AND BILLS'), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp(r'^INV-0001, ')));
     await t.pumpAndSettle();
+    // The message box (the picker's search box was another, now gone).
     expect(t.widget<EditableText>(find.byType(EditableText)).controller.text, 'Paid #INV-0001 ');
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
