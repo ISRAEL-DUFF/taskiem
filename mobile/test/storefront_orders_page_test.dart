@@ -760,7 +760,7 @@ void main() {
     await t.tap(find.text('Save this customer for next time'));
     await settle(t);
     await t.pumpAndSettle();
-    expect(find.text('Give it a name to call it up by'), findsOneWidget);
+    expect(find.text('Give it a name to call\u00A0it\u00A0up\u00A0by'), findsOneWidget);
     expect(find.text('Another name'), findsNothing);
     expect(find.textContaining('is taken'), findsNothing);
     final field = find.descendant(of: find.bySemanticsLabel(RegExp('^Name to call it up by')), matching: find.byType(EditableText));

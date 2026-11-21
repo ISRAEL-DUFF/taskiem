@@ -172,7 +172,7 @@ class _SaveNameSheetState extends State<SaveNameSheet> {
   Widget build(BuildContext context) {
     final look = TkLook.of(context);
     return TkFormSheet(
-      title: widget.needed ? 'Give it a name to call it up by' : 'Another name',
+      title: widget.needed ? 'Give it a name to call\u00A0it\u00A0up\u00A0by' : 'Another name',
       crumb: widget.needed ? null : (widget.taken.isEmpty ? 'That name is taken' : '@${widget.taken} is taken'),
       action: _busy ? 'Saving…' : 'Save',
       onAction: _busy || cleanSavedName(_name.text).isEmpty ? null : _go,
