@@ -12,6 +12,10 @@ export interface ImportRow {
   title: string;
   kind: SavedKind;
   hint: string;
+  /** Something to look at before saving, in words; saved all the same. */
+  warning?: string;
+  /** Saved already as it is: skipped, not saved again. */
+  skip?: boolean;
 }
 
 /** The answer without confirm: the plan, and the file's hash to save it by. */
@@ -29,6 +33,12 @@ export interface ImportDone {
   total: number;
   added: string[];
   failed: { line: number; name: string; message: string }[];
+  /** Names saved already as they are, skipped. */
+  skipped?: string[];
+  /** Bank accounts saved whose names were not checked yet. */
+  unchecked?: { line: number; name: string; problem: string }[];
+  /** Lines not reached before saving stopped: the file sent again saves them. */
+  left?: { line: number; name: string }[];
 }
 
 export interface ImportRefusal {
@@ -55,24 +65,57 @@ const MANY: Record<SavedKind, [string, string]> = {
   file: ["file", "files"],
 };
 
-/** What a plan saves, in a sentence. */
+/** The rows a plan saves: all but those saved already. */
+export const importToSave = (rows: ImportRow[]) => rows.filter((r) => !r.skip);
+
+/** What a plan saves, in a sentence; the lines saved already after it. */
 export function importPlanLine(p: Pick<ImportPlan, "rows">): string {
+  const rows = importToSave(p.rows);
+  const skipped = p.rows.length - rows.length;
+  const after = skipped ? ` ${count(skipped, "line is", "lines are")} saved already: skipped.` : "";
+  if (rows.length === 0) return `Everything in this file is saved already: nothing to save.`;
   const by = new Map<SavedKind, number>();
-  for (const r of p.rows) by.set(r.kind, (by.get(r.kind) ?? 0) + 1);
+  for (const r of rows) by.set(r.kind, (by.get(r.kind) ?? 0) + 1);
   const parts = [...by.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => count(n, ...(MANY[k] ?? ["thing", "things"])));
   // One kind: "This file saves 3 people."; more: each kind's count.
-  if (parts.length === 1) return `This file saves ${parts[0] ?? ""}.`;
-  return `This file saves ${count(p.rows.length, "thing", "things")}: ${parts.join(", ")}.`;
+  if (parts.length === 1) return `This file saves ${parts[0] ?? ""}.${after}`;
+  return `This file saves ${count(rows.length, "thing", "things")}: ${parts.join(", ")}.${after}`;
 }
 
 /** The button that saves a plan. */
 export const importSaveWords = (n: number) => `Save ${count(n, "thing", "things")}`;
 
 /** What saving did, in a sentence. */
-export function importDoneLine(d: Pick<ImportDone, "added" | "failed">): string {
+export function importDoneLine(d: Pick<ImportDone, "added" | "failed" | "skipped" | "left">): string {
   const added = d.added.length ? `Saved ${count(d.added.length, "thing", "things")}: ${d.added.map((n) => `@${n}`).join(", ")}.` : "Nothing was saved.";
-  return d.failed.length ? `${added} ${count(d.failed.length, "line was", "lines were")} not saved.` : added;
+  const failed = d.failed.length ? ` ${count(d.failed.length, "line was", "lines were")} not saved.` : "";
+  const skipped = d.skipped?.length ? ` ${count(d.skipped.length, "was", "were")} saved already: skipped.` : "";
+  const left = d.left?.length ? ` ${count(d.left.length, "line is", "lines are")} not saved yet: send the file again.` : "";
+  return `${added}${failed}${skipped}${left}`;
 }
+
+/** The largest file the server reads. */
+export const IMPORT_MAX_BYTES = 256 * 1024;
+
+/** Why a chosen file is not sent, or null. */
+export const importSizeProblem = (size: number) => (size > IMPORT_MAX_BYTES ? "The file is too big: up to 256 KB." : null);
+
+/** A file's text: UTF-16 by its byte order mark (Excel's "Unicode text",
+ * often tab-separated, which the server reads), else UTF-8, a UTF-8 mark
+ * dropped. */
+export function decodeImportFile(bytes: Uint8Array): string {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes);
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/** Reads a chosen file as it is now (read again each time it is sent). */
+export async function readImportFile(f: Blob): Promise<string> {
+  return decodeImportFile(new Uint8Array(await f.arrayBuffer()));
+}
+
+/** A 409 import_changed: the file is not the one checked; check it again. */
+export const importChanged = (status: number, body: Record<string, unknown> | undefined) => status === 409 && body?.code === "import_changed";
 
 /** A 422 import_unreadable answer as the page shows it, or null when the error is something else. */
 export function importRefusal(status: number, body: Record<string, unknown> | undefined, message: string): ImportRefusal | null {

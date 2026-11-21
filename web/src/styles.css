@@ -2497,6 +2497,7 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .save-after-name .error-text { margin: 0 0 8px; font-size: 13px; }
 .save-after-name .toolbar { margin-top: 4px; }
 @media (max-width: 860px) { .items > li.save-after-name { padding: 4px 16px 14px; } }
+.sub .import-warning { color: var(--tint-warn-text); font-weight: 500; }
 /* Big enough to tap on a touch screen. */
 @media (pointer: coarse) {
   .saved-fill-button, .saved-fill-use { min-height: 44px; padding-left: 14px; padding-right: 14px; }

@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { IMPORT_EXAMPLE, importDoneLine, importExampleHref, importKindWord, importPlanLine, importRefusal, importSaveWords, type ImportRow } from "./savedImport";
+import {
+  IMPORT_EXAMPLE,
+  decodeImportFile,
+  importChanged,
+  importDoneLine,
+  importExampleHref,
+  importKindWord,
+  importPlanLine,
+  importRefusal,
+  importSaveWords,
+  importSizeProblem,
+  importToSave,
+  readImportFile,
+  type ImportRow,
+} from "./savedImport";
 
 const row = (kind: ImportRow["kind"], name: string): ImportRow => ({ line: 2, name, title: name, kind, hint: "" });
 
@@ -26,6 +40,48 @@ describe("saved things from a file", () => {
         ],
       }),
     ).toBe("Nothing was saved. 2 lines were not saved.");
+    // Fields a newer server adds, each said when there.
+    expect(importDoneLine({ added: ["bayo"], failed: [], skipped: ["bisi", "shop"], left: [{ line: 9, name: "dayo" }] })).toBe(
+      "Saved 1 thing: @bayo. 2 were saved already: skipped. 1 line is not saved yet: send the file again.",
+    );
+    expect(importDoneLine({ added: ["bayo"], failed: [], skipped: [], left: [] })).toBe("Saved 1 thing: @bayo.");
+  });
+
+  it("leaves the lines saved already out of what a plan saves", () => {
+    const rows = [row("person", "a"), { ...row("person", "b"), skip: true }, row("place", "c")];
+    expect(importToSave(rows).map((r) => r.name)).toEqual(["a", "c"]);
+    expect(importPlanLine({ rows })).toBe("This file saves 2 things: 1 person, 1 place. 1 line is saved already: skipped.");
+    expect(importPlanLine({ rows: [{ ...row("person", "b"), skip: true }] })).toBe("Everything in this file is saved already: nothing to save.");
+  });
+
+  it("refuses a file too big before sending it", () => {
+    expect(importSizeProblem(256 * 1024)).toBeNull();
+    expect(importSizeProblem(256 * 1024 + 1)).toBe("The file is too big: up to 256 KB.");
+  });
+
+  it("reads UTF-16 files by their mark, UTF-8 otherwise", async () => {
+    const text = "title\tphone\nỌlá Stores\t0803\n";
+    const le = new Uint8Array(2 + text.length * 2);
+    const be = new Uint8Array(2 + text.length * 2);
+    le.set([0xff, 0xfe]);
+    be.set([0xfe, 0xff]);
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      le.set([c & 0xff, c >> 8], 2 + i * 2);
+      be.set([c >> 8, c & 0xff], 2 + i * 2);
+    }
+    expect(decodeImportFile(le)).toBe(text);
+    expect(decodeImportFile(be)).toBe(text);
+    const utf8 = new TextEncoder().encode(text);
+    expect(decodeImportFile(utf8)).toBe(text);
+    expect(decodeImportFile(new Uint8Array([0xef, 0xbb, 0xbf, ...utf8]))).toBe(text);
+    expect(await readImportFile(new Blob([le]))).toBe(text);
+  });
+
+  it("knows a file changed since it was checked", () => {
+    expect(importChanged(409, { code: "import_changed" })).toBe(true);
+    expect(importChanged(409, { name_taken: true })).toBe(false);
+    expect(importChanged(422, { code: "import_changed" })).toBe(false);
   });
 
   it("reads a refusal's lines, and leaves other errors alone", () => {

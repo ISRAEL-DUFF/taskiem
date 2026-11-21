@@ -99,3 +99,90 @@ for (const width of [390, 360]) {
     await expect(sheet.getByTestId("import-problem").first()).toContainText("@bayo is saved already");
   });
 }
+
+// What a newer server adds (stubbed until it is there): a file read again
+// each time it is sent, one too big kept back, Excel's UTF-16 text read,
+// a plan's warnings and lines saved already, a file changed since it was
+// checked, and what saving left.
+test("a file read again, too big, in UTF-16, and what a plan and saving say", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const r = await page.request.post("/v1/signup", {
+    headers: H,
+    data: { tenant: `Ada Kitchen ${letters()}`, email: `${letters()}-${Math.random().toString(36).slice(2, 8)}@saved.test`, name: "Ada Obi", password: "correct horse battery" },
+  });
+  expect(r.status(), await r.text()).toBe(201);
+  const sent: { csv: string; confirm?: string }[] = [];
+  const answers: { status: number; body: unknown }[] = [];
+  await page.route("**/v1/saved/import", (q) => {
+    sent.push(q.request().postDataJSON() as { csv: string; confirm?: string });
+    const a = answers.shift() ?? { status: 500, body: { error: "No answer." } };
+    return q.fulfill({ status: a.status, contentType: "application/json", body: JSON.stringify(a.body) });
+  });
+  await page.goto("/settings/saved");
+  await page.getByTestId("saved").getByRole("button", { name: "Import from a file" }).click();
+  const sheet = page.getByRole("dialog", { name: "Import from a file" });
+  const check = sheet.getByRole("button", { name: "Check the file" });
+
+  // Too big: said, nothing sent.
+  await pick(page, "big.csv", "title\n" + "x".repeat(256 * 1024));
+  await check.click();
+  await expect(sheet).toContainText("The file is too big: up to 256 KB.");
+  expect(sent).toHaveLength(0);
+
+  // Refused, put right and chosen again under the same name: the new text is sent.
+  answers.push({ status: 422, body: { error: "Some lines cannot be saved: put them right and send the file again.", code: "import_unreadable", problems: [{ line: 3, message: "Choose the bank." }], total: 2 } });
+  await pick(page, "bad.csv", BAD);
+  await check.click();
+  await expect(sheet.getByTestId("import-problem")).toContainText("Line 3");
+  const fixed = "title,account_number,bank\nChi Stores,0123456780,Access\nDayo,0123456789,GTBank\n";
+  const plan = {
+    saved: false,
+    hash: "h1",
+    total: 2,
+    rows: [
+      { line: 2, name: "chi-stores", title: "Chi Stores", kind: "bank_account", hint: "Access ••6780", warning: "The account name is checked once saved." },
+      { line: 3, name: "dayo", title: "Dayo", kind: "bank_account", hint: "GTBank ••6789", skip: true },
+    ],
+  };
+  answers.push({ status: 200, body: plan });
+  await pick(page, "bad.csv", fixed);
+  await check.click();
+  const shown = sheet.getByTestId("import-plan");
+  await expect(shown).toContainText("This file saves 1 bank account. 1 line is saved already: skipped.");
+  expect(sent[1]?.csv).toBe(fixed);
+  await expect(shown.locator("[data-name='chi-stores'] [data-testid='import-warning']")).toHaveText("The account name is checked once saved.");
+  await expect(shown.locator("[data-name='dayo']")).toContainText("saved already: skipped");
+  await axeBoth(page, "a plan with a warning and a line skipped", 390);
+
+  // Changed since it was checked: the plan goes, to check it again.
+  answers.push({ status: 409, body: { error: "The file changed since it was checked: check it again.", code: "import_changed" } });
+  await sheet.getByRole("button", { name: "Save 1 thing" }).click();
+  await expect(sheet).toContainText("The file changed since it was checked");
+  await expect(sheet.getByTestId("import-plan")).toHaveCount(0);
+  expect(sent[2]).toEqual({ csv: fixed, confirm: "h1" });
+
+  // Checked again and saved: what was skipped, not checked and left.
+  answers.push({ status: 200, body: plan });
+  await check.click();
+  answers.push({
+    status: 200,
+    body: { saved: true, hash: "h1", total: 2, added: ["chi-stores"], failed: [], skipped: ["dayo"], unchecked: [{ line: 2, name: "chi-stores", problem: "The bank did not answer." }], left: [{ line: 4, name: "tola" }] },
+  });
+  await sheet.getByRole("button", { name: "Save 1 thing" }).click();
+  await expect(sheet.getByTestId("import-status")).toHaveText("Saved 1 thing: @chi-stores. 1 was saved already: skipped. 1 line is not saved yet: send the file again.");
+  await expect(sheet.getByTestId("import-unchecked")).toContainText("The bank did not answer.");
+  await expect(sheet).toContainText("Check names on the Saved page.");
+  await expect(sheet.getByTestId("import-skipped")).toHaveText("@dayo");
+  await expect(sheet.getByTestId("import-left")).toContainText("Line 4: @tola");
+  await axeBoth(page, "saved, with lines skipped and left", 390);
+
+  // Excel's "Unicode text": UTF-16 with tabs, read as its words.
+  await sheet.getByRole("button", { name: "Import another file" }).click();
+  const tsv = "title\tphone\nỌlá Stores\t08031234567\n";
+  answers.push({ status: 200, body: { saved: false, hash: "h2", total: 1, rows: [{ line: 2, name: "ola-stores", title: "Ọlá Stores", kind: "person", hint: "" }] } });
+  await page.getByTestId("import-file").setInputFiles({ name: "people.txt", mimeType: "text/plain", buffer: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(tsv, "utf16le")]) });
+  await check.click();
+  await expect(sheet.getByTestId("import-plan")).toContainText("This file saves 1 person.");
+  expect(sent.at(-1)?.csv).toBe(tsv);
+});
