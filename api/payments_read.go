@@ -93,9 +93,13 @@ func (s *Server) readPayment(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Saved already: the business's saved account with this number.
+	// Saved already: the business's saved account with this number (a few
+	// times an hour for those who may not see saved numbers).
 	o := savedOwner{tenant: tenant, by: principalFrom(ctx).UserID}
 	if err := s.savedTx(ctx, o, func(tx pgx.Tx) error {
+		if !s.mayMatchSaved(principalFrom(ctx)) {
+			return nil
+		}
 		where, who := ownerWhere(o)
 		rows, err := tx.Query(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE `+where+` AND kind = $2 AND details->>'last4' = $3`, who, saved.KindBankAccount, saved.Last4(number))
 		if err != nil {

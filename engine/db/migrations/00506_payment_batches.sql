@@ -9,7 +9,7 @@ CREATE TABLE payment_batches (
   tenant_id     uuid NOT NULL REFERENCES tenants(id),
   title         text NOT NULL DEFAULT '' CHECK (length(title) <= 80),
   kind          text NOT NULL DEFAULT 'list' CHECK (kind IN ('list', 'riders', 'messages')),
-  status        text NOT NULL DEFAULT 'prepared' CHECK (status IN ('prepared', 'sent', 'cancelled')),
+  status        text NOT NULL DEFAULT 'prepared' CHECK (status IN ('preparing', 'prepared', 'sent', 'cancelled')),
   copy_of       uuid REFERENCES payment_batches(id),
   created_by    text NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),

@@ -70,10 +70,24 @@ func TestPaySeveral(t *testing.T) {
 	owner.must(400, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{}})
 
 	// One passkey for the batch; each row sent as its own payment.
-	if e := owner.must(403, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{}); e["step_up"] == nil {
+	idsOf := func(b map[string]any, status string) []string {
+		var out []string
+		for _, x := range b["payments"].([]any) {
+			if p := x.(map[string]any); p["status"] == status {
+				out = append(out, p["id"].(string))
+			}
+		}
+		return out
+	}
+	rows := idsOf(b, "prepared")
+	if e := owner.must(403, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"payments": rows}); e["step_up"] == nil {
 		t.Fatalf("no passkey: %v", e)
 	}
-	sent := owner.must(202, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+id)})["batch"].(map[string]any)
+	// The rows the person saw, exactly.
+	if e := owner.must(409, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"payments": rows[:1], "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+id)}); e["code"] != "changed" {
+		t.Fatalf("not the rows shown: %v", e)
+	}
+	sent := owner.must(202, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"payments": rows, "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+id)})["batch"].(map[string]any)
 	if sent["status"] != "sent" {
 		t.Fatalf("sent: %v", sent)
 	}
@@ -82,7 +96,7 @@ func TestPaySeveral(t *testing.T) {
 			t.Fatalf("a row: %v", p)
 		}
 	}
-	owner.must(409, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+id)})
+	owner.must(409, "POST", "/v1/payment-batches/"+id+"/confirm", map[string]any{"payments": rows, "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+id)})
 
 	// A row fails at the bank: paid again as a new batch, its row alone.
 	first := sent["payments"].([]any)[0].(map[string]any)["id"].(string)
@@ -93,8 +107,8 @@ func TestPaySeveral(t *testing.T) {
 	if again["count"] != float64(1) || again["total_kobo"] != float64(1000000) {
 		t.Fatalf("again: %v", again)
 	}
-	// Last time's, copied.
-	if cp := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"copy_of": id})["batch"].(map[string]any); cp["count"] != float64(2) || cp["title"] != "Riders, week 45" {
+	// Last time's, copied: the rows that went (not the failed one).
+	if cp := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"copy_of": id})["batch"].(map[string]any); cp["count"] != float64(1) || cp["title"] != "Riders, week 45" {
 		t.Fatalf("copied: %v", cp)
 	}
 
@@ -110,12 +124,14 @@ func TestPaySeveral(t *testing.T) {
 		{"payee": "chidi", "amount_kobo": 1800000, "purpose": "stock"},
 	}})["batch"].(map[string]any)
 	cid := cb["id"].(string)
-	cs := clerk.must(202, "POST", "/v1/payment-batches/"+cid+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay.batch", "batch:"+cid)})["batch"].(map[string]any)
+	cs := clerk.must(202, "POST", "/v1/payment-batches/"+cid+"/confirm", map[string]any{"payments": idsOf(cb, "prepared"),
+		"passkey": stepUp(t, clerk, ckey, "money.pay.batch", "batch:"+cid)})["batch"].(map[string]any)
 	if cs["waiting"] != float64(2) {
 		t.Fatalf("staff's batch: %v", cs)
 	}
-	clerk.must(403, "POST", "/v1/payment-batches/"+cid+"/approve", map[string]any{})
-	ok := owner.must(200, "POST", "/v1/payment-batches/"+cid+"/approve", map[string]any{"passkey": stepUp(t, owner, key, "money.pay.approve", "batch:"+cid)})["batch"].(map[string]any)
+	clerk.must(403, "POST", "/v1/payment-batches/"+cid+"/approve", map[string]any{"payments": idsOf(cs, "waiting_ok")})
+	ok := owner.must(200, "POST", "/v1/payment-batches/"+cid+"/approve", map[string]any{"payments": idsOf(cs, "waiting_ok"),
+		"passkey": stepUp(t, owner, key, "money.pay.approve", "batch:"+cid)})["batch"].(map[string]any)
 	for _, r := range ok["results"].([]any) {
 		if r.(map[string]any)["code"] != nil {
 			t.Fatalf("approved: %v", ok)

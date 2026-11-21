@@ -6859,18 +6859,26 @@ paths:
           type: string
           format: uuid
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               additionalProperties: false
+              required: [payments]
               properties:
                 passkey:
                   type: object
                 totp:
                   type: string
+                payments:
+                  type: array
+                  description: The rows the person saw, acted on exactly; 409 `changed` when they differ from the batch's
+                  items: {type: string, format: uuid}
                 again:
-                  type: boolean
+                  type: array
+                  description: The rows the person said "pay again" to (the same payment in the last day)
+                  items: {type: string, format: uuid}
       responses:
         '202':
           description: Sent
@@ -6890,7 +6898,7 @@ paths:
       tags:
       - Payments
       summary: The owner''s OK for every row waiting, with one passkey
-      description: 'An owner only, with a passkey asked for `money.pay.approve` on `batch:{id}`: each row waiting for the OK is approved; one the owner confirmed themselves is left for another owner.'
+      description: 'An owner only, with a passkey asked for `money.pay.approve` on `batch:{id}`: each row shown and waiting for the OK is approved; one the owner confirmed themselves is left for another owner (`own`), and one to a changed account is approved alone in Approvals (`changed`).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -6906,18 +6914,22 @@ paths:
           type: string
           format: uuid
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               additionalProperties: false
+              required: [payments]
               properties:
                 passkey:
                   type: object
                 totp:
                   type: string
-                again:
-                  type: boolean
+                payments:
+                  type: array
+                  description: The waiting rows the owner saw, acted on exactly; 409 `changed` when they differ
+                  items: {type: string, format: uuid}
       responses:
         '200':
           description: Approved
@@ -45472,7 +45484,7 @@ components:
           enum: [list, riders, messages]
         status:
           type: string
-          enum: [prepared, sent, cancelled]
+          enum: [preparing, prepared, sent, cancelled]
         created_by: {type: string}
         created_at: {type: string, format: date-time}
         confirmed_at:

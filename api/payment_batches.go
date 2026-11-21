@@ -159,7 +159,9 @@ func (s *Server) createBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.CopyOf != nil {
 		// Last time's again: its rows, as they were asked for.
-		rows, title, kind, err := s.batchRowsOf(ctx, p.TenantID, *in.CopyOf, owner, nil)
+		// Only the rows that went: not those rejected, cancelled or failed
+		// (Pay the failed ones again is its own).
+		rows, title, kind, err := s.batchRowsOf(ctx, p.TenantID, *in.CopyOf, owner, []string{"paid", "sending", "unknown", "waiting_ok"})
 		if err != nil {
 			s.payFail(w, r, err)
 			return
@@ -177,53 +179,11 @@ func (s *Server) createBatch(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusBadRequest, "rows", fmt.Sprintf("Up to %d people a batch.", maxBatchLen)))
 		return
 	}
-	id := uuid.Must(uuid.NewV7())
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO payment_batches (id, tenant_id, title, kind, copy_of, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
-			id, p.TenantID, strings.TrimSpace(in.Title), in.Kind, in.CopyOf, p.Actor())
-		return err
-	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	from := in.From
 	if from == "" {
 		from = "tools"
 	}
-	var held []batchHeld
-	for i, row := range in.Rows {
-		row.From = from
-		x, err := s.preparePayment(ctx, p.TenantID, p.UserID, owner, row.payIn, p.Actor())
-		var pr payRefused
-		if errors.As(err, &pr) {
-			held = append(held, batchHeld{Row: i, Payee: rowLabel(row.payIn), Code: pr.code, Problem: pr.msg})
-			continue
-		}
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if err := s.tx(r, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE payments SET batch_id = $2 WHERE id = $1`, x.ID, id)
-			return err
-		}); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
-	var out batchView
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		if out, err = batchTx(ctx, tx, id, owner); err != nil {
-			return err
-		}
-		return auditTx(r, tx, "payment.batch_prepare", id.String(), map[string]any{"rows": len(in.Rows), "held": len(held), "total_kobo": out.TotalKobo})
-	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	out.Held = held
-	writeJSON(w, http.StatusCreated, map[string]any{"batch": out})
+	s.prepareBatch(w, r, in.Rows, strings.TrimSpace(in.Title), in.Kind, in.CopyOf, from)
 }
 
 // rowLabel is how a held row is named back: its saved name, or the
@@ -285,9 +245,6 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 				}
 				in.AccountNumber, in.BankName = fmt.Sprint(v), x.bank
 			}
-			if x.personal {
-				in.SavedID = nil
-			}
 			rows = append(rows, batchRow{in})
 		}
 		return nil
@@ -309,7 +266,7 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in confirmIn
+	var in batchConfirmIn
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
@@ -324,7 +281,7 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if status != "prepared" {
-			return refusePay(http.StatusConflict, "not_prepared", "This batch was "+status+" already.")
+			return refusePay(http.StatusConflict, "not_prepared", "This batch is "+status+".")
 		}
 		rows, err := tx.Query(ctx, `SELECT id FROM payments WHERE batch_id = $1 AND status = 'prepared' AND (NOT personal OR $2) ORDER BY created_at, id`, id, owner)
 		if err != nil {
@@ -340,8 +297,17 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusConflict, "nothing_to_send", "Nothing in this batch is left to send."))
 		return
 	}
+	// The rows the person saw, exactly: none added meanwhile.
+	if !sameIDs(list, in.Payments) {
+		s.payFail(w, r, refusePay(http.StatusConflict, "changed", "The batch changed since it was shown: look at it again."))
+		return
+	}
 	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpBatch, "batch:"+id.String(), "Payments", "to pay")
 	if !ok {
+		return
+	}
+	if method != "passkey" {
+		s.payFail(w, r, refusePay(http.StatusForbidden, "passkey", "A batch is sent with a passkey."))
 		return
 	}
 	r = r.WithContext(context.WithoutCancel(ctx))
@@ -352,32 +318,38 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 		var needs string
 		err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			x, needs, err = confirmCheckTx(ctx, tx, p, owner, pid, in.Again, true)
+			x, needs, err = confirmCheckTx(ctx, tx, p, owner, pid, slices.Contains(in.Again, pid), true)
 			return err
 		})
 		var pr payRefused
-		if errors.As(err, &pr) {
+		switch {
+		case errors.As(err, &pr):
 			results = append(results, batchResult{Payment: pid, Code: pr.code, Problem: pr.msg})
 			continue
-		}
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if _, err := s.sendPayment(r, x, needs, p, method); err != nil {
-			if errors.As(err, &pr) {
-				results = append(results, batchResult{Payment: pid, Code: pr.code, Problem: pr.msg})
-				continue
-			}
-			s.Logger.Warn("payments: sending a batch's row", "batch", id, "payment", pid, "err", err)
-			results = append(results, batchResult{Payment: pid, Code: "not_sent", Problem: "It could not be sent just now: try again."})
+		case err != nil:
+			s.Logger.Warn("payments: checking a batch's row", "batch", id, "payment", pid, "err", err)
+			results = append(results, batchResult{Payment: pid, Code: "not_sent", Problem: "It could not be sent just now: send the batch again."})
 			continue
 		}
-		results = append(results, batchResult{Payment: pid})
+		run, err := s.sendPayment(r, x, needs, p, method)
+		switch {
+		case errors.As(err, &pr):
+			results = append(results, batchResult{Payment: pid, Code: pr.code, Problem: pr.msg})
+		case err != nil && run == uuid.Nil:
+			s.Logger.Warn("payments: sending a batch's row", "batch", id, "payment", pid, "err", err)
+			results = append(results, batchResult{Payment: pid, Code: "not_sent", Problem: "It could not be sent just now: send the batch again."})
+		case err != nil:
+			// The run started and was not approved: the owner approves it
+			// in Approvals.
+			s.Logger.Warn("payments: approving a batch's row", "batch", id, "payment", pid, "err", err)
+			results = append(results, batchResult{Payment: pid, Code: "in_approvals", Problem: "It waits in Approvals: approve it there."})
+		default:
+			results = append(results, batchResult{Payment: pid})
+		}
 	}
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'sent', confirmed_by = $2, confirmed_at = now() WHERE id = $1
+		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'sent', confirmed_by = $2, confirmed_at = now() WHERE id = $1 AND status = 'prepared'
 			AND NOT EXISTS (SELECT 1 FROM payments WHERE batch_id = $1 AND status = 'prepared')`, id, p.Actor()); err != nil {
 			return err
 		}
@@ -394,6 +366,28 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"batch": out})
 }
 
+// batchConfirmIn is a batch confirmed or approved: the passkey, the rows
+// the person saw (acted on exactly), and those they said pay again to.
+type batchConfirmIn struct {
+	Passkey  *credentialJSON `json:"passkey"`
+	TOTP     string          `json:"totp"`
+	Payments []uuid.UUID     `json:"payments"`
+	Again    []uuid.UUID     `json:"again"`
+}
+
+// sameIDs reports whether a and b hold the same ids.
+func sameIDs(a, b []uuid.UUID) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, x := range a {
+		if !slices.Contains(b, x) {
+			return false
+		}
+	}
+	return true
+}
+
 // approveBatch is POST /v1/payment-batches/{id}/approve {passkey}: the
 // owner's OK for every row of the batch waiting for it, with one passkey.
 // Each row's run checks as one payment's does that it was approved by an
@@ -403,7 +397,7 @@ func (s *Server) approveBatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in confirmIn
+	var in batchConfirmIn
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
@@ -418,10 +412,11 @@ func (s *Server) approveBatch(w http.ResponseWriter, r *http.Request) {
 		ID          uuid.UUID
 		Run         uuid.UUID
 		ConfirmedBy string
+		NeedsOK     string
 	}
 	var list []waiting
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id, run_id, COALESCE(confirmed_by, '') FROM payments WHERE batch_id = $1 AND status = 'waiting_ok' AND run_id IS NOT NULL ORDER BY created_at, id`, id)
+		rows, err := tx.Query(ctx, `SELECT id, run_id, COALESCE(confirmed_by, ''), needs_ok FROM payments WHERE batch_id = $1 AND status = 'waiting_ok' AND run_id IS NOT NULL ORDER BY created_at, id`, id)
 		if err != nil {
 			return err
 		}
@@ -433,6 +428,14 @@ func (s *Server) approveBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(list) == 0 {
 		s.payFail(w, r, refusePay(http.StatusConflict, "nothing_waiting", "Nothing in this batch waits for your OK."))
+		return
+	}
+	ids := make([]uuid.UUID, len(list))
+	for i, x := range list {
+		ids[i] = x.ID
+	}
+	if !sameIDs(ids, in.Payments) {
+		s.payFail(w, r, refusePay(http.StatusConflict, "changed", "What waits changed since it was shown: look at it again."))
 		return
 	}
 	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpApprove, "batch:"+id.String(), "Approvals", "to approve payments")
@@ -447,6 +450,11 @@ func (s *Server) approveBatch(w http.ResponseWriter, r *http.Request) {
 	ctx = r.Context()
 	var results []batchResult
 	for _, x := range list {
+		if strings.Contains(x.NeedsOK, "changed") {
+			// A changed account is the owner's to look at alone.
+			results = append(results, batchResult{Payment: x.ID, Code: "changed", Problem: "The account changed since it was last paid: call them on a number you know, then approve it in Approvals."})
+			continue
+		}
 		if x.ConfirmedBy == p.Actor() {
 			results = append(results, batchResult{Payment: x.ID, Code: "own", Problem: "You confirmed this one: another owner gives its OK."})
 			continue
@@ -486,10 +494,12 @@ func (s *Server) cancelBatch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE batch_id = $1 AND status = 'prepared'`, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE batch_id = $1 AND status = 'prepared' AND (NOT personal OR $2)`,
+			id, isOwnerOf(principalFrom(ctx))); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'cancelled' WHERE id = $1 AND status = 'prepared'`, id)
+		tag, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'cancelled' WHERE id = $1 AND status = 'prepared'
+			AND NOT EXISTS (SELECT 1 FROM payments WHERE batch_id = $1 AND status = 'prepared')`, id)
 		if err != nil {
 			return err
 		}
@@ -528,11 +538,14 @@ func (s *Server) batchAgain(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusConflict, "nothing_failed", "Nothing in this batch failed."))
 		return
 	}
-	s.prepareBatchRows(w, r, rows, strings.TrimSpace(title+" (again)"), kind)
+	s.prepareBatch(w, r, rows, strings.TrimSpace(title+" (again)"), kind, &id, "tools")
 }
 
-// prepareBatchRows prepares rows as a new batch and answers it (201).
-func (s *Server) prepareBatchRows(w http.ResponseWriter, r *http.Request, rows []batchRow, title, kind string) {
+// prepareBatch prepares rows as a new batch and answers it (201). The
+// batch is "preparing" until every row is in, so it cannot be confirmed
+// half made; it goes on if the person goes away meanwhile.
+func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []batchRow, title, kind string, copyOf *uuid.UUID, from string) {
+	r = r.WithContext(context.WithoutCancel(r.Context()))
 	ctx := r.Context()
 	p := principalFrom(ctx)
 	owner := isOwnerOf(p)
@@ -541,7 +554,8 @@ func (s *Server) prepareBatchRows(w http.ResponseWriter, r *http.Request, rows [
 	}
 	id := uuid.Must(uuid.NewV7())
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO payment_batches (id, tenant_id, title, kind, created_by) VALUES ($1, $2, $3, $4, $5)`, id, p.TenantID, title, kind, p.Actor())
+		_, err := tx.Exec(ctx, `INSERT INTO payment_batches (id, tenant_id, title, kind, copy_of, status, created_by) VALUES ($1, $2, $3, $4, $5, 'preparing', $6)`,
+			id, p.TenantID, title, kind, copyOf, p.Actor())
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -549,7 +563,7 @@ func (s *Server) prepareBatchRows(w http.ResponseWriter, r *http.Request, rows [
 	}
 	var held []batchHeld
 	for i, row := range rows {
-		row.From = "tools"
+		row.From = from
 		x, err := s.preparePayment(ctx, p.TenantID, p.UserID, owner, row.payIn, p.Actor())
 		var pr payRefused
 		if errors.As(err, &pr) {
@@ -557,8 +571,9 @@ func (s *Server) prepareBatchRows(w http.ResponseWriter, r *http.Request, rows [
 			continue
 		}
 		if err != nil {
-			s.fail(w, r, err)
-			return
+			s.Logger.Warn("payments: preparing a batch's row", "batch", id, "row", i, "err", err)
+			held = append(held, batchHeld{Row: i, Payee: rowLabel(row.payIn), Code: "not_prepared", Problem: "It could not be checked just now: add it again."})
+			continue
 		}
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, `UPDATE payments SET batch_id = $2 WHERE id = $1`, x.ID, id)
@@ -570,9 +585,14 @@ func (s *Server) prepareBatchRows(w http.ResponseWriter, r *http.Request, rows [
 	}
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'prepared' WHERE id = $1 AND status = 'preparing'`, id); err != nil {
+			return err
+		}
 		var err error
-		out, err = batchTx(ctx, tx, id, owner)
-		return err
+		if out, err = batchTx(ctx, tx, id, owner); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "payment.batch_prepare", id.String(), map[string]any{"rows": len(rows), "held": len(held), "total_kobo": out.TotalKobo})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -587,22 +607,22 @@ func (s *Server) listBatches(w http.ResponseWriter, r *http.Request) {
 	owner := isOwnerOf(principalFrom(ctx))
 	var out []batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id FROM payment_batches ORDER BY created_at DESC LIMIT 50`)
+		rows, err := tx.Query(ctx, `SELECT b.id, b.title, b.kind, b.status, b.created_by, b.created_at, b.confirmed_at,
+			COALESCE(sum(p.amount_kobo) FILTER (WHERE p.status NOT IN ('cancelled', 'rejected')), 0),
+			count(p.id) FILTER (WHERE p.status NOT IN ('cancelled', 'rejected')),
+			COALESCE(sum(p.amount_kobo) FILTER (WHERE p.status = 'paid'), 0),
+			count(p.id) FILTER (WHERE p.status = 'waiting_ok'), count(p.id) FILTER (WHERE p.status = 'failed')
+			FROM payment_batches b LEFT JOIN payments p ON p.batch_id = b.id AND (NOT p.personal OR $1)
+			GROUP BY b.id HAVING $1 OR count(p.id) > 0 OR NOT EXISTS (SELECT 1 FROM payments x WHERE x.batch_id = b.id)
+			ORDER BY b.created_at DESC LIMIT 50`, owner)
 		if err != nil {
 			return err
 		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		if err != nil {
-			return err
-		}
-		for _, id := range ids {
-			b, err := batchTx(ctx, tx, id, owner)
-			if err != nil {
-				return err
-			}
-			out = append(out, b)
-		}
-		return nil
+		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (batchView, error) {
+			b := batchView{Payments: []payment{}}
+			return b, r.Scan(&b.ID, &b.Title, &b.Kind, &b.Status, &b.CreatedBy, &b.CreatedAt, &b.ConfirmedAt, &b.TotalKobo, &b.Count, &b.PaidKobo, &b.Waiting, &b.Failed)
+		})
+		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -726,6 +746,9 @@ func (s *Server) readBatchList(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for i := range out {
+			if out[i].AccountNumber == "" || !s.mayMatchSaved(p) {
+				continue
+			}
 			for _, x := range byLast4[saved.Last4(out[i].AccountNumber)] {
 				n, err := s.openSaved(ctx, tx, o, x.ID, x.Sealed)
 				if err != nil {
@@ -765,4 +788,14 @@ func lineName(line, number string) string {
 		name = string([]rune(name)[:80])
 	}
 	return name
+}
+
+// mayMatchSaved spends one of the few matches an hour a person who may not
+// see saved numbers gets: a number pasted is told back by its saved name
+// only so often, so saved numbers cannot be found by guessing.
+func (s *Server) mayMatchSaved(p *Principal) bool {
+	if isOwnerOf(p) || p.Can(PermSavedManage) {
+		return true
+	}
+	return s.limiter("pay-match:"+p.Actor(), time.Hour/100, 100).Allow()
 }

@@ -101,17 +101,19 @@ type payment struct {
 
 	bankCode string
 	sealed   map[string]any
+	// RiderID: the rider paid, when it was one.
+	RiderID *uuid.UUID `json:"rider_id"`
 }
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
-	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed`
+	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
 	var last4 string
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
-		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed)
+		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID)
 	x.Account = "••" + last4
 	return x, err
 }
@@ -252,11 +254,8 @@ func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bo
 		}
 		b := saved.FromDetails(x.Details)
 		b.AccountNumber = number
-		out = payeeAccount{title: x.Title, bank: b, checked: x.CheckedName, personal: in.Mine}
-		if !in.Mine {
-			id := x.ID
-			out.saved = &id
-		}
+		id := x.ID
+		out = payeeAccount{title: x.Title, bank: b, checked: x.CheckedName, personal: in.Mine, saved: &id}
 		return nil
 	})
 	return out, err
@@ -611,6 +610,10 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 	}
 	if x.Personal && !owner {
 		return x, "", refusePay(http.StatusForbidden, "not_yours", "An owner's own payment is theirs to confirm.")
+	}
+	if !owner && x.SavedID == nil && x.RiderID == nil {
+		// Staff pay the business's saved accounts (and its riders) only.
+		return x, "", refusePay(http.StatusForbidden, "saved_only", "Staff pay the business's saved accounts: an owner confirms this one.")
 	}
 	if x.Status != "prepared" {
 		return x, "", refusePay(http.StatusConflict, "not_prepared", "This payment was "+paymentStatusWords(x.Status)+" already.")
