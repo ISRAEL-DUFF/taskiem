@@ -44,6 +44,9 @@ type billTransferView struct {
 	ReceivedKobo  int64      `json:"received_kobo,omitempty"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
+	// Longer: the seller's provider gives longer than the default ("I
+	// need longer" is offered).
+	Longer bool `json:"longer,omitempty"`
 	// Problem: why a number could not be had, in plain words.
 	Problem string `json:"problem,omitempty"`
 	// Next: the same seller's next bill still to pay, once this is paid.
@@ -125,6 +128,9 @@ func (s *Server) billView(ctx context.Context, tx pgx.Tx, p *Principal, b links.
 		return out, nil
 	}
 	out.Transfer = transferOf(b, time.Now())
+	if out.Transfer != nil {
+		out.Transfer.Longer = b.TransferLonger
+	}
 	if out.Transfer != nil && out.Transfer.State == "paid" {
 		// The same seller's next bill to pay: "Pay the next one".
 		var next uuid.UUID
@@ -326,8 +332,13 @@ func (s *Server) billTransferAnswered(ctx context.Context, q invoicing.Request, 
 		}
 		return nil
 	}
-	amount := a.AmountKobo
-	s.billCards(ctx, link, q.Tenant, buyer, ref, "transfer", false, &amount, "")
+	// The card carries when the number expires, so both sides can say it
+	// has (the seller's back to To pay) without another card.
+	amount, until := a.AmountKobo, ""
+	if a.ExpiresAt != nil {
+		until = a.ExpiresAt.UTC().Format(time.RFC3339)
+	}
+	s.billCards(ctx, link, q.Tenant, buyer, ref, "transfer", false, &amount, until)
 	if tell != uuid.Nil && a.AccountNumber != "" {
 		s.tellAbout(ctx, buyer, []uuid.UUID{tell}, "bill:"+bill.String(), "Pay "+ref+" by transfer",
 			transferWords(lang.EN, ref, a.AmountKobo, a.BankName, a.AccountNumber, a.AccountName, a.ExpiresAt), nil, nil)

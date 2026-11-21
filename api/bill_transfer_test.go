@@ -83,7 +83,7 @@ func TestBillByTransfer(t *testing.T) {
 	// I need longer: a new number, and the bill shows it (not "asking").
 	buyer.must(202, "POST", "/v1/bills/"+id+"/transfer", map[string]any{"longer": true})
 	drain()
-	if got := buyer.must(200, "GET", "/v1/bills/"+id+"/transfer", nil)["transfer"].(map[string]any); got["state"] != "open" || rails.calls != 2 {
+	if got := buyer.must(200, "GET", "/v1/bills/"+id+"/transfer", nil)["transfer"].(map[string]any); got["state"] != "open" || got["longer"] != true || rails.calls != 2 {
 		t.Fatalf("longer: %v (%d)", got, rails.calls)
 	}
 	// Those who may not pay bills see no number.
@@ -118,6 +118,26 @@ func TestBillByTransfer(t *testing.T) {
 	paid := billOf(x)
 	if tr := paid["transfer"].(map[string]any); paid["status"] != "paid" || tr["state"] != "paid" || tr["next"] != billOf(next)["id"] {
 		t.Fatalf("paid: %v %v", paid["status"], paid["transfer"])
+	}
+	// Both chats are told it was paid, once; the number's card carries when
+	// it expires; I need longer is offered where the provider gives longer.
+	cards := func(event string) (n int) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM link_messages WHERE card->>'event' = $1 AND card->>'reference' = $2`, event, x["number"]).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	tick()
+	if cards("transfer_paid") != 2 {
+		t.Errorf("paid cards: %d", cards("transfer_paid"))
+	}
+	var note string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT card->>'note' FROM link_messages WHERE card->>'event' = 'transfer' AND card->>'reference' = $1 LIMIT 1`, x["number"]).Scan(&note); err != nil || note == "" {
+		t.Errorf("the card's expiry: %q %v", note, err)
+	}
+	if tr := billOf(next)["transfer"]; tr != nil {
+		t.Errorf("no number asked, yet: %v", tr)
 	}
 	if e := buyer.must(409, "POST", "/v1/bills/"+id+"/transfer", map[string]any{}); e["code"] != "nothing_due" {
 		t.Errorf("nothing due: %v", e)

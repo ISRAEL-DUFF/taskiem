@@ -31,6 +31,9 @@ type customerTransfer struct {
 	AmountKobo    int64      `json:"amount_kobo,omitempty"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
+	// Longer: the business's provider gives longer than the default ("I
+	// need longer" is offered).
+	Longer bool `json:"longer,omitempty"`
 }
 
 // customerInvoiceTx is the person's own invoice from the business of chat
@@ -104,6 +107,7 @@ func (s *Server) getCustomerTransfer(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		out, err = customerTransferOf(r.Context(), tx, x)
+		out.Longer = s.transferLonger(r.Context(), c.Business, x.Connection)
 		return err
 	})
 	if err != nil {
@@ -111,6 +115,16 @@ func (s *Server) getCustomerTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// transferLonger reports whether the business's provider gives a longer
+// time than the default for an account number.
+func (s *Server) transferLonger(ctx context.Context, tenant uuid.UUID, connection string) bool {
+	if s.Invoices == nil || s.Invoices.Rails == nil {
+		return false
+	}
+	rl, err := s.Invoices.Rails.Resolve(ctx, tenant, connection)
+	return err == nil && rl.Transfer != nil && rl.Transfer.MaxMinutes > invoicing.AccountMinutes
 }
 
 // askCustomerTransfer is POST /v1/me/chats/{id}/invoices/{invoice}/transfer
@@ -179,6 +193,7 @@ func (s *Server) askCustomerTransfer(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		out, err = customerTransferOf(ctx, tx, x)
+		out.Longer = s.transferLonger(ctx, c.Business, x.Connection)
 		return err
 	})
 	if err != nil {

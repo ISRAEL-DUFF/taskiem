@@ -49788,6 +49788,9 @@ components:
         paid_at:
           type: string
           format: date-time
+        longer:
+          type: boolean
+          description: The business's provider gives longer than the default ("I need longer" may be offered)
     Bill:
       type: object
       additionalProperties: false
@@ -49818,6 +49821,9 @@ components:
               type: string
               format: date-time
               description: When the bill was paid in full
+            longer:
+              type: boolean
+              description: The supplier's provider gives longer than the default ("I need longer" may be offered)
             problem:
               type: string
               description: Why a number could not be had, in plain words

@@ -354,6 +354,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	var buyer, link uuid.UUID
 	var created bool
 	var bill links.Mirror
+	var transferTold string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 		clear := func() error {
 			_, err := tx.Exec(ctx, `DELETE FROM link_mirrors_due WHERE tenant_id = $1 AND invoice_id = $2`, seller, invoice)
@@ -410,7 +411,8 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if s.Invoices.Rails != nil {
 			if rl, err := s.Invoices.Rails.Resolve(ctx, seller, x.Connection); err == nil {
 				on := rl.Transfer != nil
-				bill.PayByTransfer = &on
+				longer := on && rl.Transfer.MaxMinutes > invoicing.AccountMinutes
+				bill.PayByTransfer, bill.TransferLonger = &on, &longer
 			}
 		}
 		all, err := invoicing.Accounts(ctx, tx, x.ID)
@@ -435,8 +437,29 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if _, err := links.EnterTx(ctx, tx, link, "link.bill", detail, links.Actor{Type: "system", ID: "link-mirror"}); err != nil {
 			return err
 		}
-		created, err = links.MirrorBillTx(ctx, tx, buyer, bill)
-		return err
+		if created, err = links.MirrorBillTx(ctx, tx, buyer, bill); err != nil {
+			return err
+		}
+		// A number paid into: both chats told once, paid in full or part.
+		if t := bill.Transfer; t != nil && !bill.Voided {
+			event := ""
+			switch {
+			case bill.PaidKobo >= bill.AmountKobo:
+				event = "transfer_paid"
+			case t.Status == "paid":
+				event = "transfer_part"
+			}
+			if event != "" {
+				told, err := links.TellTransferTx(ctx, tx, buyer, link, x.ID, fmt.Sprintf("%d:%s", t.Seq, event))
+				if err != nil {
+					return err
+				}
+				if told {
+					transferTold = event
+				}
+			}
+		}
+		return nil
 	})
 	if errors.As(err, new(*links.OtherOffError)) {
 		// The buyer has turned Money off: nothing crosses, and the invoice
@@ -445,6 +468,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	}
 	if err != nil || link == uuid.Nil {
 		return false, err
+	}
+	if transferTold != "" {
+		s.background(ctx, "bill transfer paid", func(ctx context.Context) {
+			paid := bill.PaidKobo
+			s.billCards(ctx, link, seller, buyer, bill.Reference, transferTold, false, &paid, "")
+		})
 	}
 	if created {
 		s.background(ctx, "bill arrived", func(ctx context.Context) {
