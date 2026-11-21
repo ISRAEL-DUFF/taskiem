@@ -25,6 +25,7 @@ import {
   type Payment,
 } from "../lib/payments";
 import { PayCheck, PaySheet, payWords, usePayConfirm } from "./PaySheet";
+import { BatchesCard } from "./PayBatch";
 
 function StatusPill({ status }: { status: string }) {
   const s = paymentStatus(status);
@@ -53,6 +54,9 @@ export function PaymentsPage() {
       <button type="button" onClick={open("account")} data-testid="pay-account">
         Pay an account number
       </button>
+      <Link className="button" to="/payments/several" data-testid="pay-several">
+        Pay several people
+      </Link>
     </>
   );
   return (
@@ -103,6 +107,7 @@ export function PaymentsPage() {
           ))}
         </Items>
       )}
+      <BatchesCard />
       {owner && <LimitsCard />}
       {paying && (
         <PaySheet

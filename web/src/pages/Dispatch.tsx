@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import {
   EmptyState,
@@ -647,6 +647,7 @@ export function RidersPayPage() {
   const { can } = useAuth();
   const mayPay = can("money.pay");
   const [paying, setPaying] = useState<{ line: PayLine; from: DOMRect }>();
+  const navigate = useNavigate();
   // A rider's bank account is where their money goes: changing it asks the
   // person to confirm it is them.
   const step = useStepUp();
@@ -715,6 +716,15 @@ export function RidersPayPage() {
             >
               Pay riders now
             </button>
+            {mayPay && p.lines.some((l) => l.bank && l.net_kobo > 0) && (
+              <button
+                type="button"
+                onClick={() => navigate("/payments/several?riders=1")}
+                data-testid="riders-pay-all"
+              >
+                Pay all riders
+              </button>
+            )}
             <button type="button" onClick={() => setSetup(true)}>
               {p.workflow_id ? "Change the weekly pay" : "Set up weekly pay"}
             </button>

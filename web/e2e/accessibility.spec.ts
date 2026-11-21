@@ -61,6 +61,7 @@ const PAGES = [
   "/money/entries",
   "/money/fees",
   "/payments",
+  "/payments/several",
   "/schools",
   "/schools/families",
   "/schools/classes",
@@ -1391,6 +1392,59 @@ for (const scheme of ["light", "dark"] as const)
       await sheet.getByTestId("pay-prepare").click();
       await expect(sheet.getByTestId("pay-name")).toHaveText("MUSA BELLO");
       expect(body).toEqual({ from: "tools", rider_id: rider, amount_kobo: 450_000, purpose: "delivery" });
+    });
+
+// Pay several people (paying people, phase 3): one list's page, to
+// confirm with a row held out and a changed account, and once sent with
+// rows paid, waiting and failed. The batch API is stood in for: the e2e
+// server has no payments account to pay from.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`A list of people to pay passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Pay List ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@paylist.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const pay = (id: string, payee: string, status: string, over: Record<string, unknown> = {}) => ({
+        id, saved_id: null, personal: false, payee, bank_name: "GTBank", account: "••6789", account_name: payee.toUpperCase(), amount_kobo: 450_000, purpose: "delivery",
+        purpose_note: "", note: "", first_payment: false, changed_account: false, needs_ok: "", status, reason: null, fee_kobo: null, run_id: null, started_from: "tools",
+        prepared_by: "user:ada", confirmed_by: null, created_at: now, confirmed_at: null, finished_at: null, again: false, ...over,
+      });
+      const list = (status: string, payments: ReturnType<typeof pay>[]) => ({
+        id: "0192e2e0-0000-7000-8000-00000000f001", title: "Riders, week 45", kind: "riders", status, created_by: "user:ada", created_at: now, confirmed_at: status === "sent" ? now : null,
+        payments, total_kobo: 450_000 * payments.length, count: payments.length, paid_kobo: 450_000, waiting: 1, failed: 1,
+      });
+      let sent = false;
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/payment-batches/"),
+        (q) =>
+          q.fulfill(
+            fulfil({
+              batch: sent
+                ? list("sent", [pay("p1", "Musa Bello", "paid"), pay("p2", "Kemi Ade", "waiting_ok"), pay("p3", "Tunde Bello", "failed", { reason: "account closed" })])
+                : list("prepared", [pay("p1", "Musa Bello", "prepared", { first_payment: true }), pay("p2", "Kemi Ade", "prepared", { changed_account: true })]),
+            }),
+          ),
+      );
+      await page.goto("/payments/batches/0192e2e0-0000-7000-8000-00000000f001");
+      await expect(page.getByTestId("batch-status")).toHaveText("To confirm");
+      await expect(page.getByTestId("batch-warn-changed")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a list to confirm", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      sent = true;
+      await page.reload();
+      await expect(page.getByTestId("batch-status")).toHaveText("Waiting for an OK");
+      await expect(page.getByTestId("batch-approve")).toBeVisible();
+      vs = await axe(page);
+      expect(vs, describe("a list sent", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
 
 // Save as… beside a message's Pay this account (paying people, phase 2):

@@ -148,6 +148,7 @@ import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { SavedPage } from "./pages/Saved";
 import { PaymentPage, PaymentsPage } from "./pages/Payments";
+import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -910,6 +911,8 @@ function SignedIn() {
                   <Route path="/money/entries" element={<MoneyEntries />} />
                   <Route path="/money/fees" element={<MoneyFees />} />
                   <Route path="/payments" element={<PaymentsPage />} />
+                  <Route path="/payments/several" element={<PayListPage />} />
+                  <Route path="/payments/batches/:id" element={<BatchPage />} />
                   <Route path="/payments/:id" element={<PaymentPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />

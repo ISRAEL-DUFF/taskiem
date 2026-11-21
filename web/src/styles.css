@@ -2520,6 +2520,23 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .pay-sent p { margin: 0; }
 .pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
 .card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
+
+/* Pay several people (pages/PayBatch.tsx): a row's fields, a row's
+   problem, the picks and the list's foot. */
+.batch-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-top: 10px; }
+.batch-fields label.field { margin: 0; min-width: 0; }
+.batch-fields input, .batch-fields select { width: 100%; min-width: 0; }
+.sub .batch-problem { margin-top: 6px; padding: 6px 10px; font-size: 13px; }
+.batch-held-why { color: color-mix(in srgb, var(--warn) 70%, var(--text)); }
+.batch-picks { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.batch-pick { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.batch-pick input { margin-top: 3px; flex: none; }
+.batch-pick .sub { font-size: 13px; color: var(--muted); }
+.batch-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.batch-foot-sum { margin: 0; display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.batch-foot-sum strong { font-size: 18px; }
+.batch-foot .error { flex-basis: 100%; margin: 0; }
+@media (max-width: 400px) { .batch-fields { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .pay-check-name { font-size: 24px; } }
 /* Paying from a message (P2): the chip under a message, the likely banks
    and their answers in the Pay sheet, who a rider's payment goes to. */
