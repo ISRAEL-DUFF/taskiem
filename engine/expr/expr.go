@@ -565,6 +565,9 @@ type Refs struct {
 	// Saved are the business's saved things selected directly from saved
 	// (saved.price_list, saved["price-list"]), as written.
 	Saved map[string]bool
+	// SavedUnnamed is a use of saved that names no thing literally
+	// (saved[trigger.body.x], saved alone).
+	SavedUnnamed bool
 }
 
 // References parses an expression and reports which roots and step ids it

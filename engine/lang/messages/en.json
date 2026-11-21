@@ -589,6 +589,11 @@
       "reviewed": true,
       "context": "Readiness: a secret the workflow reads is not stored"
     },
+    "ready.saved_invalid": {
+      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "reviewed": true,
+      "context": "Readiness: the workflow reads a saved thing by a name that is not valid"
+    },
     "ready.saved": {
       "text": "Save @{name} on the Saved page: the workflow reads it.",
       "reviewed": true,

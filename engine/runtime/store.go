@@ -337,7 +337,13 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			Trigger: req.Trigger, Env: req.Env, Connectors: pins, Policies: policies,
 		}
 		paths := triggerPaths(def)
-		saved, savedPaths, err := s.savedInputs(ctx, tx, req.TenantID, def)
+		var saved map[string]any
+		var savedPaths []pii.Path
+		if fork != nil && fork.saved != nil {
+			saved, savedPaths, err = s.forkSaved(ctx, tx, req.TenantID, def, fork.saved)
+		} else {
+			saved, savedPaths, err = s.savedInputs(ctx, tx, req.TenantID, def)
+		}
 		if err != nil {
 			return err
 		}

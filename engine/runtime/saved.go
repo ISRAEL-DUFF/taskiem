@@ -2,13 +2,12 @@ package runtime
 
 import (
 	"context"
-	"encoding/json"
-	"sort"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
@@ -26,63 +25,9 @@ import (
 // "saved" root: {"saved", name, field}).
 type SavedResolver func(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, names []string) (map[string]any, []pii.Path, error)
 
-var savedRefs = expr.MustNew()
-
 // SavedNames are the saved things a definition's expressions read, as
 // written, in order.
-func SavedNames(def *wd.Definition) []string {
-	seen := map[string]bool{}
-	read := func(v any) {
-		walkExprs(v, func(src string) {
-			refs, err := savedRefs.References(src)
-			if err != nil {
-				return
-			}
-			for n := range refs.Saved {
-				seen[n] = true
-			}
-		})
-	}
-	var trig any
-	_ = json.Unmarshal(def.Trigger.RawCfg, &trig)
-	read(trig)
-	def.Walk(func(st *wd.Step) {
-		var raw any
-		b, _ := json.Marshal(st)
-		_ = json.Unmarshal(b, &raw)
-		read(raw)
-	})
-	if len(def.Outputs) > 0 {
-		var out any
-		b, _ := json.Marshal(def.Outputs)
-		_ = json.Unmarshal(b, &out)
-		read(out)
-	}
-	names := make([]string, 0, len(seen))
-	for n := range seen {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
-}
-
-// walkExprs calls fn with every expression string in v.
-func walkExprs(v any, fn func(string)) {
-	switch t := v.(type) {
-	case string:
-		if expr.IsExpr(t) {
-			fn(t)
-		}
-	case map[string]any:
-		for _, c := range t {
-			walkExprs(c, fn)
-		}
-	case []any:
-		for _, c := range t {
-			walkExprs(c, fn)
-		}
-	}
-}
+func SavedNames(def *wd.Definition) []string { return def.SavedNames() }
 
 // savedInputs are the saved things def reads, for its run's start.
 func (s *Store) savedInputs(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition) (map[string]any, []pii.Path, error) {
@@ -93,5 +38,84 @@ func (s *Store) savedInputs(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, de
 	if len(names) == 0 {
 		return nil, nil, nil
 	}
-	return s.Saved(ctx, tx, tenant, names)
+	got, paths, err := s.Saved(ctx, tx, tenant, names)
+	if err != nil {
+		return nil, nil, err
+	}
+	// A thing it reads that is not saved (removed since it was published,
+	// or a name no saved thing can have) refuses the start in words, as a
+	// capability it cannot run does: a schedule skips the fire.
+	var missing []string
+	for _, n := range names {
+		if _, ok := got[n]; !ok {
+			missing = append(missing, "@"+strings.ReplaceAll(n, "_", "-"))
+		}
+	}
+	if len(missing) > 0 {
+		return nil, nil, &CapabilityError{Err: fmt.Errorf("the workflow reads %s, which the business has not saved: save it on the Saved page, or change the workflow", strings.Join(missing, ", "))}
+	}
+	return got, paths, nil
+}
+
+// forkSaved is a resumed run's saved things: the failed run's, kept,
+// sealed again as they were (the categories a fresh read gives each field,
+// else those every saved thing's personal fields have).
+func (s *Store) forkSaved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def *wd.Definition, kept map[string]any) (map[string]any, []pii.Path, error) {
+	cats := map[string]map[string]string{}
+	if s.Saved != nil {
+		if names := SavedNames(def); len(names) > 0 {
+			_, fresh, err := s.Saved(ctx, tx, tenant, names)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, p := range fresh {
+				if len(p.Segments) == 3 {
+					if cats[p.Segments[1]] == nil {
+						cats[p.Segments[1]] = map[string]string{}
+					}
+					cats[p.Segments[1]][p.Segments[2]] = p.Category
+				}
+			}
+		}
+	}
+	var paths []pii.Path
+	for name, v := range kept {
+		fields, _ := v.(map[string]any)
+		kind, _ := fields["kind"].(string)
+		for k, fv := range fields {
+			if str, ok := fv.(string); !ok || str == "" {
+				continue
+			}
+			cat := cats[name][k]
+			if cat == "" {
+				cat = savedFieldCategory(kind, k)
+			}
+			if cat != "" {
+				paths = append(paths, pii.Path{Segments: []string{"saved", name, k}, Category: cat})
+			}
+		}
+	}
+	return kept, paths, nil
+}
+
+// savedFieldCategory is the category a saved thing's field is sealed
+// under by its name alone; "" for one that is not personal.
+func savedFieldCategory(kind, key string) string {
+	switch key {
+	case "phone":
+		return "phone"
+	case "email":
+		return "email"
+	case "address", "line", "landmark":
+		return "address"
+	case "account_name", "name_on_it":
+		return "name"
+	case "note", "birthday", "number":
+		return "other"
+	case "title":
+		if kind == "person" {
+			return "name"
+		}
+	}
+	return ""
 }

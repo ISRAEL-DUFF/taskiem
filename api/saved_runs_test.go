@@ -11,7 +11,7 @@ import (
 const savedFlow = `{"schema":"wd/v1","id":"wf_saved","version":1,"name":"prices","trigger":{"type":"manual"},
   "steps":[{"id":"send","type":"transform","config":{"output":{
     "prices":"=saved.price_list.body",
-    "pay":"=saved[\"supplier\"].bank_name + ' ' + saved[\"supplier\"].account_number",
+    "pay":"=saved[\"supplier\"].bank_name + ' ' + saved[\"supplier\"].account_name",
     "kind":"=saved.supplier.kind"}}}]}`
 
 // A business's saved things as a workflow's inputs (saved objects S3,
@@ -61,13 +61,21 @@ func TestSavedReadByRuns(t *testing.T) {
 	if ev := toJSON(got["events"]); !strings.Contains(ev, "Rice 50kg: 78,000") || strings.Contains(ev, "0123456789") || !strings.Contains(ev, "bank_account") {
 		t.Fatalf("the first run: %s", ev)
 	}
-	if open := toJSON(owner.must(200, "GET", "/v1/runs/"+id+"?reveal=true", nil)); !strings.Contains(open, "GTBank 0123456789") {
+	// An account number is not a run's (paying a saved account comes with
+	// payments): not even revealed.
+	if open := toJSON(owner.must(200, "GET", "/v1/runs/"+id+"?reveal=true", nil)); strings.Contains(open, "0123456789") || !strings.Contains(open, "GTBank") {
 		t.Fatalf("revealed: %s", open)
 	}
 	// Changed: the next run reads it as it is now.
 	owner.must(200, "PUT", "/v1/saved/"+prices["id"].(string), map[string]any{"details": map[string]any{"body": "Rice 50kg: 80,500"}})
 	if _, got := run(); !strings.Contains(toJSON(got["events"]), "Rice 50kg: 80,500") {
 		t.Fatalf("the next run: %s", toJSON(got["events"]))
+	}
+	// Removed since it was published: the start is refused, in words.
+	owner.must(204, "DELETE", "/v1/saved/"+prices["id"].(string), nil)
+	st, body := owner.do("POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})
+	if st < 400 || !strings.Contains(toJSON(body), "@price-list, which the business has not saved") {
+		t.Fatalf("removed: %d %v", st, body)
 	}
 }
 

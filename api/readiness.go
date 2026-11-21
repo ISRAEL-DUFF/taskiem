@@ -164,6 +164,12 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	var trig any
 	_ = json.Unmarshal(d.Trigger.RawCfg, &trig)
 	readExprs(nil, trig)
+	if len(d.Outputs) > 0 {
+		var outs any
+		b, _ := json.Marshal(d.Outputs)
+		_ = json.Unmarshal(b, &outs)
+		readExprs(nil, outs)
+	}
 	d.Walk(func(st *wd.Step) {
 		var raw map[string]any
 		b, _ := json.Marshal(st)
@@ -319,13 +325,16 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		// @price-list); a person's own are never a run's.
 		for _, n := range slices.Sorted(maps.Keys(savedUse)) {
 			name, err := saved.Name(n)
-			ok := false
-			if err == nil {
-				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM saved_objects WHERE tenant_id = $1 AND person_id IS NULL AND archived_at IS NULL AND name = $2)`, tenant, name).Scan(&ok); err != nil {
-					return nil, err
+			if err != nil {
+				// No saved thing can be called that: the workflow is to change.
+				for _, st := range savedUse[n] {
+					add(key{"saved", n, "", env}, readyNeed{Problem: "invalid", Blocking: true, Message: needMessage(l, "saved", "invalid", "", n)}, st)
 				}
-			} else {
-				name = n
+				continue
+			}
+			ok := false
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM saved_objects WHERE tenant_id = $1 AND person_id IS NULL AND archived_at IS NULL AND name = $2)`, tenant, name).Scan(&ok); err != nil {
+				return nil, err
 			}
 			if !ok {
 				for _, st := range savedUse[n] {
@@ -470,6 +479,9 @@ func needMessage(l lang.Tag, kind, problem, service, name string) string {
 	case "table":
 		return tr(l, "ready.table", "name", humanName(name))
 	case "saved":
+		if problem == "invalid" {
+			return tr(l, "ready.saved_invalid", "name", name)
+		}
 		return tr(l, "ready.saved", "name", name)
 	case "role":
 		return tr(l, "ready.role", "role", humanName(name))

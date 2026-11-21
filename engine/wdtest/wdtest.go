@@ -50,6 +50,11 @@ type Case struct {
 	Name    string         `json:"name"`
 	Trigger any            `json:"trigger"`
 	Env     map[string]any `json:"env,omitempty"`
+	// Saved are the business's saved things the workflow reads (the saved
+	// root; saved objects S3), by name as the workflow writes it, each with
+	// its fields. One it reads that the case does not give is a sample with
+	// every field a saved thing may have (SampleSaved).
+	Saved map[string]any `json:"saved,omitempty"`
 	// Mocks answer task steps (connector, http, code), keyed by step id or
 	// by instance id ("pay_all[2].to_bank", "compensate:pay"); an instance
 	// key wins. A list answers successive attempts; its last entry repeats.
@@ -374,6 +379,7 @@ func (r *runner) run(env map[string]any) {
 		Trigger:  r.c.Trigger,
 		Env:      merged,
 		Policies: snaps,
+		Saved:    caseSaved(r.def, r.c.Saved),
 	}, history.OriginIngest)
 	var runTimeout time.Time
 	if d, err := wd.ParseDuration(r.def.Settings.Timeout); err == nil && d > 0 {
@@ -1030,4 +1036,35 @@ func Discover(paths []string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// caseSaved are the saved things a case's run reads: those the case gives,
+// and a sample for each other the workflow reads.
+func caseSaved(def *wd.Definition, given map[string]any) map[string]any {
+	names := def.SavedNames()
+	if len(names) == 0 && len(given) == 0 {
+		return nil
+	}
+	out := map[string]any{}
+	for k, v := range given {
+		out[k] = v
+	}
+	for _, n := range names {
+		if _, ok := out[n]; !ok {
+			out[n] = SampleSaved(n)
+		}
+	}
+	return out
+}
+
+// SampleSaved is a sample saved thing of a name, with every field a saved
+// thing of a kind Taskiem knows may have, so a test or a dry run reads any
+// of them.
+func SampleSaved(name string) map[string]any {
+	out := map[string]any{"name": name, "title": "Sample " + name, "kind": "text"}
+	for _, f := range []string{"note", "body", "phone", "email", "address", "birthday", "line", "area", "landmark", "bank_name", "bank_code",
+		"account_name", "type", "provider", "number", "name_on_it", "file_name", "file_type"} {
+		out[f] = "sample-" + f
+	}
+	return out
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -522,20 +523,29 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	}
 	// Saved things by name, title and kind, never what they hold (saved
 	// objects S3).
-	rows, err = tx.Query(ctx, `SELECT name, title, kind, COALESCE((SELECT k.name FROM saved_kinds k WHERE k.id = kind_id), '') FROM saved_objects
-		WHERE person_id IS NULL AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 200`)
+	rows, err = tx.Query(ctx, `SELECT o.name, o.title, o.kind, COALESCE(k.name, ''), COALESCE(k.fields, '[]'::jsonb) FROM saved_objects o
+		LEFT JOIN saved_kinds k ON k.id = o.kind_id
+		WHERE o.person_id IS NULL AND o.archived_at IS NULL ORDER BY o.updated_at DESC LIMIT 200`)
 	if err != nil {
 		return c, err
 	}
 	for rows.Next() {
 		var x builder.SavedThing
-		var made string
-		if err := rows.Scan(&x.Name, &x.Title, &x.Kind, &made); err != nil {
+		var fields []saved.Field
+		if err := rows.Scan(&x.Name, &x.Title, &x.Kind, &x.KindName, &fields); err != nil {
 			rows.Close()
 			return c, err
 		}
-		if made != "" {
-			x.Kind = made
+		// The fields a run reads (saved_runs.go): never a sensitive one.
+		for _, f := range fields {
+			if f.NeverShare || f.Sensitive || f.Type == "file" || f.Type == "bank_account" {
+				continue
+			}
+			key := f.Key
+			if savedRunOwnField[key] {
+				key = "field_" + key
+			}
+			x.Fields = append(x.Fields, key)
 		}
 		c.Saved = append(c.Saved, x)
 	}

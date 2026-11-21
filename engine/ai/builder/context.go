@@ -63,6 +63,10 @@ type SavedThing struct {
 	Name  string `json:"name"`
 	Title string `json:"title"`
 	Kind  string `json:"kind"`
+	// A made-up kind's (kind custom): its name, and the fields a run
+	// reads by key.
+	KindName string   `json:"kind_name,omitempty"`
+	Fields   []string `json:"fields,omitempty"`
 }
 
 // LinkedBusiness is a business linked to this one on Taskiem.

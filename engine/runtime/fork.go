@@ -51,10 +51,13 @@ func IsNotResumable(err error) (*NotResumableError, bool) {
 
 // forkPlan is what a new run copies from its parent.
 type forkPlan struct {
-	parent     uuid.UUID
-	seed       string
-	trigger    any
-	env        map[string]any
+	parent  uuid.UUID
+	seed    string
+	trigger any
+	env     map[string]any
+	// saved is the failed run's saved things (saved.go): kept, as env is,
+	// so the steps it replays and those it runs read the same.
+	saved      map[string]any
 	failedStep string
 	lastSeq    int64
 	expansion  []byte // the failed run's, kept
@@ -131,7 +134,7 @@ func (s *Store) planFork(ctx context.Context, tx pgx.Tx, tenant, parent uuid.UUI
 			if err := json.Unmarshal(e.Payload, &p); err != nil {
 				return nil, err
 			}
-			fp.trigger, fp.env = p.Trigger, p.Env
+			fp.trigger, fp.env, fp.saved = p.Trigger, p.Env, p.Saved
 			continue
 		case history.CompensationStarted, history.CompensationCompleted:
 			return nil, &NotResumableError{Reason: "the run compensated its completed steps when it failed; start a new run instead"}

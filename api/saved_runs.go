@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -74,35 +75,41 @@ func (s *Server) savedForRuns(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 }
 
 // savedRunFields are a saved thing's fields as a run reads them, and the
-// category each personal one is sealed under.
+// category each personal one is sealed under. Every field its kind has is
+// there, "" when it holds nothing, so a step reading one never fails for
+// want of it. What only those who may pay see in full (an account number,
+// a made-up kind's sensitive or account fields) is not a run's: paying a
+// saved account comes with payments, which read it on the server (P1).
+// A made-up kind's field named as one of every thing's own (name, title,
+// kind, note) is read as field_<key>.
 func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x savedRow) (map[string]any, map[string]string, error) {
-	f := map[string]any{"name": x.Name, "title": x.Title, "kind": x.Kind}
+	f := map[string]any{}
 	sealed := map[string]string{}
 	str := func(k string) string { v, _ := x.Details[k].(string); return v }
 	put := func(k, v, category string) {
-		if v == "" {
-			return
-		}
 		f[k] = v
-		if category != "" {
+		if v != "" && category != "" {
 			sealed[k] = category
 		}
 	}
-	put("note", str("note"), "")
+	put("name", x.Name, "")
+	// A person's title is their name.
+	titleCat := ""
+	if x.Kind == saved.KindPerson {
+		titleCat = "name"
+	}
+	put("title", x.Title, titleCat)
+	put("kind", x.Kind, "")
+	put("note", str("note"), "other")
 	switch x.Kind {
 	case saved.KindBankAccount:
 		put("bank_name", str("bank_name"), "")
 		put("bank_code", str("bank_code"), "")
+		name := ""
 		if x.CheckedName != nil {
-			put("account_name", *x.CheckedName, "name")
+			name = *x.CheckedName
 		}
-		if len(x.Sealed) > 0 {
-			number, err := s.openSaved(ctx, tx, o, x.ID, x.Sealed)
-			if err != nil {
-				return nil, nil, err
-			}
-			put("account_number", number, "account_number")
-		}
+		put("account_name", name, "name")
 	case saved.KindPerson:
 		put("phone", str("phone"), "phone")
 		put("email", str("email"), "email")
@@ -127,28 +134,34 @@ func (s *Server) savedRunFields(ctx context.Context, tx pgx.Tx, o savedOwner, x 
 		put("file_type", str("file_type"), "")
 	case saved.KindCustom:
 		values, err := s.customValuesTx(ctx, tx, o, x)
+		if errors.Is(err, pii.ErrErased) {
+			values, err = map[string]string{}, nil
+		}
 		if err != nil {
 			return nil, nil, err
 		}
 		for _, fl := range x.Fields {
-			v := values[fl.Key]
-			switch {
-			case fl.NeverShare || fl.Type == "file":
+			if fl.NeverShare || fl.Sensitive || fl.Type == "file" || fl.Type == "bank_account" {
 				continue
-			case fl.Type == "phone":
-				put(fl.Key, v, "phone")
-			case fl.Type == "email":
-				put(fl.Key, v, "email")
-			case fl.Type == "bank_account":
-				put(fl.Key, v, "account_number")
-			case fl.Type == "place":
-				put(fl.Key, v, "address")
-			case fl.Sensitive:
-				put(fl.Key, v, "other")
+			}
+			key := fl.Key
+			if savedRunOwnField[key] {
+				key = "field_" + key
+			}
+			switch fl.Type {
+			case "phone":
+				put(key, values[fl.Key], "phone")
+			case "email":
+				put(key, values[fl.Key], "email")
+			case "place":
+				put(key, values[fl.Key], "address")
 			default:
-				put(fl.Key, v, "")
+				put(key, values[fl.Key], "")
 			}
 		}
 	}
 	return f, sealed, nil
 }
+
+// savedRunOwnField are the fields every saved thing has in a run.
+var savedRunOwnField = map[string]bool{"name": true, "title": true, "kind": true, "note": true}
