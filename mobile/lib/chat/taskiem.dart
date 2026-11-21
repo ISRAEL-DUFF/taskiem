@@ -47,6 +47,8 @@ import 'invoice_match.dart' show InvoiceMatchPage, showMatchSheet;
 import 'bills_page.dart' show BillsPage, openBill;
 import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
+import 'payments_page.dart' show SentPaymentsPage;
+import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
@@ -542,6 +544,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       '/schools' || '/schools/payments' => StudentsPage(auth: auth),
       '/schools/debtors' => DebtorsPage(auth: auth),
       '/schools/clearance' => ClearancePage(auth: auth),
+      '/payments' => SentPaymentsPage(auth: auth, backLabel: 'Back to Taskiem'),
+      '/settings/saved' => SavedAccountsPage(auth: auth, mine: false),
       _ => null,
     };
     if (page == null) return false;

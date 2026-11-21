@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/menu_card.dart' show ActionFormSheet;
+import 'package:taskiem/chat/pay_sheet.dart' show PaySheet;
 import 'package:taskiem/chat/tool_sheet.dart' show ToolSheet;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
@@ -257,5 +258,60 @@ void main() {
     await t.tap(find.text('Add a product'));
     await settle(t);
     expect(find.byWidgetPredicate((w) => w is ToolSheet && w.add), findsOneWidget);
+  });
+
+  testWidgets('a payment (confirm: passkey) opens the Pay sheet, not the form sent as words', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final said = <Map<String, dynamic>>[];
+    final catalogue = {
+      'topics': [
+        {
+          'id': 'pay', 'name': 'Pay', 'icon': 'money', 'color': 'teal',
+          'actions': [
+            {
+              ..._a('pay.person', 'Pay someone', 'From your balance, checked with the bank', 'money', opens: 'form', tool: 'pay'),
+              'confirm': 'passkey',
+              'fields': [
+                {'key': 'who', 'label': 'Who are you paying?', 'kind': 'payee'},
+                {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions') return http.Response(jsonEncode(catalogue), 200);
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions/pay.person/choices') return http.Response(jsonEncode({'fields': {'who': ['@bayo']}}), 200);
+        if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
+          said.add(jsonDecode(req.body) as Map<String, dynamic>);
+          return http.Response(jsonEncode({'messages': [_menu('p1', {'topic': 'pay', 'pick': 'pay.person', 'values': {'who': '@bayo'}}, '2026-11-11T13:40:00Z')]}), 200);
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), 'pay bayo');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    await t.ensureVisible(find.text('Pay someone'));
+    await settle(t);
+    await t.tap(find.text('Pay someone'));
+    await settle(t);
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.byType(PaySheet), findsOneWidget);
+    expect(find.byType(ActionFormSheet), findsNothing);
+    expect(find.text('@bayo'), findsWidgets, reason: 'what Taskiem took from the message is in the form');
+    Navigator.of(t.element(find.byType(PaySheet))).pop();
+    await settle(t);
+    await t.pump(const Duration(milliseconds: 600));
+    expect(said, hasLength(1), reason: 'nothing was sent as words');
   });
 }

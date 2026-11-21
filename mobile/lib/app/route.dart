@@ -3,7 +3,7 @@
 // belongs to, and the screen over it, if any.
 
 /// What opens over the tab.
-enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage }
+enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
 enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request, standing, group, groupInvites }
@@ -117,6 +117,16 @@ AppRoute routeOf(String path) {
     return (tab: tabChats, screen: RouteScreen.conversation, id: with_);
   }
   if (p == '/approvals' || p.startsWith('/approvals/')) return (tab: tabChats, screen: RouteScreen.taskiem, id: '');
+  // Payments, and one payment to confirm (the link Taskiem sends in the
+  // chat): the list over Money, the payment over it; id '' for the list.
+  final pay = RegExp(r'^/payments(?:/([^/]+))?$').firstMatch(p);
+  if (pay != null) {
+    try {
+      return (tab: tabMoney, screen: RouteScreen.payments, id: pay[1] == null ? '' : Uri.decodeComponent(pay[1]!));
+    } on FormatException {
+      return (tab: tabMoney, screen: RouteScreen.payments, id: '');
+    }
+  }
   final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
   if (one != null) {
     final kind = one[1]!;

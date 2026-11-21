@@ -141,6 +141,14 @@ Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkLi
 | Place the order | `chat/basket.dart` `_PlaceStep` | The basket › Place the order | Who pays (rows marked Chosen), address, landmark, note | [fine] |
 | Where to be paid back | `chat/basket.dart` `_AccountStep` | Send each their share, with no saved account | Bank, number, name | [fine] |
 
+## 5d. Pay one person (P1, `docs/spec/chat-pay-people.md`)
+
+| Screen | File | How it is reached | What it holds | Tag |
+| --- | --- | --- | --- | --- |
+| The Pay sheet | `chat/pay_sheet.dart` `PaySheet` | Taskiem's chat › Pay › Pay someone, Pay an account number (an action with `confirm: "passkey"`) | The action's fields: a saved account as @name chips, a 10-digit number, the bank picked from `/v1/banks`, how much ("45k"), what for as chips, a note; Next prepares the payment | [done 21 Nov] a `TkFormSheet` built in the new look |
+| Check before you pay, one payment | `chat/pay_sheet.dart` `PaymentSheet` | The Pay sheet's Next; a row of Payments; a `/payments/<id>` link | The bank's name for the account large on a `TkTopCard`, the payee, bank and masked account under it, the amount; first payment, changed account and paid in the last day as callouts; Pay ₦… with the passkey (a code behind a link), Pay again, Cancel it or Back | [done 21 Nov] |
+| Payments | `chat/payments_page.dart` `SentPaymentsPage`, `PayLimitSheet` | The chat's Pay › Your payments (page `/payments`); a `/payments` link | Filters, the payments not sent yet and sent (status as a pill, amount, masked account); for an owner, what each role may pay, a sheet with one payment and a day's total | [done 21 Nov] |
+
 ## 6. Shared parts the branch added or changed
 
 | Part | File | Note |

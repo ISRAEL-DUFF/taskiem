@@ -17,6 +17,7 @@ import '../kit/kit.dart';
 import '../kit/mobile.dart';
 import '../kit/sheet.dart';
 import 'approve.dart' show TkTextBox;
+import 'pay_sheet.dart' show PaySheet;
 import '../kit/icon.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -178,6 +179,16 @@ class _MenuCardState extends State<MenuCard> {
     // with them in it, even for an action with a tool of its own, whose
     // form would start empty.
     final carry = picked && widget.menu.values.isNotEmpty && fields.isNotEmpty;
+    // A payment (confirm: passkey): the Pay sheet prepares it and pays it
+    // with a passkey; nothing is sent to Taskiem as words.
+    if (a.confirm == 'passkey' && fields.isNotEmpty) {
+      final paid = await showTkSheet<Payment>(
+        context,
+        (_) => PaySheet(auth: widget.auth, action: a, initial: picked ? widget.menu.values : const {}),
+      );
+      if (paid != null && mounted) _fold(a);
+      return;
+    }
     if (!carry && a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a);
     if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return _fold(a);
     // An action that takes values: its form here (M4), filled with what
@@ -446,7 +457,9 @@ class _MenuCardState extends State<MenuCard> {
 /// An action's form (chat-menus.md M4; the web's ChatMenu.tsx ActionForm):
 /// a field for each of its values, the business's own choices as chips
 /// above it; its button gives the values back to be sent to Taskiem, read
-/// as the action's command typed, the button being the person's yes.
+/// as the action's command typed, the button being the person's yes. An
+/// action with `confirm: "passkey"` (a payment) is not this form but the
+/// Pay sheet (pay_sheet.dart), which prepares the payment itself.
 class ActionFormSheet extends StatefulWidget {
   const ActionFormSheet({super.key, required this.auth, required this.action, this.initial = const {}});
   final Auth auth;

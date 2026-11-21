@@ -26,6 +26,7 @@ import 'api/api.g.dart';
 import 'chat/bills_page.dart' show openBill;
 import 'chat/invoices_page.dart' show openInvoice;
 import 'chat/money_page.dart' show MoneyPage;
+import 'chat/payments_page.dart' show SentPaymentsPage;
 import 'chat/purchases_page.dart' show openPurchase;
 import 'chat/storefront_orders_page.dart' show StorefrontOrdersPage, openStorefrontOrder;
 import 'chat/trade_orders_page.dart' show openTradeOrder;
@@ -595,6 +596,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openTradeOrder(context, auth, id);
       case RouteScreen.storefrontOrder:
         openStorefrontOrder(context, auth, id);
+      case RouteScreen.payments:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, open: id.isEmpty ? null : id)));
       case RouteScreen.you:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
       case RouteScreen.youPage:

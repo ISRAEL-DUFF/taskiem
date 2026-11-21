@@ -517,6 +517,24 @@ Left different on purpose:
 - A customer's order keeps what changes it: − and +, the address, the
   fee and how they pay.
 
+### Paying a person
+
+Built 21 November 2026 in the same look, from the plan (no drawing yet).
+
+- **The Pay sheet** is the chat's form for the action, with its own
+  kinds: a saved account as @name chips under its box, an account number
+  of 10 digits, the bank a `TkPickBox` opening the bank list with a search.
+  Its button is Next: nothing is paid from the form.
+- **Check before you pay:** the bank's name for the account is the
+  largest words on the sheet, on a `TkTopCard` with "The bank says" over it
+  and the payee, bank and masked account under it, then the amount. A
+  changed account is a red callout, a first payment and the same payment
+  in the last day orange ones. Pay ₦… carries the fingerprint; the
+  authenticator's code is behind a link, as Approve has it.
+- **Payments:** a list page with the filters under the head; one not sent
+  yet has an amber dot and its own section. The owner's limits are rows
+  under "What others may pay", each opening a sheet.
+
 ## The school, as drawn
 
 A school's people get the school on the phone as it was drawn (drawn first, then built to the drawing, each screen compared at 340 px in light and dark). Nothing here is new on the server except the three chat additions at the end; every screen reads and sends what the web's Schools pages do (`docs/spec/schools.md`).
