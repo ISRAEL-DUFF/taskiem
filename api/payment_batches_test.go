@@ -67,6 +67,10 @@ func TestPaySeveral(t *testing.T) {
 	if b["count"] != float64(2) || b["total_kobo"] != float64(3000000) || len(held) != 1 || held[0].(map[string]any)["code"] != "no_payee" || held[0].(map[string]any)["row"] != float64(2) {
 		t.Fatalf("prepared: %v", b)
 	}
+	// The held rows are kept with the batch.
+	if got := owner.must(200, "GET", "/v1/payment-batches/"+id, nil)["batch"].(map[string]any); len(got["held"].([]any)) != 1 {
+		t.Fatalf("held kept: %v", got["held"])
+	}
 	owner.must(400, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{}})
 	// Every row held out: nothing to send, the batch let go.
 	if all := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{{"payee": "nobody", "amount_kobo": 100000}}})["batch"].(map[string]any); all["status"] != "cancelled" {

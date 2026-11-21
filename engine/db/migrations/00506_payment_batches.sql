@@ -11,6 +11,8 @@ CREATE TABLE payment_batches (
   kind          text NOT NULL DEFAULT 'list' CHECK (kind IN ('list', 'riders', 'messages')),
   status        text NOT NULL DEFAULT 'prepared' CHECK (status IN ('preparing', 'prepared', 'sent', 'cancelled')),
   copy_of       uuid REFERENCES payment_batches(id),
+  -- The rows held out when it was prepared, with why (no account numbers).
+  held          jsonb NOT NULL DEFAULT '[]',
   created_by    text NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   confirmed_by  text,

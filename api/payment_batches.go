@@ -85,8 +85,8 @@ func (s *Server) paymentBatchRoutes(r chi.Router) {
 // batchTx reads a batch with its payments.
 func batchTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, owner bool) (batchView, error) {
 	var b batchView
-	if err := tx.QueryRow(ctx, `SELECT id, title, kind, status, created_by, created_at, confirmed_at FROM payment_batches WHERE id = $1`, id).
-		Scan(&b.ID, &b.Title, &b.Kind, &b.Status, &b.CreatedBy, &b.CreatedAt, &b.ConfirmedAt); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id, title, kind, status, created_by, created_at, confirmed_at, held FROM payment_batches WHERE id = $1`, id).
+		Scan(&b.ID, &b.Title, &b.Kind, &b.Status, &b.CreatedBy, &b.CreatedAt, &b.ConfirmedAt, &b.Held); err != nil {
 		return b, err
 	}
 	rows, err := tx.Query(ctx, `SELECT `+paymentCols+` FROM payments WHERE batch_id = $1 AND (NOT personal OR $2) ORDER BY created_at, id`, id, owner)
@@ -586,8 +586,11 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		// Every row held out: nothing to send, so the batch is let go.
-		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = CASE WHEN EXISTS (SELECT 1 FROM payments WHERE batch_id = $1) THEN 'prepared' ELSE 'cancelled' END
-			WHERE id = $1 AND status = 'preparing'`, id); err != nil {
+		if held == nil {
+			held = []batchHeld{}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = CASE WHEN EXISTS (SELECT 1 FROM payments WHERE batch_id = $1) THEN 'prepared' ELSE 'cancelled' END,
+			held = $2 WHERE id = $1 AND status = 'preparing'`, id, held); err != nil {
 			return err
 		}
 		var err error
@@ -599,7 +602,6 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 		s.fail(w, r, err)
 		return
 	}
-	out.Held = held
 	writeJSON(w, http.StatusCreated, map[string]any{"batch": out})
 }
 

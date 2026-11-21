@@ -13834,7 +13834,7 @@ class ListPaymentsResponse {
 }
 
 class Payment {
-  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, required this.bankName, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.runId, this.savedId, required this.startedFrom, required this.status});
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, required this.startedFrom, required this.status});
 
   /// The account number masked (••6789).
   final String account;
@@ -13844,6 +13844,8 @@ class Payment {
   final bool? again;
   final int amountKobo;
   final String bankName;
+  /// The list it was paid in, when it was
+  final Object? batchId;
   final bool? changedAccount;
   final Object? confirmedAt;
   final Object? confirmedBy;
@@ -13864,6 +13866,8 @@ class Payment {
   final String purpose;
   final String? purposeNote;
   final Object? reason;
+  /// The rider paid, when it was one
+  final Object? riderId;
   final Object? runId;
   final Object? savedId;
   final String startedFrom;
@@ -13875,6 +13879,7 @@ class Payment {
         again: j['again'] == null ? null : j['again'] as bool,
         amountKobo: (j['amount_kobo'] as num).toInt(),
         bankName: j['bank_name'] as String,
+        batchId: j['batch_id'],
         changedAccount: j['changed_account'] == null ? null : j['changed_account'] as bool,
         confirmedAt: j['confirmed_at'],
         confirmedBy: j['confirmed_by'],
@@ -13891,6 +13896,7 @@ class Payment {
         purpose: j['purpose'] as String,
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
         reason: j['reason'],
+        riderId: j['rider_id'],
         runId: j['run_id'],
         savedId: j['saved_id'],
         startedFrom: j['started_from'] as String,
@@ -13903,6 +13909,7 @@ class Payment {
         'again': ?again,
         'amount_kobo': amountKobo,
         'bank_name': bankName,
+        'batch_id': ?batchId,
         'changed_account': ?changedAccount,
         'confirmed_at': ?confirmedAt,
         'confirmed_by': ?confirmedBy,
@@ -13919,6 +13926,7 @@ class Payment {
         'purpose': purpose,
         'purpose_note': ?purposeNote,
         'reason': ?reason,
+        'rider_id': ?riderId,
         'run_id': ?runId,
         'saved_id': ?savedId,
         'started_from': startedFrom,

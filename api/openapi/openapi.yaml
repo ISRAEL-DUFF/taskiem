@@ -45411,6 +45411,14 @@ components:
         saved_id:
           type: [string, 'null']
           format: uuid
+        rider_id:
+          type: [string, 'null']
+          format: uuid
+          description: The rider paid, when it was one
+        batch_id:
+          type: [string, 'null']
+          format: uuid
+          description: The list it was paid in, when it was
         personal:
           type: boolean
           description: An owner's own saved account, paid from the business (owner's drawings).

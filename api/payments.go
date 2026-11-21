@@ -101,19 +101,21 @@ type payment struct {
 
 	bankCode string
 	sealed   map[string]any
-	// RiderID: the rider paid, when it was one.
+	// RiderID: the rider paid, when it was one; BatchID the list it was
+	// paid in, when it was.
 	RiderID *uuid.UUID `json:"rider_id"`
+	BatchID *uuid.UUID `json:"batch_id"`
 }
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
-	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id`
+	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
 	var last4 string
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
-		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID)
+		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID)
 	x.Account = "••" + last4
 	return x, err
 }
