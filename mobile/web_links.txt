@@ -48,3 +48,4 @@
 /void | not a page
 /you/chats/new | app lib/screens/chat_link.dart
 /schools/payments | app lib/school/school_money.dart
+/search | app lib/chat/search_everywhere.dart
