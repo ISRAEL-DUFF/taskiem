@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"sort"
 	"time"
 	"net/http"
 	"regexp"
@@ -431,6 +432,63 @@ func chatTopicByID(id string) (chatTopic, bool) {
 	return chatTopic{}, false
 }
 
+// topicHints are words a message about a topic tends to have (§8.3),
+// English and Pidgin, matched as the start of a word ("rider" finds
+// "riders"); those with a space anywhere in the message. Used when no model
+// can read the message.
+var topicHints = map[string][]string{
+	"sales":    {"sale", "sold", "sell", "selling", "customer bought", "customer buy"},
+	"stock":    {"stock", "carton", "crate", "shelf", "finish", "remain", "spoil", "expire", "inventory", "count"},
+	"products": {"product", "price", "service", "item", "photo"},
+	"page":     {"page", "website", "qr", "opening", "close shop", "open shop", "hours"},
+	"orders":   {"order", "refund", "delivered"},
+	"riders":   {"rider", "dispatch", "delivery", "deliver", "okada", "bike", "keke", "motorcycle"},
+	"bookings": {"booking", "appointment", "slot", "day off"},
+	"buying":   {"supplier", "restock", "depot", "wholesale", "distributor", "purchase", "received"},
+	"money":    {"money", "spent", "spend", "expense", "cash", "transfer", "invoice", "diesel", "fuel", "rent"},
+	"owe":      {"owe", "owing", "debt", "debtor", "credit", "balance", "pay me", "dey owe"},
+	"staff":    {"staff", "task", "worker", "team", "approv", "employee"},
+	"lists":    {"list", "table", "record", "spreadsheet"},
+	"auto":     {"automat", "workflow", "remind", "every week", "every day", "every month", "every friday"},
+	"saved":    {"save", "saved", "remember"},
+	"school":   {"student", "school", "fees", "parent", "pupil", "term", "clearance"},
+	"account":  {"language", "password", "login", "sign in", "subscription", "my plan"},
+}
+
+var hintWordRe = regexp.MustCompile(`[\p{L}]+`)
+
+// topicByWords is the one topic a message's words point to, among those
+// the person can use: the most hints, and no tie.
+func (s *Server) topicByWords(ctx context.Context, c *chat, text string) (chatTopic, bool) {
+	low := strings.ToLower(text)
+	words := hintWordRe.FindAllString(low, -1)
+	best, score, tie := chatTopic{}, 0, false
+	for _, t := range s.topicsFor(ctx, c) {
+		n := 0
+		for _, h := range topicHints[t.ID] {
+			if strings.Contains(h, " ") {
+				if strings.Contains(low, h) {
+					n++
+				}
+				continue
+			}
+			for _, w := range words {
+				if strings.HasPrefix(w, h) {
+					n++
+					break
+				}
+			}
+		}
+		switch {
+		case n > score:
+			best, score, tie = t, n, false
+		case n == score && n > 0:
+			tie = true
+		}
+	}
+	return best, score > 0 && !tie
+}
+
 // chatTopicNamed finds a topic by one of its words ("riders", "help stock").
 func chatTopicNamed(word string) (chatTopic, bool) {
 	word = strings.ToLower(strings.TrimSpace(word))
@@ -461,17 +519,29 @@ func (s *Server) actionsOf(ctx context.Context, c *chat, topic string) []chatAct
 			out = append(out, a)
 		}
 	}
+	// The person's most used first, in the last thirty days (§6.1); else
+	// the catalogue's order, which puts the commonest first.
+	if uses := s.actionUses(ctx, c); len(uses) > 0 {
+		sort.SliceStable(out, func(i, j int) bool { return uses[out[i].ID] > uses[out[j].ID] })
+	}
 	return out
 }
 
 // topicsFor are the topics the person can use at all.
 func (s *Server) topicsFor(ctx context.Context, c *chat) []chatTopic {
 	var out []chatTopic
+	used := map[string]int{}
+	uses := s.actionUses(ctx, c)
 	for _, t := range chatTopics {
-		if len(s.actionsOf(ctx, c, t.ID)) > 0 {
+		acts := s.actionsOf(ctx, c, t.ID)
+		if len(acts) > 0 {
 			out = append(out, t)
 		}
+		for _, a := range acts {
+			used[t.ID] += uses[a.ID]
+		}
 	}
+	sort.SliceStable(out, func(i, j int) bool { return used[out[i].ID] > used[out[j].ID] })
 	return out
 }
 

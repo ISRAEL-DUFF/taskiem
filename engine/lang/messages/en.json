@@ -384,6 +384,11 @@
       "reviewed": true,
       "context": "A language that is not on"
     },
+    "menu.about": {
+      "text": "About {topic}. What would you like to do?",
+      "reviewed": true,
+      "context": "Heads a topic's menu when Taskiem's model could tell the topic but not the action"
+    },
     "menu.account.lang": {
       "text": "Language",
       "reviewed": true,
@@ -1473,6 +1478,11 @@
       "text": "One item's count",
       "reviewed": true,
       "context": "The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.taken": {
+      "text": "{title}: {values}.",
+      "reviewed": true,
+      "context": "Before a menu's next question, what Taskiem already took from the message (its model)"
     },
     "menu.tip": {
       "text": "Next time you can type: *{command}*",

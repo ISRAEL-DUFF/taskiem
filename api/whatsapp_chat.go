@@ -225,6 +225,9 @@ type chat struct {
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
+	// uses are the person's uses of the menus' actions, read once for a
+	// message (chat_menus.go).
+	uses map[string]int
 }
 
 // t is a message in the conversation's language.
@@ -1220,6 +1223,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.state == stateIdle && !c.understood {
 		if done, err := s.waUnderstand(ctx, c, text); done || err != nil {
 			return err
+		}
+	}
+	// No model could read it: a topic its words point to, as its menu
+	// (chat-menus.md §8.3).
+	if c.state == stateIdle && !c.understood {
+		if t, ok := s.topicByWords(ctx, c, text); ok {
+			return s.sayMenu(ctx, c, chatMenuMsg{Topic: t.ID, Line: c.t("menu.about", "topic", word(c.lang.Tag, topicWordID(t), t.Name))})
 		}
 	}
 	// In the Taskiem chat, the topics to choose from with the short answer.

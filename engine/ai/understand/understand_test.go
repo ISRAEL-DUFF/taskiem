@@ -2,6 +2,7 @@ package understand_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -38,6 +39,12 @@ func TestParseRefusesWhatCannotBeUsed(t *testing.T) {
 		{`{"kind":"command","command":"  stock   rice ","reply":"x"}`, understand.Result{Kind: understand.Command, Command: "stock rice"}, false},
 		{`{"kind":"ask","command":"","reply":"How much did Musa pay?"}`, understand.Result{Kind: understand.Ask, Reply: "How much did Musa pay?"}, false},
 		{`{"kind":"cannot","command":"","reply":"I can't book flights."}`, understand.Result{Kind: understand.Cannot, Reply: "I can't book flights."}, false},
+		{`{"kind":"action","id":"riders.add","pick":"","values":[{"field":"name","value":" Musa  Bello "},{"field":"phone","value":""}],"command":"","reply":""}`,
+			understand.Result{Kind: understand.Action, ID: "riders.add", Values: map[string]string{"name": "Musa Bello"}}, false},
+		{`{"kind":"topic","id":"riders","pick":"riders.add","values":[{"field":"name","value":"Musa"}],"command":"","reply":""}`,
+			understand.Result{Kind: understand.Topic, ID: "riders", Pick: "riders.add"}, false},
+		{`{"kind":"action","id":"Riders; drop","pick":"","values":[],"command":"","reply":""}`, understand.Result{}, true},
+		{`{"kind":"action","id":"riders.add","pick":"","values":[{"field":"Name!","value":"x"}],"command":"","reply":""}`, understand.Result{}, true},
 		{`{"kind":"command","command":"","reply":""}`, understand.Result{}, true},
 		{`{"kind":"command","command":"` + long + `","reply":""}`, understand.Result{}, true},
 		{`{"kind":"ask","command":"","reply":""}`, understand.Result{}, true},
@@ -46,7 +53,7 @@ func TestParseRefusesWhatCannotBeUsed(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, err := understand.Parse(&ai.Response{Text: c.answer})
-		if c.bad != (err != nil) || got != c.want {
+		if c.bad != (err != nil) || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %+v %v", c.answer, got, err)
 		}
 	}

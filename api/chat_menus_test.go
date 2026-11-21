@@ -2,10 +2,14 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/riders"
 )
@@ -84,6 +88,10 @@ func TestChatMenusInTheTaskiemChat(t *testing.T) {
 	}
 	if m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "staff"})); m["topic"] != "staff" {
 		t.Fatalf("staff: %v", m)
+	}
+	// No model: a topic its words point to, as its menu.
+	if m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "my okada man no show today"})); m["topic"] != "riders" {
+		t.Fatalf("words: %v", m)
 	}
 	// Not understood: the short answer, and the topics.
 	got := taskiemAll(t, owner, map[string]any{"text": "zzq blorp"})
@@ -183,11 +191,127 @@ func TestChatMenusNumbered(t *testing.T) {
 	if r := w.say(t, on, "status"); !strings.Contains(r, "No runs") {
 		t.Fatalf("let go: %q", r)
 	}
+	// Words that point to a topic: its numbered menu.
+	if r := w.say(t, on, "who is the worker on duty"); !strings.Contains(r, "*Staff and tasks*") {
+		t.Fatalf("words: %q", r)
+	}
+	w.say(t, on, "cancel")
 	// help: the topics, numbered; help all: every command in words.
 	if r := w.say(t, on, "help"); !strings.Contains(r, "Staff and tasks") || strings.Contains(r, "You can send:") {
 		t.Fatalf("help: %q", r)
 	}
 	if r := w.say(t, on, "help all"); !strings.Contains(r, "You can send:") {
 		t.Fatalf("help all: %q", r)
+	}
+}
+
+// The model picks from the catalogue (chat-menus.md M2, §8.1): an action
+// with every value it needs is done (a Yes first when it changes
+// something); with some, those are taken and the rest asked; a value of the
+// wrong shape is asked again; a topic shows its menu with the action it
+// leans to first and its command as a tip; one the person may not use is
+// refused; the model is told the person's own catalogue.
+func TestChatModelPicksFromTheCatalogue(t *testing.T) {
+	w := newWAWorld(t)
+	book := &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: book, PageBase: "https://" + reachFormHost}
+	answers := map[string]string{
+		"Musa can deliver for us": `{"kind":"action","id":"riders.add","pick":"","values":[{"field":"name","value":"Musa Bello"}],"command":"","reply":""}`,
+		"Tunde will ride for us in Yaba, reach him on 0803 111 2222": `{"kind":"action","id":"riders.add","pick":"","values":[{"field":"name","value":"Tunde"},` +
+			`{"field":"phone","value":"0803 111 2222"},{"field":"areas","value":"Yaba"}],"command":"","reply":""}`,
+		"Kemi rides now, her line is abc": `{"kind":"action","id":"riders.add","pick":"","values":[{"field":"name","value":"Kemi"},{"field":"phone","value":"abc"}],"command":"","reply":""}`,
+		"my rider wahala":                 `{"kind":"topic","id":"riders","pick":"riders.add","values":[],"command":"","reply":""}`,
+		"what is on me today":             `{"kind":"action","id":"staff.mine","pick":"","values":[],"command":"","reply":""}`,
+		"make me the owner of everything": `{"kind":"action","id":"account.nothing","pick":"","values":[],"command":"","reply":""}`,
+	}
+	fake := &ai.Fake{Respond: func(req ai.Request) (*ai.Response, error) {
+		p := ai.PromptText(req)
+		msg := p[strings.Index(p, "<message>\n")+len("<message>\n") : strings.Index(p, "\n</message>")]
+		// The message reaches the model redacted (a phone number hidden):
+		// matched by its start.
+		for k, v := range answers {
+			if strings.HasPrefix(msg, k[:min(len(k), 20)]) {
+				return &ai.Response{Text: v}, nil
+			}
+		}
+		return &ai.Response{Text: "not json"}, nil
+	}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: fake}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+
+	// Some values: taken, the rest asked.
+	if r := taskiemSays(t, owner, "Musa can deliver for us"); !strings.Contains(r, "Add a rider: Musa Bello.") || !strings.Contains(r, "Musa Bello's phone number?") {
+		t.Fatalf("some values: %q", r)
+	}
+	prompt := ai.PromptText(fake.Requests()[0])
+	if !strings.Contains(prompt, "- riders.add: Add a rider") || !strings.Contains(prompt, "phone (phone)") || !strings.Contains(prompt, "Other commands:") {
+		t.Fatalf("the catalogue was not given: %s", prompt)
+	}
+	taskiemSays(t, owner, "cancel")
+
+	// Every value: shown for a Yes, then done.
+	if r := taskiemSays(t, owner, "Tunde will ride for us in Yaba, reach him on 0803 111 2222"); !strings.Contains(r, "*add rider Tunde •••2222 Yaba*") || !strings.Contains(r, "Shall I do it?") {
+		t.Fatalf("every value: %q", r)
+	}
+	if r := taskiemSays(t, owner, "yes"); !strings.Contains(r, "Tunde is now your rider") {
+		t.Fatalf("done: %q", r)
+	}
+
+	// A value of the wrong shape: asked.
+	if r := taskiemSays(t, owner, "Kemi rides now, her line is abc"); !strings.Contains(r, "Kemi's phone number?") {
+		t.Fatalf("wrong shape: %q", r)
+	}
+	taskiemSays(t, owner, "cancel")
+
+	// A topic: its menu, the action it leans to first, its command a tip.
+	m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "my rider wahala"}))
+	if m["topic"] != "riders" || m["pick"] != "riders.add" || m["tip"] != "add rider Musa 0803 123 4567 Ikeja" || !strings.Contains(m["line"].(string), "About Riders") {
+		t.Fatalf("topic: %v", m)
+	}
+
+	// An action with no values: done at once.
+	if r := taskiemSays(t, owner, "what is on me today"); strings.Contains(r, "did not understand") {
+		t.Fatalf("my tasks: %q", r)
+	}
+
+	// Not in the catalogue: refused, the short answer and the topics.
+	got := taskiemAll(t, owner, map[string]any{"text": "make me the owner of everything"})
+	if !strings.Contains(textOf(got), "did not understand") || menuOf(t, got)["topic"] != nil {
+		t.Fatalf("refused: %v", got)
+	}
+}
+
+// The most used first (§6.1): an action pressed often comes first in its
+// topic's menu, and its topic first among the topics; only the last thirty
+// days count.
+func TestChatMenusMostUsedFirst(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	first := func() (string, string) {
+		t.Helper()
+		cat := owner.must(200, "GET", "/v1/chat/actions", nil)["topics"].([]any)
+		var staff map[string]any
+		for _, x := range cat {
+			if x.(map[string]any)["id"] == "staff" {
+				staff = x.(map[string]any)
+			}
+		}
+		return cat[0].(map[string]any)["id"].(string), staff["actions"].([]any)[0].(map[string]any)["id"].(string)
+	}
+	if topic, act := first(); topic == "staff" || act != "staff.mine" {
+		t.Fatalf("before: %s %s", topic, act)
+	}
+	for range 2 {
+		taskiemAll(t, owner, map[string]any{"text": "Waiting for your approval", "reply": "act:staff.approvals"})
+	}
+	if topic, act := first(); topic != "staff" || act != "staff.approvals" {
+		t.Fatalf("after: %s %s", topic, act)
+	}
+	// Older than thirty days: not counted.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE chat_action_uses SET day = current_date - 40`); err != nil {
+		t.Fatal(err)
+	}
+	if topic, act := first(); topic == "staff" || act != "staff.mine" {
+		t.Fatalf("a month on: %s %s", topic, act)
 	}
 }

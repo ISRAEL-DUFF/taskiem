@@ -308,6 +308,11 @@
       "text": "{name} kò sí níbí. Àwọn èdè tó wà níbí: {languages}.",
       "reviewed": false
     },
+    "menu.about": {
+      "text": "About {topic}. What would you like to do?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Heads a topic's menu when Taskiem's model could tell the topic but not the action"
+    },
     "menu.account.lang": {
       "text": "Language",
       "reviewed": false,
@@ -1397,6 +1402,11 @@
       "text": "One item's count",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.taken": {
+      "text": "{title}: {values}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Before a menu's next question, what Taskiem already took from the message (its model)"
     },
     "menu.tip": {
       "text": "Next time you can type: *{command}*",

@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -232,6 +233,7 @@ func (s *Server) menuAct(ctx context.Context, c *chat, id string) error {
 	if !ok || !s.mayAct(c, s.chatAreas(ctx, c), a) {
 		return c.say(ctx, s, c.t("menu.not_yours"))
 	}
+	s.actionUsed(ctx, c, a.ID)
 	switch a.Opens {
 	case opensShow:
 		if a.Shortcut == "" {
@@ -459,4 +461,59 @@ func (s *Server) stepsDone(ctx context.Context, c *chat, a chatAction, st *chatS
 		shown = a.Make(v)
 	}
 	return c.say(ctx, s, c.t("menu.shall", "title", word(c.lang.Tag, titleWordID(a), a.Title), "command", whatsapp.SafeText(shown)), understoodButtons(c)...)
+}
+
+// actionUsed counts an action as used by the person today (most used
+// first, §6.1), and lets their days past thirty go. A failure is only
+// logged: the menus' order is not worth an answer.
+func (s *Server) actionUsed(ctx context.Context, c *chat, id string) {
+	if c.p == nil || c.p.UserID == uuid.Nil || c.tenant.ID == uuid.Nil {
+		return
+	}
+	err := chatTx(context.WithoutCancel(ctx), s, c, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO chat_action_uses (tenant_id, user_id, action, day) VALUES ($1, $2, $3, current_date)
+			ON CONFLICT (tenant_id, user_id, action, day) DO UPDATE SET uses = chat_action_uses.uses + 1`, c.tenant.ID, c.p.UserID, id); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `DELETE FROM chat_action_uses WHERE tenant_id = $1 AND user_id = $2 AND day < current_date - 30`, c.tenant.ID, c.p.UserID)
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("chat menus: counting a use", "err", err)
+	}
+}
+
+// actionUses are the person's uses of each action in the last thirty
+// days; nil when they cannot be read.
+func (s *Server) actionUses(ctx context.Context, c *chat) map[string]int {
+	if c.p == nil || c.p.UserID == uuid.Nil || c.tenant.ID == uuid.Nil {
+		return nil
+	}
+	if c.uses != nil {
+		return c.uses
+	}
+	out := map[string]int{}
+	err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT action, sum(uses) FROM chat_action_uses WHERE tenant_id = $1 AND user_id = $2 AND day >= current_date - 30 GROUP BY action`,
+			c.tenant.ID, c.p.UserID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a string
+			var n int
+			if err := rows.Scan(&a, &n); err != nil {
+				return err
+			}
+			out[a] = n
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		s.Logger.Warn("chat menus: reading uses", "err", err)
+		return nil
+	}
+	c.uses = out
+	return out
 }
