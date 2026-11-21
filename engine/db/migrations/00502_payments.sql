@@ -28,10 +28,11 @@ CREATE TABLE payments (
   purpose_note    text NOT NULL DEFAULT '' CHECK (length(purpose_note) <= 80),
   note            text NOT NULL DEFAULT '' CHECK (length(note) <= 100),
   -- What the checks found when it was prepared, and why the owner's OK
-  -- is asked (over a limit, a changed account), if it is.
+  -- is asked (over a limit, a changed account, a first payment by staff), if
+  -- it is.
   first_payment   boolean NOT NULL DEFAULT false,
   changed_account boolean NOT NULL DEFAULT false,
-  needs_ok        text NOT NULL DEFAULT '' CHECK (needs_ok IN ('', 'limit', 'changed', 'limit,changed')),
+  needs_ok        text NOT NULL DEFAULT '' CHECK (needs_ok ~ '^((limit|changed|first)(,(limit|changed|first))*)?$'),
   status          text NOT NULL DEFAULT 'prepared'
                   CHECK (status IN ('prepared', 'sending', 'waiting_ok', 'paid', 'failed', 'rejected', 'unknown', 'cancelled')),
   reason          text,

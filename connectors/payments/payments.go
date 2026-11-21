@@ -38,7 +38,21 @@ type PrepareIn struct {
 // Ops is what the actions call.
 type Ops interface {
 	Prepare(ctx context.Context, tenant, run uuid.UUID, in PrepareIn) (map[string]any, error)
-	Finish(ctx context.Context, tenant, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error)
+	// Check holds the pay-person run to its payment before any money
+	// moves: the payment claimed for this run, the run's input the
+	// payment's own, approved by whom it must be.
+	Check(ctx context.Context, tenant, run, payment uuid.UUID, in CheckIn) (map[string]any, error)
+	// Finish records how the payment of the run ended: only the run the
+	// payment was sent with may.
+	Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error)
+}
+
+// CheckIn is what the pay-person run is about to pay, as its input says.
+type CheckIn struct {
+	AmountKobo    int64
+	BankCode      string
+	AccountNumber string
+	NeedsOK       bool
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -48,6 +62,7 @@ func New(ops Ops) *connector.Connector {
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"prepare": connector.ActionFunc(a.prepare),
 		"finish":  connector.ActionFunc(a.finish),
+		"check":   connector.ActionFunc(a.check),
 	}}
 }
 
@@ -81,14 +96,7 @@ func (a *actions) prepare(ctx context.Context, req connector.Request) (connector
 	in.Purpose, _ = req.Input["purpose"].(string)
 	in.PurposeNote, _ = req.Input["purpose_note"].(string)
 	in.Note, _ = req.Input["note"].(string)
-	switch v := req.Input["amount_kobo"].(type) {
-	case float64:
-		in.AmountKobo = int64(v)
-	case int64:
-		in.AmountKobo = v
-	case int:
-		in.AmountKobo = int64(v)
-	}
+	in.AmountKobo = kobo(req.Input["amount_kobo"])
 	out, err := a.ops.Prepare(ctx, c.Tenant, c.Run, in)
 	if err != nil {
 		return connector.Response{}, fatal(err)
@@ -117,7 +125,39 @@ func (a *actions) finish(ctx context.Context, req connector.Request) (connector.
 	case int64:
 		fee = &v
 	}
-	out, err := a.ops.Finish(ctx, c.Tenant, id, status, name, payout, reason, fee)
+	out, err := a.ops.Finish(ctx, c.Tenant, c.Run, id, status, name, payout, reason, fee)
+	if err != nil {
+		return connector.Response{}, fatal(err)
+	}
+	return connector.Response{Output: out}, nil
+}
+
+func kobo(v any) int64 {
+	switch v := v.(type) {
+	case float64:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	}
+	return 0
+}
+
+func (a *actions) check(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, err := a.caller(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	id, err := uuid.Parse(fmt.Sprint(req.Input["payment_id"]))
+	if err != nil {
+		return connector.Response{}, fmt.Errorf("payment_id is a payment's id: %w", effects.ErrFatal)
+	}
+	in := CheckIn{AmountKobo: kobo(req.Input["amount_kobo"])}
+	in.BankCode, _ = req.Input["bank_code"].(string)
+	in.AccountNumber, _ = req.Input["account_number"].(string)
+	in.NeedsOK, _ = req.Input["needs_ok"].(bool)
+	out, err := a.ops.Check(ctx, c.Tenant, c.Run, id, in)
 	if err != nil {
 		return connector.Response{}, fatal(err)
 	}
@@ -152,10 +192,19 @@ func (l *Late) Prepare(ctx context.Context, tenant, run uuid.UUID, in PrepareIn)
 }
 
 // Finish calls the bound operations.
-func (l *Late) Finish(ctx context.Context, tenant, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
+func (l *Late) Finish(ctx context.Context, tenant, run, payment uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
 	ops, err := l.get()
 	if err != nil {
 		return nil, err
 	}
-	return ops.Finish(ctx, tenant, payment, status, accountName, payoutID, reason, feeKobo)
+	return ops.Finish(ctx, tenant, run, payment, status, accountName, payoutID, reason, feeKobo)
+}
+
+// Check calls the bound operations.
+func (l *Late) Check(ctx context.Context, tenant, run, payment uuid.UUID, in CheckIn) (map[string]any, error) {
+	ops, err := l.get()
+	if err != nil {
+		return nil, err
+	}
+	return ops.Check(ctx, tenant, run, payment, in)
 }

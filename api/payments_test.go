@@ -72,6 +72,15 @@ func TestPayOnePerson(t *testing.T) {
 		"bank_name": "Access Bank", "account_number": "0123456789"})["saved"].(map[string]any)
 	key := addPasskey(t, owner, "Phone")
 
+	runOf := func(payment string) uuid.UUID {
+		t.Helper()
+		var r uuid.UUID
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT run_id FROM payments WHERE id = $1`, payment).Scan(&r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
 	// Prepared: what the person confirming should know.
 	owner.must(404, "POST", "/v1/payments", map[string]any{"payee": "nobody", "amount_kobo": 4500000})
 	owner.must(400, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 4500000, "purpose": "gifts"})
@@ -108,8 +117,33 @@ func TestPayOnePerson(t *testing.T) {
 		t.Errorf("approved by the payer: %d %v", decided, err)
 	}
 	owner.must(409, "POST", "/v1/payments/"+id+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+id)})
+	// The run is held to its payment before it pays: the payment sent with
+	// it, its input the payment's own, approved by the payer's passkey.
+	ops := w.srv.PaymentsOps()
+	good := payconn.CheckIn{AmountKobo: 4500000, BankCode: "044", AccountNumber: "0123456789"}
+	other := uuid.Must(uuid.NewV7())
+	if _, err := ops.Check(ctx, biz, other, uuid.MustParse(id), good); err == nil {
+		t.Errorf("a run not started for the payment passed the check")
+	}
+	bad := good
+	bad.AccountNumber = "0999999999"
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("another account passed the check")
+	}
+	bad = good
+	bad.AmountKobo = 9000000
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("another amount passed the check")
+	}
+	if out, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), good); err != nil || out["status"] != "sending" {
+		t.Fatalf("the payment's own run: %v %v", out, err)
+	}
+	// Only the payment's own run records how it ended.
+	if _, err := ops.Finish(ctx, biz, other, uuid.MustParse(id), "failed", "", "", "", nil); err == nil {
+		t.Errorf("another run recorded the payment's outcome")
+	}
 	// The workflow records how it ended.
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), "paid", "BAYO RICE MILLS", "trf_1", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if p := owner.must(200, "GET", "/v1/payments/"+id, nil)["payment"].(map[string]any); p["status"] != "paid" || p["account_name"] != "BAYO RICE MILLS" {
@@ -129,7 +163,7 @@ func TestPayOnePerson(t *testing.T) {
 	if a, b := <-codes, <-codes; a+b != 202+409 {
 		t.Fatalf("two confirms at once: %d %d", a, b)
 	}
-	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil); err != nil {
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(twice), uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -163,13 +197,33 @@ func TestPayOnePerson(t *testing.T) {
 		t.Fatalf("within the limit: %v", got)
 	}
 
+	// Staff pay saved accounts only.
+	if e := clerk.must(403, "POST", "/v1/payments", map[string]any{"account_number": "0123456789", "bank_name": "Access", "amount_kobo": 300000}); e["code"] != "saved_only" {
+		t.Fatalf("staff paying an account number: %v", e)
+	}
+
 	// The account changed since it was last paid: the owner's OK, whoever
 	// pays within their limit.
 	ch := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.change", "target": bayo["id"]}))
 	owner.must(200, "PUT", "/v1/saved/"+bayo["id"].(string), map[string]any{"account_number": "0987654321", "passkey": key.Assert(ch).JSON()})
 	cid = prep(100000)
-	if got := clerk.must(202, "POST", "/v1/payments/"+cid+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay", "payment:"+cid)})["payment"].(map[string]any); got["status"] != "waiting_ok" || got["needs_ok"] != "changed" || got["changed_account"] != true {
+	if got := clerk.must(202, "POST", "/v1/payments/"+cid+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay", "payment:"+cid)})["payment"].(map[string]any); got["status"] != "waiting_ok" || got["needs_ok"] != "changed,first" || got["changed_account"] != true {
 		t.Fatalf("a changed account: %v", got)
+	}
+	// The owner's OK: in Approvals, with a passkey; until then the run
+	// does not pass its check.
+	crun := runOf(cid)
+	waiting := payconn.CheckIn{AmountKobo: 100000, BankCode: "044", AccountNumber: "0987654321", NeedsOK: true}
+	if _, err := ops.Check(ctx, biz, crun, uuid.MustParse(cid), waiting); err == nil {
+		t.Errorf("passed the check before the owner's OK")
+	}
+	if st, out := owner.do("POST", "/v1/approvals/"+crun.String()+"/approve", map[string]any{"decision": "approved"}); st != 403 || out["step_up"] == nil {
+		t.Fatalf("the owner's OK with no passkey: %d %v", st, out)
+	}
+	owner.must(200, "POST", "/v1/approvals/"+crun.String()+"/approve", map[string]any{"decision": "approved",
+		"passkey": key.Assert(options(t, owner, "approval.decide", crun.String()+"/approve/approved")).JSON()})
+	if out, err := ops.Check(ctx, biz, crun, uuid.MustParse(cid), waiting); err != nil || out["status"] != "sending" {
+		t.Fatalf("after the owner's OK: %v %v", out, err)
 	}
 
 	// Who may not pay, does not.

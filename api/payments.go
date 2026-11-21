@@ -190,6 +190,9 @@ type payeeAccount struct {
 // by id or name; or, for an owner, their own.
 func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bool, in payIn) (payeeAccount, error) {
 	if in.AccountNumber != "" {
+		if !owner {
+			return payeeAccount{}, refusePay(http.StatusForbidden, "saved_only", "Staff pay the business's saved accounts: ask an owner to save this one first.")
+		}
 		if in.SavedID != nil || in.Payee != "" || in.Mine {
 			return payeeAccount{}, refusePay(http.StatusBadRequest, "payee", "Pay a saved account or an account number, not both.")
 		}
@@ -334,14 +337,25 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	var x payment
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		// A first payment to the account, as Approvals says it.
-		first := false
+		// A first payment to the account: never paid by the business, as
+		// the money log or its own payments know it. Staff need the owner's
+		// OK for one (an account saved again under an old name with another
+		// number is one).
+		paid := false
 		if subjects, ok := s.Store.PII.(moneylog.Subjects); ok {
-			paid, known, err := moneylog.PaidBefore(ctx, tx, subjects, tenant, payee.bank.AccountNumber, code)
+			was, known, err := moneylog.PaidBefore(ctx, tx, subjects, tenant, payee.bank.AccountNumber, code)
 			if err != nil {
 				return err
 			}
-			first = known && !paid
+			paid = known && was
 		}
+		if !paid {
+			var err error
+			if paid, err = s.paidThroughPayments(ctx, tx, tenant, code, payee.bank.AccountNumber); err != nil {
+				return err
+			}
+		}
+		first := !paid
 		// The account changed since this payee was last paid: the owner's
 		// OK, whoever pays.
 		changed := false
@@ -379,6 +393,30 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		return err
 	})
 	return x, err
+}
+
+// paidThroughPayments says whether the business paid the account through
+// Taskiem's own payments before (sent, paid, or not known yet).
+func (s *Server) paidThroughPayments(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, code, number string) (bool, error) {
+	rows, err := tx.Query(ctx, `SELECT account_sealed FROM payments WHERE tenant_id = $1 AND bank_code = $2 AND last4 = $3
+		AND status IN ('sending', 'paid', 'unknown') ORDER BY created_at DESC LIMIT 50`, tenant, code, saved.Last4(number))
+	if err != nil {
+		return false, err
+	}
+	sealed, err := pgx.CollectRows(rows, pgx.RowTo[map[string]any])
+	if err != nil {
+		return false, err
+	}
+	for _, x := range sealed {
+		v, err := s.Store.PII.OpenTx(ctx, tx, tenant, x)
+		if err != nil {
+			return false, err
+		}
+		if fmt.Sprint(v) == number {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // paidAgainTx says whether the same amount went (or is going) to the same
@@ -461,9 +499,14 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, err)
 		return
 	}
-	if _, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "to pay"); !ok {
+	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "to pay")
+	if !ok {
 		return
 	}
+	// Once claimed, the payment is sent (or given back) even if the person
+	// goes away meanwhile.
+	r = r.WithContext(context.WithoutCancel(ctx))
+	ctx = r.Context()
 	var x payment
 	var needs string
 	if err := s.tx(r, func(tx pgx.Tx) error {
@@ -474,7 +517,7 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, err)
 		return
 	}
-	run, err := s.sendPayment(r, x, needs, p)
+	run, err := s.sendPayment(r, x, needs, p, method)
 	if err != nil {
 		s.payFail(w, r, err)
 		return
@@ -500,13 +543,18 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 // once cannot both fit a day's limit meant for one.
 func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id uuid.UUID, again, claim bool) (payment, string, error) {
 	if claim {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "payments:"+p.TenantID.String()+":"+p.Actor()); err != nil {
+		// One business's confirms one at a time: a payer's day total, and
+		// the same payment again by two people at once, both hold.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "payments:"+p.TenantID.String()); err != nil {
 			return payment{}, "", err
 		}
 	}
 	x, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM payments WHERE id = $1 FOR UPDATE`, id))
 	if err != nil {
 		return x, "", err
+	}
+	if x.Personal && !owner {
+		return x, "", refusePay(http.StatusForbidden, "not_yours", "An owner's own payment is theirs to confirm.")
 	}
 	if x.Status != "prepared" {
 		return x, "", refusePay(http.StatusConflict, "not_prepared", "This payment was "+paymentStatusWords(x.Status)+" already.")
@@ -535,6 +583,11 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 		if x.ChangedAccount {
 			needs = append(needs, "changed")
 		}
+		// An account never paid before (a saved account deleted and saved
+		// again with another number is one): the owner's OK.
+		if x.FirstPayment {
+			needs = append(needs, "first")
+		}
 	}
 	need := strings.Join(needs, ",")
 	if claim {
@@ -553,13 +606,13 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 // sendPayment starts the payment's run: the business's pay-person
 // workflow (made, or remade for another payments account, first), and,
 // within the payer's limit, the payer's own confirmation as its approval.
-func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Principal) (run uuid.UUID, err error) {
+func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Principal, method string) (run uuid.UUID, err error) {
 	ctx := r.Context()
 	// Claimed for this run: given back, to confirm again, if no run starts.
 	defer func() {
 		if run == uuid.Nil && err != nil {
 			if e := db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-				_, err := tx.Exec(ctx, `UPDATE payments SET status = 'prepared', needs_ok = '', confirmed_by = NULL, confirmed_at = NULL WHERE id = $1 AND run_id IS NULL`, x.ID)
+				_, err := tx.Exec(context.WithoutCancel(ctx), `UPDATE payments SET status = 'prepared', needs_ok = '', confirmed_by = NULL, confirmed_at = NULL WHERE id = $1 AND run_id IS NULL`, x.ID)
 				return err
 			}); e != nil {
 				s.Logger.Warn("payments: giving a payment back", "payment", x.ID, "err", e)
@@ -604,7 +657,8 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 	}
 	ref, _, err := s.Store.StartRun(ctx, runtime.StartRequest{TenantID: p.TenantID, WorkflowID: wf, Version: version, Environment: "prod",
 		Trigger: map[string]any{"type": "manual", "body": map[string]any{"payment_id": x.ID.String(), "payee": x.Payee, "bank_code": x.bankCode,
-			"account_number": number, "amount_kobo": x.AmountKobo, "narration": narration, "purpose": x.Purpose, "needs_ok": needs != ""}},
+			"account_number": number, "amount_kobo": x.AmountKobo, "narration": narration, "purpose": x.Purpose, "needs_ok": needs != "",
+			"needs": needs, "account": x.Account, "account_name": deref(x.AccountName)}},
 		StartedBy: p.Actor(), TriggerID: "payments/pay", DedupKey: "payment:" + x.ID.String()})
 	if err != nil {
 		return uuid.Nil, err
@@ -619,7 +673,7 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 		return ref.ID, nil
 	}
 	// Within the limit: the payer's passkey is the approval.
-	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: "web", IP: clientIP(r), StepUp: "passkey",
+	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: "web", IP: clientIP(r), StepUp: method,
 		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 			return auditTx(r, tx, "approval.decide", ref.ID.String()+"/approve", map[string]any{"decision": "approved", "result": res.Status, "via": "payment.confirm"})
 		}}
@@ -708,7 +762,7 @@ func writePayPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, fourEyes boo
 	no, yes := false, true
 	pol := policy.Policy{Constraints: policy.Constraints{ForbidSelfApproval: &no, DistinctApprovers: &yes, AllowSoleApprover: &yes}, Timeout: "48h", OnTimeout: "reject",
 		Description: "Paying one person: the owner's OK over a payer's limit or to a changed account; else the payer's passkey"}
-	pol.Rules = []policy.Rule{{When: "=subject.needs_ok == true", Levels: []policy.Level{{Role: "owner"}}}, {Levels: []policy.Level{{Role: payerRole}}}}
+	pol.Rules = []policy.Rule{{When: "=subject.needs_ok == true", Levels: []policy.Level{{Role: "owner"}}, StepUp: "passkey"}, {Levels: []policy.Level{{Role: payerRole}}}}
 	raw, err := json.Marshal(pol)
 	if err != nil {
 		return err
@@ -782,7 +836,8 @@ func (s *Server) listPayments(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	var out []payment
 	err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE ($1 = '' OR status = $1) ORDER BY created_at DESC LIMIT 100`, status)
+		rows, err := tx.Query(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE ($1 = '' OR status = $1) AND (NOT personal OR $2) ORDER BY created_at DESC LIMIT 100`,
+			status, slices.Contains(principalFrom(r.Context()).Roles, "owner"))
 		if err != nil {
 			return err
 		}
@@ -809,7 +864,8 @@ func (s *Server) getPayment(w http.ResponseWriter, r *http.Request) {
 	var x payment
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if x, err = scanPayment(tx.QueryRow(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE id = $1`, id)); err != nil {
+		if x, err = scanPayment(tx.QueryRow(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE id = $1 AND (NOT personal OR $2)`,
+			id, slices.Contains(principalFrom(r.Context()).Roles, "owner"))); err != nil {
 			return err
 		}
 		if x.Status == "prepared" {
@@ -932,8 +988,81 @@ func (o *payOps) Prepare(ctx context.Context, tenant, run uuid.UUID, in payconn.
 		"needs_ok": map[bool]string{true: "changed"}[x.ChangedAccount]}, nil
 }
 
+// Check holds the pay-person run to its payment, before it pays: the
+// payment was sent with this very run (only sendPayment starts one and
+// records it), the run's input is the payment's own, and it was approved
+// by whom it must be: within the payer's limit the payer, by the
+// passkey they confirmed it with; else an owner in their own right (not
+// acting for one) who is not the payer. Anything else fails the run
+// before money moves, whoever started it and however the workflow or its
+// policy was changed.
+func (o *payOps) Check(ctx context.Context, tenant, run, id uuid.UUID, in payconn.CheckIn) (map[string]any, error) {
+	refused := func(why string) error { return fmt.Errorf("%w: %s", payconn.ErrRefused, why) }
+	var out map[string]any
+	err := db.InTenantTx(ctx, o.s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		x, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM payments WHERE id = $1 AND run_id = $2 FOR UPDATE`, id, run))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return refused("this run was not started for that payment")
+		}
+		if err != nil {
+			return err
+		}
+		if x.Status != "sending" && x.Status != "waiting_ok" {
+			return refused("the payment was " + paymentStatusWords(x.Status) + " already")
+		}
+		number, err := o.s.Store.PII.OpenTx(ctx, tx, tenant, x.sealed)
+		if err != nil {
+			return err
+		}
+		if in.AmountKobo != x.AmountKobo || in.BankCode != x.bankCode || in.AccountNumber != fmt.Sprint(number) || in.NeedsOK != (x.NeedsOK != "") {
+			return refused("the run's input is not the payment's")
+		}
+		if x.ConfirmedBy == nil {
+			return refused("the payment was not confirmed")
+		}
+		type decision struct {
+			User     string
+			Behalf   *string
+			Decision string
+		}
+		rows, err := tx.Query(ctx, `SELECT user_id::text, on_behalf_of::text, decision FROM approval_decisions WHERE run_id = $1 AND step_id = 'approve'`, run)
+		if err != nil {
+			return err
+		}
+		ds, err := pgx.CollectRows(rows, pgx.RowToStructByPos[decision])
+		if err != nil {
+			return err
+		}
+		ok := false
+		for _, d := range ds {
+			if d.Decision != "approved" {
+				return refused("the payment was not approved")
+			}
+			switch {
+			case x.NeedsOK == "":
+				ok = ok || d.User == *x.ConfirmedBy && d.Behalf == nil
+			case d.Behalf == nil && d.User != *x.ConfirmedBy:
+				var owner bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id::text = $2 AND role = 'owner')`, tenant, d.User).Scan(&owner); err != nil {
+					return err
+				}
+				ok = ok || owner
+			}
+		}
+		if !ok {
+			return refused("the payment was not approved by whom it must be")
+		}
+		if _, err := tx.Exec(ctx, `UPDATE payments SET status = 'sending' WHERE id = $1`, id); err != nil {
+			return err
+		}
+		out = map[string]any{"payment_id": id.String(), "status": "sending"}
+		return nil
+	})
+	return out, err
+}
+
 // Finish records how the pay-person workflow's payment ended.
-func (o *payOps) Finish(ctx context.Context, tenant, id uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
+func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, accountName, payoutID, reason string, feeKobo *int64) (map[string]any, error) {
 	if !slices.Contains([]string{"paid", "failed", "unknown", "rejected"}, status) {
 		return nil, fmt.Errorf("%w: a payment ends paid, failed, unknown or rejected", payconn.ErrRefused)
 	}
@@ -942,11 +1071,11 @@ func (o *payOps) Finish(ctx context.Context, tenant, id uuid.UUID, status, accou
 		var now string
 		err := tx.QueryRow(ctx, `UPDATE payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), payout_ref = NULLIF($4, ''),
 			reason = NULLIF($5, ''), fee_kobo = $6, finished_at = now()
-			WHERE id = $1 AND (status IN ('sending', 'waiting_ok') OR status = 'unknown' AND $2 IN ('paid', 'failed')) RETURNING status`, id, status, accountName, payoutID, reason, feeKobo).Scan(&now)
+			WHERE id = $1 AND run_id = $7 AND (status IN ('sending', 'waiting_ok') OR status = 'unknown' AND $2 IN ('paid', 'failed')) RETURNING status`, id, status, accountName, payoutID, reason, feeKobo, run).Scan(&now)
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Ended already: the same outcome again changes nothing (one
 			// not known yet is settled by the bank's answer, above).
-			if err := tx.QueryRow(ctx, `SELECT status FROM payments WHERE id = $1`, id).Scan(&now); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT status FROM payments WHERE id = $1 AND run_id = $2`, id, run).Scan(&now); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					return fmt.Errorf("%w: no such payment", payconn.ErrRefused)
 				}

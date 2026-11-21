@@ -13768,6 +13768,9 @@ class Payment {
   final Object? finishedAt;
   final bool? firstPayment;
   final String id;
+  /// Why the owner's OK is asked, comma-separated; `limit` over the payer's
+  /// limit, `changed` an account changed since it was last paid, `first` an
+  /// account staff never paid before. Empty when none.
   final String? needsOk;
   final String? note;
   final String payee;

@@ -62,7 +62,10 @@
           "amount_kobo",
           "narration",
           "purpose",
-          "needs_ok"
+          "needs_ok",
+          "account",
+          "needs",
+          "account_name"
         ],
         "additionalProperties": false,
         "properties": {
@@ -117,6 +120,22 @@
           "needs_ok": {
             "type": "boolean",
             "title": "Needs the owner's OK"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "The account, masked"
+          },
+          "needs": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Why the owner's OK is asked"
+          },
+          "account_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "The bank's name for the account",
+            "x-pii": "name"
           }
         }
       }
@@ -133,12 +152,47 @@
           "on_timeout": "reject",
           "subject": {
             "payee": "=trigger.body.payee",
-            "account_number": "=trigger.body.account_number",
-            "bank_code": "=trigger.body.bank_code",
+            "account_name": "=trigger.body.account_name",
+            "account": "=trigger.body.account",
             "amount_naira": "=double(trigger.body.amount_kobo) / 100.0",
             "for": "=trigger.body.purpose",
-            "needs_ok": "=trigger.body.needs_ok"
+            "needs_ok": "=trigger.body.needs_ok",
+            "why": "=trigger.body.needs"
           }
+        }
+      },
+      {
+        "id": "verify",
+        "type": "connector",
+        "name": "Check the payment is the one confirmed",
+        "connector": "payments@1",
+        "action": "check",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "amount_kobo": "=trigger.body.amount_kobo",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "needs_ok": "=trigger.body.needs_ok"
+        },
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_not_checked",
+              "type": "connector",
+              "name": "Record that the payment was stopped",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "rejected",
+                "reason": "Stopped before paying: it was not approved by whom it must be."
+              }
+            }
+          ]
         }
       },
       {
@@ -168,9 +222,8 @@
           ]
         },
         "needs": [
-          "approve"
-        ],
-        "when": "=steps.approve.output.decision == 'approved'"
+          "verify"
+        ]
       },
       {
         "id": "pay",

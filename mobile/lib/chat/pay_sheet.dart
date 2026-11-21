@@ -77,6 +77,17 @@ String paymentWhere(Payment p) {
   return [if (p.payee.isNotEmpty && p.payee.toLowerCase() != name.toLowerCase()) p.payee, p.bankName, p.account].where((x) => x.isNotEmpty).join(' · ');
 }
 
+/// Why a payment waits for the owner's OK, in words.
+String needsOkWords(String needs) => [
+  for (final n in needs.split(','))
+    switch (n.trim()) {
+      'limit' => 'Over the limit you may pay',
+      'changed' => 'The account changed since it was last paid',
+      'first' => 'Never paid before',
+      _ => '',
+    },
+].where((w) => w.isNotEmpty).join('; ');
+
 /// What was said when it was sent: at once, or waiting for the owner's OK.
 String paymentSentWords(Payment p) => p.status == 'waiting_ok' ? 'Sent for the owner’s OK' : 'Sent to the bank';
 
@@ -456,7 +467,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       ('What for', purposeWords(p)),
       if ((p.note ?? '').isNotEmpty) ('Note', p.note!),
       if (!prepared) ('Status', status.words),
-      if (p.needsOk == 'limit' || p.needsOk == 'limit,changed') ('Why it waits', 'Over the limit you may pay'),
+      if ((p.needsOk ?? '').isNotEmpty) ('Why it waits', needsOkWords(p.needsOk!)),
       if (reason.isNotEmpty) ('Why', reason),
     ];
     final warnings = <Widget>[

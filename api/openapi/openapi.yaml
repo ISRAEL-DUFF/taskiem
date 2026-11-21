@@ -44838,7 +44838,8 @@ components:
           type: boolean
         needs_ok:
           type: string
-          enum: ['', limit, changed, 'limit,changed']
+          pattern: '^((limit|changed|first)(,(limit|changed|first))*)?$'
+          description: Why the owner's OK is asked, comma-separated; `limit` over the payer's limit, `changed` an account changed since it was last paid, `first` an account staff never paid before. Empty when none.
         status:
           type: string
           enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled]

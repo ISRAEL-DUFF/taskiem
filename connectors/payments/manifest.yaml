@@ -41,9 +41,35 @@ actions:
         amount_kobo:   { type: integer }
         first_payment: { type: boolean }
         needs_ok:      { type: string, description: "Why the owner's OK will be asked: limit, changed, or both; empty when none" }
+  check:
+    title: Check a payment before it is paid
+    description: For Taskiem's own pay-person workflow only, before it pays. Holds the run to its payment, refusing it unless the payment was sent with this very run, the run's input is the payment's own (amount, bank, account, whether the owner's OK was needed), and it was approved by whom it must be (the person who confirmed it within their limit; else an owner, not acting for one and not the payer).
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [payment_id, amount_kobo, bank_code, account_number, needs_ok]
+      properties:
+        payment_id:     { type: string }
+        amount_kobo:    { type: integer }
+        bank_code:      { type: string }
+        account_number: { type: string }
+        needs_ok:       { type: boolean }
+    output:
+      type: object
+      properties:
+        payment_id: { type: string }
+        status:     { type: string }
+    pii:
+      - { field: account_number, category: account_number }
   finish:
     title: Record a payment's outcome
-    description: For Taskiem's own pay-person workflow only. Records how a payment ended (paid, failed, rejected when not approved, or unknown when the money went and the bank never said); the same outcome twice changes nothing.
+    description: For Taskiem's own pay-person workflow only (the run the payment was sent with; any other is refused). Records how a payment ended (paid, failed, rejected when not approved, or unknown when the money went and the bank never said); the same outcome twice changes nothing.
     class: idempotent_write
     idempotency:
       field: idempotency_key

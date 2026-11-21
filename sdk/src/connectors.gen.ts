@@ -1849,6 +1849,13 @@ export const opay_business = {
 };
 
 // Payments (payments@1)
+export interface PaymentsCheckInput {
+  account_number: Val<string>;
+  amount_kobo: Val<number>;
+  bank_code: Val<string>;
+  needs_ok: Val<boolean>;
+  payment_id: Val<string>;
+}
 export interface PaymentsFinishInput {
   /** The bank's name for the account */
   account_name?: Val<string>;
@@ -1868,6 +1875,8 @@ export interface PaymentsPrepareInput {
   purpose_note?: Val<string>;
 }
 export const payments = {
+  /** Check a payment before it is paid (idempotent_write) */
+  check: (input: PaymentsCheckInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "check", input, extra),
   /** Record a payment's outcome (idempotent_write) */
   finish: (input: PaymentsFinishInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "finish", input, extra),
   /** Prepare a payment (idempotent_write) */
@@ -3955,7 +3964,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
-  "payments@1": ["finish", "prepare"],
+  "payments@1": ["check", "finish", "prepare"],
   "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],

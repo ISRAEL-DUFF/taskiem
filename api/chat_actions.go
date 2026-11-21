@@ -361,7 +361,7 @@ var chatActions = []chatAction{
 		Shortcut: "/invoices", Tool: "invoices", Page: "/invoices", may: permIn(PermInvoiceRead, areas.Money)},
 
 	// Pay (P1; docs/spec/chat-pay-people.md): nothing pays without the
-	// person's passkey.
+	// person's passkey. Staff pay the business's saved accounts only.
 	{ID: "pay.person", Topic: "pay", Title: "Pay someone", Line: "From your balance, checked with the bank", Icon: "money", Does: doesAsks, Opens: opensForm,
 		Shortcut: "send 45k to @chidi for a delivery", Tool: "pay", Confirm: "passkey",
 		Fields: []chatField{f("who", "Who are you paying? One of your saved accounts, like @chidi.", "payee"), f("amount", "How much?", "money"), payFor,
@@ -371,7 +371,7 @@ var chatActions = []chatAction{
 		Shortcut: "send 45k to 0123456789 gtbank for stock bought", Tool: "pay", Add: true, Confirm: "passkey",
 		Fields: []chatField{f("number", "What is the account number? 10 digits.", "account"), f("bank", "Which bank is it with?", "bank"),
 			f("amount", "How much?", "money"), payFor},
-		Make: fill("send {amount} to {number} {bank} for {for}"), may: payMay},
+		Make: fill("send {amount} to {number} {bank} for {for}"), may: both(payMay, func(_ *Server, c *chat, _ areas.State) bool { return isOwner(c.p) })},
 	{ID: "pay.list", Topic: "pay", Title: "Your payments", Line: "Sent, waiting for an OK, and paid", Icon: "money", Does: doesShow, Opens: opensPage,
 		Page: "/payments", may: payMay},
 	{ID: "pay.payees", Topic: "pay", Title: "Your payees", Line: "The accounts you pay, by name", Icon: "saved", Does: doesShow, Opens: opensPage,

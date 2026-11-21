@@ -37,7 +37,9 @@ export function PayCheck({ x }: { x: Payment }) {
   const warnings = payWarnings(x);
   return (
     <div className="pay-check" data-testid="pay-check">
-      <span className="pay-check-label">{x.account_name ? "The bank's name for this account" : "Paying"}</span>
+      <span className="pay-check-label">
+        {x.account_name ? "The bank's name for this account" : "Paying"}
+      </span>
       <strong className="pay-check-name" data-testid="pay-name">
         {x.account_name || x.payee}
       </strong>
@@ -64,7 +66,11 @@ export function PayCheck({ x }: { x: Payment }) {
       {warnings.length > 0 && (
         <ul className="pay-warns" aria-label="Before you pay">
           {warnings.map((w) => (
-            <li key={w.key} className={`pay-warn ${w.tone}`} data-testid={`pay-warn-${w.key}`}>
+            <li
+              key={w.key}
+              className={`pay-warn ${w.tone}`}
+              data-testid={`pay-warn-${w.key}`}
+            >
               {w.words}
             </li>
           ))}
@@ -86,16 +92,26 @@ interface Ask {
  * payment alone, or an authenticator code typed here. Shown inside a
  * sheet or on a page, so it opens no dialog of its own.
  */
-export function usePayConfirm(x: Payment | undefined, onConfirmed: (p: Payment) => void) {
+export function usePayConfirm(
+  x: Payment | undefined,
+  onConfirmed: (p: Payment) => void,
+) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [again, setAgain] = useState<string>();
   const [ask, setAsk] = useState<Ask>();
   const [code, setCode] = useState("");
   const yes = useRef(false);
+  // A yes to paying again is for that payment only.
+  useEffect(() => {
+    yes.current = false;
+  }, [x?.id]);
 
   const send = (proof: Record<string, unknown>) =>
-    post<{ payment: Payment }>(`/v1/payments/${encodeURIComponent(x?.id ?? "")}/confirm`, { ...proof, again: yes.current });
+    post<{ payment: Payment }>(
+      `/v1/payments/${encodeURIComponent(x?.id ?? "")}/confirm`,
+      { ...proof, again: yes.current },
+    );
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -119,13 +135,20 @@ export function usePayConfirm(x: Payment | undefined, onConfirmed: (p: Payment) 
         return;
       } catch (e) {
         if (!(e instanceof ApiError)) throw e;
-        if (e.status === 409 && e.body.code === "pay_again") return setAgain(e.message);
+        if (e.status === 409 && e.body.code === "pay_again")
+          return setAgain(e.message);
         if (e.status !== 403 || !e.body.step_up) throw e;
-        const methods = Array.isArray(e.body.methods) ? (e.body.methods as string[]) : [];
-        const op = typeof e.body.operation === "string" ? e.body.operation : "money.pay";
-        const target = typeof e.body.target === "string" ? e.body.target : `payment:${x.id}`;
+        const methods = Array.isArray(e.body.methods)
+          ? (e.body.methods as string[])
+          : [];
+        const op =
+          typeof e.body.operation === "string" ? e.body.operation : "money.pay";
+        const target =
+          typeof e.body.target === "string" ? e.body.target : `payment:${x.id}`;
         if (methods.includes("passkey") && passkeysSupported()) {
-          onConfirmed((await send({ passkey: await stepUpAssert(op, target) })).payment);
+          onConfirmed(
+            (await send({ passkey: await stepUpAssert(op, target) })).payment,
+          );
           return;
         }
         setAsk({ methods, message: e.message });
@@ -156,7 +179,10 @@ export function usePayConfirm(x: Payment | undefined, onConfirmed: (p: Payment) 
             void withCode();
           }}
         >
-          <KitField label="Code from your authenticator app" hint="Good for this payment only.">
+          <KitField
+            label="Code from your authenticator app"
+            hint="Good for this payment only."
+          >
             <input
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -166,14 +192,24 @@ export function usePayConfirm(x: Payment | undefined, onConfirmed: (p: Payment) 
               data-testid="pay-code"
             />
           </KitField>
-          <button type="submit" className="tk-btn primary" disabled={busy || code.length !== 6}>
+          <button
+            type="submit"
+            className="tk-btn primary"
+            disabled={busy || code.length !== 6}
+          >
             Confirm with the code
           </button>
         </form>
       )}
       {ask && !ask.methods.includes("totp") && (
-        <div className="pay-warn warn" role="alert" data-testid="pay-needs-passkey">
-          {ask.methods.length === 0 ? "Paying needs a passkey: add one under Account first." : "This browser cannot use your passkey here."}{" "}
+        <div
+          className="pay-warn warn"
+          role="alert"
+          data-testid="pay-needs-passkey"
+        >
+          {ask.methods.length === 0
+            ? "Paying needs a passkey: add one under Account first."
+            : "This browser cannot use your passkey here."}{" "}
           <Link to="/account">Go to Account</Link>
         </div>
       )}
@@ -184,14 +220,17 @@ export function usePayConfirm(x: Payment | undefined, onConfirmed: (p: Payment) 
 }
 
 /** The confirming foot's words: "Pay ₦45,000", "Pay again". */
-export const payWords = (x: Payment, again: boolean) => (again ? `Pay ${naira(x.amount_kobo)} again` : `Pay ${naira(x.amount_kobo)}`);
+export const payWords = (x: Payment, again: boolean) =>
+  again ? `Pay ${naira(x.amount_kobo)} again` : `Pay ${naira(x.amount_kobo)}`;
 
 /** Where it went, in a few words, after it was confirmed. */
 function Sent({ x }: { x: Payment }) {
   const st = paymentStatus(x.status);
   return (
     <div className="pay-sent" role="status" data-testid="pay-sent">
-      <span className={`badge sf-status ${st.tone}`}>{x.status === "waiting_ok" ? "Sent for the owner's OK" : st.label}</span>
+      <span className={`badge sf-status ${st.tone}`}>
+        {x.status === "waiting_ok" ? "Sent for the owner's OK" : st.label}
+      </span>
       <p>{outcomeWords(x)}</p>
       <Link to={`/payments/${encodeURIComponent(x.id)}`}>See the payment</Link>
     </div>
@@ -200,7 +239,15 @@ function Sent({ x }: { x: Payment }) {
 
 /** The bank: picked from the banks the business's payments account pays
  * to; typed when that list cannot be read (it then matches by name). */
-function BankPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function BankPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   const [list, setList] = useState<BankList | null>();
   const [search, setSearch] = useState("");
   useEffect(() => {
@@ -226,21 +273,48 @@ function BankPicker({ label, value, onChange }: { label: string; value: string; 
   if (list === null)
     return (
       <KitField label={label} hint="Its name, such as GTBank or Opay.">
-        <input value={value} autoComplete="off" onChange={(e) => onChange(e.target.value)} data-testid="pay-bank-typed" />
+        <input
+          value={value}
+          autoComplete="off"
+          onChange={(e) => onChange(e.target.value)}
+          data-testid="pay-bank-typed"
+        />
       </KitField>
     );
   const shown = filterBanks(list?.banks ?? [], search);
   return (
     <>
       {(list?.banks.length ?? 0) > BANK_SEARCH_FROM && (
-        <KitField label="Find the bank" hint="Part of its name, such as guaranty or kuda.">
-          <input type="search" value={search} autoComplete="off" onChange={(e) => setSearch(e.target.value)} data-testid="pay-bank-search" />
+        <KitField
+          label="Find the bank"
+          hint="Part of its name, such as guaranty or kuda."
+        >
+          <input
+            type="search"
+            value={search}
+            autoComplete="off"
+            onChange={(e) => setSearch(e.target.value)}
+            data-testid="pay-bank-search"
+          />
         </KitField>
       )}
       <KitField label={label}>
-        <select value={value} onChange={(e) => onChange(e.target.value)} disabled={!list} data-testid="pay-bank">
-          <option value="">{!list ? "Loading the banks…" : shown.length === 0 ? "No bank has that name" : "Choose the bank"}</option>
-          {value && !shown.some((b) => b.name === value) && <option value={value}>{value}</option>}
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={!list}
+          data-testid="pay-bank"
+        >
+          <option value="">
+            {!list
+              ? "Loading the banks…"
+              : shown.length === 0
+                ? "No bank has that name"
+                : "Choose the bank"}
+          </option>
+          {value && !shown.some((b) => b.name === value) && (
+            <option value={value}>{value}</option>
+          )}
           {shown.map((b) => (
             <option key={`${b.code}/${b.name}`} value={b.name}>
               {b.name}
@@ -269,12 +343,19 @@ export function PayFieldInput({
   shown: boolean;
 }) {
   const label = f.optional ? `${f.label} (optional)` : f.label;
-  const problem = shown ? (payFieldProblem(f.kind, value) ?? undefined) : undefined;
+  const problem = shown
+    ? (payFieldProblem(f.kind, value) ?? undefined)
+    : undefined;
   const id = useId();
   const chips = offered.length > 0 && (
     <span className="tk-chips tk-form-chips" role="group" aria-label={f.label}>
       {offered.map((c) => (
-        <button key={c} type="button" aria-pressed={value === c} onClick={() => set(c)}>
+        <button
+          key={c}
+          type="button"
+          aria-pressed={value === c}
+          onClick={() => set(c)}
+        >
           {c}
         </button>
       ))}
@@ -282,7 +363,10 @@ export function PayFieldInput({
   );
   // Chips are not inside a <label>: a label names the first control in it,
   // which would be the first chip rather than the box.
-  if (f.kind === "choice" || (chips && f.kind !== "bank" && f.kind !== "money" && f.kind !== "account"))
+  if (
+    f.kind === "choice" ||
+    (chips && f.kind !== "bank" && f.kind !== "money" && f.kind !== "account")
+  )
     return (
       <div className="tk-field">
         {f.kind === "choice" ? (
@@ -318,36 +402,69 @@ export function PayFieldInput({
       return <BankPicker label={label} value={value} onChange={set} />;
     case "money":
       return (
-        <KitField label={label} hint={f.hint ?? "Such as 45,000 or 45k."} error={problem}>
+        <KitField
+          label={label}
+          hint={f.hint ?? "Such as 45,000 or 45k."}
+          error={problem}
+        >
           <span className="tk-money">
             <span aria-hidden="true">₦</span>
-            <input inputMode="decimal" value={value} autoComplete="off" aria-label={`${f.label} in naira`} onChange={(e) => set(e.target.value)} data-testid="pay-field-amount" />
+            <input
+              inputMode="decimal"
+              value={value}
+              autoComplete="off"
+              aria-label={`${f.label} in naira`}
+              onChange={(e) => set(e.target.value)}
+              data-testid="pay-field-amount"
+            />
           </span>
         </KitField>
       );
     case "account":
       return (
         <KitField label={label} hint={f.hint} error={problem}>
-          <input inputMode="numeric" value={value} maxLength={13} autoComplete="off" onChange={(e) => set(e.target.value)} data-testid="pay-field-number" />
+          <input
+            inputMode="numeric"
+            value={value}
+            maxLength={13}
+            autoComplete="off"
+            onChange={(e) => set(e.target.value)}
+            data-testid="pay-field-number"
+          />
         </KitField>
       );
     case "payee":
       return (
         <KitField label={label} hint={f.hint} error={problem}>
-          <input value={value} autoCapitalize="none" autoComplete="off" placeholder="@name" onChange={(e) => set(e.target.value)} data-testid="pay-field-who" />
+          <input
+            value={value}
+            autoCapitalize="none"
+            autoComplete="off"
+            placeholder="@name"
+            onChange={(e) => set(e.target.value)}
+            data-testid="pay-field-who"
+          />
         </KitField>
       );
     default:
       return (
         <KitField label={label} hint={f.hint}>
-          <input value={value} autoComplete="off" maxLength={100} onChange={(e) => set(e.target.value)} />
+          <input
+            value={value}
+            autoComplete="off"
+            maxLength={100}
+            onChange={(e) => set(e.target.value)}
+          />
         </KitField>
       );
   }
 }
 
 /** Whether a pay form's values are enough to prepare the payment. */
-export function payReady(fields: PayField[], values: Record<string, string>): boolean {
+export function payReady(
+  fields: PayField[],
+  values: Record<string, string>,
+): boolean {
   return fields.every((f) => {
     const v = (values[f.key] ?? "").trim();
     if (!v) return !!f.optional;
@@ -392,16 +509,21 @@ export function PaySheet({
   useEffect(() => {
     if (!fields.some((f) => f.kind === "payee")) return;
     let live = true;
-    get<{ fields: Record<string, string[]> }>(`/v1/chat/actions/${encodeURIComponent(actionId)}/choices`)
+    get<{ fields: Record<string, string[]> }>(
+      `/v1/chat/actions/${encodeURIComponent(actionId)}/choices`,
+    )
       .then((r) => live && setChoices(r.fields ?? {}))
       .catch(() => undefined);
     return () => {
       live = false;
     };
   }, [actionId, fields]);
-  const set = (k: string, v: string) => setValues((cur) => ({ ...cur, [k]: v }));
+  const set = (k: string, v: string) =>
+    setValues((cur) => ({ ...cur, [k]: v }));
   const ready = payReady(fields, values);
-  const other = fields.some((f) => f.key === "for") && purposeOf(values.for ?? "") === "other";
+  const other =
+    fields.some((f) => f.key === "for") &&
+    purposeOf(values.for ?? "") === "other";
   const pay = usePayConfirm(prepared, (x) => {
     setSent(x);
     setPrepared(undefined);
@@ -414,7 +536,10 @@ export function PaySheet({
     setPreparing(true);
     setError(undefined);
     try {
-      const r = await post<{ payment: Payment }>("/v1/payments", payBody(values, from));
+      const r = await post<{ payment: Payment }>(
+        "/v1/payments",
+        payBody(values, from),
+      );
       setPrepared(r.payment);
     } catch (e) {
       setError(e);
@@ -427,10 +552,16 @@ export function PaySheet({
   const change = () => {
     const x = prepared;
     setPrepared(undefined);
-    if (x) void post(`/v1/payments/${encodeURIComponent(x.id)}/cancel`).catch(() => undefined);
+    if (x)
+      void post(`/v1/payments/${encodeURIComponent(x.id)}/cancel`).catch(
+        () => undefined,
+      );
   };
   const close = () => {
-    if (prepared) void post(`/v1/payments/${encodeURIComponent(prepared.id)}/cancel`).catch(() => undefined);
+    if (prepared)
+      void post(`/v1/payments/${encodeURIComponent(prepared.id)}/cancel`).catch(
+        () => undefined,
+      );
     onClose();
   };
   const amount = payAmountKobo(values.amount ?? "");
@@ -452,21 +583,40 @@ export function PaySheet({
 
   if (prepared)
     return (
-      <Sheet title="Check and pay" from={rect} onClose={close} onBack={change} testid="pay-sheet">
+      <Sheet
+        title="Check and pay"
+        from={rect}
+        onClose={close}
+        onBack={change}
+        testid="pay-sheet"
+      >
         <div className="tk-form-body">
           <PayCheck x={prepared} />
           {pay.view}
         </div>
         <div className="tk-sheet-foot">
           <div className="tk-form-foot-two">
-            <button type="button" className="tk-btn soft" onClick={change} disabled={pay.busy}>
+            <button
+              type="button"
+              className="tk-btn soft"
+              onClick={change}
+              disabled={pay.busy}
+            >
               Change
             </button>
-            <button type="button" className="tk-cta" onClick={() => void pay.confirm(pay.again)} disabled={pay.busy} data-testid="pay-confirm">
+            <button
+              type="button"
+              className="tk-cta"
+              onClick={() => void pay.confirm(pay.again)}
+              disabled={pay.busy}
+              data-testid="pay-confirm"
+            >
               {pay.busy ? "Confirming…" : payWords(prepared, pay.again)}
             </button>
           </div>
-          <p className="pay-foot-hint">You confirm with your passkey. Nothing is paid before.</p>
+          <p className="pay-foot-hint">
+            You confirm with your passkey. Nothing is paid before.
+          </p>
         </div>
       </Sheet>
     );
@@ -492,8 +642,16 @@ export function PaySheet({
             />
           ))}
           {other && (
-            <KitField label="What for, in a few words" hint="Such as generator fuel.">
-              <input value={values.for_note ?? ""} maxLength={80} autoComplete="off" onChange={(e) => set("for_note", e.target.value)} />
+            <KitField
+              label="What for, in a few words"
+              hint="Such as generator fuel."
+            >
+              <input
+                value={values.for_note ?? ""}
+                maxLength={80}
+                autoComplete="off"
+                onChange={(e) => set("for_note", e.target.value)}
+              />
             </KitField>
           )}
           {tried && !ready && (
@@ -504,10 +662,19 @@ export function PaySheet({
           <ErrorBox error={error} />
         </fieldset>
         <div className="tk-sheet-foot">
-          <button type="submit" className="tk-cta" disabled={preparing} data-testid="pay-prepare">
+          <button
+            type="submit"
+            className="tk-cta"
+            disabled={preparing}
+            data-testid="pay-prepare"
+          >
             {preparing ? "Checking with the bank…" : payButtonWords(values)}
           </button>
-          {amount !== undefined && !Number.isNaN(amount) && <p className="pay-foot-hint">The bank's name is checked before you confirm.</p>}
+          {amount !== undefined && !Number.isNaN(amount) && (
+            <p className="pay-foot-hint">
+              The bank's name is checked before you confirm.
+            </p>
+          )}
         </div>
       </form>
     </Sheet>
