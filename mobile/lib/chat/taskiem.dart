@@ -719,7 +719,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             builder: (context, _) => Column(
               children: [
                 ColoredBox(
-                  color: t.chatWallpaper,
+                  // The head on a bar of its own, as WhatsApp's (under the phone's
+                  // status bar too), apart from the wallpaper.
+                  color: t.panel,
                   child: Padding(
                     padding: EdgeInsets.only(top: pad.top),
                     child: ChatHeadBar(

@@ -1464,8 +1464,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
           child: Column(
             children: [
               ColoredBox(
-                // The head on the conversation's own ground.
-                color: t.chatWallpaper,
+                // The head on a bar of its own, as WhatsApp's (under the phone's
+                // status bar too), apart from the wallpaper.
+                color: t.panel,
                 child: Padding(
                   padding: EdgeInsets.only(top: pad.top),
                   child: ListenableBuilder(
@@ -1476,7 +1477,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       title: c.name,
                       subtitle: d.offline ? 'Waiting for network…' : d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), _search)],
+                      actions: [ChatHeadBar.headButton('Search this conversation', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), _search)],
                       onAvatar: _contact,
                       onMore: _more,
                     ),
