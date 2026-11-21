@@ -11,7 +11,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show Approval, ChatAlert;
+import '../api/api.g.dart' show Approval, ChatAlert, ChatTopic;
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -21,7 +21,8 @@ import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/look.dart';
 import '../kit/modal.dart' show openOrSay;
 import '../kit/polling.dart';
-import '../kit/sheet.dart' show showTkSheet;
+import '../kit/sheet.dart' show TkSheet, showTkSheet;
+import 'menu_card.dart' show MenuCard, MenuMessage, catalogueOf, formOf, runActionHere;
 import '../theme/theme.dart';
 import 'alerts.dart' show subjectWords;
 import 'approve.dart' show ApproveSheet;
@@ -416,6 +417,40 @@ class _TodayTabState extends State<TodayTab> with Polling {
     openOrSay(context, () => openInBrowser(u), 'That page could not be opened.');
   }
 
+  /// A topic of Today's menu: its rows in a sheet; a row pressed leaves
+  /// the sheet for its answer (or its form first).
+  Future<void> _topicSheet(String topic) async {
+    final topics = await catalogueOf(_auth).catchError((Object _) => <ChatTopic>[]);
+    final t = topics.where((x) => x.id == topic).firstOrNull;
+    if (t == null || !mounted) return;
+    await showTkSheet<void>(
+      context,
+      (sheet) => TkSheet(
+        title: t.name,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          child: MenuCard(
+            auth: _auth,
+            menu: MenuMessage(topic: topic),
+            open: true,
+            head: false,
+            onAct: (a) {
+              Navigator.of(sheet).pop();
+              unawaited(runActionHere(context, _auth, a.id, a.title, null));
+            },
+            onTool: (_, _) => false,
+            onPage: (_) => false,
+            onForm: (reply, text) {
+              Navigator.of(sheet).pop();
+              final (id, values) = formOf(reply);
+              unawaited(runActionHere(context, _auth, id, text, values));
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _go(Widget page) async {
     await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
     await _load();
@@ -605,6 +640,29 @@ class _TodayTabState extends State<TodayTab> with Polling {
       children: [
         ?top,
         if (tiles.isNotEmpty) TkHighlights(tiles: tiles),
+        // What would you like to do? (menus-everywhere.md §5): the topics
+        // used most, two rows of tiles; a tile's rows in a sheet, done
+        // through the Taskiem chat.
+        const TkSection(title: 'What would you like to do?'),
+        MenuCard(
+          key: const ValueKey('today-menu'),
+          auth: _auth,
+          menu: const MenuMessage(),
+          open: true,
+          head: false,
+          tiles: 7,
+          onTopic: (topic) {
+            unawaited(_topicSheet(topic));
+            return true;
+          },
+          onAct: (a) => unawaited(runActionHere(context, _auth, a.id, a.title, null)),
+          onTool: (_, _) => false,
+          onPage: (_) => false,
+          onForm: (reply, text) {
+            final (id, values) = formOf(reply);
+            unawaited(runActionHere(context, _auth, id, text, values));
+          },
+        ),
         TkSection(
           title: 'Needs you',
           inset: 56,

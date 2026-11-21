@@ -164,3 +164,43 @@ test("a failed menu tries again; a picked row's values reach its form", async ({
   const form = page.getByTestId("taskiem-action-form");
   await expect(form.getByLabel("What did you sell?")).toHaveValue("3 bags of rice");
 });
+
+// Menus everywhere, E3 (menus-everywhere.md §5): Today's "What would you
+// like to do?": the topics used most as tiles, "All topics" for the rest; a
+// tile's rows in a sheet; a row done through the Taskiem chat, its answer in
+// a sheet, kept in the Taskiem chat.
+for (const width of [390, 360])
+  test(`Today's menu, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    await page.goto("/home");
+    const menu = page.getByTestId("today-menu");
+    await expect(menu.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "All topics" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "Staff and tasks" })).toHaveCount(0);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`Today's menu (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await menu.getByRole("button", { name: "All topics" }).click();
+    await menu.getByRole("button", { name: "Staff and tasks" }).click();
+    const sheet = page.getByTestId("today-topic");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: /^Your tasks/ }).click();
+    const answer = page.getByTestId("action-answer");
+    await expect(answer).toBeVisible();
+    await expect(sheet).toHaveCount(0);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`an answer on Today (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    // Kept in the Taskiem chat.
+    await answer.getByRole("button", { name: "Taskiem chat" }).click();
+    await expect(pane(page).getByText("Your tasks", { exact: true }).first()).toBeVisible();
+  });

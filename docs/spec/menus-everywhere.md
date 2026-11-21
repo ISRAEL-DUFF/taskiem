@@ -1,6 +1,6 @@
 # Menus everywhere, and a picker that searches
 
-Status: E1 and E2 built, 21 November 2026; E3 and E4 to come. Follows [Menus in the chat](chat-menus.md)
+Status: E1, E2 and E3 built, 21 November 2026; E4 to come. Follows [Menus in the chat](chat-menus.md)
 (M1–M4, built) and [Chat tools](chat-tools.md).
 
 ## 1. Why
@@ -188,13 +188,27 @@ The picker over the message box ("/product", "/invoice", "@"):
 - The web draws a row's form outside the composer (a portal), so its Save
   submits its own form, not the message box's.
 
+## What E3 built (21 November 2026)
+
+- **Today** (app `today_tab.dart`, web `Home.tsx`): "What would you like to
+  do?" under the day's figures, before Needs you: the person's topics as
+  tiles, the seven used most (the catalogue already gives them most used
+  first) and an **All topics** tile for the rest, shown in place. A tile opens
+  that topic's rows in a sheet; a row is done with the run of E2 (no
+  conversation, so no note), its answer in the answer sheet; a row with values
+  opens its form first. Today has no tools, so a row whose tool would open
+  elsewhere is done as one that asks (the web's `MenuCard` takes `openTool` as
+  optional now).
+- The run and its answer are one helper on each side now: `runActionHere`
+  (app) and `useActionRun` (web), used by the tools panel and Today alike.
+
 ## 10. Phases
 
 | | What | Where |
 |---|---|---|
 | **E1** | The picker's search box, kind chips and "Show more"; the refs lists searched on the server (built) | server, app, web |
 | **E2** | `POST /v1/chat/actions/{id}/run`; the grid button's second view, its answer in a sheet, the note in a business's chat (built) | server, app, web |
-| **E3** | Today's panel | app, web |
+| **E3** | Today's panel (built) | app, web |
 | **E4** | Search everywhere, actions included | app, web |
 
 E1 first: it is the one people hit every day as their lists grow, and E4 reuses

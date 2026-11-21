@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import '../api/transport.dart' show ApiError, Offline;
 import '../app/auth.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart' show showTkToast;
@@ -123,7 +124,17 @@ class MenuCard extends StatefulWidget {
     required this.onForm,
     this.busy = false,
     this.head = true,
+    this.tiles,
+    this.onTopic,
   });
+
+  /// At most this many topics' tiles, then "All topics" for the rest
+  /// (Today's panel, menus-everywhere.md §5); every one when null.
+  final int? tiles;
+
+  /// A tile pressed: true when the screen shows the topic itself (in a
+  /// sheet, from Today); else the card turns into it.
+  final bool Function(String topic)? onTopic;
 
   /// The topics' own heading ("What would you like to do?"): not in the
   /// tools panel, whose chip says it.
@@ -165,6 +176,9 @@ class _MenuCardState extends State<MenuCard> {
   late String? _ended = widget.menu.done;
   String? _chosen;
   late bool _shown = widget.open && widget.menu.done == null;
+
+  /// "All topics" pressed under a limit of tiles.
+  bool _allTiles = false;
 
   @override
   void initState() {
@@ -426,11 +440,14 @@ class _MenuCardState extends State<MenuCard> {
                   final w = c.maxWidth / 4;
                   return Wrap(
                     children: [
-                      for (final x in topics)
+                      for (final x in _allTiles || widget.tiles == null ? topics : topics.take(widget.tiles!))
                         SizedBox(
                           width: w,
                           child: TkPress(
-                            onTap: () => setState(() => _topic = x.id),
+                            onTap: () {
+                              if (widget.onTopic?.call(x.id) ?? false) return;
+                              setState(() => _topic = x.id);
+                            },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
                               child: Column(
@@ -443,6 +460,24 @@ class _MenuCardState extends State<MenuCard> {
                                     maxLines: 2,
                                     style: tkText(size: 11.5, weight: 500, color: t.text, lineHeight: 1.2),
                                   ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      // The rest behind one more tile.
+                      if (!_allTiles && widget.tiles != null && topics.length > widget.tiles!)
+                        SizedBox(
+                          width: w,
+                          child: TkPress(
+                            onTap: () => setState(() => _allTiles = true),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                              child: Column(
+                                children: [
+                                  square('b-tools', look.lime, size: 38),
+                                  const SizedBox(height: 6),
+                                  Text('All topics', textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 11.5, weight: 500, color: t.text, lineHeight: 1.2)),
                                 ],
                               ),
                             ),
@@ -677,4 +712,39 @@ class _ActionAnswerState extends State<_ActionAnswer> {
       ],
     );
   }
+}
+
+
+/// A row pressed outside the Taskiem chat (menus-everywhere.md §3): done
+/// through the Taskiem chat (POST /v1/chat/actions/{id}/run), its answer in
+/// a sheet; in a business's conversation ([link]) what Taskiem said is left
+/// there as a note, given to [onNote].
+Future<void> runActionHere(
+  BuildContext context,
+  Auth auth,
+  String id,
+  String title,
+  Map<String, String>? values, {
+  String? link,
+  void Function(LinkMessage)? onNote,
+  VoidCallback? onOpenChat,
+}) async {
+  try {
+    final r = await auth.api.runChatAction(id: id, body: RunChatActionRequest(link: link, values: values));
+    final note = r.note;
+    if (note != null) onNote?.call(note);
+    if (!context.mounted) return;
+    await showActionAnswer(context, auth, title, r.messages, onOpenChat: onOpenChat);
+  } on ApiError catch (e) {
+    if (context.mounted) showTkToast(context, e.message.isEmpty ? 'That could not be done.' : e.message, error: true);
+  } on Offline {
+    if (context.mounted) showTkToast(context, 'You are offline. Try again when you are back.', error: true);
+  }
+}
+
+/// A form row's reply (`form:<id>:<values>`) as its id and values.
+(String, Map<String, String>) formOf(String reply) {
+  final rest = reply.substring('form:'.length);
+  final i = rest.indexOf(':');
+  return (rest.substring(0, i), (jsonDecode(rest.substring(i + 1)) as Map).map((k, v) => MapEntry('$k', '$v')));
 }

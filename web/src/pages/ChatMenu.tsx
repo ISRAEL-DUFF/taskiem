@@ -128,6 +128,8 @@ export function MenuCard({
   openTool,
   onFold,
   head = true,
+  tiles,
+  onTopic,
 }: {
   /** The menu message; none for the menu in the tools panel
    * (menus-everywhere.md §4), which has no ✕. */
@@ -140,7 +142,14 @@ export function MenuCard({
   busy: boolean;
   /** A row sent back to Taskiem, as a button's press. */
   onReply: (reply: string, text: string) => void;
-  openTool: (k: ToolKey, from?: DOMRect, start?: { add?: boolean }) => void;
+  /** A row's tool opened here; none where there are no tools (Today): the
+   * row is then done as one that asks. */
+  openTool?: (k: ToolKey, from?: DOMRect, start?: { add?: boolean }) => void;
+  /** At most this many topics' tiles, then "All topics" (Today's panel,
+   * menus-everywhere.md §5). */
+  tiles?: number;
+  /** A tile pressed: true when the page shows the topic itself (a sheet). */
+  onTopic?: (topic: string) => boolean;
   onFold?: () => void;
 }) {
   const { topics, retry } = useCatalogue();
@@ -150,6 +159,7 @@ export function MenuCard({
   const [ended, setEnded] = useState(menu.done);
   const [shown, setShown] = useState(open && !menu.done);
   const [all, setAll] = useState(false);
+  const [allTiles, setAllTiles] = useState(false);
   const [form, setForm] = useState<{ action: ChatAction; values: Record<string, string> }>();
   useEffect(() => {
     if (open) return;
@@ -200,7 +210,7 @@ export function MenuCard({
     const picked = a.id === menu.pick && topic === menu.topic;
     if (picked && a.fields?.length && Object.keys(menu.values ?? {}).length > 0)
       return setForm({ action: a, values: { ...menu.values } });
-    if (a.opens === "form" && a.tool) {
+    if (a.opens === "form" && a.tool && openTool) {
       choose(a, true);
       return openTool(a.tool as ToolKey, from, { add: a.add });
     }
@@ -274,14 +284,22 @@ export function MenuCard({
         </div>
         )}
         <div className="tk-menu-tiles" role="group" aria-label="Topics">
-          {topics.map((x) => (
-            <button key={x.id} type="button" className="tk-menu-tile" onClick={() => setTopic(x.id)}>
+          {(allTiles || tiles === undefined ? topics : topics.slice(0, tiles)).map((x) => (
+            <button key={x.id} type="button" className="tk-menu-tile" onClick={() => onTopic?.(x.id) || setTopic(x.id)}>
               <span className="tk-tile-icon">
                 <Icon name={menuIcon(x.icon)} />
               </span>
               <span>{x.name}</span>
             </button>
           ))}
+          {!allTiles && tiles !== undefined && topics.length > tiles && (
+            <button type="button" className="tk-menu-tile" onClick={() => setAllTiles(true)}>
+              <span className="tk-tile-icon">
+                <Icon name="grid" />
+              </span>
+              <span>All topics</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -490,4 +508,32 @@ export function ActionAnswer({
       </div>
     </Sheet>
   );
+}
+
+/** A row pressed outside the Taskiem chat (menus-everywhere.md §3): done
+ * through the Taskiem chat (POST /v1/chat/actions/{id}/run) and answered in
+ * a sheet; with a link, what Taskiem said is left in that conversation as a
+ * note, given to onNote. `run` takes a row's reply ("act:<id>" or
+ * "form:<id>:<values>") and its words; `sheet` is the answer to draw. */
+export function useActionRun(link?: string, onNote?: (m: { id: string }) => void) {
+  const [answer, setAnswer] = useState<{ title: string; said: Parameters<typeof ActionAnswer>[0]["said"] }>();
+  const [error, setError] = useState<string>();
+  const run = (reply: string, text: string) => {
+    const form = /^form:([a-z]+\.[a-z_]+):(.*)$/s.exec(reply);
+    const id = form ? form[1] : reply.replace(/^act:/, "");
+    const values = form ? (JSON.parse(form[2] ?? "{}") as Record<string, string>) : undefined;
+    setError(undefined);
+    post<{ messages: Parameters<typeof ActionAnswer>[0]["said"]; note?: { id: string } }>(
+      `/v1/chat/actions/${encodeURIComponent(id ?? "")}/run`,
+      { link, values },
+    ).then(
+      (r) => {
+        if (r.note) onNote?.(r.note);
+        setAnswer({ title: text.split(":")[0] ?? text, said: r.messages });
+      },
+      (e: unknown) => setError((e as Error)?.message || "That could not be done."),
+    );
+  };
+  const sheet = answer && <ActionAnswer title={answer.title} said={answer.said} onClose={() => setAnswer(undefined)} />;
+  return { run, sheet, error };
 }

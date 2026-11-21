@@ -54,7 +54,7 @@ void main() {
     await taskiem(t);
     await t.enterText(find.bySemanticsLabel('Message to Taskiem'), '/st');
     await settle(t);
-    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Tools'), findsWidgets);
     expect(tile('Stock'), findsOneWidget);
     expect(tile('Products'), findsNothing);
     await t.enterText(find.bySemanticsLabel('Message to Taskiem'), '/zebra');
@@ -128,7 +128,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('Back'));
     await settle(t);
     expect(find.bySemanticsLabel('Search products'), findsNothing);
-    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Tools'), findsWidgets);
     // Pulled up by its head: the whole screen; down a little: its height.
     await t.tap(tile('Products'));
     await settle(t);
@@ -178,7 +178,7 @@ void main() {
     await taskiem(t);
     await t.enterText(find.bySemanticsLabel('Message to Taskiem'), '/s');
     await settle(t);
-    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Tools'), findsWidgets);
     await t.tap(find.bySemanticsLabel('Close tools'));
     await settle(t);
     expect(find.text('Tools'), findsNothing);

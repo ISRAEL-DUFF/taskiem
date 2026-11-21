@@ -786,3 +786,8 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-action-answer { padding: 4px 20px 12px; }
 .tk-action-answer p { margin: 0; white-space: pre-line; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
 .tk-action-answer-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Today's "What would you like to do?" (menus-everywhere.md §5). */
+.home-actions { margin: 0 0 16px; }
+.home-actions > h2 { margin: 0 0 8px 4px; font-size: 20px; letter-spacing: -0.02em; }
+.home-actions .tk-menu { max-width: none; margin: 0; }

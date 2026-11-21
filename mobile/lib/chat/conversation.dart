@@ -5,7 +5,6 @@
 // unread begin and the bubbles, and the box to write in.
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -25,7 +24,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
-import 'menu_card.dart' show MenuCard, MenuMessage, showActionAnswer;
+import 'menu_card.dart' show MenuCard, MenuMessage, formOf, runActionHere;
 import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
@@ -916,28 +915,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
     },
     onPage: (_) => false,
     onForm: (reply, text) {
-      // "form:<id>:<values>": done with those values.
-      final rest = reply.substring('form:'.length);
-      final i = rest.indexOf(':');
-      final values = (jsonDecode(rest.substring(i + 1)) as Map).map((k, v) => MapEntry('$k', '$v'));
-      unawaited(_runAction(rest.substring(0, i), text, values));
+      final (id, values) = formOf(reply);
+      unawaited(_runAction(id, text, values));
     },
   );
 
   Future<void> _runAction(String id, String title, Map<String, String>? values) async {
     _tools.close();
     final d = widget.data;
-    try {
-      final r = await d.api.runChatAction(id: id, body: RunChatActionRequest(link: d.conv.link, values: values));
-      final note = r.note;
-      if (note != null) d.arrived(note);
-      if (!mounted) return;
-      await showActionAnswer(context, d.chats.auth, title, r.messages, onOpenChat: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'));
-    } on ApiError catch (e) {
-      if (mounted) showTkToast(context, e.message.isEmpty ? 'That could not be done.' : e.message, error: true);
-    } on Offline {
-      if (mounted) showTkToast(context, 'You are offline. Try again when you are back.', error: true);
-    }
+    await runActionHere(
+      context,
+      d.chats.auth,
+      id,
+      title,
+      values,
+      link: d.conv.link,
+      onNote: d.arrived,
+      onOpenChat: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+    );
   }
 
   void _openTool(Tool tool, {String? openId}) {

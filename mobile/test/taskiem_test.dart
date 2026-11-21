@@ -393,7 +393,7 @@ void main() {
     // The tools button opens the tools (M5); pressed again, they close.
     await t.tap(find.bySemanticsLabel('Open tools'));
     await t.pumpAndSettle();
-    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Tools'), findsWidgets);
     await t.tap(find.bySemanticsLabel('Close tools'));
     await t.pumpAndSettle();
     expect(find.text('Tools'), findsNothing);
