@@ -535,6 +535,24 @@ Built 21 November 2026 in the same look, from the plan (no drawing yet).
   yet has an amber dot and its own section. The owner's limits are rows
   under "What others may pay", each opening a sheet.
 
+### Paying a bill by transfer
+
+Built 21 November 2026 in the same look, from the payments flow's part 1
+(`docs/spec/chat-payments-flow.md`; no drawing yet).
+
+- **Pay** on a bill (its card, its page) or a customer's invoice opens a
+  small sheet of the ways as rows (`pickPayWay`): by transfer on teal, from
+  Taskiem on violet, their checkout on orange. With one way, Pay goes
+  straight to it.
+- **The transfer card** (`TransferCard`) has the card's kicker and a pill
+  (Getting it, Waiting, Expiring, Paid, Part-paid, Expired, No number);
+  "Send exactly" over the amount large; the bank, the number (in groups)
+  and the name on a panel of the ground's colour, each with a round Copy;
+  the countdown with a clock, orange in the last five minutes; a lime dot
+  that pulses while it waits, never a spinner over the number. Its one
+  step (Pay the next one, Pay the rest, Get a new number) is the card's
+  pine button; I need longer is a bold link.
+
 ## The school, as drawn
 
 A school's people get the school on the phone as it was drawn (drawn first, then built to the drawing, each screen compared at 340 px in light and dark). Nothing here is new on the server except the three chat additions at the end; every screen reads and sends what the web's Schools pages do (`docs/spec/schools.md`).

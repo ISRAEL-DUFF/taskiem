@@ -1644,6 +1644,30 @@ class TaskiemApi {
     final j = await _t.send('PUT', '/v1/pay-limits/${Uri.encodeComponent(role)}', body: body.toJson());
     return PayLimit.fromJson(j as Map<String, dynamic>);
   }
+
+  /// An account number to pay a bill by transfer (`POST /v1/bills/{id}/transfer`)
+  Future<Bill> askBillTransfer({required AskBillTransferRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/bills/${Uri.encodeComponent(id)}/transfer', body: body.toJson());
+    return Bill.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A bill with its account number to pay by transfer (`GET /v1/bills/{id}/transfer`)
+  Future<Bill> getBillTransfer({required String id}) async {
+    final j = await _t.send('GET', '/v1/bills/${Uri.encodeComponent(id)}/transfer');
+    return Bill.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// An invoice's account number to pay by transfer (`GET /v1/me/chats/{id}/invoices/{invoice}/transfer`)
+  Future<CustomerTransfer> getMyInvoiceTransfer({required String id, required String invoice}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/invoices/${Uri.encodeComponent(invoice)}/transfer');
+    return CustomerTransfer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay an invoice by transfer (`POST /v1/me/chats/{id}/invoices/{invoice}/transfer`)
+  Future<CustomerTransfer> askMyInvoiceTransfer({required AskMyInvoiceTransferRequest body, required String id, required String invoice}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/invoices/${Uri.encodeComponent(invoice)}/transfer', body: body.toJson());
+    return CustomerTransfer.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -14030,5 +14054,219 @@ class PayLimit {
         'day_kobo': ?dayKobo,
         'one_kobo': ?oneKobo,
         'role': ?role,
+      };
+}
+
+class AskBillTransferRequest {
+  const AskBillTransferRequest({this.longer});
+
+  /// Ask for the longest the supplier's provider gives ("I need longer")
+  final bool? longer;
+
+  factory AskBillTransferRequest.fromJson(Map<String, dynamic> j) => AskBillTransferRequest(
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'longer': ?longer,
+      };
+}
+
+class Bill {
+  const Bill({required this.allowPartPayments, required this.amountKobo, required this.createdAt, required this.declaredPaidKobo, required this.disputed, required this.dueKobo, this.dueOn, required this.id, required this.lines, required this.link, required this.mirroredAt, required this.paidKobo, this.payAccountNumber, this.payBankName, this.payLink, required this.payingKobo, required this.reference, required this.sentKobo, required this.status, required this.supplier, required this.supplierName, this.transfer, required this.uncountedKobo, this.waysToPay});
+
+  final bool allowPartPayments;
+  final int amountKobo;
+  final DateTime createdAt;
+  /// What the business says it paid outside Taskiem; its own figure
+  final int declaredPaidKobo;
+  final bool disputed;
+  /// What is left to pay; what was sent from Taskiem and is not counted yet
+  /// (uncounted_kobo) is not due again
+  final int dueKobo;
+  final String? dueOn;
+  final String id;
+  final List<Map<String, dynamic>> lines;
+  final String link;
+  final DateTime mirroredAt;
+  /// What the supplier's match has counted paid
+  final int paidKobo;
+  /// The account number the supplier issued this business; a transfer into it
+  /// is matched to the supplier's invoices exactly
+  final String? payAccountNumber;
+  final String? payBankName;
+  /// The supplier's invoice page, which takes a card or a transfer
+  final String? payLink;
+  /// A payment from Taskiem under way
+  final int payingKobo;
+  /// The supplier's invoice number
+  final String reference;
+  /// What the bank confirmed the business sent from Taskiem; the supplier's
+  /// match counts it in paid_kobo
+  final int sentKobo;
+  final String status;
+  final String supplier;
+  final String supplierName;
+  /// The account number to pay this bill by transfer, for those who may pay
+  /// bills (invoice.manage); null when none was asked for.
+  final BillTransfer? transfer;
+  /// Of what was sent from Taskiem, what the supplier's figure does not show
+  /// yet (its match has not paired the payment, or its count has not come
+  /// back); not due again, so the bill is not paid twice
+  final int uncountedKobo;
+  /// How the bill can be paid now, the default first; transfer (an account
+  /// number for one payment), taskiem (from the business's payments account),
+  /// checkout (the supplier's page)
+  final List<String>? waysToPay;
+
+  factory Bill.fromJson(Map<String, dynamic> j) => Bill(
+        allowPartPayments: j['allow_part_payments'] as bool,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        declaredPaidKobo: (j['declared_paid_kobo'] as num).toInt(),
+        disputed: j['disputed'] as bool,
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        dueOn: j['due_on'] == null ? null : j['due_on'] as String,
+        id: j['id'] as String,
+        lines: (j['lines'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        link: j['link'] as String,
+        mirroredAt: DateTime.parse(j['mirrored_at'] as String),
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payAccountNumber: j['pay_account_number'] == null ? null : j['pay_account_number'] as String,
+        payBankName: j['pay_bank_name'] == null ? null : j['pay_bank_name'] as String,
+        payLink: j['pay_link'] == null ? null : j['pay_link'] as String,
+        payingKobo: (j['paying_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        sentKobo: (j['sent_kobo'] as num).toInt(),
+        status: j['status'] as String,
+        supplier: j['supplier'] as String,
+        supplierName: j['supplier_name'] as String,
+        transfer: j['transfer'] == null ? null : BillTransfer.fromJson(j['transfer'] as Map<String, dynamic>),
+        uncountedKobo: (j['uncounted_kobo'] as num).toInt(),
+        waysToPay: j['ways_to_pay'] == null ? null : (j['ways_to_pay'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'allow_part_payments': allowPartPayments,
+        'amount_kobo': amountKobo,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'declared_paid_kobo': declaredPaidKobo,
+        'disputed': disputed,
+        'due_kobo': dueKobo,
+        'due_on': ?dueOn,
+        'id': id,
+        'lines': lines.map((e) => e).toList(),
+        'link': link,
+        'mirrored_at': mirroredAt.toUtc().toIso8601String(),
+        'paid_kobo': paidKobo,
+        'pay_account_number': ?payAccountNumber,
+        'pay_bank_name': ?payBankName,
+        'pay_link': ?payLink,
+        'paying_kobo': payingKobo,
+        'reference': reference,
+        'sent_kobo': sentKobo,
+        'status': status,
+        'supplier': supplier,
+        'supplier_name': supplierName,
+        'transfer': ?transfer?.toJson(),
+        'uncounted_kobo': uncountedKobo,
+        'ways_to_pay': ?waysToPay?.map((e) => e).toList(),
+      };
+}
+
+/// The account number to pay this bill by transfer, for those who may pay bills
+/// (invoice.manage); null when none was asked for.
+class BillTransfer {
+  const BillTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, this.expiresAt, this.next, this.problem, this.receivedKobo, required this.state});
+
+  final String? accountName;
+  final String? accountNumber;
+  /// Send exactly this
+  final int? amountKobo;
+  final String? bankName;
+  final DateTime? expiresAt;
+  /// Paid, the same supplier's next bill still to pay
+  final String? next;
+  /// Why a number could not be had, in plain words
+  final String? problem;
+  /// Part paid, what arrived
+  final int? receivedKobo;
+  final String state;
+
+  factory BillTransfer.fromJson(Map<String, dynamic> j) => BillTransfer(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        next: j['next'] == null ? null : j['next'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        receivedKobo: j['received_kobo'] == null ? null : (j['received_kobo'] as num).toInt(),
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'next': ?next,
+        'problem': ?problem,
+        'received_kobo': ?receivedKobo,
+        'state': state,
+      };
+}
+
+class CustomerTransfer {
+  const CustomerTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, required this.dueKobo, this.expiresAt, required this.invoice, required this.reference, required this.state});
+
+  final String? accountName;
+  final String? accountNumber;
+  /// Send exactly this
+  final int? amountKobo;
+  final String? bankName;
+  final int dueKobo;
+  final DateTime? expiresAt;
+  final String invoice;
+  final String reference;
+  final String state;
+
+  factory CustomerTransfer.fromJson(Map<String, dynamic> j) => CustomerTransfer(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        invoice: j['invoice'] as String,
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'due_kobo': dueKobo,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'invoice': invoice,
+        'reference': reference,
+        'state': state,
+      };
+}
+
+class AskMyInvoiceTransferRequest {
+  const AskMyInvoiceTransferRequest({this.longer});
+
+  final bool? longer;
+
+  factory AskMyInvoiceTransferRequest.fromJson(Map<String, dynamic> j) => AskMyInvoiceTransferRequest(
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'longer': ?longer,
       };
 }

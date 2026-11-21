@@ -351,3 +351,10 @@ confirmPayment
 cancelPayment
 getPayLimits
 putPayLimit
+
+# Pay a bill by transfer, in the chat (the payments flow, part 1;
+# docs/spec/chat-payments-flow.md), and a customer's invoice by transfer
+askBillTransfer
+getBillTransfer
+getMyInvoiceTransfer
+askMyInvoiceTransfer

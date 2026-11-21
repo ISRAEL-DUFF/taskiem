@@ -31,6 +31,7 @@ import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
 import 'bills_page.dart' show openBill;
+import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill;
 import 'invoices_page.dart' show openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'statement_page.dart' show openStatement;
@@ -853,6 +854,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     onDone: () => widget.data.pull(),
     // A document opens on its screen, or in its tool's sheet.
     onOpen: widget.onOpenDoc ?? _openDoc,
+    // Pay on a bill's card: the ways to pay it, over the chat (a host
+    // that opens documents itself opens it there).
+    onPay: widget.onOpenDoc == null ? (card) => _pay(card.id ?? card.reference) : null,
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
       if (mounted) showTkToast(context, words);
@@ -961,6 +965,38 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  /// Pay on a bill (the payments flow, part 1): its ways in a small sheet,
+  /// by transfer first; the way last used with this seller remembered.
+  Future<void> _pay(String bill) {
+    final chats = widget.data.chats;
+    return payBill(
+      context,
+      auth: chats.auth,
+      bill: bill,
+      prefs: chats.prefs,
+      now: chats.now,
+      sound: chats.soundOn,
+      onSent: () => unawaited(widget.data.pull().catchError((Object _) {})),
+      onHowToPay: (context, id) => openBill(context, chats.auth, id),
+    );
+  }
+
+  /// The newest transfer card of a bill, kept up to date: the account
+  /// number, the countdown, then Paid (only for those who may pay bills).
+  Widget? _transfer(LinkDocCard card) {
+    final chats = widget.data.chats;
+    if (card.doc != 'bill' || card.event != 'transfer' || !chats.auth.can('invoice.manage')) return null;
+    final id = card.id ?? card.reference;
+    return TransferLive(
+      key: ValueKey('transfer $id'),
+      source: BillTransferSource(chats.auth, id, number: card.reference),
+      now: chats.now,
+      sound: chats.soundOn,
+      onNext: (next) => unawaited(_pay(next)),
+      others: [('Other ways to pay', () => unawaited(_pay(id)))],
     );
   }
 
@@ -1624,6 +1660,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             now: now,
             latest: newest.contains(m.id),
             current: card == null ? null : current['${card.doc}:${card.reference}'],
+            transfer: card != null && newest.contains(m.id) ? _transfer(card) : null,
             acts: _acts,
             changed: () => setState(() {}),
             files: d.chats.files,
@@ -1732,6 +1769,7 @@ class _Bubble extends StatelessWidget {
     required this.files,
     this.latest = false,
     this.current,
+    this.transfer,
     this.onRetry,
     this.onDiscard,
     this.menuOpen = false,
@@ -1794,6 +1832,10 @@ class _Bubble extends StatelessWidget {
 
   /// The document's newest card: where it is now.
   final LinkDocCard? current;
+
+  /// A bill's newest transfer card, kept up to date, in place of the
+  /// card's frame.
+  final Widget? transfer;
   final VoidCallback? onRetry;
   final VoidCallback? onDiscard;
 
@@ -1955,6 +1997,7 @@ class _Bubble extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                transfer ??
                                 CardFrame(
                                   card: card,
                                   current: current,

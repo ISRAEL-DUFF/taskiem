@@ -149,6 +149,13 @@ Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkLi
 | Check before you pay, one payment | `chat/pay_sheet.dart` `PaymentSheet` | The Pay sheet's Next; a row of Payments; a `/payments/<id>` link | The bank's name for the account large on a `TkTopCard`, the payee, bank and masked account under it, the amount; first payment, changed account and paid in the last day as callouts; Pay ₦… with the passkey (a code behind a link), Pay again, Cancel it or Back | [done 21 Nov] |
 | Payments | `chat/payments_page.dart` `SentPaymentsPage`, `PayLimitSheet` | The chat's Pay › Your payments (page `/payments`); a `/payments` link | Filters, the payments not sent yet and sent (status as a pill, amount, masked account); for an owner, what each role may pay, a sheet with one payment and a day's total | [done 21 Nov] |
 
+## 5e. Pay a bill by transfer, in the chat (F1, `docs/spec/chat-payments-flow.md`)
+
+| Screen | File | How it is reached | What it holds | Tag |
+| --- | --- | --- | --- | --- |
+| The ways to pay | `chat/pay_transfer.dart` `pickPayWay`, `payBill`, `payMyInvoice` | Pay on a bill's card in a business chat, Pay on a bill's page, Pay on a customer's invoice card | By transfer, Pay from Taskiem, Pay on their checkout as rows with a coloured square; the way last used with that seller first; one way goes straight to it | [done 21 Nov] |
+| The transfer card | `chat/pay_transfer.dart` `TransferCard`, `TransferLive`, `showTransferSheet` | Pay by transfer (a sheet); a bill's newest `transfer` card in the chat; a bill's page under "By transfer" | Asking; Send exactly ₦…, bank, number, name each with Copy, Good for 29:12 (Expires in 4:05 in orange), Waiting with a quiet dot, I need longer; Paid ₦… · 14:52 with Pay the next one; Received ₦… of ₦… with Pay the rest; expired with Get a new number; couldn't get one with the other ways | [done 21 Nov] |
+
 ## 6. Shared parts the branch added or changed
 
 | Part | File | Note |

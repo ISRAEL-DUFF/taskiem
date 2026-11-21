@@ -75,6 +75,9 @@ String cardLine(LinkDocCard card, bool mine, String other) {
     final verb = deliveryVerbs[card.event] ?? card.event.replaceAll('_', ' ');
     return '$who $verb ${card.reference}';
   }
+  // Paying a bill by transfer (the payments flow, part 1): the buyer asked
+  // for an account number; the seller's card says who is paying.
+  if (card.event == 'transfer') return mine ? 'You asked to pay ${card.reference} by transfer' : '$other is paying by transfer';
   final verb = cardVerbs[card.event] ?? '${card.event.replaceAll('_', ' ')} ${card.doc == 'invoice' || card.doc == 'bill' ? 'invoice' : 'order'}';
   return '$who $verb ${card.reference}';
 }
@@ -265,6 +268,7 @@ const Map<String, CardStatus> _invoice = {
   'queried': (word: 'Queried', tone: CardTone.warn, step: null),
   'resolved': (word: 'Settled', tone: CardTone.lime, step: null),
   'reminder': (word: 'Reminder', tone: CardTone.warn, step: null),
+  'transfer': (word: 'Paying', tone: CardTone.plain, step: null),
 };
 
 /// cardframe.ts cardStatus: the pill and the progress.
@@ -287,7 +291,7 @@ String cardKicker(LinkDocCard c) {
 }
 
 /// cardframe.ts isDiary: a change we made ourselves that needs nothing more.
-bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed'].contains(c.event);
+bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed', 'transfer'].contains(c.event);
 
 /// linkchat.ts cardSub: the amount, and a word.
 String cardSub(LinkDocCard c) => [

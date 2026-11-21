@@ -44,6 +44,7 @@ import 'chats.dart' show ChatRow;
 import 'composer.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
+import 'pay_transfer.dart' show payMyInvoice;
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
 import 'groups.dart' show groupListLine;
@@ -938,6 +939,22 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
 
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
     'pay' when (c.url ?? '').isNotEmpty => ('Pay', () => _openUrl(c.url!, 'The pay page didn’t open. Try again.')),
+    // Paying it by transfer, in the chat (the payments flow, part 1,
+    // settled 4): an account number for it, or the invoice's page.
+    'invoice' when (c.invoiceId ?? '').isNotEmpty && (c.totalKobo ?? 0) > 0 && c.status != 'paid' => (
+      'Pay',
+      () => payMyInvoice(
+        context,
+        auth: d.auth,
+        chat: d.id,
+        invoice: c.invoiceId!,
+        business: d.name,
+        number: c.reference ?? '',
+        url: c.url,
+        dueKobo: c.totalKobo,
+        now: d.now,
+      ),
+    ),
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
     'booking' => ('Book', () => showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, service: c.serviceId, onBooked: (_) => d.refresh())),
     'product' => ('See in their shop', () => showShopSheet(context, d)),
