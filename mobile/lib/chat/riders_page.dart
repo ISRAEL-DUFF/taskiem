@@ -24,6 +24,7 @@ import 'approve.dart' show TkTextBox;
 import '../api/api.g.dart' show Payment;
 import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'menu_card.dart' show catalogueOf;
+import 'pay_many.dart' show payAllRiders, peopleWords;
 import 'pay_sheet.dart' show PaySheet, paymentSentWords, riderPayAction;
 import 'saved_fill.dart' show SavedButton, bankCodeIn, pickSavedAccount, pickSavedPhone;
 import 'stock_page.dart' show feeInput, feeKobo;
@@ -425,6 +426,17 @@ class _RidersPageState extends State<RidersPage> with Polling {
                 onTap: () => openRidersPay(context, _auth),
                 semanticsLabel: 'Pay riders',
               ),
+              // Paying people is on: what each is due, as one batch to
+              // check, paid with one passkey.
+              if (_pays && (due ?? 0) > 0)
+                TkListRow(
+                  title: 'Pay all riders',
+                  sub: 'What each is due, with one passkey',
+                  icon: 'b-people',
+                  square: look.teal,
+                  onTap: _payAll,
+                  semanticsLabel: 'Pay all riders what each is due',
+                ),
             ],
           ),
         if (v != null)
@@ -479,6 +491,15 @@ class _RidersPageState extends State<RidersPage> with Polling {
         () => openOutside(Uri.parse('https://wa.me/?text=${Uri.encodeComponent('Tap to get our deliveries on WhatsApp: $url')}')),
         'WhatsApp could not be opened.',
       );
+    }
+  }
+
+  /// Pay all riders: a batch of what each is due, to check and pay.
+  Future<void> _payAll() async {
+    final b = await payAllRiders(context, _auth);
+    if (b != null && b.status == 'sent' && mounted) {
+      showTkToast(context, 'Sent: ${peopleWords(b.count)}, ${naira(b.totalKobo)}');
+      await _load();
     }
   }
 

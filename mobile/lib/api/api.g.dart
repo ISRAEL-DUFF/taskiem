@@ -1657,6 +1657,54 @@ class TaskiemApi {
     return PayLimit.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Batches of payments, the newest first (`GET /v1/payment-batches`)
+  Future<ListPaymentBatchesResponse> listPaymentBatches() async {
+    final j = await _t.send('GET', '/v1/payment-batches');
+    return ListPaymentBatchesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prepare a batch of payments (`POST /v1/payment-batches`)
+  Future<CreatePaymentBatchResponse> createPaymentBatch({required CreatePaymentBatchRequest body}) async {
+    final j = await _t.send('POST', '/v1/payment-batches', body: body.toJson());
+    return CreatePaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Read a pasted list for a batch (`POST /v1/payment-batches/read`)
+  Future<ReadPaymentListResponse> readPaymentList({required ReadPaymentListRequest body}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/read', body: body.toJson());
+    return ReadPaymentListResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A batch, a row per person (`GET /v1/payment-batches/{id}`)
+  Future<GetPaymentBatchResponse> getPaymentBatch({required String id}) async {
+    final j = await _t.send('GET', '/v1/payment-batches/${Uri.encodeComponent(id)}');
+    return GetPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a batch, with one passkey (`POST /v1/payment-batches/{id}/confirm`)
+  Future<ConfirmPaymentBatchResponse> confirmPaymentBatch({required ConfirmPaymentBatchRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/confirm', body: body.toJson());
+    return ConfirmPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The owner''s OK for every row waiting, with one passkey (`POST /v1/payment-batches/{id}/approve`)
+  Future<ApprovePaymentBatchResponse> approvePaymentBatch({required ApprovePaymentBatchRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/approve', body: body.toJson());
+    return ApprovePaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Let a batch not sent go (`POST /v1/payment-batches/{id}/cancel`)
+  Future<CancelPaymentBatchResponse> cancelPaymentBatch({required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/cancel');
+    return CancelPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay the failed rows again (`POST /v1/payment-batches/{id}/again`)
+  Future<PayBatchAgainResponse> payBatchAgain({required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/again');
+    return PayBatchAgainResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// An account number to pay a bill by transfer (`POST /v1/bills/{id}/transfer`)
   Future<Bill> askBillTransfer({required AskBillTransferRequest body, required String id}) async {
     final j = await _t.send('POST', '/v1/bills/${Uri.encodeComponent(id)}/transfer', body: body.toJson());
@@ -14229,6 +14277,335 @@ class PayLimit {
         'day_kobo': ?dayKobo,
         'one_kobo': ?oneKobo,
         'role': ?role,
+      };
+}
+
+class ListPaymentBatchesResponse {
+  const ListPaymentBatchesResponse({required this.batches});
+
+  final List<PaymentBatch> batches;
+
+  factory ListPaymentBatchesResponse.fromJson(Map<String, dynamic> j) => ListPaymentBatchesResponse(
+        batches: (j['batches'] as List).map((e) => PaymentBatch.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batches': batches.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PaymentBatch {
+  const PaymentBatch({this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, required this.status, required this.title, required this.totalKobo, required this.waiting});
+
+  final Object? confirmedAt;
+  final int count;
+  final DateTime createdAt;
+  final String createdBy;
+  final int failed;
+  /// Rows held out when it was prepared, with why
+  final List<PaymentBatchHeldItem>? held;
+  final String id;
+  final String kind;
+  final int paidKobo;
+  final List<Payment> payments;
+  /// What became of each row when it was sent or approved
+  final List<PaymentBatchResultsItem>? results;
+  final String status;
+  final String title;
+  final int totalKobo;
+  final int waiting;
+
+  factory PaymentBatch.fromJson(Map<String, dynamic> j) => PaymentBatch(
+        confirmedAt: j['confirmed_at'],
+        count: (j['count'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        failed: (j['failed'] as num).toInt(),
+        held: j['held'] == null ? null : (j['held'] as List).map((e) => PaymentBatchHeldItem.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
+        results: j['results'] == null ? null : (j['results'] as List).map((e) => PaymentBatchResultsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        status: j['status'] as String,
+        title: j['title'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirmed_at': ?confirmedAt,
+        'count': count,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'failed': failed,
+        'held': ?held?.map((e) => e.toJson()).toList(),
+        'id': id,
+        'kind': kind,
+        'paid_kobo': paidKobo,
+        'payments': payments.map((e) => e.toJson()).toList(),
+        'results': ?results?.map((e) => e.toJson()).toList(),
+        'status': status,
+        'title': title,
+        'total_kobo': totalKobo,
+        'waiting': waiting,
+      };
+}
+
+class PaymentBatchHeldItem {
+  const PaymentBatchHeldItem({this.code, this.payee, this.problem, this.row});
+
+  final String? code;
+  final String? payee;
+  final String? problem;
+  final int? row;
+
+  factory PaymentBatchHeldItem.fromJson(Map<String, dynamic> j) => PaymentBatchHeldItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        row: j['row'] == null ? null : (j['row'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payee': ?payee,
+        'problem': ?problem,
+        'row': ?row,
+      };
+}
+
+class PaymentBatchResultsItem {
+  const PaymentBatchResultsItem({this.code, this.payment, this.problem});
+
+  final String? code;
+  final String? payment;
+  final String? problem;
+
+  factory PaymentBatchResultsItem.fromJson(Map<String, dynamic> j) => PaymentBatchResultsItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payment: j['payment'] == null ? null : j['payment'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payment': ?payment,
+        'problem': ?problem,
+      };
+}
+
+class CreatePaymentBatchRequest {
+  const CreatePaymentBatchRequest({this.copyOf, this.from, this.kind, this.rows, this.title});
+
+  /// Last time's batch, its rows again
+  final String? copyOf;
+  final String? from;
+  final String? kind;
+  final List<Map<String, dynamic>>? rows;
+  final String? title;
+
+  factory CreatePaymentBatchRequest.fromJson(Map<String, dynamic> j) => CreatePaymentBatchRequest(
+        copyOf: j['copy_of'] == null ? null : j['copy_of'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'copy_of': ?copyOf,
+        'from': ?from,
+        'kind': ?kind,
+        'rows': ?rows?.map((e) => e).toList(),
+        'title': ?title,
+      };
+}
+
+class CreatePaymentBatchResponse {
+  const CreatePaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory CreatePaymentBatchResponse.fromJson(Map<String, dynamic> j) => CreatePaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ReadPaymentListRequest {
+  const ReadPaymentListRequest({required this.text});
+
+  final String text;
+
+  factory ReadPaymentListRequest.fromJson(Map<String, dynamic> j) => ReadPaymentListRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class ReadPaymentListResponse {
+  const ReadPaymentListResponse({required this.lines});
+
+  final List<ReadPaymentListResponseLinesItem> lines;
+
+  factory ReadPaymentListResponse.fromJson(Map<String, dynamic> j) => ReadPaymentListResponse(
+        lines: (j['lines'] as List).map((e) => ReadPaymentListResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ReadPaymentListResponseLinesItem {
+  const ReadPaymentListResponseLinesItem({this.accountNumber, this.amountKobo, this.bankName, required this.line, this.name, this.payee, this.problem, required this.text});
+
+  final String? accountNumber;
+  final int? amountKobo;
+  final String? bankName;
+  final int line;
+  final String? name;
+  final String? payee;
+  final String? problem;
+  final String text;
+
+  factory ReadPaymentListResponseLinesItem.fromJson(Map<String, dynamic> j) => ReadPaymentListResponseLinesItem(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        line: (j['line'] as num).toInt(),
+        name: j['name'] == null ? null : j['name'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'line': line,
+        'name': ?name,
+        'payee': ?payee,
+        'problem': ?problem,
+        'text': text,
+      };
+}
+
+class GetPaymentBatchResponse {
+  const GetPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory GetPaymentBatchResponse.fromJson(Map<String, dynamic> j) => GetPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ConfirmPaymentBatchRequest {
+  const ConfirmPaymentBatchRequest({this.again, this.passkey, this.totp});
+
+  final bool? again;
+  final Map<String, dynamic>? passkey;
+  final String? totp;
+
+  factory ConfirmPaymentBatchRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentBatchRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'passkey': ?passkey,
+        'totp': ?totp,
+      };
+}
+
+class ConfirmPaymentBatchResponse {
+  const ConfirmPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory ConfirmPaymentBatchResponse.fromJson(Map<String, dynamic> j) => ConfirmPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ApprovePaymentBatchRequest {
+  const ApprovePaymentBatchRequest({this.again, this.passkey, this.totp});
+
+  final bool? again;
+  final Map<String, dynamic>? passkey;
+  final String? totp;
+
+  factory ApprovePaymentBatchRequest.fromJson(Map<String, dynamic> j) => ApprovePaymentBatchRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'passkey': ?passkey,
+        'totp': ?totp,
+      };
+}
+
+class ApprovePaymentBatchResponse {
+  const ApprovePaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory ApprovePaymentBatchResponse.fromJson(Map<String, dynamic> j) => ApprovePaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class CancelPaymentBatchResponse {
+  const CancelPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory CancelPaymentBatchResponse.fromJson(Map<String, dynamic> j) => CancelPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class PayBatchAgainResponse {
+  const PayBatchAgainResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory PayBatchAgainResponse.fromJson(Map<String, dynamic> j) => PayBatchAgainResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
       };
 }
 

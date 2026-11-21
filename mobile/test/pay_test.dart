@@ -503,7 +503,7 @@ void main() {
     // A filter: asked of the server.
     await t.tap(find.text('Paid').first);
     await settle(t);
-    expect(api.calls.last.url.queryParameters['status'], 'paid');
+    expect(api.calls.lastWhere((c) => c.url.path == '/v1/payments').url.queryParameters['status'], 'paid');
     expect(find.text('Musa Bello'), findsOneWidget);
     expect(find.text('Adebayo Musa'), findsNothing);
     await t.tap(find.text('All').first);

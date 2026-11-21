@@ -4,7 +4,9 @@
 // chat's Pay topic opens it (its page /payments), and a link to one
 // payment (/payments/<id>, which Taskiem sends in the chat) opens that
 // payment over it. For an owner, what each role may pay without their OK
-// (GET /v1/pay-limits, PUT /v1/pay-limits/{role}).
+// (GET /v1/pay-limits, PUT /v1/pay-limits/{role}). Pay several people
+// (P3) starts here, and the batches paid together are listed, the newest
+// paid the same again in one tap (copy_of).
 
 import 'dart:async';
 
@@ -13,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords, nairaText;
+import '../kit/kit.dart' show TkSmallButton;
 import '../kit/list.dart' show TkEmpty;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
@@ -25,6 +28,7 @@ import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'give_task.dart' show roleWords;
 import 'invoices_page.dart' show shortDay;
+import 'pay_many.dart';
 import 'pay_sheet.dart';
 import 'team_pages.dart' show staffRoles;
 import 'words.dart' show naira;
@@ -73,6 +77,8 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
   String? _error;
   List<PayLimit>? _limits;
   List<String> _roles = const [];
+  List<PaymentBatch> _batches = const [];
+  bool _copying = false;
 
   Auth get _auth => widget.auth;
 
@@ -101,6 +107,64 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
     }
+    try {
+      final r = await _auth.api.listPaymentBatches();
+      if (mounted) setState(() => _batches = r.batches.where((b) => b.status != 'cancelled').take(10).toList());
+    } on Object {
+      // The payments show without them.
+    }
+  }
+
+  Future<void> _payMany() async {
+    await openPayMany(context, _auth);
+    await _load();
+  }
+
+  /// A batch opened: read whole (the list carries its counts alone).
+  Future<void> _openBatch(PaymentBatch b) async {
+    try {
+      final whole = (await _auth.api.getPaymentBatch(id: b.id)).batch;
+      if (!mounted) return;
+      await showTkSheet<PaymentBatch>(context, (_) => BatchSheet(auth: _auth, batch: whole, follow: widget.follow));
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+    await _load();
+  }
+
+  /// The same as last time: [b]'s rows prepared again, to check and pay.
+  Future<void> _same(PaymentBatch b) async {
+    setState(() => _copying = true);
+    try {
+      final fresh = (await _auth.api.createPaymentBatch(body: CreatePaymentBatchRequest(copyOf: b.id, from: 'tools'))).batch;
+      if (!mounted) return;
+      final held = [for (final h in fresh.held ?? const <PaymentBatchHeldItem>[]) (who: h.payee ?? 'Someone', problem: h.problem ?? '')];
+      await showTkSheet<PaymentBatch>(context, (_) => BatchSheet(auth: _auth, batch: fresh, fresh: true, held: held, follow: widget.follow));
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _copying = false);
+    }
+    await _load();
+  }
+
+  Widget _batchRow(PaymentBatch b) {
+    final s = batchStatus(b);
+    final when = shortDay(b.createdAt.toUtc().add(const Duration(hours: 1)).toIso8601String());
+    final name = b.title.isEmpty ? peopleWords(b.count) : b.title;
+    return TkListRow(
+      title: name,
+      icon: 'b-people',
+      sub: '${peopleWords(b.count)} · $when',
+      subLines: 1,
+      titleLines: 1,
+      amount: naira(b.totalKobo),
+      status: s.words,
+      statusTone: s.tone,
+      waiting: b.status == 'prepared' || b.waiting > 0,
+      semanticsLabel: '$name: ${peopleWords(b.count)}, ${naira(b.totalKobo)}, ${s.words}. Open',
+      onTap: () => unawaited(_openBatch(b)),
+    );
   }
 
   Future<void> _loadLimits() async {
@@ -171,6 +235,7 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
     final list = _list;
     final toConfirm = (list ?? const <Payment>[]).where((p) => p.status == 'prepared').toList();
     final rest = (list ?? const <Payment>[]).where((p) => p.status != 'prepared').toList();
+    final last = _batches.where((b) => b.status == 'sent').firstOrNull;
     return TkPageScreen(
       title: 'Payments',
       titleSize: 30,
@@ -182,6 +247,19 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
       children: [
         if (_error != null) TkCallout(leading: TkSquare('b-x', color: look.red), title: 'Payments did not load', sub: _error, color: look.red),
         if (list == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the payments…'),
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'Pay several people',
+              sub: 'Pick them or paste a list: one passkey for all',
+              subLines: 1,
+              icon: 'b-people',
+              square: look.teal,
+              onTap: () => unawaited(_payMany()),
+            ),
+          ],
+        ),
         if (list != null && list.isEmpty)
           TkEmpty(
             icon: 'money',
@@ -189,6 +267,18 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
             line: _filter.isEmpty ? 'Pay someone from the chat: say “pay”, or open Pay in Tools.' : 'Payments that are ${paymentFilters.firstWhere((f) => f.$1 == _filter).$2.toLowerCase()} show here.',
           ),
         if (toConfirm.isNotEmpty) TkSection(title: 'Not sent yet', count: toConfirm.length, children: [for (final p in toConfirm) _row(p)]),
+        if (_batches.isNotEmpty)
+          TkSection(
+            title: 'Paid together',
+            trailing: last == null
+                ? null
+                : TkSmallButton(
+                    label: _copying ? 'Preparing…' : 'Same as last time',
+                    semantics: 'Same as last time: ${last.title.isEmpty ? peopleWords(last.count) : last.title}, ${naira(last.totalKobo)}',
+                    onPressed: _copying ? null : () => unawaited(_same(last)),
+                  ),
+            children: [for (final b in _batches) _batchRow(b)],
+          ),
         if (rest.isNotEmpty) TkSection(title: toConfirm.isEmpty ? null : 'Sent', children: [for (final p in rest) _row(p)]),
         if (_owner && _limits != null)
           TkSection(
