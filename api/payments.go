@@ -22,6 +22,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/templates"
@@ -262,18 +263,19 @@ func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bo
 
 // riderPayee is a rider's bank account, as their payouts use it.
 func (s *Server) riderPayee(ctx context.Context, tenant, rider uuid.UUID) (payeeAccount, error) {
-	if !s.Dispatch.Ready() {
+	if s.Dispatch == nil || s.Dispatch.Vault == nil || !s.Riders.Ready() {
 		return payeeAccount{}, refusePay(http.StatusConflict, "no_riders", "Riders are not set up here.")
 	}
 	var out payeeAccount
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var name string
-		if err := tx.QueryRow(ctx, `SELECT name FROM riders WHERE tenant_id = $1 AND id = $2`, tenant, rider).Scan(&name); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return refusePay(http.StatusNotFound, "no_payee", "There is no such rider.")
-			}
+		rd, err := s.Riders.GetTx(ctx, tx, tenant, rider)
+		if errors.Is(err, riders.ErrNoRider) {
+			return refusePay(http.StatusNotFound, "no_payee", "There is no such rider.")
+		}
+		if err != nil {
 			return err
 		}
+		name := rd.Name
 		b, ok, err := s.Dispatch.BankOfTx(ctx, tx, tenant, rider)
 		if err != nil {
 			return err

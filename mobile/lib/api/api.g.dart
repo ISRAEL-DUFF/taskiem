@@ -1603,9 +1603,9 @@ class TaskiemApi {
     return ListPaymentsResponse.fromJson(j as Map<String, dynamic>);
   }
 
-  /// The banks to pay an account number at (`GET /v1/payments/banks`)
-  Future<ListPayBanksResponse> listPayBanks() async {
-    final j = await _t.send('GET', '/v1/payments/banks');
+  /// The banks to pay an account number at, the likely ones first (`GET /v1/payments/banks`)
+  Future<ListPayBanksResponse> listPayBanks({String? account}) async {
+    final j = await _t.send('GET', '/v1/payments/banks', query: {'account': ?account});
     return ListPayBanksResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -13886,25 +13886,28 @@ class ListPayBanksResponse {
 }
 
 class ListPayBanksResponseBanksItem {
-  const ListPayBanksResponseBanksItem({required this.code, required this.name});
+  const ListPayBanksResponseBanksItem({required this.code, this.likely, required this.name});
 
   /// The bank's code in this list; empty in the list by name alone.
   final String code;
+  final bool? likely;
   final String name;
 
   factory ListPayBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListPayBanksResponseBanksItem(
         code: j['code'] as String,
+        likely: j['likely'] == null ? null : j['likely'] as bool,
         name: j['name'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'code': code,
+        'likely': ?likely,
         'name': name,
       };
 }
 
 class CreatePaymentRequest {
-  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.savedId});
+  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId});
 
   /// An account not saved (pay.account), with bank_name; its name is checked
   /// with the bank as it is prepared. 409 `name_not_checked` when the bank did
@@ -13918,6 +13921,9 @@ class CreatePaymentRequest {
   final String? payee;
   final String? purpose;
   final String? purposeNote;
+  /// One of the business's riders, paid to the account kept for their payouts.
+  /// 409 `no_bank` when none is kept.
+  final String? riderId;
   final String? savedId;
 
   factory CreatePaymentRequest.fromJson(Map<String, dynamic> j) => CreatePaymentRequest(
@@ -13930,6 +13936,7 @@ class CreatePaymentRequest {
         payee: j['payee'] == null ? null : j['payee'] as String,
         purpose: j['purpose'] == null ? null : j['purpose'] as String,
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
+        riderId: j['rider_id'] == null ? null : j['rider_id'] as String,
         savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
       );
 
@@ -13943,6 +13950,7 @@ class CreatePaymentRequest {
         'payee': ?payee,
         'purpose': ?purpose,
         'purpose_note': ?purposeNote,
+        'rider_id': ?riderId,
         'saved_id': ?savedId,
       };
 }

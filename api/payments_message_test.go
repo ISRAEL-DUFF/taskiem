@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/webauthn"
 )
 
 // fitting is a 10-digit account number whose check digit fits code.
@@ -39,7 +40,9 @@ func fitting(t *testing.T, code, nine string) string {
 // before says so; a rider is paid to the account kept for their payouts.
 func TestPayFromAMessage(t *testing.T) {
 	ctx := context.Background()
-	w := newWAWorld(t)
+	w := newReachWorld(t)
+	w.srv.WebAuthn = webauthn.Config{RPID: rpID, RPName: "Taskiem", Origins: []string{origin}}
+	w.srv.LoginBurst = 100
 	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
 	w.srv.AccountRails = payRails{}
@@ -98,12 +101,19 @@ func TestPayFromAMessage(t *testing.T) {
 	// A rider, paid to the account kept for their payouts.
 	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, Messages: w.srv.Messages, PageBase: "https://forms.taskiem.test"}
 	w.srv.Dispatch = &dispatch.Dispatch{Pool: w.env.DB.App, Vault: w.env.Vault, Riders: w.srv.Riders}
-	m := owner.must(201, "POST", "/v1/riders", map[string]any{"name": "Musa Bello", "phone": "+2348031110091", "zones": []string{"Lekki"}, "fee_kobo": 100000})["rider"].(map[string]any)
-	rider := uuid.MustParse(m["id"].(string))
+	biz := uuid.MustParse(tenantOf(t, owner))
+	var rider uuid.UUID
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{biz}, func(tx pgx.Tx) error {
+		name, phone, fee := "Musa Bello", "+2348031110091", int64(100000)
+		rd, err := w.srv.Riders.AddTx(ctx, tx, biz, riders.In{Name: &name, Phone: &phone, FeeKobo: &fee}, "user:ada")
+		rider = rd.ID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if e := owner.must(409, "POST", "/v1/payments", map[string]any{"rider_id": rider, "amount_kobo": 300000, "purpose": "delivery"}); e["code"] != "no_bank" {
 		t.Fatalf("no bank kept: %v", e)
 	}
-	biz := uuid.MustParse(tenantOf(t, owner))
 	musaAcct := fitting(t, "044", "076543210")
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{biz}, func(tx pgx.Tx) error {
 		_, err := w.srv.Dispatch.SetBankTx(ctx, tx, biz, rider, dispatch.Bank{BankCode: "044", AccountNumber: musaAcct}, "user:ada", "passkey")
