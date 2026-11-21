@@ -31,6 +31,8 @@ import {
   placeTitleFor,
   placeOffer,
   placeBody,
+  placeLine,
+  saveRefusal,
   customerOffer,
   type BankList,
   type MadeKind,
@@ -261,7 +263,13 @@ describe("saving after an action", () => {
     expect(savedNameFor("Bola Ade")).toBe("bola-ade");
     expect(savedNameFor("  Mama Put's Kitchen!! ")).toBe("mama-put-s-kitchen");
     expect(savedNameFor("Dangote Cement (Apapa) Nigeria Limited Ltd")).toBe("dangote-cement-apapa-nigeria-lim");
-    expect(savedNameFor("Chíoma Ọkafor")).toBe("ch-oma-kafor");
+    // Accents dropped, as the server does.
+    expect(savedNameFor("Chíoma Ọkafor")).toBe("chioma-okafor");
+    expect(savedNameFor("Ọlá Stores")).toBe("ola-stores");
+    expect(savedNameFor("Ìfẹ́")).toBe("ife");
+    expect(savedNameFor("İbrahim")).toBe("ibrahim");
+    expect(savedNameFor("--Ade--")).toBe("ade");
+    expect(savedNameFor("日本")).toBe("");
     expect(savedNameFor("A")).toBe("");
     expect(savedNameFor("•••")).toBe("");
     expect(savedNameFor("abcdefghijklmnopqrstuvwxyzabcde f")).toBe("abcdefghijklmnopqrstuvwxyzabcde");
@@ -290,14 +298,43 @@ describe("saving after an action", () => {
       details: { line: "12 Admiralty Way, Lekki", phone: "0803" },
     });
     expect(placeBody({ ...offered, phone: "" })).toEqual({ name: "12-admiralty-way", title: "12 Admiralty Way", kind: "place", details: { line: "12 Admiralty Way, Lekki" } });
+    // A long address is cut to the 200 a place's line takes, at a word.
+    const long = `12 Admiralty Way, ${"Lekki Phase One ".repeat(20)}`.trim();
+    const line = placeBody({ ...offered, address: long }).details.line;
+    expect(line.length).toBeLessThanOrEqual(200);
+    expect(long.startsWith(line)).toBe(true);
+    expect(long.charAt(line.length)).toBe(" ");
+  });
+
+  it("cuts a place's line at a word, and a comma off its end", () => {
+    expect(placeLine("12 Admiralty Way, Lekki")).toBe("12 Admiralty Way, Lekki");
+    expect(placeLine("12 Admiralty Way, Lekki", 18)).toBe("12 Admiralty Way");
+    expect(placeLine("12 Admiralty Way, Lekki", 16)).toBe("12 Admiralty Way");
+    expect(placeLine("abcdefghij", 4)).toBe("abcd");
+    expect(placeLine("x".repeat(250))).toHaveLength(200);
+  });
+
+  it("answers each refusal to save after an action", () => {
+    const e = (body: Record<string, unknown>, message = "No.", status = 409) => Object.assign(new Error(message), { status, body });
+    expect(saveRefusal(e({ name_taken: true }))).toEqual({ kind: "taken" });
+    expect(saveRefusal(e({ code: "name_needed", name_needed: true }))).toEqual({ kind: "name_needed" });
+    expect(saveRefusal(e({ code: "saved_already", saved_as: "ngozi" }))).toEqual({ kind: "saved_already", name: "ngozi" });
+    expect(saveRefusal(e({ code: "not_a_customer" }, "A linked business is not saved as a customer."))).toEqual({ kind: "gone", message: "A linked business is not saved as a customer." });
+    expect(saveRefusal(e({ code: "nothing_to_save" }, "Their details were erased."))).toEqual({ kind: "gone", message: "Their details were erased." });
+    expect(saveRefusal(e({ code: "something_else" }))).toBeNull();
+    expect(saveRefusal(e({ name_taken: true }, "No.", 400))).toBeNull();
+    expect(saveRefusal(new Error("offline"))).toBeNull();
   });
 
   it("offers to save a new customer on their first order only", () => {
     const base = { customerOrders: 1, customerSaved: "", kind: "order", may: true, name: "Ngozi" };
-    expect(customerOffer(base)).toEqual({ title: "Save Ngozi for next time", sub: "As @ngozi, with their phone and address", name: "ngozi" });
+    expect(customerOffer(base)).toEqual({ title: "Save Ngozi for next time", sub: "As @ngozi, with their phone, email and address", name: "ngozi" });
+    // A name the server cannot make one from: its own, asked for if none.
+    expect(customerOffer({ ...base, name: "Ìfẹ́" })?.name).toBe("ife");
+    expect(customerOffer({ ...base, name: "日本" })?.name).toBe("");
     expect(customerOffer({ ...base, name: "N•••" })).toEqual({
       title: "Save this customer for next time",
-      sub: "Among your saved people, with their phone and address",
+      sub: "Among your saved people, with their phone, email and address",
       name: "",
     });
     expect(customerOffer({ ...base, customerOrders: 2 })).toBeNull();

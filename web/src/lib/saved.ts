@@ -575,22 +575,33 @@ export function revealProblem(e: unknown): string {
 // app does it (mobile/lib/chat/save_after.dart).
 
 /** A name made from a title, as the server makes one (saved.NameFor):
- * lowercase letters and digits, every other run one "-", at most 32; ""
- * when none fits ("Bola Ade" → bola-ade). */
+ * accents dropped ("Ọlá" → ola), lowercase ASCII letters and digits, every
+ * other run one "-", at most 32; "" when shorter than 2 ("Bola Ade" →
+ * bola-ade). */
 export function savedNameFor(title: string): string {
-  let n = "";
-  let dash = false;
-  for (const c of title.toLowerCase()) {
-    if (/^[a-z0-9]$/.test(c)) {
-      if (dash && n) n += "-";
-      n += c;
-      dash = false;
-    } else {
-      dash = true;
-    }
-  }
-  if (n.length > 32) n = n.slice(0, 32).replace(/-+$/, "");
-  return nameProblem(n) === null ? n : "";
+  const n = title
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return n.length < 2 ? "" : n;
+}
+
+/** The longest street line a saved place takes (the server's limit; a
+ * typed address may be up to 300). */
+export const PLACE_LINE_MAX = 200;
+
+/** An address cut to max to be a place's line: at the last space (or
+ * ",") before max, so no word is cut in two; whole when it fits. */
+export function placeLine(address: string, max = PLACE_LINE_MAX): string {
+  const a = address.trim();
+  if (a.length <= max) return a;
+  const head = a.slice(0, max + 1);
+  const at = Math.max(head.lastIndexOf(" "), head.lastIndexOf(","));
+  return (at > 0 ? head.slice(0, at) : a.slice(0, max)).replace(/[\s,;]+$/, "");
 }
 
 /** A typed address as a place's title: its first part ("12 Admiralty Way"
@@ -628,14 +639,32 @@ export const placeBody = (o: PlaceOffer, name = o.name) => ({
   name,
   title: o.title,
   kind: "place" as const,
-  details: o.phone ? { line: o.address, phone: o.phone } : { line: o.address },
+  details: o.phone ? { line: placeLine(o.address), phone: o.phone } : { line: placeLine(o.address) },
 });
+
+/** Why saving after an action was refused (409s from POST /v1/saved and
+ * …/orders/{reference}/save-customer), as the offer answers it: taken and
+ * name_needed ask for a name (the second with the field empty), gone hides
+ * the offer and says the server's words, saved_already says what it was
+ * saved as; null for any other error, shown with the offer kept. */
+export type SaveRefusal = { kind: "taken" } | { kind: "name_needed" } | { kind: "gone"; message: string } | { kind: "saved_already"; name: string };
+
+export function saveRefusal(e: unknown): SaveRefusal | null {
+  const x = e as { status?: number; body?: Record<string, unknown>; message?: string } | null;
+  if (x?.status !== 409) return null;
+  const b = x.body ?? {};
+  if (b.name_taken) return { kind: "taken" };
+  if (b.name_needed || b.code === "name_needed") return { kind: "name_needed" };
+  if (b.code === "saved_already" && typeof b.saved_as === "string" && b.saved_as) return { kind: "saved_already", name: b.saved_as };
+  if (b.code === "not_a_customer" || b.code === "nothing_to_save") return { kind: "gone", message: x.message || "There is nothing of theirs to save." };
+  return null;
+}
 
 /** The offer on a new customer's first order to save them among the
  * business's saved people: its words and the @name it is saved by ("" for
  * the server's own, when their name is hidden or none fits); null for a
  * repeat customer, one saved already, a linked business's order, or one who
- * may not manage saved things. */
+ * may not manage saved things and see personal data (may). */
 export function customerOffer(o: {
   customerOrders?: number;
   customerSaved?: string;
@@ -651,7 +680,7 @@ export function customerOffer(o: {
   const name = known ? savedNameFor(shown) : "";
   return {
     title: known ? `Save ${shown} for next time` : "Save this customer for next time",
-    sub: name ? `As @${name}, with their phone and address` : "Among your saved people, with their phone and address",
+    sub: name ? `As @${name}, with their phone, email and address` : "Among your saved people, with their phone, email and address",
     name,
   };
 }

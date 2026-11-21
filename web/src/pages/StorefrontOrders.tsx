@@ -397,14 +397,15 @@ export function StorefrontOrder() {
   useLiveRefresh(reload);
   const o = data?.order;
   // A new customer's first order (saved objects S3): saved for next time
-  // with one click, by whoever may manage the business's saved things.
+  // with one click, by whoever may manage the business's saved things and
+  // see personal data (saving reads the customer's details whole).
   const offer =
     o &&
     customerOffer({
       customerOrders: data?.customer_orders,
       customerSaved: data?.customer_saved,
       kind: o.kind,
-      may: can("saved.manage"),
+      may: can("saved.manage") && can("pii.reveal"),
       name: (revealed?.customer ?? o.customer).name ?? "",
     });
   return (

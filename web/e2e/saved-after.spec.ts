@@ -96,13 +96,13 @@ for (const width of [390, 360]) {
     // Hidden, the server makes the name from theirs.
     const offer = card.getByTestId("save-customer");
     await expect(offer).toContainText("Save this customer for next time");
-    await expect(offer).toContainText("Among your saved people, with their phone and address");
+    await expect(offer).toContainText("Among your saved people, with their phone, email and address");
     await axeBoth(page, "the first order, customer hidden", width);
 
     // Shown: by their name.
     await card.getByRole("button", { name: "Show customer's details" }).click();
     await expect(offer).toContainText("Save Bola Ade for next time");
-    await expect(offer).toContainText("As @bola-ade, with their phone and address");
+    await expect(offer).toContainText("As @bola-ade, with their phone, email and address");
     await offer.getByRole("button", { name: "Save as @bola-ade" }).click();
 
     // Taken: another name, filled in to change.
@@ -180,5 +180,82 @@ for (const width of [390, 360]) {
     await list.getByRole("button", { name: "Save", exact: true }).click();
     await expect(card.getByTestId("save-place-done")).toContainText("Saved as @ikota-shop");
     expect(await (await page.request.get("/v1/saved/resolve?name=ikota-shop")).text()).toContain("Shop 4, Ikota Market");
+
+    // A long address: the place's line cut to 200, at a word.
+    const long = `Plot 12, ${"Admiralty Way Lekki Phase One ".repeat(9)}`.trim();
+    await card.getByLabel("Address").fill(long);
+    await card.getByRole("button", { name: "Save", exact: true }).click();
+    const posted = page.waitForRequest((q) => q.url().endsWith("/v1/saved") && q.method() === "POST");
+    await offer.getByRole("button", { name: "Save as @plot-12" }).click();
+    const line = ((await posted).postDataJSON() as { details: { line: string } }).details.line;
+    expect(line.length).toBeLessThanOrEqual(200);
+    expect(long.startsWith(line)).toBe(true);
+    expect(long.charAt(line.length)).toBe(" ");
+    await expect(card.getByTestId("save-place-done")).toContainText("Saved as @plot-12");
   });
 }
+
+// The server's other answers to saving a customer (stubbed: the order's
+// customer is sealed by the public site).
+test("a customer's save refused: a name asked for, saved already, nothing to save, another error", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await owner(page);
+  const order = (reference: string, name: string) => ({
+    id: reference,
+    reference,
+    kind: "order",
+    status: "accepted",
+    customer: { name, phone: "•••0099" },
+    basket: [{ id: "1", name: "Jollof rice", quantity: 1, price_kobo: 250_000, line_kobo: 250_000 }],
+    total_kobo: 250_000,
+    fulfilment: "pickup",
+    payment: "none",
+    created_at: now,
+  });
+  const answers: Record<string, (b: { name?: string }) => { status: number; body: unknown }> = {
+    // No name given and none can be made from theirs: one asked for, the field empty.
+    "AK-NAME": (b) => (b.name ? { status: 201, body: { saved: savedPerson(b.name) } } : { status: 409, body: { error: "Give it a name.", code: "name_needed", name_needed: true } }),
+    "AK-ALREADY": () => ({ status: 409, body: { error: "They are saved already.", code: "saved_already", saved_as: "bola" } }),
+    "AK-ERASED": () => ({ status: 409, body: { error: "This customer's details were erased: there is nothing to save.", code: "nothing_to_save" } }),
+    "AK-DOWN": () => ({ status: 500, body: { error: "Something went wrong on our side." } }),
+  };
+  const sent: unknown[] = [];
+  await page.route(/\/v1\/storefront\/orders\/(AK-[A-Z]+)(\/save-customer)?(\?.*)?$/, (r) => {
+    const m = /orders\/(AK-[A-Z]+)(\/save-customer)?/.exec(new URL(r.request().url()).pathname);
+    const ref = m?.[1] ?? "";
+    if (!m?.[2]) return r.fulfill(json({ order: order(ref, "B•••"), revealed: false, customer_orders: 1, customer_saved: "" }, 200));
+    const b = r.request().postDataJSON() as { name?: string };
+    sent.push(b);
+    const a = answers[ref]?.(b) ?? { status: 404, body: {} };
+    return r.fulfill(json(a.body, a.status));
+  });
+  const card = page.getByRole("region", { name: "Customer" });
+
+  await page.goto("/storefront/orders/AK-NAME");
+  await card.getByTestId("save-customer").getByRole("button", { name: "Save for next time" }).click();
+  const list = card.getByRole("list", { name: "Save this customer for next time" });
+  await expect(list).toContainText("Give it a name to call it up by");
+  await expect(list.getByLabel("Name to call it up by")).toHaveValue("");
+  await axeBoth(page, "a customer's name asked for", 390);
+  await list.getByLabel("Name to call it up by").fill("@bisi");
+  await list.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(card.getByTestId("save-customer-done")).toContainText("Saved as @bisi");
+  expect(sent).toEqual([{}, { name: "bisi" }]);
+
+  await page.goto("/storefront/orders/AK-ALREADY");
+  await card.getByTestId("save-customer").getByRole("button", { name: "Save for next time" }).click();
+  await expect(card.getByTestId("save-customer-done")).toContainText("Saved as @bola");
+
+  await page.goto("/storefront/orders/AK-ERASED");
+  await card.getByTestId("save-customer").getByRole("button", { name: "Save for next time" }).click();
+  await expect(card.getByTestId("save-customer-gone")).toHaveText("This customer's details were erased: there is nothing to save.");
+  await expect(card.getByTestId("save-customer")).toHaveCount(0);
+  await axeBoth(page, "a customer with nothing to save", 390);
+
+  // Any other error: said, the offer kept to try again.
+  await page.goto("/storefront/orders/AK-DOWN");
+  await card.getByTestId("save-customer").getByRole("button", { name: "Save for next time" }).click();
+  await expect(card).toContainText("Something went wrong on our side.");
+  await expect(card.getByTestId("save-customer").getByRole("button", { name: "Save for next time" })).toBeVisible();
+});
