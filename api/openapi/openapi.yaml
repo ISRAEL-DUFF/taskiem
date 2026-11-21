@@ -34173,7 +34173,7 @@ paths:
       tags:
       - Saved
       summary: Import saved things from a file
-      description: 'A CSV of the business''s saved things (its first line names the columns: title or name, then kind and what each holds, such as bank and account_number, phone, street and area). Without `confirm` it answers the plan with the file''s `hash`; with that hash it saves each thing as one added by hand is (a bank account checked with its bank). A file with any line that cannot be taken, a name saved already or past the plan''s limit saves nothing: 422 `import_unreadable` with each line and why. 409 `import_changed` when `confirm` is not the file''s hash.'
+      description: 'A CSV of the business''s saved things (its first line names the columns: title or name, then kind and what each holds, such as bank and account_number, phone, street and area; separated by commas, semicolons or tabs). Without `confirm` it answers the plan with the file''s `hash`; with that hash it saves each thing as one added by hand is (a bank account checked with its bank), under a time limit of about 90 seconds. A thing saved already by its name and kind is marked `skip` and not saved again, so a file saved in part can be sent again. A file with any line that cannot be taken, a name saved already as another kind or past the plan''s limit saves nothing: 422 `import_unreadable` with each line and why (also for a file over 256 KB). 409 `import_changed` when `confirm` is not the file''s hash.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -44323,9 +44323,10 @@ components:
           type: string
         total:
           type: integer
+          description: The things to save (the rows not skipped).
         rows:
           type: array
-          description: The plan's things.
+          description: The plan's things, those to skip with them.
           items:
             type: object
             additionalProperties: false
@@ -44333,6 +44334,7 @@ components:
             properties:
               line:
                 type: integer
+                description: Its line in the file, the column names' being 1.
               name:
                 type: string
               title:
@@ -44341,6 +44343,12 @@ components:
                 type: string
               hint:
                 type: string
+              warning:
+                type: string
+                description: What to know before saving it, which does not keep it from being saved (a bank Taskiem does not know by that name, its name not checked), or why it is skipped.
+              skip:
+                type: boolean
+                description: Saved already by this name and kind (an earlier send of the file); not saved again.
         added:
           type: array
           description: The names saved.
@@ -44360,6 +44368,43 @@ components:
                 type: string
               message:
                 type: string
+        skipped:
+          type: array
+          description: The names not saved because they are saved already as the same kind.
+          items:
+            type: string
+        unchecked:
+          type: array
+          description: The bank accounts saved (in added) whose name the bank has not checked, each with why; Check names on the Saved page (POST /v1/saved/check) checks them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name, problem]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+              problem:
+                type: string
+        check_words:
+          type: string
+          description: When some accounts are unchecked, how many and how to check them, in plain words.
+        left:
+          type: array
+          description: Lines not reached within the time limit; sending the file again saves them, skipping what is saved.
+          items:
+            type: object
+            additionalProperties: false
+            required: [line, name]
+            properties:
+              line:
+                type: integer
+              name:
+                type: string
+        left_words:
+          type: string
+          description: When lines are left, what to do, in plain words.
     SavedImportProblems:
       type: object
       additionalProperties: false
