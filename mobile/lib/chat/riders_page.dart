@@ -18,10 +18,13 @@ import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import '../api/api.g.dart' show Payment;
 import 'book_sheet.dart' show lagosTime, whenLabel;
+import 'menu_card.dart' show catalogueOf;
+import 'pay_sheet.dart' show PaySheet, paymentSentWords, riderPayAction;
 import 'saved_fill.dart' show SavedButton, bankCodeIn, pickSavedAccount, pickSavedPhone;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'words.dart' show CardTone, naira;
@@ -266,6 +269,9 @@ class _RidersPageState extends State<RidersPage> with Polling {
   Object? _error;
   bool _busy = false;
   String? _actError;
+  // Paying people is on here (money.pay and a payments account): Pay on a
+  // rider with a bank account kept.
+  bool _pays = false;
 
   Auth get _auth => widget.auth;
 
@@ -274,6 +280,12 @@ class _RidersPageState extends State<RidersPage> with Polling {
     super.initState();
     _load();
     startPolling(const Duration(seconds: 60), _load);
+    if (_auth.can('money.pay')) {
+      catalogueOf(_auth).then((topics) {
+        final on = topics.any((t) => t.actions.any((a) => a.id == 'pay.person'));
+        if (mounted && on) setState(() => _pays = true);
+      }, onError: (Object _) {});
+    }
   }
 
   Future<void> _load() async {
@@ -427,6 +439,9 @@ class _RidersPageState extends State<RidersPage> with Polling {
                   status: _retired ? null : stateLine(r),
                   statusAccent: _retired ? null : accent(r),
                   onTap: _retired ? null : () => _more(r),
+                  trailing: !_retired && _pays && _str(r['bank']).isNotEmpty
+                      ? TkSmallButton(label: 'Pay', semantics: 'Pay ${_str(r['name'])}', onPressed: () => _pay(r))
+                      : null,
                 ),
             ],
           ),
@@ -465,6 +480,17 @@ class _RidersPageState extends State<RidersPage> with Polling {
         'WhatsApp could not be opened.',
       );
     }
+  }
+
+  /// Pay on a rider: the Pay sheet, to the bank account kept for their
+  /// payouts, for a delivery unless changed.
+  Future<void> _pay(Map<String, dynamic> r) async {
+    final name = _str(r['name']);
+    final paid = await showTkSheet<Payment>(
+      context,
+      (_) => PaySheet(auth: _auth, action: riderPayAction(name), riderId: _str(r['id']), initial: const {'for': 'a delivery'}, from: 'tools'),
+    );
+    if (paid != null && mounted) showTkToast(context, '${paymentSentWords(paid)}: ${naira(paid.amountKobo)} to $name');
   }
 
   /// A rider pressed: change them, send the link again, retire them.

@@ -1609,6 +1609,18 @@ class TaskiemApi {
     return ListPayBanksResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// What a message says to pay (`POST /v1/payments/read`)
+  Future<ReadPaymentResponse> readPayment({required ReadPaymentRequest body}) async {
+    final j = await _t.send('POST', '/v1/payments/read', body: body.toJson());
+    return ReadPaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Check the likely banks for an account number (`POST /v1/payments/name-check`)
+  Future<PayNameCheckResponse> payNameCheck({required PayNameCheckRequest body}) async {
+    final j = await _t.send('POST', '/v1/payments/name-check', body: body.toJson());
+    return PayNameCheckResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Prepare a payment (`POST /v1/payments`)
   Future<CreatePaymentResponse> createPayment({required CreatePaymentRequest body}) async {
     final j = await _t.send('POST', '/v1/payments', body: body.toJson());
@@ -13903,6 +13915,161 @@ class ListPayBanksResponseBanksItem {
         'code': code,
         'likely': ?likely,
         'name': name,
+      };
+}
+
+class ReadPaymentRequest {
+  const ReadPaymentRequest({required this.text});
+
+  final String text;
+
+  factory ReadPaymentRequest.fromJson(Map<String, dynamic> j) => ReadPaymentRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class ReadPaymentResponse {
+  const ReadPaymentResponse({this.accountNumber, this.amountKobo, this.bankCode, this.bankName, required this.found, this.likely, this.name, this.paid, this.payee});
+
+  final String? accountNumber;
+  final int? amountKobo;
+  final String? bankCode;
+  final String? bankName;
+  final bool found;
+  final List<ReadPaymentResponseLikelyItem>? likely;
+  final String? name;
+  final ReadPaymentResponsePaid? paid;
+  /// The business's saved account with this number, by its name (staff pay
+  /// saved accounts only)
+  final String? payee;
+
+  factory ReadPaymentResponse.fromJson(Map<String, dynamic> j) => ReadPaymentResponse(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        found: j['found'] as bool,
+        likely: j['likely'] == null ? null : (j['likely'] as List).map((e) => ReadPaymentResponseLikelyItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] == null ? null : j['name'] as String,
+        paid: j['paid'] == null ? null : ReadPaymentResponsePaid.fromJson(j['paid'] as Map<String, dynamic>),
+        payee: j['payee'] == null ? null : j['payee'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_code': ?bankCode,
+        'bank_name': ?bankName,
+        'found': found,
+        'likely': ?likely?.map((e) => e.toJson()).toList(),
+        'name': ?name,
+        'paid': ?paid?.toJson(),
+        'payee': ?payee,
+      };
+}
+
+class ReadPaymentResponseLikelyItem {
+  const ReadPaymentResponseLikelyItem({this.code, this.likely, this.name});
+
+  final String? code;
+  final bool? likely;
+  final String? name;
+
+  factory ReadPaymentResponseLikelyItem.fromJson(Map<String, dynamic> j) => ReadPaymentResponseLikelyItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        likely: j['likely'] == null ? null : j['likely'] as bool,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'likely': ?likely,
+        'name': ?name,
+      };
+}
+
+class ReadPaymentResponsePaid {
+  const ReadPaymentResponsePaid({this.amountKobo, this.at, this.id, this.status});
+
+  final int? amountKobo;
+  final DateTime? at;
+  final String? id;
+  final String? status;
+
+  factory ReadPaymentResponsePaid.fromJson(Map<String, dynamic> j) => ReadPaymentResponsePaid(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        at: j['at'] == null ? null : DateTime.parse(j['at'] as String),
+        id: j['id'] == null ? null : j['id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'at': ?at?.toUtc().toIso8601String(),
+        'id': ?id,
+        'status': ?status,
+      };
+}
+
+class PayNameCheckRequest {
+  const PayNameCheckRequest({required this.accountNumber, this.bankCodes});
+
+  final String accountNumber;
+  final List<String>? bankCodes;
+
+  factory PayNameCheckRequest.fromJson(Map<String, dynamic> j) => PayNameCheckRequest(
+        accountNumber: j['account_number'] as String,
+        bankCodes: j['bank_codes'] == null ? null : (j['bank_codes'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_codes': ?bankCodes?.map((e) => e).toList(),
+      };
+}
+
+class PayNameCheckResponse {
+  const PayNameCheckResponse({required this.account, required this.banks});
+
+  /// The number, masked
+  final String account;
+  final List<PayNameCheckResponseBanksItem> banks;
+
+  factory PayNameCheckResponse.fromJson(Map<String, dynamic> j) => PayNameCheckResponse(
+        account: j['account'] as String,
+        banks: (j['banks'] as List).map((e) => PayNameCheckResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': account,
+        'banks': banks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayNameCheckResponseBanksItem {
+  const PayNameCheckResponseBanksItem({this.accountName, required this.bankCode, required this.bankName, this.problem});
+
+  final String? accountName;
+  final String bankCode;
+  final String bankName;
+  final String? problem;
+
+  factory PayNameCheckResponseBanksItem.fromJson(Map<String, dynamic> j) => PayNameCheckResponseBanksItem(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        bankCode: j['bank_code'] as String,
+        bankName: j['bank_name'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'bank_code': bankCode,
+        'bank_name': bankName,
+        'problem': ?problem,
       };
 }
 

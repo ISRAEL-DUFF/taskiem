@@ -19,6 +19,7 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
+import 'pay_chip.dart' show PayChip, mayHoldAccount, mayPayFromMessages;
 import 'save_as.dart' show saveAsItems, saveNamed;
 import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'saved_picks.dart';
@@ -684,6 +685,20 @@ class _CustomerScreenState extends State<CustomerScreen> {
   /// A message's menu (saved objects S1): Copy and Save as… on its words,
   /// Save as… on a photo or document, into the business's saved things
   /// for whoever may manage them.
+  /// Account details in a message: Pay this account under it (paying
+  /// people, phase 2).
+  Widget _withPay(CustomerLine m, Widget bubble) {
+    final auth = widget.data.chats.auth;
+    if (m.local || m.m.card != null || m.m.kind == 'media' || !mayHoldAccount(m.m.body) || !mayPayFromMessages(auth)) return bubble;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        bubble,
+        PayChip(key: ValueKey('pay-${m.id}'), auth: auth, id: m.id, text: m.m.body, mine: m.m.mine),
+      ],
+    );
+  }
+
   Future<void> _hold(CustomerLine x, Rect at) async {
     final m = x.m;
     final a = m.attachment;
@@ -848,7 +863,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                               final line = m.m.line ?? (app ? 'app' : 'whatsapp');
                               if (line == 'app' || m.m.card != null || m.m.attachment != null) {
                                 final meta = m.m.mine && m.m.card == null ? t.chatOutMeta : t.muted;
-                                return Padding(
+                                return _withPay(m, Padding(
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
                                   child: BubbleHold(
                                     label: m.m.mine ? 'Your message' : 'Message from the customer',
@@ -878,9 +893,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                       ],
                                     ),
                                   )),
-                                );
+                                ));
                               }
-                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null)));
+                              return _withPay(m, Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null))));
                             },
                           ),
                         ),

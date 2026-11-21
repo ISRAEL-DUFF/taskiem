@@ -31,6 +31,7 @@ import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
 import 'bills_page.dart' show openBill;
+import 'pay_chip.dart' show PayChip, mayHoldAccount, mayPayFromMessages;
 import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill;
 import 'invoices_page.dart' show openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -1656,7 +1657,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
         final first = prev == null || _startsRun(prev.m, m.m);
         final card = m.m.kind == 'card' ? m.m.card : null;
-        return Padding(
+        // Account details in the words: Pay this account under it (phase 2).
+        final pay = card == null && m.out == null && mayHoldAccount(m.m.body) && mayPayFromMessages(d.chats.auth);
+        final bubble = Padding(
           padding: EdgeInsets.only(top: first ? 6 : 0),
           child: _Bubble(
             m: m,
@@ -1685,6 +1688,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
             refs: (auth: d.chats.auth, link: d.conv.link),
             onMore: () => setState(() => _taps[m.id] = (_taps[m.id] ?? 0) + 1),
           ),
+        );
+        if (!pay) return bubble;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            bubble,
+            PayChip(key: ValueKey('pay-${m.id}'), auth: d.chats.auth, id: m.id, text: m.m.body!, mine: m.m.mine),
+          ],
         );
       },
     );

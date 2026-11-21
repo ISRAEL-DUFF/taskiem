@@ -534,6 +534,16 @@ Built 21 November 2026 in the same look, from the plan (no drawing yet).
 - **Payments:** a list page with the filters under the head; one not sent
   yet has an amber dot and its own section. The owner's limits are rows
   under "What others may pay", each opening a sheet.
+- **From a message** (phase 2): "Pay this account" is a pill under the
+  bubble on the wallpaper (the incoming bubble's colour, a teal round bank
+  mark; lime with a tick once paid, "Paid ₦45,000 on 3 Nov · Pay again").
+- **The bank for a number:** the bank list puts the likely banks first,
+  marked "Likely for this number"; "Check the likely banks for me" is a
+  bold link under the bank's box, its answers rows under "What the banks
+  say" (lime with the name, red without), the one picked ticked. The bank's
+  name is a lime callout, no account a red one; the message's name that is
+  not the bank's an amber one.
+- **Pay on a rider:** a small Pay button on the rider's row.
 
 ### Paying a bill by transfer
 

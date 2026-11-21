@@ -21,6 +21,7 @@ import 'package:taskiem/app/route.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/pay_sheet.dart';
 import 'package:taskiem/chat/payments_page.dart';
+import 'package:taskiem/chat/riders_page.dart' show RidersPage;
 import 'package:taskiem/kit/kit.dart' show TkField;
 import 'package:taskiem/kit/sheet.dart';
 import 'package:taskiem/main.dart';
@@ -607,6 +608,217 @@ void main() {
       ),
       drive: settle,
     );
+  });
+
+  testWidgets('an account number with no bank: the likely banks first, checked for me, one picked; the message’s name in amber', (t) async {
+    phone(t);
+    final api = _Api();
+    api.routes['GET /v1/payments/banks'] = (r) => {
+      'banks': [
+        {'code': '058', 'name': 'Guaranty Trust Bank', 'likely': r.url.queryParameters['account'] == '0123456789'},
+        {'code': '044', 'name': 'Access Bank', 'likely': r.url.queryParameters['account'] == '0123456789'},
+        {'code': '057', 'name': 'Zenith Bank', 'likely': r.url.queryParameters['account'] == '0123456789'},
+        {'code': '011', 'name': 'First Bank of Nigeria'},
+      ],
+      'from': 'iswallet/taskiem',
+    };
+    final answers = {
+      '058': {'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'account_name': 'CHIDI OKEKE'},
+      '044': {'bank_name': 'Access Bank', 'bank_code': '044', 'problem': 'No account ••6789 at Access Bank.'},
+      '057': {'bank_name': 'Zenith Bank', 'bank_code': '057', 'problem': 'The bank did not say just now.'},
+      '011': {'bank_name': 'First Bank of Nigeria', 'bank_code': '011', 'account_name': 'CHIDI OKEKE'},
+    };
+    api.routes['POST /v1/payments/name-check'] = (r) {
+      final codes = ((jsonDecode(r.body) as Map)['bank_codes'] as List?)?.cast<String>() ?? ['058', '044', '057'];
+      return {
+        'account': '••6789',
+        'banks': [for (final c in codes) answers[c]],
+      };
+    };
+    api.routes['POST /v1/payments'] = (_) => {'payment': payment('p6', payee: 'Account ••6789', name: 'CHIDI OKEKE', first: true)};
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host(
+          (c) => showTkSheet<Payment>(
+            c,
+            (_) => PaySheet(
+              auth: api.auth(),
+              action: _payAccount,
+              initial: const {'number': '0123456789', 'amount': '45000'},
+              from: 'message',
+              said: 'Chidi Okafor',
+            ),
+          ),
+          [],
+        ),
+      ),
+    );
+    await settle(t);
+    expect(api.calls.where((c) => c.url.path == '/v1/payments/banks').last.url.queryParameters['account'], '0123456789');
+    expect(find.text('Check the likely banks for me'), findsOneWidget);
+
+    // The full list, the likely ones first and marked.
+    await t.tap(find.text('Choose the bank'));
+    await settle(t);
+    expect(find.text('Likely for this number'), findsNWidgets(3));
+    expect(find.text('The banks this number can be at come first.'), findsOneWidget);
+    expect(find.text('First Bank of Nigeria'), findsOneWidget);
+    // Picked: the name check runs at once; a wrong bank keeps the number.
+    await t.tap(find.text('Access Bank'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payments/name-check').single, {
+      'account_number': '0123456789',
+      'bank_codes': ['044'],
+    });
+    expect(find.text('No account ••6789 at Access Bank.'), findsOneWidget);
+    expect(find.text('Try another bank: the number stays.'), findsOneWidget);
+    expect(find.text('Check the likely banks for me'), findsNothing);
+
+    // Another bank from the full list: checked in its turn.
+    await t.tap(find.text('Access Bank'));
+    await settle(t);
+    await t.tap(find.text('First Bank of Nigeria'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payments/name-check').last['bank_codes'], ['011']);
+    expect(find.text('The bank says CHIDI OKEKE'), findsOneWidget);
+    expect(find.text('First Bank of Nigeria · ••6789'), findsOneWidget);
+    expect(find.text('The message says Chidi Okafor; the bank says CHIDI OKEKE.'), findsOneWidget);
+    // A new number: what the banks said of the old one let go.
+    final boxes = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
+    await t.enterText(boxes.at(0), '012345678');
+    await settle(t);
+    expect(find.text('The bank says CHIDI OKEKE'), findsNothing);
+  });
+
+  testWidgets('Check the likely banks for me: each bank’s answer, the person picks; nothing paid without a pick', (t) async {
+    phone(t);
+    final api = _Api();
+    api.routes['GET /v1/payments/banks'] = (r) => {
+      'banks': [
+        {'code': '058', 'name': 'Guaranty Trust Bank', 'likely': true},
+        {'code': '044', 'name': 'Access Bank', 'likely': true},
+        {'code': '057', 'name': 'Zenith Bank', 'likely': true},
+        {'code': '011', 'name': 'First Bank of Nigeria'},
+      ],
+      'from': 'iswallet/taskiem',
+    };
+    api.routes['POST /v1/payments/name-check'] = (r) => {
+      'account': '••6789',
+      'banks': [
+        {'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'account_name': 'CHIDI OKEKE'},
+        {'bank_name': 'Access Bank', 'bank_code': '044', 'problem': 'No account ••6789 at Access Bank.'},
+        {'bank_name': 'Zenith Bank', 'bank_code': '057', 'problem': 'The bank did not say just now.'},
+      ],
+    };
+    api.routes['POST /v1/payments'] = (_) => {'payment': payment('p6', payee: 'Account ••6789', name: 'CHIDI OKEKE', first: true)};
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host(
+          (c) => showTkSheet<Payment>(
+            c,
+            (_) => PaySheet(
+              auth: api.auth(),
+              action: _payAccount,
+              initial: const {'number': '0123456789', 'amount': '45000'},
+              from: 'message',
+              said: 'Chidi Okafor',
+            ),
+          ),
+          [],
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('Check the likely banks for me'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payments/name-check').single, {'account_number': '0123456789'});
+    expect(find.text('What the banks say'), findsOneWidget);
+    expect(find.text('CHIDI OKEKE'), findsOneWidget);
+    expect(find.text('No account ••6789 at Access Bank.'), findsOneWidget);
+    expect(find.text('The bank did not say just now.'), findsOneWidget);
+    // Nothing chosen yet: Next waits.
+    expect(api.sent('POST', '/v1/payments'), isEmpty);
+    await t.ensureVisible(find.text('CHIDI OKEKE'));
+    await settle(t);
+    await t.tap(find.text('CHIDI OKEKE'));
+    await settle(t);
+    await t.ensureVisible(find.text('a delivery'));
+    await t.tap(find.text('a delivery'));
+    await settle(t);
+    await t.drag(find.text('What the banks say'), const Offset(0, -500));
+    await settle(t);
+    expect(find.text('The bank says CHIDI OKEKE'), findsOneWidget);
+    expect(find.text('The message says Chidi Okafor; the bank says CHIDI OKEKE.'), findsOneWidget);
+    await looks(t, 'pay-likely-banks');
+    await t.tap(find.text('Next'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payments').single, {
+      'account_number': '0123456789',
+      'amount_kobo': 4500000,
+      'bank_name': 'Guaranty Trust Bank',
+      'purpose': 'delivery',
+      'from': 'message',
+    });
+    // Still said before paying.
+    expect(find.text('The message says Chidi Okafor; the bank says CHIDI OKEKE.'), findsOneWidget);
+    expect(sameName('Chidi Okeke', 'OKEKE CHIDI JOHN'), isTrue);
+    expect(sameName('Chidi Okafor', 'CHIDI OKEKE'), isFalse);
+  });
+
+  testWidgets('Pay on a rider with a bank kept: the Pay sheet with rider_id, for a delivery', (t) async {
+    t.view.physicalSize = const Size(360, 1400);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final api = _Api();
+    Map<String, dynamic> rider(String id, String name, {String bank = ''}) => {
+      'id': id,
+      'name': name,
+      'phone': '0803 123 4567',
+      'zones': ['Lekki'],
+      'fee_kobo': 100000,
+      'active': true,
+      'reached': 'whatsapp',
+      'presence': {'state': 'free'},
+      'bank': bank,
+      'created_at': '2026-11-01T10:00:00Z',
+    };
+    api.routes['GET /v1/riders'] = (_) => {
+      'riders': [rider('R1', 'Musa', bank: 'GTBank ••6789'), rider('R2', 'Tolu')],
+      'zones': <Object>[],
+    };
+    api.routes['GET /v1/riders/pay'] = (_) => {'lines': <Object>[], 'payouts': <Object>[]};
+    api.routes['GET /v1/riders/owed'] = (_) => {'owed': <Object>[]};
+    api.routes['GET /v1/chat/actions'] = (_) => {
+      'topics': [
+        {
+          'id': 'pay',
+          'name': 'Pay',
+          'icon': 'money',
+          'color': 'lime',
+          'actions': [_payPerson.toJson()],
+        },
+      ],
+    };
+    api.routes['POST /v1/payments'] = (_) => {'payment': payment('p7', payee: 'Musa', name: 'MUSA BELLO')};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: RidersPage(auth: api.auth())));
+    await settle(t);
+    // Only the rider with a bank account kept has Pay.
+    expect(find.bySemanticsLabel('Pay Musa'), findsOneWidget);
+    expect(find.bySemanticsLabel('Pay Tolu'), findsNothing);
+    await looks(t, 'riders-pay');
+    await t.tap(find.bySemanticsLabel('Pay Musa'));
+    await settle(t);
+    expect(find.text('Pay Musa'), findsWidgets);
+    await t.enterText(find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText)).first, '3,000');
+    await settle(t);
+    await t.tap(find.text('Next'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payments').single, {'rider_id': 'R1', 'amount_kobo': 300000, 'purpose': 'delivery', 'from': 'tools'});
+    expect(find.text('MUSA BELLO'), findsOneWidget);
+    await t.tap(find.text('Back').last);
+    await settle(t);
   });
 
   test('a link to a payment opens it over Payments', () {

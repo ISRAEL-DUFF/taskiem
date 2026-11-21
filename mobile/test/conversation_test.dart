@@ -9,9 +9,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
+import 'package:taskiem/app/auth.dart' show Auth;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/bills_page.dart' show BillPage;
+import 'package:taskiem/chat/pay_chip.dart' show mayHoldAccount, paidWords;
+import 'package:taskiem/chat/pay_sheet.dart' show PaySheet;
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -314,6 +317,154 @@ void main() {
     await t.tap(find.bySemanticsLabel(RegExp(r'^Our account, shared\. .*Show details$')));
     await settle(t);
     await looks(t, 'saved-link-card');
+    await t.pump(const Duration(seconds: 5));
+  });
+  testWidgets('pay from a message: account details get Pay this account, already paid says so, and open the Pay sheet filled in', (t) async {
+    t.view.physicalSize = const Size(360, 800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-tunde');
+    final reads = <String>[];
+    final checks = <Map<String, dynamic>>[];
+    http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
+    final messages = f.json('/v1/link-chats/$_link/messages');
+    final list = [
+      ...(messages['messages'] as List),
+      {
+        'id': 'm-acct', 'link': _link, 'mine': false, 'kind': 'text', 'sender_name': 'Funke',
+        'body': 'Send 45k for the tomatoes. 0123456789 GTBank Chidi Okafor', 'created_at': f.at.subtract(const Duration(minutes: 1)).toIso8601String(),
+      },
+    ];
+    Map<String, dynamic> field(String key, String label, String kind) => {'key': key, 'label': label, 'kind': kind};
+    final payFor = {'key': 'for', 'label': 'What is it for?', 'kind': 'choice', 'choices': ['a bill', 'wages', 'a delivery', 'a refund', 'stock bought', 'other']};
+    final auth = f.auth(also: (req) async {
+      final p = req.url.path;
+      if (req.method == 'GET' && p == '/v1/link-chats/$_link/messages') return ok({'messages': list});
+      if (req.method == 'GET' && p == '/v1/chat/actions') {
+        return ok({
+          'topics': [
+            {
+              'id': 'pay', 'name': 'Pay', 'icon': 'money', 'color': 'lime',
+              'actions': [
+                {'id': 'pay.person', 'title': 'Pay someone', 'line': 'From your balance', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey',
+                  'fields': [field('who', 'Who are you paying?', 'payee'), field('amount', 'How much?', 'money'), payFor]},
+                {'id': 'pay.account', 'title': 'Pay an account number', 'line': 'Any bank: its name is checked first', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey',
+                  'fields': [field('number', 'What is the account number?', 'account'), field('bank', 'Which bank is it with?', 'bank'), field('amount', 'How much?', 'money'), payFor]},
+              ],
+            },
+          ],
+        });
+      }
+      if (req.method == 'POST' && p == '/v1/payments/read') {
+        reads.add((jsonDecode(req.body) as Map)['text'] as String);
+        return ok({
+          'found': true, 'account_number': '0123456789', 'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'amount_kobo': 4500000, 'name': 'Chidi Okafor',
+          'paid': {'id': 'p0', 'amount_kobo': 4500000, 'status': 'paid', 'at': '2026-11-03T10:00:00Z'},
+        });
+      }
+      if (req.method == 'GET' && p == '/v1/payments/banks') {
+        return ok({'banks': [{'code': '058', 'name': 'Guaranty Trust Bank', 'likely': true}, {'code': '044', 'name': 'Access Bank'}], 'from': 'iswallet/taskiem'});
+      }
+      if (req.method == 'POST' && p == '/v1/payments/name-check') {
+        checks.add(jsonDecode(req.body) as Map<String, dynamic>);
+        return ok({'account': '••6789', 'banks': [{'bank_name': 'Guaranty Trust Bank', 'bank_code': '058', 'account_name': 'CHIDI OKEKE'}]});
+      }
+      return null;
+    });
+    // An owner who may pay.
+    auth.me = Me.fromJson({...auth.me!.toJson(), 'permissions': [...auth.me!.permissions, 'money.pay']});
+    final chats = ChatsData(auth, now: () => f.at);
+    await t.pumpWidget(app(chats));
+    await settle(t);
+    await t.tap(find.text("Mama Tunde's Market"));
+    await settle(t);
+    await settle(t);
+    expect(reads, ['Send 45k for the tomatoes. 0123456789 GTBank Chidi Okafor'], reason: 'only the message with ten digits is read');
+    final chip = find.bySemanticsLabel('Paid ₦45,000 on 3 Nov. Pay this account again ending 6789');
+    expect(chip, findsOneWidget);
+    expect(find.textContaining('Pay again', findRichText: true), findsOneWidget);
+    await looks(t, 'pay-chip');
+    await t.tap(chip);
+    await settle(t);
+    await settle(t);
+    // Filled in: the number, the bank, the amount; the bank's name checked
+    // at once, and the message's name in amber.
+    expect(find.text('Pay an account number'), findsWidgets);
+    expect(find.text('Guaranty Trust Bank'), findsOneWidget);
+    expect(checks.single, {'account_number': '0123456789', 'bank_codes': ['058']});
+    expect(find.text('The bank says CHIDI OKEKE'), findsOneWidget);
+    expect(find.text('The message says Chidi Okafor; the bank says CHIDI OKEKE.'), findsOneWidget);
+    final boxes = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(boxes.at(0)).controller.text, '0123456789');
+    expect(t.widget<EditableText>(boxes.at(1)).controller.text, '45000');
+    await t.tap(find.text('Cancel'));
+    await settle(t);
+    expect(paidWords(ReadPaymentResponsePaid(amountKobo: 4500000, status: 'sending', at: DateTime.utc(2026, 11, 3, 23, 30))), 'Sent ₦45,000 on 4 Nov');
+    expect(mayHoldAccount('Order ref 0803 123 4567'), isFalse, reason: 'eleven digits: a phone');
+    expect(mayHoldAccount('Acct: 0123 456 789, Access'), isTrue);
+    await t.pump(const Duration(seconds: 5));
+  });
+  testWidgets('pay from a message, as staff: the saved account by its @name, or ask an owner to save it', (t) async {
+    t.view.physicalSize = const Size(360, 800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-tunde');
+    var payee = 'chidi';
+    http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
+    final messages = f.json('/v1/link-chats/$_link/messages');
+    final list = [
+      ...(messages['messages'] as List),
+      {'id': 'm-acct', 'link': _link, 'mine': false, 'kind': 'text', 'body': 'Acct: 0123456789, Access', 'created_at': f.at.toIso8601String()},
+    ];
+    Auth staff() => f.auth(also: (req) async {
+      final p = req.url.path;
+      if (req.method == 'GET' && p == '/v1/link-chats/$_link/messages') return ok({'messages': list});
+      if (req.method == 'GET' && p == '/v1/chat/actions/pay.person/choices') return ok({'fields': {'who': ['@chidi']}});
+      if (req.method == 'GET' && p == '/v1/chat/actions') {
+        return ok({
+          'topics': [
+            {
+              'id': 'pay', 'name': 'Pay', 'icon': 'money', 'color': 'lime',
+              'actions': [
+                {'id': 'pay.person', 'title': 'Pay someone', 'line': 'From your balance', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey',
+                  'fields': [{'key': 'who', 'label': 'Who are you paying?', 'kind': 'payee'}, {'key': 'amount', 'label': 'How much?', 'kind': 'money'}]},
+              ],
+            },
+          ],
+        });
+      }
+      if (req.method == 'POST' && p == '/v1/payments/read') {
+        return ok({'found': true, 'account_number': '0123456789', 'bank_name': 'Access Bank', 'bank_code': '044', 'payee': payee});
+      }
+      return null;
+    })..me = Me.fromJson({...f.auth().me!.toJson(), 'roles': ['cashier'], 'permissions': ['money.pay', 'chat.trade']});
+    Future<void> openChat() async {
+      await t.pumpWidget(const SizedBox());
+      await t.pumpWidget(app(ChatsData(staff(), now: () => f.at)));
+      await settle(t);
+      await t.tap(find.text("Mama Tunde's Market"));
+      await settle(t);
+      await settle(t);
+    }
+
+    await openChat();
+    await t.tap(find.bySemanticsLabel('Pay this account ending 6789'));
+    await settle(t);
+    await settle(t);
+    expect(find.text('Pay someone'), findsWidgets);
+    final boxes = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(boxes.at(0)).controller.text, '@chidi');
+    await t.tap(find.text('Cancel'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 1));
+
+    // Not saved yet: an owner saves it first.
+    payee = '';
+    await openChat();
+    await t.tap(find.bySemanticsLabel('Pay this account ending 6789. Ask an owner to save it first'));
+    await t.pump();
+    expect(find.text('Ask an owner to save this account: then you can pay it.'), findsOneWidget);
+    expect(find.byType(PaySheet), findsNothing);
     await t.pump(const Duration(seconds: 5));
   });
 }

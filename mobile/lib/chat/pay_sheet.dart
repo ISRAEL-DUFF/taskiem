@@ -18,6 +18,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
 import '../kit/forms.dart' show errorWords;
+import '../kit/icon.dart' show TkIcon;
 import '../kit/kit.dart';
 import '../kit/look.dart';
 import '../kit/mobile.dart';
@@ -111,17 +112,69 @@ Future<Payment> confirmPaymentWithProof(Auth auth, Payment p, {bool again = fals
   return send(await passkeyProof(auth, 'money.pay', 'payment:${p.id}'), null);
 }
 
+/// Whether the name a message gives is the bank's: every word of one
+/// among the other's (the bank often has a middle name more), any order.
+bool sameName(String said, String bank) {
+  List<String> words(String s) => s.toLowerCase().split(RegExp('[^a-z]+')).where((w) => w.length > 1).toList();
+  final a = words(said), b = words(bank);
+  if (a.isEmpty || b.isEmpty) return true;
+  return a.every(b.contains) || b.every(a.contains);
+}
+
+/// The name a message gave against the bank's, in amber, when they differ.
+Widget? nameDiffers(BuildContext context, String said, String bank) {
+  if (said.trim().isEmpty || bank.trim().isEmpty || sameName(said, bank)) return null;
+  final look = TkLook.of(context);
+  return TkCallout(
+    leading: TkSquare('b-alert', color: look.orange),
+    title: 'The message says ${said.trim()}; the bank says ${bank.trim()}.',
+    sub: 'Check with them before you pay.',
+    subLines: 3,
+    color: look.orange,
+  );
+}
+
+/// The Pay sheet's form for one of the business's riders, paid to the bank
+/// account kept for their payouts: how much, what for (a delivery unless
+/// changed) and a note.
+ChatAction riderPayAction(String name) => ChatAction.fromJson({
+  'id': 'pay.rider',
+  'title': 'Pay $name',
+  'line': 'To the bank account kept for their payouts',
+  'icon': 'money',
+  'does': 'asks',
+  'opens': 'form',
+  'tool': 'pay',
+  'confirm': 'passkey',
+  'fields': [
+    {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
+    {
+      'key': 'for',
+      'label': 'What is it for?',
+      'kind': 'choice',
+      'choices': [for (final (w, _) in payPurposes) w],
+    },
+    {'key': 'note', 'label': 'A few words for their bank statement?', 'kind': 'text', 'optional': true},
+  ],
+});
+
 /// The Pay sheet over the chat (an action with `confirm: "passkey"`): its
 /// form, then the payment prepared to check and pay. Closes with the
 /// payment once it is sent, or null.
 class PaySheet extends StatefulWidget {
-  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat'});
+  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.said = ''});
   final Auth auth;
   final ChatAction action;
   final Map<String, String> initial;
 
   /// Where it started (tools, chat, message, card).
   final String from;
+
+  /// One of the business's riders, paid to their kept bank account.
+  final String? riderId;
+
+  /// The name the message gave for the account, set against the bank's.
+  final String said;
 
   @override
   State<PaySheet> createState() => _PaySheetState();
@@ -139,7 +192,16 @@ class _PaySheetState extends State<PaySheet> {
       if (f.kind == 'bank' && (widget.initial[f.key] ?? '').isNotEmpty) f.key: widget.initial[f.key]!,
   };
   Map<String, List<String>> _choices = const {};
-  List<String>? _banks;
+  // The banks to pay at, for the number they were read for (the likely
+  // ones first).
+  List<ListPayBanksResponseBanksItem>? _banks;
+  String? _banksFor;
+  // What each bank said of the number (by its code), for [_saidFor].
+  final Map<String, PayNameCheckResponseBanksItem> _said = {};
+  // The banks "Check the likely banks for me" asked, in their order.
+  List<String> _likelyAsked = const [];
+  String? _saidFor;
+  bool _checking = false;
   Payment? _payment;
   bool _busy = false;
   String? _error;
@@ -151,6 +213,11 @@ class _PaySheetState extends State<PaySheet> {
     super.initState();
     for (final b in _boxes.values) {
       b.addListener(() => setState(() {}));
+    }
+    final account = _ofKind('account');
+    if (account != null) {
+      _boxes[account.key]!.addListener(_numberChanged);
+      _numberChanged();
     }
     if (_fields.any((f) => !_typed.contains(f.kind))) {
       unawaited(
@@ -172,6 +239,73 @@ class _PaySheetState extends State<PaySheet> {
       b.dispose();
     }
     super.dispose();
+  }
+
+  /// The account number typed, once it is 10 digits.
+  String? get _number {
+    final f = _ofKind('account');
+    final v = f == null ? '' : _boxes[f.key]!.text.replaceAll(RegExp(r'[\s-]'), '');
+    return RegExp(r'^\d{10}$').hasMatch(v) ? v : null;
+  }
+
+  /// A new number: its banks read again (the likely ones first), what the
+  /// banks said of the old one let go, and the bank chosen checked.
+  void _numberChanged() {
+    final n = _number;
+    if (n == _saidFor) return;
+    _said.clear();
+    _likelyAsked = const [];
+    _saidFor = n;
+    if (n == null) return;
+    unawaited(
+      _loadBanks(n).then((_) {
+        final bank = _ofKind('bank');
+        final code = bank == null ? '' : _codeOf(_banksChosen[bank.key] ?? '');
+        if (code.isNotEmpty) return _check([code]);
+      }, onError: (Object _) {}),
+    );
+  }
+
+  Future<void> _loadBanks(String? number) async {
+    if (_banks != null && _banksFor == number) return;
+    final r = await widget.auth.api.listPayBanks(account: number);
+    if (!mounted) return;
+    setState(() => (_banks = r.banks, _banksFor = number));
+  }
+
+  /// A bank's code in the list, by its name (as chosen, or as the message
+  /// said it); empty when the list is by name alone.
+  String _codeOf(String name) {
+    final n = name.trim().toLowerCase();
+    if (n.isEmpty) return '';
+    final list = _banks ?? const <ListPayBanksResponseBanksItem>[];
+    return list.where((b) => b.name.toLowerCase() == n).firstOrNull?.code ?? '';
+  }
+
+  /// Names are checked before preparing by owners alone (staff pay saved
+  /// accounts, checked when saved).
+  bool get _owner => (widget.auth.me?.roles as List?)?.contains('owner') ?? false;
+
+  /// The bank's name for the account at these banks (the likely ones, up
+  /// to three, when none are named): each answer kept; nothing chosen.
+  Future<void> _check(List<String>? codes) async {
+    final n = _number;
+    if (n == null || !_owner) return;
+    setState(() => (_checking = true, _error = null));
+    try {
+      final r = await widget.auth.api.payNameCheck(body: PayNameCheckRequest(accountNumber: n, bankCodes: codes));
+      if (!mounted || _number != n) return;
+      setState(() {
+        for (final b in r.banks) {
+          _said[b.bankCode] = b;
+        }
+        if (codes == null) _likelyAsked = [for (final b in r.banks) b.bankCode];
+      });
+    } on Object catch (e) {
+      if (mounted && codes == null) setState(() => _error = errorWords(e));
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
   }
 
   String _value(ChatField f) => f.kind == 'bank' ? (_banksChosen[f.key] ?? '') : _boxes[f.key]!.text.trim();
@@ -196,11 +330,10 @@ class _PaySheetState extends State<PaySheet> {
   }
 
   Future<void> _pickBank(ChatField f) async {
-    if (_banks == null) {
+    if (_banks == null || _banksFor != _number) {
       setState(() => _error = null);
       try {
-        final r = await widget.auth.api.listPayBanks();
-        _banks = [for (final b in r.banks) b.name];
+        await _loadBanks(_number);
       } on Object catch (e) {
         if (mounted) setState(() => _error = errorWords(e));
         return;
@@ -208,14 +341,23 @@ class _PaySheetState extends State<PaySheet> {
     }
     if (!mounted) return;
     final list = _banks!;
+    final likely = _number != null && list.any((b) => b.likely == true);
     final v = await pickOneOf(
       context,
       title: 'Bank',
       value: _banksChosen[f.key],
-      choices: [for (final b in list) (b, b, '')],
+      note: likely ? 'The banks this number can be at come first.' : null,
+      choices: [for (final b in list) (b.name, b.name, likely && b.likely == true ? 'Likely for this number' : '')],
       searchHint: list.length > 8 ? 'Find the bank: guaranty, kuda…' : null,
     );
-    if (v != null && mounted) setState(() => _banksChosen[f.key] = v);
+    if (v != null && mounted) _choose(f, v);
+  }
+
+  /// A bank chosen: the name check runs at once.
+  void _choose(ChatField f, String name) {
+    setState(() => _banksChosen[f.key] = name);
+    final code = _codeOf(name);
+    if (code.isNotEmpty && _number != null && !_said.containsKey(code)) unawaited(_check([code]));
   }
 
   /// The payment prepared, from the form: nothing is sent.
@@ -229,6 +371,7 @@ class _PaySheetState extends State<PaySheet> {
     final what = _fields.where((f) => f.kind == 'choice').firstOrNull;
     CreatePaymentRequest body({bool mine = false}) => CreatePaymentRequest(
       amountKobo: _kobo!,
+      riderId: widget.riderId,
       payee: payee == null ? null : values[payee.key]!.replaceFirst(RegExp('^@'), ''),
       mine: mine ? true : null,
       accountNumber: account == null ? null : values[account.key],
@@ -272,11 +415,32 @@ class _PaySheetState extends State<PaySheet> {
       case 'choice':
         return TkKitField(label: f.label, hint: f.hint, field: false, child: _chips(f, f.choices ?? const []));
       case 'bank':
+        final pick = TkPickBox(label: f.label, shown: _banksChosen[f.key] ?? 'Choose the bank', onTap: () => unawaited(_pickBank(f)));
+        // An account number with no bank yet: the likely banks checked at
+        // once, each answer shown, the person picks.
+        final likely = _owner && _number != null && _banksFor == _number && (_banks?.any((b) => b.likely == true && b.code.isNotEmpty) ?? false);
+        if (!likely || _likelyAsked.isNotEmpty || (_banksChosen[f.key] ?? '').isNotEmpty) {
+          return TkKitField(label: f.label, hint: f.hint, field: false, child: pick);
+        }
         return TkKitField(
           label: f.label,
           hint: f.hint,
           field: false,
-          child: TkPickBox(label: f.label, shown: _banksChosen[f.key] ?? 'Choose the bank', onTap: () => unawaited(_pickBank(f))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              pick,
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TkLink(
+                  label: _checking ? 'Checking the likely banks…' : 'Check the likely banks for me',
+                  bold: true,
+                  onTap: _checking ? null : () => unawaited(_check(null)),
+                ),
+              ),
+            ],
+          ),
         );
       default:
         final box = TkKitField(
@@ -300,11 +464,69 @@ class _PaySheetState extends State<PaySheet> {
     }
   }
 
+  /// What the likely banks said: one row each, the ones with a name to
+  /// pick; the one picked ticked.
+  Widget? _answers() {
+    final bank = _ofKind('bank');
+    if (bank == null || _likelyAsked.isEmpty) return null;
+    final look = TkLook.of(context);
+    final chosen = (_banksChosen[bank.key] ?? '').toLowerCase();
+    return TkSection(
+      title: 'What the banks say',
+      inset: 56,
+      children: [
+        for (final code in _likelyAsked)
+          if (_said[code] case final b?)
+            TkListRow(
+              title: b.bankName,
+              sub: (b.accountName ?? '').isNotEmpty ? b.accountName! : (b.problem ?? 'The bank did not say just now.'),
+              icon: (b.accountName ?? '').isNotEmpty ? 'b-bank' : 'b-x',
+              square: (b.accountName ?? '').isNotEmpty ? look.lime : look.red,
+              chevron: false,
+              trailing: chosen == b.bankName.toLowerCase() ? TkIcon('b-check', size: 20, stroke: 2.4, color: look.limeInk) : null,
+              onTap: (b.accountName ?? '').isNotEmpty ? () => _choose(bank, b.bankName) : null,
+              semanticsLabel: (b.accountName ?? '').isNotEmpty ? '${b.bankName}: ${b.accountName}. Pay at this bank' : '${b.bankName}: ${b.problem ?? 'no answer'}',
+            ),
+      ],
+    );
+  }
+
+  /// What the bank chosen says of the number: its name, or that it has
+  /// none (the number kept, another bank to try); and the message's name
+  /// when it is not the bank's.
+  List<Widget> _bankSays() {
+    final bank = _ofKind('bank');
+    final n = _number;
+    if (bank == null || n == null) return const [];
+    final name = _banksChosen[bank.key] ?? '';
+    final b = _said[_codeOf(name)];
+    if (name.isEmpty || b == null) return const [];
+    final look = TkLook.of(context);
+    final ok = (b.accountName ?? '').isNotEmpty;
+    return [
+      if (ok)
+        TkCallout(
+          leading: TkSquare('b-check', color: look.lime),
+          title: 'The bank says ${b.accountName}',
+          sub: '${b.bankName} · ••${n.substring(6)}',
+          color: look.lime,
+        )
+      else
+        TkCallout(
+          leading: TkSquare('b-x', color: look.red),
+          title: b.problem ?? 'No account found at ${b.bankName}.',
+          sub: 'Try another bank: the number stays.',
+          color: look.red,
+        ),
+      if (ok) ?nameDiffers(context, widget.said, b.accountName!),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = _payment;
     if (p != null) {
-      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, onBack: () => setState(() => _payment = null));
+      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, said: widget.said, onBack: () => setState(() => _payment = null));
     }
     final problem = _problem;
     final look = TkLook.of(context);
@@ -317,6 +539,8 @@ class _PaySheetState extends State<PaySheet> {
       onSecond: () => Navigator.of(context).pop(),
       children: [
         TkFormGroup(children: [for (final f in _fields) _field(f)]),
+        ?_answers(),
+        ..._bankSays(),
         if (problem != null && problem.isNotEmpty && _fields.every((f) => f.optional == true || _value(f).isNotEmpty))
           TkCallout(
             leading: TkSquare('b-alert', color: look.orange),
@@ -341,9 +565,12 @@ class _PaySheetState extends State<PaySheet> {
 /// first. A payment not sent yet has Pay (the passkey) and Cancel. Closes
 /// with the payment once sent.
 class PaymentSheet extends StatefulWidget {
-  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack});
+  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack, this.said = ''});
   final Auth auth;
   final Payment payment;
+
+  /// The name the message gave, set against the bank's.
+  final String said;
 
   /// Prepared in this sheet just now: let go if the sheet closes unpaid.
   final bool fresh;
@@ -471,6 +698,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       if (reason.isNotEmpty) ('Why', reason),
     ];
     final warnings = <Widget>[
+      if (p.accountName is String) ?nameDiffers(context, widget.said, p.accountName as String),
       if (p.changedAccount == true)
         TkCallout(
           leading: TkSquare('b-warn', color: look.red),

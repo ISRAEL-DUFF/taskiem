@@ -148,30 +148,6 @@ Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkLi
 | The Pay sheet | `chat/pay_sheet.dart` `PaySheet` | Taskiem's chat › Pay › Pay someone, Pay an account number (an action with `confirm: "passkey"`) | The action's fields: a saved account as @name chips, a 10-digit number, the bank picked from `/v1/banks`, how much ("45k"), what for as chips, a note; Next prepares the payment | [done 21 Nov] a `TkFormSheet` built in the new look |
 | Check before you pay, one payment | `chat/pay_sheet.dart` `PaymentSheet` | The Pay sheet's Next; a row of Payments; a `/payments/<id>` link | The bank's name for the account large on a `TkTopCard`, the payee, bank and masked account under it, the amount; first payment, changed account and paid in the last day as callouts; Pay ₦… with the passkey (a code behind a link), Pay again, Cancel it or Back | [done 21 Nov] |
 | Payments | `chat/payments_page.dart` `SentPaymentsPage`, `PayLimitSheet` | The chat's Pay › Your payments (page `/payments`); a `/payments` link | Filters, the payments not sent yet and sent (status as a pill, amount, masked account); for an owner, what each role may pay, a sheet with one payment and a day's total | [done 21 Nov] |
-
-## 5e. Pay a bill by transfer, in the chat (F1, `docs/spec/chat-payments-flow.md`)
-
-| Screen | File | How it is reached | What it holds | Tag |
-| --- | --- | --- | --- | --- |
-| The ways to pay | `chat/pay_transfer.dart` `pickPayWay`, `payBill`, `payMyInvoice` | Pay on a bill's card in a business chat, Pay on a bill's page, Pay on a customer's invoice card | By transfer, Pay from Taskiem, Pay on their checkout as rows with a coloured square; the way last used with that seller first; one way goes straight to it | [done 21 Nov] |
-| The transfer card | `chat/pay_transfer.dart` `TransferCard`, `TransferLive`, `showTransferSheet` | Pay by transfer (a sheet); a bill's newest `transfer` card in the chat; a bill's page under "By transfer" | Asking; Send exactly ₦…, bank, number, name each with Copy, Good for 29:12 (Expires in 4:05 in orange), Waiting with a quiet dot, I need longer; Paid ₦… · 14:52 with Pay the next one; Received ₦… of ₦… with Pay the rest; expired with Get a new number; couldn't get one with the other ways | [done 21 Nov] |
-
-## 6. Shared parts the branch added or changed
-
-| Part | File | Note |
-| --- | --- | --- |
-| `TkListRow` gained `face:` | `kit/mobile.dart` | [fine] |
-| `TkLoadMore` (load more as the list nears its end) | `kit/load_more.dart` | [fine] |
-| Modal changes | `kit/modal.dart` | Web modals are still used by the screens above |
-| Polling that pauses in the background | `kit/polling.dart` | n/a |
-| Theme tokens (generated) | `theme/tokens.g.dart` | n/a |
-| Routing, pushes, links | `main.dart`, `app/applinks.dart`, `app/notify.dart`, `app/openers.dart`, `app/route.dart` | n/a |
-
-## Order of work, if the redesign goes screen by screen
-
-1. Your own bubble's colours (`thread.dart`): a bug visible in every chat on You and every people chat.
-2. You home and the people chat: the screens people see most.
-3. Sheets drawing the browser's checkboxes and radios (the two report sheets, place, appeal, second proof, switcher).
-4. The rest of the [web] screens, then the [off] and [minor] ones.
-
-The web↔app parity test (`mobile/test/parity_test.dart`) does not cover any screen in sections 1 to 5 except sign-in. Per the founder's direction, the app does not have to match the web, so these screens should not be added to it.
+| Pay this account (P2) | `chat/pay_chip.dart` `PayChip` | Under a message in a link chat or a customer chat holding a 10-digit account number, for those with money.pay | "Pay this account", or "Paid ₦45,000 on 3 Nov · Pay again"; opens the Pay sheet filled in (the number and bank for an owner, the saved account by @name for staff; staff with none are told to ask an owner to save it) | [done 21 Nov] a pill on the wallpaper under the bubble, on its side |
+| The bank for a number (P2) | `chat/pay_sheet.dart` `PaySheet` | Pay an account number with no bank | The likely banks first in the list ("Likely for this number"), searchable; Check the likely banks for me (owners) as rows "What the banks say", the person picks; the bank's name as a lime callout, no account as a red one; the message's name against the bank's in amber | [done 21 Nov] |
+| Pay on a rider (P2) | `chat/riders_page.dart` `RidersPage` | Riders › Your riders, a rider with a bank account kept | Pay as a small button on the row; the Pay sheet with how much, what for (a delivery) and a note, paid to the rider's kept account | [done 21 Nov] |
