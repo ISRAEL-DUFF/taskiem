@@ -61,6 +61,7 @@ const (
 	PermOrders      = access.StorefrontManage + "|" + access.OrderHandle
 	// PermSavedManage is changing the business's saved things.
 	PermSavedManage = access.SavedManage
+	PermMoneyPay    = access.MoneyPay
 	// PermTaskGive is giving staff tasks and seeing everyone's: those who
 	// run the business (staff_tasks.go).
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage

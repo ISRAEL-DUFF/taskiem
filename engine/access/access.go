@@ -79,6 +79,11 @@ const (
 	// (docs/spec/saved-objects.md §5.2): its saved accounts, and later its
 	// places, texts and the rest. Everyone in the business uses them.
 	SavedManage = "saved.manage"
+	// MoneyPay pays people from the business's payments account (P1;
+	// docs/spec/chat-pay-people.md): each payment confirmed with a passkey,
+	// within the limits the owner sets for the role (pay_limits); over them,
+	// the owner's OK. The owner's alone unless given to a role.
+	MoneyPay = "money.pay"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -86,7 +91,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -126,6 +131,7 @@ var Descriptions = map[string]string{
 	ChatTrade:        "Write to linked businesses in their conversations, as the business",
 	OrderHandle:      "Work the orders: see them, accept or decline, ready and send them out, and offer them to riders (not the storefront's settings, prices or refunds)",
 	SavedManage:      "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
+	MoneyPay:         "Pay people from the business's payments account, each payment with a passkey, within the limits the owner sets (over them, the owner's OK)",
 }
 
 // Gate is the built-in role of the person at the school gate: the gate

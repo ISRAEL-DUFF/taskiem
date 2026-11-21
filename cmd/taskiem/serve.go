@@ -32,6 +32,7 @@ import (
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	payconn "github.com/israel-duff/taskiem/connectors/payments"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
@@ -842,6 +843,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
 	schoolOps := &schconn.Late{}
+	payOps := &payconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
@@ -849,6 +851,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Riders = riderOps
 	bills := &links.Payments{Pool: pool}
 	copts.Bills = bills
+	copts.Payments = payOps
 	copts.Link = linkOps
 	copts.Stock = stockOps
 	copts.Forms = formOps
@@ -985,6 +988,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	// Payments' own records, for the pay-person workflow and a workflow's
+	// payments@1 prepare (P1), with the accounts people are paid from.
+	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault))
 	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and

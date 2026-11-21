@@ -1848,6 +1848,32 @@ export const opay_business = {
   request_payment: (input: OpayBusinessRequestPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "request_payment", input, extra),
 };
 
+// Payments (payments@1)
+export interface PaymentsFinishInput {
+  /** The bank's name for the account */
+  account_name?: Val<string>;
+  fee_kobo?: Val<number>;
+  payment_id: Val<string>;
+  payout_id?: Val<string>;
+  reason?: Val<string>;
+  status: Val<"paid" | "failed" | "unknown" | "rejected">;
+}
+export interface PaymentsPrepareInput {
+  amount_kobo: Val<number>;
+  /** Sent with the transfer where the provider allows it */
+  note?: Val<string>;
+  /** The saved account's name, like landlord (no @) */
+  payee: Val<string>;
+  purpose: Val<"bill" | "wages" | "delivery" | "refund" | "stock" | "other">;
+  purpose_note?: Val<string>;
+}
+export const payments = {
+  /** Record a payment's outcome (idempotent_write) */
+  finish: (input: PaymentsFinishInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "finish", input, extra),
+  /** Prepare a payment (idempotent_write) */
+  prepare: (input: PaymentsPrepareInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "prepare", input, extra),
+};
+
 // Payrolla (payrolla@1)
 export interface PayrollaCreatePayslipLinkInput {
   payslip_id: Val<string>;
@@ -3874,6 +3900,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "notify@1": "notify",
   "opay@1": "opay",
   "opay_business@1": "opay_business",
+  "payments@1": "payments",
   "payrolla@1": "payrolla",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
@@ -3928,6 +3955,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
+  "payments@1": ["finish", "prepare"],
   "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],

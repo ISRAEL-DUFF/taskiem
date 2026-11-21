@@ -130,6 +130,9 @@ tags:
 - name: Saved
   description: 'Saved things a person or a business keeps and calls up by @name (saved objects, S0: saved bank accounts), with the bank list and the name check payments share.'
   x-taskiem-guide: spec/saved-objects
+- name: Payments
+  description: 'Paying one person from the business: a payment prepared to a saved account, confirmed with a passkey, sent by the managed pay-person workflow, and what each role may pay without the owner''s OK (P1).'
+  x-taskiem-guide: spec/chat-pay-people
 - name: People
   description: 'Chats between people, one to one (people-chatting, stage 5a): kept by Taskiem, sealed under each person''s own key and readable by Taskiem''s servers (not end-to-end encrypted); requests, blocks, reports, shared business cards and share cards; and You''s one Chats list.'
   x-taskiem-guide: spec/people-chatting
@@ -6242,6 +6245,268 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments:
+    get:
+      operationId: listPayments
+      tags:
+      - Payments
+      summary: Payments to people, the newest first
+      description: 'Each payment prepared, sent or ended (P1, docs/spec/chat-pay-people.md), the account masked; `status` narrows them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Payments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payments]
+                properties:
+                  payments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPayment
+      tags:
+      - Payments
+      summary: Prepare a payment
+      description: 'A payment to one of the business''s saved bank accounts (`saved_id`, or `payee` by its name), or for an owner their own (`mine`), with what it is for. Nothing is sent: it is confirmed with a passkey. It says a first payment to the account, an account changed since it was last paid, and the same payment again in the last day (`again`). 409 `no_provider` with no payments account; `bank_unknown` when the account pays to no bank of that name.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [amount_kobo]
+              properties:
+                saved_id:
+                  type: string
+                  format: uuid
+                payee:
+                  type: string
+                mine:
+                  type: boolean
+                amount_kobo:
+                  type: integer
+                  minimum: 100
+                purpose:
+                  type: string
+                  enum: [bill, wages, delivery, refund, stock, other]
+                purpose_note:
+                  type: string
+                  maxLength: 80
+                note:
+                  type: string
+                  maxLength: 100
+                from:
+                  type: string
+                  enum: [tools, chat, message, card, workflow]
+      responses:
+        '201':
+          description: Prepared
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}:
+    get:
+      operationId: getPayment
+      tags:
+      - Payments
+      summary: One payment
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The payment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/confirm:
+    post:
+      operationId: confirmPayment
+      tags:
+      - Payments
+      summary: Send a prepared payment, with a passkey
+      description: 'A passkey (or authenticator code) asked for `money.pay` on `payment:{id}`. Within the payer''s limit (an owner has none) it is sent at once (`sending`), the passkey being its approval; over the limit, or to an account changed since it was last paid, it waits for the owner''s OK in Approvals (`waiting_ok`, `needs_ok` saying why). 403 `step_up` without the proof; 409 `pay_again` for the same payment in the last day without `again`, `not_prepared` once sent.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                passkey:
+                  type: object
+                totp:
+                  type: string
+                again:
+                  type: boolean
+      responses:
+        '202':
+          description: Sent, or waiting for the owner's OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/{id}/cancel:
+    post:
+      operationId: cancelPayment
+      tags:
+      - Payments
+      summary: Let a payment not sent yet go
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payment]
+                properties:
+                  payment:
+                    $ref: '#/components/schemas/Payment'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-limits:
+    get:
+      operationId: getPayLimits
+      tags:
+      - Payments
+      summary: What each role may pay without the owner's OK
+      description: 'One payment and a day''s total, in kobo; a role with none pays nothing without the owner''s OK. An owner has no limit.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The limits
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [limits]
+                properties:
+                  limits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayLimit'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-limits/{role}:
+    put:
+      operationId: putPayLimit
+      tags:
+      - Payments
+      summary: Set a role's limit (the owner's alone)
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      x-taskiem-permission: money.pay
+      parameters:
+      - name: role
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayLimit'
+      responses:
+        '200':
+          description: Set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayLimit'
         default:
           $ref: '#/components/responses/Error'
   /v1/bills:
@@ -42492,11 +42757,13 @@ components:
           - key.byok.disable
           - rider.bank
           - pii.erase
+          - money.pay
+          - money.pay.approve
         target:
           type: string
           maxLength: 200
           description: 'What the passkey confirms: `{run}/{step}/{decision}` for an approval, the action (`passkey.add`,
-            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`, the subject id for `pii.erase`.'
+            `totp.setup`, `password.change`) for `account.reauth`, the rider''s id for `rider.bank`, the subject id for `pii.erase`, `payment:{id}` for `money.pay`.'
       additionalProperties: false
     PasskeyLoginRequest:
       type: object
@@ -44489,6 +44756,85 @@ components:
                 type: integer
               message:
                 type: string
+    Payment:
+      type: object
+      required: [id, personal, payee, bank_name, account, amount_kobo, purpose, status, started_from, prepared_by, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        saved_id:
+          type: [string, 'null']
+          format: uuid
+        personal:
+          type: boolean
+          description: An owner's own saved account, paid from the business (owner's drawings).
+        payee:
+          type: string
+        bank_name:
+          type: string
+        account:
+          type: string
+          description: The account number masked (••6789).
+        account_name:
+          type: [string, 'null']
+          description: The bank's name for the account, once checked.
+        amount_kobo:
+          type: integer
+        purpose:
+          type: string
+          enum: [bill, wages, delivery, refund, stock, other]
+        purpose_note:
+          type: string
+        note:
+          type: string
+        first_payment:
+          type: boolean
+        changed_account:
+          type: boolean
+        needs_ok:
+          type: string
+          enum: ['', limit, changed, 'limit,changed']
+        status:
+          type: string
+          enum: [prepared, sending, waiting_ok, paid, failed, rejected, unknown, cancelled]
+        reason:
+          type: [string, 'null']
+        fee_kobo:
+          type: [integer, 'null']
+        run_id:
+          type: [string, 'null']
+          format: uuid
+        started_from:
+          type: string
+        prepared_by:
+          type: string
+        confirmed_by:
+          type: [string, 'null']
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: [string, 'null']
+          format: date-time
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+        again:
+          type: boolean
+          description: The same amount to the same payee in the last day.
+    PayLimit:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+        one_kobo:
+          type: integer
+          minimum: 0
+        day_kobo:
+          type: integer
+          minimum: 0
     PurchaseDeliverTo:
       type: object
       additionalProperties: false

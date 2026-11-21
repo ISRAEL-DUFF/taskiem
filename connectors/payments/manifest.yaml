@@ -1,0 +1,70 @@
+# The payments platform connector (docs/spec/chat-pay-people.md, P1): what
+# workflows do with a business's payments to people. It acts on Taskiem's
+# own records, for the run's tenant only, and needs no connection.
+# prepare makes a payment a person who may pay confirms with a passkey, as
+# any payment; it never sends money. finish is the pay-person workflow's
+# own: it records how a payment ended.
+manifest: connector/v1
+id: payments
+version: 1.0.0
+name: Payments
+category: other
+regions: [NG]
+auth:
+  type: none
+actions:
+  prepare:
+    title: Prepare a payment
+    description: Prepares a payment to one of the business's saved bank accounts, by its name (saved.landlord's name is landlord), for a person who may pay to confirm with a passkey in Taskiem. It sends nothing; the payment waits, prepared, in Payments. The account number is read by Taskiem, never given to the workflow.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [payee, amount_kobo, purpose]
+      properties:
+        payee:        { type: string, description: "The saved account's name, like landlord (no @)" }
+        amount_kobo:  { type: integer, minimum: 100 }
+        purpose:      { type: string, enum: [bill, wages, delivery, refund, stock, other] }
+        purpose_note: { type: string, maxLength: 80 }
+        note:         { type: string, maxLength: 100, description: Sent with the transfer where the provider allows it }
+    output:
+      type: object
+      properties:
+        payment_id:    { type: string }
+        status:        { type: string, description: prepared }
+        payee:         { type: string }
+        amount_kobo:   { type: integer }
+        first_payment: { type: boolean }
+        needs_ok:      { type: string, description: "Why the owner's OK will be asked: limit, changed, or both; empty when none" }
+  finish:
+    title: Record a payment's outcome
+    description: For Taskiem's own pay-person workflow only. Records how a payment ended (paid, failed, rejected when not approved, or unknown when the money went and the bank never said); the same outcome twice changes nothing.
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [payment_id, status]
+      properties:
+        payment_id:   { type: string }
+        status:       { type: string, enum: [paid, failed, unknown, rejected] }
+        account_name: { type: string, description: The bank's name for the account }
+        payout_id:    { type: string }
+        fee_kobo:     { type: integer }
+        reason:       { type: string }
+    output:
+      type: object
+      properties:
+        payment_id: { type: string }
+        status:     { type: string }
+    pii:
+      - { field: account_name, category: name }
