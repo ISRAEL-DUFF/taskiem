@@ -66,7 +66,7 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | Count the shelf | changes | questions (item by item, as now) | *count rice 12, indomie 40* |
 | Record a sale | changes | form: Sell | (as in Sales) |
 
-**Products and your page**
+**Products**
 | Action | Does | Opens | Shortcut |
 | --- | --- | --- | --- |
 | Add a product | changes | form: Product | *add product Jollof rice 2000* |
@@ -74,6 +74,10 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | Hide or show a product | changes | questions | *hide jollof rice* |
 | Add a service | changes | form: Service | *add service Haircut 30 2000* |
 | Price lists | show | form: Price list | */prices* |
+
+**Your page**
+| Action | Does | Opens | Shortcut |
+| --- | --- | --- | --- |
 | See your page, and its QR code | show | show | *my page*, *qr* |
 | Opening hours | changes | questions | *hours mon-sat 8-6* |
 | Close or open the shop | changes | questions | *close shop* |
@@ -181,7 +185,7 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 
 Message a linked business (*... @Dangote how much is a bag of cement?*) and voice notes are not actions: they stay as the help says them, in a line under the topics menu.
 
-Topics are shown in this order, with those the person cannot use at all left out. Topics a person uses often may later come first (§13).
+Topics are shown in this order, with those the person cannot use at all left out; from M2, those the person uses most come first (§6.1).
 
 ## 5. When a menu is shown
 
@@ -197,9 +201,23 @@ A menu never does anything by itself: it is only choices.
 A **menu card** in Taskiem's conversation, drawn in the app's own look (Direction B) on the phone and as the web chat's cards are:
 
 - **A head:** the topic's icon on its colour, its name ("Riders"), and when the model sent it, one plain line of what it understood ("About riders. What would you like to do?").
-- **Rows,** as the tools panel's rows (`TkListRow`; the web's `.tk-row`): the action's icon on its colour, its title, its line, and under it, small and muted, the shortcut ("or type *add rider Musa 0803… Ikeja*"). A row with values from the message says so: "Add a rider: *Musa*".
-- **A foot row,** "All topics", which turns the card into the topics menu in place.
-- **The topics menu** is the same card with one row a topic: its icon, its name, and its first three actions in its line ("Add stock, correct a count, count the shelf").
+- **Rows,** as the tools panel's rows (`TkListRow`; the web's `.tk-row`): the action's icon on its colour, its title and its line, one row each. A row with values from the message says so: "Add a rider: *Musa*". **At most five rows** show in the chat (§6.1).
+- **A foot,** with "All 9 for Products" when the topic has more than five (it opens them all in a sheet over the chat, the tools panel's sheet), and "All topics", which turns the card into the topics menu in place.
+- **A tip,** under the card, only when the model picked a row: that row's shortcut, once ("Next time you can type: *add rider Musa 0803… Ikeja*"). No other row carries its shortcut; *help all* has them all.
+- **The topics menu** is a **grid of tiles**, four to a row, as the tools panel draws its tools: each tile the topic's icon on its colour and its name. Sixteen topics fit in four short rows, under half a phone's screen. A tile pressed turns the card into that topic's menu in place.
+
+### 6.1 Keeping it short
+
+A menu must never fill the screen, so the chat stays a conversation:
+
+1. **Five rows at most** in a topic's menu in the chat; the rest behind "All N" in a sheet.
+2. **Which five:** the row the model picked first, then those the person used most in the last 30 days (pressed or typed, counted per person and business, from M2), then the catalogue's order. Before M2, the catalogue's order, which puts the most common first.
+3. **One row, one line:** a title and its line; no shortcut on the rows.
+4. **One menu open at a time:** when a newer menu arrives, every older one folds to its one line.
+5. **Topics as tiles**, not rows.
+6. **No topic of more than about seven actions:** a topic that grows past that is split, as Products and Your page are.
+
+On a 360 by 640 phone, a topic's menu (a head, five rows, a foot) is at most about 380 px, and the topics grid about 300.
 
 **Pressing a row:**
 
@@ -210,7 +228,7 @@ A **menu card** in Taskiem's conversation, drawn in the app's own look (Directio
 | `questions` | The first question appears in the chat (§7) |
 | `page` | The page opens (in the app where it has the screen; else the web, as `openToolPage` does) |
 
-Once a row is pressed, the card **folds** to one line ("Riders: Add a rider") with "Show again" to unfold it, as tagged cards fold (17 November 2026). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
+Once a row is pressed, the card **folds** to one line ("Riders: Add a rider") with "Show again" to unfold it, as tagged cards fold (17 November 2026); a newer menu folds it too (§6.1). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
 
 The card passes the app's rules (`mobile/CLAUDE.md`): light and dark, 340 to 390 wide, large text with nothing cut off, every row 48 px and labelled for screen readers ("Add a rider. Name, phone and the areas they cover. Button."). On the web it passes axe at 390 and 360 in both themes.
 
@@ -258,8 +276,8 @@ The same menus, in each app's own way. A row's id is the action's (`act:riders.a
 
 | | Topics menu | A topic's menu | A form |
 | --- | --- | --- | --- |
-| **WhatsApp** | A **list message**: the text, and one button ("Choose") opening the rows; up to 10 rows in all, in sections. More than 10 topics: the 9 most used, then "More…" | A list message: the actions, each with its title (24 characters) and line (72) | Questions in the chat; a link to the web's form for one that has a form and many fields (products with photos) |
-| **Telegram** | A button for each row under the message (inline keyboard, one row each) | The same | As WhatsApp |
+| **WhatsApp** | A **list message**: the text, and one button ("Choose") opening the rows in WhatsApp's own pop-up, so the chat stays short; up to 10 rows in all, in sections. More than 10 topics: the 9 most used, then "More…" | A list message: every action of the topic (a topic has at most about seven), each with its title (24 characters) and line (72) | Questions in the chat; a link to the web's form for one that has a form and many fields (products with photos) |
+| **Telegram** | Buttons under the message, two to a row for topics | One button a row, five at most, then "All N" | As WhatsApp |
 | **Slack** | Buttons in the message (Block Kit), five at most, then "More…" | The same | As WhatsApp |
 
 Taskiem's WhatsApp client sends only reply buttons today (`SendButtons`, three at most): **list messages are new** (`SendList` in `engine/whatsapp/graph.go`, the reply read as a button's is now). Lists, like buttons, can be sent only inside WhatsApp's 24-hour window; outside it Taskiem's answers are templates anyway.
@@ -284,7 +302,7 @@ No command they must learn; no list of 29 lines unless they ask for it (*help al
 | Phase | What | Done when |
 | --- | --- | --- |
 | **M1** | The catalogue (§3, §4), with the test holding it to the code; `waHelp` made from it; `GET /v1/chat/actions`; the menu card in the app and on the web (§6); *help*, *help all*, *help riders*, a topic's word alone (§5); rows that show, open the existing forms, or open pages; step by step questions (§7) for the rest | Every topic's menu, in the app and on the web, light and dark, both widths, with every row doing what §6 says; questions for every `questions` action; tests for each (server, web e2e, the app's screen tests and pictures) |
-| **M2** | The model answers with `action` and `topic` and values (§8.1); forms filled in (§8.2); topics by words without the model (§8.3) | A message about riders the model is unsure of shows the riders menu; "add rider Musa" opens the questions with Musa taken; with the model off, "my rider issue" shows the riders menu |
+| **M2** | The model answers with `action` and `topic` and values (§8.1); forms filled in (§8.2); topics by words without the model (§8.3); the most used first (§6.1) | A message about riders the model is unsure of shows the riders menu; "add rider Musa" opens the questions with Musa taken; with the model off, "my rider issue" shows the riders menu |
 | **M3** | WhatsApp list messages, Telegram's buttons, Slack's blocks, numbers on every channel (§9) | Each channel's tests: the topics menu, a topic's menu, a row pressed, questions to the end, a link to a form |
 | **M4** | Forms for the actions that ask step by step today and are better as forms: Add a rider, Add a supplier, Correct a count, Order from a supplier, Opening hours, Someone owes you, Record money spent, Send an invoice. In the app and on the web they replace the questions; on WhatsApp and Telegram the questions stay | Each form built in the look ([mobile-screen](../../.claude/skills/mobile-screen/SKILL.md)), filled from the model's values, with the web's twin |
 
@@ -292,7 +310,6 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 
 ## 13. Later, not now
 
-- **Topics the person uses most first**, from what they pressed and typed in the last month.
 - **A row's last values** ("Add stock: 50 cartons of Indomie, again?").
 - **A menu in a customer's own chat with a business** (order, book, pay, my orders): customers have the door's buttons today ([Taskiem for everyone](taskiem-for-everyone.md) §8.4); a menu there is its own plan.
 - **Voice**: a voice note's transcript is read as typed, so it gets menus already; a spoken menu is not planned.
