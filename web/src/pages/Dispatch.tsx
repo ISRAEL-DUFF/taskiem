@@ -810,8 +810,8 @@ export function RidersPayPage() {
           )}
           {p.payouts.length > 0 && (
             <details open={p.payouts.some((x) => x.status === "pending")}>
-              <summary>Recent payouts</summary>
-              <Items label="Recent payouts">
+              <summary>Recent payments to riders</summary>
+              <Items label="Recent payments to riders">
                 {p.payouts.map((x) => (
                   <Row
                     key={x.payout_id}
