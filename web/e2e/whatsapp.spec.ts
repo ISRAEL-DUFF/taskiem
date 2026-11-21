@@ -447,7 +447,7 @@ test.describe("customers' conversations", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const tag = String(Date.now()).replace(/\d/g, (d) =>
-      "abcdefghij".charAt(Number(d)),
+      "kmpqrtvwxz".charAt(Number(d)),
     );
     const signup = await page.request.post("/v1/signup", {
       headers: H,
@@ -607,7 +607,7 @@ test.describe("customers' conversations", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const tag = String(Date.now()).replace(/\d/g, (d) =>
-      "abcdefghij".charAt(Number(d)),
+      "kmpqrtvwxz".charAt(Number(d)),
     );
     const signup = await page.request.post("/v1/signup", {
       headers: H,

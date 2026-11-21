@@ -8,7 +8,7 @@ test.use({ bypassCSP: false, viewport: { width: 390, height: 844 } });
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
-  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+  String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
   "base64",

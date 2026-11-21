@@ -39,7 +39,7 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => graph.close(() => resolve()));
 });
 
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 function aNumber(): { typed: string; e164: string } {

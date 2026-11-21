@@ -12,7 +12,7 @@ test.use({ bypassCSP: true });
 
 const H = { "X-Taskiem-Request": "1" };
 const PASSWORD = "correct horse battery";
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 /** An owner, with chat tools on; and, when a role is named, a member of

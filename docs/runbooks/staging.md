@@ -12,12 +12,12 @@ Each step ends with a **check**. Stop at the first check that fails and see [Whe
 | --- | --- |
 | A VPS | Ubuntu 22.04 or 24.04, or Debian 12, x86_64. 4 vCPU and 8 GB is comfortable; 2 vCPU and 4 GB is the minimum with public pages on (the virus scanner for form files takes about 1.5 GB). 40 GB of disk. A user with `sudo` and SSH key login |
 | The provider's firewall | Inbound 22, 80 and 443 open, and 25 for [email triggers](#9-email-triggers). The kit closes everything else on the server itself |
-| Postgres 16 or newer | A **dedicated** server (managed, with point-in-time recovery), not a shared platform's project database: Taskiem's migrations create roles, which belong to the whole server, so the owner needs `CREATEROLE`, and two environments cannot share one server. An **empty** database, **not named `taskiem`** (`taskiem_staging`), and its owner. The VPS must be allowed to connect. For staging only, Postgres can run on the VPS itself: see [A database on the VPS](#a-database-on-the-vps-staging-only). Tested on 16 and 18 |
+| Postgres 16 or newer | A **dedicated** server (managed, with point-in-time recovery), not a shared platform's project database: Taskiem's migrations create roles, which belong to the whole server, so the owner needs `CREATEROLE`, and two environments cannot share one server. A **Xenibase dedicated project with role management on** is such a server: see [A database on Xenibase](#a-database-on-xenibase-dedicated-project) (a Xenibase shared project is not). An **empty** database, **not named `taskiem`** (`taskiem_staging`; Xenibase names its own), and its owner. The VPS must be allowed to connect. For staging only, Postgres can run on the VPS itself: see [A database on the VPS](#a-database-on-the-vps-staging-only). Tested on 16 and 18 |
 | A mail domain (optional) | `$MAIL`, for [email triggers](#9-email-triggers): a subdomain of one you own, whose MX record you can set. Can be added later |
 | Two domains | `$APP`, and `$PREVIEW`, a **separate registrable domain**, never a subdomain of the app's (storefront pages must never share the app's cookies). Staging and production need different preview domains |
 | SMTP | An account that can send from the sender address you will use (owners, agents and operators get their set-your-password links by email) |
 | A Telegram bot | Made with [@BotFather](https://t.me/BotFather) (`/newbot`): its token and its username |
-| Backups (optional) | An S3-compatible bucket and an access key limited to it. Without it, nothing survives losing the VPS. Fine to skip for a first staging |
+| Backups (optional) | An S3-compatible bucket and an access key limited to it. Without it, nothing survives losing the VPS. Fine to skip for a first staging. The database's backups are its provider's (on Xenibase, Xenibase's backups and point-in-time recovery); the bucket holds Taskiem's own: OpenBao, archives and settings |
 | Optional, for the full Phase 5 flows | A Xenibase instance and an admin token (catalogues and photos), an Anthropic API key (the moderation model and AI building), Termii test credentials (SMS to customers) |
 
 **Never paste secrets into chat or tickets.** Type them into the installer's prompts, or into the env file on the server.
@@ -57,7 +57,7 @@ sudo -v && echo sudo ok
 sudo ss -ltnp | grep -E ':(80|443) ' || echo "80 and 443 are free"
 ```
 
-Nothing must listen on 80 or 443 yet: Caddy takes them.
+Nothing must listen on 80 or 443 yet: Caddy takes them. (On a server shared with Xenibase, Xenibase's Caddy holds them and serves Taskiem too: see [Sharing the server with Xenibase](../vm.md#sharing-the-server-with-xenibase), and install with `TASKIEM_VPS_PROXY=external`.)
 
 **Check** the database is reachable from the VPS (replace the host and port; this tests the network only):
 
@@ -92,6 +92,29 @@ sudo sh -c '. /opt/taskiem-postgres/.env && TASKIEM_VPS_DATABASE_URL="postgres:/
 ```
 
 (On a fresh server, run the installer first, which installs Docker, the firewall and `taskiem-vps`, and let it stop at the database question with Ctrl-C; then start Postgres as above, and run `taskiem-vps setup` like this.)
+
+## A database on Xenibase (dedicated project)
+
+Instead of another managed Postgres, use a Xenibase **dedicated** project ([details](../vm.md#a-database-on-xenibase-dedicated-project)):
+
+1. In Xenibase, create a **dedicated** project: Postgres 18, the smallest size. Note its id and its database's name (Xenibase's, never `taskiem`).
+2. Turn on **role management**: Project Settings → Compute → Database roles → **Let the owner create roles** (an organisation owner, with a fresh step-up), or
+
+   ```sh
+   curl -fsS -X PUT -H "Authorization: Bearer $XENIBASE_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"enabled":true}' "$XENIBASE/api/v1/projects/$PROJECT/manage-roles"
+   ```
+
+3. Copy the **session pooler** URL (port 5432, not 6543), as the owner: `postgres://<db>_owner:<password>@<db host>:5432/<db>?sslmode=verify-full&sslrootcert=system`.
+4. In step 3, give it as the Postgres URL. Setup creates the logins `<db>_app` and `<db>_public` and waits up to 90 seconds for Xenibase to sync them to its poolers (every 30 seconds), saying so. To skip the wait, run setup with `TASKIEM_VPS_XENIBASE_URL=$XENIBASE TASKIEM_VPS_XENIBASE_TOKEN=<an API token> TASKIEM_VPS_XENIBASE_PROJECT=$PROJECT`: it asks Xenibase to sync at once.
+
+**Check:** the database is reachable from the VPS with TLS checked (needs the `postgresql-client` package, 16 or newer):
+
+```sh
+psql "postgres://<db>_owner:<password>@<db host>:5432/<db>?sslmode=verify-full&sslrootcert=system" -c 'select version()'   # PostgreSQL 18
+```
+
+Backups and point-in-time recovery of the database are Xenibase's; the kit's bucket keeps Taskiem's own.
 
 ## 3. Install
 
@@ -312,9 +335,11 @@ The installer sets `TASKIEM_WORKER_QUEUES=connector,sandbox,ai`. Add `ANTHROPIC_
 | Symptom | Look at |
 | --- | --- |
 | The installer stops at the database | The URL (user, password, `sslmode`), the provider's allow-list for the VPS's address |
-| `permission denied to create role` | The user lacks `CREATEROLE`: a shared platform's project database cannot host Taskiem; use a dedicated server, or Postgres on the VPS for staging |
+| `permission denied to create role` | The user lacks `CREATEROLE`: a shared platform's project database cannot host Taskiem; use a dedicated server (a Xenibase dedicated project with role management on: [A database on Xenibase](#a-database-on-xenibase-dedicated-project)), or Postgres on the VPS for staging |
+| `<db>_app cannot sign in to the database after 90 seconds` | On Xenibase: role management is off, or the URL is not the session pooler's (5432); `POST /api/v1/projects/<id>/manage-roles/sync` with an API token says why a login is not synced. Run setup again once fixed |
+| `the Caddy in xenibase-caddy-1 did not take Taskiem's sites` | Sharing the server with Xenibase: its Caddyfile must import `caddy.d/*.global` inside its global options and `caddy.d/*.caddy`; `sudo docker logs xenibase-caddy-1`. See [Sharing the server with Xenibase](../vm.md#sharing-the-server-with-xenibase) |
 | `role "taskiem_app" is a member of role "taskiem_app"` | The database was named `taskiem` (kits before the guard did not refuse it). Its roles are now wrong: start the database over with another name |
-| No certificate for `$APP` | DNS (step 1) and ports 80 and 443 at the provider's firewall; `sudo taskiem-vps logs caddy` |
+| No certificate for `$APP` | DNS (step 1) and ports 80 and 443 at the provider's firewall; `sudo taskiem-vps logs caddy` (beside Xenibase, `sudo docker logs xenibase-caddy-1`) |
 | No certificate for a storefront | The wildcard record; the page must be published (certificates are issued only for hosts Taskiem serves); `sudo taskiem-vps logs taskiem-public` |
 | The bot does not answer | `sudo taskiem-vps logs taskiem` for the webhook registration at start; the token and username in `/opt/taskiem/taskiem.env` |
 | Emails do not arrive | The SMTP URL and sender; the spam folder; `sudo taskiem-vps logs taskiem` |

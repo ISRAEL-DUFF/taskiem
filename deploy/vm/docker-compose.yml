@@ -1,6 +1,11 @@
 # Taskiem on one VM (decision 0032): every role in one process, persistent
 # OpenBao, Caddy for HTTPS. Postgres is NOT here: use a managed Postgres 16
-# (or one on another host) with backups and point-in-time recovery.
+# or newer (or one on another host) with backups and point-in-time
+# recovery, such as a Xenibase dedicated project with role management on.
+#
+# Beside Xenibase on one server, Xenibase's Caddy serves Taskiem's sites and
+# this file's caddy is left out (external-proxy mode: taskiem-vps adds
+# docker-compose.external-proxy.yml, docs/vm.md#sharing-the-server-with-xenibase).
 #
 # Installed and run by taskiem-vps (docs/vm.md): `taskiem-vps setup` writes
 # the env files and initialises OpenBao, and `taskiem-vps update` moves
@@ -16,7 +21,9 @@
 # chooses what to kill when it runs out. The limits are ceilings, not
 # reservations: together they come to about 6 GiB, so a 4 GiB server can
 # still run out with the public pages or mail on. oom_score_adj then makes
-# the malware scanner the first to be killed and OpenBao the last.
+# the malware scanner the first to be killed and OpenBao the last. Each can
+# be changed in /opt/taskiem/.env, which updates keep: <SERVICE>_MEM_LIMIT,
+# such as TASKIEM_MEM_LIMIT=3g or CLAMAV_MEM_LIMIT=3g (docs/vm.md).
 name: taskiem
 
 x-hardening: &hardening
@@ -30,7 +37,7 @@ services:
   caddy:
     <<: *hardening
     image: caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf
-    mem_limit: 256m
+    mem_limit: ${CADDY_MEM_LIMIT:-256m}
     pids_limit: 256
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
@@ -52,7 +59,7 @@ services:
     <<: *hardening
     image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     command: ["server"]
-    mem_limit: 512m
+    mem_limit: ${OPENBAO_MEM_LIMIT:-512m}
     pids_limit: 256
     # The keys to every secret: the last thing to kill.
     oom_score_adj: -500
@@ -75,7 +82,7 @@ services:
     <<: *hardening
     image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     entrypoint: ["sh", "-c"]
-    mem_limit: 64m
+    mem_limit: ${OPENBAO_RENEW_MEM_LIMIT:-64m}
     pids_limit: 32
     command:
       - |
@@ -95,7 +102,7 @@ services:
   migrate:
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["migrate"]
-    mem_limit: 256m
+    mem_limit: ${MIGRATE_MEM_LIMIT:-256m}
     pids_limit: 256
     env_file: [migrate.env]
     restart: "no"
@@ -107,7 +114,7 @@ services:
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "all"]
     # Code steps need room, as the chart's "all" role (2Gi).
-    mem_limit: 2g
+    mem_limit: ${TASKIEM_MEM_LIMIT:-2g}
     pids_limit: 2048
     env_file: [taskiem.env, openbao.env]
     read_only: true
@@ -139,7 +146,7 @@ services:
     profiles: [public]
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "public"]
-    mem_limit: 256m
+    mem_limit: ${TASKIEM_PUBLIC_MEM_LIMIT:-256m}
     pids_limit: 256
     env_file: [public.env]
     read_only: true
@@ -165,7 +172,7 @@ services:
     profiles: [mail]
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "mail"]
-    mem_limit: 256m
+    mem_limit: ${TASKIEM_MAIL_MEM_LIMIT:-256m}
     pids_limit: 256
     env_file:
       # Optional: kits from before email triggers have no mail.env until
@@ -195,7 +202,7 @@ services:
     <<: *hardening
     profiles: [public, mail]
     image: ${CLAMAV_IMAGE:-clamav/clamav:1.4.6@sha256:8ad6197396974726c35d017e50aaaaf4b91745726a04faec8480c203edd98052}
-    mem_limit: 2560m
+    mem_limit: ${CLAMAV_MEM_LIMIT:-2560m}
     pids_limit: 256
     oom_score_adj: 500
     volumes:

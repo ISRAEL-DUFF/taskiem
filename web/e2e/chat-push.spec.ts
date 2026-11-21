@@ -18,7 +18,7 @@ test.use({
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
-  String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+  String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 const PASSWORD = "correct horse battery";
 
 async function signUp(page: Page) {

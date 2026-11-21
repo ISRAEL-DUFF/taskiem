@@ -57,7 +57,7 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => graph.close(() => resolve()));
 });
 
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 
 function aNumber(): { typed: string; e164: string; digits: string } {
   const rest = String(Date.now()).slice(-7) + String(Math.floor(Math.random() * 10));
