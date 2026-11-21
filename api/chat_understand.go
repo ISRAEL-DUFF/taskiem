@@ -146,6 +146,12 @@ func (s *Server) waUnderstand(ctx context.Context, c *chat, text string) (bool, 
 		}
 		return true, c.say(ctx, s, whatsapp.SafeText(res.Reply))
 	case understand.Cannot:
+		if c.cards() {
+			if err := c.say(ctx, s, whatsapp.SafeText(res.Reply)); err != nil {
+				return true, err
+			}
+			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: "Here is what I can help with."})
+		}
 		return true, c.say(ctx, s, whatsapp.SafeText(res.Reply)+"\n\n"+c.t("wa.not_understood_help"))
 	}
 	if understoodRefused(c, res.Command) {
