@@ -57,7 +57,9 @@ func (s *Server) paymentRoutes(r chi.Router) {
 	r.With(pay).Get("/payments", s.listPayments)
 	// The banks to pay to, for those who may pay but not manage saved
 	// things: the list the Saved page offers.
-	r.With(pay).Get("/payments/banks", s.listSavedBanks)
+	r.With(pay).Get("/payments/banks", s.listPayBanks)
+	r.With(pay, s.tenantWide).Post("/payments/name-check", s.payNameCheck)
+	r.With(pay).Post("/payments/read", s.readPayment)
 	r.With(pay, s.tenantWide).Post("/payments", s.createPayment)
 	r.With(pay).Get("/payments/{id}", s.getPayment)
 	r.With(pay, s.tenantWide).Post("/payments/{id}/confirm", s.confirmPayment)
@@ -120,6 +122,9 @@ type payIn struct {
 	SavedID *uuid.UUID `json:"saved_id"`
 	Payee   string     `json:"payee"`
 	Mine    bool       `json:"mine"`
+	// RiderID: one of the business's riders, to the bank account kept for
+	// their payouts.
+	RiderID *uuid.UUID `json:"rider_id"`
 	// AccountNumber and BankName: an account not saved (pay.account),
 	// its name checked with the bank as it is prepared.
 	AccountNumber string `json:"account_number"`
@@ -189,6 +194,12 @@ type payeeAccount struct {
 // payeeOf reads the saved account a payment is made to: the business's,
 // by id or name; or, for an owner, their own.
 func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bool, in payIn) (payeeAccount, error) {
+	if in.RiderID != nil {
+		if in.SavedID != nil || in.Payee != "" || in.Mine || in.AccountNumber != "" {
+			return payeeAccount{}, refusePay(http.StatusBadRequest, "payee", "Pay a rider, a saved account or an account number: one of them.")
+		}
+		return s.riderPayee(ctx, tenant, *in.RiderID)
+	}
 	if in.AccountNumber != "" {
 		if !owner {
 			return payeeAccount{}, refusePay(http.StatusForbidden, "saved_only", "Staff pay the business's saved accounts: ask an owner to save this one first.")
@@ -249,6 +260,41 @@ func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bo
 	return out, err
 }
 
+// riderPayee is a rider's bank account, as their payouts use it.
+func (s *Server) riderPayee(ctx context.Context, tenant, rider uuid.UUID) (payeeAccount, error) {
+	if !s.Dispatch.Ready() {
+		return payeeAccount{}, refusePay(http.StatusConflict, "no_riders", "Riders are not set up here.")
+	}
+	var out payeeAccount
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM riders WHERE tenant_id = $1 AND id = $2`, tenant, rider).Scan(&name); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return refusePay(http.StatusNotFound, "no_payee", "There is no such rider.")
+			}
+			return err
+		}
+		b, ok, err := s.Dispatch.BankOfTx(ctx, tx, tenant, rider)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return refusePay(http.StatusConflict, "no_bank", name+" has no bank account kept: add it on their page under Riders > Pay.")
+		}
+		bank := b.BankName
+		if bank == "" {
+			bank = b.BankCode
+		}
+		out = payeeAccount{title: name, bank: saved.BankAccount{BankName: bank, BankCode: b.BankCode, AccountNumber: b.AccountNumber}}
+		if b.AccountName != "" {
+			n := b.AccountName
+			out.checked = &n
+		}
+		return nil
+	})
+	return out, err
+}
+
 // bankCodeFor is the payee's bank's code in the list rl pays to.
 func (s *Server) bankCodeFor(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, b saved.BankAccount, isSaved bool) (string, error) {
 	if b.BankCode != "" && b.CodeFrom == rl.Channel() {
@@ -264,6 +310,10 @@ func (s *Server) bankCodeFor(ctx context.Context, tenant uuid.UUID, rl invoicing
 	// As a file's bank is matched ("GTBank", "First Bank").
 	if m, ok := matchBank(bankItems(banks), b.BankName); ok && m.Code != "" {
 		return m.Code, nil
+	}
+	// A code kept with the account (a rider's) that the list has.
+	if b.BankCode != "" && slices.ContainsFunc(bankItems(banks), func(it bankItem) bool { return it.Code == b.BankCode }) {
+		return b.BankCode, nil
 	}
 	again := "choose the bank again on the account in Saved."
 	if !isSaved {

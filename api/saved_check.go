@@ -94,6 +94,9 @@ func railTitle(rl invoicing.Rail) string {
 type bankItem struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
+	// Likely: an account number asked about can be at this bank (its
+	// check digit fits), or the business pays it most (payments' list).
+	Likely bool `json:"likely,omitempty"`
 }
 
 // savedBanks are the banks the connection rl itself (its connector and

@@ -6307,6 +6307,10 @@ paths:
                   format: uuid
                 payee:
                   type: string
+                rider_id:
+                  type: string
+                  format: uuid
+                  description: One of the business's riders, paid to the account kept for their payouts. 409 `no_bank` when none is kept.
                 account_number:
                   type: string
                   description: An account not saved (pay.account), with bank_name; its name is checked with the bank as it is prepared. 409 `name_not_checked` when the bank did not say it.
@@ -6519,13 +6523,20 @@ paths:
       operationId: listPayBanks
       tags:
       - Payments
-      summary: The banks to pay an account number at
+      summary: The banks to pay an account number at, the likely ones first
       description: 'The list `/v1/banks` gives, for those who may pay (money.pay) but not manage saved things. The business''s payments connection''s own list, each bank with its code (`from`: the connection); without a connection, or when it does not answer, the banks by name alone (`from: ""`), found by name in a connection''s list when the account is checked.'
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
       x-taskiem-permission: money.pay
+      parameters:
+      - name: account
+        in: query
+        required: false
+        schema:
+          type: string
+        description: An account number; the banks it can be at (its check digit fits their code) come first, marked likely
       responses:
         '200':
           description: The banks
@@ -6548,9 +6559,124 @@ paths:
                           description: The bank's code in this list; empty in the list by name alone.
                         name:
                           type: string
+                        likely:
+                          type: boolean
                   from:
                     type: string
                     description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/name-check:
+    post:
+      operationId: payNameCheck
+      tags:
+      - Payments
+      summary: Check the likely banks for an account number
+      description: 'The bank''s name for the account at up to three banks at once: those named (bank_codes), or the likely ones (its check digit fits their code, the business''s most-paid first). Each answers its name, or that it has no such account, or that it could not say just now. Nothing is chosen or paid: the person picks. 409 `no_provider`; 400 `no_banks` when none fits.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [account_number]
+              properties:
+                account_number:
+                  type: string
+                bank_codes:
+                  type: array
+                  maxItems: 3
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Each bank's answer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account, banks]
+                properties:
+                  account:
+                    type: string
+                    description: The number, masked
+                  banks:
+                    type: array
+                    items:
+                      type: object
+                      required: [bank_name, bank_code]
+                      properties:
+                        bank_name: {type: string}
+                        bank_code: {type: string}
+                        account_name: {type: string}
+                        problem: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payments/read:
+    post:
+      operationId: readPayment
+      tags:
+      - Payments
+      summary: What a message says to pay
+      description: 'Paying from a message (phase 2): the account number, the bank (by the payments account''s list, with its code), the amount (naira or k: "45k", "₦45,000") and the name a message gives; with no bank, the banks the number can be at (likely); and the business''s last payment to that account, so a chip already paid says so. Nothing is prepared.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        '200':
+          description: What it says; found false when it holds no account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [found]
+                properties:
+                  found: {type: boolean}
+                  account_number: {type: string}
+                  bank_name: {type: string}
+                  bank_code: {type: string}
+                  amount_kobo: {type: integer}
+                  name: {type: string}
+                  payee:
+                    type: string
+                    description: The business's saved account with this number, by its name (staff pay saved accounts only)
+                  likely:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: {type: string}
+                        name: {type: string}
+                        likely: {type: boolean}
+                  paid:
+                    type: object
+                    properties:
+                      id: {type: string, format: uuid}
+                      amount_kobo: {type: integer}
+                      status: {type: string}
+                      at: {type: string, format: date-time}
         default:
           $ref: '#/components/responses/Error'
   /v1/bills:
