@@ -129,6 +129,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **P2. Pay from a message** (paying people phase 2). Needs: P1.
 - The details reader gains the NUBAN check and candidate banks; the **Pay this account** chip on web chat and business-chat messages and photo text; a chip already paid says so; **Save as…** beside it; Pay on staff, riders and refunds (their bank details read from their own records, with the same checks); the reader takes "transfer 45k to 0123456789 gtbank".
 - Done when: account details in a WhatsApp message that reached the web chat become a checked, filled-in payment in one tap, and can be saved as `@driver` on the way.
+- **Status (21 November 2026): built against fakes, not yet on a real wallet.** Done: the check digit of an account number (worked with each bank's CBN code, found by its name where the provider lists its own), the likely banks first (`GET /v1/payments/banks?account=`, the business's most-paid among them first), and **Check the likely banks for me** (`POST /v1/payments/name-check`: up to three at once, owners only, a few at a time, each check recorded; the person picks); a message read for a payment (`POST /v1/payments/read`: the number, the bank, one clear amount, the name, the saved account with that number, the last payment to it); the **Pay this account** chip under the other side's messages in link chats and the business's customer chats, filled-in, already-paid said, staff paying the saved account by @name; a name in the message that differs from the bank's said in amber; **Pay on a rider**, to the account kept for their payouts (the payment records the rider, so a changed account is said and needs the owner's OK from staff; the name checked as it is prepared). On the web and in the app. Reviewed; its fixes made. **Not built, waiting for a decision:** Pay on staff and on refunds (Taskiem keeps no bank account for either today: staff records and refunds would need one first), and photo text (Taskiem reads no text from photos yet); **Save as…** beside the chip (saving is already in the Saved page and the sheet's account flow, not on the chip).
 
 **P3. Pay several people** (paying people phase 3). Needs: P2.
 - Batches: picking (saved accounts as a list), collecting from messages, pasting and photographing a list, last time's again; a check per row, held-out rows, one confirmation, results per person, paying the failed ones again.
@@ -227,7 +228,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 - [ ] S0 · [ ] S1
 - [ ] S2 · [ ] S3
 - [ ] F1 (built, in review) · [ ] P1 (built, in review)
-- [ ] P2 · [ ] P3 · [ ] P4
+- [ ] P2 (built, in review) · [ ] P3 · [ ] P4
 - [ ] M0 · [ ] M1 · [ ] D0
 - [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
 - [ ] M5 · [ ] G2 · [ ] G3 · [ ] D2
