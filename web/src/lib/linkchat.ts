@@ -196,6 +196,10 @@ export function cardLine(card: DocCard, mine: boolean, other: string): string {
     const verb = DELIVERY_VERB[card.event] ?? card.event.replaceAll("_", " ");
     return `${who} ${verb} ${card.reference}`;
   }
+  // Paying by transfer (the payments flow, part 1): a number was given for
+  // the bill; the seller's card says who is paying.
+  if (card.event === "transfer" && (card.doc === "invoice" || card.doc === "bill"))
+    return mine ? "You are paying by transfer" : `${other} is paying by transfer`;
   const verb =
     VERB[card.event] ??
     `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;

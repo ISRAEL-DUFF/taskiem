@@ -75,6 +75,8 @@ const INVOICE: Record<string, CardStatus> = {
   queried: { word: "Queried", tone: "warn" },
   resolved: { word: "Settled", tone: "lime" },
   reminder: { word: "Reminder", tone: "warn" },
+  // A number given to pay it by transfer (the payments flow, part 1).
+  transfer: { word: "By transfer", tone: "warn" },
 };
 
 /** The card's pill and progress. */
@@ -120,6 +122,7 @@ export function isDiary(card: DocCard, mine: boolean): boolean {
     card.event !== "ordered" &&
     card.event !== "offered" &&
     card.event !== "bill" &&
+    card.event !== "transfer" &&
     card.event !== "proposed"
   );
 }

@@ -3,6 +3,7 @@
 // reads in a row and on its page.
 
 import { naira, type InvoiceLine } from "./invoices";
+import type { BillTransfer } from "./paybytransfer";
 
 export type BillStatus = "open" | "paying" | "part_paid" | "paid" | "disputed" | "void";
 
@@ -34,6 +35,10 @@ export interface Bill {
   pay_bank_name?: string;
   /** The supplier's invoice page: a card or a transfer. */
   pay_link?: string;
+  /** How it can be paid now: transfer, taskiem, checkout, in that order. */
+  ways_to_pay?: string[];
+  /** Its account number for paying by transfer (those who may pay bills only). */
+  transfer?: BillTransfer | null;
   mirrored_at: string;
   created_at: string;
 }

@@ -40,6 +40,7 @@ import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, yo
 import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
+import { CustomerInvoiceCard } from "./PayByTransfer";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
@@ -777,7 +778,11 @@ export function PersonChatPage() {
                   <Pill tone="plain">Offer</Pill>
                 </span>
               )}
-              {card && (
+              {card && card.type === "invoice" && card.invoice_id && !m.mine && (
+                // Paid by transfer from the chat (the payments flow, part 1).
+                <CustomerInvoiceCard chat={id} business={c?.business ?? id} card={card} mine={m.mine} />
+              )}
+              {card && !(card.type === "invoice" && card.invoice_id && !m.mine) && (
                 <AppCardView
                   card={card}
                   mine={m.mine}

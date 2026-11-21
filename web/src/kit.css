@@ -888,3 +888,42 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-start-findable { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 .tk-x-empty-acts { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .tk-x-area { margin: 0 16px 12px; }
+
+/* ---------- Pay by transfer (the payments flow, part 1) ---------- */
+.xfer { display: flex; flex-direction: column; gap: 10px; padding: 14px; margin: 8px 0; border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 0 0 1px var(--border); max-width: 420px; width: 100%; box-sizing: border-box; }
+.xfer-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.xfer-head { margin: 0; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.xfer-head.ok { color: var(--ok); }
+.xfer-head svg { width: 20px; height: 20px; flex: none; }
+.xfer-account { margin: 0; display: grid; gap: 2px; border-radius: 12px; background: var(--tk-tile); padding: 4px 12px; }
+.xfer-line { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--border); }
+.xfer-line:first-child { border-top: 0; }
+.xfer-line dt { font-size: 12px; color: var(--muted); }
+.xfer-line dd { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; min-width: 0; }
+.xfer-line dd > span { min-width: 0; overflow-wrap: anywhere; }
+.xfer-number { font-size: 20px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.xfer-copy { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 0; background: var(--tk-soft); color: var(--tk-pine-ink); font-weight: 700; font-size: 13px; cursor: pointer; box-shadow: none; }
+.xfer-copy svg { width: 16px; height: 16px; }
+.xfer-copy:focus-visible { box-shadow: var(--ring); }
+.xfer-time { margin: 0; display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--tk-soft); color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.xfer-time svg { width: 16px; height: 16px; }
+.xfer-time.warn { background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
+.xfer-next { margin: 0; font-size: 14px; color: var(--muted); }
+.xfer-wait { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.xfer-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .xfer-dot { animation: xfer-breathe 1.6s ease-in-out infinite; }
+}
+@keyframes xfer-breathe { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+.xfer-longer { align-self: flex-start; }
+.xfer-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.xfer-acts .xfer-ways { flex-basis: 100%; }
+.xfer-ways { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.xfer-way { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--panel); color: var(--text); text-align: left; text-decoration: none; cursor: pointer; box-shadow: none; font: inherit; box-sizing: border-box; }
+.xfer-way:hover { background: var(--panel-2); text-decoration: none; }
+.xfer-way.first { border-color: var(--accent); }
+.xfer-way:focus-visible { box-shadow: var(--ring); }
+.xfer-way .tk-row-tile { width: 40px; height: 40px; border-radius: 12px; }
+.xfer-way > svg:last-of-type { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.xfer-way-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.xfer-way-name { font-weight: 700; }

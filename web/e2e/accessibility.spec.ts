@@ -487,6 +487,22 @@ for (const scheme of ["light", "dark"] as const)
       );
       await page.route("**/v1/me/chats/c1/read", (r) => r.fulfill({ status: 204 }));
       await page.route("**/v1/me/chats/c1/orders", (r) => r.fulfill(json({ orders: [] })));
+      // The invoice's account number, to pay it by transfer (the payments flow, part 1).
+      await page.route("**/v1/me/chats/c1/invoices/f1/transfer", (r) =>
+        r.fulfill(
+          json({
+            invoice: "f1",
+            reference: "INV-0001",
+            due_kobo: 100_000,
+            state: "open",
+            bank_name: "Wema Bank",
+            account_number: "0123456789",
+            account_name: "Mama's Kitchen",
+            amount_kobo: 100_000,
+            expires_at: new Date(Date.now() + 3 * 60_000).toISOString(),
+          }),
+        ),
+      );
       // A server with no push keys: "We'll text you when they answer."
       await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.goto("/you/chats/c1");
@@ -496,6 +512,8 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Business checked · Payments through Taskiem · Trading 1 year");
       await expect(page.getByTestId("person-whatsapp-here")).toBeVisible();
       await expect(page.getByTestId("person-on-whatsapp")).toHaveCount(2);
+      // The number in its last minutes: the warning colour.
+      await expect(page.getByTestId("customer-transfer-card").getByTestId("transfer-time")).toHaveText(/^Expires in 2:\d\d$/);
       await check("/you/chats/{id}");
       expect(found, found.join("\n\n")).toEqual([]);
     });

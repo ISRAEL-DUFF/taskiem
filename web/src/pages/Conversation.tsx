@@ -5,6 +5,7 @@ import { SavedCardView } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
+import { BillTransferLive } from "./PayByTransfer";
 import {
   useCallback,
   useEffect,
@@ -361,6 +362,15 @@ function CardActions({
       {!!act.error && <ErrorBox error={act.error} />}
     </span>
   );
+}
+
+/** A bill's newest card, once an account number was given for it: the
+ * number as it is now, for those who may pay bills (the payments flow,
+ * part 1). */
+function ChatTransfer({ seller, reference }: { seller: string; reference: string }) {
+  const { can } = useAuth();
+  if (!can("invoice.manage")) return null;
+  return <BillTransferLive seller={seller} reference={reference} />;
 }
 
 /** A message's photo, voice note or PDF: this business's own copy, from
@@ -941,7 +951,11 @@ function Bubble({
               <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
             )}
         </CardFrame>
-      ) : (
+      ) : null}
+      {card && latest && card.doc === "bill" && card.event === "transfer" && (
+        <ChatTransfer seller={other} reference={card.reference} />
+      )}
+      {card ? null : (
         <>
           {m.attachment && (
             <AttachmentView m={m} a={m.attachment} other={other} />

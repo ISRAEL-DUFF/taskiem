@@ -88,6 +88,8 @@ const OWNER_FILES = [
   "pages/ChatPush.tsx",
   "pages/PushNotices.tsx",
   "pages/Bills.tsx",
+  "pages/PayByTransfer.tsx",
+  "lib/paybytransfer.ts",
   "pages/TradeOrders.tsx",
   "pages/Conversation.tsx",
   "pages/TaskiemChat.tsx",
