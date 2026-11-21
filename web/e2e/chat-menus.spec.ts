@@ -73,12 +73,23 @@ for (const width of [390, 360])
     const staff = menus(page).last();
     await expect(staff).toHaveAttribute("data-topic", "staff");
 
-    // A row that asks: its first question; the card folds to its line.
+    // A row that takes values: its form (M4); Save sends it, and the card
+    // folds to its line.
     await staff.getByRole("button", { name: /Give someone a task/ }).click();
-    await expect(pane(page).getByText("Who is it for? Their name as on the team.", { exact: true })).toBeVisible();
+    const form = page.getByTestId("taskiem-action-form");
+    await expect(form.getByText("Who is it for?", { exact: true })).toBeVisible();
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`a form (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    await form.getByLabel("Who is it for?").fill("Tunde");
+    await form.getByLabel("What should they do, and by when?").fill("count the float by 7am");
+    await form.getByRole("button", { name: "Give someone a task" }).click();
+    await expect(form).toHaveCount(0);
     await expect(menus(page).last()).toHaveAttribute("data-folded", "1");
-    await expect(menus(page).last()).toContainText("Give someone a task");
-    await send(page, "cancel");
+    await expect(pane(page).getByText("Give someone a task: Tunde, count the float by 7am", { exact: true }).first()).toBeVisible();
 
     // Not understood: the short answer, and the topics.
     await send(page, "zzq blorp");

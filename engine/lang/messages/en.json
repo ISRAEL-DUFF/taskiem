@@ -674,6 +674,11 @@
       "reviewed": true,
       "context": "An answer that is not one of a question's fixed choices"
     },
+    "menu.form_missing": {
+      "text": "Fill in: {fields}",
+      "reviewed": true,
+      "context": "A form sent without a value it needs; {fields} are the questions left"
+    },
     "menu.here_help": {
       "text": "Here is what I can help with.",
       "reviewed": true,

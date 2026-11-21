@@ -9,9 +9,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { get } from "../api";
-import { Sheet } from "../kit";
+import { KitField, Sheet } from "../kit";
+import { FormFrame } from "./FormFrame";
 import { Icon } from "../icons";
 import type { ToolKey } from "../lib/tools";
+
+export interface ChatField {
+  key: string;
+  label: string;
+  hint?: string;
+  kind: string;
+  choices?: string[];
+  optional?: boolean;
+}
 
 export interface ChatAction {
   id: string;
@@ -24,6 +34,7 @@ export interface ChatAction {
   tool?: string;
   add?: boolean;
   page?: string;
+  fields?: ChatField[];
 }
 
 export interface ChatTopic {
@@ -115,22 +126,48 @@ export function MenuCard({
   const [chosen, setChosen] = useState<string>();
   const [shown, setShown] = useState(open);
   const [all, setAll] = useState(false);
+  const [form, setForm] = useState<{ action: ChatAction; values: Record<string, string> }>();
   useEffect(() => setShown(open && !chosen), [open, chosen]);
 
   if (!topics) return <div className="tk-menu tk-menu-loading" data-msg={id} aria-busy="true" />;
   const t = topic ? topics.find((x) => x.id === topic) : undefined;
 
   const press = (a: ChatAction, from?: DOMRect) => {
-    setChosen(a.title);
     setAll(false);
+    if (a.opens === "form" && a.tool) {
+      setChosen(a.title);
+      onFold?.();
+      return openTool(a.tool as ToolKey, from, { add: a.add });
+    }
+    if (a.opens === "page" && a.page) {
+      setChosen(a.title);
+      onFold?.();
+      return navigate(a.page);
+    }
+    // An action that takes values: its form here (M4), filled with what
+    // Taskiem took from the message.
+    if (a.fields?.length) {
+      return setForm({ action: a, values: a.id === menu.pick && topic === menu.topic ? { ...menu.values } : {} });
+    }
+    setChosen(a.title);
     onFold?.();
-    if (a.opens === "form" && a.tool) return openTool(a.tool as ToolKey, from, { add: a.add });
-    if (a.opens === "page" && a.page) return navigate(a.page);
     onReply(`act:${a.id}`, a.title);
   };
+  const sent = (a: ChatAction, values: Record<string, string>) => {
+    setForm(undefined);
+    setChosen(a.title);
+    onFold?.();
+    const shown = (a.fields ?? []).map((f) => values[f.key]?.trim()).filter(Boolean);
+    onReply(`form:${a.id}:${JSON.stringify(values)}`, shown.length ? `${a.title}: ${shown.join(", ")}` : a.title);
+  };
+  const formSheet = form && (
+    <ActionForm action={form.action} initial={form.values} onClose={() => setForm(undefined)} onSend={(v) => sent(form.action, v)} />
+  );
 
   if (!shown)
     return (
+      <>
+      {formSheet}
       <div className="tk-menu tk-menu-folded" data-msg={id} data-testid="taskiem-menu" data-folded="1">
         <span className="tk-tile-icon tk-menu-icon-sm">
           <Icon name={t ? menuIcon(t.icon) : "grid"} />
@@ -143,6 +180,7 @@ export function MenuCard({
           Show again
         </button>
       </div>
+      </>
     );
 
   if (!t)
@@ -221,11 +259,87 @@ export function MenuCard({
           Next time you can type: <b>{menu.tip}</b>
         </p>
       )}
+      {formSheet}
       {all && (
         <Sheet title={t.name} count={acts.length} onClose={() => setAll(false)} testid="taskiem-menu-all">
           <div className="tk-menu-rows">{acts.map(row)}</div>
         </Sheet>
       )}
     </>
+  );
+}
+
+/** The kinds of value typed as a number. */
+const NUMERIC = new Set(["money", "number", "signed", "phone"]);
+
+/**
+ * An action's form (chat-menus.md M4): a field for each of its values, with
+ * the choices the business's own records offer as chips; Save sends it to
+ * Taskiem as "form:<id>:<values>", read as its command typed, the Save
+ * being the person's yes.
+ */
+export function ActionForm({
+  action,
+  initial,
+  onClose,
+  onSend,
+}: {
+  action: ChatAction;
+  initial: Record<string, string>;
+  onClose: () => void;
+  onSend: (values: Record<string, string>) => void;
+}) {
+  const fields = action.fields ?? [];
+  const [values, setValues] = useState<Record<string, string>>(initial);
+  const [choices, setChoices] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (!fields.some((f) => f.kind !== "choice" && f.kind !== "text" && !NUMERIC.has(f.kind))) return;
+    let live = true;
+    get<{ fields: Record<string, string[]> }>(`/v1/chat/actions/${encodeURIComponent(action.id)}/choices`)
+      .then((r) => live && setChoices(r.fields ?? {}))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [action.id]);
+  const set = (k: string, v: string) => setValues((cur) => ({ ...cur, [k]: v }));
+  const ready = fields.every((f) => f.optional || (values[f.key] ?? "").trim() !== "");
+  return (
+    <Sheet title={action.title} onClose={onClose} testid="taskiem-action-form">
+      <FormFrame
+        save={async () => {
+          onSend(Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.trim()])));
+          return null;
+        }}
+        onSaved={() => undefined}
+        ready={ready}
+        saveWords={action.title}
+      >
+        {fields.map((f) => {
+          const offered = f.choices ?? choices[f.key] ?? [];
+          return (
+            <KitField key={f.key} label={f.optional ? `${f.label} (optional)` : f.label} hint={f.hint}>
+              {offered.length > 0 && (
+                <span className="tk-chips tk-form-chips" role="group" aria-label={f.label}>
+                  {offered.map((c) => (
+                    <button key={c} type="button" aria-pressed={values[f.key] === c} onClick={() => set(f.key, c)}>
+                      {c}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {f.kind !== "choice" && (
+                <input
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => set(f.key, e.target.value)}
+                  inputMode={f.kind === "phone" ? "tel" : NUMERIC.has(f.kind) ? "decimal" : undefined}
+                  autoComplete="off"
+                />
+              )}
+            </KitField>
+          );
+        })}
+      </FormFrame>
+    </Sheet>
   );
 }

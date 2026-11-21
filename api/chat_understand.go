@@ -294,6 +294,12 @@ func (s *Server) modelPicked(ctx context.Context, c *chat, res understand.Result
 		}
 		return s.stepsDone(ctx, c, a, &chatSteps{Action: a.ID, Values: values})
 	}
+	// In the app and on the web: the action's row, picked and filled in,
+	// opens its form there (M4).
+	if c.cards() {
+		return s.sayMenu(ctx, c, chatMenuMsg{Topic: a.Topic, Pick: a.ID, Values: values, Tip: a.Shortcut,
+			Line: c.t("menu.about", "topic", word(c.lang.Tag, topicWordID(mustTopic(a.Topic)), mustTopic(a.Topic).Name))})
+	}
 	st := &chatSteps{Action: a.ID, Values: values}
 	before := ""
 	if len(values) > 0 {
@@ -338,4 +344,9 @@ func takenValues(a chatAction, given map[string]string) map[string]string {
 		out[f.Key] = v
 	}
 	return out
+}
+
+func mustTopic(id string) chatTopic {
+	t, _ := chatTopicByID(id)
+	return t
 }

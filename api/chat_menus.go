@@ -32,6 +32,7 @@ import (
 // Prefixes of what a menu's rows and a question's choices send back.
 const (
 	actPrefix   = "act:"
+	formPrefix  = "form:"
 	topicPrefix = "topic:"
 	ansPrefix   = "ans:"
 )
@@ -198,6 +199,14 @@ func (s *Server) waMenuWords(ctx context.Context, c *chat, text, cmd string) (bo
 			}
 		}
 		return true, s.menuAct(ctx, c, id)
+	}
+	if rest, ok := strings.CutPrefix(c.in.Reply, formPrefix); ok {
+		if c.state != stateIdle {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return true, err
+			}
+		}
+		return true, s.formDone(ctx, c, rest)
 	}
 	if id, ok := strings.CutPrefix(c.in.Reply, topicPrefix); ok {
 		if id == topicsMore {
@@ -561,4 +570,42 @@ func (s *Server) actionUses(ctx context.Context, c *chat) map[string]int {
 	}
 	c.uses = out
 	return out
+}
+
+// formDone does an action from its form in the app or on the web (M4):
+// "form:<id>:<values as JSON>". The values are taken as the questions take
+// them; with every one it needs, the command is made and read as typed,
+// the form's Save being the person's yes; else what is missing is said.
+func (s *Server) formDone(ctx context.Context, c *chat, rest string) error {
+	id, raw, _ := strings.Cut(rest, ":")
+	a, ok := chatActionByID(id)
+	if !ok || !s.mayAct(c, s.chatAreas(ctx, c), a) {
+		return c.say(ctx, s, c.t("menu.not_yours"))
+	}
+	var given map[string]string
+	if err := json.Unmarshal([]byte(raw), &given); err != nil {
+		return c.say(ctx, s, c.t("menu.need_answer"))
+	}
+	values := takenValues(a, given)
+	var missing []string
+	for _, f := range a.Fields {
+		if _, ok := values[f.Key]; ok {
+			continue
+		}
+		if f.Optional && strings.TrimSpace(given[f.Key]) == "" {
+			values[f.Key] = ""
+			continue
+		}
+		label, _ := formLabel(word(c.lang.Tag, askWordID(a, f), f.Ask))
+		missing = append(missing, label)
+	}
+	if len(missing) > 0 {
+		return c.say(ctx, s, c.t("menu.form_missing", "fields", strings.Join(missing, " ")))
+	}
+	s.actionUsed(ctx, c, a.ID)
+	cmd := a.Shortcut
+	if a.Make != nil {
+		cmd = a.Make(values)
+	}
+	return s.waUnderstood(ctx, c, cmd)
 }

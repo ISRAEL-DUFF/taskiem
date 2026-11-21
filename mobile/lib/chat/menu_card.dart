@@ -16,6 +16,7 @@ import '../app/auth.dart';
 import '../kit/kit.dart';
 import '../kit/mobile.dart';
 import '../kit/sheet.dart';
+import 'approve.dart' show TkTextBox;
 import '../kit/icon.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -103,6 +104,7 @@ class MenuCard extends StatefulWidget {
     required this.onAct,
     required this.onTool,
     required this.onPage,
+    required this.onForm,
     this.busy = false,
   });
   final Auth auth;
@@ -120,6 +122,9 @@ class MenuCard extends StatefulWidget {
 
   /// A page opened here; false when the app has no such screen.
   final bool Function(String path) onPage;
+
+  /// An action's form sent to Taskiem (M4): the reply and its words.
+  final void Function(String reply, String text) onForm;
 
   @override
   State<MenuCard> createState() => _MenuCardState();
@@ -149,13 +154,30 @@ class _MenuCardState extends State<MenuCard> {
     if (old.open && !widget.open) _shown = false;
   }
 
-  void _press(ChatAction a) {
-    setState(() {
-      _chosen = a.title;
-      _shown = false;
-    });
-    if (a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return;
-    if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return;
+  void _fold(ChatAction a) => setState(() {
+    _chosen = a.title;
+    _shown = false;
+  });
+
+  Future<void> _press(ChatAction a) async {
+    if (a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a);
+    if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return _fold(a);
+    // An action that takes values: its form here (M4), filled with what
+    // Taskiem took from the message.
+    final fields = a.fields ?? const [];
+    if (fields.isNotEmpty) {
+      final picked = a.id == widget.menu.pick && _topic == widget.menu.topic;
+      final values = await showTkSheet<Map<String, String>>(
+        context,
+        (_) => ActionFormSheet(auth: widget.auth, action: a, initial: picked ? widget.menu.values : const {}),
+      );
+      if (values == null || !mounted) return;
+      _fold(a);
+      final shown = [for (final f in fields) values[f.key] ?? ''].where((v) => v.isNotEmpty).toList();
+      widget.onForm('form:${a.id}:${jsonEncode(values)}', shown.isEmpty ? a.title : '${a.title}: ${shown.join(', ')}');
+      return;
+    }
+    _fold(a);
     widget.onAct(a);
   }
 
@@ -187,7 +209,7 @@ class _MenuCardState extends State<MenuCard> {
           ? null
           : () {
               close?.call();
-              _press(a);
+              unawaited(_press(a));
             },
     );
   }
@@ -379,4 +401,95 @@ class _MenuCardState extends State<MenuCard> {
       ],
     );
   }
+}
+
+/// An action's form (chat-menus.md M4; the web's ChatMenu.tsx ActionForm):
+/// a field for each of its values, the business's own choices as chips
+/// above it; its button gives the values back to be sent to Taskiem, read
+/// as the action's command typed, the button being the person's yes.
+class ActionFormSheet extends StatefulWidget {
+  const ActionFormSheet({super.key, required this.auth, required this.action, this.initial = const {}});
+  final Auth auth;
+  final ChatAction action;
+  final Map<String, String> initial;
+
+  @override
+  State<ActionFormSheet> createState() => _ActionFormSheetState();
+}
+
+class _ActionFormSheetState extends State<ActionFormSheet> {
+  late final List<ChatField> _fields = widget.action.fields ?? const [];
+  late final Map<String, TextEditingController> _boxes = {
+    for (final f in _fields) f.key: TextEditingController(text: widget.initial[f.key] ?? ''),
+  };
+  Map<String, List<String>> _choices = const {};
+
+  static const _typed = {'text', 'phone', 'money', 'number', 'signed', 'choice'};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final b in _boxes.values) {
+      b.addListener(() => setState(() {}));
+    }
+    if (_fields.any((f) => !_typed.contains(f.kind))) {
+      unawaited(widget.auth.api.chatActionChoices(id: widget.action.id).then((r) {
+        if (!mounted) return;
+        setState(() => _choices = {for (final e in r.fields.entries) e.key: [for (final x in (e.value as List)) '$x']});
+      }, onError: (Object _) {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final b in _boxes.values) {
+      b.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _chips(ChatField f) => TkChips<String>(
+    label: f.label,
+    padding: EdgeInsets.zero,
+    chips: [for (final c in f.choices ?? _choices[f.key] ?? const <String>[]) (c, c)],
+    on: _boxes[f.key]!.text,
+    onPick: (v) => _boxes[f.key]!.text = v,
+  );
+
+  bool get _ready => _fields.every((f) => f.optional == true || _boxes[f.key]!.text.trim().isNotEmpty);
+
+  @override
+  Widget build(BuildContext context) => TkFormSheet(
+    title: widget.action.title,
+    action: widget.action.title,
+    onAction: _ready ? () => Navigator.of(context).pop({for (final f in _fields) f.key: _boxes[f.key]!.text.trim()}) : null,
+    second: 'Cancel',
+    onSecond: () => Navigator.of(context).pop(),
+    children: [
+      TkFormGroup(
+        children: [
+          for (final f in _fields) ...[
+            if (f.kind == 'choice')
+              TkKitField(label: f.label, hint: f.hint, field: false, child: _chips(f))
+            else
+              TkKitField(
+                label: f.optional == true ? '${f.label} (optional)' : f.label,
+                hint: f.hint,
+                child: TkTextBox(
+                  controller: _boxes[f.key]!,
+                  size: 15,
+                  height: 46,
+                  max: 150,
+                  money: f.kind == 'money',
+                  signed: f.kind == 'signed',
+                  digits: f.kind == 'number' ? 6 : null,
+                ),
+              ),
+            // The business's own: its riders, their areas, its items.
+            if (f.kind != 'choice' && (_choices[f.key] ?? const []).isNotEmpty) _chips(f),
+          ],
+        ],
+      ),
+    ],
+  );
 }

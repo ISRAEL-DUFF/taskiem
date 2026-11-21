@@ -8241,6 +8241,39 @@ paths:
                       $ref: '#/components/schemas/ChatTopic'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat/actions/{id}/choices:
+    get:
+      operationId: chatActionChoices
+      tags:
+      - Account
+      summary: The choices an action's form offers
+      description: 'For each of the action''s fields that takes one of the business''s own records (its riders and their areas, its stock items, its open orders and coming bookings), the five most likely, as the chat''s questions offer them.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+      responses:
+        '200':
+          description: The choices, by field
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [fields]
+                properties:
+                  fields:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-card:
     get:
       operationId: chatCard
@@ -44745,6 +44778,23 @@ components:
         tool: {type: string}
         add: {type: boolean}
         page: {type: string}
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatField'
+    ChatField:
+      type: object
+      additionalProperties: false
+      required: [key, label, kind]
+      properties:
+        key: {type: string}
+        label: {type: string}
+        hint: {type: string}
+        kind: {type: string}
+        choices:
+          type: array
+          items: {type: string}
+        optional: {type: boolean}
     ChatRef:
       type: object
       additionalProperties: false

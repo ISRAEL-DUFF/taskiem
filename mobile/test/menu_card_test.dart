@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/menu_card.dart' show ActionFormSheet;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
@@ -38,7 +39,14 @@ final _catalogue = {
       'id': 'riders', 'name': 'Riders', 'icon': 'rider', 'color': 'teal',
       'actions': [
         _a('riders.list', "Your riders, and who's free", 'Who is out, who can go now', 'rider', opens: 'show'),
-        _a('riders.add', 'Add a rider', 'Name, phone, and the areas they cover', 'rider'),
+        {
+          ..._a('riders.add', 'Add a rider', 'Name, phone, and the areas they cover', 'rider'),
+          'fields': [
+            {'key': 'name', 'label': "What's the rider's name?", 'kind': 'text'},
+            {'key': 'phone', 'label': "What's their phone number?", 'kind': 'phone'},
+            {'key': 'areas', 'label': 'Which areas do they cover?', 'kind': 'zone', 'optional': true},
+          ],
+        },
         _a('riders.give', 'Give an order to a rider', 'Pick the order, then the rider', 'rider'),
         _a('riders.today', "Today's deliveries", 'Out, done, and waiting', 'rider', opens: 'show'),
         _a('riders.back', 'Take an order back', "From a rider who can't go", 'rider'),
@@ -85,6 +93,9 @@ void main() {
     final chats = ChatsData(
       f.auth(also: (req) async {
         if (req.method == 'GET' && req.url.path == '/v1/chat/actions') return http.Response(jsonEncode(_catalogue), 200);
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions/riders.add/choices') {
+          return http.Response(jsonEncode({'fields': {'areas': ['Ikeja', 'Yaba']}}), 200);
+        }
         if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
           final body = jsonDecode(req.body) as Map<String, dynamic>;
           said.add(body);
@@ -147,13 +158,26 @@ void main() {
     expect(find.text('Show again'), findsOneWidget);
     await looks(t, 'taskiem-menu-riders');
 
-    // A row that asks: sent back as act:, its title as the words; folded.
+    // A row that takes values: its form (M4), the areas offered as chips;
+    // sent as form:, the values as the words; the card folds.
     await t.ensureVisible(find.text('Add a rider').last);
     await settle(t);
     await t.tap(find.text('Add a rider').last);
     await settle(t);
-    expect(said.last, {'text': 'Add a rider', 'reply': 'act:riders.add'});
-    expect(find.textContaining("What's the rider's name?", findRichText: true), findsOneWidget);
+    await t.pump(const Duration(milliseconds: 600)); // the sheet arrives
+    expect(find.byType(ActionFormSheet), findsOneWidget);
+    expect(find.text('Which areas do they cover? (optional)'), findsOneWidget);
+    final boxes = find.descendant(of: find.byType(ActionFormSheet), matching: find.byType(EditableText));
+    await t.enterText(boxes.at(0), 'Musa Bello');
+    await t.enterText(boxes.at(1), '08031234567');
+    await t.tap(find.text('Yaba'));
+    await settle(t);
+    await looks(t, 'taskiem-menu-form');
+    await t.tap(find.descendant(of: find.byType(ActionFormSheet), matching: find.text('Add a rider')).last);
+    await settle(t);
+    expect(said.last['reply'], startsWith('form:riders.add:'));
+    expect(jsonDecode((said.last['reply'] as String).substring('form:riders.add:'.length)), {'name': 'Musa Bello', 'phone': '08031234567', 'areas': 'Yaba'});
+    expect(said.last['text'], 'Add a rider: Musa Bello, 08031234567, Yaba');
     expect(find.text('Show again'), findsNWidgets(2));
   });
 }

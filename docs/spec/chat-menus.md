@@ -1,6 +1,6 @@
 # Menus in the chat: showing people what they can do
 
-Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1, M2 and M3 are built** (21 November 2026; see "What M1 built", "What M2 built" and "What M3 built" at the end); M4 is not. It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
+Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 to M4 are built** (21 November 2026; see "What M1 built" to "What M4 built" at the end). It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
 
 Builds on: [chat tools](chat-tools.md) (the tools panel, the tool sheets, the forms), [business chat tools](business-chat-tools.md), [the phone app's look](mobile-app-look.md) (Direction B), [saved objects](saved-objects.md) (`@name`), [Schools in the chat](schools-in-the-chat.md), [languages](../languages.md) (the word lists, the model's routing).
 
@@ -338,3 +338,10 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 - The test WhatsApp server checks WhatsApp's own limits on a list (ten rows, a button of 20, titles of 24, lines of 72).
 
 Not done: two buttons to a row on Telegram for the topics (one to a row for now); Slack shows every row rather than five and "More…".
+
+## What M4 built (21 November 2026)
+
+- **One form, drawn from the catalogue**, rather than a form written for each action: in the app (`ActionFormSheet`, `mobile/lib/chat/menu_card.dart`) and on the web (`ActionForm`, `web/src/pages/ChatMenu.tsx`), an action's form has a field for each of its values (the catalogue gives each a label, from its question's first sentence, a hint, its kind and its fixed choices). The business's own choices (riders and their areas, stock items, open orders, coming bookings) come from `GET /v1/chat/actions/{id}/choices`, as chips under the field. So every action that asked step by step, the eight §12 names and the rest, has its form, in both.
+- Its button sends the values to Taskiem as `form:<id>:<values>`, with the words the person sees ("Add a rider: Musa Bello, 0803 123 4567, Yaba"). The values are checked as the questions check them; with every one needed, the command is made and read as typed, the form's button being the person's yes; else Taskiem says what to fill in.
+- The actions that had a form of their own (record a sale, stock in, a product, a service, a price list, the handover) keep it.
+- When the model knows the action but not every value (M2), the app and the web get its topic's menu with that row first and filled in; the row opens the form with those values in it. WhatsApp, Telegram and Slack keep the questions.

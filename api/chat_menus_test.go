@@ -271,15 +271,16 @@ func TestChatModelPicksFromTheCatalogue(t *testing.T) {
 	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN}, Model: fake}
 	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
 
-	// Some values: taken, the rest asked.
-	if r := taskiemSays(t, owner, "Musa can deliver for us"); !strings.Contains(r, "Add a rider: Musa Bello.") || !strings.Contains(r, "Musa Bello's phone number?") {
-		t.Fatalf("some values: %q", r)
+	// Some values: in the Taskiem chat, the action's row picked and filled
+	// in, to open its form (M4).
+	if m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "Musa can deliver for us"})); m["topic"] != "riders" || m["pick"] != "riders.add" ||
+		m["values"].(map[string]any)["name"] != "Musa Bello" {
+		t.Fatalf("some values: %v", m)
 	}
 	prompt := ai.PromptText(fake.Requests()[0])
 	if !strings.Contains(prompt, "- riders.add: Add a rider") || !strings.Contains(prompt, "phone (phone)") || !strings.Contains(prompt, "Other commands:") {
 		t.Fatalf("the catalogue was not given: %s", prompt)
 	}
-	taskiemSays(t, owner, "cancel")
 
 	// Every value: shown for a Yes, then done.
 	if r := taskiemSays(t, owner, "Tunde will ride for us in Yaba, reach him on 0803 111 2222"); !strings.Contains(r, "*add rider Tunde •••2222 Yaba*") || !strings.Contains(r, "Shall I do it?") {
@@ -289,11 +290,11 @@ func TestChatModelPicksFromTheCatalogue(t *testing.T) {
 		t.Fatalf("done: %q", r)
 	}
 
-	// A value of the wrong shape: asked.
-	if r := taskiemSays(t, owner, "Kemi rides now, her line is abc"); !strings.Contains(r, "Kemi's phone number?") {
-		t.Fatalf("wrong shape: %q", r)
+	// A value of the wrong shape: left out, to be filled in.
+	if m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "Kemi rides now, her line is abc"})); m["values"].(map[string]any)["phone"] != nil ||
+		m["values"].(map[string]any)["name"] != "Kemi" {
+		t.Fatalf("wrong shape: %v", m)
 	}
-	taskiemSays(t, owner, "cancel")
 
 	// A topic: its menu, the action it leans to first, its command a tip.
 	m := menuOf(t, taskiemAll(t, owner, map[string]any{"text": "my rider wahala"}))
@@ -345,5 +346,53 @@ func TestChatMenusMostUsedFirst(t *testing.T) {
 	}
 	if topic, act := first(); topic == "staff" || act != "staff.mine" {
 		t.Fatalf("a month on: %s %s", topic, act)
+	}
+}
+
+// Forms in the app and on the web (chat-menus.md M4): the catalogue gives
+// each action's fields (a label, a hint, the kind, the choices); the
+// business's own choices come for its form; a form sent with every value
+// does the action (its Save the yes), one missing a value says which.
+func TestChatMenusForms(t *testing.T) {
+	w := newWAWorld(t)
+	book := &reach.Book{Pool: w.env.Store.Pool, Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}
+	w.srv.Riders = &riders.Riders{Pool: w.env.DB.App, Vault: w.env.Vault, Book: book, PageBase: "https://" + reachFormHost}
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+
+	var add map[string]any
+	for _, x := range owner.must(200, "GET", "/v1/chat/actions", nil)["topics"].([]any) {
+		for _, a := range x.(map[string]any)["actions"].([]any) {
+			if a.(map[string]any)["id"] == "riders.add" {
+				add = a.(map[string]any)
+			}
+		}
+	}
+	fields := add["fields"].([]any)
+	phone, areas := fields[1].(map[string]any), fields[2].(map[string]any)
+	if len(fields) != 3 || phone["label"] != "What's their phone number?" || phone["kind"] != "phone" || areas["label"] != "Which areas do they cover?" || areas["optional"] != true {
+		t.Fatalf("fields: %v", fields)
+	}
+
+	// A value missing: said which.
+	r := textOf(taskiemAll(t, owner, map[string]any{"text": "Add a rider: Musa Bello", "reply": `form:riders.add:{"name":"Musa Bello"}`}))
+	if !strings.Contains(r, "Fill in: What's their phone number?") {
+		t.Fatalf("missing: %q", r)
+	}
+	// Every value: done, with no Yes (the form's Save was it).
+	r = textOf(taskiemAll(t, owner, map[string]any{"text": "Add a rider: Musa Bello, 0803 123 4567, Yaba",
+		"reply": `form:riders.add:{"name":"Musa Bello","phone":"0803 123 4567","areas":"Yaba"}`}))
+	if !strings.Contains(r, "Musa Bello is now your rider") {
+		t.Fatalf("done: %q", r)
+	}
+	// The business's own choices for a form.
+	ch := owner.must(200, "GET", "/v1/chat/actions/riders.give/choices", nil)["fields"].(map[string]any)
+	if got := ch["rider"].([]any); len(got) != 1 || got[0] != "Musa Bello" {
+		t.Fatalf("choices: %v", ch)
+	}
+	// Not the person's: refused.
+	viewer := w.member(t, owner, "vic@kitchen.test", "viewer")
+	viewer.must(404, "GET", "/v1/chat/actions/riders.give/choices", nil)
+	if r := textOf(taskiemAll(t, viewer, map[string]any{"text": "x", "reply": `form:riders.add:{"name":"A","phone":"0803 123 4567"}`})); !strings.Contains(r, "isn't something you can do here") {
+		t.Fatalf("viewer: %q", r)
 	}
 }

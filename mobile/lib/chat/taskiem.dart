@@ -999,6 +999,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   return true;
                 },
                 onPage: (path) => _openPage(path),
+                onForm: (reply, text) => d.say(reply: reply, text: text),
               );
             }
           }

@@ -279,6 +279,12 @@ class TaskiemApi {
     return ChatActionsResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The choices an action's form offers (`GET /v1/chat/actions/{id}/choices`)
+  Future<ChatActionChoicesResponse> chatActionChoices({required String id}) async {
+    final j = await _t.send('GET', '/v1/chat/actions/${Uri.encodeComponent(id)}/choices');
+    return ChatActionChoicesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// A customer's conversation (`GET /v1/customer-chats/{id}`)
   Future<CustomerChat> getCustomerChat({required String id}) async {
     final j = await _t.send('GET', '/v1/customer-chats/${Uri.encodeComponent(id)}');
@@ -4593,10 +4599,11 @@ class ChatTopic {
 }
 
 class ChatAction {
-  const ChatAction({this.add, required this.does, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
+  const ChatAction({this.add, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
 
   final bool? add;
   final String does;
+  final List<ChatField>? fields;
   final String icon;
   final String id;
   final String line;
@@ -4609,6 +4616,7 @@ class ChatAction {
   factory ChatAction.fromJson(Map<String, dynamic> j) => ChatAction(
         add: j['add'] == null ? null : j['add'] as bool,
         does: j['does'] as String,
+        fields: j['fields'] == null ? null : (j['fields'] as List).map((e) => ChatField.fromJson(e as Map<String, dynamic>)).toList(),
         icon: j['icon'] as String,
         id: j['id'] as String,
         line: j['line'] as String,
@@ -4622,6 +4630,7 @@ class ChatAction {
   Map<String, dynamic> toJson() => {
         'add': ?add,
         'does': does,
+        'fields': ?fields?.map((e) => e.toJson()).toList(),
         'icon': icon,
         'id': id,
         'line': line,
@@ -4630,6 +4639,49 @@ class ChatAction {
         'shortcut': ?shortcut,
         'title': title,
         'tool': ?tool,
+      };
+}
+
+class ChatField {
+  const ChatField({this.choices, this.hint, required this.key, required this.kind, required this.label, this.optional});
+
+  final List<String>? choices;
+  final String? hint;
+  final String key;
+  final String kind;
+  final String label;
+  final bool? optional;
+
+  factory ChatField.fromJson(Map<String, dynamic> j) => ChatField(
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => e as String).toList(),
+        hint: j['hint'] == null ? null : j['hint'] as String,
+        key: j['key'] as String,
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+        optional: j['optional'] == null ? null : j['optional'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'choices': ?choices?.map((e) => e).toList(),
+        'hint': ?hint,
+        'key': key,
+        'kind': kind,
+        'label': label,
+        'optional': ?optional,
+      };
+}
+
+class ChatActionChoicesResponse {
+  const ChatActionChoicesResponse({required this.fields});
+
+  final Map<String, dynamic> fields;
+
+  factory ChatActionChoicesResponse.fromJson(Map<String, dynamic> j) => ChatActionChoicesResponse(
+        fields: j['fields'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fields': fields,
       };
 }
 

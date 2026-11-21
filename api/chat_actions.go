@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -632,6 +633,44 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 
 // --- GET /v1/chat/actions ---
 
+// chatFieldOut is a value an action takes, as a form shows it (M4): a
+// short label (the question's first sentence), a hint (the rest), its kind
+// and its fixed choices.
+type chatFieldOut struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	Hint     string   `json:"hint,omitempty"`
+	Kind     string   `json:"kind"`
+	Choices  []string `json:"choices,omitempty"`
+	Optional bool     `json:"optional,omitempty"`
+}
+
+var (
+	possessiveRe = regexp.MustCompile(`\{[a-z_]+\}'s`)
+	doesRe       = regexp.MustCompile(`does \{[a-z_]+\}`)
+	sentenceRe   = regexp.MustCompile(`[^.?!]+[.?!]?`)
+)
+
+// formLabel parts a question into a form's label and hint: its first
+// sentence, and the rest less what only a chat needs ("Send skip ...");
+// another value's name is a pronoun ("What's {name}'s phone number?" is
+// "What's their phone number?").
+func formLabel(ask string) (label, hint string) {
+	ask = doesRe.ReplaceAllString(possessiveRe.ReplaceAllString(ask, "their"), "do they")
+	var rest []string
+	for i, sn := range sentenceRe.FindAllString(ask, -1) {
+		sn = strings.TrimSpace(sn)
+		switch {
+		case i == 0:
+			label = sn
+		case sn == "" || strings.HasPrefix(sn, "Send skip") || strings.HasPrefix(sn, "Send its number"):
+		default:
+			rest = append(rest, sn)
+		}
+	}
+	return label, strings.Join(rest, " ")
+}
+
 type chatActionOut struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -643,6 +682,8 @@ type chatActionOut struct {
 	Tool     string `json:"tool,omitempty"`
 	Add      bool   `json:"add,omitempty"`
 	Page     string `json:"page,omitempty"`
+	// Fields are what the action's form asks for (M4).
+	Fields []chatFieldOut `json:"fields,omitempty"`
 }
 
 type chatTopicOut struct {
@@ -654,8 +695,13 @@ type chatTopicOut struct {
 }
 
 func actionOut(l lang.Tag, a chatAction) chatActionOut {
-	return chatActionOut{ID: a.ID, Title: word(l, titleWordID(a), a.Title), Line: word(l, lineWordID(a), a.Line), Icon: a.Icon, Does: a.Does, Opens: a.Opens,
+	out := chatActionOut{ID: a.ID, Title: word(l, titleWordID(a), a.Title), Line: word(l, lineWordID(a), a.Line), Icon: a.Icon, Does: a.Does, Opens: a.Opens,
 		Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page}
+	for _, f := range a.Fields {
+		label, hint := formLabel(word(l, askWordID(a, f), f.Ask))
+		out.Fields = append(out.Fields, chatFieldOut{Key: f.Key, Label: label, Hint: hint, Kind: f.Kind, Choices: f.Choices, Optional: f.Optional})
+	}
+	return out
 }
 
 // catalogueFor is the person's own catalogue: the topics and actions they
@@ -683,4 +729,32 @@ func (s *Server) chatActionsList(w http.ResponseWriter, r *http.Request) {
 	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), p: p, tenant: tenantRef{ID: p.TenantID}}
 	c.lang = s.chooseLang(r.Context(), p.TenantID, c.addr, "")
 	writeJSON(w, http.StatusOK, map[string]any{"topics": s.actionCatalogue(r.Context(), c)})
+}
+
+// chatActionChoices is GET /v1/chat/actions/{id}/choices: the choices its
+// form offers for the fields that take one of the business's own records
+// (its riders and their areas, its stock items, its open orders and coming
+// bookings), the five most likely each.
+func (s *Server) chatActionChoices(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.TenantID == uuid.Nil {
+		s.fail(w, r, errForbidden)
+		return
+	}
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), p: p, tenant: tenantRef{ID: p.TenantID}}
+	a, ok := chatActionByID(chi.URLParam(r, "id"))
+	if !ok || !s.mayAct(c, s.chatAreas(r.Context(), c), a) {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	out := map[string][]string{}
+	for _, f := range a.Fields {
+		if f.Kind == "choice" {
+			continue
+		}
+		if ch := s.choicesFor(r.Context(), c, f); len(ch) > 0 {
+			out[f.Key] = ch
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"fields": out})
 }

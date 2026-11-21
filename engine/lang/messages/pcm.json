@@ -598,6 +598,11 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. An answer that is not one of a question's fixed choices"
     },
+    "menu.form_missing": {
+      "text": "Fill in: {fields}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A form sent without a value it needs; {fields} are the questions left"
+    },
     "menu.here_help": {
       "text": "Here is what I can help with.",
       "reviewed": false,
