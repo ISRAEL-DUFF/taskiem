@@ -61,8 +61,9 @@ Map<String, dynamic> _bill({List<String> ways = const ['transfer', 'taskiem', 'c
   'ways_to_pay': ways,
 };
 
-Map<String, dynamic> _open({int minutes = 60}) => {
+Map<String, dynamic> _open({int minutes = 60, bool longer = false}) => {
   'state': 'open',
+  'longer': ?(longer ? true : null),
   'bank_name': 'Wema Bank',
   'account_number': '0123456789',
   'account_name': 'Bayo Rice Mills / Taskiem',
@@ -167,6 +168,33 @@ void main() {
     expect(cardStatus(seller, _at).word, 'Paying');
   });
 
+  test('the cards in the chat: paid in full or part, and a number past its time', () {
+    const paid = LinkDocCard(doc: 'bill', event: 'transfer_paid', reference: 'INV-0042', amountKobo: 8300000);
+    const part = LinkDocCard(doc: 'bill', event: 'transfer_part', reference: 'INV-0042', amountKobo: 5000000);
+    expect(cardLine(paid, true, 'Bayo Rice Mills'), 'Paid ₦83,000 by transfer');
+    expect(cardLine(part, true, 'Bayo Rice Mills'), 'Part paid by transfer: ₦50,000 so far');
+    const sold = LinkDocCard(doc: 'invoice', event: 'transfer_paid', reference: 'INV-0042', amountKobo: 8300000);
+    const soldPart = LinkDocCard(doc: 'invoice', event: 'transfer_part', reference: 'INV-0042', amountKobo: 5000000);
+    expect(cardLine(sold, false, 'Ada’s Kitchen'), 'Ada’s Kitchen paid ₦83,000 by transfer');
+    expect(cardLine(soldPart, false, 'Ada’s Kitchen'), 'Ada’s Kitchen paid part by transfer');
+    expect((cardStatus(paid, _at).word, cardStatus(part, _at).word), ('Paid', 'Part paid'));
+    expect(isDiary(paid, true) || isDiary(part, true), isFalse, reason: 'the buyer’s card shows');
+    // The seller's card stops saying paying once paid into.
+    final until = _at.add(const Duration(minutes: 30)).toIso8601String();
+    final seller = LinkDocCard(doc: 'invoice', event: 'transfer', reference: 'INV-0042', amountKobo: 8300000, note: until);
+    expect(cardLine(seller, false, 'Ada’s Kitchen', paid: sold, now: _at), 'Ada’s Kitchen paid by transfer');
+    expect(cardLine(seller, false, 'Ada’s Kitchen', paid: soldPart, now: _at), 'Ada’s Kitchen paid part by transfer');
+    expect(cardStatus(seller, _at).word, 'Paying', reason: 'its number still good');
+    expect(cardSub(seller), '₦83,000', reason: 'the note is a time, not words');
+    // ...and once its number's time has passed: back to To pay.
+    final later = _at.add(const Duration(minutes: 31));
+    expect(cardLine(seller, false, 'Ada’s Kitchen', now: later), 'The number Ada’s Kitchen was paying by transfer expired');
+    expect(cardStatus(seller, later).word, 'To pay');
+    final buyer = LinkDocCard(doc: 'bill', event: 'transfer', reference: 'INV-0042', amountKobo: 8300000, note: until);
+    expect(cardStatus(buyer, later).word, 'Expired', reason: 'the buyer’s stops saying Paying too');
+    expect(cardLine(buyer, true, 'Bayo Rice Mills', now: later), 'The number to pay INV-0042 by transfer expired');
+  });
+
   test('the bill\'s and the customer\'s answers read', () {
     final part = TransferNow.ofBill(Bill.fromJson(_bill(due: 3300000, transfer: {..._open(), 'state': 'part', 'received_kobo': 5000000})));
     expect((part.state, part.receivedKobo, part.leftKobo), ('part', 5000000, 3300000));
@@ -176,6 +204,10 @@ void main() {
       CustomerTransfer.fromJson({'invoice': 'I1', 'reference': 'INV-0007', 'due_kobo': 1500000, 'state': 'part', 'amount_kobo': 4500000, 'account_number': '0123456789'}),
     );
     expect((mine.receivedKobo, mine.leftKobo), (3000000, 1500000));
+    // I need longer only where the seller's side gives it.
+    expect(TransferNow.ofBill(Bill.fromJson(_bill(transfer: _open()))).longer, isFalse);
+    expect(TransferNow.ofBill(Bill.fromJson(_bill(transfer: _open(longer: true)))).longer, isTrue);
+    expect(TransferNow.ofInvoice(CustomerTransfer.fromJson({'invoice': 'I1', 'reference': 'INV-0007', 'due_kobo': 1, 'state': 'open', 'longer': true})).longer, isTrue);
   });
 
   testWidgets('the card in each state, light and dark', (t) async {
@@ -259,7 +291,7 @@ void main() {
     expect(prefs.payWays, {'S1': 'transfer'}, reason: 'remembered for this seller');
     expect(find.text('Getting an account number…'), findsOneWidget);
     // The number arrives; read again two seconds on.
-    transfer = _open();
+    transfer = _open(longer: true);
     await t.pump(const Duration(seconds: 2));
     await _settle(t);
     expect(find.text('Send exactly'), findsOneWidget);
@@ -417,11 +449,12 @@ void main() {
         });
       },
     );
+    final prefs = Prefs(MemoryKeyStore());
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.dark,
         home: _PayHost(
-          onPay: (c) => payMyInvoice(c, auth: auth, chat: 'C1', invoice: 'I1', business: 'Bola Stores', number: 'INV-0007', url: 'https://pay.taskiem.test/i/7', dueKobo: 4500000, now: () => _at),
+          onPay: (c) => payMyInvoice(c, auth: auth, chat: 'C1', invoice: 'I1', business: 'Bola Stores', seller: 'B9', prefs: prefs, number: 'INV-0007', url: 'https://pay.taskiem.test/i/7', dueKobo: 4500000, now: () => _at),
         ),
       ),
     );
@@ -436,6 +469,8 @@ void main() {
     expect(find.text('Pay Bola Stores'), findsOneWidget);
     expect(find.text('Good for 60:00'), findsOneWidget);
     expect(find.text('Bola Stores'), findsOneWidget, reason: 'the account name');
+    expect(find.bySemanticsLabel('I need longer'), findsNothing, reason: 'the business’s side gives no longer');
+    expect(prefs.payWays, {'B9': 'transfer'}, reason: 'remembered for this business');
     await looks(t, 'pay-invoice-transfer');
     await t.pump(const Duration(seconds: 10));
     await _settle(t);
@@ -499,6 +534,63 @@ void main() {
     await t.pump(const Duration(seconds: 10));
     await _settle(t);
     expect(reads.where((r) => r == 'GET').length, greaterThanOrEqualTo(3), reason: 'read again while it waits');
+  });
+
+  testWidgets('in the chat: paid and part paid cards; the paying card stops saying paying once paid into or past its time', (t) async {
+    t.view.physicalSize = const Size(360, 1400);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    const link = '3af349e2-b776-4306-bdb8-10df59687c55';
+    final f = Fixture('chat-tunde');
+    final until = _at.add(const Duration(minutes: 30)).toIso8601String();
+    final gone = _at.subtract(const Duration(minutes: 5)).toIso8601String();
+    Map<String, Object> card(String id, String doc, String event, String reference, int amount, String at, {bool mine = false, String? note}) => {
+      'id': id,
+      'link': link,
+      'mine': mine,
+      'kind': 'card',
+      'card': {'doc': doc, 'event': event, 'reference': reference, 'id': reference, 'amount_kobo': amount, 'note': ?note},
+      'sender_name': 'Funke',
+      'created_at': at,
+      'read_at': at,
+    };
+    final chats = ChatsData(
+      f.auth(
+        also: (req) async {
+          final p = req.url.path;
+          if (req.method == 'GET' && p == '/v1/link-chats/$link/messages' && !req.url.queryParameters.containsKey('after')) {
+            final page = f.json(p);
+            (page['messages'] as List).addAll([
+              // Ours to pay: the number asked for, then paid in full.
+              card('b1', 'bill', 'transfer', 'INV-0042', 8300000, '2026-11-21T13:00:00Z', mine: true, note: until),
+              card('b2', 'bill', 'transfer_paid', 'INV-0042', 8300000, '2026-11-21T13:10:00Z', mine: true),
+              // Theirs to pay us: part paid into one number; another past its time.
+              card('s1', 'invoice', 'transfer', 'INV-0101', 4500000, '2026-11-21T13:20:00Z', note: until),
+              card('s2', 'invoice', 'transfer_part', 'INV-0101', 2000000, '2026-11-21T13:25:00Z'),
+              card('s3', 'invoice', 'transfer', 'INV-0102', 1200000, '2026-11-21T13:30:00Z', note: gone),
+            ]);
+            return _ok(page);
+          }
+          if (req.method == 'GET') return null;
+          return _ok(<String, Object>{});
+        },
+      ),
+      now: () => _at,
+    )..load();
+    final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.link == link);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ConversationScreen(data: ConversationData(chats, conv, follow: false))));
+    await _settle(t);
+    const them = 'Mama Tunde\'s Market';
+    expect(find.text(breakAfterHyphens('You paid INV-0042 by transfer')), findsOneWidget, reason: 'the number asked for, paid');
+    expect(find.text('Paid ₦83,000 by transfer'), findsOneWidget);
+    expect(find.text('$them paid part by transfer'), findsNWidgets(2), reason: 'the paying card and the part paid card');
+    expect(find.text('The number $them was paying by transfer expired'), findsOneWidget);
+    expect(find.textContaining('is paying by transfer'), findsNothing);
+    expect(find.text('Paying'), findsNothing);
+    expect(find.text('To pay'), findsOneWidget, reason: 'the expired number: back to To pay');
+    expect(find.text('Part paid'), findsNWidgets(2));
+    expect(find.textContaining(until.substring(0, 10)), findsNothing, reason: 'the note is when it expires, not words');
+    await looks(t, 'pay-transfer-chat');
   });
 
   testWidgets('the bill\'s page: Pay opens the ways; an open number shows on it', (t) async {

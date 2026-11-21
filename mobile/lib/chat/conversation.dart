@@ -1607,10 +1607,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // card of a document shows where it is now.
     final newest = <String>{};
     final current = <String, LinkDocCard>{};
+    // A transfer card's number paid into: the paid (or part paid) card
+    // nearest after it says so.
+    final paidLater = <String, LinkDocCard>{};
+    final paidAfter = <String, LinkDocCard>{};
     for (final x in (items ?? const <ThreadMessage>[]).reversed) {
       final card = x.m.card;
       if (x.m.kind != 'card' || card == null) continue;
       final key = '${card.doc}:${card.reference}';
+      if (card.event == 'transfer_paid' || card.event == 'transfer_part') paidLater[key] = card;
+      if (card.event == 'transfer' && paidLater[key] != null) paidAfter[x.id] = paidLater[key]!;
       if (current.containsKey(key)) continue;
       current[key] = card;
       newest.add(x.id);
@@ -1659,7 +1665,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             last: next == null || diary(next.m) || _startsRun(m.m, next.m) || dayLabel(m.m.createdAt, now) != dayLabel(next.m.createdAt, now),
             now: now,
             latest: newest.contains(m.id),
-            current: card == null ? null : current['${card.doc}:${card.reference}'],
+            current: card == null ? null : paidAfter[m.id] ?? current['${card.doc}:${card.reference}'],
+            paid: paidAfter[m.id],
             transfer: card != null && newest.contains(m.id) ? _transfer(card) : null,
             acts: _acts,
             changed: () => setState(() {}),
@@ -1769,6 +1776,7 @@ class _Bubble extends StatelessWidget {
     required this.files,
     this.latest = false,
     this.current,
+    this.paid,
     this.transfer,
     this.onRetry,
     this.onDiscard,
@@ -1832,6 +1840,9 @@ class _Bubble extends StatelessWidget {
 
   /// The document's newest card: where it is now.
   final LinkDocCard? current;
+
+  /// A transfer card's number paid into: the paid or part paid card after it.
+  final LinkDocCard? paid;
 
   /// A bill's newest transfer card, kept up to date, in place of the
   /// card's frame.
@@ -2003,7 +2014,7 @@ class _Bubble extends StatelessWidget {
                                   current: current,
                                   mine: mine,
                                   now: now,
-                                  title: cardLine(card, mine, other),
+                                  title: cardLine(card, mine, other, paid: paid, now: now),
                                   view: viewButton(card, acts),
                                   actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
                                   // A deal to answer (theirs, the newest of its order).

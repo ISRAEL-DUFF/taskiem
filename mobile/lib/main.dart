@@ -599,7 +599,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       case RouteScreen.payments:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, open: id.isEmpty ? null : id)));
       case RouteScreen.you:
-        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id, prefs: widget.prefs), notify: widget.notify)));
       case RouteScreen.youPage:
         // The rest of the person's own side: pushed over the business.
         final you = youRouteOf(id);
@@ -611,7 +611,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   /// The person's own chat with a business, over the business (a business
   /// session is its person too).
   Future<void> _openMine(String chat, {String? notice, String draft = '', String? tool}) =>
-      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
+      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice, prefs: widget.prefs), draft: draft, notify: widget.notify, tool: tool));
 
   /// The person's own chat with a person, over the business: a shared
   /// card's Chat opens their chat with that business, and this phone's

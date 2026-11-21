@@ -50,7 +50,7 @@ class CardFrame extends StatelessWidget {
     final line = [
       if (amount != null) breakAfterHyphens(title),
       if (card.wasKobo != null && card.wasKobo! > (amount ?? 0)) 'was ${naira(card.wasKobo!)}',
-      if ((card.note ?? '').isNotEmpty) '“${card.note}”',
+      if (cardNote(card).isNotEmpty) '“${cardNote(card)}”',
     ].join(' · ');
     final children = <Widget>[
       // The kind and reference small, the state as a capsule at the end.

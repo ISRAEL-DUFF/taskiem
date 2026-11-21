@@ -357,7 +357,7 @@ class _YouHomeState extends State<YouHome> with Polling {
   /// A chat opened by its id (from Orders and Discover too), with a tool
   /// over it when asked; the list read again when it is closed.
   Future<void> _openId(String id, {String? notice, String draft = '', String? tool}) async {
-    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, id, notice: notice, now: widget.now), draft: draft, notify: widget.notify, tool: tool));
+    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, id, notice: notice, prefs: widget.prefs, now: widget.now), draft: draft, notify: widget.notify, tool: tool));
     await _chats.load();
   }
 
@@ -775,7 +775,7 @@ class YouSettingsScreen extends StatelessWidget {
   final DateTime Function() now;
 
   Future<void> _openChat(BuildContext context, String id, {String? notice, String draft = '', String? tool}) =>
-      tkPush<void>(context, MyChatScreen(data: MyChatData(auth, id, notice: notice, now: now), draft: draft, notify: notify, tool: tool));
+      tkPush<void>(context, MyChatScreen(data: MyChatData(auth, id, notice: notice, prefs: prefs, now: now), draft: draft, notify: notify, tool: tool));
 
   @override
   Widget build(BuildContext context) {

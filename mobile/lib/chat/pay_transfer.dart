@@ -50,6 +50,7 @@ class TransferNow {
     this.problem = '',
     this.next = '',
     this.paidAt,
+    this.longer = false,
   });
 
   /// none (nothing asked yet), asking, open, part, paid, expired or failed.
@@ -72,6 +73,10 @@ class TransferNow {
   /// Paid: when (as near as it is known).
   final DateTime? paidAt;
 
+  /// The seller's side gives longer than the default: "I need longer" is
+  /// offered (only then).
+  final bool longer;
+
   /// A bill's (GET or POST /v1/bills/{id}/transfer).
   factory TransferNow.ofBill(Bill b) {
     final t = b.transfer;
@@ -91,6 +96,7 @@ class TransferNow {
       next: t.next ?? '',
       // The bill is brought up to date when the payment is counted.
       paidAt: t.state == 'paid' ? (t.paidAt ?? b.mirroredAt) : null,
+      longer: t.longer ?? false,
     );
   }
 
@@ -107,6 +113,7 @@ class TransferNow {
       leftKobo: c.dueKobo,
       expiresAt: c.expiresAt,
       paidAt: c.state == 'paid' ? c.paidAt : null,
+      longer: c.longer ?? false,
     );
   }
 
@@ -126,6 +133,7 @@ class TransferNow {
     problem: problem,
     next: next,
     paidAt: paidAt ?? when,
+    longer: longer,
   );
 }
 
@@ -427,9 +435,6 @@ String spacedNumber(String n) {
 abstract class TransferSource {
   /// The bill's or invoice's number (INV-0042).
   String get number;
-
-  /// Whether "I need longer" is offered.
-  bool get longer => true;
   Future<TransferNow> read();
   Future<TransferNow> ask({bool longer = false});
 }
@@ -603,7 +608,7 @@ class _TransferLiveState extends State<TransferLive> {
       number: widget.source.number,
       busy: _busy,
       onAgain: state == 'part' || state == 'expired' || state == 'failed' ? () => _ask() : null,
-      onLonger: state == 'open' && widget.source.longer ? () => _ask(longer: true) : null,
+      onLonger: state == 'open' && s.longer ? () => _ask(longer: true) : null,
       onNext: state == 'paid' && s.next.isNotEmpty && widget.onNext != null ? () => widget.onNext!(s.next) : null,
       others: state == 'failed' ? widget.others : const [],
     );
@@ -784,13 +789,16 @@ Future<void> payBill(
 }
 
 /// Pay on a customer's own invoice in their chat with a business: by
-/// transfer, or on the invoice's page (when it has one).
+/// transfer, or on the invoice's page (when it has one); the way last used
+/// with that business ([seller], its id) first, as a bill's.
 Future<void> payMyInvoice(
   BuildContext context, {
   required Auth auth,
   required String chat,
   required String invoice,
   required String business,
+  String seller = '',
+  Prefs? prefs,
   String number = '',
   String? url,
   int? dueKobo,
@@ -798,9 +806,10 @@ Future<void> payMyInvoice(
   bool sound = true,
 }) async {
   final page = url ?? '';
-  final ways = ['transfer', if (page.isNotEmpty) 'checkout'];
+  final ways = orderWays(['transfer', if (page.isNotEmpty) 'checkout'], prefs?.payWays[seller]);
   final way = ways.length == 1 ? ways.first : await pickPayWay(context, title: number.isNotEmpty || dueKobo == null ? 'Pay $number' : 'Pay ${naira(dueKobo)}', ways: ways, customer: true);
   if (way == null || !context.mounted) return;
+  unawaited(prefs?.rememberPayWay(seller, way));
   Future<void> open() => openOrSay(context, () => openInBrowser(Uri.parse(page)), 'The invoice didn’t open. Try again.');
   if (way == 'checkout') return open();
   await showTransferSheet(

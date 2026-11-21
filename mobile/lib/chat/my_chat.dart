@@ -25,6 +25,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../app/notify.dart' show PhoneNotifications;
+import '../app/prefs.dart' show Prefs;
 import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -503,9 +504,13 @@ List<MyLine> _merge(List<MyLine> cur, List<MyLine> more) {
 /// seconds while it is seen (its screen polls: not while the app is put
 /// away or another screen covers it).
 class MyChatData extends ChangeNotifier {
-  MyChatData(this.auth, this.id, {this.follow = true, this.notice, DateTime Function()? now}) : now = now ?? DateTime.now;
+  MyChatData(this.auth, this.id, {this.follow = true, this.notice, this.prefs, DateTime Function()? now}) : now = now ?? DateTime.now;
   final Auth auth;
   final String id;
+
+  /// What this phone keeps: the way an invoice was last paid to this
+  /// business comes first on Pay.
+  final Prefs? prefs;
 
   /// Read again every few seconds while seen (the screen polls).
   final bool follow;
@@ -949,6 +954,8 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
         chat: d.id,
         invoice: c.invoiceId!,
         business: d.name,
+        seller: d.chat?.business ?? '',
+        prefs: d.prefs,
         number: c.reference ?? '',
         url: c.url,
         dueKobo: c.totalKobo,
