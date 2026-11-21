@@ -7678,6 +7678,128 @@
     "signup.customer_no_app": {
       "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
       "reviewed": false
+    },
+    "menu.pay.account": {
+      "text": "Pay an account number",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.amount": {
+      "text": "How much?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.bank": {
+      "text": "Which bank is it with?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.for": {
+      "text": "What is it for?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.number": {
+      "text": "What is the account number? 10 digits.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.line": {
+      "text": "Any bank: its name is checked first",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.list": {
+      "text": "Your payments",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.list.line": {
+      "text": "Sent, waiting for an OK, and paid",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payees": {
+      "text": "Your payees",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payees.line": {
+      "text": "The accounts you pay, by name",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.person": {
+      "text": "Pay someone",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.amount": {
+      "text": "How much?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.for": {
+      "text": "What is it for?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.note": {
+      "text": "A few words for their bank statement? Send skip for none.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.who": {
+      "text": "Who are you paying? One of your saved accounts, like @chidi.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.line": {
+      "text": "From your balance, checked with the bank",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.topic.pay": {
+      "text": "Pay",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.check.account": {
+      "text": "An account number is 10 digits, like 0123456789.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not an account number"
+    },
+    "wa.pay.which_bank": {
+      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "reviewed": false
+    },
+    "wa.pay.not": {
+      "text": "Not prepared: {reason}",
+      "reviewed": false
+    },
+    "wa.pay.prepared": {
+      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "reviewed": false
+    },
+    "wa.pay.first": {
+      "text": "This is the first payment to this account.",
+      "reviewed": false
+    },
+    "wa.pay.changed": {
+      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "reviewed": false
+    },
+    "wa.pay.again": {
+      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "reviewed": false
+    },
+    "wa.pay.confirm_link": {
+      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "reviewed": false
+    },
+    "wa.pay.confirm_app": {
+      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "reviewed": false
     }
   }
 }

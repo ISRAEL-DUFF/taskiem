@@ -6307,6 +6307,11 @@ paths:
                   format: uuid
                 payee:
                   type: string
+                account_number:
+                  type: string
+                  description: An account not saved (pay.account), with bank_name; its name is checked with the bank as it is prepared. 409 `name_not_checked` when the bank did not say it.
+                bank_name:
+                  type: string
                 mine:
                   type: boolean
                 amount_kobo:
@@ -45409,6 +45414,10 @@ components:
         tool: {type: string}
         add: {type: boolean}
         page: {type: string}
+        confirm:
+          type: string
+          enum: [passkey]
+          description: What the form's button asks before the command is sent; `passkey` (a payment) opens the single-action step-up.
         fields:
           type: array
           items:

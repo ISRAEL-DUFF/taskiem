@@ -409,9 +409,13 @@ func stepsCheck(kind, v string) string {
 		if !refAnswer.MatchString(v) {
 			return "menu.check.ref"
 		}
-	case "saved", "saved_place":
+	case "saved", "saved_place", "payee":
 		if _, err := saved.Name(v); err != nil {
 			return "menu.check.saved"
+		}
+	case "account":
+		if _, err := saved.AccountNumber(v); err != nil {
+			return "menu.check.account"
 		}
 	}
 	if utf8.RuneCountInString(v) > 150 {

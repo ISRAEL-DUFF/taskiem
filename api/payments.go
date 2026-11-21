@@ -114,14 +114,18 @@ func scanPayment(r pgx.Row) (payment, error) {
 type payIn struct {
 	// SavedID or Payee (its @name) is the business's saved bank account;
 	// Mine, an owner's own (only an owner's, recorded as personal).
-	SavedID     *uuid.UUID `json:"saved_id"`
-	Payee       string     `json:"payee"`
-	Mine        bool       `json:"mine"`
-	AmountKobo  int64      `json:"amount_kobo"`
-	Purpose     string     `json:"purpose"`
-	PurposeNote string     `json:"purpose_note"`
-	Note        string     `json:"note"`
-	From        string     `json:"from"`
+	SavedID *uuid.UUID `json:"saved_id"`
+	Payee   string     `json:"payee"`
+	Mine    bool       `json:"mine"`
+	// AccountNumber and BankName: an account not saved (pay.account),
+	// its name checked with the bank as it is prepared.
+	AccountNumber string `json:"account_number"`
+	BankName      string `json:"bank_name"`
+	AmountKobo    int64  `json:"amount_kobo"`
+	Purpose       string `json:"purpose"`
+	PurposeNote   string `json:"purpose_note"`
+	Note          string `json:"note"`
+	From          string `json:"from"`
 }
 
 // payRefused is a payment refused in words, with a code for the clients.
@@ -182,6 +186,16 @@ type payeeAccount struct {
 // payeeOf reads the saved account a payment is made to: the business's,
 // by id or name; or, for an owner, their own.
 func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bool, in payIn) (payeeAccount, error) {
+	if in.AccountNumber != "" {
+		if in.SavedID != nil || in.Payee != "" || in.Mine {
+			return payeeAccount{}, refusePay(http.StatusBadRequest, "payee", "Pay a saved account or an account number, not both.")
+		}
+		b, err := saved.BankAccount{BankName: in.BankName, AccountNumber: in.AccountNumber}.Clean()
+		if err != nil {
+			return payeeAccount{}, refusePay(http.StatusBadRequest, "account", refusedWords(err))
+		}
+		return payeeAccount{title: "Account " + saved.Masked(b.AccountNumber), bank: b}, nil
+	}
 	o := savedOwner{tenant: tenant, by: person}
 	if in.Mine {
 		if !owner || person == uuid.Nil {
@@ -230,7 +244,7 @@ func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bo
 }
 
 // bankCodeFor is the payee's bank's code in the list rl pays to.
-func (s *Server) bankCodeFor(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, b saved.BankAccount) (string, error) {
+func (s *Server) bankCodeFor(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, b saved.BankAccount, isSaved bool) (string, error) {
 	if b.BankCode != "" && b.CodeFrom == rl.Channel() {
 		return b.BankCode, nil
 	}
@@ -241,7 +255,15 @@ func (s *Server) bankCodeFor(ctx context.Context, tenant uuid.UUID, rl invoicing
 	if code, ok := links.BankCode(banks, b.BankName); ok {
 		return code, nil
 	}
-	return "", refusePay(http.StatusConflict, "bank_unknown", fmt.Sprintf("%s does not pay to %s by that name: choose the bank again on the account in Saved.", railTitle(rl), b.BankName))
+	// As a file's bank is matched ("GTBank", "First Bank").
+	if m, ok := matchBank(bankItems(banks), b.BankName); ok && m.Code != "" {
+		return m.Code, nil
+	}
+	again := "choose the bank again on the account in Saved."
+	if !isSaved {
+		again = "choose the bank from its list."
+	}
+	return "", refusePay(http.StatusConflict, "bank_unknown", fmt.Sprintf("%s does not pay to %s by that name: %s", railTitle(rl), b.BankName, again))
 }
 
 // preparePayment makes a prepared payment: who, where and how much, with
@@ -282,9 +304,29 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	if err != nil {
 		return payment{}, err
 	}
-	code, err := s.bankCodeFor(ctx, tenant, *rl, payee.bank)
+	code, err := s.bankCodeFor(ctx, tenant, *rl, payee.bank, in.AccountNumber == "")
 	if err != nil {
 		return payment{}, err
+	}
+	if in.AccountNumber != "" {
+		// An account not saved: its name checked with the bank now, as the
+		// person confirming must see it.
+		payee.bank.BankCode, payee.bank.CodeFrom = code, rl.Channel()
+		res, problem, err := s.checkWithRail(ctx, tenant, *rl, payee.bank)
+		if w := refusedWords(err); w != "" {
+			return payment{}, refusePay(http.StatusBadRequest, "no_account", w)
+		}
+		if err != nil {
+			return payment{}, err
+		}
+		if res == nil {
+			why := problem.Words
+			if why == "" {
+				why = "The bank did not say the account's name just now: try again in a moment."
+			}
+			return payment{}, refusePay(http.StatusConflict, "name_not_checked", why)
+		}
+		payee.title, payee.checked = res.AccountName, &res.AccountName
 	}
 	var x payment
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {

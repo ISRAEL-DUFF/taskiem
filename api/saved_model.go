@@ -94,7 +94,7 @@ func (s *Server) savedChoices(ctx context.Context, c *chat, kind string) []strin
 	if c.p == nil || c.p.UserID == uuid.Nil {
 		return nil
 	}
-	want := map[string]string{"saved_place": saved.KindPlace, "person": saved.KindPerson}[kind]
+	want := map[string]string{"saved_place": saved.KindPlace, "person": saved.KindPerson, "payee": saved.KindBankAccount}[kind]
 	var out []string
 	seen := map[string]bool{}
 	read := func(o savedOwner) {
@@ -123,7 +123,9 @@ func (s *Server) savedChoices(ctx context.Context, c *chat, kind string) []strin
 	if c.tenant.ID != uuid.Nil {
 		read(savedOwner{tenant: c.tenant.ID, by: c.p.UserID})
 	}
-	if !ownAppChat(c) {
+	// A payee is the business's: an owner's own is paid by its name too,
+	// but not offered.
+	if !ownAppChat(c) && kind != "payee" {
 		read(savedOwner{person: c.p.UserID, by: c.p.UserID})
 	}
 	return out

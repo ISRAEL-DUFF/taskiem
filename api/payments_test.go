@@ -160,6 +160,54 @@ func TestPayOnePerson(t *testing.T) {
 	viewer.must(403, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 100000})
 	viewer.must(403, "GET", "/v1/payments", nil)
 
+	// An account number not saved: its name checked as it is prepared.
+	acct := owner.must(201, "POST", "/v1/payments", map[string]any{"account_number": "0123456789", "bank_name": "Access", "amount_kobo": 300000, "purpose": "stock"})["payment"].(map[string]any)
+	if acct["account_name"] != "BAYO RICE MILLS" || acct["payee"] != "BAYO RICE MILLS" || acct["saved_id"] != nil {
+		t.Fatalf("an account number: %v", acct)
+	}
+	owner.must(400, "POST", "/v1/payments", map[string]any{"account_number": "01234", "bank_name": "Access Bank", "amount_kobo": 300000})
+	owner.must(200, "POST", "/v1/payments/"+acct["id"].(string)+"/cancel", nil)
+
+	// The Pay topic, for those who may pay; its forms confirm with a passkey.
+	var pay map[string]any
+	for _, tp := range owner.must(200, "GET", "/v1/chat/actions", nil)["topics"].([]any) {
+		if tp.(map[string]any)["id"] == "pay" {
+			pay = tp.(map[string]any)
+		}
+	}
+	if pay == nil || pay["actions"].([]any)[0].(map[string]any)["confirm"] != "passkey" {
+		t.Fatalf("the pay topic: %v", pay)
+	}
+	if strings.Contains(stringOf(viewer.must(200, "GET", "/v1/chat/actions", nil)), `"pay.person"`) {
+		t.Errorf("a viewer offered paying")
+	}
+	if ch := owner.must(200, "GET", "/v1/chat/actions/pay.person/choices", nil); !strings.Contains(stringOf(ch), "@bayo") {
+		t.Errorf("payee choices: %v", ch)
+	}
+
+	// From the chat: prepared, never sent, with where to confirm it.
+	w.srv.PublicURL = "https://app.taskiem.test"
+	if said := taskiemSays(t, owner, "send 2,500 to @bayo for a delivery: rice"); !strings.Contains(said, "Ready to pay ₦2,500 to Bayo Rice Mills") ||
+		!strings.Contains(said, "for a delivery") || !strings.Contains(said, "https://app.taskiem.test/payments/") {
+		t.Fatalf("from the chat: %q", said)
+	}
+	if said := taskiemSays(t, owner, "transfer 3k to 0123456789 for stock"); !strings.Contains(said, "Which bank") {
+		t.Fatalf("no bank: %q", said)
+	}
+	if said := taskiemSays(t, owner, "transfer 3k to 0123456789 access for stock bought"); !strings.Contains(said, "BAYO RICE MILLS") {
+		t.Fatalf("an account number from the chat: %q", said)
+	}
+	if said := taskiemSays(t, owner, "pay @nobody 3k"); !strings.Contains(said, "Not prepared") {
+		t.Fatalf("to nobody: %q", said)
+	}
+	if said := taskiemSays(t, viewer, "send 2,500 to @bayo for a delivery"); strings.Contains(said, "Ready to pay") {
+		t.Fatalf("a viewer paid from the chat: %q", said)
+	}
+	var fromChat int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM payments WHERE tenant_id = $1 AND started_from = 'chat' AND status = 'prepared'`, biz).Scan(&fromChat); err != nil || fromChat != 2 {
+		t.Errorf("prepared from the chat: %d %v", fromChat, err)
+	}
+
 	// A workflow prepares one; a person confirms it.
 	out, err := w.srv.PaymentsOps().Prepare(ctx, biz, uuid.Must(uuid.NewV7()), payconn.PrepareIn{Payee: "bayo", AmountKobo: 250000, Purpose: "bill"})
 	if err != nil || out["status"] != "prepared" {
@@ -169,7 +217,7 @@ func TestPayOnePerson(t *testing.T) {
 		t.Errorf("a workflow's to nobody")
 	}
 	list := owner.must(200, "GET", "/v1/payments", nil)["payments"].([]any)
-	if len(list) < 5 || list[0].(map[string]any)["started_from"] != "workflow" {
+	if len(list) < 8 || list[0].(map[string]any)["started_from"] != "workflow" {
 		t.Errorf("list: %v", list)
 	}
 }

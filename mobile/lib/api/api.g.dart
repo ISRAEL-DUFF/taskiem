@@ -4611,9 +4611,12 @@ class ChatTopic {
 }
 
 class ChatAction {
-  const ChatAction({this.add, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
+  const ChatAction({this.add, this.confirm, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
 
   final bool? add;
+  /// What the form's button asks before the command is sent; `passkey` (a
+  /// payment) opens the single-action step-up.
+  final String? confirm;
   final String does;
   final List<ChatField>? fields;
   final String icon;
@@ -4627,6 +4630,7 @@ class ChatAction {
 
   factory ChatAction.fromJson(Map<String, dynamic> j) => ChatAction(
         add: j['add'] == null ? null : j['add'] as bool,
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
         does: j['does'] as String,
         fields: j['fields'] == null ? null : (j['fields'] as List).map((e) => ChatField.fromJson(e as Map<String, dynamic>)).toList(),
         icon: j['icon'] as String,
@@ -4641,6 +4645,7 @@ class ChatAction {
 
   Map<String, dynamic> toJson() => {
         'add': ?add,
+        'confirm': ?confirm,
         'does': does,
         'fields': ?fields?.map((e) => e.toJson()).toList(),
         'icon': icon,
