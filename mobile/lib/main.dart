@@ -31,6 +31,7 @@ import 'chat/storefront_orders_page.dart' show StorefrontOrdersPage, openStorefr
 import 'chat/trade_orders_page.dart' show openTradeOrder;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
+import 'chat/search_everywhere.dart' show openSearchEverywhere;
 import 'chat/today_tab.dart' show TodayTab;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
@@ -662,7 +663,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         (label: 'Chats', icon: 'b-chat', build: _chatsTab),
         // Today (the web's Home); Updates as WhatsApp's (status and
         // channels) is planned for later: docs/spec/mobile-app-updates.md.
-        (label: 'Today', icon: 'b-home', build: (_) => TodayTab(auth: _chats.auth)),
+        (label: 'Today', icon: 'b-home', build: (context) => TodayTab(auth: _chats.auth, onSearch: () => _searchAll(context))),
         (
           label: 'Money',
           icon: 'b-money',
@@ -679,6 +680,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       ],
     );
   }
+
+  /// Search everywhere (menus-everywhere.md §6), over [context]: a chat or
+  /// a customer found opens by its path, as a notification's would.
+  void _searchAll(BuildContext context) => unawaited(openSearchEverywhere(context, _chats, onPath: (p) => unawaited(_openPath(p))));
 
   void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
@@ -702,6 +707,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     return ChatsScreen(
       data: _chats,
       onLinks: () => _links(context),
+      onSearchAll: () => _searchAll(context),
       // You and the person's other businesses (taskiem-for-everyone §6).
       onSwitch: () => showSwitcher(context, widget.auth),
       onProfile: () => _profile(context),

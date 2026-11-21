@@ -131,10 +131,43 @@ func TestChatToolsRouting(t *testing.T) {
 	// person's own Taskiem conversation and to no business.
 	dl, bl := link(buyer, "Dangote Stores"), link(buyer, "BUA Foods Plc")
 	n = len(bodies(dangote))
-	out := buyer.must(202, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@Taskiem status"})
+	// What Taskiem answered stays here as a note only this side sees, and
+	// a send repeated with its client id (its answer lost on the way, the
+	// phone's outbox trying again) answers the same note, never asking
+	// Taskiem again (the loop of 21 November 2026).
+	asked := func() int {
+		h := buyer.must(200, "GET", "/v1/taskiem-chat", nil)
+		ms, _ := h["messages"].([]any)
+		return len(ms)
+	}
+	before := asked()
+	const client = "6f1d8b0e-0a5b-4d3e-9c1f-2b7a4e5d6c01"
+	out := buyer.must(201, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@Taskiem status", "client_id": client})
 	if ms, _ := out["messages"].([]any); len(ms) == 0 {
 		t.Fatalf("Taskiem's answer: %v", out)
 	}
+	note, _ := out["message"].(map[string]any)
+	if note["kind"] != "taskiem" || note["asked"] != "@Taskiem status" || note["body"] == "" || note["mine"] != true {
+		t.Fatalf("the note: %v", note)
+	}
+	after := asked()
+	if after <= before {
+		t.Fatalf("Taskiem's conversation: %d, was %d", after, before)
+	}
+	again := buyer.must(200, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "@Taskiem status", "client_id": client})
+	if again["message"].(map[string]any)["id"] != note["id"] {
+		t.Fatalf("a repeat made another note: %v", again)
+	}
+	if got := asked(); got != after {
+		t.Fatalf("a repeat asked Taskiem again: %d, was %d", got, after)
+	}
+	conv := buyer.must(200, "GET", "/v1/link-chats/"+dl+"/messages", nil)
+	ms, _ := conv["messages"].([]any)
+	if last := ms[len(ms)-1].(map[string]any); last["id"] != note["id"] || last["kind"] != "taskiem" {
+		t.Fatalf("the note in the conversation: %v", last)
+	}
+	// Not a message to reply to or react to.
+	buyer.must(400, "POST", "/v1/link-chats/"+dl+"/messages", map[string]any{"text": "about that", "reply_to": note["id"]})
 	if got := len(bodies(dangote)); got != n {
 		t.Fatalf("Dangote was sent @Taskiem: %d, was %d", got, n)
 	}

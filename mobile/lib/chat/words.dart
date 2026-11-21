@@ -91,6 +91,7 @@ String previewLine(LinkMessage m, String other) {
   final card = m.card;
   if (m.kind == 'card' && card != null) return cardLine(card, m.mine, other);
   if (m.kind == 'diary') return '✓ ${m.body ?? ''}';
+  if (m.kind == 'taskiem') return 'Taskiem: ${m.body ?? ''}';
   final a = m.attachment;
   final words = a != null ? [attachmentLabel(a), m.body ?? ''].where((s) => s.isNotEmpty).join(': ') : (m.body ?? '');
   return (m.mine ? 'You: ' : '') + words;

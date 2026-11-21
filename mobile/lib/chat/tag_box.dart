@@ -24,7 +24,7 @@ typedef TagSources = ({
 });
 
 class TagBox {
-  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed, this.onAttachSaved});
+  TagBox({required this.text, required this.sources, required this.grouped, required this.taskiem, required this.onChange, this.explore, this.onExplore, this.saved, this.onShareSaved, this.savedAsTags = false, this.onSaveNamed, this.onAttachSaved, this.searchRefs});
 
   final TextEditingController text;
   final TagSources Function() sources;
@@ -62,7 +62,30 @@ class TagBox {
   /// typed for it taken out of the box.
   final void Function(TagSuggestion)? onAttachSaved;
 
+  /// Invoices, orders and customers searched on the server, every record
+  /// and not only the newest (menus-everywhere.md §7): the words, the
+  /// kinds ("invoice,bill"), where the last page ended; the next page and
+  /// where it ends ("" for no more).
+  final Future<({List<TagSuggestion> list, String cursor})> Function(String words, String kinds, String? cursor)? searchRefs;
+
   TagQuery? query;
+
+  /// The picker's chip, when one other than the first was pressed.
+  String? _chip;
+
+  /// How many times "Show more" was pressed under this chip.
+  int _more = 0;
+
+  /// What the server found for a chip and its words, and where it ended.
+  ({String key, List<TagSuggestion> list, String cursor})? _found2;
+  bool _searching = false;
+
+  /// The server could not be asked: what the phone keeps is searched.
+  bool offline = false;
+  Timer? _refSoon;
+
+  /// The picker's search box: what is typed after the mark, both ways.
+  final search = TextEditingController();
   final picked = <TagSuggestion>[];
   final overlay = OverlayPortalController();
   final boxTop = LayerLink();
@@ -73,7 +96,11 @@ class TagBox {
   ({String q, List<TagSuggestion> list})? _found;
   Timer? _soon;
 
-  void dispose() => _soon?.cancel();
+  void dispose() {
+    _soon?.cancel();
+    _refSoon?.cancel();
+    search.dispose();
+  }
 
   /// The floating picker shut, when it is open: a box with no floating
   /// picker (a chat offering only saved texts) never placed it.
@@ -93,7 +120,14 @@ class TagBox {
     final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
     final q = tagQuery(v.text, caret);
     if (q == query) return;
+    // Another tag begun: the picker starts again on its own chip.
+    if (q == null || query == null || q.start != query!.start || q.mark != query!.mark || q.kind != query!.kind) {
+      _chip = null;
+      _more = 0;
+    }
     query = q;
+    if (q != null && search.text != q.query) search.text = q.query;
+    _askRefs();
     if (q?.mark == '@' || (q?.mark == '/' && q?.kind == null)) saved?.want();
     _ask();
     onChange();
@@ -131,6 +165,7 @@ class TagBox {
       final found = suggest(saved?.list ?? const [], q.query).take(4).toList();
       return [if (found.isNotEmpty) (label: 'Saved', items: found)];
     }
+    if (floats && chip != 'all') return [_chipGroup(q, chip)];
     if (q.mark == '/') {
       final kind = q.kind ?? '';
       return [(label: refLabel[kind] ?? '', items: suggest(src.refs[kind] ?? const [], q.query))];
@@ -155,6 +190,134 @@ class TagBox {
       ])
         if (g.items.isNotEmpty) g,
     ]);
+  }
+
+  /// The chip the picker shows: the one pressed, else the tag's own.
+  String get chip => _chip ?? (query?.mark == '@' ? 'all' : tagChipOf(query?.kind));
+
+  /// The picker's chips here: the tag's own, and every kind with something
+  /// to offer (menus-everywhere.md §7). None for "/mum".
+  List<String> chips() {
+    final q = query;
+    if (q == null || !floats || (q.mark == '/' && q.kind == null)) return const [];
+    final src = sources();
+    return [
+      for (final k in tagChipLabels.keys)
+        if (k == chip ||
+            switch (k) {
+              'all' => q.mark == '@',
+              'saved' => (saved?.list ?? const []).isNotEmpty,
+              _ => _local(k, src).isNotEmpty,
+            })
+          k,
+    ];
+  }
+
+  /// A chip pressed: its list, from its first six.
+  void pickChip(String k) {
+    if (k == chip) return;
+    _chip = k;
+    _more = 0;
+    if (k == 'saved') saved?.want();
+    _askRefs();
+    onChange();
+  }
+
+  /// "/bill" and "/purchase" keep to their own kind until a chip is pressed.
+  String? get _narrow => _chip == null && (query?.kind == 'bill' || query?.kind == 'purchase') ? query!.kind : null;
+
+  /// The kinds the chip searches on the server.
+  String? get _kinds => _narrow ?? tagChipKinds[chip];
+
+  /// What a chip offers from what is on the phone.
+  List<TagSuggestion> _local(String k, TagSources src) => switch (k) {
+    // "@" offers every item (suppliers' too); "/product" our own.
+    'product' => query?.mark == '@' ? src.items : src.refs['product'] ?? src.items,
+    'service' => src.services,
+    'invoice' || 'order' => src.refs[_narrow ?? k] ?? const [],
+    'customer' => src.refs['customer'] ?? const [],
+    'business' => src.businesses,
+    'saved' => saved?.list ?? const [],
+    _ => const [],
+  };
+
+  /// The server's answer for the chip and the words now, when it came.
+  ({String key, List<TagSuggestion> list, String cursor})? get _served {
+    final q = query;
+    final f = _found2;
+    return q != null && f != null && f.key == '${_narrow ?? chip}|${q.query.trim().toLowerCase()}' ? f : null;
+  }
+
+  /// One chip's list: six, and six more for each "Show more".
+  TagGroup _chipGroup(TagQuery q, String k) {
+    final served = _served;
+    final all = served != null ? served.list : suggest(_local(k, sources()), q.query, limit: null);
+    // Headed as "/invoice" heads it ("Invoices and bills", "Bills").
+    return (label: refLabel[_narrow ?? k] ?? tagChipLabels[k] ?? '', items: all.take(6 * (_more + 1)).toList());
+  }
+
+  /// Whether the chip has more than it shows.
+  bool get hasMore {
+    final q = query;
+    if (q == null || !floats || chip == 'all') return false;
+    final served = _served;
+    final all = served != null ? served.list.length : suggest(_local(chip, sources()), q.query, limit: null).length;
+    return all > 6 * (_more + 1) || (served != null && served.cursor.isNotEmpty);
+  }
+
+  /// "Show more": six more, the server's next page when they run out.
+  Future<void> showMore() async {
+    _more++;
+    onChange();
+    final served = _served;
+    final look = searchRefs;
+    if (look == null || served == null || served.cursor.isEmpty || served.list.length >= 6 * (_more + 1) || _searching) return;
+    _searching = true;
+    try {
+      final next = await look(query!.query.trim(), _kinds!, served.cursor);
+      if (identical(_found2, served)) _found2 = (key: served.key, list: [...served.list, ...next.list], cursor: next.cursor);
+    } on Object {
+      offline = true;
+    } finally {
+      _searching = false;
+    }
+    onChange();
+  }
+
+  /// Invoices, orders or customers under their chip: asked of the server
+  /// for the words typed, a moment after the last key.
+  void _askRefs() {
+    _refSoon?.cancel();
+    final look = searchRefs;
+    final q = query;
+    final kinds = _kinds;
+    if (look == null || q == null || !floats || kinds == null) return;
+    final words = q.query.trim().toLowerCase();
+    final key = '${_narrow ?? chip}|$words';
+    if (_found2?.key == key) return;
+    _refSoon = Timer(const Duration(milliseconds: 250), () async {
+      try {
+        final got = await look(words, kinds, null);
+        _found2 = (key: key, list: got.list, cursor: got.cursor);
+        offline = false;
+      } on Object {
+        offline = true;
+      }
+      onChange();
+    });
+  }
+
+  /// The search box typed in: its words in the message box, after the mark
+  /// (and "/invoice "), so both say the same.
+  void searchFor(String words) {
+    final q = query;
+    if (q == null) return;
+    final v = text.value;
+    final head = q.mark == '/' ? RegExp(r'^[a-z]+[/ ]', caseSensitive: false).firstMatch(v.text.substring(q.start + 1))?.end ?? 0 : 0;
+    final from = q.start + 1 + head;
+    final end = (from + q.query.length).clamp(0, v.text.length);
+    final next = v.text.substring(0, from) + words + v.text.substring(end);
+    text.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: from + words.length));
   }
 
   /// Save "@mum"… under Saved, once the saved things are read and none
@@ -235,7 +398,7 @@ class TagBox {
       share(s);
       return;
     }
-    final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name);
+    final next = s.kind == 'saved' && body != null ? insertWords(v.text, q, caret < end ? end : caret, body) : insertTag(v.text, q, caret < end ? end : caret, s.name, kind: s.kind);
     if (s.kind != 'taskiem' && (s.kind != 'saved' || (savedAsTags && body == null))) picked.add(s);
     _picking = true;
     text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
@@ -312,7 +475,20 @@ class _Floating extends StatelessWidget {
     final q = box.query;
     if (q == null || !box.floats) return const SizedBox.shrink();
     final groups = box.groups();
-    if (groups.every((g) => g.items.isEmpty)) return const SizedBox.shrink();
-    return TagPicker(query: q.query, groups: groups, first: box.first(groups), onPick: box.pick);
+    // Empty under the tag's own words with no chips to try: nothing shown.
+    if (groups.every((g) => g.items.isEmpty) && box.chips().length < 2) return const SizedBox.shrink();
+    return TagPicker(
+      query: q.query,
+      groups: groups,
+      first: box.first(groups),
+      onPick: box.pick,
+      search: box.search,
+      onSearch: box.searchFor,
+      chips: box.chips(),
+      chip: box.chip,
+      onChip: box.pickChip,
+      more: box.hasMore ? box.showMore : null,
+      offline: box.offline && tagChipKinds.containsKey(box.chip),
+    );
   }
 }

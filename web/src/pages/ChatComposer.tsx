@@ -9,7 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
-import { getBlob } from "../api";
+import { get, getBlob } from "../api";
+import { MenuCard, useActionRun } from "./ChatMenu";
+import { announce } from "../lib/outboxStore";
+import type { LinkMessage } from "../lib/linkchat";
+import { refSuggestion, type ChatRef } from "../lib/refs";
 import { savedFileURL } from "../lib/saved";
 import type { Suggestion } from "../lib/mentions";
 import { toast } from "../toast";
@@ -134,6 +138,10 @@ export type ComposerOptions<R> = {
   placeholder?: string;
   /** Chat tools: the tools button, and "/". */
   tools?: boolean;
+  /** A row of the tools panel's menu pressed, in the Taskiem chat: said as
+   * a row of the chat's own menu. Elsewhere it is done through the Taskiem
+   * chat and answered in a sheet (menus-everywhere.md §3). */
+  onAction?: (reply: string, text: string) => void;
   /** Where the tools are open: "taskiem" or a link. */
   diaryWhere?: string;
   /** A tool saved a change: what is newer is shown. */
@@ -174,6 +182,18 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     // (saved objects S1): the chat's own checks and sending.
     {
       ...o.sources,
+      // Invoices, orders and customers searched on the server, every
+      // record (menus-everywhere.md §7): a business's conversation only
+      // what is between us.
+      searchRefs: o.grouped
+        ? async (words, kinds, cursor) => {
+            const qs = new URLSearchParams({ q: words, kind: kinds, limit: "20" });
+            if (cursor) qs.set("cursor", cursor);
+            const path = o.scope ? `/v1/link-chats/${encodeURIComponent(o.scope.link)}/refs` : "/v1/chat-refs";
+            const r = await get<{ refs: ChatRef[]; cursor?: string }>(`${path}?${qs}`);
+            return { list: r.refs.map((x) => refSuggestion(x)), cursor: r.cursor ?? "" };
+          }
+        : undefined,
       attachSaved: (s: Suggestion) =>
         void getBlob(savedFileURL(s.savedOwner ?? "mine", s.id)).then(
           (b) => void choose(new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type })),
@@ -381,7 +401,21 @@ export function useComposer<R>(o: ComposerOptions<R>) {
         setFileError(new Error(o.rules.manyWords));
     },
   };
+  // A row of the tools panel's menu (menus-everywhere.md §3, §4): said in
+  // the Taskiem chat, or done through it, answered in a sheet, and in a
+  // business's conversation left as a note only we see.
+  const action = useActionRun(o.scope?.link, (m) => o.scope && announce(o.scope.link, m as LinkMessage));
+  useEffect(() => {
+    if (action.error) toast(action.error, "error");
+  }, [action.error]);
+  const runAction = (reply: string, text: string) => {
+    closeTools();
+    if (o.onAction) return o.onAction(reply, text);
+    action.run(reply, text);
+  };
   return {
+    runAction,
+    answerSheet: action.sheet,
     o,
     text,
     setText,
@@ -411,6 +445,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     dropProps,
     toolsShown,
     toolsQuery: slash?.[1] ?? "",
+    slashed: !!slash,
     setToolsOpen,
     closeTools,
     toolMatches,
@@ -606,8 +641,20 @@ export function ComposerView<R>({
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
               business={c.o.scope?.name}
               extras={c.o.extras}
+              slashed={c.slashed}
+              menu={
+                <MenuCard
+                  menu={{}}
+                  open
+                  head={false}
+                  busy={false}
+                  onReply={c.runAction}
+                  openTool={(k, from, start) => c.openTool(k, from, start)}
+                />
+              }
             />
           )}
+          {c.answerSheet}
           {c.o.tools && (
             <button
               type="button"

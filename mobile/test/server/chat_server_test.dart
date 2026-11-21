@@ -202,7 +202,7 @@ void main() {
     });
 
     String last() => taskiem.messages!.lastWhere((x) => !x.m.inbound).m.text;
-    TaskiemChatMessagesItem lastItem() => taskiem.messages!.lastWhere((x) => !x.m.inbound).m;
+    TaskiemMessage lastItem() => taskiem.messages!.lastWhere((x) => !x.m.inbound).m;
 
     test('sets up their page, one question at a time, and Taskiem says what publishing needs', () async {
       await taskiem.say(text: 'make my page');

@@ -71,13 +71,72 @@ test("the switch, and @Taskiem in a business conversation", async ({ browser }) 
   const pane = buyer.getByTestId("chat-pane");
   await pane.getByLabel("Message").fill("@Taskiem status");
   await pane.getByLabel("Message").press("Enter");
-  const note = buyer.locator(".toast", { hasText: "Only Taskiem saw that" });
+  // Taskiem's answer stays here as a note only we see (21 November 2026),
+  // with the way to the Taskiem chat; nothing went to the business.
+  const note = pane.getByTestId("taskiem-note");
   await expect(note).toBeVisible();
-  await expect(note.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/chat?with=taskiem");
+  await expect(note.getByText("You asked: status", { exact: true })).toBeVisible();
+  await expect(note.getByRole("link", { name: "Open Taskiem chat" })).toHaveAttribute("href", "/chat?with=taskiem");
+  await expect(buyer.locator(".toast", { hasText: "Only Taskiem saw that" })).toHaveCount(0);
   await expect(pane.locator('[data-testid="chat-message"][data-mine="true"]')).toHaveCount(0);
+  await axeBoth(buyer, "A Taskiem note in a conversation");
+  // Opened again: still there, once.
+  await buyer.reload();
+  await expect(buyer.getByTestId("chat-pane").getByTestId("taskiem-note")).toHaveCount(1);
   const theirs = (await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json()).messages as { kind: string }[];
   expect(theirs.filter((m) => m.kind !== "card")).toEqual([]);
 });
+
+// Menus everywhere, E2 (menus-everywhere.md §3, §4): the tools panel of a
+// business's conversation has a second view, the topics' menu; a row is
+// done through the Taskiem chat, its answer in a sheet, and what Taskiem
+// said is left in the conversation as a note only we see.
+for (const width of [390, 360])
+  test(`the tools panel's menu in a business's conversation, ${width} px`, async ({ browser }) => {
+    const { seller, buyer, link } = await linked(browser);
+    await buyer.setViewportSize({ width, height: 844 });
+    const on = await buyer.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });
+    expect(on.status()).toBe(200);
+    await buyer.goto(`/chat?with=${link}`);
+    const pane = buyer.getByTestId("chat-pane");
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    const panel = buyer.getByTestId("tools-panel");
+    await panel.getByRole("group", { name: "Show" }).getByRole("button", { name: "What would you like to do?" }).click();
+    const tile = panel.getByRole("button", { name: "Staff and tasks" });
+    await expect(tile).toBeVisible();
+    await axeBoth(buyer, "the tools panel's menu");
+    expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await tile.click();
+    await panel.getByRole("button", { name: /^Your tasks/ }).click();
+    const answer = buyer.getByTestId("action-answer");
+    await expect(answer).toBeVisible();
+    await axeBoth(buyer, "an action's answer");
+    await answer.getByRole("button", { name: "Done" }).click();
+    await expect(answer).toHaveCount(0);
+    // The note, here; the business sees nothing of it.
+    const note = pane.getByTestId("taskiem-note");
+    await expect(note).toBeVisible();
+    await expect(note.getByText("You asked: Your tasks", { exact: true })).toBeVisible();
+    const theirs = (await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json()).messages as { kind: string }[];
+    expect(theirs.filter((m) => m.kind === "taskiem")).toEqual([]);
+    // Opened again: on the view used last. A row that takes values: its
+    // form, typed in without the panel going, then done with them.
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await panel.getByRole("button", { name: "Staff and tasks" }).click();
+    await panel.getByRole("button", { name: /^Give someone a task/ }).click();
+    const form = buyer.getByTestId("taskiem-action-form");
+    await form.getByLabel("Who is it for?").fill("Tunde");
+    await form.getByLabel("What should they do, and by when?").fill("count the float by 7am");
+    await form.getByRole("button", { name: "Give someone a task" }).click();
+    await expect(answer).toBeVisible();
+    await expect(pane.getByTestId("taskiem-note")).toHaveCount(2);
+    await expect(pane.getByTestId("taskiem-note").last()).toContainText("Give someone a task: Tunde, count the float by 7am");
+    // "/" typed is the tools, never the menu, though the menu was used last.
+    await pane.getByLabel("Message").fill("/");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("button", { name: "What would you like to do?" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Staff and tasks" })).toHaveCount(0);
+  });
 
 const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 const stock = {

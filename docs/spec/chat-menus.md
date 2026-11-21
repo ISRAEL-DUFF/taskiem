@@ -228,7 +228,13 @@ Measured in the demo (a 390 px wide phone): a topic's menu (a head, five rows, a
 | `questions` | The first question appears in the chat (§7) |
 | `page` | The page opens (in the app where it has the screen; else the web, as `openToolPage` does) |
 
-Once a row is pressed, the card **folds** to one line ("Riders: Add a rider") with "Show again" to unfold it, as tagged cards fold (17 November 2026); a newer menu folds it too (§6.1). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
+Once a row is pressed, the card **folds** to one line saying what happened, and does not unfold (21 November 2026: "Show again" kept a finished menu alive and in the way):
+
+- **"Riders · You chose Add a rider"**: a row pressed, or a row that opened a tool or a page here.
+- **"Riders · Closed, nothing done"**: its **✕**, in the card's head, so a menu can be put away without choosing.
+- **"Riders · Not used"**: the person typed something else, or a newer menu came (§6.1). A menu stays open only while nothing has been said since it.
+
+How it ended is kept with the menu (`chat_history.menu_done`, migration 00500: `chose:<id>`, `closed`, `passed`) and given in its text as `done` and `chose`, so it folds the same after a reload and on another device. The server ends a person's open menus when they next say something (`settleMenus`); the ✕, and a row that opens a tool or a page (nothing sent to Taskiem), tell it with `POST /v1/taskiem-chat/menus/{id}/close` (`{"chose": id}` for a row). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
 
 The card passes the app's rules (`mobile/CLAUDE.md`): light and dark, 340 to 390 wide, large text with nothing cut off, every row 48 px and labelled for screen readers ("Add a rider. Name, phone and the areas they cover. Button."). On the web it passes axe at 390 and 360 in both themes.
 

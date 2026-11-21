@@ -38,7 +38,7 @@ import {
   type Reaction,
   logoSrc,
 } from "../lib/linkchat";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
 import { ContactInfo } from "./ContactInfo";
@@ -1041,6 +1041,29 @@ function CardFrame({
 /** Diary lines (chat-tools.md §3): changes we made ourselves, told as
  * lines; several made close together are one line, the newest, under
  * which the earlier ones unfold. */
+/** What Taskiem answered a "@Taskiem" typed in this conversation, kept on
+ * our side only (the business never sees it): the words asked, the
+ * answer, and the way to the Taskiem chat. */
+function TaskiemNote({ m }: { m: LinkMessage }) {
+  const asked = (m.asked ?? "").replace(/(^|\s)@taskiem\b[,:]?\s*/i, "$1").trim();
+  return (
+    <div className="tk-taskiem-note" data-testid="taskiem-note" data-msg={m.id}>
+      <div className="tk-taskiem-note-head">
+        <span className="tk-taskiem-note-mark" aria-hidden="true">
+          <TaskiemMark />
+        </span>
+        <span className="tk-taskiem-note-who">Taskiem · only you see this</span>
+        <span className="tk-taskiem-note-when">{fmtTime(m.created_at)}</span>
+      </div>
+      {asked && <p className="tk-taskiem-note-asked">You asked: {asked}</p>}
+      <p className="tk-taskiem-note-answer">{m.body}</p>
+      <Link className="tk-taskiem-note-open" to="/chat?with=taskiem">
+        Open Taskiem chat
+      </Link>
+    </div>
+  );
+}
+
 function DiaryRun({
   run,
   other,
@@ -1971,7 +1994,9 @@ export function ConversationPane({
         unread={unread}
         empty={`No messages yet. Say hello to ${conv.name}.`}
         render={(m, { first }) =>
-          runs.member.has(m.id) ? null : runs.lead.has(m.id) ? (
+          runs.member.has(m.id) ? null : m.kind === "taskiem" ? (
+            <TaskiemNote m={m} />
+          ) : runs.lead.has(m.id) ? (
             <DiaryRun
               run={runs.lead.get(m.id) ?? [m]}
               other={conv.name}

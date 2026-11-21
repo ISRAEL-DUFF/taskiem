@@ -7537,6 +7537,11 @@ paths:
                 properties:
                   message:
                     $ref: '#/components/schemas/LinkMessage'
+                  messages:
+                    type: array
+                    description: With chat tools on, a message with @Taskiem goes to the sender's own Taskiem conversation and to no business; these are what Taskiem said there, and the message is the note (kind taskiem) it left in this conversation, on our side only. The same send repeated (its client_id) answers that note (200) and never asks Taskiem again.
+                    items:
+                      $ref: '#/components/schemas/TaskiemMessage'
                   also:
                     type: array
                     description: With chat tools on, the other linked businesses the message named, each sent it as its own message in our conversation with it.
@@ -7554,12 +7559,6 @@ paths:
                           type: boolean
                         reason:
                           type: string
-        '202':
-          description: With chat tools on, a message with @Taskiem goes to the sender's own Taskiem conversation and to no business; the answer is what Taskiem said there
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskiemChat'
         '200':
           description: The same send repeated (its client_id), answered with the first message and not sent again
           content:
@@ -8198,6 +8197,30 @@ paths:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+        description: Words to search for, each found at the start of a word of the number or reference, who it is with, its kind or its status ("unpaid", "overdue", "delivered"); a number like 0104 anywhere in a reference.
+      - name: kind
+        in: query
+        schema:
+          type: string
+        description: One or more of invoice, bill, order, purchase, customer, comma separated; all when none.
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: The cursor an earlier search answered, for the ones after.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+        description: How many at most (20 when none)
       responses:
         '200':
           description: The things
@@ -8212,6 +8235,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ChatRef'
+                  cursor:
+                    type: string
+                    description: With q, kind, cursor or limit given, a search of every record (not only the newest), newest first; this is where the next page starts, empty when there is no more.
         default:
           $ref: '#/components/responses/Error'
   /v1/chat/actions:
@@ -8239,6 +8265,59 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ChatTopic'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/chat/actions/{id}/run:
+    post:
+      operationId: runChatAction
+      tags:
+      - Account
+      summary: Do an action from a menu outside the Taskiem chat
+      description: 'A row of a menu pressed outside the Taskiem chat (docs/spec/menus-everywhere.md §3): the grid panel of a business''s conversation, Today. It is read in the Taskiem chat as the row pressed there would be (with values, as its form saved), and kept in that chat''s history; the answer is what Taskiem said. An action that takes values needs them (400): its questions are only asked in the Taskiem chat. With link, what Taskiem said is also kept in that business''s conversation as a note only this side sees (kind taskiem). A person only: not an API key.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                values:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: The action's values by key, as its form gives them
+                link:
+                  type: string
+                  format: uuid
+                  description: The business's conversation it was pressed in
+      responses:
+        '200':
+          description: What Taskiem said
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskiemMessage'
+                  note:
+                    $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
   /v1/chat/actions/{id}/choices:
@@ -8369,6 +8448,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskiemChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/taskiem-chat/menus/{id}/close:
+    post:
+      operationId: closeChatMenu
+      tags:
+      - Links
+      summary: Close a menu in the Taskiem chat
+      description: 'A menu''s close button (docs/spec/chat-menus.md): it folds to a line saying it was closed with nothing done; with chose, a row that opened a tool or a page in the app, so it folds to the row chosen. A menu that already ended (a row chosen, or the person said something else) stays as it ended. How a menu ended is in its text as done (chose, closed or passed) and chose (the action''s id). A person only: not an API key.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                chose:
+                  type: string
+                  description: The id of the action whose row opened a tool or a page
+      responses:
+        '204':
+          description: Closed
         default:
           $ref: '#/components/responses/Error'
   /v1/taskiem-chat/files:
@@ -8799,6 +8913,29 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+        description: Words to search for, each found at the start of a word of the number or reference, who it is with, its kind or its status ("unpaid", "overdue", "delivered"); a number like 0104 anywhere in a reference.
+      - name: kind
+        in: query
+        schema:
+          type: string
+        description: One or more of invoice, bill, order, purchase, customer, comma separated; all when none.
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: The cursor an earlier search answered, for the ones after.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+        description: How many at most (20 when none)
       responses:
         '200':
           description: The invoices and orders
@@ -8813,6 +8950,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ChatRef'
+                  cursor:
+                    type: string
+                    description: With q, kind, cursor or limit given, a search of every record (not only the newest), newest first; this is where the next page starts, empty when there is no more.
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/card:
@@ -44463,6 +44603,40 @@ components:
           type: string
         seller_item:
           type: string
+    TaskiemMessage:
+      type: object
+      additionalProperties: false
+      required: [id, channel, inbound, kind, text, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [whatsapp, telegram, slack, web]
+        inbound:
+          type: boolean
+          description: The person said it (else Taskiem did)
+        kind:
+          type: string
+          enum: [text, button, voice, photo, form, location, diary, chart, menu]
+        text:
+          type: string
+        buttons:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [title]
+            properties:
+              id:
+                type: string
+                description: Only on an answer just given; press it by sending it as reply
+              title:
+                type: string
+        created_at:
+          type: string
+          format: date-time
     TaskiemChat:
       type: object
       additionalProperties: false
@@ -44471,39 +44645,7 @@ components:
         messages:
           type: array
           items:
-            type: object
-            additionalProperties: false
-            required: [id, channel, inbound, kind, text, created_at]
-            properties:
-              id:
-                type: string
-                format: uuid
-              channel:
-                type: string
-                enum: [whatsapp, telegram, slack, web]
-              inbound:
-                type: boolean
-                description: The person said it (else Taskiem did)
-              kind:
-                type: string
-                enum: [text, button, voice, photo, form, location, diary, chart, menu]
-              text:
-                type: string
-              buttons:
-                type: array
-                items:
-                  type: object
-                  additionalProperties: false
-                  required: [title]
-                  properties:
-                    id:
-                      type: string
-                      description: Only on an answer just given; press it by sending it as reply
-                    title:
-                      type: string
-              created_at:
-                type: string
-                format: date-time
+            $ref: '#/components/schemas/TaskiemMessage'
     LinkMention:
       type: object
       additionalProperties: false
@@ -47412,10 +47554,13 @@ components:
           description: We sent it (a card, we acted)
         kind:
           type: string
-          enum: [text, card, diary]
-          description: A diary line is a change we made with a chat tool, on our side only
+          enum: [text, card, diary, taskiem]
+          description: A diary line is a change we made with a chat tool, on our side only. A taskiem note is what Taskiem answered a "@Taskiem" typed in this conversation, on our side only (asked, and the answer as body)
         body:
           type: string
+        asked:
+          type: string
+          description: On a taskiem note, the words asked of Taskiem
         sender_name:
           type: string
           description: The first name of the member who wrote it

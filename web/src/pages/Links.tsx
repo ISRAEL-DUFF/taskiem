@@ -557,6 +557,10 @@ export function ChatPage() {
             {me?.tenant_name && (
               <span className="chat-list-biz">{me.tenant_name}</span>
             )}
+            {/* Search everywhere (menus-everywhere.md §6). */}
+            <Link className="head-search" to="/search" aria-label="Search everything">
+              <Icon name="search" />
+            </Link>
             {linksOn && (
               <button
                 type="button"

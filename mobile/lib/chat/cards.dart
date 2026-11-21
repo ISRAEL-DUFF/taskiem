@@ -473,6 +473,69 @@ class CardViewRow extends StatelessWidget {
   }
 }
 
+/// Conversation.tsx TaskiemNote: what Taskiem answered a "@Taskiem" typed
+/// in a business's conversation, kept on our side only (the business never
+/// sees it): the words asked, the answer, and the way to the Taskiem chat.
+class TaskiemNote extends StatelessWidget {
+  const TaskiemNote({super.key, required this.asked, required this.answer, required this.at, this.onOpen});
+
+  final String asked;
+  final String answer;
+  final DateTime at;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final words = asked.replaceFirstMapped(RegExp(r'(^|\s)@taskiem\b[,:]?\s*', caseSensitive: false), (m) => m[1] ?? '').trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: LayoutBuilder(
+        builder: (context, box) => Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: box.maxWidth * 0.92),
+            child: Container(
+              key: const ValueKey('taskiem-note'),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+              decoration: BoxDecoration(
+                color: t.panel,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: t.border),
+                boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 2), blurRadius: 8)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(color: t.brand, shape: BoxShape.circle),
+                        child: Center(child: TkIcon('sparkle', size: 14, color: t.brandDark)),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Taskiem · only you see this', style: tkText(size: 12, weight: 600, color: t.muted))),
+                      Text(clock(at), style: tkText(size: 12, color: t.muted)),
+                    ],
+                  ),
+                  if (words.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('You asked: $words', style: tkText(size: 13, color: t.muted)),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(answer, style: tkText(size: 14, color: t.text)),
+                  if (onOpen != null) TkLink(label: 'Open Taskiem chat', bold: true, onTap: onOpen),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// kit.tsx DiaryLine: a change we made ourselves, told as a line in a
 /// soft pill, with a tick; "and 2 earlier changes" unfolds the rest.
 class DiaryLine extends StatelessWidget {

@@ -17,15 +17,19 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -606,4 +610,111 @@ func (s *Server) formDone(ctx context.Context, c *chat, rest string) error {
 		cmd = a.Make(values)
 	}
 	return s.waUnderstood(ctx, c, cmd)
+}
+
+// menuDoneRe is how a menu ended, as kept: chose:<action id>, closed, or
+// passed.
+var menuDoneRe = regexp.MustCompile(`^(closed|passed|chose:[a-z]+\.[a-z_]+)$`)
+
+// menuWithDone is a menu message's JSON with how it ended in it ("done":
+// chose, closed or passed; "chose": the action's id), so it folds to a
+// line saying so. Any other message is as it is.
+func menuWithDone(kind, text string, done *string) string {
+	if kind != "menu" || done == nil || !menuDoneRe.MatchString(*done) {
+		return text
+	}
+	var m map[string]any
+	if json.Unmarshal([]byte(text), &m) != nil || m == nil {
+		return text
+	}
+	how, id, _ := strings.Cut(*done, ":")
+	m["done"] = how
+	if id != "" {
+		m["chose"] = id
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return text
+	}
+	return string(b)
+}
+
+// settleMenus ends the person's open menus in the Taskiem chat once they
+// say something (chat-menus.md: a menu folds when you type): a row pressed
+// (act:, form:) is what the newest menu chose; every other open menu, and
+// the newest when they said something else, passed.
+func (s *Server) settleMenus(ctx context.Context, p *Principal, msg whatsapp.Inbound) {
+	if p.UserID == uuid.Nil {
+		return
+	}
+	chose := ""
+	if id, ok := strings.CutPrefix(msg.Reply, "act:"); ok {
+		chose = id
+	} else if rest, ok := strings.CutPrefix(msg.Reply, "form:"); ok {
+		chose, _, _ = strings.Cut(rest, ":")
+	}
+	if _, ok := chatActionByID(chose); !ok || !menuDoneRe.MatchString("chose:"+chose) {
+		chose = ""
+	}
+	ctx = context.WithoutCancel(ctx)
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if chose != "" {
+			if _, err := tx.Exec(ctx, `UPDATE chat_history SET menu_done = $3 WHERE id = (
+				SELECT id FROM chat_history WHERE tenant_id = $1 AND user_id = $2 AND kind = 'menu' AND menu_done IS NULL AND expires_at > now()
+				ORDER BY created_at DESC, id DESC LIMIT 1)`, p.TenantID, p.UserID, "chose:"+chose); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx, `UPDATE chat_history SET menu_done = 'passed'
+			WHERE tenant_id = $1 AND user_id = $2 AND kind = 'menu' AND menu_done IS NULL`, p.TenantID, p.UserID)
+		return err
+	})
+	if err != nil {
+		s.Logger.Warn("chat menus: not settled", "tenant", p.TenantID, "err", err)
+	}
+}
+
+// closeMenu is POST /v1/taskiem-chat/menus/{id}/close: the menu's ✕, it
+// folds to "closed, nothing done"; or, with {"chose": id}, a row that
+// opened a tool or a page in the app (nothing sent to Taskiem). A menu that
+// already ended stays as it ended.
+func (s *Server) closeMenu(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil || p.UserID == uuid.Nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	// A row that opened a tool or a page here (no message sent): the menu
+	// chose it.
+	var in struct {
+		Chose string `json:"chose"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	done := "closed"
+	if in.Chose != "" {
+		if _, ok := chatActionByID(in.Chose); !ok || !menuDoneRe.MatchString("chose:"+in.Chose) {
+			s.fail(w, r, fmt.Errorf("%w: no such action", errBadRequest))
+			return
+		}
+		done = "chose:" + in.Chose
+	}
+	var found bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(r.Context(), `SELECT true FROM chat_history WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND kind = 'menu' AND expires_at > now()`,
+			id, p.TenantID, p.UserID).Scan(&found); err != nil {
+			return err
+		}
+		_, err := tx.Exec(r.Context(), `UPDATE chat_history SET menu_done = $3 WHERE id = $1 AND tenant_id = $2 AND menu_done IS NULL`, id, p.TenantID, done)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

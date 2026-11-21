@@ -76,7 +76,7 @@ export function reactionWords(r: Reaction): string {
 export interface Quote {
   pair_id: string;
   mine: boolean;
-  kind: "text" | "card" | "diary";
+  kind: "text" | "card" | "diary" | "taskiem";
   body?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -103,9 +103,13 @@ export interface LinkMessage {
   id: string;
   link: string;
   mine: boolean;
-  /** diary: a change we made with a chat tool, on our side only. */
-  kind: "text" | "card" | "diary";
+  /** diary: a change we made with a chat tool, on our side only.
+   * taskiem: what Taskiem answered a "@Taskiem" typed here, on our side
+   * only (asked, and the answer as body). */
+  kind: "text" | "card" | "diary" | "taskiem";
   body?: string;
+  /** On a taskiem note, the words asked of Taskiem. */
+  asked?: string;
   sender_name?: string;
   card?: DocCard;
   attachment?: Attachment;
@@ -258,6 +262,7 @@ export function previewLine(
 ): string {
   if (m.kind === "card" && m.card) return cardLine(m.card, m.mine, other);
   if (m.kind === "diary") return `✓ ${m.body ?? ""}`;
+  if (m.kind === "taskiem") return `Taskiem: ${m.body ?? ""}`;
   const words = m.attachment
     ? [attachmentLabel(m.attachment), m.body].filter(Boolean).join(": ")
     : (m.body ?? "");

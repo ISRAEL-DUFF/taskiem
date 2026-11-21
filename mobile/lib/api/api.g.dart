@@ -268,8 +268,8 @@ class TaskiemApi {
   }
 
   /// What "/" may tag in the Taskiem chat (`GET /v1/chat-refs`)
-  Future<ChatRefsResponse> chatRefs() async {
-    final j = await _t.send('GET', '/v1/chat-refs');
+  Future<ChatRefsResponse> chatRefs({String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/chat-refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return ChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -283,6 +283,17 @@ class TaskiemApi {
   Future<ChatActionChoicesResponse> chatActionChoices({required String id}) async {
     final j = await _t.send('GET', '/v1/chat/actions/${Uri.encodeComponent(id)}/choices');
     return ChatActionChoicesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Close a menu in the Taskiem chat (`POST /v1/taskiem-chat/menus/{id}/close`)
+  Future<void> closeChatMenu({required CloseChatMenuRequest body, required String id}) async {
+    await _t.send('POST', '/v1/taskiem-chat/menus/${Uri.encodeComponent(id)}/close', body: body.toJson());
+  }
+
+  /// Do an action from a menu outside the Taskiem chat (`POST /v1/chat/actions/{id}/run`)
+  Future<RunChatActionResponse> runChatAction({required RunChatActionRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/chat/actions/${Uri.encodeComponent(id)}/run', body: body.toJson());
+    return RunChatActionResponse.fromJson(j as Map<String, dynamic>);
   }
 
   /// A customer's conversation (`GET /v1/customer-chats/{id}`)
@@ -608,8 +619,8 @@ class TaskiemApi {
   }
 
   /// What "/invoice", "/bill", "/order" and "/purchase" name in a conversation (`GET /v1/link-chats/{link}/refs`)
-  Future<LinkChatRefsResponse> linkChatRefs({required String link}) async {
-    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs');
+  Future<LinkChatRefsResponse> linkChatRefs({required String link, String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return LinkChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -2925,8 +2936,10 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
 
+  /// On a taskiem note, the words asked of Taskiem
+  final String? asked;
   /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
   /// streams it
   final LinkMessageAttachment? attachment;
@@ -2937,7 +2950,9 @@ class LinkMessage {
   final bool? forwarded;
   /// The message, the same in both businesses
   final String id;
-  /// A diary line is a change we made with a chat tool, on our side only
+  /// A diary line is a change we made with a chat tool, on our side only. A
+  /// taskiem note is what Taskiem answered a "@Taskiem" typed in this
+  /// conversation, on our side only (asked, and the answer as body)
   final String kind;
   final String link;
   final List<LinkMention>? mentions;
@@ -2955,6 +2970,7 @@ class LinkMessage {
   final bool? starred;
 
   factory LinkMessage.fromJson(Map<String, dynamic> j) => LinkMessage(
+        asked: j['asked'] == null ? null : j['asked'] as String,
         attachment: j['attachment'] == null ? null : LinkMessageAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
         body: j['body'] == null ? null : j['body'] as String,
         card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
@@ -2974,6 +2990,7 @@ class LinkMessage {
       );
 
   Map<String, dynamic> toJson() => {
+        'asked': ?asked,
         'attachment': ?attachment?.toJson(),
         'body': ?body,
         'card': ?card?.toJson(),
@@ -4112,10 +4129,10 @@ class ReadLinkChatResponse {
 class TaskiemChat {
   const TaskiemChat({required this.messages});
 
-  final List<TaskiemChatMessagesItem> messages;
+  final List<TaskiemMessage> messages;
 
   factory TaskiemChat.fromJson(Map<String, dynamic> j) => TaskiemChat(
-        messages: (j['messages'] as List).map((e) => TaskiemChatMessagesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -4123,10 +4140,10 @@ class TaskiemChat {
       };
 }
 
-class TaskiemChatMessagesItem {
-  const TaskiemChatMessagesItem({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
+class TaskiemMessage {
+  const TaskiemMessage({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
 
-  final List<TaskiemChatMessagesItemButtonsItem>? buttons;
+  final List<TaskiemMessageButtonsItem>? buttons;
   final String channel;
   final DateTime createdAt;
   final String id;
@@ -4135,8 +4152,8 @@ class TaskiemChatMessagesItem {
   final String kind;
   final String text;
 
-  factory TaskiemChatMessagesItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItem(
-        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemChatMessagesItemButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
+  factory TaskiemMessage.fromJson(Map<String, dynamic> j) => TaskiemMessage(
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemMessageButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
         channel: j['channel'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
         id: j['id'] as String,
@@ -4156,14 +4173,14 @@ class TaskiemChatMessagesItem {
       };
 }
 
-class TaskiemChatMessagesItemButtonsItem {
-  const TaskiemChatMessagesItemButtonsItem({this.id, required this.title});
+class TaskiemMessageButtonsItem {
+  const TaskiemMessageButtonsItem({this.id, required this.title});
 
   /// Only on an answer just given; press it by sending it as reply
   final String? id;
   final String title;
 
-  factory TaskiemChatMessagesItemButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItemButtonsItem(
+  factory TaskiemMessageButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemMessageButtonsItem(
         id: j['id'] == null ? null : j['id'] as String,
         title: j['title'] as String,
       );
@@ -4509,15 +4526,21 @@ class GetChatBriefingResponseTasks {
 }
 
 class ChatRefsResponse {
-  const ChatRefsResponse({required this.refs});
+  const ChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory ChatRefsResponse.fromJson(Map<String, dynamic> j) => ChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
@@ -4682,6 +4705,57 @@ class ChatActionChoicesResponse {
 
   Map<String, dynamic> toJson() => {
         'fields': fields,
+      };
+}
+
+class CloseChatMenuRequest {
+  const CloseChatMenuRequest({this.chose});
+
+  /// The id of the action whose row opened a tool or a page
+  final String? chose;
+
+  factory CloseChatMenuRequest.fromJson(Map<String, dynamic> j) => CloseChatMenuRequest(
+        chose: j['chose'] == null ? null : j['chose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chose': ?chose,
+      };
+}
+
+class RunChatActionRequest {
+  const RunChatActionRequest({this.link, this.values});
+
+  /// The business's conversation it was pressed in
+  final String? link;
+  /// The action's values by key, as its form gives them
+  final Map<String, dynamic>? values;
+
+  factory RunChatActionRequest.fromJson(Map<String, dynamic> j) => RunChatActionRequest(
+        link: j['link'] == null ? null : j['link'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': ?link,
+        'values': ?values,
+      };
+}
+
+class RunChatActionResponse {
+  const RunChatActionResponse({required this.messages, this.note});
+
+  final List<TaskiemMessage> messages;
+  final LinkMessage? note;
+
+  factory RunChatActionResponse.fromJson(Map<String, dynamic> j) => RunChatActionResponse(
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        note: j['note'] == null ? null : LinkMessage.fromJson(j['note'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'note': ?note?.toJson(),
       };
 }
 
@@ -7732,15 +7806,21 @@ class ChatCardLinesItem {
 }
 
 class LinkChatRefsResponse {
-  const LinkChatRefsResponse({required this.refs});
+  const LinkChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory LinkChatRefsResponse.fromJson(Map<String, dynamic> j) => LinkChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
