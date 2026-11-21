@@ -16,6 +16,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../app/auth.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart' show showTkToast;
 import '../kit/mobile.dart';
 import '../kit/sheet.dart';
 import 'approve.dart' show TkTextBox;
@@ -113,7 +114,7 @@ class MenuCard extends StatefulWidget {
   const MenuCard({
     super.key,
     required this.auth,
-    required this.id,
+    this.id,
     required this.menu,
     required this.open,
     required this.onAct,
@@ -121,11 +122,17 @@ class MenuCard extends StatefulWidget {
     required this.onPage,
     required this.onForm,
     this.busy = false,
+    this.head = true,
   });
+
+  /// The topics' own heading ("What would you like to do?"): not in the
+  /// tools panel, whose chip says it.
+  final bool head;
   final Auth auth;
 
-  /// The menu message's id, to close it.
-  final String id;
+  /// The menu message's id, to close it; null for the menu in the tools
+  /// panel (menus-everywhere.md §4), which is no message and has no ✕.
+  final String? id;
   final MenuMessage menu;
 
   /// The newest menu, nothing said since: open; any other is folded.
@@ -194,7 +201,8 @@ class _MenuCardState extends State<MenuCard> {
     });
     // Nothing goes to Taskiem for a tool or a page: the server is told, so
     // the menu stays folded to what was chosen.
-    if (tell) unawaited(widget.auth.api.closeChatMenu(id: widget.id, body: CloseChatMenuRequest(chose: a.id)).then((_) {}, onError: (Object _) {}));
+    final id = widget.id;
+    if (tell && id != null) unawaited(widget.auth.api.closeChatMenu(id: id, body: CloseChatMenuRequest(chose: a.id)).then((_) {}, onError: (Object _) {}));
   }
 
   void _close() {
@@ -202,7 +210,8 @@ class _MenuCardState extends State<MenuCard> {
       _ended = 'closed';
       _shown = false;
     });
-    unawaited(widget.auth.api.closeChatMenu(id: widget.id, body: const CloseChatMenuRequest()).then((_) {}, onError: (Object _) {}));
+    final id = widget.id;
+    if (id != null) unawaited(widget.auth.api.closeChatMenu(id: id, body: const CloseChatMenuRequest()).then((_) {}, onError: (Object _) {}));
   }
 
   Future<void> _press(ChatAction a) async {
@@ -339,7 +348,7 @@ class _MenuCardState extends State<MenuCard> {
             ),
           ),
           // Its ✕: folds to "Closed, nothing done" (21 November 2026).
-          Semantics(
+          if (widget.id != null) Semantics(
             button: true,
             label: 'Close this menu',
             excludeSemantics: true,
@@ -409,7 +418,7 @@ class _MenuCardState extends State<MenuCard> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            head('What would you like to do?', widget.menu.line, square('b-tools', look.lime)),
+            if (widget.head) head('What would you like to do?', widget.menu.line, square('b-tools', look.lime)) else const SizedBox(height: 10),
             Padding(
               padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
               child: LayoutBuilder(
@@ -583,4 +592,89 @@ class _ActionFormSheetState extends State<ActionFormSheet> {
       ),
     ],
   );
+}
+
+
+/// What Taskiem said to a row pressed outside the Taskiem chat
+/// (menus-everywhere.md §3), in a sheet: its words, a question's buttons
+/// (answered here, the answer said in turn), and the way to the Taskiem
+/// chat, where all of it is kept.
+Future<void> showActionAnswer(BuildContext context, Auth auth, String title, List<TaskiemMessage> said, {VoidCallback? onOpenChat}) =>
+    showTkSheet<void>(context, (sheet) => _ActionAnswer(auth: auth, title: title, said: said, onOpenChat: onOpenChat == null ? null : () {
+      Navigator.of(sheet).pop();
+      onOpenChat();
+    }));
+
+class _ActionAnswer extends StatefulWidget {
+  const _ActionAnswer({required this.auth, required this.title, required this.said, this.onOpenChat});
+  final Auth auth;
+  final String title;
+  final List<TaskiemMessage> said;
+  final VoidCallback? onOpenChat;
+
+  @override
+  State<_ActionAnswer> createState() => _ActionAnswerState();
+}
+
+class _ActionAnswerState extends State<_ActionAnswer> {
+  late List<TaskiemMessage> _said = widget.said;
+  bool _busy = false;
+
+  /// A button of Taskiem's question pressed (a Yes): sent to the Taskiem
+  /// chat as its press is there, the answer shown in its place.
+  Future<void> _press(TaskiemMessageButtonsItem b) async {
+    if (_busy || b.id == null) return;
+    setState(() => _busy = true);
+    try {
+      final r = await widget.auth.api.taskiemSay(body: TaskiemSayRequest(text: b.title, reply: b.id));
+      if (mounted) setState(() => _said = r.messages);
+    } on Object {
+      if (mounted) showTkToast(context, 'That did not go. Try it in your Taskiem chat.', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final words = <String>[];
+    final buttons = <TaskiemMessageButtonsItem>[];
+    for (final m in _said) {
+      if (m.inbound) continue;
+      if (m.kind == 'menu') {
+        final line = MenuMessage.parse(m.text)?.line;
+        if (line != null && line.isNotEmpty) words.add(line);
+      } else if (m.text.trim().isNotEmpty && m.kind != 'chart') {
+        words.add(m.text.replaceAll('*', '').trim());
+      }
+      buttons.addAll((m.buttons ?? const []).where((b) => b.id != null));
+    }
+    return TkFormSheet(
+      title: widget.title,
+      action: 'Done',
+      onAction: () => Navigator.of(context).pop(),
+      second: widget.onOpenChat == null ? null : 'Taskiem chat',
+      onSecond: widget.onOpenChat,
+      children: [
+        TkFormGroup(
+          children: [
+            Text(
+              words.isEmpty ? 'Done. It is in your Taskiem chat.' : words.join('\n\n'),
+              key: const ValueKey('action-answer'),
+              style: tkText(size: 15, lineHeight: 1.45, color: t.text),
+            ),
+            if (buttons.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (i, b) in buttons.indexed) TkSmallButton(label: b.title, primary: i == 0, onPressed: _busy ? null : () => unawaited(_press(b))),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+  }
 }

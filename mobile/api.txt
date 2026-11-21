@@ -62,6 +62,7 @@ chatRefs
 chatActions
 chatActionChoices
 closeChatMenu
+runChatAction
 
 # Customers' conversations (M3)
 getCustomerChat

@@ -9,6 +9,7 @@
 // November 2026).
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { get, post } from "../api";
 import { KitField, Sheet } from "../kit";
@@ -126,8 +127,13 @@ export function MenuCard({
   onReply,
   openTool,
   onFold,
+  head = true,
 }: {
-  id: string;
+  /** The menu message; none for the menu in the tools panel
+   * (menus-everywhere.md §4), which has no ✕. */
+  id?: string;
+  /** The topics' own heading: not in the tools panel, whose chip says it. */
+  head?: boolean;
   menu: MenuMessage;
   /** The newest menu, nothing said since: open; any other is folded. */
   open: boolean;
@@ -157,14 +163,14 @@ export function MenuCard({
     onFold?.();
     // Nothing goes to Taskiem for a form or a page: the server is told, so
     // the menu stays folded to what was chosen.
-    if (tell) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, { chose: a.id }).catch(() => undefined);
+    if (tell && id) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, { chose: a.id }).catch(() => undefined);
   };
   const close = () => {
     setEnded("closed");
     setShown(false);
-    void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, {}).catch(() => undefined);
+    if (id) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, {}).catch(() => undefined);
   };
-  const closeButton = (
+  const closeButton = id && (
     <button type="button" className="tk-menu-close" aria-label="Close this menu" onClick={close}>
       <Icon name="close" />
     </button>
@@ -216,9 +222,18 @@ export function MenuCard({
     const shown = (a.fields ?? []).map((f) => values[f.key]?.trim()).filter(Boolean);
     onReply(`form:${a.id}:${JSON.stringify(values)}`, shown.length ? `${a.title}: ${shown.join(", ")}` : a.title);
   };
-  const formSheet = form && (
-    <ActionForm action={form.action} initial={form.values} onClose={() => setForm(undefined)} onSend={(v) => sent(form.action, v)} />
-  );
+  // Its form's submit and keys stay its own: drawn inside a composer (the
+  // tools panel's menu), they would reach the composer's form too.
+  // Drawn outside the page's other forms (a portal), so its button
+  // submits its own form, not a composer's; its events stop at it too.
+  const formSheet =
+    form &&
+    createPortal(
+      <div style={{ display: "contents" }} onSubmit={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <ActionForm action={form.action} initial={form.values} onClose={() => setForm(undefined)} onSend={(v) => sent(form.action, v)} />
+      </div>,
+      document.body,
+    );
 
   if (!shown)
     return (
@@ -246,6 +261,7 @@ export function MenuCard({
   if (!t)
     return (
       <div className="tk-menu" data-msg={id} data-testid="taskiem-menu" data-topic="">
+        {head && (
         <div className="tk-menu-head">
           <span className="tk-tile-icon">
             <Icon name="grid" />
@@ -256,6 +272,7 @@ export function MenuCard({
           </span>
           {closeButton}
         </div>
+        )}
         <div className="tk-menu-tiles" role="group" aria-label="Topics">
           {topics.map((x) => (
             <button key={x.id} type="button" className="tk-menu-tile" onClick={() => setTopic(x.id)}>
@@ -402,6 +419,75 @@ export function ActionForm({
           );
         })}
       </FormFrame>
+    </Sheet>
+  );
+}
+
+/** What Taskiem said to a row pressed outside the Taskiem chat
+ * (menus-everywhere.md §3), in a sheet: its words, a question's buttons
+ * (answered here, the answer said in turn), and the way to the Taskiem
+ * chat, where all of it is kept. */
+export function ActionAnswer({
+  title,
+  said,
+  onClose,
+}: {
+  title: string;
+  said: { inbound: boolean; kind: string; text: string; buttons?: { id?: string; title: string }[] }[];
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const [now, setNow] = useState(said);
+  const [busy, setBusy] = useState(false);
+  const words: string[] = [];
+  const buttons: { id: string; title: string }[] = [];
+  for (const m of now) {
+    if (m.inbound) continue;
+    if (m.kind === "menu") {
+      const line = parseMenu(m.text)?.line;
+      if (line) words.push(line);
+    } else if (m.kind !== "chart" && m.text.trim()) words.push(m.text.replaceAll("*", "").trim());
+    for (const b of m.buttons ?? []) if (b.id) buttons.push({ id: b.id, title: b.title });
+  }
+  const press = async (b: { id: string; title: string }) => {
+    setBusy(true);
+    try {
+      const r = await post<{ messages: typeof said }>("/v1/taskiem-chat", { text: b.title, reply: b.id });
+      setNow(r.messages);
+    } catch {
+      words.push("That did not go. Try it in your Taskiem chat.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      title={title}
+      onClose={onClose}
+      testid="action-answer"
+      footer={
+        <>
+          <button type="button" className="secondary" onClick={() => (onClose(), navigate("/chat?with=taskiem"))}>
+            Taskiem chat
+          </button>
+          <button type="button" onClick={onClose}>
+            Done
+          </button>
+        </>
+      }
+    >
+      <div className="tk-action-answer">
+        <p>{words.length ? words.join("\n\n") : "Done. It is in your Taskiem chat."}</p>
+        {buttons.length > 0 && (
+          <div className="tk-action-answer-buttons">
+            {buttons.map((b, i) => (
+              <button key={b.id} type="button" className={i === 0 ? "" : "secondary"} disabled={busy} onClick={() => void press(b)}>
+                {b.title}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Sheet>
   );
 }

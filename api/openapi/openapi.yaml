@@ -8267,6 +8267,59 @@ paths:
                       $ref: '#/components/schemas/ChatTopic'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat/actions/{id}/run:
+    post:
+      operationId: runChatAction
+      tags:
+      - Account
+      summary: Do an action from a menu outside the Taskiem chat
+      description: 'A row of a menu pressed outside the Taskiem chat (docs/spec/menus-everywhere.md §3): the grid panel of a business''s conversation, Today. It is read in the Taskiem chat as the row pressed there would be (with values, as its form saved), and kept in that chat''s history; the answer is what Taskiem said. An action that takes values needs them (400): its questions are only asked in the Taskiem chat. With link, what Taskiem said is also kept in that business''s conversation as a note only this side sees (kind taskiem). A person only: not an API key.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                values:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: The action's values by key, as its form gives them
+                link:
+                  type: string
+                  format: uuid
+                  description: The business's conversation it was pressed in
+      responses:
+        '200':
+          description: What Taskiem said
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskiemMessage'
+                  note:
+                    $ref: '#/components/schemas/LinkMessage'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat/actions/{id}/choices:
     get:
       operationId: chatActionChoices

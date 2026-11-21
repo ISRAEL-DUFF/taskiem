@@ -5,6 +5,7 @@
 // unread begin and the bubbles, and the box to write in.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -24,6 +25,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'menu_card.dart' show MenuCard, MenuMessage, showActionAnswer;
 import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
@@ -583,6 +585,13 @@ class ConversationData extends ChangeNotifier {
     }
   }
 
+  /// A message the server wrote here for us (a note Taskiem left): shown
+  /// at once.
+  void arrived(LinkMessage m) {
+    _merge([m]);
+    _changed();
+  }
+
   void _merge(List<LinkMessage> add) {
     final byId = {for (final m in messages ?? const <LinkMessage>[]) m.id: m};
     for (final m in add) {
@@ -890,6 +899,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)..clearSlash = _text.clear;
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
+  /// The tools panel's other view (menus-everywhere.md §4): the topics'
+  /// menu. A row is done through the Taskiem chat and its answer shown in a
+  /// sheet; what Taskiem said stays here as a note only we see.
+  Widget _actionMenu(BuildContext context) => MenuCard(
+    auth: widget.data.chats.auth,
+    menu: const MenuMessage(),
+    open: true,
+    head: false,
+    onAct: (a) => unawaited(_runAction(a.id, a.title, null)),
+    onTool: (key, add) {
+      final tool = _tools.toolsHere('').where((t) => t.key == key).firstOrNull;
+      if (tool == null) return false;
+      _openTool(tool);
+      return true;
+    },
+    onPage: (_) => false,
+    onForm: (reply, text) {
+      // "form:<id>:<values>": done with those values.
+      final rest = reply.substring('form:'.length);
+      final i = rest.indexOf(':');
+      final values = (jsonDecode(rest.substring(i + 1)) as Map).map((k, v) => MapEntry('$k', '$v'));
+      unawaited(_runAction(rest.substring(0, i), text, values));
+    },
+  );
+
+  Future<void> _runAction(String id, String title, Map<String, String>? values) async {
+    _tools.close();
+    final d = widget.data;
+    try {
+      final r = await d.api.runChatAction(id: id, body: RunChatActionRequest(link: d.conv.link, values: values));
+      final note = r.note;
+      if (note != null) d.arrived(note);
+      if (!mounted) return;
+      await showActionAnswer(context, d.chats.auth, title, r.messages, onOpenChat: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'));
+    } on ApiError catch (e) {
+      if (mounted) showTkToast(context, e.message.isEmpty ? 'That could not be done.' : e.message, error: true);
+    } on Offline {
+      if (mounted) showTkToast(context, 'You are offline. Try again when you are back.', error: true);
+    }
+  }
+
   void _openTool(Tool tool, {String? openId}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
@@ -1509,6 +1559,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     extras: tiles.extras,
                     recent: d.chats.prefs?.recentTools ?? const [],
                     maxHeight: room,
+                    menu: _actionMenu,
                   );
                 },
               ),

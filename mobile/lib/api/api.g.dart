@@ -290,6 +290,12 @@ class TaskiemApi {
     await _t.send('POST', '/v1/taskiem-chat/menus/${Uri.encodeComponent(id)}/close', body: body.toJson());
   }
 
+  /// Do an action from a menu outside the Taskiem chat (`POST /v1/chat/actions/{id}/run`)
+  Future<RunChatActionResponse> runChatAction({required RunChatActionRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/chat/actions/${Uri.encodeComponent(id)}/run', body: body.toJson());
+    return RunChatActionResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// A customer's conversation (`GET /v1/customer-chats/{id}`)
   Future<CustomerChat> getCustomerChat({required String id}) async {
     final j = await _t.send('GET', '/v1/customer-chats/${Uri.encodeComponent(id)}');
@@ -4714,6 +4720,42 @@ class CloseChatMenuRequest {
 
   Map<String, dynamic> toJson() => {
         'chose': ?chose,
+      };
+}
+
+class RunChatActionRequest {
+  const RunChatActionRequest({this.link, this.values});
+
+  /// The business's conversation it was pressed in
+  final String? link;
+  /// The action's values by key, as its form gives them
+  final Map<String, dynamic>? values;
+
+  factory RunChatActionRequest.fromJson(Map<String, dynamic> j) => RunChatActionRequest(
+        link: j['link'] == null ? null : j['link'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': ?link,
+        'values': ?values,
+      };
+}
+
+class RunChatActionResponse {
+  const RunChatActionResponse({required this.messages, this.note});
+
+  final List<TaskiemMessage> messages;
+  final LinkMessage? note;
+
+  factory RunChatActionResponse.fromJson(Map<String, dynamic> j) => RunChatActionResponse(
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        note: j['note'] == null ? null : LinkMessage.fromJson(j['note'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'note': ?note?.toJson(),
       };
 }
 

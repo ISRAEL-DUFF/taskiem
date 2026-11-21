@@ -753,7 +753,41 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 ToolsAnchor(
                   tools: _tools,
                   panel: (context, room) =>
-                      ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
+                      ToolsPanel(
+                        tools: _tools,
+                        onOpen: _openTool,
+                        lead: _schoolTiles(d),
+                        extras: _extras(d),
+                        recent: d.chats.prefs?.recentTools ?? const [],
+                        maxHeight: room,
+                        // The topics' menu (menus-everywhere.md §4): a row
+                        // pressed here is as pressed in a menu of the chat.
+                        menu: (context) => MenuCard(
+                          auth: d.chats.auth,
+                          menu: const MenuMessage(),
+                          open: true,
+                          head: false,
+                          busy: d.busy,
+                          onAct: (a) {
+                            _tools.close();
+                            unawaited(d.say(reply: 'act:${a.id}', text: a.title));
+                          },
+                          onTool: (key, add) {
+                            final tool = tools.where((t) => t.key == key).firstOrNull;
+                            if (tool == null) return false;
+                            _openTool(tool, add: add);
+                            return true;
+                          },
+                          onPage: (path) {
+                            _tools.close();
+                            return _openPage(path);
+                          },
+                          onForm: (reply, text) {
+                            _tools.close();
+                            unawaited(d.say(reply: reply, text: text));
+                          },
+                        ),
+                      ),
                 ),
                 Composer(
                   key: _composer,

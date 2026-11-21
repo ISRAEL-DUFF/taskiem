@@ -225,6 +225,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
+    // The tools panel's menu: as a row of the chat's own menus.
+    onAction: (reply, text) => say({ reply, text }),
     // With chat tools, "@" tags things and businesses in groups, and finds
     // businesses not yet linked (their card, with Connect); Taskiem is
     // who is being talked to, so it is not offered.

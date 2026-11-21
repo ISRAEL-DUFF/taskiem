@@ -777,3 +777,12 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-picker-chips { padding: 4px 2px 6px; }
 .tk-picker-note { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }
 .tk-picker-more { display: flex; justify-content: center; padding: 6px 0 2px; }
+
+/* The tools panel's other view, the topics' menu (menus-everywhere.md §4). */
+.tk-tools-view { padding: 0 0 10px; }
+.tk-tools-menu { overflow-y: auto; min-height: 0; }
+.tk-tools-menu .tk-menu { max-width: none; margin: 0; }
+/* What Taskiem said to a row pressed there, in a sheet. */
+.tk-action-answer { padding: 4px 20px 12px; }
+.tk-action-answer p { margin: 0; white-space: pre-line; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.tk-action-answer-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }

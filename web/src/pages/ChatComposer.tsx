@@ -9,7 +9,10 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
-import { get, getBlob } from "../api";
+import { get, getBlob, post } from "../api";
+import { ActionAnswer, MenuCard } from "./ChatMenu";
+import { announce } from "../lib/outboxStore";
+import type { LinkMessage } from "../lib/linkchat";
 import { refSuggestion, type ChatRef } from "../lib/refs";
 import { savedFileURL } from "../lib/saved";
 import type { Suggestion } from "../lib/mentions";
@@ -135,6 +138,10 @@ export type ComposerOptions<R> = {
   placeholder?: string;
   /** Chat tools: the tools button, and "/". */
   tools?: boolean;
+  /** A row of the tools panel's menu pressed, in the Taskiem chat: said as
+   * a row of the chat's own menu. Elsewhere it is done through the Taskiem
+   * chat and answered in a sheet (menus-everywhere.md §3). */
+  onAction?: (reply: string, text: string) => void;
   /** Where the tools are open: "taskiem" or a link. */
   diaryWhere?: string;
   /** A tool saved a change: what is newer is shown. */
@@ -394,7 +401,31 @@ export function useComposer<R>(o: ComposerOptions<R>) {
         setFileError(new Error(o.rules.manyWords));
     },
   };
+  // A row of the tools panel's menu (menus-everywhere.md §3, §4): said in
+  // the Taskiem chat, or done through it, answered in a sheet, and in a
+  // business's conversation left as a note only we see.
+  const [answer, setAnswer] = useState<{ title: string; said: Parameters<typeof ActionAnswer>[0]["said"] }>();
+  const runAction = (reply: string, text: string) => {
+    closeTools();
+    if (o.onAction) return o.onAction(reply, text);
+    const form = /^form:([a-z]+\.[a-z_]+):(.*)$/s.exec(reply);
+    const id = form ? form[1] : reply.replace(/^act:/, "");
+    const values = form ? (JSON.parse(form[2] ?? "{}") as Record<string, string>) : undefined;
+    post<{ messages: Parameters<typeof ActionAnswer>[0]["said"]; note?: LinkMessage }>(`/v1/chat/actions/${encodeURIComponent(id ?? "")}/run`, {
+      link: o.scope?.link,
+      values,
+    }).then(
+      (r) => {
+        if (r.note && o.scope) announce(o.scope.link, r.note);
+        setAnswer({ title: text.split(":")[0] ?? text, said: r.messages });
+      },
+      (e: unknown) => toast((e as Error)?.message || "That could not be done.", "error"),
+    );
+  };
   return {
+    runAction,
+    answer,
+    closeAnswer: () => setAnswer(undefined),
     o,
     text,
     setText,
@@ -619,8 +650,19 @@ export function ComposerView<R>({
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
               business={c.o.scope?.name}
               extras={c.o.extras}
+              menu={
+                <MenuCard
+                  menu={{}}
+                  open
+                  head={false}
+                  busy={false}
+                  onReply={c.runAction}
+                  openTool={(k, from, start) => c.openTool(k, from, start)}
+                />
+              }
             />
           )}
+          {c.answer && <ActionAnswer title={c.answer.title} said={c.answer.said} onClose={c.closeAnswer} />}
           {c.o.tools && (
             <button
               type="button"

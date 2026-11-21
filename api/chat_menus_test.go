@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -495,4 +496,66 @@ func TestChatMenusRememberHowTheyEnded(t *testing.T) {
 	other := w.tenant(t, "Bola's Bakery", "bola@bakery.test")
 	other.must(404, "POST", "/v1/taskiem-chat/menus/"+ms[2]["id"].(string)+"/close", nil)
 	owner.must(404, "POST", "/v1/taskiem-chat/menus/not-an-id/close", nil)
+}
+
+// A row pressed outside the Taskiem chat (menus-everywhere.md §3, E2): read
+// in the Taskiem chat as there, kept in its history, the answer for a
+// sheet; an action that takes values needs them; in a business's
+// conversation, what Taskiem said is kept there as a note only this side
+// sees, never the other's.
+func TestChatActionRun(t *testing.T) {
+	w := newWAWorld(t)
+	seller, buyer, _, _ := linkedPair(t, w)
+	run := func(c *client, status int, id string, body map[string]any) map[string]any {
+		t.Helper()
+		if body == nil {
+			body = map[string]any{}
+		}
+		return c.must(status, "POST", "/v1/chat/actions/"+id+"/run", body)
+	}
+
+	// No values: as the row pressed.
+	out := run(buyer, 200, "staff.mine", nil)
+	said := out["messages"].([]any)
+	if len(said) < 2 || said[0].(map[string]any)["inbound"] != true || said[0].(map[string]any)["text"] != "Your tasks" {
+		t.Fatalf("staff.mine: %v", said)
+	}
+	if _, ok := out["note"]; ok {
+		t.Fatalf("a note with no conversation: %v", out)
+	}
+	// Kept in the Taskiem chat.
+	hist := buyer.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any)
+	if !strings.Contains(fmt.Sprint(hist), "Your tasks") {
+		t.Fatalf("history: %v", hist)
+	}
+
+	// Values: as its form saved; none, refused; one not its own, refused.
+	run(buyer, 400, "staff.give", nil)
+	run(buyer, 400, "staff.give", map[string]any{"values": map[string]any{"who": "x", "what": "y", "when": "z", "else": "w"}})
+	out = run(buyer, 200, "staff.give", map[string]any{"values": map[string]any{"who": "Tunde", "what": "count the float by 7am"}})
+	if txt := fmt.Sprint(out["messages"]); !strings.Contains(txt, "Give someone a task: Tunde, count the float by 7am") {
+		t.Fatalf("staff.give: %v", txt)
+	}
+
+	// In a business's conversation: the note, ours only.
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	out = run(buyer, 200, "staff.mine", map[string]any{"link": link})
+	note := out["note"].(map[string]any)
+	if note["kind"] != "taskiem" || note["asked"] != "Your tasks" || note["body"] == "" {
+		t.Fatalf("the note: %v", note)
+	}
+	ours := buyer.must(200, "GET", "/v1/link-chats/"+link+"/messages", nil)["messages"].([]any)
+	if last := ours[len(ours)-1].(map[string]any); last["id"] != note["id"] {
+		t.Fatalf("our conversation: %v", last)
+	}
+	sl := seller.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	for _, m := range seller.must(200, "GET", "/v1/link-chats/"+sl+"/messages", nil)["messages"].([]any) {
+		if m.(map[string]any)["kind"] == "taskiem" {
+			t.Fatalf("the other business sees the note: %v", m)
+		}
+	}
+
+	// Not an action, not theirs, not a conversation of theirs.
+	run(buyer, 404, "no.such", nil)
+	run(buyer, 404, "staff.mine", map[string]any{"link": "00000000-0000-4000-8000-000000000000"})
 }

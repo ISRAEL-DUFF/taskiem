@@ -1,6 +1,6 @@
 # Menus everywhere, and a picker that searches
 
-Status: E1 built, 21 November 2026; E2–E4 to come. Follows [Menus in the chat](chat-menus.md)
+Status: E1 and E2 built, 21 November 2026; E3 and E4 to come. Follows [Menus in the chat](chat-menus.md)
 (M1–M4, built) and [Chat tools](chat-tools.md).
 
 ## 1. Why
@@ -165,12 +165,35 @@ The picker over the message box ("/product", "/invoice", "@"):
   server could not be asked. Something picked under another chip goes in with
   its own mark: a business or a saved thing "@", an invoice or an order "#".
 
+## What E2 built (21 November 2026)
+
+- **`POST /v1/chat/actions/{id}/run`** `{values, link}` (`api/chat_actions.go`):
+  read in the Taskiem chat as the row's `act:` (or `form:` with values) would
+  be, kept in its history, answered with what Taskiem said; an action that
+  takes values without them is refused (400), as are values it does not have;
+  with `link`, what Taskiem said is kept in that conversation as the note
+  "@Taskiem" leaves (kind `taskiem`), answered as `note`.
+- **The tools panel's second view** (app `tools_panel.dart`, web
+  `ChatTools.tsx`): two chips under its heading, **Tools** and **What would
+  you like to do?**; it opens on the one used last; "/" and a word is always
+  the tools. The view is the menu card without its own heading or ✕
+  (`MenuCard(id: null, head: false)`).
+- **Pressed in a business's conversation**: a row that shows something or
+  asks is done with the run, its answer in a sheet (`showActionAnswer`,
+  `ActionAnswer`: the words, a question's buttons answered there, Done and
+  Taskiem chat) and the note lands in the thread at once; a row with values
+  opens its form first; one with a tool the conversation has opens it.
+  **In the Taskiem chat** a row is said there, as a row of the chat's own
+  menus.
+- The web draws a row's form outside the composer (a portal), so its Save
+  submits its own form, not the message box's.
+
 ## 10. Phases
 
 | | What | Where |
 |---|---|---|
 | **E1** | The picker's search box, kind chips and "Show more"; the refs lists searched on the server (built) | server, app, web |
-| **E2** | `POST /v1/chat/actions/{id}/run`; the menu in a sheet (`place: sheet`); the grid button's second view, with the note in a business's chat | server, app, web |
+| **E2** | `POST /v1/chat/actions/{id}/run`; the grid button's second view, its answer in a sheet, the note in a business's chat (built) | server, app, web |
 | **E3** | Today's panel | app, web |
 | **E4** | Search everywhere, actions included | app, web |
 

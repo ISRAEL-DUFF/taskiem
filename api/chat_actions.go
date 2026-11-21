@@ -12,6 +12,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
@@ -24,9 +26,11 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // What an action does.
@@ -792,4 +796,93 @@ func (s *Server) chatActionChoices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"fields": out})
+}
+
+// chatActionRun is POST /v1/chat/actions/{id}/run {values, link}: a row of
+// a menu pressed outside the Taskiem chat (menus-everywhere.md §3, E2): the
+// grid panel of a business's conversation, Today. It is read in the Taskiem
+// chat as the row's act: (or form:, with values) would be, and kept in its
+// history; the answer is what Taskiem said, for a sheet. With link (a
+// business's conversation), what it said is also kept there as a note only
+// this side sees, as "@Taskiem" leaves one.
+func (s *Server) chatActionRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.TenantID == uuid.Nil {
+		s.fail(w, r, errForbidden)
+		return
+	}
+	var in struct {
+		Values map[string]string `json:"values"`
+		Link   *uuid.UUID        `json:"link"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), p: p, tenant: tenantRef{ID: p.TenantID}}
+	c.lang = s.chooseLang(r.Context(), p.TenantID, c.addr, "")
+	a, ok := chatActionByID(chi.URLParam(r, "id"))
+	if !ok || !s.mayAct(c, s.chatAreas(r.Context(), c), a) {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	// Questions are asked only in the Taskiem chat: anywhere else, an
+	// action that takes values comes with them, from its form.
+	if len(a.Fields) > 0 && len(in.Values) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: fill in its form first", errBadRequest))
+		return
+	}
+	if len(in.Values) > len(a.Fields) {
+		s.fail(w, r, fmt.Errorf("%w: those are not this action's values", errBadRequest))
+		return
+	}
+	if in.Link != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			_, err := links.GetTx(r.Context(), tx, *in.Link)
+			return err
+		}); err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+	}
+	if !s.limiter("web-chat:"+p.UserID.String(), 3*time.Second, 20).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		return
+	}
+	title := word(c.lang.Tag, titleWordID(a), a.Title)
+	msg := whatsapp.Inbound{Type: "interactive", Reply: actPrefix + a.ID, Text: title}
+	if len(a.Fields) > 0 {
+		raw, err := json.Marshal(in.Values)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		var shown []string
+		for _, f := range a.Fields {
+			if v := strings.TrimSpace(in.Values[f.Key]); v != "" {
+				shown = append(shown, v)
+			}
+		}
+		msg.Reply = formPrefix + a.ID + ":" + string(raw)
+		if len(shown) > 0 {
+			msg.Text = title + ": " + strings.Join(shown, ", ")
+		}
+	}
+	said, err := s.taskiemRun(r.Context(), p, msg, nil)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := map[string]any{"messages": said}
+	if in.Link != nil {
+		note, err := s.taskiemNote(r.Context(), p, *in.Link, msg.Text, said, nil)
+		if err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+		out["note"] = note
+	}
+	writeJSON(w, http.StatusOK, out)
 }

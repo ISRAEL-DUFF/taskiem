@@ -563,6 +563,7 @@ func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/chat-refs", s.chatRefs)
 	r.Get("/chat/actions", s.chatActionsList)
 	r.Get("/chat/actions/{id}/choices", s.chatActionChoices)
+	r.Post("/chat/actions/{id}/run", s.chatActionRun)
 	r.Get("/chat-card", s.chatCardGet)
 	r.Post("/taskiem-chat", s.taskiemSay)
 	r.Post("/taskiem-chat/files", s.taskiemSend)
