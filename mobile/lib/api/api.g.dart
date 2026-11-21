@@ -14514,22 +14514,25 @@ class GetPaymentBatchResponse {
 }
 
 class ConfirmPaymentBatchRequest {
-  const ConfirmPaymentBatchRequest({this.again, this.passkey, this.totp});
+  const ConfirmPaymentBatchRequest({this.again, this.passkey, required this.payments});
 
-  final bool? again;
+  /// The rows the person said "pay again" to (the same payment in the last day)
+  final List<String>? again;
   final Map<String, dynamic>? passkey;
-  final String? totp;
+  /// The rows the person saw, acted on exactly; 409 `changed` when they differ
+  /// from the batch's
+  final List<String> payments;
 
   factory ConfirmPaymentBatchRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentBatchRequest(
-        again: j['again'] == null ? null : j['again'] as bool,
+        again: j['again'] == null ? null : (j['again'] as List).map((e) => e as String).toList(),
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
-        totp: j['totp'] == null ? null : j['totp'] as String,
+        payments: (j['payments'] as List).map((e) => e as String).toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'again': ?again,
+        'again': ?again?.map((e) => e).toList(),
         'passkey': ?passkey,
-        'totp': ?totp,
+        'payments': payments.map((e) => e).toList(),
       };
 }
 
@@ -14548,22 +14551,21 @@ class ConfirmPaymentBatchResponse {
 }
 
 class ApprovePaymentBatchRequest {
-  const ApprovePaymentBatchRequest({this.again, this.passkey, this.totp});
+  const ApprovePaymentBatchRequest({this.passkey, required this.payments});
 
-  final bool? again;
   final Map<String, dynamic>? passkey;
-  final String? totp;
+  /// The waiting rows the owner saw, acted on exactly; 409 `changed` when they
+  /// differ
+  final List<String> payments;
 
   factory ApprovePaymentBatchRequest.fromJson(Map<String, dynamic> j) => ApprovePaymentBatchRequest(
-        again: j['again'] == null ? null : j['again'] as bool,
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
-        totp: j['totp'] == null ? null : j['totp'] as String,
+        payments: (j['payments'] as List).map((e) => e as String).toList(),
       );
 
   Map<String, dynamic> toJson() => {
-        'again': ?again,
         'passkey': ?passkey,
-        'totp': ?totp,
+        'payments': payments.map((e) => e).toList(),
       };
 }
 
