@@ -94,7 +94,7 @@ func TestChatLinkByEmail(t *testing.T) {
 	if st, _ := ada.do("POST", "/v1/me/chat-link", map[string]any{"token": token, "password": testPassword}); st != 400 {
 		t.Fatalf("a second use: %d", st)
 	}
-	if got := w.say(t, number, "help"); !strings.Contains(got, "status") {
+	if got := w.say(t, number, "help all"); !strings.Contains(got, "status") {
 		t.Fatalf("the conversation: %q", got)
 	}
 	var audited int

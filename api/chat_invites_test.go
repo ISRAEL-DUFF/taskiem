@@ -74,7 +74,7 @@ func TestInviteOnWhatsApp(t *testing.T) {
 	if user == uuid.Nil || memberRoles(t, w.world, user, "Acme") != "viewer" {
 		t.Fatalf("membership: %v %q", user, memberRoles(t, w.world, user, "Acme"))
 	}
-	if got := w.say(t, ada, "help"); !strings.Contains(got, "status") {
+	if got := w.say(t, ada, "help all"); !strings.Contains(got, "status") {
 		t.Fatalf("the conversation: %q", got)
 	}
 	// Pressed again: it was answered.

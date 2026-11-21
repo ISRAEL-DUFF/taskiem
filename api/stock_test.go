@@ -173,7 +173,7 @@ func TestStockByChat(t *testing.T) {
 	w.bind(t, owner, on)
 	w.bind(t, w.member(t, owner, "vic@mama.test", "viewer"), vn)
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*add 50 cartons of Indomie at 8,500*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*add 50 cartons of Indomie at 8,500*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, on, "stock"); !strings.Contains(r, "keeps no stock in Taskiem yet") {
