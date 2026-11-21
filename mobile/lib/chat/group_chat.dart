@@ -1303,7 +1303,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -1313,7 +1315,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                         avatar: PersonFace(name: name, transport: d.auth.transport, photo: g?.photo, size: 40, letterSize: 15),
                         title: name,
                         subtitle: groupHeadLine(g, typing: d.offline ? const [] : typing, offline: d.offline),
-                        actions: [ChatHeadBar.iconButton('Search this group', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), g == null ? null : _search)],
+                        actions: [ChatHeadBar.headButton('Search this group', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), g == null ? null : _search)],
                       ),
                     ),
                   ),
