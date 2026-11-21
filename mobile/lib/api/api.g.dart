@@ -13325,36 +13325,61 @@ class ImportSavedRequest {
 }
 
 class SavedImport {
-  const SavedImport({this.added, this.failed, required this.hash, this.rows, required this.saved, required this.total});
+  const SavedImport({this.added, this.checkWords, this.failed, required this.hash, this.left, this.leftWords, this.rows, required this.saved, this.skipped, required this.total, this.unchecked});
 
   /// The names saved.
   final List<String>? added;
+  /// When some accounts are unchecked, how many and how to check them, in plain
+  /// words.
+  final String? checkWords;
   /// Lines that could not be saved after all (a bank that does not know the
   /// account), each with why.
   final List<SavedImportFailedItem>? failed;
   final String hash;
-  /// The plan's things.
+  /// Lines not reached within the time limit; sending the file again saves
+  /// them, skipping what is saved.
+  final List<SavedImportLeftItem>? left;
+  /// When lines are left, what to do, in plain words.
+  final String? leftWords;
+  /// The plan's things, those to skip with them.
   final List<SavedImportRowsItem>? rows;
   /// false for the plan; true once saved.
   final bool saved;
+  /// The names not saved because they are saved already as the same kind.
+  final List<String>? skipped;
+  /// The things to save (the rows not skipped).
   final int total;
+  /// The bank accounts saved (in added) whose name the bank has not checked,
+  /// each with why; Check names on the Saved page (POST /v1/saved/check) checks
+  /// them.
+  final List<SavedImportUncheckedItem>? unchecked;
 
   factory SavedImport.fromJson(Map<String, dynamic> j) => SavedImport(
         added: j['added'] == null ? null : (j['added'] as List).map((e) => e as String).toList(),
+        checkWords: j['check_words'] == null ? null : j['check_words'] as String,
         failed: j['failed'] == null ? null : (j['failed'] as List).map((e) => SavedImportFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
         hash: j['hash'] as String,
+        left: j['left'] == null ? null : (j['left'] as List).map((e) => SavedImportLeftItem.fromJson(e as Map<String, dynamic>)).toList(),
+        leftWords: j['left_words'] == null ? null : j['left_words'] as String,
         rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => SavedImportRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
         saved: j['saved'] as bool,
+        skipped: j['skipped'] == null ? null : (j['skipped'] as List).map((e) => e as String).toList(),
         total: (j['total'] as num).toInt(),
+        unchecked: j['unchecked'] == null ? null : (j['unchecked'] as List).map((e) => SavedImportUncheckedItem.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
         'added': ?added?.map((e) => e).toList(),
+        'check_words': ?checkWords,
         'failed': ?failed?.map((e) => e.toJson()).toList(),
         'hash': hash,
+        'left': ?left?.map((e) => e.toJson()).toList(),
+        'left_words': ?leftWords,
         'rows': ?rows?.map((e) => e.toJson()).toList(),
         'saved': saved,
+        'skipped': ?skipped?.map((e) => e).toList(),
         'total': total,
+        'unchecked': ?unchecked?.map((e) => e.toJson()).toList(),
       };
 }
 
@@ -13378,21 +13403,48 @@ class SavedImportFailedItem {
       };
 }
 
+class SavedImportLeftItem {
+  const SavedImportLeftItem({required this.line, required this.name});
+
+  final int line;
+  final String name;
+
+  factory SavedImportLeftItem.fromJson(Map<String, dynamic> j) => SavedImportLeftItem(
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'name': name,
+      };
+}
+
 class SavedImportRowsItem {
-  const SavedImportRowsItem({required this.hint, required this.kind, required this.line, required this.name, required this.title});
+  const SavedImportRowsItem({required this.hint, required this.kind, required this.line, required this.name, this.skip, required this.title, this.warning});
 
   final String hint;
   final String kind;
+  /// Its line in the file, the column names' being 1.
   final int line;
   final String name;
+  /// Saved already by this name and kind (an earlier send of the file); not
+  /// saved again.
+  final bool? skip;
   final String title;
+  /// What to know before saving it, which does not keep it from being saved (a
+  /// bank Taskiem does not know by that name, its name not checked), or why it
+  /// is skipped.
+  final String? warning;
 
   factory SavedImportRowsItem.fromJson(Map<String, dynamic> j) => SavedImportRowsItem(
         hint: j['hint'] as String,
         kind: j['kind'] as String,
         line: (j['line'] as num).toInt(),
         name: j['name'] as String,
+        skip: j['skip'] == null ? null : j['skip'] as bool,
         title: j['title'] as String,
+        warning: j['warning'] == null ? null : j['warning'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -13400,7 +13452,29 @@ class SavedImportRowsItem {
         'kind': kind,
         'line': line,
         'name': name,
+        'skip': ?skip,
         'title': title,
+        'warning': ?warning,
+      };
+}
+
+class SavedImportUncheckedItem {
+  const SavedImportUncheckedItem({required this.line, required this.name, required this.problem});
+
+  final int line;
+  final String name;
+  final String problem;
+
+  factory SavedImportUncheckedItem.fromJson(Map<String, dynamic> j) => SavedImportUncheckedItem(
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+        problem: j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'name': name,
+        'problem': problem,
       };
 }
 
