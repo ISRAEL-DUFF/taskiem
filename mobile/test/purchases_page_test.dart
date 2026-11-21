@@ -98,7 +98,8 @@ void main() {
     SavedStub? stub,
     bool deliverToFails = false,
     List<String>? perms,
-    List<int> placeAnswers = const [201],
+    // 201, 409 (the name taken) or 'name_needed'.
+    List<Object> placeAnswers = const [201],
   }) async {
     var placeAsked = 0;
     await t.pumpWidget(const SizedBox());
@@ -116,6 +117,9 @@ void main() {
             sent.add('${req.method} $p ${req.body}');
             final status = placeAnswers[placeAsked < placeAnswers.length ? placeAsked : placeAnswers.length - 1];
             placeAsked++;
+            if (status == 'name_needed') {
+              return http.Response(jsonEncode({'error': 'Give it a name to call it up by.', 'code': 'name_needed', 'name_needed': true}), 409, headers: {'content-type': 'application/json'});
+            }
             if (status == 409) return http.Response(jsonEncode({'error': 'That name is taken: choose another.', 'name_taken': true}), 409, headers: {'content-type': 'application/json'});
             final b = jsonDecode(req.body) as Map<String, dynamic>;
             return http.Response(
@@ -593,6 +597,70 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('where linked suppliers deliver: a long address saved as a place cut to its 200, at a comma', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms);
+    final long = 'Plot 12 Admiralty Way, ${'Behind the big blue gate ' * 6}Lekki Phase 1, Opposite the filling station, Lagos';
+    expect(long.length, inInclusiveRange(201, 300));
+    await t.enterText(field('Address'), long);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    expect(sent.last, contains(long), reason: 'the address itself kept whole');
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.bySemanticsLabel('Save this place as @plot-12-admiralty-way'));
+    await settle(t);
+    final line = ((jsonDecode(sent.last.substring('POST /v1/saved '.length)) as Map)['details'] as Map)['line'] as String;
+    expect(line.length, lessThanOrEqualTo(200));
+    expect(line, 'Plot 12 Admiralty Way, ${'Behind the big blue gate ' * 6}Lekki Phase 1');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: only the number changed after: the place still offered, with the new number', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms);
+    await t.enterText(field('Address'), '12 Admiralty Way, Lekki');
+    await t.enterText(field('Number the rider calls'), '+2348031120099');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 5));
+    expect(find.text('Save this place for next time?'), findsOneWidget);
+    await t.enterText(field('Number the rider calls'), '+2348039990000');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 5));
+    expect(sent.last, 'PUT /v1/stock/deliver-to {"address":"12 Admiralty Way, Lekki","phone":"+2348039990000"}');
+    expect(find.text('Save this place for next time?'), findsOneWidget, reason: 'the place offered stays');
+    await t.tap(find.bySemanticsLabel('Save this place as @12-admiralty-way'));
+    await settle(t);
+    expect(
+      sent.last,
+      'POST /v1/saved {"details":{"line":"12 Admiralty Way, Lekki","phone":"+2348039990000"},"kind":"place","name":"12-admiralty-way","title":"12 Admiralty Way"}',
+    );
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where linked suppliers deliver: no name could be made: one asked for, the sheet empty', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth), perms: savedPerms, placeAnswers: ['name_needed', 201]);
+    await t.enterText(field('Address'), 'Shop 4, Ikota Market');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save where they deliver'));
+    await settle(t);
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.bySemanticsLabel('Save this place as @shop-4'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Give it a name to call it up by'), findsOneWidget);
+    expect((t.widget<EditableText>(field('Name to call it up by'))).controller.text, '');
+    await t.enterText(field('Name to call it up by'), '@ikota-shop');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save').last);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'POST /v1/saved {"details":{"line":"Shop 4, Ikota Market"},"kind":"place","name":"ikota-shop","title":"Shop 4"}');
+    expect(find.text('Saved as @ikota-shop'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
 }
 
 Future<void> settle(WidgetTester t) async {

@@ -689,7 +689,10 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
         children: [TkListRow(title: 'Saved as @$saved', sub: 'Among your saved people, for next time', icon: 'b-check', square: look.lime, chevron: false)],
       );
     }
-    if (_view?['customer_orders'] != 1 || ((_view?['customer_saved'] as String?) ?? '').isNotEmpty || kind == 'trade' || !_auth.can('saved.manage') || (_customersSaved[_auth]?.contains(_savedKey) ?? false)) return null;
+    // Saving them keeps their phone, email and address: for whoever may see
+    // them (pii.reveal) as well as handle orders and manage saved things.
+    final may = _auth.can('storefront.manage|order.handle') && _auth.can('saved.manage') && _auth.can('pii.reveal');
+    if (_view?['customer_orders'] != 1 || ((_view?['customer_saved'] as String?) ?? '').isNotEmpty || kind == 'trade' || !may || (_customersSaved[_auth]?.contains(_savedKey) ?? false)) return null;
     final c = _revealed ?? shown;
     final name = _str(c['name']);
     if (name.isEmpty) return null;
@@ -702,7 +705,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       children: [
         TkListRow(
           title: title,
-          sub: at.isNotEmpty ? 'As @$at, with their phone and address' : 'Among your saved people, with their phone and address',
+          sub: at.isNotEmpty ? 'As @$at, with their phone, email and address' : 'Among your saved people, with their phone, email and address',
           icon: 'b-person',
           square: look.violet,
           semanticsLabel: title,
@@ -726,10 +729,31 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
         setState(() => _savedAs = x.name);
         showTkToast(context, 'Saved as @${x.name}');
       }
+    } on ApiError catch (e) {
+      if (mounted) _saveRefused(e);
     } on Object catch (e) {
       if (mounted) showTkToast(context, errorWords(e), error: true);
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  /// The server would not save them: saved already (said as saved), or
+  /// nothing to save here (the offer goes, with its words); else a toast
+  /// and the offer stays.
+  void _saveRefused(ApiError e) {
+    final code = e.status == 409 ? e.body['code'] : null;
+    final was = (e.body['saved_as'] as String?) ?? '';
+    if (code == 'saved_already' && was.isNotEmpty) {
+      (_customersSaved[_auth] ??= {}).add(_savedKey);
+      setState(() => _savedAs = was);
+      showTkToast(context, 'Saved as @$was');
+    } else if (const {'not_a_customer', 'nothing_to_save', 'saved_already'}.contains(code)) {
+      (_customersSaved[_auth] ??= {}).add(_savedKey);
+      setState(() {});
+      showTkToast(context, e.message, error: true);
+    } else {
+      showTkToast(context, errorWords(e), error: true);
+    }
   }
 
   /// The top card: where the order stands in its stage's colour, its total

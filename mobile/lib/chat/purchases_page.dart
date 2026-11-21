@@ -1446,7 +1446,14 @@ class _SuppliersPageState extends State<SuppliersPage> {
                           final was = _str(_deliver!['address']);
                           final body = {'address': _address.text.trim(), 'phone': _phone.text.trim()};
                           await _auth.transport.send('PUT', '/v1/stock/deliver-to', body: body);
-                          if (mounted) setState(() => (_deliver = body, _offer = _offerFor(body['address']!, body['phone']!, was)));
+                          if (!mounted) return;
+                          setState(() {
+                            _deliver = body;
+                            // Only its number changed: the place offered stays, with the new number.
+                            final o = _offer;
+                            _offer = _offerFor(body['address']!, body['phone']!, was) ??
+                                (o != null && o.address == body['address'] ? (address: o.address, phone: body['phone']!, title: o.title, name: o.name) : null);
+                          });
                         }, 'Saved'),
                 ),
               ),
