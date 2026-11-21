@@ -938,9 +938,10 @@ func (o *payOps) Finish(ctx context.Context, tenant, id uuid.UUID, status, accou
 		var now string
 		err := tx.QueryRow(ctx, `UPDATE payments SET status = $2, account_name = COALESCE(NULLIF($3, ''), account_name), payout_ref = NULLIF($4, ''),
 			reason = NULLIF($5, ''), fee_kobo = $6, finished_at = now()
-			WHERE id = $1 AND status IN ('sending', 'waiting_ok') RETURNING status`, id, status, accountName, payoutID, reason, feeKobo).Scan(&now)
+			WHERE id = $1 AND (status IN ('sending', 'waiting_ok') OR status = 'unknown' AND $2 IN ('paid', 'failed')) RETURNING status`, id, status, accountName, payoutID, reason, feeKobo).Scan(&now)
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Ended already: the same outcome again changes nothing.
+			// Ended already: the same outcome again changes nothing (one
+			// not known yet is settled by the bank's answer, above).
 			if err := tx.QueryRow(ctx, `SELECT status FROM payments WHERE id = $1`, id).Scan(&now); err != nil {
 				if errors.Is(err, pgx.ErrNoRows) {
 					return fmt.Errorf("%w: no such payment", payconn.ErrRefused)
