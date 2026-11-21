@@ -175,11 +175,11 @@ test("staff pay a message's account only when it is saved; the customer chats to
   await page.emulateMedia({ reducedMotion: "reduce" });
   await signUp(page, `Mama Kitchen ${letters()}`);
   const calls = await payApi(page);
-  // A cashier who may pay, not an owner.
+  // A cashier who may pay, not an owner, and may not save accounts.
   await page.route("**/v1/me", async (r) => {
     const res = await r.fetch();
     const me = (await res.json()) as { roles: string[]; permissions: string[] };
-    return json(r, 200, { ...me, roles: ["cashier"], permissions: [...new Set([...me.permissions, "money.pay", "order.handle"])] });
+    return json(r, 200, { ...me, roles: ["cashier"], permissions: [...new Set([...me.permissions, "money.pay", "order.handle"])].filter((p) => p !== "saved.manage") });
   });
   const now = new Date().toISOString();
   const chat = { id: "0192e2e0-0000-7000-8000-00000000d001", name: "Tolu Bello", phone: "+234 803 ••• 0099", last: SAVED, last_mine: false, last_at: now, unread: 0, window_open: true, window_until: null, stopped: false, archived: false, line: "whatsapp" };
@@ -235,4 +235,154 @@ test("staff see no Check the likely banks: an owner's", async ({ page }) => {
   await sheet.getByTestId("pay-field-number").fill("0123456789");
   await expect(sheet.getByRole("group", { name: "Banks this number could be with" })).toBeVisible();
   await expect(sheet.getByTestId("pay-check-banks")).toHaveCount(0);
+});
+
+/** A customer chat holding these messages from the customer. */
+async function customerChat(page: Page, said: string[]) {
+  const now = new Date().toISOString();
+  const chat = { id: "0192e2e0-0000-7000-8000-00000000d002", name: "Tolu Bello", phone: "+234 803 ••• 0099", last: said[said.length - 1], last_mine: false, last_at: now, unread: 0, window_open: true, window_until: null, stopped: false, archived: false, line: "whatsapp" };
+  const messages = said.map((body, i) => ({ id: `m${i}`, mine: false, kind: "text", body, read_at: now, created_at: now }));
+  await page.route(
+    (u) => u.pathname.startsWith("/v1/customer-chats"),
+    (r) => {
+      const p = new URL(r.request().url()).pathname;
+      if (p === "/v1/customer-chats") return json(r, 200, { chats: [chat] });
+      if (p === "/v1/customer-chats/unread") return json(r, 200, { chats: 0, messages: 0 });
+      if (p === `/v1/customer-chats/${chat.id}`) return json(r, 200, chat);
+      if (p === `/v1/customer-chats/${chat.id}/messages`) return json(r, 200, { messages, more: false });
+      if (p.endsWith("/orders")) return json(r, 200, { orders: [] });
+      return json(r, 200, {});
+    },
+  );
+  await page.goto(`/chat?with=c-${chat.id}`);
+  const pane = page.getByTestId("customer-pane");
+  return (t: string) => pane.getByTestId("customer-message").filter({ hasText: t });
+}
+
+/** Stands in for POST /v1/saved: a name taken, a bank with no such
+ * account, else saved with the bank's name for it. */
+async function savedApi(page: Page) {
+  const posts: Record<string, unknown>[] = [];
+  await page.route(
+    (u) => u.pathname === "/v1/saved",
+    async (r) => {
+      if (r.request().method() !== "POST") return r.fallback();
+      const body = (r.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      posts.push(body);
+      if (body.name === "chidi") return json(r, 409, { error: "That name is taken: choose another.", name_taken: true });
+      if (body.account_number === "0987654321") return json(r, 400, { error: "Guaranty Trust Bank has no account ••4321. Check the number and the bank." });
+      const now = new Date().toISOString();
+      return json(r, 201, {
+        saved: {
+          id: "0192e2e0-0000-7000-8000-00000000f001", owner: "business", name: body.name, title: body.title, kind: "bank_account", hint: "GTBank ••6789",
+          details: { bank_name: body.bank_name, account_number: "••6789" }, check: { state: "checked", account_name: "CHIDI OKEKE", via: "paystack", at: now, problem: null },
+          to_change: false, created_at: now, updated_at: now,
+        },
+      });
+    },
+  );
+  return posts;
+}
+
+for (const width of [390, 360])
+  test(`a message's account is saved as an @name beside its chip, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page, `Save As ${letters()}`);
+    const calls = await payApi(page);
+    const posts = await savedApi(page);
+    const msg = await customerChat(page, [NEW, PAID, SAVED]);
+    // Not saved: Save as… beside Pay this account. Saved already: none.
+    await expect(msg("send 45k").getByTestId("pay-chip")).toHaveText("Pay this account");
+    await expect(msg("send 45k").getByTestId("pay-chip-save")).toHaveText("Save as…");
+    await expect(msg("Same as before").getByTestId("pay-chip")).toHaveText("Pay @chidi");
+    await expect(msg("Same as before").getByTestId("pay-chip-save")).toHaveCount(0);
+    await noAxe(page, "the chat with Save as…");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    // The sheet: the @name made from the message's name, its title, the
+    // likely banks (none read), the number masked.
+    await msg("send 45k").getByTestId("pay-chip-save").click();
+    const sheet = page.getByTestId("save-as-sheet");
+    await expect(sheet.getByTestId("save-as-name")).toHaveValue("@chidi-okafor");
+    await expect(sheet.getByTestId("save-as-title")).toHaveValue("Chidi Okafor");
+    await expect(sheet.getByTestId("save-as-number")).toHaveText("••6789");
+    const likely = sheet.getByRole("group", { name: "Banks this number could be with" });
+    await expect(likely.getByRole("button")).toHaveText(["Guaranty Trust Bank", "Access Bank", "Kuda Microfinance Bank"]);
+    expect(calls.some((c) => c.path === "/v1/payments/banks" && c.query === "?account=0123456789")).toBe(true);
+    await noAxe(page, "the Save as sheet");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    // No bank chosen: said, and nothing sent.
+    await sheet.getByTestId("save-as-save").click();
+    await expect(sheet.getByRole("alert")).toHaveText("Choose the bank.");
+    expect(posts).toHaveLength(0);
+    await likely.getByRole("button", { name: "Guaranty Trust Bank" }).click();
+    // A name taken: said in plain words at the name.
+    await sheet.getByTestId("save-as-name").fill("@chidi");
+    await sheet.getByTestId("save-as-save").click();
+    await expect(sheet.getByRole("alert")).toHaveText("That name is taken: choose another.");
+    await sheet.getByTestId("save-as-name").fill("@Chidi Rider");
+    await sheet.getByTestId("save-as-title").fill("Chidi, rider");
+    await sheet.getByTestId("save-as-save").click();
+    // Saved: the bank's name, and the message's name differing from it.
+    await expect(sheet.getByTestId("save-as-done")).toContainText("Saved as @chidi-rider");
+    await expect(sheet.getByTestId("save-as-bank-name")).toHaveText("The bank's name for it: CHIDI OKEKE");
+    await expect(sheet.getByTestId("save-as-name-differs")).toHaveText("The message says Chidi Okafor; the bank says CHIDI OKEKE.");
+    expect(posts[posts.length - 1]).toEqual({
+      name: "chidi-rider",
+      title: "Chidi, rider",
+      kind: "bank_account",
+      bank_name: "Guaranty Trust Bank",
+      bank_code: "058",
+      code_from: "paystack",
+      account_number: "0123456789",
+    });
+    await noAxe(page, "the Save as sheet, saved");
+    await sheet.getByTestId("save-as-close").click();
+    await expect(sheet).toBeHidden();
+    // The chip now goes by the @name, and Pay with it.
+    await expect(msg("send 45k").getByTestId("pay-chip")).toHaveText("Pay @chidi-rider");
+    await expect(msg("send 45k").getByTestId("pay-chip-save")).toHaveCount(0);
+    await msg("send 45k").getByTestId("pay-chip").click();
+    const pay = page.getByTestId("pay-sheet");
+    await expect(pay.getByTestId("pay-field-who")).toHaveValue("@chidi-rider");
+    await expect(pay.getByLabel("How much? in naira")).toHaveValue("45,000");
+    await pay.getByRole("button", { name: "Close" }).click();
+    await expect(pay).toBeHidden();
+
+    // A bank read from the message is shown, not asked; the bank having no
+    // such account says so, and nothing is saved.
+    await msg("Pay my rider").getByTestId("pay-chip-save").click();
+    await expect(sheet.getByTestId("save-as-bank")).toHaveText("Guaranty Trust Bank");
+    await expect(sheet.getByTestId("save-as-number")).toHaveText("••4321");
+    await expect(sheet.getByTestId("save-as-name")).toHaveValue("");
+    await sheet.getByTestId("save-as-save").click();
+    await expect(sheet.getByRole("alert")).toHaveText(/^Give it a short name/);
+    await sheet.getByTestId("save-as-name").fill("@rider");
+    await sheet.getByTestId("save-as-title").fill("Rider");
+    await sheet.getByTestId("save-as-save").click();
+    await expect(sheet.getByRole("alert")).toHaveText("Guaranty Trust Bank has no account ••4321. Check the number and the bank.");
+    expect(posts[posts.length - 1]).toEqual({
+      name: "rider",
+      title: "Rider",
+      kind: "bank_account",
+      bank_name: "Guaranty Trust Bank",
+      bank_code: "058",
+      code_from: "paystack",
+      account_number: "0987654321",
+    });
+    await expect(msg("Pay my rider").getByTestId("pay-chip-save")).toHaveCount(1);
+  });
+
+test("no Save as… for someone who may pay but not manage saved things", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page, `No Keep ${letters()}`);
+  await payApi(page);
+  await page.route("**/v1/me", async (r) => {
+    const me = (await (await r.fetch()).json()) as { roles: string[]; permissions: string[] };
+    return json(r, 200, { ...me, roles: ["cashier"], permissions: [...new Set([...me.permissions, "money.pay"])].filter((p) => p !== "saved.manage") });
+  });
+  const msg = await customerChat(page, [NEW]);
+  await expect(msg("send 45k").getByTestId("pay-chip-ask")).toBeVisible();
+  await expect(msg("send 45k").getByTestId("pay-chip-save")).toHaveCount(0);
 });

@@ -42,6 +42,7 @@ const OWNER_FILES = [
   "pages/Payments.tsx",
   "pages/PaySheet.tsx",
   "pages/PayChip.tsx",
+  "pages/SaveAsSheet.tsx",
   "lib/payments.ts",
   "lib/paymessage.ts",
   "pages/SavedImport.tsx",
@@ -220,7 +221,7 @@ function allStrings(file: string, src: string): string[] {
 // "Send money", "Beneficiary", the words bank apps use; never "payout" or
 // "NUBAN" in the Pay sheet, the chip under a message, or their words.
 describe("paying people says Pay, never payout", () => {
-  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts"];
+  const PAY_FILES = ["pages/PaySheet.tsx", "pages/PayChip.tsx", "pages/SaveAsSheet.tsx","pages/Payments.tsx", "lib/payments.ts", "lib/paymessage.ts"];
   for (const f of PAY_FILES) {
     it(f, () => {
       const src = readFileSync(resolve(__dirname, "..", f), "utf8");

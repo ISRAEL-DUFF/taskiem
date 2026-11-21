@@ -11,6 +11,13 @@ import {
   namesDiffer,
   paidWords,
   riderFill,
+  maskedAccount,
+  saveAsAnswer,
+  saveAsBank,
+  saveAsBody,
+  saveAsProblem,
+  saveAsShown,
+  saveAsStart,
   type PayReading,
 } from "./paymessage";
 import { payAmountKobo } from "./payments";
@@ -103,5 +110,78 @@ describe("paying a rider", () => {
     expect(RIDER_PAY_FIELDS.map((f) => f.key)).toEqual(["amount", "for", "note"]);
     expect(riderFill("r1", 250_000)).toEqual({ rider: "r1", for: "a delivery", amount: "2,500" });
     expect(riderFill("r1", -100)).toEqual({ rider: "r1", for: "a delivery" });
+  });
+});
+
+describe("Save as… beside the chip", () => {
+  it("shows for an account not saved, to whoever may manage saved things", () => {
+    expect(saveAsShown(reading(), true)).toBe(true);
+    expect(saveAsShown(reading({ payee: "chidi" }), true)).toBe(false);
+    expect(saveAsShown(reading(), false)).toBe(false);
+    expect(saveAsShown({ found: false }, true)).toBe(false);
+    expect(saveAsShown(undefined, true)).toBe(false);
+  });
+  it("says the saved name on the chip once saved", () => {
+    expect(chipWords(reading({ payee: "chidi-okafor" }))).toBe("Pay @chidi-okafor");
+    expect(chipWords(reading({ payee: "@bayo" }))).toBe("Pay @bayo");
+  });
+  it("suggests a name from the message's name, as the Saved page's names", () => {
+    expect(saveAsStart(reading({ name: "Chidi Okafor" }))).toEqual({ name: "@chidi-okafor", title: "Chidi Okafor" });
+    expect(saveAsStart(reading({ name: " Ọlá Adé " }))).toEqual({ name: "@ola-ade", title: "Ọlá Adé" });
+    expect(saveAsStart(reading())).toEqual({ name: "", title: "" });
+  });
+  it("masks the number", () => {
+    expect(maskedAccount("0123456789")).toBe("••6789");
+    expect(maskedAccount(undefined)).toBe("");
+  });
+  it("sends the bank's code with the list it came from, else the name alone", () => {
+    const list = {
+      from: "paystack",
+      banks: [
+        { code: "058", name: "Guaranty Trust Bank" },
+        { code: "", name: "Some Bank" },
+      ],
+    };
+    expect(saveAsBank("Guaranty Trust Bank", list)).toEqual({ bank_name: "Guaranty Trust Bank", bank_code: "058", code_from: "paystack" });
+    expect(saveAsBank("Some Bank", list)).toEqual({ bank_name: "Some Bank" });
+    expect(saveAsBank("gtbank", null)).toEqual({ bank_name: "gtbank" });
+    expect(saveAsBank("Guaranty Trust Bank", { from: "", banks: list.banks })).toEqual({ bank_name: "Guaranty Trust Bank" });
+    // Read from the message with its code, the list not holding it.
+    expect(saveAsBank("OPay", { from: "paystack", banks: [] }, reading({ bank_name: "OPay", bank_code: "999" }))).toEqual({
+      bank_name: "OPay",
+      bank_code: "999",
+      code_from: "paystack",
+    });
+    expect(saveAsBank(" ", list)).toBeNull();
+  });
+  it("says what is missing, where", () => {
+    expect(saveAsProblem({ name: "", title: "Chidi", bank: "GTBank" })?.at).toBe("name");
+    expect(saveAsProblem({ name: "@a b!", title: "Chidi", bank: "GTBank" })?.at).toBe("name");
+    expect(saveAsProblem({ name: "@chidi", title: " ", bank: "GTBank" })).toEqual({ at: "title", words: "Give it a title, like Chidi, rider." });
+    expect(saveAsProblem({ name: "@chidi", title: "Chidi", bank: "" })).toEqual({ at: "bank", words: "Choose the bank." });
+    expect(saveAsProblem({ name: "@Chidi Rider", title: "Chidi, rider", bank: "GTBank" })).toBeNull();
+  });
+  it("saves as the Saved page does", () => {
+    expect(saveAsBody(reading(), { name: "@Chidi Rider", title: " Chidi, rider " }, { bank_name: "Guaranty Trust Bank", bank_code: "058", code_from: "paystack" })).toEqual({
+      name: "chidi-rider",
+      title: "Chidi, rider",
+      kind: "bank_account",
+      bank_name: "Guaranty Trust Bank",
+      bank_code: "058",
+      code_from: "paystack",
+      account_number: "0123456789",
+    });
+  });
+  it("says the bank's answer", () => {
+    const check = (over: object) => ({ state: "checked" as const, account_name: "CHIDI OKEKE", via: "paystack", at: null, problem: null, ...over });
+    expect(saveAsAnswer({ saved: { name: "chidi", check: check({}) } }, "Chidi Okeke")).toEqual({ bankName: "CHIDI OKEKE", differs: undefined, problem: undefined });
+    expect(saveAsAnswer({ saved: { name: "chidi", check: check({}) } }, "Chidi Okafor").differs).toBe("The message says Chidi Okafor; the bank says CHIDI OKEKE.");
+    const later = "Paystack did not check the name just now; it is checked again later.";
+    expect(saveAsAnswer({ saved: { name: "chidi", check: check({ state: "unchecked", account_name: null }) }, check_problem: later })).toEqual({
+      bankName: undefined,
+      differs: undefined,
+      problem: later,
+    });
+    expect(saveAsAnswer({ saved: { name: "chidi", check: check({ state: "unchecked", account_name: null }) } })).toEqual({ bankName: undefined, differs: undefined, problem: undefined });
   });
 });

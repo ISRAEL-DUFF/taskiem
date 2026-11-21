@@ -251,12 +251,13 @@ function Sent({ x }: { x: Payment }) {
  * (its check digit fits their code; those the business pays most ahead),
  * the full list one tap away; and "Check the likely banks for me" asks
  * the bank's name at up to three of them at once, to pick the right one. */
-function BankPicker({
+export function BankPicker({
   label,
   value,
   onChange,
   account = "",
   expectName,
+  onList,
 }: {
   label: string;
   value: string;
@@ -265,11 +266,17 @@ function BankPicker({
   account?: string;
   /** The name the message gave, to compare with the bank's. */
   expectName?: string;
+  /** The banks, once read (null when they cannot be: the bank typed), for
+   * what saves a bank's code with the name (Save as…). */
+  onList?: (l: BankList | null) => void;
 }) {
   const digits = accountDigits(account);
   const number = /^\d{10}$/.test(digits) ? digits : "";
   const owner = !!useAuth().me?.roles.includes("owner");
   const [list, setList] = useState<BankList | null>();
+  useEffect(() => {
+    if (list !== undefined) onList?.(list);
+  }, [list, onList]);
   const [search, setSearch] = useState("");
   const [all, setAll] = useState(false);
   const [answers, setAnswers] = useState<NameAnswer[]>();

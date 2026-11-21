@@ -1392,3 +1392,77 @@ for (const scheme of ["light", "dark"] as const)
       await expect(sheet.getByTestId("pay-name")).toHaveText("MUSA BELLO");
       expect(body).toEqual({ from: "tools", rider_id: rider, amount_kobo: 450_000, purpose: "delivery" });
     });
+
+// Save as… beside a message's Pay this account (paying people, phase 2):
+// the chip line, the sheet with the likely banks, and the sheet once saved
+// with the bank's name, signed in as a new owner. The customer chat, the
+// message's reading, the banks and the save are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Save as… from a message passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Save As ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@saveas.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const text = "Acct: 0123456789, send 45k. Chidi Okafor";
+      const chat = { id: "0192e2e0-0000-7000-8000-00000000e101", name: "Tolu Bello", phone: "+234 803 ••• 0099", last: text, last_mine: false, last_at: now, unread: 0, window_open: true, window_until: null, stopped: false, archived: false, line: "whatsapp" };
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/customer-chats"),
+        (q) => {
+          const p = new URL(q.request().url()).pathname;
+          if (p === "/v1/customer-chats") return q.fulfill(fulfil({ chats: [chat] }));
+          if (p === "/v1/customer-chats/unread") return q.fulfill(fulfil({ chats: 0, messages: 0 }));
+          if (p === `/v1/customer-chats/${chat.id}`) return q.fulfill(fulfil(chat));
+          if (p.endsWith("/messages")) return q.fulfill(fulfil({ messages: [{ id: "m1", mine: false, kind: "text", body: text, read_at: now, created_at: now }], more: false }));
+          if (p.endsWith("/orders")) return q.fulfill(fulfil({ orders: [] }));
+          return q.fulfill(fulfil({}));
+        },
+      );
+      const banks = [
+        { code: "058", name: "Guaranty Trust Bank", likely: true },
+        { code: "044", name: "Access Bank", likely: true },
+      ];
+      await page.route("**/v1/payments/read", (q) => q.fulfill(fulfil({ found: true, account_number: "0123456789", amount_kobo: 4_500_000, name: "Chidi Okafor", likely: banks })));
+      await page.route("**/v1/payments/banks?*", (q) => q.fulfill(fulfil({ from: "paystack", banks })));
+      await page.route(
+        (u) => u.pathname === "/v1/saved",
+        (q) => {
+          if (q.request().method() !== "POST") return q.fallback();
+          return q.fulfill(
+            fulfil(
+              {
+                saved: {
+                  id: "0192e2e0-0000-7000-8000-00000000e102", owner: "business", name: "chidi-okafor", title: "Chidi Okafor", kind: "bank_account", hint: "GTBank ••6789",
+                  details: { bank_name: "Guaranty Trust Bank", account_number: "••6789" }, check: { state: "checked", account_name: "CHIDI OKEKE", via: "paystack", at: now, problem: null },
+                  to_change: false, created_at: now, updated_at: now,
+                },
+              },
+              201,
+            ),
+          );
+        },
+      );
+      await page.goto(`/chat?with=c-${chat.id}`);
+      const message = page.getByTestId("customer-pane").getByTestId("customer-message").filter({ hasText: "send 45k" });
+      await expect(message.getByTestId("pay-chip-save")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a message with Save as…", vs)).toEqual([]);
+      await message.getByTestId("pay-chip-save").click();
+      const sheet = page.getByTestId("save-as-sheet");
+      await expect(sheet.getByRole("group", { name: "Banks this number could be with" })).toBeVisible();
+      vs = await axe(page);
+      expect(vs, describe("the Save as sheet", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await sheet.getByRole("button", { name: "Guaranty Trust Bank" }).click();
+      await sheet.getByTestId("save-as-save").click();
+      await expect(sheet.getByTestId("save-as-bank-name")).toContainText("CHIDI OKEKE");
+      vs = await axe(page);
+      expect(vs, describe("the Save as sheet, saved", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });

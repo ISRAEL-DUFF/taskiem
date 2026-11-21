@@ -8,6 +8,10 @@
 // A chip already paid says so, and still pays again. Only for people who
 // may pay (money.pay); staff pay saved accounts only, so an account not
 // saved asks them to have an owner save it. Nothing is paid by the chip.
+// Beside it, for whoever may manage saved things (saved.manage), "Save
+// as…" keeps an account not saved yet by a name to call them by
+// (SaveAsSheet); saved, the chip says that @name and Pay goes by it.
+// Staff who may save see it in place of "Ask an owner to save".
 
 import {
   createContext,
@@ -26,9 +30,11 @@ import {
   chipWords,
   mayHoldAccount,
   messageFill,
+  saveAsShown,
   type PayReading,
 } from "../lib/paymessage";
 import { PaySheet } from "./PaySheet";
+import { SaveAsSheet } from "./SaveAsSheet";
 
 /** What a message's words were read as, once per words. */
 const reads = new Map<string, Promise<PayReading>>();
@@ -44,9 +50,12 @@ const readMessage = (text: string): Promise<PayReading> => {
 
 interface PayFrom {
   owner: boolean;
+  /** May keep an account among the business's saved ones (saved.manage). */
+  mayKeep: boolean;
   /** Changes when a payment is made, so chips read again. */
   paidAt: number;
   open: (r: PayReading, text: string, from: DOMRect) => void;
+  keep: (r: PayReading, text: string, from: DOMRect) => void;
 }
 
 const Ctx = createContext<PayFrom | null>(null);
@@ -61,17 +70,44 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
     text: string;
     from: DOMRect;
   }>();
+  const [keeping, setKeeping] = useState<{
+    r: PayReading;
+    text: string;
+    from: DOMRect;
+  }>();
   const [paidAt, setPaidAt] = useState(0);
   const open = useCallback(
     (r: PayReading, text: string, from: DOMRect) =>
       setPaying({ r, text, from }),
     [],
   );
+  const keep = useCallback(
+    (r: PayReading, text: string, from: DOMRect) =>
+      setKeeping({ r, text, from }),
+    [],
+  );
   if (!can("money.pay")) return <>{children}</>;
   const fill = paying && messageFill(paying.r);
+  const mayKeep = can("saved.manage");
   return (
-    <Ctx.Provider value={{ owner, paidAt, open }}>
+    <Ctx.Provider value={{ owner, mayKeep, paidAt, open, keep }}>
       {children}
+      {keeping && (
+        <SaveAsSheet
+          r={keeping.r}
+          rect={keeping.from}
+          onClose={() => setKeeping(undefined)}
+          onSaved={(name) => {
+            // Saved: the message reads as this @name from now on, so the
+            // chip says it and Pay goes by it (for staff too).
+            reads.set(
+              keeping.text,
+              Promise.resolve({ ...keeping.r, payee: name }),
+            );
+            setPaidAt(Date.now());
+          }}
+        />
+      )}
       {paying && fill && (
         <PaySheet
           title="Pay this account"
@@ -145,10 +181,23 @@ export function PayChip({ text }: { text: string | undefined }) {
           <span>{chipWords(r)}</span>
         </button>
       )}
-      {kind === "ask" && (
+      {kind === "ask" && !ctx.mayKeep && (
         <span className="pay-chip muted" data-testid="pay-chip-ask">
           Ask an owner to save this account
         </span>
+      )}
+      {r && kind && saveAsShown(r, ctx.mayKeep) && (
+        <button
+          type="button"
+          className="pay-chip save"
+          onClick={(e) =>
+            ctx.keep(r, words, e.currentTarget.getBoundingClientRect())
+          }
+          data-testid="pay-chip-save"
+        >
+          <Icon name="plus" />
+          <span>Save as…</span>
+        </button>
       )}
     </span>
   );
