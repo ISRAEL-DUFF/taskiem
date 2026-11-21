@@ -1,6 +1,6 @@
 # Menus everywhere, and a picker that searches
 
-Status: E1, E2 and E3 built, 21 November 2026; E4 to come. Follows [Menus in the chat](chat-menus.md)
+Status: built (E1–E4), 21 November 2026. Follows [Menus in the chat](chat-menus.md)
 (M1–M4, built) and [Chat tools](chat-tools.md).
 
 ## 1. Why
@@ -202,6 +202,28 @@ The picker over the message box ("/product", "/invoice", "@"):
 - The run and its answer are one helper on each side now: `runActionHere`
   (app) and `useActionRun` (web), used by the tools panel and Today alike.
 
+## What E4 built (21 November 2026)
+
+- **Search everywhere** (app `search_everywhere.dart`, web
+  `SearchEverywhere.tsx` at `/search`): a search button in the head of
+  Chats and of Today. One box, and chips: All · Actions · Chats · Products ·
+  Invoices · Orders · Customers. As the words are typed, the results in
+  groups, three of each in All, and "Show more" goes to the group's chip,
+  eight at a time there.
+- **Where each comes from**: actions from the person's catalogue (a word of
+  the title, the topic's name, or the command: "add rider" finds "Add a
+  rider"); chats from the linked businesses; products from the business's
+  stock; invoices and bills, orders and purchases, and customers from the
+  refs search of E1 (`GET /v1/chat-refs` with `q`, `kind`, `cursor`), every
+  record. There is no `GET /v1/search`: each list was already searchable
+  where it is, so one more endpoint would only join them.
+- **What a result does**: an action is done as from Today (its form first,
+  its answer in a sheet); a chat or a customer opens its conversation; an
+  invoice, a bill, an order or a purchase opens its own page; a product opens
+  the stock list.
+- **Not in E4**: the words of messages (each conversation's own search has
+  them), saved things, and services.
+
 ## 10. Phases
 
 | | What | Where |
@@ -209,7 +231,7 @@ The picker over the message box ("/product", "/invoice", "@"):
 | **E1** | The picker's search box, kind chips and "Show more"; the refs lists searched on the server (built) | server, app, web |
 | **E2** | `POST /v1/chat/actions/{id}/run`; the grid button's second view, its answer in a sheet, the note in a business's chat (built) | server, app, web |
 | **E3** | Today's panel (built) | app, web |
-| **E4** | Search everywhere, actions included | app, web |
+| **E4** | Search everywhere, actions included (built) | app, web |
 
 E1 first: it is the one people hit every day as their lists grow, and E4 reuses
 its search.

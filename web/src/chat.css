@@ -791,3 +791,19 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .home-actions { margin: 0 0 16px; }
 .home-actions > h2 { margin: 0 0 8px 4px; font-size: 20px; letter-spacing: -0.02em; }
 .home-actions .tk-menu { max-width: none; margin: 0; }
+
+/* Search everywhere (menus-everywhere.md §6). */
+.head-search { display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; color: var(--text); background: var(--panel); }
+.head-search:hover { background: var(--panel-2); }
+.head-search svg { width: 20px; height: 20px; }
+.greeting { position: relative; }
+.greeting-search { position: absolute; top: 0; right: 0; }
+.greeting:has(.greeting-search) > h1, .greeting:has(.greeting-search) > p { padding-right: 52px; }
+.search-everywhere { max-width: 720px; }
+.search-everywhere-box { margin: 0 0 10px; }
+.search-everywhere .tk-chips { padding: 0 0 12px; }
+.search-group { margin: 14px 0 0; }
+.search-group > h2 { margin: 0 0 8px 4px; font-size: 18px; }
+.search-group .item { width: 100%; text-align: left; }
+.search-more { display: flex; justify-content: center; padding: 8px 0 0; }
+.search-hint { margin: 8px 4px; }

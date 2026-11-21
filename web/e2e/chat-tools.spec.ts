@@ -131,6 +131,11 @@ for (const width of [390, 360])
     await expect(answer).toBeVisible();
     await expect(pane.getByTestId("taskiem-note")).toHaveCount(2);
     await expect(pane.getByTestId("taskiem-note").last()).toContainText("Give someone a task: Tunde, count the float by 7am");
+    // "/" typed is the tools, never the menu, though the menu was used last.
+    await pane.getByLabel("Message").fill("/");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("button", { name: "What would you like to do?" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Staff and tasks" })).toHaveCount(0);
   });
 
 const json = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });

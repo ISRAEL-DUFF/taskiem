@@ -73,6 +73,10 @@ export function Home() {
   return (
     <>
       <div className="greeting">
+        {/* Search everywhere (menus-everywhere.md §6). */}
+        <Link className="head-search greeting-search" to="/search" aria-label="Search everything">
+          <Icon name="search" />
+        </Link>
         <h1>
           {greeting()}
           {first ? `, ${first}` : ""}

@@ -204,3 +204,48 @@ for (const width of [390, 360])
     await answer.getByRole("button", { name: "Taskiem chat" }).click();
     await expect(pane(page).getByText("Your tasks", { exact: true }).first()).toBeVisible();
   });
+
+// Menus everywhere, E4 (menus-everywhere.md §6): search everywhere, from
+// Today's head and the chats': one box; actions, chats, products, invoices,
+// orders and customers in groups; an action done, its answer in a sheet.
+for (const width of [390, 360])
+  test(`search everywhere, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    await page.goto("/home");
+    await page.getByRole("link", { name: "Search everything" }).click();
+    await expect(page).toHaveURL(/\/search$/);
+    const box = page.getByRole("searchbox", { name: "Search everything" });
+    await expect(box).toBeFocused();
+    await box.fill("task");
+    const actions = page.getByTestId("search-action");
+    await expect(actions.getByRole("button", { name: /Give someone a task/ })).toBeVisible();
+    if (width === 390) await page.screenshot({ path: "test-results/search-everywhere-phone.png" });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`search everywhere (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    // A chip: only that kind.
+    await page.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "Invoices" }).click();
+    await expect(actions).toHaveCount(0);
+    await page.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "All" }).click();
+    // An action: done, its answer in a sheet.
+    await actions.getByRole("button", { name: /Your tasks/ }).click();
+    await expect(page.getByTestId("action-answer")).toBeVisible();
+    // Nothing found, said so.
+    await page.getByTestId("action-answer").getByRole("button", { name: "Done" }).click();
+    await box.fill("zzqx");
+    await expect(page.getByText("Nothing found for “zzqx”.")).toBeVisible();
+  });
+
+test("search everywhere from the chats' head", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+  await page.goto("/chat");
+  await page.getByRole("link", { name: "Search everything" }).click();
+  await expect(page.getByTestId("search-everywhere")).toBeVisible();
+});

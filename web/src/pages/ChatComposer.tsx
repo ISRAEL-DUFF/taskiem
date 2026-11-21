@@ -445,6 +445,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     dropProps,
     toolsShown,
     toolsQuery: slash?.[1] ?? "",
+    slashed: !!slash,
     setToolsOpen,
     closeTools,
     toolMatches,
@@ -640,6 +641,7 @@ export function ComposerView<R>({
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
               business={c.o.scope?.name}
               extras={c.o.extras}
+              slashed={c.slashed}
               menu={
                 <MenuCard
                   menu={{}}

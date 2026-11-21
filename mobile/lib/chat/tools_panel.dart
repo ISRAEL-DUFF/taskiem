@@ -58,6 +58,10 @@ class ToolsController extends ChangeNotifier {
   /// What follows "/", when it was typed.
   String get query => _slash ?? '';
 
+  /// Opened by "/" typed (not the button): it shows the tools, never the
+  /// menu, even when the menu was the view used last.
+  bool get bySlash => _slash != null;
+
   /// Clears the box's "/" and word (ChatComposer.tsx closeTools): set by
   /// the screen whose box it is.
   VoidCallback? clearSlash;
@@ -263,7 +267,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
     final more = [for (final x in widget.extras) if (named(x)) x];
     final none = lead.isEmpty && listed.isEmpty && more.isEmpty;
     // "/" and a word looks for a tool: the tools, whichever view was last.
-    final menu = q.isEmpty ? widget.menu : null;
+    final menu = c.bySlash ? null : widget.menu;
     final onMenu = menu != null && c.menuView;
     // The last used, as tiles of this panel.
     final recent = [

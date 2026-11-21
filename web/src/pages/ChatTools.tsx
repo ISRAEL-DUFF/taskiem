@@ -236,9 +236,12 @@ export function ToolsPanel({
   business,
   extras,
   menu,
+  slashed = false,
 }: {
   /** The topics' menu, as the panel's other view (menus-everywhere.md §4). */
   menu?: ReactNode;
+  /** Opened by "/" typed (not the button): the tools, never the menu. */
+  slashed?: boolean;
   /** What follows "/" in the box, when it was typed. */
   query: string;
   onOpen: (k: ToolKey, from: DOMRect) => void;
@@ -256,7 +259,7 @@ export function ToolsPanel({
   const { can, me } = useAuth();
   // "/" and a word looks for a tool: the tools, whichever view was last.
   const [view, setView] = useState(lastView);
-  const onMenu = !!menu && !query && view === "menu";
+  const onMenu = !!menu && !slashed && !query && view === "menu";
   const show = (v: "tools" | "menu") => {
     lastView = v;
     setView(v);
@@ -376,7 +379,7 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
-      {menu && !query && (
+      {menu && !slashed && !query && (
         <div className="tk-chips tk-tools-view" role="group" aria-label="Show">
           <button type="button" aria-pressed={!onMenu} onClick={() => show("tools")}>
             Tools

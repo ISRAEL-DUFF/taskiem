@@ -32,7 +32,7 @@ import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
-import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
+import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
 import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -247,8 +247,11 @@ String usualWords(({int kobo, bool? up}) v, DateTime now) {
 }
 
 class TodayTab extends StatefulWidget {
-  const TodayTab({super.key, required this.auth, this.now});
+  const TodayTab({super.key, required this.auth, this.now, this.onSearch});
   final Auth auth;
+
+  /// Search everywhere (menus-everywhere.md §6): its button in the head.
+  final VoidCallback? onSearch;
   final DateTime Function()? now;
 
   @override
@@ -634,6 +637,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
               ],
             ),
           ),
+          if (widget.onSearch != null) ...[const SizedBox(width: 10), TkHeadButton(icon: 'b-search', label: 'Search everything', onTap: widget.onSearch!)],
           if (name.isNotEmpty) ...[const SizedBox(width: 10), TkFace(tkInitials(name), size: 38)],
         ],
       ),

@@ -10,6 +10,7 @@ test.use({ bypassCSP: true });
 
 const PAGES = [
   "/home",
+  "/search",
   "/workflows",
   "/runs",
   "/approvals",

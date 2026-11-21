@@ -132,5 +132,11 @@ void main() {
     await settle(t);
     expect(ran.last.$1, 'owe.add');
     expect(ran.last.$2, {'link': _bayo, 'values': {'who': 'Bisi', 'amount': '6500'}});
+
+    // "/" typed is the tools, never the menu, though the menu was used last.
+    await t.enterText(find.byType(EditableText).first, '/');
+    await settle(t);
+    expect(find.text('What would you like to do?'), findsNothing);
+    expect(find.text('Who owes you'), findsNothing);
   });
 }
