@@ -3095,6 +3095,9 @@ export interface StorefrontPaymentLinkInput {
   amount_kobo?: Val<number>;
   reference: Val<string>;
 }
+export interface StorefrontRecentCustomersInput {
+  days?: Val<number>;
+}
 export interface StorefrontRefundInput {
   reference: Val<string>;
 }
@@ -3113,6 +3116,8 @@ export const storefront = {
   offer_place: (input: StorefrontOfferPlaceInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "offer_place", input, extra),
   /** Make the order's payment link (idempotent_write) */
   payment_link: (input: StorefrontPaymentLinkInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "payment_link", input, extra),
+  /** Customers who ordered lately (read) */
+  recent_customers: (input?: StorefrontRecentCustomersInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "recent_customers", input, extra),
   /** Refund the customer (idempotent_write) */
   refund: (input: StorefrontRefundInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "refund", input, extra),
 };
@@ -3936,7 +3941,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
-  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
+  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "recent_customers", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
