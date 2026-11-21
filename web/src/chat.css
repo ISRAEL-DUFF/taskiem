@@ -763,3 +763,17 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-menu-close { flex: none; align-self: flex-start; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -8px -8px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .tk-menu-close:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
 .tk-menu-close svg { width: 18px; height: 18px; }
+
+/* The picker's search box, kinds and Show more (menus-everywhere.md §7). */
+.tk-picker-search { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 2px 4px; padding: 0 14px; border-radius: 14px; background: var(--panel-2); color: var(--muted); }
+.tk-picker-search:focus-within { box-shadow: 0 0 0 2px var(--brand); }
+.tk-picker-search svg { width: 18px; height: 18px; flex: none; }
+.tk-picker-search input[type="search"] { flex: 1; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; background: none; padding: 10px 0; font: inherit; font-size: 15px; color: var(--text); outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+/* Over the global soft field (styles.css "Fields without outlines"): the
+   picker's box is the field, so the input inside has no fill of its own. */
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):hover,
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):focus { background: none; box-shadow: none; outline: none; }
+.tk-picker-chips { padding: 4px 2px 6px; }
+.tk-picker-note { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }
+.tk-picker-more { display: flex; justify-content: center; padding: 6px 0 2px; }

@@ -22,6 +22,10 @@ import {
   unlinkedSuggestion,
   refStatusWords,
   REF_LABEL,
+  CHIPS,
+  CHIP_KINDS,
+  chipOf,
+  type Chip,
   type Mention,
   type MentionQuery,
   type RefKind,
@@ -74,6 +78,10 @@ export function useMentions(
     /** Saved things other than texts kept as tags, sent with the message
      * (a business's chat with another business; saved objects S1). */
     savedAsTags?: boolean;
+    /** Invoices, orders and customers searched on the server, every
+     * record (menus-everywhere.md §7): the words, the kinds, where the
+     * last page ended; the next page and where it ends ("" for no more). */
+    searchRefs?: (words: string, kinds: string, cursor?: string) => Promise<{ list: Suggestion[]; cursor: string }>;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -111,7 +119,80 @@ export function useMentions(
     };
   }, [words]);
   const unlinked = found && words.length >= 2 && found.q === words ? found.list : [];
+  // The picker's chips, Show more and the server's search (menus-
+  // everywhere.md §7): another tag begun starts again on its own chip.
+  const tagKey = q ? `${q.start}|${q.mark}|${q.kind ?? ""}` : "";
+  const [chosen, setChosen] = useState<{ tag: string; chip: Chip; more: number }>();
+  const chip: Chip = chosen?.tag === tagKey ? chosen.chip : q?.mark === "@" ? "all" : chipOf(q?.kind);
+  const more = chosen?.tag === tagKey ? chosen.more : 0;
+  // "/bill" and "/purchase" keep to their own kind until a chip is pressed.
+  const narrow = chosen?.tag !== tagKey && (q?.kind === "bill" || q?.kind === "purchase") ? q.kind : undefined;
+  const local = (k: Chip): Suggestion[] =>
+    k === "product"
+      ? q?.mark === "@"
+        ? sources["#"]
+        : (sources.refs?.product ?? sources["#"])
+      : k === "service"
+        ? (sources.services ?? [])
+        : k === "invoice" || k === "order" || k === "customer"
+          ? (sources.refs?.[narrow ?? k] ?? [])
+          : k === "business"
+            ? sources["@"]
+            : k === "saved"
+              ? (sources.saved ?? [])
+              : [];
+  const chips: Chip[] =
+    grouped && q && (q.mark === "@" || (q.mark === "/" && q.kind))
+      ? (Object.keys(CHIPS) as Chip[]).filter((k) => k === chip || (k === "all" ? q.mark === "@" : local(k).length > 0))
+      : [];
+  const searchWords = (q?.query ?? "").trim().toLowerCase();
+  const servedKey = `${narrow ?? chip}|${searchWords}`;
+  const [served, setServed] = useState<{ key: string; list: Suggestion[]; cursor: string }>();
+  const [offline, setOffline] = useState(false);
+  const kinds = chips.length > 0 ? (narrow ?? CHIP_KINDS[chip]) : undefined;
+  useEffect(() => {
+    const look = sources.searchRefs;
+    if (!look || !kinds || served?.key === servedKey) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      look(searchWords, kinds).then(
+        (r) => {
+          if (!live) return;
+          setServed({ key: servedKey, list: r.list, cursor: r.cursor });
+          setOffline(false);
+        },
+        () => live && setOffline(true),
+      );
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [servedKey, kinds]);
+  const fromServer = served?.key === servedKey ? served : undefined;
+  const chipAll =
+    chips.length > 0 && chip !== "all" && q
+      ? fromServer
+        ? fromServer.list
+        : suggest(local(chip), q.query, null)
+      : [];
+  const hasMore = chipAll.length > 6 * (more + 1) || (!!fromServer && fromServer.cursor !== "");
+  const showMore = () => {
+    setChosen({ tag: tagKey, chip, more: more + 1 });
+    const look = sources.searchRefs;
+    if (!look || !kinds || !fromServer || !fromServer.cursor || fromServer.list.length >= 6 * (more + 2)) return;
+    look(searchWords, kinds, fromServer.cursor).then(
+      (r) =>
+        setServed((cur) =>
+          cur && cur.key === fromServer.key ? { key: cur.key, list: [...cur.list, ...r.list], cursor: r.cursor } : cur,
+        ),
+      () => setOffline(true),
+    );
+  };
   const groups: SuggestionGroup[] =
+    chips.length > 0 && chip !== "all"
+      ? [{ label: CHIPS[chip], items: chipAll.slice(0, 6 * (more + 1)) }]
+      :
     q && grouped && q.mark === "@"
       ? groupSuggestions(
           q.query,
@@ -215,7 +296,7 @@ export function useMentions(
     const next =
       s.kind === "saved" && s.body !== undefined
         ? insertWords(text, q, end, s.body)
-        : insertMention(text, q, end, s.name);
+        : insertMention(text, q, end, s.name, s.kind);
     // The words and the caret move together, at once: a caret put back a
     // frame later would land the next key typed at the end of the box.
     flushSync(() => {
@@ -274,6 +355,19 @@ export function useMentions(
     setPicked([]);
     setQ(null);
   };
+  /** The search box typed in: its words in the text box, after the mark
+   * (and "/invoice "), so both say the same. */
+  const searchFor = (words: string) => {
+    if (!q) return;
+    const head = q.mark === "/" ? (/^[a-z]+[/ ]/i.exec(text.slice(q.start + 1))?.[0].length ?? 0) : 0;
+    const from = q.start + 1 + head;
+    const end = Math.min(from + q.query.length, text.length);
+    const next = text.slice(0, from) + words + text.slice(end);
+    setText(next);
+    update(next, from + words.length);
+    const el = box.current;
+    requestAnimationFrame(() => el?.setSelectionRange(from + words.length, from + words.length));
+  };
   return {
     /** What was picked, kept to give back to a message not sent. */
     picked: () => picked,
@@ -295,6 +389,13 @@ export function useMentions(
     reset,
     close: () => setQ(null),
     box,
+    chips,
+    chip,
+    pickChip: (k: Chip) => k !== chip && setChosen({ tag: tagKey, chip: k, more: 0 }),
+    hasMore,
+    showMore,
+    searchFor,
+    offline: offline && !!kinds,
     card,
     // The sheet asked, withdrew or answered: the row says so at once.
     cardChanged: (business: string, state: ExploreCard["state"]) =>
@@ -331,7 +432,7 @@ export function GroupedPicker({ m }: { m: Mentions }) {
   const open =
     !!m.grouped &&
     (m.q?.mark === "@" || m.q?.mark === "/") &&
-    m.shown.length > 0;
+    (m.shown.length > 0 || m.chips.length > 1);
   const p = usePresence(open, 150);
   const last = useRef<{
     query: string;
@@ -496,18 +597,49 @@ function Picker({
       aria-label={kind ? what : "Tag something"}
       data-testid="mention-list"
     >
-      <div className="tk-picker-head">
-        <span>
-          {query ? (
-            <>
-              Matches for <b>{query}</b>
-            </>
-          ) : (
-            what
-          )}
-        </span>
-        {query && <span>{what}</span>}
+      {/* The search box and the kinds (menus-everywhere.md §7). */}
+      <div className="tk-picker-search">
+        <Icon name="search" />
+        <input
+          type="search"
+          aria-label="Search what to tag"
+          placeholder={
+            m.chip === "all"
+              ? "Search things and businesses"
+              : m.chip === "invoice"
+                ? "Search invoices and bills"
+                : `Search ${CHIPS[m.chip].toLowerCase()}`
+          }
+          value={query}
+          onChange={(e) => m.searchFor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && m.enterPick) {
+              e.preventDefault();
+              m.pick(m.enterPick);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              m.list.current?.querySelector<HTMLButtonElement>(".tk-pick")?.focus();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              m.close();
+              m.box.current?.focus();
+            }
+          }}
+        />
       </div>
+      {m.chips.length > 1 && (
+        <div className="tk-chips tk-picker-chips" role="group" aria-label="Kinds">
+          {m.chips.map((k) => (
+            <button key={k} type="button" aria-pressed={k === m.chip} onClick={() => m.pickChip(k)}>
+              {CHIPS[k]}
+            </button>
+          ))}
+        </div>
+      )}
+      {m.offline && <p className="tk-picker-note">Searching what is on this phone</p>}
+      {groups.every((g) => g.items.length === 0) && (
+        <p className="tk-picker-note">{query ? `Nothing found for "${query}"` : "Nothing here yet"}</p>
+      )}
       {groups.map((g) => (
         <div
           key={g.label || "taskiem"}
@@ -551,6 +683,13 @@ function Picker({
           })}
         </div>
       ))}
+      {!leaving && m.hasMore && (
+        <div className="tk-picker-more">
+          <button type="button" className="secondary" onClick={m.showMore}>
+            Show more
+          </button>
+        </div>
+      )}
       {/* On a computer, the keys (DeskSeller). */}
       <div className="tk-picker-keys" aria-hidden="true">
         <span>

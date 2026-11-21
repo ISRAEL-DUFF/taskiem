@@ -160,7 +160,7 @@ const wordStarts = (text: string, q: string) =>
 /** The suggestions a query fits: a word of the name starting with it
  * first, then the name holding it, then those whose category or words
  * hold it ("nike" finds a shoe whose description says Nike); six at most. */
-export function suggest(list: Suggestion[], query: string): Suggestion[] {
+export function suggest(list: Suggestion[], query: string, limit: number | null = 6): Suggestion[] {
   const q = query.trim().toLowerCase();
   const starts: Suggestion[] = [];
   const holds: Suggestion[] = [];
@@ -175,7 +175,8 @@ export function suggest(list: Suggestion[], query: string): Suggestion[] {
     )
       about.push(s);
   }
-  return [...starts, ...holds, ...about].slice(0, 6);
+  const all = [...starts, ...holds, ...about];
+  return limit === null ? all : all.slice(0, limit);
 }
 
 /** The categories of a list with how many items each has, the most used
@@ -223,10 +224,24 @@ export function insertMention(
   q: MentionQuery,
   caret: number,
   name: string,
+  kind?: string,
 ): { text: string; caret: number } {
   // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
-  // a saved thing found with "/mum" as its "@mum".
-  const head = text.slice(0, q.start) + (q.mark === "/" ? (q.kind ? "#" : "@") : q.mark) + name + " ";
+  // a saved thing found with "/mum" as its "@mum". Picked under another
+  // chip of the picker (menus-everywhere.md §7): a business or a saved
+  // thing as "@", an invoice or an order as "#" (a customer as typed: in a
+  // group "@" names a member).
+  const mark =
+    kind === "business" || kind === "saved"
+      ? "@"
+      : kind === "invoice" || kind === "bill" || kind === "order" || kind === "purchase"
+        ? "#"
+        : q.mark === "/"
+          ? q.kind
+            ? "#"
+            : "@"
+          : q.mark;
+  const head = text.slice(0, q.start) + mark + name + " ";
   return { text: head + text.slice(caret), caret: head.length };
 }
 
@@ -368,3 +383,31 @@ export function unlinkedSuggestion(c: ExploreCard): Suggestion | null {
       return null;
   }
 }
+
+/** The picker's chips (menus-everywhere.md §7), in its order. */
+export const CHIPS = {
+  all: "All",
+  product: "Products",
+  service: "Services",
+  invoice: "Invoices",
+  order: "Orders",
+  customer: "Customers",
+  business: "Businesses",
+  saved: "Saved",
+} as const;
+export type Chip = keyof typeof CHIPS;
+
+/** The chip "/invoice" and the like open on. */
+export function chipOf(kind?: RefKind): Chip {
+  if (!kind) return "all";
+  if (kind === "bill") return "invoice";
+  if (kind === "purchase") return "order";
+  return kind;
+}
+
+/** The kinds a chip searches on the server. */
+export const CHIP_KINDS: Partial<Record<Chip, string>> = {
+  invoice: "invoice,bill",
+  order: "order,purchase",
+  customer: "customer",
+};

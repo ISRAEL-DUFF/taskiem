@@ -1,6 +1,6 @@
 # Menus everywhere, and a picker that searches
 
-Status: proposed, 21 November 2026. Follows [Menus in the chat](chat-menus.md)
+Status: E1 built, 21 November 2026; E2–E4 to come. Follows [Menus in the chat](chat-menus.md)
 (M1–M4, built) and [Chat tools](chat-tools.md).
 
 ## 1. Why
@@ -137,11 +137,39 @@ The picker over the message box ("/product", "/invoice", "@"):
 - The menus on WhatsApp outside the Taskiem conversation: WhatsApp has only the
   one conversation.
 
+## What E1 built (21 November 2026)
+
+- **The search** is on the two lists the picker already read, not a new
+  `/v1/search`: `GET /v1/chat-refs` (the Taskiem chat) and
+  `GET /v1/link-chats/{link}/refs` (a business's conversation, only what is
+  between the two) take `q`, `kind` (invoice, bill, order, purchase,
+  customer; comma separated), `cursor` and `limit`, and answer `refs` with a
+  `cursor` for the next page ("" for no more). Without any of them they answer
+  as before. A customer's name is sealed, so no index finds it: each list is
+  read a page of 200 at a time, newest first, each row opened and matched,
+  until enough are found or 2,000 rows were read; the cursor keeps where each
+  kind stopped (`api/chat_refs_search.go`). A word matches the start of a word
+  of the number, who it is with (a person's name in full, though it is shown
+  masked), the kind or the status ("unpaid", "overdue", "delivered"); digits
+  anywhere in a reference ("0104"). `GET /v1/search` stays for E4.
+- **Products, services, businesses and saved things** are searched on the
+  phone or the page, as before: those lists were already whole there, only
+  shown six at a time.
+- **The picker** (app `tag_box.dart`, `tag_picker.dart`; web `Mentions.tsx`):
+  a search box at the top holding the words after the mark (typed in either,
+  both change); the kinds as chips, only those with something to offer;
+  "/invoice" opens on Invoices, "/bill" and "/purchase" keep to their own kind
+  until another chip is pressed; six, then "Show more", six at a time, the
+  server's next page when those run out; "Nothing found" when nothing matched,
+  with the chips still there to try; "Searching what is on this phone" when the
+  server could not be asked. Something picked under another chip goes in with
+  its own mark: a business or a saved thing "@", an invoice or an order "#".
+
 ## 10. Phases
 
 | | What | Where |
 |---|---|---|
-| **E1** | `GET /v1/search`; the picker's search box, kind chips and "Show more" | server, app, web |
+| **E1** | The picker's search box, kind chips and "Show more"; the refs lists searched on the server (built) | server, app, web |
 | **E2** | `POST /v1/chat/actions/{id}/run`; the menu in a sheet (`place: sheet`); the grid button's second view, with the note in a business's chat | server, app, web |
 | **E3** | Today's panel | app, web |
 | **E4** | Search everywhere, actions included | app, web |

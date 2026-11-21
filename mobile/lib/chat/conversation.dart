@@ -1098,6 +1098,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tags = TagBox(
     text: _text,
     sources: _tagSources,
+    // Invoices, orders and customers searched on the server, every record
+    // (menus-everywhere.md §7).
+    searchRefs: (words, kinds, cursor) async {
+      final r = await widget.data.api.linkChatRefs(link: widget.data.conv.link, q: words, kind: kinds, cursor: cursor, limit: '20');
+      final now = widget.data.chats.now();
+      return (list: [for (final x in r.refs) refTag(x, now, date: shortDate, status: refStatusWords)], cursor: r.cursor ?? '');
+    },
     grouped: () => widget.data.chats.chatTools,
     taskiem: true,
     onChange: () {

@@ -9,7 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
-import { getBlob } from "../api";
+import { get, getBlob } from "../api";
+import { refSuggestion, type ChatRef } from "../lib/refs";
 import { savedFileURL } from "../lib/saved";
 import type { Suggestion } from "../lib/mentions";
 import { toast } from "../toast";
@@ -174,6 +175,18 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     // (saved objects S1): the chat's own checks and sending.
     {
       ...o.sources,
+      // Invoices, orders and customers searched on the server, every
+      // record (menus-everywhere.md §7): a business's conversation only
+      // what is between us.
+      searchRefs: o.grouped
+        ? async (words, kinds, cursor) => {
+            const qs = new URLSearchParams({ q: words, kind: kinds, limit: "20" });
+            if (cursor) qs.set("cursor", cursor);
+            const path = o.scope ? `/v1/link-chats/${encodeURIComponent(o.scope.link)}/refs` : "/v1/chat-refs";
+            const r = await get<{ refs: ChatRef[]; cursor?: string }>(`${path}?${qs}`);
+            return { list: r.refs.map((x) => refSuggestion(x)), cursor: r.cursor ?? "" };
+          }
+        : undefined,
       attachSaved: (s: Suggestion) =>
         void getBlob(savedFileURL(s.savedOwner ?? "mine", s.id)).then(
           (b) => void choose(new File([b], s.savedFile?.name ?? s.name, { type: s.savedFile?.type || b.type })),

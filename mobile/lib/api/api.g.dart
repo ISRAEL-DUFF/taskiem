@@ -268,8 +268,8 @@ class TaskiemApi {
   }
 
   /// What "/" may tag in the Taskiem chat (`GET /v1/chat-refs`)
-  Future<ChatRefsResponse> chatRefs() async {
-    final j = await _t.send('GET', '/v1/chat-refs');
+  Future<ChatRefsResponse> chatRefs({String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/chat-refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return ChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -613,8 +613,8 @@ class TaskiemApi {
   }
 
   /// What "/invoice", "/bill", "/order" and "/purchase" name in a conversation (`GET /v1/link-chats/{link}/refs`)
-  Future<LinkChatRefsResponse> linkChatRefs({required String link}) async {
-    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs');
+  Future<LinkChatRefsResponse> linkChatRefs({required String link, String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return LinkChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -4520,15 +4520,21 @@ class GetChatBriefingResponseTasks {
 }
 
 class ChatRefsResponse {
-  const ChatRefsResponse({required this.refs});
+  const ChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory ChatRefsResponse.fromJson(Map<String, dynamic> j) => ChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
@@ -7758,15 +7764,21 @@ class ChatCardLinesItem {
 }
 
 class LinkChatRefsResponse {
-  const LinkChatRefsResponse({required this.refs});
+  const LinkChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory LinkChatRefsResponse.fromJson(Map<String, dynamic> j) => LinkChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
