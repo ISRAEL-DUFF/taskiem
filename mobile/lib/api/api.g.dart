@@ -14177,7 +14177,7 @@ class Bill {
 /// The account number to pay this bill by transfer, for those who may pay bills
 /// (invoice.manage); null when none was asked for.
 class BillTransfer {
-  const BillTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, this.expiresAt, this.next, this.problem, this.receivedKobo, required this.state});
+  const BillTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, this.expiresAt, this.next, this.paidAt, this.problem, this.receivedKobo, required this.state});
 
   final String? accountName;
   final String? accountNumber;
@@ -14187,6 +14187,8 @@ class BillTransfer {
   final DateTime? expiresAt;
   /// Paid, the same supplier's next bill still to pay
   final String? next;
+  /// When the bill was paid in full
+  final DateTime? paidAt;
   /// Why a number could not be had, in plain words
   final String? problem;
   /// Part paid, what arrived
@@ -14200,6 +14202,7 @@ class BillTransfer {
         bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
         expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
         next: j['next'] == null ? null : j['next'] as String,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
         problem: j['problem'] == null ? null : j['problem'] as String,
         receivedKobo: j['received_kobo'] == null ? null : (j['received_kobo'] as num).toInt(),
         state: j['state'] as String,
@@ -14212,6 +14215,7 @@ class BillTransfer {
         'bank_name': ?bankName,
         'expires_at': ?expiresAt?.toUtc().toIso8601String(),
         'next': ?next,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
         'problem': ?problem,
         'received_kobo': ?receivedKobo,
         'state': state,
@@ -14219,7 +14223,7 @@ class BillTransfer {
 }
 
 class CustomerTransfer {
-  const CustomerTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, required this.dueKobo, this.expiresAt, required this.invoice, required this.reference, required this.state});
+  const CustomerTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, required this.dueKobo, this.expiresAt, required this.invoice, this.paidAt, required this.reference, required this.state});
 
   final String? accountName;
   final String? accountNumber;
@@ -14229,6 +14233,7 @@ class CustomerTransfer {
   final int dueKobo;
   final DateTime? expiresAt;
   final String invoice;
+  final DateTime? paidAt;
   final String reference;
   final String state;
 
@@ -14240,6 +14245,7 @@ class CustomerTransfer {
         dueKobo: (j['due_kobo'] as num).toInt(),
         expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
         invoice: j['invoice'] as String,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
         reference: j['reference'] as String,
         state: j['state'] as String,
       );
@@ -14252,6 +14258,7 @@ class CustomerTransfer {
         'due_kobo': dueKobo,
         'expires_at': ?expiresAt?.toUtc().toIso8601String(),
         'invoice': invoice,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
         'reference': reference,
         'state': state,
       };

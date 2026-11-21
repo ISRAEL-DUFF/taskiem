@@ -90,7 +90,7 @@ class TransferNow {
       problem: t.problem ?? '',
       next: t.next ?? '',
       // The bill is brought up to date when the payment is counted.
-      paidAt: t.state == 'paid' ? b.mirroredAt : null,
+      paidAt: t.state == 'paid' ? (t.paidAt ?? b.mirroredAt) : null,
     );
   }
 
@@ -106,6 +106,7 @@ class TransferNow {
       receivedKobo: c.state == 'part' && amount > c.dueKobo ? amount - c.dueKobo : 0,
       leftKobo: c.dueKobo,
       expiresAt: c.expiresAt,
+      paidAt: c.state == 'paid' ? c.paidAt : null,
     );
   }
 
