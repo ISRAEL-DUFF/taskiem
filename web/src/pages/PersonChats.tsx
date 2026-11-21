@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
 import { useAuth } from "../auth";
@@ -36,7 +40,7 @@ import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, yo
 import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, Ticks } from "./BubbleShell";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -532,10 +536,36 @@ export function PersonChatPage() {
     }
   };
 
+  const savedTexts = useSavedPicks("share-mine");
+  // Save "mum"… in the picker (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
+  // One's own saved thing other than a text, picked: shared with the
+  // business as a card (saved objects S1), after a yes to sharing what is
+  // sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setSendError(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<PersonMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergeMessages(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const closedNow = e instanceof ApiError ? erasedWords(e.status, e.message, "person") : null;
+        if (closedNow) setErased(closedNow);
+        else setSendError(e);
+        reloadChat();
+      }
+    })();
   const composer = useComposer<never>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    sources: { "@": [], "#": [] },
+    // Saved things (saved objects S1): a text's words into the box; the
+    // rest shared as cards.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
@@ -700,6 +730,26 @@ export function PersonChatPage() {
               testid="person-message"
               className={`${card ? "card-bubble" : ""}${m.offer ? " offer-bubble" : ""}`.trim()}
               what={(card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
+              menu={(() => {
+                // Copy and Save as… (saved objects S1): the words, or a photo
+                // or document as a file thing.
+                const words = !card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) ? m.body : "";
+                const file = m.attachment && m.attachment.kind !== "voice" && !m.local ? m.attachment : undefined;
+                if (m.local || (!words && !file)) return undefined;
+                return (close: () => void) => ({
+                  actions: (
+                    <>
+                      {words && <CopyItem text={words} />}
+                      {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
+                      {file && (
+                        <PopItem icon="note" disabled={saveAs.fileBusy} onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
+                          {words ? "Save the file as…" : "Save as…"}
+                        </PopItem>
+                      )}
+                    </>
+                  ),
+                });
+              })()}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
@@ -730,6 +780,7 @@ export function PersonChatPage() {
               {card && (
                 <AppCardView
                   card={card}
+                  mine={m.mine}
                   actions={
                     (card.type === "pay" || card.type === "invoice") && card.url ? (
                       <a className="tk-btn primary" href={card.url} target="_blank" rel="noopener noreferrer">
@@ -878,6 +929,7 @@ export function PersonChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
   );
 }

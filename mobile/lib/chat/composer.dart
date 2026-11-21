@@ -257,6 +257,13 @@ class ComposerState extends State<Composer> {
 
   void _typed() => setState(() {});
 
+  /// A message not sent after all (its sender said no): its file back
+  /// above the box, unless another was chosen since.
+  void putBack(PickedFile? f) {
+    if (f == null || _file != null) return;
+    setState(() => _file = f);
+  }
+
   /// A file chosen: it waits above the box for its caption.
   void choose(PickedFile? f) {
     if (f == null) return;

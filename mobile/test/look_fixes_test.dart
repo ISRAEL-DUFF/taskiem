@@ -1,15 +1,14 @@
-// Three things seen on a real phone in the light (17 November 2026): the
-// chats' "…" menu ran off the left of the screen; a card's pill and a tag's
-// letters in your own pine bubble did not show; the open tab at the bottom
-// was hard to tell from the others.
+// Things seen on a real phone (17 November 2026): the chats' "…" menu ran
+// off the left of the screen; a card's pill and a tag's letters in your own
+// bubble did not show; the open tab at the bottom was hard to tell from the
+// others.
 
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taskiem/chat/cards.dart' show CardButton, CardPill;
-import 'package:taskiem/chat/conversation.dart' show ownWords;
+import 'package:taskiem/chat/cards.dart' show CardPill;
 import 'package:taskiem/chat/thread.dart' show showHeadMenu;
 import 'package:taskiem/chat/words.dart' show CardTone;
 import 'package:taskiem/main.dart';
@@ -19,7 +18,6 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
 
-const pine = Color(0xFF0D3B2E);
 
 /// WCAG's contrast ratio of two colours.
 double contrast(Color a, Color b) {
@@ -64,68 +62,32 @@ void main() {
     }
   });
 
-  testWidgets('in your own pine bubble in the light, a card\'s pill and a tag\'s letters show', (t) async {
-    late TkLook look;
-    await t.pumpWidget(TaskiemApp(
-      home: Builder(
-        builder: (context) => ownWords(
-          context,
-          true,
-          Builder(builder: (inner) {
-            look = TkLook.of(inner);
-            return const Center(child: CardPill('Completed', CardTone.lime));
-          }),
-        ),
-      ),
-    ));
-    final ink = t.widget<Text>(find.text('Completed')).style!.color!;
-    expect(contrast(ink, pine), greaterThan(4.5), reason: 'the pill\'s word on pine');
-    for (final c in [look.limeInk, look.tealInk, look.orangeInk, look.blueInk, look.violetInk]) {
-      expect(contrast(c, pine), greaterThan(4.5), reason: 'a tag\'s letters on pine');
-    }
-    // Before: the light's lime ink, dark green on the dark green.
-    expect(contrast(tkLookLight.limeInk, pine), lessThan(3));
-  });
-
-  testWidgets('in your own pine bubble in the light, a card\'s buttons look pressable: light ones with white words, the main one lime', (t) async {
-    await t.pumpWidget(TaskiemApp(
-      home: Builder(
-        builder: (context) => ownWords(
-          context,
-          true,
-          ColoredBox(
-            color: pine,
-            child: Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                CardButton(label: 'Open', onTap: () {}),
-                CardButton(label: 'Pay', primary: true, onTap: () {}),
-              ]),
-            ),
-          ),
-        ),
-      ),
-    ));
-    Color ground(String label) => (t.widget<Container>(find.ancestor(of: find.text(label), matching: find.byType(Container)).first).decoration as BoxDecoration).color!;
-    final open = t.widget<Text>(find.text('Open')).style!.color!;
-    final pay = t.widget<Text>(find.text('Pay')).style!.color!;
-    expect(contrast(open, Color.alphaBlend(ground('Open'), pine)), greaterThan(4.5), reason: 'a plain button\'s words');
-    expect(contrast(ground('Pay'), pine), greaterThan(3), reason: 'the main button stands off the bubble');
-    expect(contrast(pay, ground('Pay')), greaterThan(4.5), reason: 'its words');
-  });
-
-  testWidgets('in the dark your own bubble is left as it is', (t) async {
-    late TkLook look;
-    await t.pumpWidget(TaskiemApp(
-      mode: TkMode.dark,
-      home: Builder(
-        builder: (context) => ownWords(context, true, Builder(builder: (inner) {
-          look = TkLook.of(inner);
-          return const SizedBox();
-        })),
-      ),
-    ));
-    expect(identical(look, tkLookDark), isTrue);
-  });
+  // The chat went back to WhatsApp's colours (20 November 2026): your own
+  // bubble light green (a deep green in the dark), its words the theme's own.
+  for (final mode in TkMode.values) {
+    testWidgets('in your own bubble, ${mode.name}: the words, the names, a pill and a tag\'s letters show', (t) async {
+      late TkTokens tokens;
+      late TkLook look;
+      await t.pumpWidget(TaskiemApp(
+        mode: mode,
+        home: Builder(builder: (context) {
+          tokens = TkTheme.tokens(context);
+          look = TkLook.of(context);
+          return const Center(child: CardPill('Completed', CardTone.lime));
+        }),
+      ));
+      final bubble = tokens.chatOut;
+      expect(bubble, mode == TkMode.light ? const Color(0xFFD9FDD3) : const Color(0xFF0F4A37), reason: 'WhatsApp\'s green');
+      expect(contrast(tokens.text, bubble), greaterThan(7), reason: 'the words');
+      expect(contrast(tokens.tintText, bubble), greaterThan(4.5), reason: 'a sender\'s name, a quote\'s');
+      expect(contrast(tokens.chatOutMeta, bubble), greaterThan(4.5), reason: 'the time');
+      final ink = t.widget<Text>(find.text('Completed')).style!.color!;
+      expect(contrast(ink, bubble), greaterThan(4.5), reason: 'a pill\'s word');
+      for (final c in [look.limeInk, look.tealInk, look.orangeInk, look.blueInk, look.violetInk]) {
+        expect(contrast(c, bubble), greaterThan(4.5), reason: 'a tag\'s letters');
+      }
+    });
+  }
 
   testWidgets('the open tab has a pill behind its icon and a bold name; the others do not', (t) async {
     t.view.physicalSize = const Size(390, 844);

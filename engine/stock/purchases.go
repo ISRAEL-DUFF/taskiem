@@ -702,6 +702,8 @@ type PurchaseFilter struct {
 	// Open lists only those not received or cancelled.
 	Open  bool
 	Limit int
+	// Offset is where the page starts, newest first.
+	Offset int
 }
 
 // PurchasesTx lists orders, the newest first.
@@ -712,7 +714,7 @@ func PurchasesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f PurchaseFil
 	rows, err := tx.Query(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND ($2::uuid IS NULL OR o.supplier_id = $2)
 		  AND (NOT $3 OR o.status IN ('drafted', 'sent', 'confirmed', 'part_received'))
-		ORDER BY o.created_at DESC, o.id DESC LIMIT $4`, tenant, f.Supplier, f.Open, f.Limit)
+		ORDER BY o.created_at DESC, o.id DESC LIMIT $4 OFFSET $5`, tenant, f.Supplier, f.Open, f.Limit, max(f.Offset, 0))
 	if err != nil {
 		return nil, err
 	}

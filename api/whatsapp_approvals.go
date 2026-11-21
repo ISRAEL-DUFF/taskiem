@@ -87,6 +87,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 	if err := s.dormantSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("dormant bindings: %w", err))
 	}
+	// Saved uploads never claimed, a day on (saved_files.go).
+	if err := s.purgeSavedUploads(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("saved uploads: %w", err))
+	}
 	// Slack installs no business took (slack_install.go).
 	if err := s.slackInstallSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("slack installs: %w", err))

@@ -13,6 +13,7 @@ import 'package:taskiem/chat/approve.dart' show ApproveSheet;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoice_match.dart' show InvoiceMatchPage;
 import 'package:taskiem/chat/today_tab.dart';
+import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -36,6 +37,25 @@ final _approval = {
   'levels': 1,
   'sole_approver': false,
   'subject': {'amount_kobo': 15600000},
+};
+
+Map<String, dynamic> _topic(String id, String name, String icon, String color, List<(String, String, String)> rows) => {
+  'id': id, 'name': name, 'icon': icon, 'color': color,
+  'actions': [for (final (aid, title, line) in rows) {'id': aid, 'title': title, 'line': line, 'icon': icon, 'does': 'show', 'opens': 'show'}],
+};
+
+final _catalogue = {
+  'topics': [
+    _topic('sales', 'Sales', 'sell', 'lime', [('sales.today', "Today's sales", 'What came in today'), ('sales.week', 'How we did this week', 'Sales, money in and out')]),
+    _topic('stock', 'Stock', 'stock', 'orange', [('stock.low', "See what's low", 'Items about to run out')]),
+    _topic('products', 'Products', 'products', 'teal', [('products.list', 'Your products', 'What you sell')]),
+    _topic('orders', 'Orders', 'orders', 'blue', [('orders.open', 'Open orders', 'Waiting for you')]),
+    _topic('money', 'Money', 'money', 'lime', [('money.today', 'Money today', 'In and out')]),
+    _topic('owe', 'Who owes you', 'customers', 'red', [('owe.list', 'Who owes you', 'Everyone, biggest first')]),
+    _topic('staff', 'Staff and tasks', 'tasks', 'blue', [('staff.mine', 'Your tasks', 'What is on you today')]),
+    _topic('auto', 'Automations', 'workflows', 'teal', [('auto.list', 'Your automations', 'What runs for you')]),
+    _topic('account', 'Your account', 'you', 'violet', [('account.me', 'Your account', 'You and your business')]),
+  ],
 };
 
 void main() {
@@ -109,8 +129,22 @@ void main() {
       f.auth(
         also: (req) async {
           asked.add('${req.method} ${req.url.path}${req.url.query.isEmpty ? '' : '?${req.url.query}'}');
+          if (req.method == 'POST' && req.url.path == '/v1/chat/actions/sales.today/run') {
+            return http.Response.bytes(
+              utf8.encode(jsonEncode({
+                'messages': [
+                  {'id': 'h1', 'channel': 'web', 'inbound': true, 'kind': 'text', 'text': "Today's sales", 'created_at': '2026-11-12T13:00:00Z'},
+                  {'id': 'h2', 'channel': 'web', 'inbound': false, 'kind': 'text', 'text': 'Sales today: ₦45,000 from 3 sales.', 'created_at': '2026-11-12T13:00:00Z'},
+                ],
+              })),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
           if (req.method != 'GET') return ok({'ok': true});
           return switch (req.url.path) {
+            // Today's menu (menus-everywhere.md §5): the person's topics.
+            '/v1/chat/actions' => ok(_catalogue),
             // The same weekday in the weeks before: ₦20,000 by 9 am.
             '/v1/money/summary' when req.url.queryParameters['from'] != '2026-11-12' => ok({
               'in_settled_kobo': 2000000,
@@ -242,10 +276,36 @@ void main() {
     expect(find.byType(InvoiceMatchPage), findsOneWidget);
   });
 
+  testWidgets("Today's menu: the topics used most, All topics; a tile's rows in a sheet; a row's answer in a sheet", (t) async {
+    final asked = await open(t);
+    final menu = find.byKey(const ValueKey('today-menu'));
+    expect(find.text('What would you like to do?'), findsOneWidget);
+    for (final name in ['Sales', 'Stock', 'Who owes you', 'All topics']) {
+      expect(find.descendant(of: menu, matching: find.text(name)), findsOneWidget, reason: name);
+    }
+    expect(find.descendant(of: menu, matching: find.text('Your account')), findsNothing, reason: 'the ninth, behind All topics');
+    await t.ensureVisible(find.descendant(of: menu, matching: find.text('Sales')));
+    await t.pump();
+    await t.tap(find.descendant(of: menu, matching: find.text('Sales')));
+    await settle(t);
+    expect(find.byType(TkSheet), findsOneWidget);
+    await t.tap(find.bySemanticsLabel(RegExp(r"^Today's sales\. ")));
+    await settle(t);
+    expect(asked, contains('POST /v1/chat/actions/sales.today/run'));
+    expect(find.text('Sales today: ₦45,000 from 3 sales.'), findsOneWidget);
+    expect(find.text("Today's sales"), findsWidgets, reason: 'the answer\'s title');
+  });
+
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
     final f = Fixture('chats');
     final chats = ChatsData(
-      f.auth(also: (req) async => req.method == 'GET' && req.url.path == '/v1/onboarding' ? http.Response('{}', 404) : null),
+      f.auth(
+        also: (req) async => req.method == 'GET' && req.url.path == '/v1/onboarding'
+            ? http.Response('{}', 404)
+            : req.method == 'GET' && req.url.path == '/v1/chat/actions'
+            ? http.Response(jsonEncode(_catalogue), 200)
+            : null,
+      ),
       now: () => f.at,
     );
     await expectLargeText(

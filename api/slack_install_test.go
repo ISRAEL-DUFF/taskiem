@@ -187,7 +187,7 @@ func TestSlackSignup(t *testing.T) {
 	// Now a linked owner: the conversation, on the business's connection.
 	n = len(w.fake.to("U0ADA"))
 	w.event(t, dm("Ev4", "U0ADA", "help"), slackSecret)
-	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "status") {
+	if s := w.says("U0ADA", n); len(s) != 1 || !strings.Contains(s[0], "Pick a topic") {
 		t.Fatalf("help after sign-up: %v", s)
 	}
 	// Another business from Slack has the workspace's Slack too.

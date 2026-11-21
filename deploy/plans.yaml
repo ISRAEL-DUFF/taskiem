@@ -65,6 +65,7 @@ plans:
       storefront_bookings_monthly: 300
       sms_monthly: 100
       link_messages_daily: 200
+      max_saved_objects: 2000
       embed_sites: 1
     features: {receive_money: true}
 
@@ -96,6 +97,7 @@ plans:
       storefront_bookings_monthly: 1500
       sms_monthly: 500
       link_messages_daily: 500
+      max_saved_objects: 3000
       embed_sites: 3
     features: {receive_money: true, storefront_pay_on_order: true}
   - id: starter
@@ -124,6 +126,7 @@ plans:
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 1000
+      max_saved_objects: 5000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true}
 
   - id: growth
@@ -152,6 +155,7 @@ plans:
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 2000
+      max_saved_objects: 10000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true}
 
   - id: business
@@ -180,6 +184,7 @@ plans:
       storefront_items: 2000
       sms_monthly: 1000
       link_messages_daily: 5000
+      max_saved_objects: 25000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, embedded: true}
     partner:
       max_subtenants: 50
@@ -206,6 +211,7 @@ plans:
       ai_monthly_tokens: 50000000
       whatsapp_templates_monthly: 100000
       container_minutes_monthly: 3000   # PLACEHOLDER (CS3): 0 = container steps off
+      max_saved_objects: 100000
     features: {receive_money: true, storefront_pay_on_order: true, ai: true, git: true, sso: true, scim: true, custom_roles: true, white_label: true, byok: true, embedded: true}
     partner:
       max_subtenants: 0

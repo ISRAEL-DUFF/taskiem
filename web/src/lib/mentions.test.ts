@@ -3,6 +3,7 @@ import {
   groupSuggestions,
   unlinkedSuggestion,
   insertMention,
+  insertWords,
   mentionParts,
   mentionQuery,
   stillNamed,
@@ -75,6 +76,19 @@ describe("mentions in the composer", () => {
   });
 });
 
+describe("/ finding a saved thing (saved objects §15 1)", () => {
+  it("reads /mum as a saved thing's name, and /invoice as a document", () => {
+    expect(mentionQuery("Pay /mum", 8)).toEqual({ mark: "/", query: "mum", start: 4 });
+    expect(mentionQuery("/invoice ada", 12)).toMatchObject({ mark: "/", kind: "invoice", query: "ada" });
+    expect(mentionQuery("and/or", 6)).toBeNull();
+    expect(mentionQuery("/mum and", 8)).toBeNull();
+  });
+  it("writes a saved thing found with / as its @name", () => {
+    const q = mentionQuery("Pay /mu", 7) ?? { mark: "/" as const, query: "", start: -1 };
+    expect(insertMention("Pay /mu", q, 7, "mum")).toEqual({ text: "Pay @mum ", caret: 9 });
+  });
+});
+
 describe("the grouped picker (chat tools)", () => {
   const items = [
     { kind: "item" as const, id: "i1", name: "Rice, 50kg bag", sub: "₦78,000 a bag" },
@@ -91,6 +105,16 @@ describe("the grouped picker (chat tools)", () => {
     expect(all[2]?.items[0]?.kind).toBe("taskiem");
     expect(groupSuggestions("zzz", { items, businesses }, true).map((x) => x.label)).toEqual([""]);
     expect(groupSuggestions("", { items, businesses }, false).some((x) => x.label === "")).toBe(false);
+  });
+  it("puts saved things between services and businesses", () => {
+    const saved = [{ kind: "saved" as const, id: "s1", name: "rivers-depot", sub: "Rivers depot · Yaba", savedKind: "place" }];
+    expect(groupSuggestions("ri", { items, businesses, saved }, true).map((x) => x.label)).toEqual(["Products", "Saved", "Businesses", ""]);
+  });
+  it("puts a saved text's words in place of what was typed", () => {
+    const q = mentionQuery("Hello @bank", 11);
+    expect(q).not.toBeNull();
+    if (!q) return;
+    expect(insertWords("Hello @bank", q, 11, "Pay to Bola\nGTBank 0123")).toEqual({ text: "Hello Pay to Bola\nGTBank 0123", caret: 29 });
   });
   it("knows an item written with @ or #", () => {
     const picked = [{ kind: "item", name: "Rice, 25kg bag" }];

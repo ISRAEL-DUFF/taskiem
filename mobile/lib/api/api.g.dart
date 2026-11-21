@@ -268,9 +268,32 @@ class TaskiemApi {
   }
 
   /// What "/" may tag in the Taskiem chat (`GET /v1/chat-refs`)
-  Future<ChatRefsResponse> chatRefs() async {
-    final j = await _t.send('GET', '/v1/chat-refs');
+  Future<ChatRefsResponse> chatRefs({String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/chat-refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return ChatRefsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What the person can do from the Taskiem chat (`GET /v1/chat/actions`)
+  Future<ChatActionsResponse> chatActions() async {
+    final j = await _t.send('GET', '/v1/chat/actions');
+    return ChatActionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The choices an action's form offers (`GET /v1/chat/actions/{id}/choices`)
+  Future<ChatActionChoicesResponse> chatActionChoices({required String id}) async {
+    final j = await _t.send('GET', '/v1/chat/actions/${Uri.encodeComponent(id)}/choices');
+    return ChatActionChoicesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Close a menu in the Taskiem chat (`POST /v1/taskiem-chat/menus/{id}/close`)
+  Future<void> closeChatMenu({required CloseChatMenuRequest body, required String id}) async {
+    await _t.send('POST', '/v1/taskiem-chat/menus/${Uri.encodeComponent(id)}/close', body: body.toJson());
+  }
+
+  /// Do an action from a menu outside the Taskiem chat (`POST /v1/chat/actions/{id}/run`)
+  Future<RunChatActionResponse> runChatAction({required RunChatActionRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/chat/actions/${Uri.encodeComponent(id)}/run', body: body.toJson());
+    return RunChatActionResponse.fromJson(j as Map<String, dynamic>);
   }
 
   /// A customer's conversation (`GET /v1/customer-chats/{id}`)
@@ -596,8 +619,8 @@ class TaskiemApi {
   }
 
   /// What "/invoice", "/bill", "/order" and "/purchase" name in a conversation (`GET /v1/link-chats/{link}/refs`)
-  Future<LinkChatRefsResponse> linkChatRefs({required String link}) async {
-    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs');
+  Future<LinkChatRefsResponse> linkChatRefs({required String link, String? q, String? kind, String? cursor, String? limit}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs', query: {'q': ?q, 'kind': ?kind, 'cursor': ?cursor, 'limit': ?limit});
     return LinkChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -1419,6 +1442,158 @@ class TaskiemApi {
   Future<SendBasketShareCardsResponse> sendBasketShareCards({required SendBasketShareCardsRequest body, required String id}) async {
     final j = await _t.send('POST', '/v1/me/baskets/${Uri.encodeComponent(id)}/share-cards', body: body.toJson());
     return SendBasketShareCardsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's saved things (`GET /v1/saved`)
+  Future<ListSavedResponse> listSaved({String? kind, String? q}) async {
+    final j = await _t.send('GET', '/v1/saved', query: {'kind': ?kind, 'q': ?q});
+    return ListSavedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save an account for the business (`POST /v1/saved`)
+  Future<SavedObjectResult> addSaved({required SavedObjectIn body}) async {
+    final j = await _t.send('POST', '/v1/saved', body: body.toJson());
+    return SavedObjectResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a saved thing (`PUT /v1/saved/{id}`)
+  Future<SavedObjectResult> changeSaved({required SavedObjectIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/saved/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedObjectResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a saved thing (`DELETE /v1/saved/{id}`)
+  Future<void> removeSaved({required String id}) async {
+    await _t.send('DELETE', '/v1/saved/${Uri.encodeComponent(id)}');
+  }
+
+  /// See an account number in full (`POST /v1/saved/{id}/reveal`)
+  Future<RevealSavedResponse> revealSaved({required RevealSavedRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/saved/${Uri.encodeComponent(id)}/reveal', body: body.toJson());
+    return RevealSavedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A passkey challenge for one saved thing (`POST /v1/saved/step-up/options`)
+  Future<SavedStepUpOptionsResponse> savedStepUpOptions({required SavedStepUpOptionsRequest body}) async {
+    final j = await _t.send('POST', '/v1/saved/step-up/options', body: body.toJson());
+    return SavedStepUpOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Check the names not checked yet (`POST /v1/saved/check`)
+  Future<CheckAllSavedResponse> checkAllSaved() async {
+    final j = await _t.send('POST', '/v1/saved/check');
+    return CheckAllSavedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What names are checked through (`GET /v1/saved/provider`)
+  Future<SavedProviderResponse> savedProvider() async {
+    final j = await _t.send('GET', '/v1/saved/provider');
+    return SavedProviderResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The banks to choose an account's bank from (`GET /v1/banks`)
+  Future<ListBanksResponse> listBanks() async {
+    final j = await _t.send('GET', '/v1/banks');
+    return ListBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The bank's name for an account (`POST /v1/name-check`)
+  Future<NameCheckResponse> nameCheck({required SavedObjectIn body}) async {
+    final j = await _t.send('POST', '/v1/name-check', body: body.toJson());
+    return NameCheckResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your saved things (`GET /v1/me/saved`)
+  Future<ListMySavedResponse> listMySaved({String? kind, String? q}) async {
+    final j = await _t.send('GET', '/v1/me/saved', query: {'kind': ?kind, 'q': ?q});
+    return ListMySavedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save an account of your own (`POST /v1/me/saved`)
+  Future<SavedObjectResult> addMySaved({required SavedObjectIn body}) async {
+    final j = await _t.send('POST', '/v1/me/saved', body: body.toJson());
+    return SavedObjectResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change one of your saved things (`PUT /v1/me/saved/{id}`)
+  Future<SavedObjectResult> changeMySaved({required SavedObjectIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/saved/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedObjectResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove one of your saved things (`DELETE /v1/me/saved/{id}`)
+  Future<void> removeMySaved({required String id}) async {
+    await _t.send('DELETE', '/v1/me/saved/${Uri.encodeComponent(id)}');
+  }
+
+  /// See one of your account numbers in full (`POST /v1/me/saved/{id}/reveal`)
+  Future<RevealMySavedResponse> revealMySaved({required RevealMySavedRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/saved/${Uri.encodeComponent(id)}/reveal', body: body.toJson());
+    return RevealMySavedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A passkey challenge for one of your saved things (`POST /v1/me/saved/step-up/options`)
+  Future<MySavedStepUpOptionsResponse> mySavedStepUpOptions({required MySavedStepUpOptionsRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/saved/step-up/options', body: body.toJson());
+    return MySavedStepUpOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Read a message for what can be saved (`POST /v1/me/saved/read`)
+  Future<ReadSavedWordsResponse> readSavedWords({required ReadSavedWordsRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/saved/read', body: body.toJson());
+    return ReadSavedWordsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Kinds of your own (`GET /v1/me/saved-kinds`)
+  Future<SavedKindList> listMySavedKinds() async {
+    final j = await _t.send('GET', '/v1/me/saved-kinds');
+    return SavedKindList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a kind (`POST /v1/me/saved-kinds`)
+  Future<SavedKindResult> addMySavedKind({required SavedKindIn body}) async {
+    final j = await _t.send('POST', '/v1/me/saved-kinds', body: body.toJson());
+    return SavedKindResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a kind (`PUT /v1/me/saved-kinds/{id}`)
+  Future<SavedKindResult> changeMySavedKind({required SavedKindIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/saved-kinds/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedKindResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a kind (`DELETE /v1/me/saved-kinds/{id}`)
+  Future<void> removeMySavedKind({required String id}) async {
+    await _t.send('DELETE', '/v1/me/saved-kinds/${Uri.encodeComponent(id)}');
+  }
+
+  /// Kinds of the business's (`GET /v1/saved-kinds`)
+  Future<SavedKindList> listSavedKinds() async {
+    final j = await _t.send('GET', '/v1/saved-kinds');
+    return SavedKindList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a kind (`POST /v1/saved-kinds`)
+  Future<SavedKindResult> addSavedKind({required SavedKindIn body}) async {
+    final j = await _t.send('POST', '/v1/saved-kinds', body: body.toJson());
+    return SavedKindResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a kind (`PUT /v1/saved-kinds/{id}`)
+  Future<SavedKindResult> changeSavedKind({required SavedKindIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/saved-kinds/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedKindResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a kind (`DELETE /v1/saved-kinds/{id}`)
+  Future<void> removeSavedKind({required String id}) async {
+    await _t.send('DELETE', '/v1/saved-kinds/${Uri.encodeComponent(id)}');
+  }
+
+  /// The banks by name (`GET /v1/me/banks`)
+  Future<ListMyBanksResponse> listMyBanks() async {
+    final j = await _t.send('GET', '/v1/me/banks');
+    return ListMyBanksResponse.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -2761,8 +2936,10 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
 
+  /// On a taskiem note, the words asked of Taskiem
+  final String? asked;
   /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
   /// streams it
   final LinkMessageAttachment? attachment;
@@ -2773,7 +2950,9 @@ class LinkMessage {
   final bool? forwarded;
   /// The message, the same in both businesses
   final String id;
-  /// A diary line is a change we made with a chat tool, on our side only
+  /// A diary line is a change we made with a chat tool, on our side only. A
+  /// taskiem note is what Taskiem answered a "@Taskiem" typed in this
+  /// conversation, on our side only (asked, and the answer as body)
   final String kind;
   final String link;
   final List<LinkMention>? mentions;
@@ -2791,6 +2970,7 @@ class LinkMessage {
   final bool? starred;
 
   factory LinkMessage.fromJson(Map<String, dynamic> j) => LinkMessage(
+        asked: j['asked'] == null ? null : j['asked'] as String,
         attachment: j['attachment'] == null ? null : LinkMessageAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
         body: j['body'] == null ? null : j['body'] as String,
         card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
@@ -2810,6 +2990,7 @@ class LinkMessage {
       );
 
   Map<String, dynamic> toJson() => {
+        'asked': ?asked,
         'attachment': ?attachment?.toJson(),
         'body': ?body,
         'card': ?card?.toJson(),
@@ -2943,7 +3124,7 @@ class LinkDocCardDealStepsItem {
 
 /// A structured reference the composer put in a message
 class LinkMention {
-  const LinkMention({this.itemId, required this.kind, this.link, this.minutes, required this.name, this.priceKobo, this.ref, this.serviceId, this.status, this.unit});
+  const LinkMention({this.itemId, required this.kind, this.link, this.minutes, required this.name, this.priceKobo, this.ref, this.saved, this.serviceId, this.status, this.unit});
 
   final String? itemId;
   final String kind;
@@ -2955,6 +3136,7 @@ class LinkMention {
   final int? priceKobo;
   /// An invoice's or an order's id, on our copy only
   final String? ref;
+  final SavedCard? saved;
   /// One of the sender's own services
   final String? serviceId;
   /// An invoice's or an order's status when it was named
@@ -2969,6 +3151,7 @@ class LinkMention {
         name: j['name'] as String,
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         ref: j['ref'] == null ? null : j['ref'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         status: j['status'] == null ? null : j['status'] as String,
         unit: j['unit'] == null ? null : j['unit'] as String,
@@ -2982,9 +3165,69 @@ class LinkMention {
         'name': name,
         'price_kobo': ?priceKobo,
         'ref': ?ref,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'status': ?status,
         'unit': ?unit,
+      };
+}
+
+/// A saved thing as shared in a chat, a copy of it as it was when sent (never a
+/// link); details are its fields for Save this, an account number in full; a
+/// made-up kind's are its lines as a text's body.
+class SavedCard {
+  const SavedCard({required this.details, required this.kind, this.kindName, required this.lines, required this.name, required this.sensitive, required this.title});
+
+  final Map<String, dynamic> details;
+  final String kind;
+  /// A made-up kind's name ("Car").
+  final String? kindName;
+  final List<SavedCardLinesItem> lines;
+  /// The sender's @name for it.
+  final String name;
+  final bool sensitive;
+  final String title;
+
+  factory SavedCard.fromJson(Map<String, dynamic> j) => SavedCard(
+        details: j['details'] as Map<String, dynamic>,
+        kind: j['kind'] as String,
+        kindName: j['kind_name'] == null ? null : j['kind_name'] as String,
+        lines: (j['lines'] as List).map((e) => SavedCardLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        sensitive: j['sensitive'] as bool,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'details': details,
+        'kind': kind,
+        'kind_name': ?kindName,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'name': name,
+        'sensitive': sensitive,
+        'title': title,
+      };
+}
+
+class SavedCardLinesItem {
+  const SavedCardLinesItem({required this.label, this.sensitive, required this.value});
+
+  final String label;
+  /// The line holds what is sensitive (an account number, a phone, an email);
+  /// its sender sees it masked.
+  final bool? sensitive;
+  final String value;
+
+  factory SavedCardLinesItem.fromJson(Map<String, dynamic> j) => SavedCardLinesItem(
+        label: j['label'] as String,
+        sensitive: j['sensitive'] == null ? null : j['sensitive'] as bool,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'sensitive': ?sensitive,
+        'value': value,
       };
 }
 
@@ -3777,7 +4020,11 @@ class SendLinkMessageRequest {
   /// services ({kind: service, service_id}), or an invoice, bill, order or
   /// purchase between you and this business ({kind, ref}: one of
   /// /link-chats/{link}/refs), named in the text as @Name (any but a business
-  /// also #Name); one the text does not name is left out.
+  /// also #Name); one the text does not name is left out. A saved thing ({kind:
+  /// saved, saved}: the business's or your own; saved objects S1) is shared as
+  /// a card, its @name in the text (400 without it), after 409 `confirm_share`
+  /// (its error the question) until `saved.confirm` when it holds what is
+  /// sensitive.
   final List<SendLinkMessageRequestMentionsItem>? mentions;
   final String? replyTo;
   final String text;
@@ -3798,13 +4045,14 @@ class SendLinkMessageRequest {
 }
 
 class SendLinkMessageRequestMentionsItem {
-  const SendLinkMessageRequestMentionsItem({this.itemId, required this.kind, this.link, this.ref, this.serviceId});
+  const SendLinkMessageRequestMentionsItem({this.itemId, required this.kind, this.link, this.ref, this.saved, this.serviceId});
 
   final String? itemId;
   final String kind;
   final String? link;
   /// An invoice's or an order's id, from /link-chats/{link}/refs
   final String? ref;
+  final SavedShare? saved;
   final String? serviceId;
 
   factory SendLinkMessageRequestMentionsItem.fromJson(Map<String, dynamic> j) => SendLinkMessageRequestMentionsItem(
@@ -3812,6 +4060,7 @@ class SendLinkMessageRequestMentionsItem {
         kind: j['kind'] as String,
         link: j['link'] == null ? null : j['link'] as String,
         ref: j['ref'] == null ? null : j['ref'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
       );
 
@@ -3820,7 +4069,32 @@ class SendLinkMessageRequestMentionsItem {
         'kind': kind,
         'link': ?link,
         'ref': ?ref,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
+      };
+}
+
+/// A saved thing a message shares (saved objects S1): the sender's own (mine)
+/// or their business's; confirm says yes to sharing what is sensitive in it (an
+/// account number, a phone, an email), asked first by a 409 `confirm_share`
+/// whose error is the question.
+class SavedShare {
+  const SavedShare({this.confirm, required this.id, required this.owner});
+
+  final bool? confirm;
+  final String id;
+  final String owner;
+
+  factory SavedShare.fromJson(Map<String, dynamic> j) => SavedShare(
+        confirm: j['confirm'] == null ? null : j['confirm'] as bool,
+        id: j['id'] as String,
+        owner: j['owner'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': ?confirm,
+        'id': id,
+        'owner': owner,
       };
 }
 
@@ -3855,10 +4129,10 @@ class ReadLinkChatResponse {
 class TaskiemChat {
   const TaskiemChat({required this.messages});
 
-  final List<TaskiemChatMessagesItem> messages;
+  final List<TaskiemMessage> messages;
 
   factory TaskiemChat.fromJson(Map<String, dynamic> j) => TaskiemChat(
-        messages: (j['messages'] as List).map((e) => TaskiemChatMessagesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -3866,10 +4140,10 @@ class TaskiemChat {
       };
 }
 
-class TaskiemChatMessagesItem {
-  const TaskiemChatMessagesItem({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
+class TaskiemMessage {
+  const TaskiemMessage({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
 
-  final List<TaskiemChatMessagesItemButtonsItem>? buttons;
+  final List<TaskiemMessageButtonsItem>? buttons;
   final String channel;
   final DateTime createdAt;
   final String id;
@@ -3878,8 +4152,8 @@ class TaskiemChatMessagesItem {
   final String kind;
   final String text;
 
-  factory TaskiemChatMessagesItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItem(
-        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemChatMessagesItemButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
+  factory TaskiemMessage.fromJson(Map<String, dynamic> j) => TaskiemMessage(
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemMessageButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
         channel: j['channel'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
         id: j['id'] as String,
@@ -3899,14 +4173,14 @@ class TaskiemChatMessagesItem {
       };
 }
 
-class TaskiemChatMessagesItemButtonsItem {
-  const TaskiemChatMessagesItemButtonsItem({this.id, required this.title});
+class TaskiemMessageButtonsItem {
+  const TaskiemMessageButtonsItem({this.id, required this.title});
 
   /// Only on an answer just given; press it by sending it as reply
   final String? id;
   final String title;
 
-  factory TaskiemChatMessagesItemButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItemButtonsItem(
+  factory TaskiemMessageButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemMessageButtonsItem(
         id: j['id'] == null ? null : j['id'] as String,
         title: j['title'] as String,
       );
@@ -4252,15 +4526,21 @@ class GetChatBriefingResponseTasks {
 }
 
 class ChatRefsResponse {
-  const ChatRefsResponse({required this.refs});
+  const ChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory ChatRefsResponse.fromJson(Map<String, dynamic> j) => ChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
@@ -4298,6 +4578,184 @@ class ChatRef {
         'status': ?status,
         'total_kobo': ?totalKobo,
         'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class ChatActionsResponse {
+  const ChatActionsResponse({required this.topics});
+
+  final List<ChatTopic> topics;
+
+  factory ChatActionsResponse.fromJson(Map<String, dynamic> j) => ChatActionsResponse(
+        topics: (j['topics'] as List).map((e) => ChatTopic.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'topics': topics.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ChatTopic {
+  const ChatTopic({required this.actions, required this.color, required this.icon, required this.id, required this.name});
+
+  final List<ChatAction> actions;
+  final String color;
+  final String icon;
+  final String id;
+  final String name;
+
+  factory ChatTopic.fromJson(Map<String, dynamic> j) => ChatTopic(
+        actions: (j['actions'] as List).map((e) => ChatAction.fromJson(e as Map<String, dynamic>)).toList(),
+        color: j['color'] as String,
+        icon: j['icon'] as String,
+        id: j['id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': actions.map((e) => e.toJson()).toList(),
+        'color': color,
+        'icon': icon,
+        'id': id,
+        'name': name,
+      };
+}
+
+class ChatAction {
+  const ChatAction({this.add, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
+
+  final bool? add;
+  final String does;
+  final List<ChatField>? fields;
+  final String icon;
+  final String id;
+  final String line;
+  final String opens;
+  final String? page;
+  final String? shortcut;
+  final String title;
+  final String? tool;
+
+  factory ChatAction.fromJson(Map<String, dynamic> j) => ChatAction(
+        add: j['add'] == null ? null : j['add'] as bool,
+        does: j['does'] as String,
+        fields: j['fields'] == null ? null : (j['fields'] as List).map((e) => ChatField.fromJson(e as Map<String, dynamic>)).toList(),
+        icon: j['icon'] as String,
+        id: j['id'] as String,
+        line: j['line'] as String,
+        opens: j['opens'] as String,
+        page: j['page'] == null ? null : j['page'] as String,
+        shortcut: j['shortcut'] == null ? null : j['shortcut'] as String,
+        title: j['title'] as String,
+        tool: j['tool'] == null ? null : j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add': ?add,
+        'does': does,
+        'fields': ?fields?.map((e) => e.toJson()).toList(),
+        'icon': icon,
+        'id': id,
+        'line': line,
+        'opens': opens,
+        'page': ?page,
+        'shortcut': ?shortcut,
+        'title': title,
+        'tool': ?tool,
+      };
+}
+
+class ChatField {
+  const ChatField({this.choices, this.hint, required this.key, required this.kind, required this.label, this.optional});
+
+  final List<String>? choices;
+  final String? hint;
+  final String key;
+  final String kind;
+  final String label;
+  final bool? optional;
+
+  factory ChatField.fromJson(Map<String, dynamic> j) => ChatField(
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => e as String).toList(),
+        hint: j['hint'] == null ? null : j['hint'] as String,
+        key: j['key'] as String,
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+        optional: j['optional'] == null ? null : j['optional'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'choices': ?choices?.map((e) => e).toList(),
+        'hint': ?hint,
+        'key': key,
+        'kind': kind,
+        'label': label,
+        'optional': ?optional,
+      };
+}
+
+class ChatActionChoicesResponse {
+  const ChatActionChoicesResponse({required this.fields});
+
+  final Map<String, dynamic> fields;
+
+  factory ChatActionChoicesResponse.fromJson(Map<String, dynamic> j) => ChatActionChoicesResponse(
+        fields: j['fields'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fields': fields,
+      };
+}
+
+class CloseChatMenuRequest {
+  const CloseChatMenuRequest({this.chose});
+
+  /// The id of the action whose row opened a tool or a page
+  final String? chose;
+
+  factory CloseChatMenuRequest.fromJson(Map<String, dynamic> j) => CloseChatMenuRequest(
+        chose: j['chose'] == null ? null : j['chose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chose': ?chose,
+      };
+}
+
+class RunChatActionRequest {
+  const RunChatActionRequest({this.link, this.values});
+
+  /// The business's conversation it was pressed in
+  final String? link;
+  /// The action's values by key, as its form gives them
+  final Map<String, dynamic>? values;
+
+  factory RunChatActionRequest.fromJson(Map<String, dynamic> j) => RunChatActionRequest(
+        link: j['link'] == null ? null : j['link'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': ?link,
+        'values': ?values,
+      };
+}
+
+class RunChatActionResponse {
+  const RunChatActionResponse({required this.messages, this.note});
+
+  final List<TaskiemMessage> messages;
+  final LinkMessage? note;
+
+  factory RunChatActionResponse.fromJson(Map<String, dynamic> j) => RunChatActionResponse(
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        note: j['note'] == null ? null : LinkMessage.fromJson(j['note'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'note': ?note?.toJson(),
       };
 }
 
@@ -4406,7 +4864,7 @@ class ChatAttachment {
 /// pay page in `url` while something is due), or a delivery (the rider's
 /// progress in `delivery`, as it was when sent).
 class CustomerCard {
-  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
+  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.saved, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
 
   final DeliveryProgress? delivery;
   final String? invoiceId;
@@ -4414,6 +4872,7 @@ class CustomerCard {
   final String? line;
   final int? minutes;
   final String? reference;
+  final SavedCard? saved;
   final String? serviceId;
   final String? status;
   final String title;
@@ -4428,6 +4887,7 @@ class CustomerCard {
         line: j['line'] == null ? null : j['line'] as String,
         minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         status: j['status'] == null ? null : j['status'] as String,
         title: j['title'] as String,
@@ -4443,6 +4903,7 @@ class CustomerCard {
         'line': ?line,
         'minutes': ?minutes,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'status': ?status,
         'title': title,
@@ -4533,21 +4994,25 @@ class ReplyCustomerRequest {
 }
 
 class ReplyCustomerRequestCard {
-  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.serviceId, required this.type});
+  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.saved, this.serviceId, required this.type});
 
   final String? invoiceId;
   final String? itemId;
   final String? reference;
+  final SavedShare? saved;
   final String? serviceId;
   /// invoice: one of this customer's sent invoices (`invoice_id`); delivery:
   /// the rider's progress on this customer's order (`reference`), once a rider
-  /// holds it.
+  /// holds it; saved: a saved thing of the business's or the member's own
+  /// (`saved`), a card in the app and plain lines on WhatsApp, 409
+  /// `confirm_share` until `saved.confirm` when it holds what is sensitive.
   final String type;
 
   factory ReplyCustomerRequestCard.fromJson(Map<String, dynamic> j) => ReplyCustomerRequestCard(
         invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
         type: j['type'] as String,
       );
@@ -4556,6 +5021,7 @@ class ReplyCustomerRequestCard {
         'invoice_id': ?invoiceId,
         'item_id': ?itemId,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'service_id': ?serviceId,
         'type': type,
       };
@@ -4962,19 +5428,39 @@ class PersonMessage {
 }
 
 class SendMyChatMessageRequest {
-  const SendMyChatMessageRequest({this.clientId, required this.text});
+  const SendMyChatMessageRequest({this.card, this.clientId, this.text});
 
+  final SendMyChatMessageRequestCard? card;
   final String? clientId;
-  final String text;
+  final String? text;
 
   factory SendMyChatMessageRequest.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequest(
+        card: j['card'] == null ? null : SendMyChatMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
-        text: j['text'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
         'client_id': ?clientId,
-        'text': text,
+        'text': ?text,
+      };
+}
+
+class SendMyChatMessageRequestCard {
+  const SendMyChatMessageRequestCard({required this.saved, required this.type});
+
+  final SavedShare saved;
+  final String type;
+
+  factory SendMyChatMessageRequestCard.fromJson(Map<String, dynamic> j) => SendMyChatMessageRequestCard(
+        saved: SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'saved': saved.toJson(),
+        'type': type,
       };
 }
 
@@ -7320,15 +7806,21 @@ class ChatCardLinesItem {
 }
 
 class LinkChatRefsResponse {
-  const LinkChatRefsResponse({required this.refs});
+  const LinkChatRefsResponse({this.cursor, required this.refs});
 
+  /// With q, kind, cursor or limit given, a search of every record (not only
+  /// the newest), newest first; this is where the next page starts, empty when
+  /// there is no more.
+  final String? cursor;
   final List<ChatRef> refs;
 
   factory LinkChatRefsResponse.fromJson(Map<String, dynamic> j) => LinkChatRefsResponse(
+        cursor: j['cursor'] == null ? null : j['cursor'] as String,
         refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'cursor': ?cursor,
         'refs': refs.map((e) => e.toJson()).toList(),
       };
 }
@@ -9920,7 +10412,7 @@ class PeopleMessage {
 /// rider's progress when shared), or a share (amount, what for, the account to
 /// pay to, paid).
 class PeopleCard {
-  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
+  const PeopleCard({this.amountKobo, this.area, this.basketId, this.business, this.businessId, this.delivery, this.for_, this.forId, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.saved, this.state, required this.title, required this.type, this.what});
 
   final int? amountKobo;
   final String? area;
@@ -9940,6 +10432,7 @@ class PeopleCard {
   final PayoutAccount? payTo;
   final int? priceKobo;
   final String? reference;
+  final SavedCard? saved;
   final String? state;
   final String title;
   final String type;
@@ -9961,6 +10454,7 @@ class PeopleCard {
         payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedCard.fromJson(j['saved'] as Map<String, dynamic>),
         state: j['state'] == null ? null : j['state'] as String,
         title: j['title'] as String,
         type: j['type'] as String,
@@ -9983,6 +10477,7 @@ class PeopleCard {
         'pay_to': ?payTo?.toJson(),
         'price_kobo': ?priceKobo,
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'state': ?state,
         'title': title,
         'type': type,
@@ -10191,13 +10686,14 @@ class SendPeopleMessageRequest {
 /// orders (a delivery once a rider has it); split: amount_kobo, what, and
 /// pay_to (else your saved payout account).
 class SendPeopleMessageRequestCard {
-  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, this.saved, required this.type, this.what});
 
   final int? amountKobo;
   final String? businessId;
   final String? itemId;
   final PayoutAccount? payTo;
   final String? reference;
+  final SavedShare? saved;
   final String type;
   final String? what;
 
@@ -10207,6 +10703,7 @@ class SendPeopleMessageRequestCard {
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         type: j['type'] as String,
         what: j['what'] == null ? null : j['what'] as String,
       );
@@ -10217,6 +10714,7 @@ class SendPeopleMessageRequestCard {
         'item_id': ?itemId,
         'pay_to': ?payTo?.toJson(),
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'type': type,
         'what': ?what,
       };
@@ -11335,13 +11833,14 @@ class SendGroupMessageRequest {
 }
 
 class SendGroupMessageRequestCard {
-  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, this.saved, required this.type, this.what});
 
   final int? amountKobo;
   final String? businessId;
   final String? itemId;
   final SendGroupMessageRequestCardPayTo? payTo;
   final String? reference;
+  final SavedShare? saved;
   final String type;
   final String? what;
 
@@ -11351,6 +11850,7 @@ class SendGroupMessageRequestCard {
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         payTo: j['pay_to'] == null ? null : SendGroupMessageRequestCardPayTo.fromJson(j['pay_to'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
+        saved: j['saved'] == null ? null : SavedShare.fromJson(j['saved'] as Map<String, dynamic>),
         type: j['type'] as String,
         what: j['what'] == null ? null : j['what'] as String,
       );
@@ -11361,6 +11861,7 @@ class SendGroupMessageRequestCard {
         'item_id': ?itemId,
         'pay_to': ?payTo?.toJson(),
         'reference': ?reference,
+        'saved': ?saved?.toJson(),
         'type': type,
         'what': ?what,
       };
@@ -12198,5 +12699,853 @@ class SendBasketShareCardsResponse {
         'basket': basket.toJson(),
         'failed': failed.map((e) => e).toList(),
         'sent': sent.map((e) => e).toList(),
+      };
+}
+
+class ListSavedResponse {
+  const ListSavedResponse({this.canCheck, required this.limit, required this.saved});
+
+  /// A payments connection can check the names not checked yet (POST
+  /// /v1/saved/check).
+  final bool? canCheck;
+  final int limit;
+  final List<SavedObject> saved;
+
+  factory ListSavedResponse.fromJson(Map<String, dynamic> j) => ListSavedResponse(
+        canCheck: j['can_check'] == null ? null : j['can_check'] as bool,
+        limit: (j['limit'] as num).toInt(),
+        saved: (j['saved'] as List).map((e) => SavedObject.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_check': ?canCheck,
+        'limit': limit,
+        'saved': saved.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A saved thing (saved objects S0), as its owner's people see it. A bank
+/// account's number is only ever masked here.
+class SavedObject {
+  const SavedObject({required this.check, required this.createdAt, required this.details, this.files, required this.hint, required this.id, required this.kind, this.kindId, this.kindName, required this.name, required this.owner, this.shareSensitive, required this.title, required this.toChange, required this.updatedAt, this.values});
+
+  final SavedObjectCheck check;
+  final DateTime createdAt;
+  /// The kind's fields that are not sensitive. A bank account's (bank_name,
+  /// bank_code, code_from, account_number masked); a person's (phone, email,
+  /// address, birthday); a place's (line, area, landmark, phone); a text's
+  /// (body); an account with a provider's (type, provider, number, name_on_it);
+  /// and every kind's note.
+  final SavedObjectDetails details;
+  /// A made-up kind's file fields, each its file's name, type and size (GET
+  /// …/saved/{id}/file?field= opens it).
+  final Map<String, dynamic>? files;
+  /// What a list shows ("GTBank ••6789").
+  final String hint;
+  final String id;
+  /// custom is one of the owner's own kinds (kind_id).
+  final String kind;
+  final String? kindId;
+  /// A made-up kind's name ("Car").
+  final String? kindName;
+  /// What it is called up by after @, lowercase.
+  final String name;
+  final String owner;
+  /// Sharing it in a chat shares what is sensitive (an account number, a phone,
+  /// an email), so the sender is asked first.
+  final bool? shareSensitive;
+  final String title;
+  /// The person may change or remove it.
+  final bool toChange;
+  final DateTime updatedAt;
+  /// A made-up kind's values by field key; each sensitive one masked
+  /// (••3456), in full only by reveal.
+  final Map<String, dynamic>? values;
+
+  factory SavedObject.fromJson(Map<String, dynamic> j) => SavedObject(
+        check: SavedObjectCheck.fromJson(j['check'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        details: SavedObjectDetails.fromJson(j['details'] as Map<String, dynamic>),
+        files: j['files'] == null ? null : j['files'] as Map<String, dynamic>,
+        hint: j['hint'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        kindId: j['kind_id'] == null ? null : j['kind_id'] as String,
+        kindName: j['kind_name'] == null ? null : j['kind_name'] as String,
+        name: j['name'] as String,
+        owner: j['owner'] as String,
+        shareSensitive: j['share_sensitive'] == null ? null : j['share_sensitive'] as bool,
+        title: j['title'] as String,
+        toChange: j['to_change'] as bool,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'check': check.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'details': details.toJson(),
+        'files': ?files,
+        'hint': hint,
+        'id': id,
+        'kind': kind,
+        'kind_id': ?kindId,
+        'kind_name': ?kindName,
+        'name': name,
+        'owner': owner,
+        'share_sensitive': ?shareSensitive,
+        'title': title,
+        'to_change': toChange,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+        'values': ?values,
+      };
+}
+
+class SavedObjectCheck {
+  const SavedObjectCheck({this.accountName, this.at, this.problem, required this.state, this.via});
+
+  /// The bank's name for the account.
+  final Object? accountName;
+  final Object? at;
+  /// Why it will not be checked until the account changes (the bank has no such
+  /// account; the payments account does not list its bank by that name). Null
+  /// while checked or only waiting.
+  final Object? problem;
+  /// A bank account's name check; none for every other kind.
+  final String state;
+  /// The payments connection that gave it ("iswallet/taskiem").
+  final Object? via;
+
+  factory SavedObjectCheck.fromJson(Map<String, dynamic> j) => SavedObjectCheck(
+        accountName: j['account_name'],
+        at: j['at'],
+        problem: j['problem'],
+        state: j['state'] as String,
+        via: j['via'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'at': ?at,
+        'problem': ?problem,
+        'state': state,
+        'via': ?via,
+      };
+}
+
+/// The kind's fields that are not sensitive. A bank account's (bank_name,
+/// bank_code, code_from, account_number masked); a person's (phone, email,
+/// address, birthday); a place's (line, area, landmark, phone); a text's
+/// (body); an account with a provider's (type, provider, number, name_on_it);
+/// and every kind's note.
+class SavedObjectDetails {
+  const SavedObjectDetails({this.accountNumber, this.address, this.area, this.bankCode, this.bankName, this.birthday, this.body, this.codeFrom, this.email, this.file, this.fileName, this.fileSize, this.fileType, this.landmark, this.line, this.nameOnIt, this.note, this.number, this.phone, this.provider, this.type});
+
+  /// Masked (••6789).
+  final String? accountNumber;
+  final String? address;
+  final String? area;
+  final String? bankCode;
+  final String? bankName;
+  final String? birthday;
+  final String? body;
+  final String? codeFrom;
+  final String? email;
+  /// A file's (GET …/saved/{id}/file opens it).
+  final String? file;
+  final String? fileName;
+  final int? fileSize;
+  final String? fileType;
+  final String? landmark;
+  final String? line;
+  final String? nameOnIt;
+  final String? note;
+  final String? number;
+  final String? phone;
+  final String? provider;
+  final String? type;
+
+  factory SavedObjectDetails.fromJson(Map<String, dynamic> j) => SavedObjectDetails(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        birthday: j['birthday'] == null ? null : j['birthday'] as String,
+        body: j['body'] == null ? null : j['body'] as String,
+        codeFrom: j['code_from'] == null ? null : j['code_from'] as String,
+        email: j['email'] == null ? null : j['email'] as String,
+        file: j['file'] == null ? null : j['file'] as String,
+        fileName: j['file_name'] == null ? null : j['file_name'] as String,
+        fileSize: j['file_size'] == null ? null : (j['file_size'] as num).toInt(),
+        fileType: j['file_type'] == null ? null : j['file_type'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        nameOnIt: j['name_on_it'] == null ? null : j['name_on_it'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        number: j['number'] == null ? null : j['number'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        provider: j['provider'] == null ? null : j['provider'] as String,
+        type: j['type'] == null ? null : j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'address': ?address,
+        'area': ?area,
+        'bank_code': ?bankCode,
+        'bank_name': ?bankName,
+        'birthday': ?birthday,
+        'body': ?body,
+        'code_from': ?codeFrom,
+        'email': ?email,
+        'file': ?file,
+        'file_name': ?fileName,
+        'file_size': ?fileSize,
+        'file_type': ?fileType,
+        'landmark': ?landmark,
+        'line': ?line,
+        'name_on_it': ?nameOnIt,
+        'note': ?note,
+        'number': ?number,
+        'phone': ?phone,
+        'provider': ?provider,
+        'type': ?type,
+      };
+}
+
+/// A saved thing as its owner writes it; on a change, what is left out stays as
+/// it was. A bank account by its own fields, every other kind by details.
+class SavedObjectIn {
+  const SavedObjectIn({this.accountNumber, this.bankCode, this.bankName, this.codeFrom, this.details, this.kind, this.kindId, this.name, this.note, this.passkey, this.title, this.values});
+
+  final String? accountNumber;
+  final String? bankCode;
+  final String? bankName;
+  final String? codeFrom;
+  /// The fields of a kind other than the bank account (see
+  /// SavedObject.details); on a change, those given replace those kept, and
+  /// null removes one.
+  final Map<String, dynamic>? details;
+  final String? kind;
+  /// Which of the owner's kinds, for kind custom.
+  final String? kindId;
+  final String? name;
+  final String? note;
+  final PasskeyCredential? passkey;
+  final String? title;
+  /// A made-up kind's values by field key; on a change, those given replace
+  /// those kept, and null removes one.
+  final Map<String, dynamic>? values;
+
+  factory SavedObjectIn.fromJson(Map<String, dynamic> j) => SavedObjectIn(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        codeFrom: j['code_from'] == null ? null : j['code_from'] as String,
+        details: j['details'] == null ? null : j['details'] as Map<String, dynamic>,
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        kindId: j['kind_id'] == null ? null : j['kind_id'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+        title: j['title'] == null ? null : j['title'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'bank_code': ?bankCode,
+        'bank_name': ?bankName,
+        'code_from': ?codeFrom,
+        'details': ?details,
+        'kind': ?kind,
+        'kind_id': ?kindId,
+        'name': ?name,
+        'note': ?note,
+        'passkey': ?passkey?.toJson(),
+        'title': ?title,
+        'values': ?values,
+      };
+}
+
+class SavedObjectResult {
+  const SavedObjectResult({this.checkProblem, required this.saved});
+
+  /// Why the name could not be checked just now; it stays unchecked.
+  final String? checkProblem;
+  final SavedObject saved;
+
+  factory SavedObjectResult.fromJson(Map<String, dynamic> j) => SavedObjectResult(
+        checkProblem: j['check_problem'] == null ? null : j['check_problem'] as String,
+        saved: SavedObject.fromJson(j['saved'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'check_problem': ?checkProblem,
+        'saved': saved.toJson(),
+      };
+}
+
+class RevealSavedRequest {
+  const RevealSavedRequest({this.passkey});
+
+  final PasskeyCredential? passkey;
+
+  factory RevealSavedRequest.fromJson(Map<String, dynamic> j) => RevealSavedRequest(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+      };
+}
+
+/// A bank account's number; or a made-up kind's sensitive values by field key
+/// (saved objects S1).
+class RevealSavedResponse {
+  const RevealSavedResponse({this.accountNumber, this.values});
+
+  final String? accountNumber;
+  final Map<String, dynamic>? values;
+
+  factory RevealSavedResponse.fromJson(Map<String, dynamic> j) => RevealSavedResponse(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'values': ?values,
+      };
+}
+
+class SavedStepUpOptionsRequest {
+  const SavedStepUpOptionsRequest({required this.operation, required this.target});
+
+  final String operation;
+  /// The saved thing's id.
+  final String target;
+
+  factory SavedStepUpOptionsRequest.fromJson(Map<String, dynamic> j) => SavedStepUpOptionsRequest(
+        operation: j['operation'] as String,
+        target: j['target'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'operation': operation,
+        'target': target,
+      };
+}
+
+class SavedStepUpOptionsResponse {
+  const SavedStepUpOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory SavedStepUpOptionsResponse.fromJson(Map<String, dynamic> j) => SavedStepUpOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class CheckAllSavedResponse {
+  const CheckAllSavedResponse({required this.checked, required this.problems, required this.unchecked, required this.via});
+
+  final int checked;
+  final List<CheckAllSavedResponseProblemsItem> problems;
+  /// How many are left not checked.
+  final int unchecked;
+  final String via;
+
+  factory CheckAllSavedResponse.fromJson(Map<String, dynamic> j) => CheckAllSavedResponse(
+        checked: (j['checked'] as num).toInt(),
+        problems: (j['problems'] as List).map((e) => CheckAllSavedResponseProblemsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        unchecked: (j['unchecked'] as num).toInt(),
+        via: j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'checked': checked,
+        'problems': problems.map((e) => e.toJson()).toList(),
+        'unchecked': unchecked,
+        'via': via,
+      };
+}
+
+class CheckAllSavedResponseProblemsItem {
+  const CheckAllSavedResponseProblemsItem({required this.id, required this.problem});
+
+  final String id;
+  final String problem;
+
+  factory CheckAllSavedResponseProblemsItem.fromJson(Map<String, dynamic> j) => CheckAllSavedResponseProblemsItem(
+        id: j['id'] as String,
+        problem: j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'problem': problem,
+      };
+}
+
+class SavedProviderResponse {
+  const SavedProviderResponse({this.connected, required this.owner, this.providers, this.wallet, this.words});
+
+  /// The payments connection names are checked through; null when there is
+  /// none.
+  final SavedProviderResponseConnected? connected;
+  final bool owner;
+  /// "I already have an account with…": connected under Connections.
+  final List<SavedProviderResponseProvidersItem>? providers;
+  /// Open a Taskiem wallet (POST /v1/settings/receive-money); for an owner of a
+  /// business with no connection.
+  final SavedProviderResponseWallet? wallet;
+  final String? words;
+
+  factory SavedProviderResponse.fromJson(Map<String, dynamic> j) => SavedProviderResponse(
+        connected: j['connected'] == null ? null : SavedProviderResponseConnected.fromJson(j['connected'] as Map<String, dynamic>),
+        owner: j['owner'] as bool,
+        providers: j['providers'] == null ? null : (j['providers'] as List).map((e) => SavedProviderResponseProvidersItem.fromJson(e as Map<String, dynamic>)).toList(),
+        wallet: j['wallet'] == null ? null : SavedProviderResponseWallet.fromJson(j['wallet'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connected': ?connected?.toJson(),
+        'owner': owner,
+        'providers': ?providers?.map((e) => e.toJson()).toList(),
+        'wallet': ?wallet?.toJson(),
+        'words': ?words,
+      };
+}
+
+/// The payments connection names are checked through; null when there is none.
+class SavedProviderResponseConnected {
+  const SavedProviderResponseConnected({required this.channel, required this.name, required this.wallet});
+
+  final String channel;
+  final String name;
+  /// It is the business's Taskiem wallet.
+  final bool wallet;
+
+  factory SavedProviderResponseConnected.fromJson(Map<String, dynamic> j) => SavedProviderResponseConnected(
+        channel: j['channel'] as String,
+        name: j['name'] as String,
+        wallet: j['wallet'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'channel': channel,
+        'name': name,
+        'wallet': wallet,
+      };
+}
+
+class SavedProviderResponseProvidersItem {
+  const SavedProviderResponseProvidersItem({required this.id, required this.name});
+
+  final String id;
+  final String name;
+
+  factory SavedProviderResponseProvidersItem.fromJson(Map<String, dynamic> j) => SavedProviderResponseProvidersItem(
+        id: j['id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+      };
+}
+
+/// Open a Taskiem wallet (POST /v1/settings/receive-money); for an owner of a
+/// business with no connection.
+class SavedProviderResponseWallet {
+  const SavedProviderResponseWallet({required this.available, required this.plan, this.planNote});
+
+  final bool available;
+  final bool plan;
+  final String? planNote;
+
+  factory SavedProviderResponseWallet.fromJson(Map<String, dynamic> j) => SavedProviderResponseWallet(
+        available: j['available'] as bool,
+        plan: j['plan'] as bool,
+        planNote: j['plan_note'] == null ? null : j['plan_note'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'plan': plan,
+        'plan_note': ?planNote,
+      };
+}
+
+class ListBanksResponse {
+  const ListBanksResponse({required this.banks, required this.from});
+
+  final List<ListBanksResponseBanksItem> banks;
+  /// The payments connection the list is from ("iswallet/taskiem"), to send
+  /// back as `code_from`; empty for the list by name alone.
+  final String from;
+
+  factory ListBanksResponse.fromJson(Map<String, dynamic> j) => ListBanksResponse(
+        banks: (j['banks'] as List).map((e) => ListBanksResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+        from: j['from'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'banks': banks.map((e) => e.toJson()).toList(),
+        'from': from,
+      };
+}
+
+class ListBanksResponseBanksItem {
+  const ListBanksResponseBanksItem({required this.code, required this.name});
+
+  /// The bank's code in this list; empty in the list by name alone.
+  final String code;
+  final String name;
+
+  factory ListBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListBanksResponseBanksItem(
+        code: j['code'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+      };
+}
+
+class NameCheckResponse {
+  const NameCheckResponse({required this.accountName, required this.via});
+
+  final String accountName;
+  final String via;
+
+  factory NameCheckResponse.fromJson(Map<String, dynamic> j) => NameCheckResponse(
+        accountName: j['account_name'] as String,
+        via: j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'via': via,
+      };
+}
+
+class ListMySavedResponse {
+  const ListMySavedResponse({this.canCheck, required this.limit, required this.saved});
+
+  /// A payments connection can check the names not checked yet (POST
+  /// /v1/saved/check).
+  final bool? canCheck;
+  final int limit;
+  final List<SavedObject> saved;
+
+  factory ListMySavedResponse.fromJson(Map<String, dynamic> j) => ListMySavedResponse(
+        canCheck: j['can_check'] == null ? null : j['can_check'] as bool,
+        limit: (j['limit'] as num).toInt(),
+        saved: (j['saved'] as List).map((e) => SavedObject.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_check': ?canCheck,
+        'limit': limit,
+        'saved': saved.map((e) => e.toJson()).toList(),
+      };
+}
+
+class RevealMySavedRequest {
+  const RevealMySavedRequest({this.passkey});
+
+  final PasskeyCredential? passkey;
+
+  factory RevealMySavedRequest.fromJson(Map<String, dynamic> j) => RevealMySavedRequest(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+      };
+}
+
+/// A bank account's number; or a made-up kind's sensitive values by field key
+/// (saved objects S1).
+class RevealMySavedResponse {
+  const RevealMySavedResponse({this.accountNumber, this.values});
+
+  final String? accountNumber;
+  final Map<String, dynamic>? values;
+
+  factory RevealMySavedResponse.fromJson(Map<String, dynamic> j) => RevealMySavedResponse(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        values: j['values'] == null ? null : j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'values': ?values,
+      };
+}
+
+class MySavedStepUpOptionsRequest {
+  const MySavedStepUpOptionsRequest({required this.operation, required this.target});
+
+  final String operation;
+  /// The saved thing's id.
+  final String target;
+
+  factory MySavedStepUpOptionsRequest.fromJson(Map<String, dynamic> j) => MySavedStepUpOptionsRequest(
+        operation: j['operation'] as String,
+        target: j['target'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'operation': operation,
+        'target': target,
+      };
+}
+
+class MySavedStepUpOptionsResponse {
+  const MySavedStepUpOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory MySavedStepUpOptionsResponse.fromJson(Map<String, dynamic> j) => MySavedStepUpOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class ReadSavedWordsRequest {
+  const ReadSavedWordsRequest({required this.text});
+
+  final String text;
+
+  factory ReadSavedWordsRequest.fromJson(Map<String, dynamic> j) => ReadSavedWordsRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class ReadSavedWordsResponse {
+  const ReadSavedWordsResponse({required this.details, required this.kind, required this.title});
+
+  /// The kind's fields (bank_name and account_number for an account; phone,
+  /// email; line, area, landmark; body for a text).
+  final Map<String, dynamic> details;
+  final String kind;
+  /// A name the words give ("Account name: Ada Obi"), or empty.
+  final String title;
+
+  factory ReadSavedWordsResponse.fromJson(Map<String, dynamic> j) => ReadSavedWordsResponse(
+        details: j['details'] as Map<String, dynamic>,
+        kind: j['kind'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'details': details,
+        'kind': kind,
+        'title': title,
+      };
+}
+
+class SavedKindList {
+  const SavedKindList({required this.kinds, required this.limit, required this.starters, required this.toChange});
+
+  final List<SavedKind> kinds;
+  final int limit;
+  /// Kinds to start from (a car, a generator, a pet, a medical card).
+  final List<SavedKindListStartersItem> starters;
+  /// The person may add, change and remove kinds.
+  final bool toChange;
+
+  factory SavedKindList.fromJson(Map<String, dynamic> j) => SavedKindList(
+        kinds: (j['kinds'] as List).map((e) => SavedKind.fromJson(e as Map<String, dynamic>)).toList(),
+        limit: (j['limit'] as num).toInt(),
+        starters: (j['starters'] as List).map((e) => SavedKindListStartersItem.fromJson(e as Map<String, dynamic>)).toList(),
+        toChange: j['to_change'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kinds': kinds.map((e) => e.toJson()).toList(),
+        'limit': limit,
+        'starters': starters.map((e) => e.toJson()).toList(),
+        'to_change': toChange,
+      };
+}
+
+class SavedKind {
+  const SavedKind({required this.count, required this.createdAt, required this.fields, required this.id, required this.name, required this.updatedAt});
+
+  /// How many live saved things are of it.
+  final int count;
+  final DateTime createdAt;
+  final List<SavedKindField> fields;
+  final String id;
+  final String name;
+  final DateTime updatedAt;
+
+  factory SavedKind.fromJson(Map<String, dynamic> j) => SavedKind(
+        count: (j['count'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        fields: (j['fields'] as List).map((e) => SavedKindField.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'fields': fields.map((e) => e.toJson()).toList(),
+        'id': id,
+        'name': name,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+      };
+}
+
+/// One field of a made-up kind. Its key is made from its label once and kept;
+/// never_share makes it sensitive too.
+class SavedKindField {
+  const SavedKindField({this.key, required this.label, this.neverShare, this.options, this.required, this.sensitive, required this.type});
+
+  final String? key;
+  final String label;
+  /// Kept out of every card.
+  final bool? neverShare;
+  /// A choice's options, 2 to 30.
+  final List<String>? options;
+  final bool? required;
+  /// Sealed, masked in lists, shown in full only on a fresh unlock, asked
+  /// before sharing.
+  final bool? sensitive;
+  /// A place is an address in one line; a bank account its bank and 10-digit
+  /// number (always sensitive); a file the id of an upload (POST
+  /// …/saved/uploads).
+  final String type;
+
+  factory SavedKindField.fromJson(Map<String, dynamic> j) => SavedKindField(
+        key: j['key'] == null ? null : j['key'] as String,
+        label: j['label'] as String,
+        neverShare: j['never_share'] == null ? null : j['never_share'] as bool,
+        options: j['options'] == null ? null : (j['options'] as List).map((e) => e as String).toList(),
+        required: j['required'] == null ? null : j['required'] as bool,
+        sensitive: j['sensitive'] == null ? null : j['sensitive'] as bool,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': ?key,
+        'label': label,
+        'never_share': ?neverShare,
+        'options': ?options?.map((e) => e).toList(),
+        'required': ?required,
+        'sensitive': ?sensitive,
+        'type': type,
+      };
+}
+
+class SavedKindListStartersItem {
+  const SavedKindListStartersItem({required this.fields, required this.name});
+
+  final List<SavedKindField> fields;
+  final String name;
+
+  factory SavedKindListStartersItem.fromJson(Map<String, dynamic> j) => SavedKindListStartersItem(
+        fields: (j['fields'] as List).map((e) => SavedKindField.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fields': fields.map((e) => e.toJson()).toList(),
+        'name': name,
+      };
+}
+
+class SavedKindIn {
+  const SavedKindIn({required this.fields, required this.name, this.passkey});
+
+  final List<SavedKindField> fields;
+  final String name;
+  /// Confirms a change that shows what was kept hidden (a field with values
+  /// made not sensitive, made shareable, or a sensitive one given another
+  /// type); asked for with 403 step_up, operation saved.kind.
+  final PasskeyCredential? passkey;
+
+  factory SavedKindIn.fromJson(Map<String, dynamic> j) => SavedKindIn(
+        fields: (j['fields'] as List).map((e) => SavedKindField.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fields': fields.map((e) => e.toJson()).toList(),
+        'name': name,
+        'passkey': ?passkey?.toJson(),
+      };
+}
+
+class SavedKindResult {
+  const SavedKindResult({required this.kind});
+
+  final SavedKind kind;
+
+  factory SavedKindResult.fromJson(Map<String, dynamic> j) => SavedKindResult(
+        kind: SavedKind.fromJson(j['kind'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind.toJson(),
+      };
+}
+
+class ListMyBanksResponse {
+  const ListMyBanksResponse({required this.banks, required this.from});
+
+  final List<ListMyBanksResponseBanksItem> banks;
+  /// The payments connection the list is from ("iswallet/taskiem"), to send
+  /// back as `code_from`; empty for the list by name alone.
+  final String from;
+
+  factory ListMyBanksResponse.fromJson(Map<String, dynamic> j) => ListMyBanksResponse(
+        banks: (j['banks'] as List).map((e) => ListMyBanksResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+        from: j['from'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'banks': banks.map((e) => e.toJson()).toList(),
+        'from': from,
+      };
+}
+
+class ListMyBanksResponseBanksItem {
+  const ListMyBanksResponseBanksItem({required this.code, required this.name});
+
+  /// The bank's code in this list; empty in the list by name alone.
+  final String code;
+  final String name;
+
+  factory ListMyBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListMyBanksResponseBanksItem(
+        code: j['code'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
       };
 }

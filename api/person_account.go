@@ -432,7 +432,11 @@ func (s *Server) deletePersonTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 			`DELETE FROM person_files WHERE person_id = $1`,
 			`DELETE FROM person_messages WHERE person_id = $1`,
 			`DELETE FROM person_conversations WHERE person_id = $1`,
-			`DELETE FROM person_addresses WHERE person_id = $1`,
+			// Their saved things (saved objects; their log goes with them).
+			`DELETE FROM saved_object_events WHERE person_id = $1`,
+			`DELETE FROM saved_objects WHERE person_id = $1`,
+			`DELETE FROM saved_files WHERE person_id = $1`,
+			`DELETE FROM saved_kinds WHERE person_id = $1`,
 			`DELETE FROM person_photos WHERE person_id = $1`,
 			`DELETE FROM person_notify WHERE person_id = $1`,
 			`DELETE FROM push_outbox WHERE tenant_id IS NULL AND user_id = $1`,

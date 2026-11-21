@@ -1,4 +1,8 @@
 import type { ToolKey } from "../lib/tools";
+import { useSavedPicks } from "./SavedPicks";
+import { shareQuestion } from "../lib/saved";
+import { SavedCardView } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import {
@@ -34,7 +38,7 @@ import {
   type Reaction,
   logoSrc,
 } from "../lib/linkchat";
-import { Icon } from "../icons";
+import { Icon, TaskiemMark } from "../icons";
 import { MentionText } from "./Mentions";
 import { ChatAvatar } from "./ChatAvatar";
 import { ContactInfo } from "./ContactInfo";
@@ -624,6 +628,7 @@ function Bubble({
   current,
   onDone = () => undefined,
   onForward,
+  onSaveAs,
   onHide,
   onJump,
   flash = false,
@@ -648,6 +653,8 @@ function Bubble({
   current?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
+  /** Save as… on its words (saved objects S1, part 4). */
+  onSaveAs?: (text: string) => void;
   onHide?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
@@ -752,6 +759,7 @@ function Bubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {!card && onForward && (
                     <PopItem
                       icon="forward"
@@ -968,6 +976,9 @@ function Bubble({
                 openTool={refs.openTool}
               />
             ))}
+          {(m.mentions ?? []).map((x) =>
+            x.kind === "saved" && x.saved ? <SavedCardView key={`saved:${x.name}`} card={x.saved} mine={m.mine} saveTo="business" /> : null,
+          )}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
@@ -1030,6 +1041,29 @@ function CardFrame({
 /** Diary lines (chat-tools.md §3): changes we made ourselves, told as
  * lines; several made close together are one line, the newest, under
  * which the earlier ones unfold. */
+/** What Taskiem answered a "@Taskiem" typed in this conversation, kept on
+ * our side only (the business never sees it): the words asked, the
+ * answer, and the way to the Taskiem chat. */
+function TaskiemNote({ m }: { m: LinkMessage }) {
+  const asked = (m.asked ?? "").replace(/(^|\s)@taskiem\b[,:]?\s*/i, "$1").trim();
+  return (
+    <div className="tk-taskiem-note" data-testid="taskiem-note" data-msg={m.id}>
+      <div className="tk-taskiem-note-head">
+        <span className="tk-taskiem-note-mark" aria-hidden="true">
+          <TaskiemMark />
+        </span>
+        <span className="tk-taskiem-note-who">Taskiem · only you see this</span>
+        <span className="tk-taskiem-note-when">{fmtTime(m.created_at)}</span>
+      </div>
+      {asked && <p className="tk-taskiem-note-asked">You asked: {asked}</p>}
+      <p className="tk-taskiem-note-answer">{m.body}</p>
+      <Link className="tk-taskiem-note-open" to="/chat?with=taskiem">
+        Open Taskiem chat
+      </Link>
+    </div>
+  );
+}
+
 function DiaryRun({
   run,
   other,
@@ -1316,6 +1350,9 @@ export function ConversationPane({
           : []),
       ]
     : [];
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest named as tags, each shared as a card with the message.
+  const savedTexts = useSavedPicks("share");
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1362,6 +1399,9 @@ export function ConversationPane({
         (priced.data?.whose === "ours" && can("table.read"))
           ? undefined
           : [],
+      // Saved texts (saved objects S1): their words into the box.
+      saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, savedAsTags: true,
+      saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (r) => previewLine(r, conv.name),
     closes: [infoOpen, !!forwarding],
@@ -1385,7 +1425,7 @@ export function ConversationPane({
         post(`${path}/typing`).catch(() => undefined);
       }
     },
-    onSend: (s) => sendMessage(s),
+    onSend: (s) => void shareThenSend(s),
   });
   openOrder.current = (start) =>
     c.openTool("order", undefined, { order: start });
@@ -1623,6 +1663,27 @@ export function ConversationPane({
       }),
     [conv.link, onChanged],
   );
+  // A message naming saved things: what is sensitive in them is shared only
+  // after a yes, asked here (the server's question, the server refusing
+  // without it) since the outbox sends later; on a no, the words come back.
+  // A pick the list does not know (it failed or is still loading) is asked
+  // about too; confirm is sent only after a yes.
+  const shareThenSend = async (s: Sending<LinkMessage>) => {
+    const refs = (s.mentions ?? []) as { kind: string; saved?: { id: string; owner: string; confirm: boolean } }[];
+    for (const r of refs) {
+      if (r.kind !== "saved" || !r.saved) continue;
+      const pick = (savedTexts.saved ?? []).find((x) => x.id === r.saved?.id);
+      if (pick && !pick.savedSensitive) continue;
+      const known = s.picked?.find((p) => p.kind === "saved" && p.id === r.saved?.id);
+      const title = pick ? shareQuestion(pick, conv.name) : shareQuestion({ name: `@${known?.name ?? "it"}`, words: known?.words, savedKind: known?.savedKind }, conv.name);
+      if (!(await confirm({ title, ok: "Share" }))) {
+        c.restore(s);
+        return;
+      }
+      r.saved.confirm = true;
+    }
+    sendMessage(s);
+  };
   const sendMessage = (s: Sending<LinkMessage>) => {
     const { file, reply } = s;
     const o: Outgoing = {
@@ -1708,6 +1769,9 @@ export function ConversationPane({
     done: string,
   ) => void act.run(async () => (await put(path, body), onChanged()), done);
   const { confirm, node: confirmNode } = useConfirm();
+  // Save as… on a message (saved objects S1, part 4): the business's for
+  // whoever may manage them, else one's own.
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedTexts.reload() });
   const hide = async (m: LinkMessage) => {
     if (
       !(await confirm({
@@ -1930,7 +1994,9 @@ export function ConversationPane({
         unread={unread}
         empty={`No messages yet. Say hello to ${conv.name}.`}
         render={(m, { first }) =>
-          runs.member.has(m.id) ? null : runs.lead.has(m.id) ? (
+          runs.member.has(m.id) ? null : m.kind === "taskiem" ? (
+            <TaskiemNote m={m} />
+          ) : runs.lead.has(m.id) ? (
             <DiaryRun
               run={runs.lead.get(m.id) ?? [m]}
               other={conv.name}
@@ -1944,6 +2010,7 @@ export function ConversationPane({
               onRetry={retry}
               onDiscard={discard}
               onReply={setReply}
+              onSaveAs={saveAs.fromWords}
               onJump={jump}
               first={first}
               flash={flashId === m.id}
@@ -2068,6 +2135,7 @@ export function ConversationPane({
         />
       )}
       {confirmNode}
+      {saveAs.node}
     </section>
   );
 }

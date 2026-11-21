@@ -74,6 +74,8 @@ flutter:
   uses-material-design: false
   assets:
     - assets/brand/
+    # The chat's wallpaper (tools/chatwallpaper).
+    - assets/chat/
   # The web's Inter, unpacked from its own files (tool/fonts.py): one family
   # per alphabet, the rest as fallbacks, as the browser picks by unicode-range.
   fonts:

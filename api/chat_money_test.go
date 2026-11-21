@@ -191,6 +191,42 @@ func TestLinkChatRefs(t *testing.T) {
 	if bills := buyer.must(200, "GET", "/v1/chat-refs", nil)["refs"].([]any); len(bills) != 1 || bills[0].(map[string]any)["kind"] != "bill" {
 		t.Fatalf("the buyer's Taskiem chat refs: %v", bills)
 	}
+	// Searched (menus-everywhere.md §7): by a customer's name though it is
+	// shown masked, by part of a number, by its status; a kind at a time;
+	// none found, an empty cursor; a business's conversation only what is
+	// between the two.
+	search := func(c *client, path string) ([]any, string) {
+		t.Helper()
+		out := c.must(200, "GET", path, nil)
+		return out["refs"].([]any), out["cursor"].(string)
+	}
+	if got, cur := search(seller, "/v1/chat-refs?q=bisi"); len(got) != 1 || got[0].(map[string]any)["party"] != "B•••" || cur != "" {
+		t.Fatalf("bisi: %v %q", got, cur)
+	}
+	if got, _ := search(seller, "/v1/chat-refs?kind=invoice&q="+num[len(num)-3:]); len(got) != 1 || got[0].(map[string]any)["name"] != num {
+		t.Fatalf("part of %s: %v", num, got)
+	}
+	if got, _ := search(seller, "/v1/chat-refs?q=unpaid&kind=invoice,bill"); len(got) != 1 {
+		t.Fatalf("unpaid: %v", got)
+	}
+	if got, cur := search(seller, "/v1/chat-refs?q=zzz"); len(got) != 0 || cur != "" {
+		t.Fatalf("zzz: %v %q", got, cur)
+	}
+	if got, cur := search(seller, "/v1/chat-refs?limit=1&kind=invoice"); len(got) != 1 || cur == "" {
+		t.Fatalf("a page of one: %v %q", got, cur)
+	} else if more, end := search(seller, "/v1/chat-refs?limit=1&kind=invoice&cursor="+cur); len(more) != 1 || more[0].(map[string]any)["id"] == got[0].(map[string]any)["id"] || end != "" {
+		t.Fatalf("the next page: %v %q", more, end)
+	}
+	if got, _ := search(seller, "/v1/link-chats/"+link+"/refs?q=bisi"); len(got) != 0 {
+		t.Fatalf("Bisi is not between us: %v", got)
+	}
+	if got, _ := search(seller, "/v1/link-chats/"+link+"/refs?q=ada"); len(got) != 1 {
+		t.Fatalf("ada, in her conversation: %v", got)
+	}
+	if got, _ := search(builder, "/v1/chat-refs?q=bisi"); len(got) != 0 {
+		t.Fatalf("a builder finds no invoice: %v", got)
+	}
+	seller.must(400, "GET", "/v1/chat-refs?kind=dog", nil)
 	c := seller.must(200, "GET", "/v1/chat-card?kind=invoice&id="+other["id"].(string), nil)
 	if c["party"] != "B•••" || c["action"] != "remind" || c["total_kobo"] != float64(100000) {
 		t.Fatalf("a card from the Taskiem chat: %v", c)

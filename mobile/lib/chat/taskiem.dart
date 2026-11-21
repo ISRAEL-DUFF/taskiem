@@ -35,6 +35,7 @@ import 'live.dart';
 import 'explore.dart' show showExploreCard;
 import 'menu.dart';
 import 'ref_card.dart';
+import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
@@ -43,7 +44,9 @@ import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, showMatchSheet;
-import 'bills_page.dart' show openBill;
+import 'bills_page.dart' show BillsPage, openBill;
+import 'menu_card.dart';
+import 'money_page.dart' show MoneyPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
@@ -53,6 +56,8 @@ import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 import '../kit/mobile.dart' show TkRoute;
 import '../school/school_chasing.dart' show DebtorsPage;
 import '../school/school_clearance.dart' show ClearancePage;
@@ -76,7 +81,7 @@ const _page = 50;
 
 class TaskiemLine {
   TaskiemLine(this.m, {this.local = false});
-  final TaskiemChatMessagesItem m;
+  final TaskiemMessage m;
   final bool local;
   String get id => m.id;
 }
@@ -85,7 +90,7 @@ class TaskiemLine {
 /// not kept (a code) stays as sent. A message of ours being sent gives way
 /// to its stored copy when that comes first (by the stream); the copy of an
 /// answer that carries its buttons' ids is kept over one that does not.
-List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemChatMessagesItem> b) {
+List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemMessage> b) {
   final arrived = b.where((m) => m.inbound && m.channel == 'web' && !a.any((x) => !x.local && x.id == m.id)).toList();
   bool sent(TaskiemLine x) {
     if (!x.local) return false;
@@ -106,7 +111,7 @@ List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemChatMessagesItem
     final words = had != null && !had.local && keptWithoutLinks(had.m.text, x.m.text);
     seen[key] = keep || words
         ? TaskiemLine(
-            TaskiemChatMessagesItem(
+            TaskiemMessage(
               id: x.m.id,
               channel: x.m.channel,
               inbound: x.m.inbound,
@@ -286,7 +291,7 @@ class TaskiemData extends ChangeNotifier {
     final local = chats.auth.local;
     if (local == null) return;
     try {
-      final kept = [for (final j in local.messages('taskiem')) TaskiemChatMessagesItem.fromJson(j)];
+      final kept = [for (final j in local.messages('taskiem')) TaskiemMessage.fromJson(j)];
       if (kept.isNotEmpty && messages == null) {
         final list = mergeTaskiem(const [], kept);
         unread = unreadAfter(list, chats.taskiemSeen);
@@ -340,7 +345,7 @@ class TaskiemData extends ChangeNotifier {
     if (!follow || _disposed) return;
     _live ??= chats.live?.events.listen((e) {
       if (e is LiveTaskiem) {
-        _merge(e.messages.map(TaskiemChatMessagesItem.fromJson).toList());
+        _merge(e.messages.map(TaskiemMessage.fromJson).toList());
       }
     });
     chats.live?.addListener(_reschedule);
@@ -378,7 +383,7 @@ class TaskiemData extends ChangeNotifier {
     _merge(out.messages);
   }
 
-  void _merge(List<TaskiemChatMessagesItem> add) {
+  void _merge(List<TaskiemMessage> add) {
     if (_disposed) return;
     messages = mergeTaskiem(messages ?? const [], add);
     _keep();
@@ -400,7 +405,7 @@ class TaskiemData extends ChangeNotifier {
     TaskiemLine? mine;
     if (words.isNotEmpty) {
       mine = TaskiemLine(
-        TaskiemChatMessagesItem(id: 'local-${++_localN}', channel: 'web', inbound: true, kind: 'text', text: words, createdAt: chats.now()),
+        TaskiemMessage(id: 'local-${++_localN}', channel: 'web', inbound: true, kind: 'text', text: words, createdAt: chats.now()),
         local: true,
       );
       messages = mergeTaskiem(messages ?? const [], const [])..add(mine);
@@ -504,6 +509,13 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   late final _tags = TagBox(
     text: _text,
     sources: _tagSources,
+    // Invoices, orders and customers searched on the server, every record
+    // (menus-everywhere.md §7).
+    searchRefs: (words, kinds, cursor) async {
+      final r = await widget.data.api.chatRefs(q: words, kind: kinds, cursor: cursor, limit: '20');
+      final now = widget.data.chats.now();
+      return (list: [for (final x in r.refs) refTag(x, now, date: shortDate, status: refStatusWords)], cursor: r.cursor ?? '');
+    },
     grouped: () => widget.data.chats.chatTools,
     taskiem: false,
     onChange: () {
@@ -511,12 +523,40 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
+    // Saved things by @name (saved objects S1): Taskiem reads any of them.
+    saved: SavedPicks(
+      auth: widget.data.chats.auth,
+      textsOnly: false,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    ),
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    onAttachSaved: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => _composer.currentState?.choose(f))),
   );
+  final _composer = GlobalKey<ComposerState>();
 
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
 
-  void _openTool(Tool tool, {String? openId}) {
+  /// A menu row's page, where the app has it as a screen.
+  bool _openPage(String path) {
+    final auth = widget.data.chats.auth;
+    final Widget? page = switch (path) {
+      '/bills' => BillsPage(auth: auth),
+      '/invoices' => InvoicesPage(auth: auth),
+      '/money' => MoneyPage(auth: auth),
+      '/schools' || '/schools/payments' => StudentsPage(auth: auth),
+      '/schools/debtors' => DebtorsPage(auth: auth),
+      '/schools/clearance' => ClearancePage(auth: auth),
+      _ => null,
+    };
+    if (page == null) return false;
+    unawaited(Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page)));
+    return true;
+  }
+
+  void _openTool(Tool tool, {String? openId, bool add = false}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
@@ -561,6 +601,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       tool: tool,
       detail: toolDetail(widget.data.chats.auth),
       openId: openId,
+      add: add,
       // Saved: its diary line here at once, and the alerts read again.
       onSaved: (_) {
         unawaited(widget.data.pull().catchError((Object _) {}));
@@ -647,8 +688,10 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     _text.addListener(_tags.typed);
     // "/" and a word as the whole message: the panel, filtered by it.
-    _text.addListener(() => _tools.typed(_tags.query?.mark == '/' ? '' : _text.text));
+    _text.addListener(() => _tools.typed(_tags.tagging ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
+    // The menus' catalogue, read now, so a menu is drawn whole at once.
+    unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
       if (_text.text.isEmpty) _text.text = words;
@@ -684,7 +727,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             builder: (context, _) => Column(
               children: [
                 ColoredBox(
-                  color: t.chatWallpaper,
+                  // The head on a bar of its own, as WhatsApp's (under the phone's
+                  // status bar too), apart from the wallpaper.
+                  color: t.panel,
                   child: Padding(
                     padding: EdgeInsets.only(top: pad.top),
                     child: ChatHeadBar(
@@ -708,9 +753,44 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 ToolsAnchor(
                   tools: _tools,
                   panel: (context, room) =>
-                      ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
+                      ToolsPanel(
+                        tools: _tools,
+                        onOpen: _openTool,
+                        lead: _schoolTiles(d),
+                        extras: _extras(d),
+                        recent: d.chats.prefs?.recentTools ?? const [],
+                        maxHeight: room,
+                        // The topics' menu (menus-everywhere.md §4): a row
+                        // pressed here is as pressed in a menu of the chat.
+                        menu: (context) => MenuCard(
+                          auth: d.chats.auth,
+                          menu: const MenuMessage(),
+                          open: true,
+                          head: false,
+                          busy: d.busy,
+                          onAct: (a) {
+                            _tools.close();
+                            unawaited(d.say(reply: 'act:${a.id}', text: a.title));
+                          },
+                          onTool: (key, add) {
+                            final tool = tools.where((t) => t.key == key).firstOrNull;
+                            if (tool == null) return false;
+                            _openTool(tool, add: add);
+                            return true;
+                          },
+                          onPage: (path) {
+                            _tools.close();
+                            return _openPage(path);
+                          },
+                          onForm: (reply, text) {
+                            _tools.close();
+                            unawaited(d.say(reply: reply, text: text));
+                          },
+                        ),
+                      ),
                 ),
                 Composer(
+                  key: _composer,
                   tools: d.chats.chatTools ? _tools : null,
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
@@ -783,6 +863,17 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       if (m.inbound) break;
       if (m.buttons?.any((b) => b.id != null) ?? false) {
         pressable = l[i].id;
+        break;
+      }
+    }
+    // The newest menu stays open while nothing has been said since it;
+    // every other folds (chat-menus.md §6.1; folding once the person types
+    // something else, 21 November 2026).
+    String? lastMenu;
+    for (final x in l.reversed) {
+      if (x.m.inbound) break;
+      if (x.m.kind == 'menu') {
+        lastMenu = x.id;
         break;
       }
     }
@@ -936,6 +1027,28 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         ),
         render: (x, prev) {
           final m = x.m;
+          if (m.kind == 'menu') {
+            final menu = MenuMessage.parse(m.text);
+            if (menu != null) {
+              return MenuCard(
+                key: ValueKey('menu-${x.id}'),
+                auth: d.chats.auth,
+                id: x.id,
+                menu: menu,
+                open: x.id == lastMenu,
+                busy: d.busy,
+                onAct: (a) => d.say(reply: 'act:${a.id}', text: a.title),
+                onTool: (key, add) {
+                  final tool = tools.where((t) => t.key == key).firstOrNull;
+                  if (tool == null) return false;
+                  _openTool(tool, add: add);
+                  return true;
+                },
+                onPage: (path) => _openPage(path),
+                onForm: (reply, text) => d.say(reply: reply, text: text),
+              );
+            }
+          }
           if (m.kind == 'chart') {
             final chart = ChartData.parse(m.text);
             if (chart != null) return ChartCard(chart: chart);
@@ -991,14 +1104,14 @@ class TaskiemSignupBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _TaskiemBubble(
-    x: TaskiemLine(TaskiemChatMessagesItem(
+    x: TaskiemLine(TaskiemMessage(
       id: id,
       inbound: mine,
       channel: 'web',
       kind: 'text',
       text: text,
       createdAt: at,
-      buttons: [for (final b in buttons) TaskiemChatMessagesItemButtonsItem(id: b.id, title: b.title)],
+      buttons: [for (final b in buttons) TaskiemMessageButtonsItem(id: b.id, title: b.title)],
     )),
     first: first,
     read: true,
@@ -1049,7 +1162,7 @@ class _TaskiemBubble extends StatefulWidget {
   final bool read;
   final String? choice;
   final bool pressable;
-  final void Function(TaskiemChatMessagesItemButtonsItem b) onPress;
+  final void Function(TaskiemMessageButtonsItem b) onPress;
 
   @override
   State<_TaskiemBubble> createState() => _TaskiemBubbleState();
@@ -1063,7 +1176,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     final t = TkTheme.tokens(context);
     final m = widget.x.m;
     final mine = m.inbound;
-    final buttons = m.buttons ?? const <TaskiemChatMessagesItemButtonsItem>[];
+    final buttons = m.buttons ?? const <TaskiemMessageButtonsItem>[];
     // The time sits in the corner of the last line when there are no
     // buttons and it came from here.
     final inline = m.channel == 'web' && buttons.isEmpty;
@@ -1180,8 +1293,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
             if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
           ],
         ),
-        // Yours on pine: white words in the light theme, as a conversation's.
-        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
@@ -1194,7 +1306,11 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
               bubble: at,
               mine: mine,
               what: m.text.split('\n').first.length > 60 ? m.text.split('\n').first.substring(0, 60) : m.text.split('\n').first,
-              items: [MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied')],
+              items: [
+                MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied'),
+                // Save as… (saved objects S1, part 4): in a business, its saved things for whoever may manage them.
+                if (widget.auth != null) MenuItem('note', 'Save as…', () => saveFromWords(context, widget.auth!, m.text, business: true)),
+              ],
             )
           : null,
       child: BubbleFrame(
@@ -1233,10 +1349,10 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
 /// between; pressable on its newest answer, else the one chosen ticked.
 class _ReplyButtons extends StatelessWidget {
   const _ReplyButtons({required this.buttons, required this.choice, required this.pressable, required this.onPress});
-  final List<TaskiemChatMessagesItemButtonsItem> buttons;
+  final List<TaskiemMessageButtonsItem> buttons;
   final String? choice;
   final bool pressable;
-  final void Function(TaskiemChatMessagesItemButtonsItem b) onPress;
+  final void Function(TaskiemMessageButtonsItem b) onPress;
 
   @override
   Widget build(BuildContext context) {

@@ -279,6 +279,11 @@ class ChatsData extends ChangeNotifier {
           return;
         } on ApiError {
           // Refused: left for its conversation to show.
+        } on Object {
+          // An answer that could not be read: the server took the send (it
+          // answered), so it is not sent again and again (each "@Taskiem"
+          // resent asked Taskiem once more: 21 November 2026).
+          local.dropOut(k.id);
         }
       }
     } finally {
@@ -491,6 +496,7 @@ class ChatsScreen extends StatefulWidget {
     required this.data,
     this.onMenu,
     this.onFind,
+    this.onSearchAll,
     this.onOpen,
     this.onOpenTaskiem,
     this.onOpenCustomer,
@@ -506,6 +512,9 @@ class ChatsScreen extends StatefulWidget {
   final VoidCallback? onSwitch;
   final VoidCallback? onMenu;
   final VoidCallback? onFind;
+
+  /// Search everywhere (menus-everywhere.md §6): its button in the head.
+  final VoidCallback? onSearchAll;
 
   /// The ⋯ menu's Linked businesses and Your business in Explore.
   final VoidCallback? onLinks;
@@ -661,6 +670,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     _Head(
                       name: d.auth.me?.tenantName,
                       onMenu: (at) => _menu(d, at),
+                      onSearch: widget.onSearchAll,
                       // Find a business: Explore, over the chats.
                       onFind: d.linksOn ? (widget.onFind ?? () => showExplore(context, chats: d, onOpen: (c) => widget.onOpen?.call(c))) : null,
                     ),
@@ -877,8 +887,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 /// The list's head: "Chats" large with the business's name under it, ⋯
 /// and + (Find a business) as round buttons.
 class _Head extends StatelessWidget {
-  const _Head({this.name, this.onMenu, this.onFind});
+  const _Head({this.name, this.onMenu, this.onFind, this.onSearch});
   final String? name;
+  final VoidCallback? onSearch;
   final ValueChanged<Rect>? onMenu;
   final VoidCallback? onFind;
 
@@ -898,6 +909,7 @@ class _Head extends StatelessWidget {
               ],
             ),
           ),
+          if (onSearch != null) ...[TkHeadButton(icon: 'b-search', label: 'Search everything', onTap: onSearch!), const SizedBox(width: 8)],
           // Its own button, not merged with the title beside it; the menu
           // grows from where it is.
           Builder(

@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
@@ -335,6 +339,28 @@ export function GroupChatPage() {
     }
   };
 
+  const savedTexts = useSavedPicks("share-mine");
+  // Save as… on a message (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
+  // A saved thing other than a text, picked: shared as a card (saved
+  // objects S1), after a yes to sharing what is sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setProblem(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<GroupMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergePeople(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const said = sendProblem(e);
+        if (said) setProblem(said);
+        else setSendError(e);
+      }
+    })();
   const composer = useComposer<GroupMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
@@ -342,6 +368,8 @@ export function GroupChatPage() {
       "@": mentionable(members).map((m) => ({ kind: "customer" as const, id: m.person_id, name: m.name, sub: m.role === "admin" ? "Admin" : undefined })),
       "#": [],
       atLabel: "Members to mention",
+      // Saved texts (saved objects S1): their words into the box.
+      saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name),
     },
     replyLine: (m) => messageLine(m),
     onType: (v) => {
@@ -535,6 +563,7 @@ export function GroupChatPage() {
               current={current}
               busy={act.busy}
               onReply={() => composer.setReply(m)}
+              onSaveAs={saveAs.fromWords}
               onReact={(e) => void react(m, e)}
               onStar={() => void star(m)}
               onPaid={(paid) => void markPaid(m, paid)}
@@ -598,6 +627,7 @@ export function GroupChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
   );
 }
@@ -621,6 +651,7 @@ function GroupBubble({
   onPaid,
   onSheet,
   fileURL,
+  onSaveAs,
 }: {
   m: GroupMessage;
   first: boolean;
@@ -632,6 +663,8 @@ function GroupBubble({
   current: boolean;
   busy: boolean;
   onReply: () => void;
+  /** Save as… on its words (saved objects S1, part 4). */
+  onSaveAs: (text: string) => void;
   onReact: (emoji: string) => void;
   onStar: () => void;
   onPaid: (paid: boolean) => void;
@@ -690,6 +723,7 @@ function GroupBubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
+                  {!card && m.body && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
                   {card?.type !== "split" && card?.type !== "basket" && (
                     <PopItem icon="forward" onClick={() => (close(), onSheet("forward"))}>
                       Forward

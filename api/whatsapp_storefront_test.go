@@ -107,7 +107,7 @@ func TestWhatsAppMakeMyPage(t *testing.T) {
 	if r := w.say(t, vn, "help"); strings.Contains(r, "*make my page*") {
 		t.Errorf("viewer help: %q", r)
 	}
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*make my page*") || !strings.Contains(r, "*add product Jollof rice 2000*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*make my page*") || !strings.Contains(r, "*add product Jollof rice 2000*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, on, "qr"); !strings.Contains(r, "no page yet") || !strings.Contains(r, "*make my page*") {

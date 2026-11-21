@@ -120,8 +120,9 @@ func TestChatQuestionsOverTables(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM ai_interactions WHERE kind = 'table_query' AND outcome = 'refused'`).Scan(&refused); err != nil || refused != 1 {
 		t.Errorf("recorded refusal: %d %v", refused, err)
 	}
-	// Not about the tables: the usual answer.
-	if r := w.say(t, on, "who won the football?"); strings.Contains(r, "couldn't answer that from your tables") || !strings.Contains(r, "*find*") {
+	// Not about the tables: the usual answer, which says how to see the
+	// commands rather than listing them all.
+	if r := w.say(t, on, "who won the football?"); strings.Contains(r, "couldn't answer that from your tables") || !strings.Contains(r, "*help*") || strings.Contains(r, "*find*") {
 		t.Errorf("fallback: %q", r)
 	}
 	// Pidgin.

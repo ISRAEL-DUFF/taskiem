@@ -707,7 +707,15 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		}
 		erased = append(erased, x)
 	}
-	if len(erased) == 0 {
+	// The business's saved things holding the phone or email (saved
+	// objects: a person, a place, a field of its own kind), which are kept
+	// plain, not sealed under the subject: let go with what they held.
+	scrubbed, err := s.eraseSavedContacts(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(erased) == 0 && scrubbed == 0 {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
@@ -722,7 +730,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Warn("erasure: the customer's lines", "tenant", p.TenantID, "err", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased})
+	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased, "saved": scrubbed})
 }
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key

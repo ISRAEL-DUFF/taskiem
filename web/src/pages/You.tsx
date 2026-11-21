@@ -23,6 +23,7 @@ import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitc
 import { StandingNotice, YouStandingPage } from "./YouStanding";
 import { DeleteAccountPage, YouNotificationsCard, YouPhoto, YouPrivacyLinks, YouPrivacyPage } from "./YouAccount";
 import { SavedAddresses, YouOrder, YouOrders } from "./YouOrders";
+import { SavedCard } from "./Saved";
 
 // You (docs/spec/taskiem-for-everyone.md §7): a person's own side, where a
 // session with no business lands. Its tabs: Chats (chats with businesses,
@@ -250,6 +251,7 @@ function YouSettings() {
         </div>
       </section>
       <SavedAddresses />
+      <SavedCard mine />
       <YouPeopleSettings />
       <YouNotificationsCard />
       <Appearance />

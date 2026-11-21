@@ -33,6 +33,8 @@ const list = (names: string[]) =>
 
 /** What to tell the sender about where the message went, besides here. */
 export function sendNotes(a: SendAnswer): Note[] {
+  // Taskiem's answer to a "@Taskiem" is a note in the conversation now; the
+  // toast is for a server that answers only with Taskiem's words.
   if (!a.message && a.messages) {
     return [
       {

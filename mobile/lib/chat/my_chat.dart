@@ -14,6 +14,7 @@
 // WhatsApp chat with them is here too". What the person writes goes in the
 // app.
 
+import 'saved_picks.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -49,7 +50,12 @@ import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
+import 'save_as.dart' show saveAsItems, saveNamed;
+import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
+import 'saved_files.dart' show attachSavedFile;
+import 'menu.dart' show showMessageMenu;
+
 
 /// The words for a failure, as the chats say them.
 String sayFailure(Object e) => switch (e) {
@@ -704,6 +710,34 @@ class MyChatData extends ChangeNotifier {
     _changed();
   }
 
+  /// One of the person's own saved things shared with the business as a
+  /// card (saved objects S1), with [ask]'s yes when the server wants one
+  /// before what is sensitive.
+  Future<void> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final client = '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendMyChatMessage(
+          id: id,
+          body: SendMyChatMessageRequest(card: SendMyChatMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client),
+        ),
+        ask,
+      );
+      if (sent == null || _disposed) return;
+      messages = _merge(messages ?? const [], [MyLine(sent)]);
+      error = null;
+    } on Object catch (e) {
+      if (_disposed) return;
+      if (e is ApiError && e.status == 409 && e.message.contains('erased')) {
+        closed = e.message;
+      } else {
+        error = e is ApiError && e.status == 429 ? 'You are sending too fast. Wait a moment and try again.' : sayFailure(e);
+      }
+      unawaited(_chat());
+    }
+    _changed();
+  }
+
   /// Your settings with them: mute, archive, offers, the offers question
   /// passed over. False if refused ([actionError] says why).
   Future<bool> put({bool? muted, bool? archived, bool? offers, bool? offersAsked}) async {
@@ -778,6 +812,21 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest of one's own shared with the business as cards.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
+  );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
 
   MyChatData get d => widget.data;
@@ -806,6 +855,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     widget.notify?.show(d.tag, this);
     _text.addListener(() {
       if (_text.text.trim().isNotEmpty) d.typing();
+      _saved.typed();
     });
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
@@ -816,6 +866,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   void dispose() {
     widget.notify?.unshow(this);
     _back?.cancel();
+    _saved.dispose();
     _text.dispose();
     // The screen owns its conversation: closed, it stops reading.
     d.dispose();
@@ -873,6 +924,18 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   /// A card's button: Pay opens its pay link (an invoice's page) in the
   /// app; Book, that service; a product, their shop; an order or a
   /// delivery, your orders with them.
+  /// A message's menu (saved objects S1): Copy and Save as… on its words,
+  /// Save as… on a photo or document.
+  Future<void> _hold(MyLine x, Rect at) async {
+    final m = x.m;
+    final a = m.attachment;
+    final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
+    final file = a != null && a.kind != 'voice';
+    final items = saveAsItems(context, d.auth, words: words, filePath: file ? '/v1/me/chats/${d.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '');
+    if (items.isEmpty) return;
+    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+  }
+
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
     'pay' when (c.url ?? '').isNotEmpty => ('Pay', () => _openUrl(c.url!, 'The pay page didn’t open. Try again.')),
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
@@ -880,6 +943,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     'product' => ('See in their shop', () => showShopSheet(context, d)),
     'order' => ('View order', () => showMyOrdersSheet(context, d)),
     'delivery' => ('View delivery', () => showMyOrdersSheet(context, d)),
+    'saved' when c.saved != null => ('Save this', () => saveSavedCard(context, d.auth, c.saved!)),
     _ => null,
   };
 
@@ -910,8 +974,9 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    // The head on the conversation's own ground.
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -965,7 +1030,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                         final act = m.card == null ? null : _cardAction(m.card!);
                         return Padding(
                           padding: EdgeInsets.only(top: first ? 6 : 0),
-                          child: DoorBubble(
+                          child: BubbleHold(
+                            label: m.mine ? 'Your message' : 'Message from ${d.name}',
+                            onHold: x.local ? null : (at) => _hold(x, at),
+                            child: DoorBubble(
                             id: m.id,
                             mine: m.mine,
                             first: first,
@@ -992,7 +1060,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
                             ),
-                          ),
+                          )),
                         );
                       },
                     ),
@@ -1003,8 +1071,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                   if (c != null && c.blocked)
                     _Note(text: 'You blocked $name. They can’t write to you, and you can’t write to them.', action: 'Unblock', onAction: () => _say(d.block(false), 'Unblocked $name')),
                   if (c != null && !c.blocked && c.blockedYou) _Note(text: '$name is not taking messages from you.'),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

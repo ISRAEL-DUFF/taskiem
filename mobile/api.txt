@@ -59,6 +59,10 @@ taskiemHistory
 taskiemSay
 getChatBriefing
 chatRefs
+chatActions
+chatActionChoices
+closeChatMenu
+runChatAction
 
 # Customers' conversations (M3)
 getCustomerChat
@@ -309,3 +313,31 @@ handBasket
 placeBasket
 payBasketShare
 sendBasketShareCards
+
+# Saved accounts (saved objects S0): a business's and the person's own
+listSaved
+addSaved
+changeSaved
+removeSaved
+revealSaved
+savedStepUpOptions
+checkAllSaved
+savedProvider
+listBanks
+nameCheck
+listMySaved
+addMySaved
+changeMySaved
+removeMySaved
+revealMySaved
+mySavedStepUpOptions
+readSavedWords
+listMySavedKinds
+addMySavedKind
+changeMySavedKind
+removeMySavedKind
+listSavedKinds
+addSavedKind
+changeSavedKind
+removeSavedKind
+listMyBanks

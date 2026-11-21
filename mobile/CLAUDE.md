@@ -35,6 +35,7 @@ render and compare.
 | The card at the top | `TkTopCard`; `MyPhotoCard` for the person |
 | Fields | `TkFormGroup(title:, children: [TkKitField(label:, child:)])` |
 | A code | `CodeBoxes` (from `screens/sign_in.dart`), inside a `TkFormGroup` |
+| A field chosen, not typed (a bank, a class, a date) | `TkKitField(field: false, child: TkPickBox(label:, shown:, onTap:))`, opening `pickOneOf` or a date |
 | The page's main button | `TkCta(label:)`; `danger: true` to delete |
 | Two buttons side by side | `TkButtonRow([...])` |
 | A small button in a row or under a list | `TkSmallButton` (`primary:` / `danger:`) |
@@ -44,7 +45,7 @@ render and compare.
 | Search | `TkSearchBox` |
 | A status mark | `CardPill(words, CardTone.x)` |
 | A sheet with a form | `TkFormSheet(title:, action:, onAction:, children:)` |
-| Pick one of a few | `pickOneOf` (`chat/groups.dart`) |
+| Pick one of a few | `pickOneOf` (`chat/groups.dart`); of many (banks), with `searchHint:` for a search box over them |
 | A menu of actions | `pickAction` |
 | "Are you sure?" | `askSure(danger: true)` |
 | Text that is several lines of facts | `TkLines` |
@@ -70,12 +71,15 @@ theme has.
 
 ## Mistakes that have happened before
 
-- **Your own words on the pine bubble.** In the light theme your bubble is
-  dark pine and its words white. `ownWords` recolours the theme *inside*
-  the bubble, so a colour read *outside* it (a `t` taken at the top of
-  `build`) is still the dark one. Work the ink out yourself:
-  `final ink = mine && TkTheme.of(context).mode != TkMode.dark ? white : t.text;`
-  (see `chat/door.dart`, `chat/customer.dart`).
+- **The chat's colours are WhatsApp's.** Bubbles, wallpaper and ticks
+  are the web chat's tokens (`t.chatIn`, `t.chatOut`, `t.chatWallpaper`,
+  `t.chatDoodle`, `t.chatTickRead`): your own bubble is light green with
+  the theme's usual dark words, so use `t.text` and `t.tintText` in it,
+  never white or lime typed in. A dark bubble with white words (pine, 16–20
+  November 2026) was tried and dropped: it needed its own colours inside
+  every bubble and kept breaking. The chat keeps the app's own shapes.
+  Its wallpaper is `WallpaperBox` (the doodles of `tools/chatwallpaper`);
+  change the doodles there, not in a screen.
 - **Code boxes vanish** on the page's ground: put them in a `TkFormGroup`.
 - **A stamp over the words.** A bubble's time sits over the end of the last
   line; a longer stamp (with "on WhatsApp", a template's note) goes under

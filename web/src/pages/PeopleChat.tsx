@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import type { Suggestion } from "../lib/mentions";
+import { SavedCardView } from "./SavedCard";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
@@ -385,10 +390,33 @@ export function PeopleChatPage() {
   };
 
   const closed = closedWords(c);
+  const savedTexts = useSavedPicks("share-mine");
+  // Save as… on a message (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
+  // A saved thing other than a text, picked: shared as a card (saved
+  // objects S1), after a yes to sharing what is sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setProblem(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<PeopleMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergePeople(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const said = sendProblem(e);
+        if (said) setProblem(said);
+        else setSendError(e);
+      }
+    })();
   const composer = useComposer<PeopleMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    sources: { "@": [], "#": [] },
+    // Saved texts (saved objects S1): their words into the box.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     replyLine: (m) => messageLine(m),
     // What a send ran into goes once the words are changed; the other
     // person is told we are typing.
@@ -638,6 +666,7 @@ export function PeopleChatPage() {
                             </PopItem>
                           )}
                           {!card && m.body && <CopyItem text={m.body} />}
+                          {!card && m.body && <SaveAsItem text={m.body} onSave={saveAs.fromWords} close={close} />}
                           {card?.type !== "split" && card?.type !== "basket" && !c?.request && (
                             <PopItem icon="forward" onClick={() => (close(), setSheet({ k: "forward", m }))}>
                               Forward
@@ -814,6 +843,7 @@ export function PeopleChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
   );
 }
@@ -834,6 +864,8 @@ export function PeopleCardView({
   onPaid?: (paid: boolean) => void;
   busy?: boolean;
 }) {
+  // A saved thing shared (saved objects S1): its own card, with Copy and Save this.
+  if (card.type === "saved" && card.saved) return <SavedCardView card={card.saved} mine={mine} />;
   const split = card.type === "split";
   const title = split ? splitTitle(card, naira) : card.title;
   if (card.type === "basket" && card.basket_id) {
@@ -848,7 +880,7 @@ export function PeopleCardView({
       ? `Pay to ${card.pay_to.account_name}, ${card.pay_to.bank} ${card.pay_to.account_number}`
       : ""
     : [card.business && card.business !== card.title ? card.business : "", card.price_kobo !== undefined ? naira(card.price_kobo) : "", card.reference ?? "", card.area ?? ""].filter(Boolean).join(" · ");
-  const icon = { product: "tag", business: "store", order: "orders", delivery: "package", split: "split", basket: "orders" }[card.type];
+  const icon = { product: "tag", business: "store", order: "orders", delivery: "package", split: "split", basket: "orders", saved: "note" }[card.type];
   return (
     <article className="tk-ref app-card" aria-label={`${cardKind(card)}: ${title}`} data-testid="people-card" data-type={card.type}>
       <span className="tk-ref-top">

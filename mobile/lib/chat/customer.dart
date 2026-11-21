@@ -19,6 +19,9 @@
 // line that cannot take a message is not offered and says why; on WhatsApp
 // the 24 hours and the template hold; cards, offers and files go in the app.
 
+import 'save_as.dart' show saveAsItems, saveNamed;
+import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
+import 'saved_picks.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
@@ -44,6 +47,8 @@ import 'customer_orders.dart' show CustomerOrders;
 import 'door.dart';
 import 'thread.dart';
 import 'words.dart';
+import 'saved_files.dart' show attachSavedFile;
+import 'menu.dart' show showMessageMenu;
 
 // --- words (lib/customerchat.ts) ---
 
@@ -414,6 +419,54 @@ class CustomerData extends ChangeNotifier {
     same: 'card:${card.type}:${card.reference ?? ''}:${card.invoiceId ?? ''}:${card.serviceId ?? ''}:${card.itemId ?? ''}',
   );
 
+  /// A saved thing (the business's, or the member's own: [owner]) shared
+  /// with the customer (saved objects S1): a card in the app, its lines on
+  /// WhatsApp, on [line] as a reply goes; with [ask]'s yes when the server
+  /// wants one before sharing what is sensitive.
+  Future<void> shareSaved(String saved, String owner, Future<bool> Function(String question) ask, {String? line}) async {
+    final on = !both ? null : line;
+    // Picked, never dropped without a word.
+    if (!reaches(on) || busy) {
+      error = busy ? 'Wait for the last message to go, then pick it again.' : 'Not shared: this chat can’t take a message now.';
+      _changed();
+      return;
+    }
+    busy = true;
+    error = null;
+    _changed();
+    try {
+      final client = '${DateTime.now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+      final out = await sendSaved(
+        (confirm) => api.replyCustomer(
+          id: id,
+          body: ReplyCustomerRequest(card: ReplyCustomerRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: owner, confirm: confirm)), clientId: client, line: on),
+        ),
+        ask,
+      );
+      if (out != null && !_disposed) {
+        messages = mergeCustomer(messages ?? const [], [CustomerLine(out)]);
+        unawaited(chats.load());
+      }
+    } on Object catch (e) {
+      _fail(e);
+      unawaited(_chat());
+    } finally {
+      busy = false;
+      _changed();
+    }
+  }
+
+  /// A saved photo or document picked with "@": only in the app; said
+  /// when the customer is not chatting there.
+  Future<void> sendSavedFile(PickedFile f, String name) async {
+    if (!appOpen) {
+      error = '@$name was not sent: photos and documents go in the app, and this customer isn’t chatting in it.';
+      _changed();
+      return;
+    }
+    await sendFile(f);
+  }
+
   /// A photo, voice note or PDF to an app customer.
   Future<void> sendFile(PickedFile f) => _reply(
     CustomerMessage(
@@ -541,6 +594,20 @@ class CustomerScreen extends StatefulWidget {
 
 class _CustomerScreenState extends State<CustomerScreen> {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.chats.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    // Anything else: shared as a card in the app, as lines on WhatsApp.
+    onShare: (s) => unawaited(widget.data.shareSaved(s.id, s.savedOwner ?? 'business', askShare(context), line: _on)),
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    // A saved file: sent as itself, in the app (S1).
+    // Only the file goes: the words in the box stay there.
+    onAttach: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => unawaited(widget.data.sendSavedFile(f, s.name)))),
+  );
   StreamSubscription<String>? _back;
 
   /// The line staff chose for the reply (both lines); the one held while
@@ -563,6 +630,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     // The words left unsent here, back in the box, and kept as they change.
     _draftKey = 'customer:${d.threadId}';
     _text.text = d.chats.draft(_draftKey);
+    _text.addListener(_saved.typed);
     _text.addListener(() {
       d.chats.setDraft(_draftKey, _text.text);
       final writing = _text.text.trim().isNotEmpty;
@@ -601,6 +669,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
   void dispose() {
     widget.data.removeListener(_rekey);
     _back?.cancel();
+    _saved.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -610,6 +679,20 @@ class _CustomerScreenState extends State<CustomerScreen> {
     if (words.trim().isEmpty) return;
     _text.clear();
     widget.data.send(words, line: _on);
+  }
+
+  /// A message's menu (saved objects S1): Copy and Save as… on its words,
+  /// Save as… on a photo or document, into the business's saved things
+  /// for whoever may manage them.
+  Future<void> _hold(CustomerLine x, Rect at) async {
+    final m = x.m;
+    final a = m.attachment;
+    final words = m.card == null && m.kind != 'media' && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
+    final file = a != null && a.kind != 'voice';
+    final auth = widget.data.chats.auth;
+    final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true);
+    if (items.isEmpty) return;
+    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
 
   @override
@@ -659,7 +742,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
               child: Column(
                 children: [
                   ColoredBox(
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -765,7 +850,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                 final meta = m.m.mine && m.m.card == null ? t.chatOutMeta : t.muted;
                                 return Padding(
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
-                                  child: DoorBubble(
+                                  child: BubbleHold(
+                                    label: m.m.mine ? 'Your message' : 'Message from the customer',
+                                    onHold: m.local ? null : (at) => _hold(m, at),
+                                    child: DoorBubble(
                                     id: m.id,
                                     mine: m.m.mine,
                                     first: first,
@@ -776,6 +864,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                     other: title,
                                     sender: m.m.mine ? m.m.senderName : null,
                                     card: m.m.card,
+                                    // A customer's saved thing: Save this, into the business's Saved.
+                                    onCard: !m.m.mine && m.m.card?.saved != null ? () => saveSavedCard(context, d.chats.auth, m.m.card!.saved!, mine: false) : null,
                                     attachment: m.m.attachment,
                                     offer: m.m.offer == true,
                                     local: m.file,
@@ -787,10 +877,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                         if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
                                       ],
                                     ),
-                                  ),
+                                  )),
                                 );
                               }
-                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null));
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: BubbleHold(label: m.m.mine ? 'Your message' : 'Message from the customer', onHold: m.local ? null : (at) => _hold(m, at), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null)));
                             },
                           ),
                         ),
@@ -834,6 +924,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       ),
                     ),
                   ),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     _ReplyBox(
                       text: _text,
@@ -870,10 +961,6 @@ class _CustomerBubble extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final m = x.m;
     final meta = m.mine ? t.chatOutMeta : t.muted;
-    // Your own words white on pine in the light (ownWords' ink): read here,
-    // outside the bubble, the theme's own ink would be dark on pine.
-    final light = m.mine && TkTheme.of(context).mode != TkMode.dark;
-    final ink = light ? const Color(0xFFFFFFFF) : t.text;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -899,7 +986,7 @@ class _CustomerBubble extends StatelessWidget {
       // the end of the last line: under the words instead.
       inline: line == null && !(m.mine && m.sentAs == 'template'),
       children: [
-        if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: light ? const Color(0xFFC8F169) : t.tintText)),
+        if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: t.tintText)),
         Text.rich(
           TextSpan(
             children: [
@@ -908,7 +995,7 @@ class _CustomerBubble extends StatelessWidget {
               TextSpan(text: m.body, style: m.kind == 'media' ? const TextStyle(fontStyle: FontStyle.italic) : null),
             ],
           ),
-          style: tkText(size: 16, lineHeight: 23 / 16, color: m.kind == 'media' ? (light ? const Color(0xB3FFFFFF) : t.muted) : ink),
+          style: tkText(size: 16, lineHeight: 23 / 16, color: m.kind == 'media' ? t.muted : t.text),
         ),
         if (m.mine && m.delivery == 'failed')
           Text('Not delivered${(m.failure ?? '').isNotEmpty ? ': ${m.failure}' : '.'}', style: tkText(size: 12, weight: 600, color: t.danger)),

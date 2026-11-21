@@ -3,6 +3,7 @@
 // GET /v1/chat-links/{code}, GET /v1/me/storefront-orders), and the words
 // the screens build from it. Pure helpers, tested on their own.
 
+import type { SavedCard } from "./saved";
 import { formatPrice } from "./storefront";
 
 /** A delivery as its customer follows it, once a rider holds it (nothing
@@ -21,7 +22,9 @@ export interface DeliveryProgress {
  * booking offer), a product, an invoice, a delivery. The same on both
  * sides. */
 export interface AppCard {
-  type: "order" | "pay" | "booking" | "product" | "invoice" | "delivery";
+  type: "order" | "pay" | "booking" | "product" | "invoice" | "delivery" | "saved";
+  /** A saved thing shared (saved objects S1), as it was when sent. */
+  saved?: SavedCard;
   /** An order's reference; an invoice's number. */
   reference?: string;
   invoice_id?: string;

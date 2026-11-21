@@ -11,6 +11,15 @@ code is half the job; the other half is **looking at the screen** and fixing
 what is off, in both themes, before calling it done.
 
 Flutter in a cloud session: `export PATH=/root/sdk/flutter/bin:$PATH`.
+If it is not there, install the version CI pins (`FLUTTER_VERSION` in
+`.github/workflows/mobile.yml`) the way CI does:
+
+```sh
+mkdir -p /root/sdk && cd /root/sdk
+curl -fsSL -o flutter.tar.xz "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+tar xf flutter.tar.xz && rm flutter.tar.xz
+git config --global --add safe.directory /root/sdk/flutter
+```
 Run the commands below from `mobile/`. The scripts are in
 `.claude/skills/mobile-screen/scripts/`. Keep pictures and throwaway files
 in your scratchpad, never in the repository: below, `$SCRATCH` is that
@@ -61,9 +70,9 @@ behaviour, unless asked.
 3. Check each picture against the drawing and the screens around it:
    - the head: Back as "‹ Page", the title large, no paragraph under it;
    - spacing, rounded panels, rows of one or two lines, nothing cut off;
-   - **dark**: every word readable (your own pine bubble's words white in
-     light; nothing dark on dark), panels visible against the ground, code
-     boxes and fields visible;
+   - **dark**: every word readable (nothing dark on dark; in a chat, the
+     words, names and ticks in your own green bubble), panels visible
+     against the ground, code boxes and fields visible;
    - scrolled down (`-1.png`): the end of the page looks finished;
    - no "Something went wrong" (if there is, it is the preview's stand-in
      server missing an answer or a required field: fix `answer`).

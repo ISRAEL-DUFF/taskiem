@@ -24,6 +24,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'menu_card.dart' show MenuCard, MenuMessage, formOf, runActionHere;
 import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
@@ -52,10 +53,14 @@ import 'contact.dart';
 import 'deal.dart';
 import 'live_card.dart';
 import 'explore.dart' show showExploreCard;
+import 'saved_card.dart' show SavedCardView, askShare, saveSavedCard;
+import 'saved_picks.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
+import 'save_as.dart' show saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
 
 /// Conversation.tsx PAGE: a page of messages.
 const _page = 50;
@@ -579,6 +584,13 @@ class ConversationData extends ChangeNotifier {
     }
   }
 
+  /// A message the server wrote here for us (a note Taskiem left): shown
+  /// at once.
+  void arrived(LinkMessage m) {
+    _merge([m]);
+    _changed();
+  }
+
   void _merge(List<LinkMessage> add) {
     final byId = {for (final m in messages ?? const <LinkMessage>[]) m.id: m};
     for (final m in add) {
@@ -886,6 +898,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)..clearSlash = _text.clear;
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
+  /// The tools panel's other view (menus-everywhere.md §4): the topics'
+  /// menu. A row is done through the Taskiem chat and its answer shown in a
+  /// sheet; what Taskiem said stays here as a note only we see.
+  Widget _actionMenu(BuildContext context) => MenuCard(
+    auth: widget.data.chats.auth,
+    menu: const MenuMessage(),
+    open: true,
+    head: false,
+    onAct: (a) => unawaited(_runAction(a.id, a.title, null)),
+    onTool: (key, add) {
+      final tool = _tools.toolsHere('').where((t) => t.key == key).firstOrNull;
+      if (tool == null) return false;
+      _openTool(tool);
+      return true;
+    },
+    onPage: (_) => false,
+    onForm: (reply, text) {
+      final (id, values) = formOf(reply);
+      unawaited(_runAction(id, text, values));
+    },
+  );
+
+  Future<void> _runAction(String id, String title, Map<String, String>? values) async {
+    _tools.close();
+    final d = widget.data;
+    await runActionHere(
+      context,
+      d.chats.auth,
+      id,
+      title,
+      values,
+      link: d.conv.link,
+      onNote: d.arrived,
+      onOpenChat: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+    );
+  }
+
   void _openTool(Tool tool, {String? openId}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
@@ -1094,6 +1143,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tags = TagBox(
     text: _text,
     sources: _tagSources,
+    // Invoices, orders and customers searched on the server, every record
+    // (menus-everywhere.md §7).
+    searchRefs: (words, kinds, cursor) async {
+      final r = await widget.data.api.linkChatRefs(link: widget.data.conv.link, q: words, kind: kinds, cursor: cursor, limit: '20');
+      final now = widget.data.chats.now();
+      return (list: [for (final x in r.refs) refTag(x, now, date: shortDate, status: refStatusWords)], cursor: r.cursor ?? '');
+    },
     grouped: () => widget.data.chats.chatTools,
     taskiem: true,
     onChange: () {
@@ -1101,7 +1157,44 @@ class _ConversationScreenState extends State<ConversationScreen> {
     },
     explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: (o) => widget.onOpenLink?.call(o.link)),
+    // Saved things (saved objects S1): a text's words into the box; the
+    // rest named as tags, each shared as a card with the message.
+    saved: SavedPicks(
+      auth: widget.data.chats.auth,
+      textsOnly: false,
+      onChange: () {
+        if (mounted) setState(() {});
+      },
+    ),
+    savedAsTags: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, widget.data.chats.auth, name, business: true)),
+    onAttachSaved: (s) => unawaited(attachSavedFile(context, widget.data.chats.auth, s, (f) => composerKey.currentState?.choose(f))),
   );
+
+  /// The tags a message sends, with a yes to each saved thing's sensitive
+  /// details (the server's question, asked here since the message goes
+  /// later); null on a no.
+  Future<List<SendLinkMessageRequestMentionsItem>?> _withYes(List<SendLinkMessageRequestMentionsItem> tags) async {
+    final out = <SendLinkMessageRequestMentionsItem>[];
+    for (final x in tags) {
+      final sh = x.saved;
+      if (x.kind != 'saved' || sh == null) {
+        out.add(x);
+        continue;
+      }
+      // Asked as the server says (share_sensitive); one the list does not
+      // know (unread, or unreadable) asked about too; confirm only on a yes.
+      final pick = _tags.saved?.list.where((s) => s.id == sh.id).firstOrNull;
+      if (pick != null && !pick.savedSensitive) {
+        out.add(x);
+        continue;
+      }
+      final known = pick ?? _tags.taken.where((s) => s.id == sh.id).firstOrNull ?? TagSuggestion(kind: 'saved', id: sh.id, name: 'this saved thing');
+      if (!await askShare(context)(shareQuestion(known, widget.data.conv.name))) return null;
+      out.add(SendLinkMessageRequestMentionsItem(kind: 'saved', saved: SavedShare(id: sh.id, owner: sh.owner, confirm: true)));
+    }
+    return out;
+  }
 
   String _words = '';
 
@@ -1117,7 +1210,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _tags.typed();
     // "/" and a word as the whole message: the panel, filtered by it ("/invoice/"
     // picks a thing to tag instead).
-    _tools.typed(_tags.query?.mark == '/' ? '' : _text.text);
+    _tools.typed(_tags.tagging ? '' : _text.text);
   }
 
   /// What "@" and "#" offer here: the price list's items on sale, our own
@@ -1239,6 +1332,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         MenuItem('info', 'Message info', () => _info(m)),
         if (_write) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
+        // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
+        if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
         if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
         MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
         if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),
@@ -1421,8 +1516,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
           child: Column(
             children: [
               ColoredBox(
-                // The head on the conversation's own ground.
-                color: t.chatWallpaper,
+                // The head on a bar of its own, as WhatsApp's (under the phone's
+                // status bar too), apart from the wallpaper.
+                color: t.panel,
                 child: Padding(
                   padding: EdgeInsets.only(top: pad.top),
                   child: ListenableBuilder(
@@ -1433,7 +1529,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       title: c.name,
                       subtitle: d.offline ? 'Waiting for network…' : d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), _search)],
+                      actions: [ChatHeadBar.headButton('Search this conversation', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), _search)],
                       onAvatar: _contact,
                       onMore: _more,
                     ),
@@ -1458,6 +1554,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     extras: tiles.extras,
                     recent: d.chats.prefs?.recentTools ?? const [],
                     maxHeight: room,
+                    menu: _actionMenu,
                   );
                 },
               ),
@@ -1467,9 +1564,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),
                 onCancelReply: () => setState(() => _reply = null),
-                onSend: (words, file) {
+                onSend: (words, file) async {
                   final r = _reply;
-                  final tags = _tags.take(words);
+                  final tags = await _withYes(_tags.take(words));
+                  if (tags == null) {
+                    // Not shared: the words, the file and the picks come
+                    // back (the reply stays).
+                    if (_text.text.isEmpty) {
+                      _text.text = words;
+                      _tags.giveBack();
+                    }
+                    composerKey.currentState?.putBack(file);
+                    return;
+                  }
+                  if (!mounted) return;
                   setState(() => _reply = null);
                   d.send(words, file: file, reply: r, tags: tags);
                 },
@@ -1557,6 +1665,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
         final next = nextOf[m.id];
         final lead = runs[m.id];
         if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
+        if (m.m.kind == 'taskiem') {
+          return TaskiemNote(
+            asked: m.m.asked ?? '',
+            answer: m.m.body ?? '',
+            at: m.m.createdAt,
+            onOpen: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+          );
+        }
         final first = prev == null || _startsRun(prev.m, m.m);
         final card = m.m.kind == 'card' ? m.m.card : null;
         return Padding(
@@ -1601,32 +1717,6 @@ const _lineDrift = 0.31;
 
 Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: child) : child;
 
-/// Your own bubble's words: white on pine in the light (the dark's deep
-/// green keeps the light words it has), lime where the web tints.
-@visibleForTesting
-Widget ownWords(BuildContext context, bool on, Widget child) {
-  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
-  const white = Color(0xFFFFFFFF);
-  return TkTheme.recolour(
-    context,
-    (t) => t.copyWith(
-      text: white,
-      muted: const Color(0xB3FFFFFF),
-      accent: const Color(0xFFC8F169),
-      tintText: const Color(0xFFC8F169),
-      tint: const Color(0x1AFFFFFF),
-      accentSoft: const Color(0x1AFFFFFF),
-      panel: const Color(0x1AFFFFFF),
-      panel2: const Color(0x1AFFFFFF),
-      border: const Color(0x33FFFFFF),
-      tkSoft: const Color(0x1AFFFFFF),
-    ),
-    child,
-    // Pills and a tag's letters in the bright inks: the light's dark green
-    // ink on a faint lime did not show on pine.
-    look: tkLookOnPine,
-  );
-}
 
 /// lib/thread.ts startsRun: the first of a run has the bubble's tail.
 bool _startsRun(LinkMessage prev, LinkMessage m) {
@@ -1778,7 +1868,9 @@ class _Bubble extends StatelessWidget {
     final meta = mine ? t.chatOutMeta : t.muted;
     final body = msg.body ?? '';
     final card = msg.kind == 'card' ? msg.card : null;
-    final inline = card == null && body.isNotEmpty && msg.preview == null && !failed;
+    // A saved thing's card under the words: the time goes under it.
+    final savedCards = (msg.mentions ?? const <LinkMention>[]).any((x) => x.kind == 'saved' && x.saved != null);
+    final inline = card == null && body.isNotEmpty && msg.preview == null && !failed && !savedCards;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
     // A voice note alone: its time ends its row (as drawn).
     final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
@@ -1865,8 +1957,7 @@ class _Bubble extends StatelessWidget {
               ),
           ],
         ),
-        // White on your own pine bubble in the light.
-        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: t.text),
       ),
     );
     if (fold.folded) {
@@ -1914,107 +2005,116 @@ class _Bubble extends StatelessWidget {
                             borderRadius: radius,
                             boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                           ),
-                    child: ownWords(
-                      context,
-                      mine && card == null,
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          if (card != null)
-                            // The card, then the time.
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CardFrame(
-                                    card: card,
-                                    current: current,
-                                    mine: mine,
-                                    now: now,
-                                    title: cardLine(card, mine, other),
-                                    view: viewButton(card, acts),
-                                    actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
-                                    // A deal to answer (theirs, the newest of its order).
-                                    deal: latest && !mine && dealSide(card) != null
-                                        ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)
-                                        : null,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        if (card != null)
+                          // The card, then the time.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CardFrame(
+                                  card: card,
+                                  current: current,
+                                  mine: mine,
+                                  now: now,
+                                  title: cardLine(card, mine, other),
+                                  view: viewButton(card, acts),
+                                  actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
+                                  // A deal to answer (theirs, the newest of its order).
+                                  deal: latest && !mine && dealSide(card) != null
+                                      ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)
+                                      : null,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 1),
+                                  child: Align(alignment: Alignment.centerRight, child: stamp),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Padding(
+                            // `padding: 8px 12px 6px`, with two corrections: on the
+                            // right 11.5, as Chrome fits a line its measure says
+                            // is a hundredth of a pixel wider; above and below
+                            // 0.31 less, as Flutter's lines are a whole 23 px and
+                            // Chrome's 22.69 (exact for two lines; a thread
+                            // otherwise drifts a pixel every three lines).
+                            // `.bubble.has-reactions { padding-bottom: 13px }` more.
+                            padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 7 - _lineDrift),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (msg.forwarded == true)
+                                  Text(
+                                    'Forwarded',
+                                    style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
                                   ),
+                                if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
+                                if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file, stamp: voiceOnly ? stamp : null),
+                                if (body.isNotEmpty) text,
+                                // Conversation.tsx: the invoices, bills and orders it
+                                // names, each as its card, read now.
+                                if (refs != null)
+                                  for (final x in docMentions(msg.mentions))
+                                    RefCard(
+                                      key: ValueKey('${x.kind}:${x.name}'),
+                                      auth: refs!.auth,
+                                      now: now,
+                                      load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
+                                    ),
+                                // Saved things it shares (saved objects S1), each as its
+                                // card; Save this into the business's Saved.
+                                for (final x in msg.mentions ?? const <LinkMention>[])
+                                  if (x.kind == 'saved' && x.saved != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: SavedCardView(
+                                        key: ValueKey('saved:${x.name}'),
+                                        card: x.saved!,
+                                        mine: mine,
+                                        onSave: refs == null ? null : () => saveSavedCard(context, refs!.auth, x.saved!, mine: false),
+                                      ),
+                                    ),
+                                if (msg.preview != null) _PreviewCard(p: msg.preview!),
+                                if (!inline && !voiceOnly)
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 1),
+                                    // `.stamp { margin-top: 1px }`, which collapses
+                                    // into an attachment's larger bottom margin.
+                                    padding: EdgeInsets.only(top: msg.attachment != null && body.isEmpty ? 0 : 1),
                                     child: Align(alignment: Alignment.centerRight, child: stamp),
                                   ),
-                                ],
-                              ),
-                            )
-                          else
-                            Padding(
-                              // `padding: 8px 12px 6px`, with two corrections: on the
-                              // right 11.5, as Chrome fits a line its measure says
-                              // is a hundredth of a pixel wider; above and below
-                              // 0.31 less, as Flutter's lines are a whole 23 px and
-                              // Chrome's 22.69 (exact for two lines; a thread
-                              // otherwise drifts a pixel every three lines).
-                              // `.bubble.has-reactions { padding-bottom: 13px }` more.
-                              padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 7 - _lineDrift),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (msg.forwarded == true)
-                                    Text(
-                                      'Forwarded',
-                                      style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
-                                    ),
-                                  if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
-                                  if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file, stamp: voiceOnly ? stamp : null),
-                                  if (body.isNotEmpty) text,
-                                  // Conversation.tsx: the invoices, bills and orders it
-                                  // names, each as its card, read now.
-                                  if (refs != null)
-                                    for (final x in docMentions(msg.mentions))
-                                      RefCard(
-                                        key: ValueKey('${x.kind}:${x.name}'),
-                                        auth: refs!.auth,
-                                        now: now,
-                                        load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
-                                      ),
-                                  if (msg.preview != null) _PreviewCard(p: msg.preview!),
-                                  if (!inline && !voiceOnly)
-                                    Padding(
-                                      // `.stamp { margin-top: 1px }`, which collapses
-                                      // into an attachment's larger bottom margin.
-                                      padding: EdgeInsets.only(top: msg.attachment != null && body.isEmpty ? 0 : 1),
-                                      child: Align(alignment: Alignment.centerRight, child: stamp),
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
-                          // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
-                          // (14 px with reactions under it).
-                          if (inline) Positioned(right: 12, bottom: 6, child: stamp),
-                          // `.bubble-chevron`, shown while its menu is open.
-                          if (menuOpen)
-                            Positioned(
-                              top: 1,
-                              right: 2,
-                              child: Container(
-                                width: 22,
-                                height: 22,
-                                decoration: BoxDecoration(
-                                  color: cssMix(mine ? t.chatOut : t.chatIn, const Color(0x00000000), 0.85),
-                                  shape: BoxShape.circle,
-                                  boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
-                                ),
-                                alignment: Alignment.center,
-                                child: TkIcon('down', size: 16, color: meta),
+                          ),
+                        // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
+                        // (14 px with reactions under it).
+                        if (inline) Positioned(right: 12, bottom: 6, child: stamp),
+                        // `.bubble-chevron`, shown while its menu is open.
+                        if (menuOpen)
+                          Positioned(
+                            top: 1,
+                            right: 2,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                color: cssMix(mine ? t.chatOut : t.chatIn, const Color(0x00000000), 0.85),
+                                shape: BoxShape.circle,
+                                boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
                               ),
+                              alignment: Alignment.center,
+                              child: TkIcon('down', size: 16, color: meta),
                             ),
-                          // `.tk-cheer`: a good moment's ring, 6 px out.
-                          if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
-                        ],
-                      ),
+                          ),
+                        // `.tk-cheer`: a good moment's ring, 6 px out.
+                        if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
+                      ],
                     ),
                   ),
                 ),

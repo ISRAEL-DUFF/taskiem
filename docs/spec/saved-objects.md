@@ -1,6 +1,6 @@
 # Saved objects: things a person or a business keeps, and calls up by name
 
-Status: **plan, settled** (19 November 2026), written with the founder. Nothing here is built. The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
+Status: **plan, settled** (19 November 2026), written with the founder. Being built: S0's server (saved accounts: the store, the name check, `@name` resolved; [decision 0071](../decisions/0071-saved-objects.md)) is built; the rest is not. The founder took every recommendation in §15 the same day. It is built in the phases of [the build plan for saved objects, made tools and payments](build-plan-saved-tools-payments.md).
 
 Builds on: [chat tools](chat-tools.md) (tags), [paying people from the chat](chat-pay-people.md) (a plan, not built: its payees), [Taskiem for everyone](taskiem-for-everyone.md) (You, the person's own scope, saved addresses), [people chatting with people](people-chatting.md), [data tables](../data-tables.md), [Schools in the chat](schools-in-the-chat.md).
 
@@ -66,7 +66,7 @@ When none fits, the owner makes a kind: a name ("Car", "Generator", "Tenant", "M
 - **required** or not;
 - **sensitive** or not (§8): sealed, masked in lists, never sent to the AI, shown only on a fresh unlock.
 
-Because each field has a type, Taskiem still knows what to do with a made-up kind: a **date** field can remind ("Car: insurance due 3 March"), a **bank account** field can be paid, a **place** field can be delivered to, a **phone** can be called or messaged. A kind can be changed later; objects keep what they had, and new fields start empty.
+Because each field has a type, Taskiem still knows what to do with a made-up kind: a **date** field can remind ("Car: insurance due 3 March"), a **bank account** field can be paid, a **place** field can be delivered to, a **phone** can be called or messaged. A kind can be changed later; objects keep what they had in the fields kept, and new fields start empty. A field removed takes its values with it (they are deleted, never kept unseen), and the form says so. A change that would show what was kept hidden (a field with values made not sensitive or shareable, or a sensitive one given another type) needs the owner's passkey and is recorded (settled after S1's review, 20 November 2026).
 
 Proposed: made-up kinds from the first phase for businesses (it is what makes this useful in any scenario); for people too, with a few starters to copy (Car, Generator, Pet, Medical card).
 
@@ -109,7 +109,7 @@ A payment to a person's own object from a business's account is for **owners onl
 Calling up an object in a message **shares** it: the message carries it as a card, folded to a row like orders' cards, that opens to its details with **Copy** beside each and **Save this** for the receiver (a copy of their own).
 
 - **Text** objects drop their words into the box instead, to change before sending; nothing is shared but the words.
-- **Before sharing anything sensitive** (an account number, a phone, an ID number), the sender confirms: "Share Mum's account details with Bola Stores?". A field marked **never share** stays out of every card.
+- **Before sharing anything sensitive** (an account number, a phone, an ID number), the sender confirms: "Share Mum's account details with Bola Stores?". A field marked **never share** stays out of every card. A business's sensitive details are shared only by those who may manage its saved things, and the sender's own copy of the card shows them masked (settled after S1's review, 20 November 2026).
 - **A copy, not a link:** the receiver gets the details as they were when sent. Changing the object later does not change what was shared (proposed; §15).
 - **A receiver on WhatsApp, Telegram or Slack** (most customers) gets the card as plain lines: the title, then each detail on its own line, easy to copy. The same sensitive check runs first.
 - In a business's chat with a customer, the card follows that chat's rules (#198): a business sharing `@bank-details` with a customer shows the transfer warning only where it is a personal account.

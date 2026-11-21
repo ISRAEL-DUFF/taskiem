@@ -3,6 +3,8 @@
 // happens when nobody answers, offers, and the words for an app thread.
 // Pure helpers, tested on their own.
 
+import type { SavedShare } from "./saved";
+
 /** The business's chat link (GET /v1/customers/chat-link). */
 export interface ChatLink {
   code: string;
@@ -64,7 +66,8 @@ export type CardAsk =
   | { type: "booking"; service_id: string }
   | { type: "product"; item_id: string }
   | { type: "invoice"; invoice_id: string }
-  | { type: "delivery"; reference: string };
+  | { type: "delivery"; reference: string }
+  | { type: "saved"; saved: SavedShare };
 
 /** Taking chats while the Orders area is off, in words. */
 export const ORDERS_OFF_WORDS =

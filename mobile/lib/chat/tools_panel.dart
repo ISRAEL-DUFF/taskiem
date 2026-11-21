@@ -13,6 +13,7 @@ import '../api/transport.dart' show ApiError, Offline;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/mobile.dart' show TkChips;
 import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import 'words.dart' show CardTone;
@@ -41,11 +42,25 @@ class ToolsController extends ChangeNotifier {
   bool _open = false;
   String? _slash;
 
+  /// The panel's other view: "What would you like to do?", the topics'
+  /// menu (menus-everywhere.md §4); it opens on the one used last.
+  bool menuView = false;
+
+  void showMenu(bool on) {
+    if (menuView == on) return;
+    menuView = on;
+    _notify();
+  }
+
   /// Open: from the button, or "/" and a word as the whole message.
   bool get shown => chats.chatTools && (_open || _slash != null);
 
   /// What follows "/", when it was typed.
   String get query => _slash ?? '';
+
+  /// Opened by "/" typed (not the button): it shows the tools, never the
+  /// menu, even when the menu was the view used last.
+  bool get bySlash => _slash != null;
 
   /// Clears the box's "/" and word (ChatComposer.tsx closeTools): set by
   /// the screen whose box it is.
@@ -204,7 +219,10 @@ class ToolsController extends ChangeNotifier {
 /// The panel, floating from the top of the composer over the thread; the
 /// tiles scroll inside it while its heading and Recent stay.
 class ToolsPanel extends StatefulWidget {
-  const ToolsPanel({super.key, required this.tools, required this.onOpen, this.lead = const [], this.extras = const [], this.recent = const [], this.maxHeight});
+  const ToolsPanel({super.key, required this.tools, required this.onOpen, this.lead = const [], this.extras = const [], this.recent = const [], this.maxHeight, this.menu});
+
+  /// The topics' menu, as the panel's other view (menus-everywhere.md §4).
+  final WidgetBuilder? menu;
 
   final ToolsController tools;
 
@@ -248,6 +266,9 @@ class _ToolsPanelState extends State<ToolsPanel> {
     ];
     final more = [for (final x in widget.extras) if (named(x)) x];
     final none = lead.isEmpty && listed.isEmpty && more.isEmpty;
+    // "/" and a word looks for a tool: the tools, whichever view was last.
+    final menu = c.bySlash ? null : widget.menu;
+    final onMenu = menu != null && c.menuView;
     // The last used, as tiles of this panel.
     final recent = [
       for (final k in widget.recent)
@@ -301,7 +322,17 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 ],
               ),
             ),
-            if (none)
+            if (menu != null)
+              TkChips<bool>(
+                label: 'Show',
+                chips: const [(false, 'Tools'), (true, 'What would you like to do?')],
+                on: onMenu,
+                onPick: c.showMenu,
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 10),
+              ),
+            if (onMenu)
+              Flexible(child: SingleChildScrollView(child: menu(context)))
+            else if (none)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 child: Text('No tool called “${c.query}”. Send sends it as a message.', style: tkText(size: 12, color: t.muted)),
@@ -319,7 +350,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
                   ),
                 ),
               ),
-            if (recent.isNotEmpty && q.isEmpty)
+            if (recent.isNotEmpty && q.isEmpty && !onMenu)
               Container(
                 // `.tk-tools-recent { margin-top: 8px; padding: 8px 6px 2px; border-top }`
                 margin: const EdgeInsets.only(top: 8),

@@ -14,6 +14,7 @@ import { initialsOf } from "./ChatAvatar";
 import {
   groupSuggestions,
   insertMention,
+  insertWords,
   mentionParts,
   mentionQuery,
   stillNamed,
@@ -21,6 +22,10 @@ import {
   unlinkedSuggestion,
   refStatusWords,
   REF_LABEL,
+  CHIPS,
+  CHIP_KINDS,
+  chipOf,
+  type Chip,
   type Mention,
   type MentionQuery,
   type RefKind,
@@ -30,6 +35,7 @@ import {
 import { formatPrice } from "../lib/storefront";
 import { exploreLogo, type ExploreCard, type ExploreResult } from "../lib/explore";
 import { BusinessCardSheet } from "./BusinessCardSheet";
+import { savedIcon } from "../lib/saved";
 
 // Mentions in the composer (business links L4, §5.5): typing "@" offers
 // linked businesses, "#" items with their unit and price. Enter or Tab
@@ -53,6 +59,29 @@ export function useMentions(
     categories?: { name: string; count: number }[];
     /** What "/invoice", "/product", "/order" and "/customer" offer. */
     refs?: Partial<Record<RefKind, Suggestion[]>>;
+    /** Saved things "@" offers (saved objects S1): a text's words go in the
+     * box; any other is written as its @name. wantSaved is called when "@"
+     * is typed, so they are read only then. */
+    saved?: Suggestion[];
+    /** The saved things were all read: Save "mum"… is offered only then. */
+    savedComplete?: boolean;
+    wantSaved?: () => void;
+    /** A saved thing other than a text, picked where the chat shares it as
+     * a card: what was typed for it goes, and the chat sends the card. */
+    shareSaved?: (s: Suggestion) => void;
+    /** A saved file picked: attached to the message as itself (saved
+     * objects S1), what was typed for it taken out of the box. */
+    attachSaved?: (s: Suggestion) => void;
+    /** Save "mum"… when nothing saved has the name typed (saved objects
+     * S1, part 4): the name, to save something as. */
+    saveNamed?: (name: string) => void;
+    /** Saved things other than texts kept as tags, sent with the message
+     * (a business's chat with another business; saved objects S1). */
+    savedAsTags?: boolean;
+    /** Invoices, orders and customers searched on the server, every
+     * record (menus-everywhere.md §7): the words, the kinds, where the
+     * last page ended; the next page and where it ends ("" for no more). */
+    searchRefs?: (words: string, kinds: string, cursor?: string) => Promise<{ list: Suggestion[]; cursor: string }>;
   },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
    * groups, with the Taskiem row when it may be called; a category picked
@@ -90,7 +119,86 @@ export function useMentions(
     };
   }, [words]);
   const unlinked = found && words.length >= 2 && found.q === words ? found.list : [];
+  // The picker's chips, Show more and the server's search (menus-
+  // everywhere.md §7): another tag begun starts again on its own chip.
+  const tagKey = q ? `${q.start}|${q.mark}|${q.kind ?? ""}` : "";
+  const [chosen, setChosen] = useState<{ tag: string; chip: Chip; more: number }>();
+  const chip: Chip = chosen?.tag === tagKey ? chosen.chip : q?.mark === "@" ? "all" : chipOf(q?.kind);
+  const more = chosen?.tag === tagKey ? chosen.more : 0;
+  // "/bill" and "/purchase" keep to their own kind until a chip is pressed.
+  const narrow = chosen?.tag !== tagKey && (q?.kind === "bill" || q?.kind === "purchase") ? q.kind : undefined;
+  const local = (k: Chip): Suggestion[] =>
+    k === "product"
+      ? q?.mark === "@"
+        ? sources["#"]
+        : (sources.refs?.product ?? sources["#"])
+      : k === "service"
+        ? (sources.services ?? [])
+        : k === "invoice" || k === "order" || k === "customer"
+          ? (sources.refs?.[narrow ?? k] ?? [])
+          : k === "business"
+            ? sources["@"]
+            : k === "saved"
+              ? (sources.saved ?? [])
+              : [];
+  const chips: Chip[] =
+    grouped && q && (q.mark === "@" || (q.mark === "/" && q.kind))
+      ? (Object.keys(CHIPS) as Chip[]).filter((k) => k === chip || (k === "all" ? q.mark === "@" : local(k).length > 0))
+      : [];
+  const searchWords = (q?.query ?? "").trim().toLowerCase();
+  const servedKey = `${narrow ?? chip}|${searchWords}`;
+  const [served, setServed] = useState<{ key: string; list: Suggestion[]; cursor: string }>();
+  const [offline, setOffline] = useState(false);
+  const kinds = chips.length > 0 ? (narrow ?? CHIP_KINDS[chip]) : undefined;
+  useEffect(() => {
+    const look = sources.searchRefs;
+    if (!look || !kinds || served?.key === servedKey) return;
+    let live = true;
+    const t = window.setTimeout(() => {
+      look(searchWords, kinds).then(
+        (r) => {
+          if (!live) return;
+          setServed({ key: servedKey, list: r.list, cursor: r.cursor });
+          setOffline(false);
+        },
+        () => live && setOffline(true),
+      );
+    }, 250);
+    return () => {
+      live = false;
+      window.clearTimeout(t);
+    };
+  }, [servedKey, kinds]);
+  const fromServer = served?.key === servedKey ? served : undefined;
+  const chipAll =
+    chips.length > 0 && chip !== "all" && q
+      ? fromServer
+        ? fromServer.list
+        : suggest(local(chip), q.query, null)
+      : [];
+  const hasMore = chipAll.length > 6 * (more + 1) || (!!fromServer && fromServer.cursor !== "");
+  const showMore = () => {
+    setChosen({ tag: tagKey, chip, more: more + 1 });
+    const look = sources.searchRefs;
+    if (!look || !kinds || !fromServer || !fromServer.cursor || fromServer.list.length >= 6 * (more + 2)) return;
+    look(searchWords, kinds, fromServer.cursor).then(
+      (r) =>
+        setServed((cur) =>
+          cur && cur.key === fromServer.key ? { key: cur.key, list: [...cur.list, ...r.list], cursor: r.cursor } : cur,
+        ),
+      () => setOffline(true),
+    );
+  };
   const groups: SuggestionGroup[] =
+    chips.length > 0 && chip !== "all"
+      ? [
+          {
+            // Headed as "/invoice" heads it ("Invoices and bills", "Bills").
+            label: (REF_LABEL as Partial<Record<string, string>>)[narrow ?? chip] ?? CHIPS[chip],
+            items: chipAll.slice(0, 6 * (more + 1)),
+          },
+        ]
+      :
     q && grouped && q.mark === "@"
       ? groupSuggestions(
           q.query,
@@ -100,6 +208,7 @@ export function useMentions(
             businesses: sources["@"],
             unlinked,
             categories: sources.categories,
+            saved: sources.saved,
           },
           grouped.taskiem,
         )
@@ -110,20 +219,47 @@ export function useMentions(
               items: suggest(sources.refs?.[q.kind] ?? [], q.query),
             },
           ]
-        : q && q.mark !== "/"
-          ? [{ label: "", items: suggest(sources[q.mark], q.query) }]
+        : q?.mark === "/"
+          ? // "/" and a name: the saved things by that name, if any (§15 1).
+            sources.saved
+            ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }].filter((g) => g.items.length > 0)
+            : []
+          : q
+          ? [
+              { label: "", items: suggest(sources[q.mark], q.query) },
+              ...(q.mark === "@" && sources.saved ? [{ label: "Saved", items: suggest(sources.saved, q.query).slice(0, 4) }] : []),
+            ].filter((g) => g.items.length > 0)
           : [];
+  // Save "mum"… (saved objects S1, part 4): offered under Saved once the
+  // saved things are read and none has the name typed.
+  const newName = q?.mark === "@" ? q.query.toLowerCase() : "";
+  if (
+    sources.saveNamed &&
+    sources.saved &&
+    sources.savedComplete !== false &&
+    /^[a-z0-9][a-z0-9_-]{0,31}$/.test(newName) &&
+    !sources.saved.some((x) => x.name.toLowerCase() === newName) &&
+    !groups.some((g) => g.items.some((x) => x.name.toLowerCase() === newName))
+  ) {
+    const row: Suggestion = { kind: "save-new", id: `save-new:${newName}`, name: newName, sub: "Save something by this name" };
+    const saved = groups.find((g) => g.label === "Saved");
+    if (saved) saved.items = [...saved.items, row];
+    else groups.push({ label: "Saved", items: [row] });
+  }
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
   // only when "Taskiem" is what is being typed ("@4500" stays as typed).
   // A category is not a tag: Enter tags an item, a tap opens the category.
   const enterPick = shown.find(
     (s) =>
-      (s.kind !== "taskiem" && s.kind !== "category") ||
+      (s.kind !== "taskiem" && s.kind !== "category" && s.kind !== "save-new") ||
       (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
   );
-  const update = (value: string, caret: number | null) =>
-    setQ(mentionQuery(value, caret ?? value.length));
+  const update = (value: string, caret: number | null) => {
+    const next = mentionQuery(value, caret ?? value.length);
+    if (next?.mark === "@" || (next?.mark === "/" && !next.kind)) sources.wantSaved?.();
+    setQ(next);
+  };
   const pick = (s: Suggestion, from?: DOMRect) => {
     if (!q) return;
     const el = box.current;
@@ -142,17 +278,36 @@ export function useMentions(
       grouped?.onCategory?.(s.name);
       return;
     }
-    const next = insertMention(
-      text,
-      q,
-      Math.max(caret, q.start + 1 + q.query.length),
-      s.name,
-    );
+    const end = Math.max(caret, q.start + 1 + q.query.length);
+    if (s.kind === "saved" && s.savedFile && sources.attachSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.attachSaved(s);
+      return;
+    }
+    if (s.kind === "save-new") {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.saveNamed?.(s.name);
+      return;
+    }
+    if (s.kind === "saved" && s.body === undefined && sources.shareSaved) {
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      sources.shareSaved(s);
+      return;
+    }
+    // A saved text's words in place of what was typed, to change before
+    // sending; any other saved thing as its @name, which the words carry.
+    const next =
+      s.kind === "saved" && s.body !== undefined
+        ? insertWords(text, q, end, s.body)
+        : insertMention(text, q, end, s.name, s.kind);
     // The words and the caret move together, at once: a caret put back a
     // frame later would land the next key typed at the end of the box.
     flushSync(() => {
       setText(next.text);
-      if (s.kind !== "taskiem")
+      if (s.kind !== "taskiem" && (s.kind !== "saved" || (sources.savedAsTags && s.body === undefined)))
         setPicked((cur) => [...cur, s]);
       setQ(null);
     });
@@ -186,7 +341,9 @@ export function useMentions(
       // A customer is named in words only: never sent to another business.
       .filter((p) => p.kind !== "customer")
       .map((p) =>
-        p.kind === "business"
+        p.kind === "saved"
+          ? { kind: p.kind, saved: { id: p.id, owner: p.savedOwner ?? "business", confirm: false } }
+          : p.kind === "business"
           ? { kind: p.kind, link: p.id }
           : p.kind === "service"
             ? { kind: p.kind, service_id: p.id }
@@ -204,8 +361,26 @@ export function useMentions(
     setPicked([]);
     setQ(null);
   };
+  /** The search box typed in: its words in the text box, after the mark
+   * (and "/invoice "), so both say the same. */
+  const searchFor = (words: string) => {
+    if (!q) return;
+    const head = q.mark === "/" ? (/^[a-z]+[/ ]/i.exec(text.slice(q.start + 1))?.[0].length ?? 0) : 0;
+    const from = q.start + 1 + head;
+    const end = Math.min(from + q.query.length, text.length);
+    const next = text.slice(0, from) + words + text.slice(end);
+    setText(next);
+    update(next, from + words.length);
+    const el = box.current;
+    requestAnimationFrame(() => el?.setSelectionRange(from + words.length, from + words.length));
+  };
   return {
-    atLabel: sources.atLabel,
+    /** What was picked, kept to give back to a message not sent. */
+    picked: () => picked,
+    /** Picks given back, with the words they were picked in. */
+    restore: (ps: Suggestion[]) => setPicked(ps),
+    // Only saved things to offer (a chat with no one else to name).
+    atLabel: sources.atLabel ?? (sources["@"].length === 0 && sources.saved ? "Saved things" : undefined),
     q,
     shown,
     enterPick,
@@ -220,6 +395,13 @@ export function useMentions(
     reset,
     close: () => setQ(null),
     box,
+    chips,
+    chip,
+    pickChip: (k: Chip) => k !== chip && setChosen({ tag: tagKey, chip: k, more: 0 }),
+    hasMore,
+    showMore,
+    searchFor,
+    offline: offline && !!kinds,
     card,
     // The sheet asked, withdrew or answered: the row says so at once.
     cardChanged: (business: string, state: ExploreCard["state"]) =>
@@ -256,7 +438,7 @@ export function GroupedPicker({ m }: { m: Mentions }) {
   const open =
     !!m.grouped &&
     (m.q?.mark === "@" || m.q?.mark === "/") &&
-    m.shown.length > 0;
+    (m.shown.length > 0 || m.chips.length > 1);
   const p = usePresence(open, 150);
   const last = useRef<{
     query: string;
@@ -332,6 +514,12 @@ function PickIcon({ s }: { s: Suggestion }) {
         aria-hidden="true"
       >
         {initialsOf(s.name)}
+      </span>
+    );
+  if (s.kind === "saved" || s.kind === "save-new")
+    return (
+      <span className="pick-icon soft" aria-hidden="true">
+        <Icon name={savedIcon(s.savedKind)} />
       </span>
     );
   if (s.kind === "taskiem")
@@ -415,18 +603,49 @@ function Picker({
       aria-label={kind ? what : "Tag something"}
       data-testid="mention-list"
     >
-      <div className="tk-picker-head">
-        <span>
-          {query ? (
-            <>
-              Matches for <b>{query}</b>
-            </>
-          ) : (
-            what
-          )}
-        </span>
-        {query && <span>{what}</span>}
+      {/* The search box and the kinds (menus-everywhere.md §7). */}
+      <div className="tk-picker-search">
+        <Icon name="search" />
+        <input
+          type="search"
+          aria-label="Search what to tag"
+          placeholder={
+            m.chip === "all"
+              ? "Search things and businesses"
+              : m.chip === "invoice"
+                ? "Search invoices and bills"
+                : `Search ${CHIPS[m.chip].toLowerCase()}`
+          }
+          value={query}
+          onChange={(e) => m.searchFor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && m.enterPick) {
+              e.preventDefault();
+              m.pick(m.enterPick);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              m.list.current?.querySelector<HTMLButtonElement>(".tk-pick")?.focus();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              m.close();
+              m.box.current?.focus();
+            }
+          }}
+        />
       </div>
+      {m.chips.length > 1 && (
+        <div className="tk-chips tk-picker-chips" role="group" aria-label="Kinds">
+          {m.chips.map((k) => (
+            <button key={k} type="button" aria-pressed={k === m.chip} onClick={() => m.pickChip(k)}>
+              {CHIPS[k]}
+            </button>
+          ))}
+        </div>
+      )}
+      {m.offline && <p className="tk-picker-note">Searching what is on this phone</p>}
+      {groups.every((g) => g.items.length === 0) && (
+        <p className="tk-picker-note">{query ? `Nothing found for "${query}"` : "Nothing here yet"}</p>
+      )}
       {groups.map((g) => (
         <div
           key={g.label || "taskiem"}
@@ -452,7 +671,7 @@ function Picker({
               >
                 <PickIcon s={s} />
                 <span className="pick-words">
-                  <span className="pick-name">{s.name}</span>
+                  <span className="pick-name">{s.kind === "save-new" ? `Save "@${s.name}"…` : s.name}</span>
                   {s.sub && <span className="pick-sub">{s.sub}</span>}
                 </span>
                 {s.explore && <span className="sr-only">: see their card</span>}
@@ -470,6 +689,13 @@ function Picker({
           })}
         </div>
       ))}
+      {!leaving && m.hasMore && (
+        <div className="tk-picker-more">
+          <button type="button" className="secondary" onClick={m.showMore}>
+            Show more
+          </button>
+        </div>
+      )}
       {/* On a computer, the keys (DeskSeller). */}
       <div className="tk-picker-keys" aria-hidden="true">
         <span>
@@ -500,7 +726,7 @@ function PlainList({ m }: { m: Mentions }) {
         mark === "@"
           ? (m.atLabel ?? "Businesses to mention")
           : mark === "/"
-            ? "Things to tag"
+            ? m.q?.kind ? "Things to tag" : "Saved things"
             : "Items to mention"
       }
       data-testid="mention-list"
@@ -509,8 +735,14 @@ function PlainList({ m }: { m: Mentions }) {
         <li key={`${s.kind}:${s.id}`}>
           <button type="button" onClick={() => m.pick(s)} onKeyDown={move}>
             <span className="name">
-              {mark === "/" ? "#" : mark}
-              {s.name}
+              {s.kind === "save-new" ? (
+                `Save "@${s.name}"…`
+              ) : (
+                <>
+                  {mark === "/" ? (s.kind === "saved" ? "@" : "#") : mark}
+                  {s.name}
+                </>
+              )}
             </span>
             {s.sub && <span className="hint">{s.sub}</span>}
           </button>

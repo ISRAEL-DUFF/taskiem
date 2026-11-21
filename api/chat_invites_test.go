@@ -74,7 +74,7 @@ func TestInviteOnWhatsApp(t *testing.T) {
 	if user == uuid.Nil || memberRoles(t, w.world, user, "Acme") != "viewer" {
 		t.Fatalf("membership: %v %q", user, memberRoles(t, w.world, user, "Acme"))
 	}
-	if got := w.say(t, ada, "help"); !strings.Contains(got, "status") {
+	if got := w.say(t, ada, "help all"); !strings.Contains(got, "status") {
 		t.Fatalf("the conversation: %q", got)
 	}
 	// Pressed again: it was answered.
@@ -196,7 +196,7 @@ func TestSlackInviteAndAskToJoin(t *testing.T) {
 	}
 	n := len(w.fake.to("U0BEN"))
 	w.event(t, dm("Ev3", "U0BEN", "help"), slackSecret)
-	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "status") {
+	if s := w.says("U0BEN", n); len(s) != 1 || !strings.Contains(s[0], "Pick a topic") {
 		t.Fatalf("Ben's conversation: %v", s)
 	}
 

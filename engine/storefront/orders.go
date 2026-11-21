@@ -284,6 +284,27 @@ func (o *Orders) ListOrders(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, st
 	return o.ListOrdersOn(ctx, tx, tenant, nil, status, kind, limit)
 }
 
+// ListOrdersPage is ListOrders (every status, every kind) from offset on,
+// newest first: a page of the list, for a search that reads it a page at a
+// time (chat refs).
+func (o *Orders) ListOrdersPage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit, offset int) ([]Order, error) {
+	rows, err := tx.Query(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1
+		ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`, tenant, max(1, min(limit, 200)), max(offset, 0))
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Order, error) { return scanOrder(r) })
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if err := o.open(ctx, tx, tenant, &list[i]); err != nil {
+			return nil, err
+		}
+	}
+	return list, nil
+}
+
 // ListOrdersOn is ListOrders for one front's submissions (fronts F3; nil
 // for every front's).
 func (o *Orders) ListOrdersOn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, front *uuid.UUID, status, kind string, limit int) ([]Order, error) {

@@ -169,6 +169,13 @@ export function Settings() {
         description="Your environments and the secrets and variables workflows read in each of them."
         actions={<EnvSelect value={env} onChange={setEnv} />}
       />
+      <div className="card" data-testid="settings-saved">
+        <h2 style={{ marginTop: 0 }}>Saved</h2>
+        <p className="hint">Accounts your business pays or shares, saved once and called up by name, like @bayo.</p>
+        <Link className="button" to="/settings/saved">
+          Open saved accounts
+        </Link>
+      </div>
       {can("member.manage") && <AdvancedSwitch />}
       {can("member.manage") && <ChatToolsSwitch />}
       {(can("order.handle") || can("storefront.manage")) && (
