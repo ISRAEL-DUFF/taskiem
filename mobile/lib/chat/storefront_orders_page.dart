@@ -689,7 +689,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
         children: [TkListRow(title: 'Saved as @$saved', sub: 'Among your saved people, for next time', icon: 'b-check', square: look.lime, chevron: false)],
       );
     }
-    if (_view?['customer_orders'] != 1 || kind == 'trade' || !_auth.can('saved.manage') || (_customersSaved[_auth]?.contains(_savedKey) ?? false)) return null;
+    if (_view?['customer_orders'] != 1 || ((_view?['customer_saved'] as String?) ?? '').isNotEmpty || kind == 'trade' || !_auth.can('saved.manage') || (_customersSaved[_auth]?.contains(_savedKey) ?? false)) return null;
     final c = _revealed ?? shown;
     final name = _str(c['name']);
     if (name.isEmpty) return null;

@@ -71,7 +71,13 @@ func TestSavedFromOrderCustomer(t *testing.T) {
 	if got := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil); got["customer_orders"] != float64(1) {
 		t.Fatalf("first order: %v", got["customer_orders"])
 	}
+	if got := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil); got["customer_saved"] != "" {
+		t.Fatalf("not saved yet: %v", got["customer_saved"])
+	}
 	x := ada.must(201, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{})["saved"].(map[string]any)
+	if got := ada.must(200, "GET", "/v1/storefront/orders/"+ref, nil); got["customer_saved"] != "bola-ade" {
+		t.Fatalf("saved: %v", got["customer_saved"])
+	}
 	if x["name"] != "bola-ade" || x["title"] != "Bola Ade" || x["kind"] != "person" {
 		t.Fatalf("saved: %v", x)
 	}

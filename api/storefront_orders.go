@@ -146,6 +146,7 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	var o storefront.Order
 	var pays []storefront.OrderPayment
 	var orders int
+	var savedAs string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		o, err = s.Orders.GetOrder(r.Context(), tx, principalFrom(r.Context()).TenantID, ref)
@@ -158,6 +159,9 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 		// How many orders its customer has made: one is a new customer's
 		// first, which the page offers to save (saved objects S3).
 		if orders, err = customerOrdersTx(r.Context(), tx, principalFrom(r.Context()).TenantID, ref); err != nil {
+			return err
+		}
+		if savedAs, err = customerSavedTx(r.Context(), tx, principalFrom(r.Context()).TenantID, o.Customer); err != nil {
 			return err
 		}
 		// The money matched to it (docs/matching.md), undone with
@@ -174,7 +178,7 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	if !reveal {
 		maskCustomer(&o.Customer)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal, "customer_orders": orders})
+	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal, "customer_orders": orders, "customer_saved": savedAs})
 }
 
 // maskCustomer leaves enough to recognise a customer: a name's first

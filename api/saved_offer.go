@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	phonenum "github.com/israel-duff/taskiem/engine/phone"
 	"github.com/israel-duff/taskiem/engine/storefront"
 
 	"github.com/israel-duff/taskiem/engine/saved"
@@ -142,4 +143,22 @@ func customerOrdersTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref stri
 	err := tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders o WHERE o.tenant_id = $1
 		AND o.subject_id = (SELECT subject_id FROM storefront_orders WHERE tenant_id = $1 AND reference = $2)`, tenant, ref).Scan(&n)
 	return n, err
+}
+
+// customerSavedTx is the name of the business's saved person the customer
+// is (the same phone, else email), "" when none: the order page offers to
+// save only a customer not saved yet.
+func customerSavedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cu storefront.Customer) (string, error) {
+	phone, _ := phonenum.Normalise(cu.Phone)
+	email := strings.ToLower(strings.TrimSpace(cu.Email))
+	if phone == "" && email == "" {
+		return "", nil
+	}
+	var name string
+	err := tx.QueryRow(ctx, `SELECT name FROM saved_objects WHERE tenant_id = $1 AND person_id IS NULL AND archived_at IS NULL AND kind = 'person'
+		AND ((details->>'phone' <> '' AND details->>'phone' = $2) OR (details->>'email' <> '' AND lower(details->>'email') = $3)) ORDER BY created_at LIMIT 1`, tenant, phone, email).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return name, err
 }

@@ -11045,6 +11045,9 @@ paths:
                   customer_orders:
                     type: integer
                     description: How many orders its customer has made with the business, this one with them (1 is a new customer's first).
+                  customer_saved:
+                    type: string
+                    description: The business's saved person the customer is (the same phone, else email), by name; empty when none.
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/orders/{reference}/save-customer:

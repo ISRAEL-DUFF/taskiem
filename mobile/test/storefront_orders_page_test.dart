@@ -648,7 +648,7 @@ void main() {
   });
 
   // A new customer's first order (saved objects S3): saved for next time.
-  Future<({List<String> sent, ChatsData chats})> firstOrder(WidgetTester t, {int orders = 1, String customer = 'Ngozi', List<String> perms = const ['storefront.manage', 'order.handle', 'saved.manage'], List<int> answers = const [201]}) {
+  Future<({List<String> sent, ChatsData chats})> firstOrder(WidgetTester t, {int orders = 1, String saved = '', String customer = 'Ngozi', List<String> perms = const ['storefront.manage', 'order.handle', 'saved.manage'], List<int> answers = const [201]}) {
     var asked = 0;
     http.Response json(Object b, int status) => http.Response(jsonEncode(b), status, headers: {'content-type': 'application/json'});
     return serve(
@@ -658,7 +658,7 @@ void main() {
       also: (req) async {
         final p = req.url.path;
         if (req.method == 'GET' && p == '/v1/storefront/orders/OR-5K2Q') {
-          return json({'order': {..._order(), 'customer': {'name': customer, 'phone': '•••4567'}}, 'revealed': false, 'payments': [], 'customer_orders': orders}, 200);
+          return json({'order': {..._order(), 'customer': {'name': customer, 'phone': '•••4567'}}, 'revealed': false, 'payments': [], 'customer_orders': orders, 'customer_saved': saved}, 200);
         }
         if (req.method == 'POST' && p == '/v1/storefront/orders/OR-5K2Q/save-customer') {
           final status = answers[asked < answers.length ? asked : answers.length - 1];
@@ -695,6 +695,10 @@ void main() {
     expect(find.text('Jollof rice × 2'), findsOneWidget);
     expect(find.textContaining('for next time'), findsNothing);
     await firstOrder(t, perms: ['storefront.manage', 'order.handle']);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.textContaining('for next time'), findsNothing);
+    // Saved already (by phone or email, as the server says): not offered.
+    await firstOrder(t, saved: 'ngozi');
     expect(find.text('Jollof rice × 2'), findsOneWidget);
     expect(find.textContaining('for next time'), findsNothing);
   });
