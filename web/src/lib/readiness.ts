@@ -4,7 +4,7 @@
 // this decides how the web app offers each one.
 
 export interface ReadyNeed {
-  kind: "connection" | "variable" | "secret" | "table" | "role" | "field";
+  kind: "connection" | "variable" | "secret" | "table" | "role" | "field" | "saved";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
@@ -44,6 +44,7 @@ export type Fix =
   | { kind: "make_table"; name: string; table?: TableSpec }
   | { kind: "give_role"; role: string }
   | { kind: "ask_phone"; field: string }
+  | { kind: "save_thing"; name: string }
   | { kind: "ask_support"; service: string };
 
 /** The connection name a new connection takes for a need. */
@@ -67,6 +68,9 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "give_role", role: n.name };
     case "field":
       return { kind: "ask_phone", field: n.name };
+    case "saved":
+      // A business's saved thing the workflow reads (saved.price_list is @price-list).
+      return { kind: "save_thing", name: n.name };
   }
 }
 

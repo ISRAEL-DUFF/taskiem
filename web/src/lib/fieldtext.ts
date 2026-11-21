@@ -7,7 +7,8 @@
 
 export type Segment = { text: string } | { expr: string; label: string };
 
-const PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*$/;
+// A path's parts: .name, [0], or ["price-list"] (a saved thing's name).
+const PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\]|\["[a-z0-9-]+"\])*$/;
 // An amount kept in kobo, shown in naira: double(trigger.fields.amount_kobo) / 100.0.
 const NAIRA = /^double\(([^()]+)\) \/ 100\.0$/;
 
