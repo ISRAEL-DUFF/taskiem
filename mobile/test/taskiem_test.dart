@@ -140,8 +140,8 @@ void main() {
   });
 
   test('merging: by id, a code kept as sent, ours giving way to the stored copy, buttons with ids kept', () {
-    TaskiemChatMessagesItem m(String id, String text, {bool inbound = false, String at = '2026-11-11T13:00:00Z', List<Map<String, dynamic>>? buttons}) =>
-        TaskiemChatMessagesItem.fromJson(_msg(id, text, inbound: inbound, at: at, buttons: buttons));
+    TaskiemMessage m(String id, String text, {bool inbound = false, String at = '2026-11-11T13:00:00Z', List<Map<String, dynamic>>? buttons}) =>
+        TaskiemMessage.fromJson(_msg(id, text, inbound: inbound, at: at, buttons: buttons));
     final local = TaskiemLine(m('local-1', 'hello', inbound: true, at: '2026-11-11T13:00:05Z'), local: true);
     var list = mergeTaskiem([TaskiemLine(m('a', 'hi'))], []);
     list = mergeTaskiem([...list, local], [m('s1', 'hello', inbound: true, at: '2026-11-11T13:00:06Z')]);

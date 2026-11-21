@@ -71,10 +71,18 @@ test("the switch, and @Taskiem in a business conversation", async ({ browser }) 
   const pane = buyer.getByTestId("chat-pane");
   await pane.getByLabel("Message").fill("@Taskiem status");
   await pane.getByLabel("Message").press("Enter");
-  const note = buyer.locator(".toast", { hasText: "Only Taskiem saw that" });
+  // Taskiem's answer stays here as a note only we see (21 November 2026),
+  // with the way to the Taskiem chat; nothing went to the business.
+  const note = pane.getByTestId("taskiem-note");
   await expect(note).toBeVisible();
-  await expect(note.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/chat?with=taskiem");
+  await expect(note.getByText("You asked: status", { exact: true })).toBeVisible();
+  await expect(note.getByRole("link", { name: "Open Taskiem chat" })).toHaveAttribute("href", "/chat?with=taskiem");
+  await expect(buyer.locator(".toast", { hasText: "Only Taskiem saw that" })).toHaveCount(0);
   await expect(pane.locator('[data-testid="chat-message"][data-mine="true"]')).toHaveCount(0);
+  await axeBoth(buyer, "A Taskiem note in a conversation");
+  // Opened again: still there, once.
+  await buyer.reload();
+  await expect(buyer.getByTestId("chat-pane").getByTestId("taskiem-note")).toHaveCount(1);
   const theirs = (await (await seller.request.get(`/v1/link-chats/${link}/messages`, { headers: H })).json()).messages as { kind: string }[];
   expect(theirs.filter((m) => m.kind !== "card")).toEqual([]);
 });

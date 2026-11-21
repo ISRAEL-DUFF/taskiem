@@ -70,6 +70,9 @@ for (const width of [390, 360])
     await send(page, "help staff");
     await expect(menus(page)).toHaveCount(2);
     await expect(menus(page).first()).toHaveAttribute("data-folded", "1");
+    // Folded to what happened: no way back into a menu that is done.
+    await expect(menus(page).first()).toContainText("Products · Not used");
+    await expect(menus(page).first().getByRole("button")).toHaveCount(0);
     const staff = menus(page).last();
     await expect(staff).toHaveAttribute("data-topic", "staff");
 
@@ -89,6 +92,7 @@ for (const width of [390, 360])
     await form.getByRole("button", { name: "Give someone a task" }).click();
     await expect(form).toHaveCount(0);
     await expect(menus(page).last()).toHaveAttribute("data-folded", "1");
+    await expect(menus(page).last()).toContainText("Staff and tasks · You chose Give someone a task");
     await expect(pane(page).getByText("Give someone a task: Tunde, count the float by 7am", { exact: true }).first()).toBeVisible();
 
     // Not understood: the short answer, and the topics.
@@ -96,6 +100,14 @@ for (const width of [390, 360])
     await expect(pane(page).getByText("Sorry, I did not understand that.", { exact: true }).last()).toBeVisible();
     await expect(menus(page).last()).toHaveAttribute("data-topic", "");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    // Its ✕: closed, nothing done; kept so after a reload, as the others.
+    await menus(page).last().getByRole("button", { name: "Close this menu" }).click();
+    await expect(menus(page).last()).toContainText("Topics · Closed, nothing done");
+    await page.reload();
+    await expect(menus(page).last()).toContainText("Topics · Closed, nothing done");
+    await expect(menus(page).first()).toContainText("Topics · Not used");
+    await expect(menus(page).nth(1)).toContainText("Staff and tasks · You chose Give someone a task");
   });
 
 // Review fixes: a menu whose catalogue could not be read says so and tries

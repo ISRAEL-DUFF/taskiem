@@ -285,6 +285,11 @@ class TaskiemApi {
     return ChatActionChoicesResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Close a menu in the Taskiem chat (`POST /v1/taskiem-chat/menus/{id}/close`)
+  Future<void> closeChatMenu({required CloseChatMenuRequest body, required String id}) async {
+    await _t.send('POST', '/v1/taskiem-chat/menus/${Uri.encodeComponent(id)}/close', body: body.toJson());
+  }
+
   /// A customer's conversation (`GET /v1/customer-chats/{id}`)
   Future<CustomerChat> getCustomerChat({required String id}) async {
     final j = await _t.send('GET', '/v1/customer-chats/${Uri.encodeComponent(id)}');
@@ -2925,8 +2930,10 @@ class LinkConversation {
 }
 
 class LinkMessage {
-  const LinkMessage({this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+  const LinkMessage({this.asked, this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
 
+  /// On a taskiem note, the words asked of Taskiem
+  final String? asked;
   /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
   /// streams it
   final LinkMessageAttachment? attachment;
@@ -2937,7 +2944,9 @@ class LinkMessage {
   final bool? forwarded;
   /// The message, the same in both businesses
   final String id;
-  /// A diary line is a change we made with a chat tool, on our side only
+  /// A diary line is a change we made with a chat tool, on our side only. A
+  /// taskiem note is what Taskiem answered a "@Taskiem" typed in this
+  /// conversation, on our side only (asked, and the answer as body)
   final String kind;
   final String link;
   final List<LinkMention>? mentions;
@@ -2955,6 +2964,7 @@ class LinkMessage {
   final bool? starred;
 
   factory LinkMessage.fromJson(Map<String, dynamic> j) => LinkMessage(
+        asked: j['asked'] == null ? null : j['asked'] as String,
         attachment: j['attachment'] == null ? null : LinkMessageAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
         body: j['body'] == null ? null : j['body'] as String,
         card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
@@ -2974,6 +2984,7 @@ class LinkMessage {
       );
 
   Map<String, dynamic> toJson() => {
+        'asked': ?asked,
         'attachment': ?attachment?.toJson(),
         'body': ?body,
         'card': ?card?.toJson(),
@@ -4112,10 +4123,10 @@ class ReadLinkChatResponse {
 class TaskiemChat {
   const TaskiemChat({required this.messages});
 
-  final List<TaskiemChatMessagesItem> messages;
+  final List<TaskiemMessage> messages;
 
   factory TaskiemChat.fromJson(Map<String, dynamic> j) => TaskiemChat(
-        messages: (j['messages'] as List).map((e) => TaskiemChatMessagesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        messages: (j['messages'] as List).map((e) => TaskiemMessage.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -4123,10 +4134,10 @@ class TaskiemChat {
       };
 }
 
-class TaskiemChatMessagesItem {
-  const TaskiemChatMessagesItem({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
+class TaskiemMessage {
+  const TaskiemMessage({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
 
-  final List<TaskiemChatMessagesItemButtonsItem>? buttons;
+  final List<TaskiemMessageButtonsItem>? buttons;
   final String channel;
   final DateTime createdAt;
   final String id;
@@ -4135,8 +4146,8 @@ class TaskiemChatMessagesItem {
   final String kind;
   final String text;
 
-  factory TaskiemChatMessagesItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItem(
-        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemChatMessagesItemButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
+  factory TaskiemMessage.fromJson(Map<String, dynamic> j) => TaskiemMessage(
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemMessageButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
         channel: j['channel'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
         id: j['id'] as String,
@@ -4156,14 +4167,14 @@ class TaskiemChatMessagesItem {
       };
 }
 
-class TaskiemChatMessagesItemButtonsItem {
-  const TaskiemChatMessagesItemButtonsItem({this.id, required this.title});
+class TaskiemMessageButtonsItem {
+  const TaskiemMessageButtonsItem({this.id, required this.title});
 
   /// Only on an answer just given; press it by sending it as reply
   final String? id;
   final String title;
 
-  factory TaskiemChatMessagesItemButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItemButtonsItem(
+  factory TaskiemMessageButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemMessageButtonsItem(
         id: j['id'] == null ? null : j['id'] as String,
         title: j['title'] as String,
       );
@@ -4682,6 +4693,21 @@ class ChatActionChoicesResponse {
 
   Map<String, dynamic> toJson() => {
         'fields': fields,
+      };
+}
+
+class CloseChatMenuRequest {
+  const CloseChatMenuRequest({this.chose});
+
+  /// The id of the action whose row opened a tool or a page
+  final String? chose;
+
+  factory CloseChatMenuRequest.fromJson(Map<String, dynamic> j) => CloseChatMenuRequest(
+        chose: j['chose'] == null ? null : j['chose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chose': ?chose,
       };
 }
 

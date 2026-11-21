@@ -434,3 +434,65 @@ func TestChatMenusProductChoices(t *testing.T) {
 		t.Fatalf("choices: %v", ch)
 	}
 }
+
+// How a menu ended (21 November 2026): a row pressed is what it chose, a
+// menu the person passed by saying something else is passed, and its ✕
+// closes one; the history says so in the menu's text, so it folds to a
+// line saying what happened, and a menu that ended stays as it ended.
+func TestChatMenusRememberHowTheyEnded(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Ada's Kitchen", "ada@kitchen.test")
+	menus := func() []map[string]any {
+		var out []map[string]any
+		for _, x := range owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) {
+			if m := x.(map[string]any); m["kind"] == "menu" {
+				var menu map[string]any
+				if err := json.Unmarshal([]byte(m["text"].(string)), &menu); err != nil {
+					t.Fatal(err)
+				}
+				menu["id"] = m["id"]
+				out = append(out, menu)
+			}
+		}
+		return out
+	}
+
+	// A row pressed: chose.
+	taskiemAll(t, owner, map[string]any{"text": "help staff"})
+	if ms := menus(); len(ms) != 1 || ms[0]["done"] != nil {
+		t.Fatalf("an open menu: %v", ms)
+	}
+	taskiemAll(t, owner, map[string]any{"text": "Your tasks", "reply": "act:staff.mine"})
+	if ms := menus(); ms[0]["done"] != "chose" || ms[0]["chose"] != "staff.mine" {
+		t.Fatalf("chose: %v", ms[0])
+	}
+
+	// Something else said instead: passed.
+	taskiemAll(t, owner, map[string]any{"text": "help"})
+	taskiemAll(t, owner, map[string]any{"text": "zzq blorp"})
+	ms := menus()
+	if len(ms) != 3 || ms[1]["done"] != "passed" || ms[2]["done"] != nil {
+		t.Fatalf("passed, and the newest open: %v", ms)
+	}
+
+	// Its ✕: closed; again changes nothing, and one that ended stays.
+	owner.must(204, "POST", "/v1/taskiem-chat/menus/"+ms[2]["id"].(string)+"/close", nil)
+	owner.must(204, "POST", "/v1/taskiem-chat/menus/"+ms[2]["id"].(string)+"/close", nil)
+	owner.must(204, "POST", "/v1/taskiem-chat/menus/"+ms[0]["id"].(string)+"/close", nil)
+	ms = menus()
+	if ms[2]["done"] != "closed" || ms[0]["done"] != "chose" {
+		t.Fatalf("closed: %v", ms)
+	}
+	// A row that opened a tool in the app: chose, said with the close.
+	taskiemAll(t, owner, map[string]any{"text": "help sales"})
+	ms = menus()
+	owner.must(400, "POST", "/v1/taskiem-chat/menus/"+ms[3]["id"].(string)+"/close", map[string]any{"chose": "no.such"})
+	owner.must(204, "POST", "/v1/taskiem-chat/menus/"+ms[3]["id"].(string)+"/close", map[string]any{"chose": "sales.sell"})
+	if ms = menus(); ms[3]["done"] != "chose" || ms[3]["chose"] != "sales.sell" {
+		t.Fatalf("chose with the close: %v", ms[3])
+	}
+	// Someone else's menu, or no menu: not found.
+	other := w.tenant(t, "Bola's Bakery", "bola@bakery.test")
+	other.must(404, "POST", "/v1/taskiem-chat/menus/"+ms[2]["id"].(string)+"/close", nil)
+	owner.must(404, "POST", "/v1/taskiem-chat/menus/not-an-id/close", nil)
+}

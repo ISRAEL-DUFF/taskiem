@@ -279,6 +279,11 @@ class ChatsData extends ChangeNotifier {
           return;
         } on ApiError {
           // Refused: left for its conversation to show.
+        } on Object {
+          // An answer that could not be read: the server took the send (it
+          // answered), so it is not sent again and again (each "@Taskiem"
+          // resent asked Taskiem once more: 21 November 2026).
+          local.dropOut(k.id);
         }
       }
     } finally {

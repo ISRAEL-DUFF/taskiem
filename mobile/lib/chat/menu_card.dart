@@ -4,7 +4,9 @@
 // first five actions as rows, the rest behind "All N" in a sheet; the
 // topics are tiles. A row shows its answer or asks step by step (sent back
 // as "act:<id>"), or opens its tool or its page here. Once a row is
-// pressed, or a newer menu comes, the card folds to one line.
+// pressed, its ✕ closes it, the person says something else, or a newer menu
+// comes, the card folds to one line saying what happened (21 November
+// 2026: no "Show again", the menu has done its work).
 
 import 'dart:async';
 import 'dart:convert';
@@ -28,12 +30,18 @@ const menuRows = 5;
 /// understood, the row it picked with what it took from the message, and
 /// that row's command as a tip.
 class MenuMessage {
-  const MenuMessage({this.topic, this.line, this.pick, this.values = const {}, this.tip});
+  const MenuMessage({this.topic, this.line, this.pick, this.values = const {}, this.tip, this.done, this.chose});
   final String? topic;
   final String? line;
   final String? pick;
   final Map<String, String> values;
   final String? tip;
+
+  /// How it ended, as the server kept it: chose, closed or passed.
+  final String? done;
+
+  /// The action chosen, when it ended so.
+  final String? chose;
 
   static MenuMessage? parse(String text) {
     try {
@@ -45,6 +53,8 @@ class MenuMessage {
         pick: j['pick'] as String?,
         values: {for (final e in ((j['values'] as Map?) ?? const {}).entries) '${e.key}': '${e.value}'},
         tip: j['tip'] as String?,
+        done: j['done'] as String?,
+        chose: j['chose'] as String?,
       );
     } on FormatException {
       return null;
@@ -103,6 +113,7 @@ class MenuCard extends StatefulWidget {
   const MenuCard({
     super.key,
     required this.auth,
+    required this.id,
     required this.menu,
     required this.open,
     required this.onAct,
@@ -112,9 +123,12 @@ class MenuCard extends StatefulWidget {
     this.busy = false,
   });
   final Auth auth;
+
+  /// The menu message's id, to close it.
+  final String id;
   final MenuMessage menu;
 
-  /// The newest menu: open; any other is folded.
+  /// The newest menu, nothing said since: open; any other is folded.
   final bool open;
   final bool busy;
 
@@ -139,8 +153,11 @@ class _MenuCardState extends State<MenuCard> {
   // the conversation opens), so the chat does not jump as it comes.
   late List<ChatTopic>? _topics = _read[widget.auth];
   String? _topic;
+
+  /// How it ended here (chose, closed, passed) and the row chosen.
+  late String? _ended = widget.menu.done;
   String? _chosen;
-  late bool _shown = widget.open;
+  late bool _shown = widget.open && widget.menu.done == null;
 
   @override
   void initState() {
@@ -163,13 +180,30 @@ class _MenuCardState extends State<MenuCard> {
   @override
   void didUpdateWidget(MenuCard old) {
     super.didUpdateWidget(old);
-    if (old.open && !widget.open) _shown = false;
+    if (old.open && !widget.open) {
+      _shown = false;
+      _ended ??= 'passed';
+    }
   }
 
-  void _fold(ChatAction a) => setState(() {
-    _chosen = a.title;
-    _shown = false;
-  });
+  void _fold(ChatAction a, {bool tell = false}) {
+    setState(() {
+      _ended = 'chose';
+      _chosen = a.title;
+      _shown = false;
+    });
+    // Nothing goes to Taskiem for a tool or a page: the server is told, so
+    // the menu stays folded to what was chosen.
+    if (tell) unawaited(widget.auth.api.closeChatMenu(id: widget.id, body: CloseChatMenuRequest(chose: a.id)).then((_) {}, onError: (Object _) {}));
+  }
+
+  void _close() {
+    setState(() {
+      _ended = 'closed';
+      _shown = false;
+    });
+    unawaited(widget.auth.api.closeChatMenu(id: widget.id, body: const CloseChatMenuRequest()).then((_) {}, onError: (Object _) {}));
+  }
 
   Future<void> _press(ChatAction a) async {
     final fields = a.fields ?? const [];
@@ -178,8 +212,8 @@ class _MenuCardState extends State<MenuCard> {
     // with them in it, even for an action with a tool of its own, whose
     // form would start empty.
     final carry = picked && widget.menu.values.isNotEmpty && fields.isNotEmpty;
-    if (!carry && a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a);
-    if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return _fold(a);
+    if (!carry && a.opens == 'form' && a.tool != null && widget.onTool(a.tool!, a.add == true)) return _fold(a, tell: true);
+    if (a.opens == 'page' && a.page != null && widget.onPage(a.page!)) return _fold(a, tell: true);
     // An action that takes values: its form here (M4), filled with what
     // Taskiem took from the message.
     if (fields.isNotEmpty) {
@@ -277,7 +311,11 @@ class _MenuCardState extends State<MenuCard> {
       );
     }
     if (topics == null) return card(const SizedBox(height: 96));
-    final topic = _topic == null ? null : topics.where((x) => x.id == _topic).firstOrNull;
+    // The action chosen (here, or kept by the server), and its topic when
+    // the card was the topics.
+    final chosenAction = widget.menu.chose == null ? null : topics.expand((x) => x.actions).where((a) => a.id == widget.menu.chose).firstOrNull;
+    final topicId = _topic ?? (chosenAction == null ? null : topics.where((x) => x.actions.contains(chosenAction)).firstOrNull?.id);
+    final topic = topicId == null ? null : topics.where((x) => x.id == topicId).firstOrNull;
     Widget square(String icon, Color color, {double size = 36}) => Container(
       width: size,
       height: size,
@@ -286,7 +324,7 @@ class _MenuCardState extends State<MenuCard> {
       child: TkIcon(icon, size: size * 0.48, stroke: 2.2, color: const Color(0xFFFFFFFF)),
     );
     Widget head(String title, String? line, Widget lead) => Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 4, 8),
       child: Row(
         children: [
           lead,
@@ -298,6 +336,22 @@ class _MenuCardState extends State<MenuCard> {
                 Text(title, style: tkText(size: 16, weight: 700, color: t.text)),
                 if (line != null && line.isNotEmpty) Text(line, style: tkText(size: 13, color: t.muted, lineHeight: 1.35)),
               ],
+            ),
+          ),
+          // Its ✕: folds to "Closed, nothing done" (21 November 2026).
+          Semantics(
+            button: true,
+            label: 'Close this menu',
+            excludeSemantics: true,
+            child: TkPress(
+              onTap: _close,
+              child: Container(
+                key: const ValueKey('menu-close'),
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                child: TkIcon('b-x', size: 18, color: t.muted),
+              ),
             ),
           ),
         ],
@@ -316,34 +370,31 @@ class _MenuCardState extends State<MenuCard> {
     );
 
     if (!_shown) {
+      // What happened, said once: no way back into a menu that is done.
+      final what = switch (_ended) {
+        'chose' => 'You chose ${_chosen ?? chosenAction?.title ?? 'an action'}',
+        'closed' => 'Closed, nothing done',
+        _ => 'Not used',
+      };
       return Semantics(
         container: true,
         child: card(
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
             child: Row(
               children: [
                 square(topic == null ? 'b-tools' : menuIcon(topic.icon), topic == null ? look.lime : topicColor(look, topic.color), size: 28),
                 const SizedBox(width: 10),
-                Expanded(
+                Flexible(
                   child: Text.rich(
                     TextSpan(
                       children: [
                         TextSpan(text: topic?.name ?? 'Topics', style: tkText(size: 13.5, weight: 700, color: t.text)),
-                        if (_chosen != null) TextSpan(text: ' · $_chosen', style: tkText(size: 13.5, color: t.muted)),
+                        TextSpan(text: ' · $what', style: tkText(size: 13.5, color: t.muted)),
                       ],
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                TkPress(
-                  onTap: () => setState(() => _shown = true),
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text('Show again', style: tkText(size: 13, weight: 600, color: dark ? t.brandDark : t.brand)),
                   ),
                 ),
               ],

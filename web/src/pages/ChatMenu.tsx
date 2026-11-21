@@ -3,12 +3,14 @@
 // (GET /v1/chat/actions). A topic's menu shows its first five actions as
 // rows, the rest behind "All N" in a sheet; the topics are tiles. A row
 // shows its answer (sent back as "act:<id>"), opens its form or its page
-// here, or starts its questions in the chat. Once a row is pressed, or a
-// newer menu comes, the card folds to one line.
+// here, or starts its questions in the chat. Once a row is pressed, its ✕
+// closes it, the person says something else, or a newer menu comes, the
+// card folds to one line saying what happened (no "Show again": 21
+// November 2026).
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { get } from "../api";
+import { get, post } from "../api";
 import { KitField, Sheet } from "../kit";
 import { FormFrame } from "./FormFrame";
 import { Icon } from "../icons";
@@ -51,6 +53,10 @@ export interface MenuMessage {
   pick?: string;
   values?: Record<string, string>;
   tip?: string;
+  /** How it ended, as the server kept it. */
+  done?: "chose" | "closed" | "passed";
+  /** The action chosen, when it ended so. */
+  chose?: string;
 }
 
 /** A menu message's JSON, or undefined when it is not one. */
@@ -123,7 +129,7 @@ export function MenuCard({
 }: {
   id: string;
   menu: MenuMessage;
-  /** The newest menu: open; any other is folded. */
+  /** The newest menu, nothing said since: open; any other is folded. */
   open: boolean;
   busy: boolean;
   /** A row sent back to Taskiem, as a button's press. */
@@ -135,10 +141,34 @@ export function MenuCard({
   const navigate = useNavigate();
   const [topic, setTopic] = useState(menu.topic);
   const [chosen, setChosen] = useState<string>();
-  const [shown, setShown] = useState(open);
+  const [ended, setEnded] = useState(menu.done);
+  const [shown, setShown] = useState(open && !menu.done);
   const [all, setAll] = useState(false);
   const [form, setForm] = useState<{ action: ChatAction; values: Record<string, string> }>();
-  useEffect(() => setShown(open && !chosen), [open, chosen]);
+  useEffect(() => {
+    if (open) return;
+    setShown(false);
+    setEnded((e) => e ?? "passed");
+  }, [open]);
+  const choose = (a: ChatAction, tell = false) => {
+    setChosen(a.title);
+    setEnded("chose");
+    setShown(false);
+    onFold?.();
+    // Nothing goes to Taskiem for a form or a page: the server is told, so
+    // the menu stays folded to what was chosen.
+    if (tell) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, { chose: a.id }).catch(() => undefined);
+  };
+  const close = () => {
+    setEnded("closed");
+    setShown(false);
+    void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, {}).catch(() => undefined);
+  };
+  const closeButton = (
+    <button type="button" className="tk-menu-close" aria-label="Close this menu" onClick={close}>
+      <Icon name="close" />
+    </button>
+  );
 
   if (topics === null)
     return (
@@ -150,7 +180,11 @@ export function MenuCard({
       </div>
     );
   if (!topics) return <div className="tk-menu tk-menu-loading" data-msg={id} aria-busy="true" />;
-  const t = topic ? topics.find((x) => x.id === topic) : undefined;
+  // The action chosen (here, or kept by the server), and its topic when the
+  // card was the topics.
+  const chosenAction = menu.chose ? topics.flatMap((x) => x.actions).find((a) => a.id === menu.chose) : undefined;
+  const shownTopic = topic ?? (chosenAction ? topics.find((x) => x.actions.includes(chosenAction))?.id : undefined);
+  const t = shownTopic ? topics.find((x) => x.id === shownTopic) : undefined;
 
   const press = (a: ChatAction, from?: DOMRect) => {
     setAll(false);
@@ -161,13 +195,11 @@ export function MenuCard({
     if (picked && a.fields?.length && Object.keys(menu.values ?? {}).length > 0)
       return setForm({ action: a, values: { ...menu.values } });
     if (a.opens === "form" && a.tool) {
-      setChosen(a.title);
-      onFold?.();
+      choose(a, true);
       return openTool(a.tool as ToolKey, from, { add: a.add });
     }
     if (a.opens === "page" && a.page) {
-      setChosen(a.title);
-      onFold?.();
+      choose(a, true);
       return navigate(a.page);
     }
     // An action that takes values: its form here (M4), filled with what
@@ -175,14 +207,12 @@ export function MenuCard({
     if (a.fields?.length) {
       return setForm({ action: a, values: a.id === menu.pick && topic === menu.topic ? { ...menu.values } : {} });
     }
-    setChosen(a.title);
-    onFold?.();
+    choose(a);
     onReply(`act:${a.id}`, a.title);
   };
   const sent = (a: ChatAction, values: Record<string, string>) => {
     setForm(undefined);
-    setChosen(a.title);
-    onFold?.();
+    choose(a);
     const shown = (a.fields ?? []).map((f) => values[f.key]?.trim()).filter(Boolean);
     onReply(`form:${a.id}:${JSON.stringify(values)}`, shown.length ? `${a.title}: ${shown.join(", ")}` : a.title);
   };
@@ -200,11 +230,15 @@ export function MenuCard({
         </span>
         <span className="tk-menu-folded-words">
           <b>{t ? t.name : "Topics"}</b>
-          {chosen && <span> · {chosen}</span>}
+          <span>
+            {" · "}
+            {ended === "chose"
+              ? `You chose ${chosen ?? chosenAction?.title ?? "an action"}`
+              : ended === "closed"
+                ? "Closed, nothing done"
+                : "Not used"}
+          </span>
         </span>
-        <button type="button" className="link" onClick={() => setShown(true)}>
-          Show again
-        </button>
       </div>
       </>
     );
@@ -220,6 +254,7 @@ export function MenuCard({
             <span className="tk-menu-title">What would you like to do?</span>
             {menu.line && <span className="tk-menu-line">{menu.line}</span>}
           </span>
+          {closeButton}
         </div>
         <div className="tk-menu-tiles" role="group" aria-label="Topics">
           {topics.map((x) => (
@@ -267,6 +302,7 @@ export function MenuCard({
             <span className="tk-menu-title">{t.name}</span>
             <span className="tk-menu-line">{(topic === menu.topic && menu.line) || "What would you like to do?"}</span>
           </span>
+          {closeButton}
         </div>
         <div className="tk-menu-rows">{acts.slice(0, MENU_ROWS).map(row)}</div>
         <div className="tk-menu-foot">

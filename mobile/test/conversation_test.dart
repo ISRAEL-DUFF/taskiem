@@ -316,4 +316,52 @@ void main() {
     await looks(t, 'saved-link-card');
     await t.pump(const Duration(seconds: 5));
   });
+
+  testWidgets('"@Taskiem" in a business\'s conversation: sent once, Taskiem\'s answer as a note only we see, the way to the Taskiem chat', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-tunde');
+    final sent = <Map<String, dynamic>>[];
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'POST' && req.url.path == '/v1/link-chats/$_link/messages') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          sent.add(body);
+          return http.Response(
+            jsonEncode({
+              'message': {
+                'id': 'note-1', 'link': _link, 'mine': true, 'kind': 'taskiem', 'asked': body['text'],
+                'body': 'Nothing in your catalogue is called butter.', 'created_at': f.at.toIso8601String(),
+              },
+              'messages': [
+                {'id': 'h1', 'channel': 'web', 'inbound': false, 'kind': 'text', 'text': 'Nothing in your catalogue is called butter.', 'created_at': f.at.toIso8601String()},
+              ],
+            }),
+            201,
+          );
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.link == _link);
+    final opened = <String>[];
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ConversationScreen(data: ConversationData(chats, conv, follow: false), onOpenLink: opened.add)));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), '@Taskiem sold 5 butter');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    await settle(t);
+    expect(sent, hasLength(1), reason: 'sent once, never again by itself');
+    expect(find.byKey(const ValueKey('taskiem-note')), findsOneWidget);
+    expect(find.text('You asked: sold 5 butter'), findsOneWidget);
+    expect(find.text('Nothing in your catalogue is called butter.'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Not sent')), findsNothing);
+    await looks(t, 'conversation-taskiem-note');
+    await t.tap(find.text('Open Taskiem chat'));
+    expect(opened, ['taskiem']);
+    await t.pump(const Duration(seconds: 5));
+  });
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -306,6 +307,59 @@ type linkMessageOut struct {
 	// Also are the other businesses the message named, with chat tools on:
 	// each got it as its own message in our conversation with it.
 	Also []alsoSent `json:"also,omitempty"`
+	// Messages are what Taskiem said, for a "@Taskiem" (the message is then
+	// the note it left in this conversation).
+	Messages []TaskiemMessage `json:"messages,omitempty"`
+}
+
+// taskiemNote keeps what Taskiem answered a "@Taskiem" in a conversation
+// with a linked business, as a note on this side only.
+func (s *Server) taskiemNote(ctx context.Context, p *Principal, link uuid.UUID, asked string, said []TaskiemMessage, client *uuid.UUID) (links.Message, error) {
+	var note links.Message
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if _, err := links.GetTx(ctx, tx, link); err != nil {
+			return err
+		}
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, p.UserID).Scan(&name); err != nil {
+			return err
+		}
+		var err error
+		note, err = links.TaskiemNoteTx(ctx, tx, p.TenantID, link, asked, taskiemAnswerWords(said), links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, client)
+		return err
+	})
+	return note, err
+}
+
+// taskiemAnswerWords is what Taskiem said, as plain words for a note: its
+// lines, *bold* marks off; a menu as its line and where to pick from it.
+func taskiemAnswerWords(said []TaskiemMessage) string {
+	var out []string
+	menu := false
+	for _, m := range said {
+		if m.Inbound {
+			continue
+		}
+		switch m.Kind {
+		case "text", "diary":
+			if w := strings.TrimSpace(strings.ReplaceAll(m.Text, "*", "")); w != "" {
+				out = append(out, w)
+			}
+		case "menu":
+			var mm chatMenuMsg
+			if json.Unmarshal([]byte(m.Text), &mm) == nil && strings.TrimSpace(mm.Line) != "" {
+				out = append(out, strings.TrimSpace(strings.ReplaceAll(mm.Line, "*", "")))
+			}
+			menu = true
+		}
+	}
+	if menu {
+		out = append(out, "Pick what to do in your Taskiem chat.")
+	}
+	if len(out) == 0 {
+		return "Taskiem answered in your Taskiem chat."
+	}
+	return strings.Join(out, "\n")
 }
 
 // alsoSent is how a copy to another business named in a message went.
@@ -342,6 +396,12 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	} else if m != nil {
+		// A "@Taskiem" sent again (the first answer was lost on the way):
+		// the note it left, without asking Taskiem a second time.
+		if m.Kind == links.KindTaskiem {
+			writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+			return
+		}
 		if !sameSend(m, in.Text) {
 			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
 			return
@@ -378,8 +438,19 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Nothing went to the business: Taskiem answered in the
-			// person's own conversation with it.
-			writeJSON(w, http.StatusAccepted, taskiemChatOut{Messages: msgs})
+			// person's own conversation with it, and the answer is kept
+			// here as a note only this side sees.
+			note, err := s.taskiemNote(r.Context(), p, link, strings.TrimSpace(in.Text), msgs, in.ClientID)
+			if errors.Is(err, links.ErrDuplicate) {
+				if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
+					note, err = *first, nil
+				}
+			}
+			if err != nil {
+				s.fail(w, r, linkMessageErr(err))
+				return
+			}
+			writeJSON(w, http.StatusCreated, linkMessageOut{Message: note, Messages: msgs})
 			return
 		}
 	}

@@ -81,7 +81,7 @@ const _page = 50;
 
 class TaskiemLine {
   TaskiemLine(this.m, {this.local = false});
-  final TaskiemChatMessagesItem m;
+  final TaskiemMessage m;
   final bool local;
   String get id => m.id;
 }
@@ -90,7 +90,7 @@ class TaskiemLine {
 /// not kept (a code) stays as sent. A message of ours being sent gives way
 /// to its stored copy when that comes first (by the stream); the copy of an
 /// answer that carries its buttons' ids is kept over one that does not.
-List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemChatMessagesItem> b) {
+List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemMessage> b) {
   final arrived = b.where((m) => m.inbound && m.channel == 'web' && !a.any((x) => !x.local && x.id == m.id)).toList();
   bool sent(TaskiemLine x) {
     if (!x.local) return false;
@@ -111,7 +111,7 @@ List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemChatMessagesItem
     final words = had != null && !had.local && keptWithoutLinks(had.m.text, x.m.text);
     seen[key] = keep || words
         ? TaskiemLine(
-            TaskiemChatMessagesItem(
+            TaskiemMessage(
               id: x.m.id,
               channel: x.m.channel,
               inbound: x.m.inbound,
@@ -291,7 +291,7 @@ class TaskiemData extends ChangeNotifier {
     final local = chats.auth.local;
     if (local == null) return;
     try {
-      final kept = [for (final j in local.messages('taskiem')) TaskiemChatMessagesItem.fromJson(j)];
+      final kept = [for (final j in local.messages('taskiem')) TaskiemMessage.fromJson(j)];
       if (kept.isNotEmpty && messages == null) {
         final list = mergeTaskiem(const [], kept);
         unread = unreadAfter(list, chats.taskiemSeen);
@@ -345,7 +345,7 @@ class TaskiemData extends ChangeNotifier {
     if (!follow || _disposed) return;
     _live ??= chats.live?.events.listen((e) {
       if (e is LiveTaskiem) {
-        _merge(e.messages.map(TaskiemChatMessagesItem.fromJson).toList());
+        _merge(e.messages.map(TaskiemMessage.fromJson).toList());
       }
     });
     chats.live?.addListener(_reschedule);
@@ -383,7 +383,7 @@ class TaskiemData extends ChangeNotifier {
     _merge(out.messages);
   }
 
-  void _merge(List<TaskiemChatMessagesItem> add) {
+  void _merge(List<TaskiemMessage> add) {
     if (_disposed) return;
     messages = mergeTaskiem(messages ?? const [], add);
     _keep();
@@ -405,7 +405,7 @@ class TaskiemData extends ChangeNotifier {
     TaskiemLine? mine;
     if (words.isNotEmpty) {
       mine = TaskiemLine(
-        TaskiemChatMessagesItem(id: 'local-${++_localN}', channel: 'web', inbound: true, kind: 'text', text: words, createdAt: chats.now()),
+        TaskiemMessage(id: 'local-${++_localN}', channel: 'web', inbound: true, kind: 'text', text: words, createdAt: chats.now()),
         local: true,
       );
       messages = mergeTaskiem(messages ?? const [], const [])..add(mine);
@@ -825,9 +825,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         break;
       }
     }
-    // The newest menu stays open; every other folds (chat-menus.md §6.1).
+    // The newest menu stays open while nothing has been said since it;
+    // every other folds (chat-menus.md §6.1; folding once the person types
+    // something else, 21 November 2026).
     String? lastMenu;
     for (final x in l.reversed) {
+      if (x.m.inbound) break;
       if (x.m.kind == 'menu') {
         lastMenu = x.id;
         break;
@@ -989,6 +992,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
               return MenuCard(
                 key: ValueKey('menu-${x.id}'),
                 auth: d.chats.auth,
+                id: x.id,
                 menu: menu,
                 open: x.id == lastMenu,
                 busy: d.busy,
@@ -1059,14 +1063,14 @@ class TaskiemSignupBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _TaskiemBubble(
-    x: TaskiemLine(TaskiemChatMessagesItem(
+    x: TaskiemLine(TaskiemMessage(
       id: id,
       inbound: mine,
       channel: 'web',
       kind: 'text',
       text: text,
       createdAt: at,
-      buttons: [for (final b in buttons) TaskiemChatMessagesItemButtonsItem(id: b.id, title: b.title)],
+      buttons: [for (final b in buttons) TaskiemMessageButtonsItem(id: b.id, title: b.title)],
     )),
     first: first,
     read: true,
@@ -1117,7 +1121,7 @@ class _TaskiemBubble extends StatefulWidget {
   final bool read;
   final String? choice;
   final bool pressable;
-  final void Function(TaskiemChatMessagesItemButtonsItem b) onPress;
+  final void Function(TaskiemMessageButtonsItem b) onPress;
 
   @override
   State<_TaskiemBubble> createState() => _TaskiemBubbleState();
@@ -1131,7 +1135,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     final t = TkTheme.tokens(context);
     final m = widget.x.m;
     final mine = m.inbound;
-    final buttons = m.buttons ?? const <TaskiemChatMessagesItemButtonsItem>[];
+    final buttons = m.buttons ?? const <TaskiemMessageButtonsItem>[];
     // The time sits in the corner of the last line when there are no
     // buttons and it came from here.
     final inline = m.channel == 'web' && buttons.isEmpty;
@@ -1304,10 +1308,10 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
 /// between; pressable on its newest answer, else the one chosen ticked.
 class _ReplyButtons extends StatelessWidget {
   const _ReplyButtons({required this.buttons, required this.choice, required this.pressable, required this.onPress});
-  final List<TaskiemChatMessagesItemButtonsItem> buttons;
+  final List<TaskiemMessageButtonsItem> buttons;
   final String? choice;
   final bool pressable;
-  final void Function(TaskiemChatMessagesItemButtonsItem b) onPress;
+  final void Function(TaskiemMessageButtonsItem b) onPress;
 
   @override
   Widget build(BuildContext context) {

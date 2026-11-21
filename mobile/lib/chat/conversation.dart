@@ -1612,6 +1612,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
         final next = nextOf[m.id];
         final lead = runs[m.id];
         if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
+        if (m.m.kind == 'taskiem') {
+          return TaskiemNote(
+            asked: m.m.asked ?? '',
+            answer: m.m.body ?? '',
+            at: m.m.createdAt,
+            onOpen: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+          );
+        }
         final first = prev == null || _startsRun(prev.m, m.m);
         final card = m.m.kind == 'card' ? m.m.card : null;
         return Padding(
