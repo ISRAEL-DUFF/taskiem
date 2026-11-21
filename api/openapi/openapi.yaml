@@ -6869,8 +6869,6 @@ paths:
               properties:
                 passkey:
                   type: object
-                totp:
-                  type: string
                 payments:
                   type: array
                   description: The rows the person saw, acted on exactly; 409 `changed` when they differ from the batch's
@@ -6924,8 +6922,6 @@ paths:
               properties:
                 passkey:
                   type: object
-                totp:
-                  type: string
                 payments:
                   type: array
                   description: The waiting rows the owner saw, acted on exactly; 409 `changed` when they differ

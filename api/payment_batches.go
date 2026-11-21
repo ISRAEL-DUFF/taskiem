@@ -585,7 +585,9 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 	}
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = 'prepared' WHERE id = $1 AND status = 'preparing'`, id); err != nil {
+		// Every row held out: nothing to send, so the batch is let go.
+		if _, err := tx.Exec(ctx, `UPDATE payment_batches SET status = CASE WHEN EXISTS (SELECT 1 FROM payments WHERE batch_id = $1) THEN 'prepared' ELSE 'cancelled' END
+			WHERE id = $1 AND status = 'preparing'`, id); err != nil {
 			return err
 		}
 		var err error

@@ -68,6 +68,10 @@ func TestPaySeveral(t *testing.T) {
 		t.Fatalf("prepared: %v", b)
 	}
 	owner.must(400, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{}})
+	// Every row held out: nothing to send, the batch let go.
+	if all := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{{"payee": "nobody", "amount_kobo": 100000}}})["batch"].(map[string]any); all["status"] != "cancelled" {
+		t.Fatalf("all held: %v", all)
+	}
 
 	// One passkey for the batch; each row sent as its own payment.
 	idsOf := func(b map[string]any, status string) []string {
