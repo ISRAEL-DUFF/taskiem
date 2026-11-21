@@ -221,9 +221,15 @@ func (s *Server) waSaveAsk(ctx context.Context, c *chat, sv *chatSave, details m
 
 // saveButtons: Save, and for the business's, Keep it to myself; Cancel.
 func saveButtons(c *chat, sv *chatSave) []whatsapp.Button {
-	out := []whatsapp.Button{{ID: "yes", Title: c.t("button.save")}}
+	// An offer's buttons are its own, so a Yes left on an earlier card (an
+	// invoice's Send) never answers it.
+	yes, mine := "yes", "mine"
+	if sv.Offer {
+		yes, mine = offerSave, offerMine
+	}
+	out := []whatsapp.Button{{ID: yes, Title: c.t("button.save")}}
 	if sv.Business && !ownAppChat(c) {
-		out = append(out, whatsapp.Button{ID: "mine", Title: c.t("button.keep_mine")})
+		out = append(out, whatsapp.Button{ID: mine, Title: c.t("button.keep_mine")})
 	}
 	return append(out, whatsapp.Button{ID: "cancel", Title: c.t("button.cancel")})
 }

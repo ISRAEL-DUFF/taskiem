@@ -556,15 +556,45 @@ func (o *Orders) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 // RecentCustomers are the customers who ordered or booked in the last days
 // (saved objects S3: "send @price-list to the customers who ordered last
 // week"): each once, the newest first, with their name, phone and email
-// and how many of those orders were theirs. Orders declined, cancelled or
-// expired do not count; a customer erased since is left out.
-func (o *Orders) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int) ([]map[string]any, error) {
+// and how many orders were theirs, up to MaxRecentCustomers (truncated
+// says more were left out). An order is one that went ahead (not
+// declined, cancelled, expired, or waiting on a price or a payment) of a
+// kind a customer orders or books (not an enquiry, a callback, a quote, a
+// chat or a linked business's); a customer the business blocked, one
+// erased, and orders forgotten under the retention rules are left out.
+func (o *Orders) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int) ([]map[string]any, bool, error) {
 	days = max(1, min(days, 31))
 	var out []map[string]any
+	truncated := false
 	err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+orderCols+` FROM storefront_orders WHERE tenant_id = $1
-			AND created_at >= now() - make_interval(days => $2) AND status NOT IN ('declined', 'cancelled', 'expired')
-			ORDER BY created_at DESC LIMIT 1000`, tenant, days)
+		const which = ` FROM storefront_orders o WHERE o.tenant_id = $1
+			AND o.created_at >= now() - make_interval(days => $2)
+			AND o.kind IN ('order', 'booking', 'hire', 'space', 'tickets', 'class', 'app')
+			AND o.status NOT IN ('declined', 'cancelled', 'expired', 'proposed', 'price_changed', 'awaiting_payment')
+			AND o.subject_id NOT LIKE 'retention:%'
+			AND NOT EXISTS (SELECT 1 FROM customer_conversations c WHERE c.tenant_id = o.tenant_id AND c.subject_id = o.subject_id AND c.blocked_at IS NOT NULL)`
+		counts := map[string]int{}
+		rows, err := tx.Query(ctx, `SELECT o.subject_id, count(*)::int`+which+` GROUP BY o.subject_id`, tenant, days)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var sub string
+			var n int
+			if err := rows.Scan(&sub, &n); err != nil {
+				rows.Close()
+				return err
+			}
+			counts[sub] = n
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		truncated = len(counts) > MaxRecentCustomers
+		// Each customer's newest order, the newest customers first.
+		rows, err = tx.Query(ctx, `SELECT `+orderCols+` FROM (SELECT DISTINCT ON (o.subject_id) o.*`+which+`
+			ORDER BY o.subject_id, o.created_at DESC) storefront_orders ORDER BY storefront_orders.created_at DESC LIMIT $3`, tenant, days, MaxRecentCustomers)
 		if err != nil {
 			return err
 		}
@@ -572,7 +602,6 @@ func (o *Orders) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int
 		if err != nil {
 			return err
 		}
-		at := map[string]int{}
 		for i := range list {
 			x := &list[i]
 			if err := o.open(ctx, tx, tenant, x); err != nil {
@@ -581,18 +610,16 @@ func (o *Orders) RecentCustomers(ctx context.Context, tenant uuid.UUID, days int
 			if x.Customer.Phone == "" && x.Customer.Email == "" {
 				continue
 			}
-			if k, ok := at[x.subject]; ok {
-				out[k]["orders"] = out[k]["orders"].(int) + 1
-				continue
-			}
-			at[x.subject] = len(out)
 			out = append(out, map[string]any{"name": x.Customer.Name, "phone": x.Customer.Phone, "email": x.Customer.Email,
-				"orders": 1, "last_reference": x.Reference, "last_order_at": x.CreatedAt.UTC().Format(time.RFC3339)})
+				"orders": counts[x.subject], "last_reference": x.Reference, "last_order_at": x.CreatedAt.UTC().Format(time.RFC3339)})
 		}
 		return nil
 	})
 	if out == nil {
 		out = []map[string]any{}
 	}
-	return out, err
+	return out, truncated, err
 }
+
+// MaxRecentCustomers is the most customers RecentCustomers lists.
+const MaxRecentCustomers = 500

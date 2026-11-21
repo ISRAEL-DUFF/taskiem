@@ -177,7 +177,7 @@ actions:
         total:      { type: string }
   recent_customers:
     title: Customers who ordered lately
-    description: The customers who ordered or booked in the last days (7 unless days says, up to 31), each once, the newest first, with how many orders were theirs. Orders declined, cancelled or expired do not count. To send them something, such as a saved price list (saved.price_list.body), with notify@1 message in a foreach.
+    description: The customers who ordered or booked in the last days (7 unless days says, up to 31), each once, the newest first, with how many orders were theirs; up to 500 (truncated says more were left out). Only orders that went ahead count (not declined, cancelled, expired, or waiting on a price or a payment), and only orders and bookings (not enquiries, callbacks, quotes or chats); customers the business blocked are left out. To send them something, such as a saved price list (saved.price_list.body), with notify@1 message in a foreach. Publishing a workflow that uses it needs the storefront or orders permission.
     class: read
     input:
       type: object
@@ -187,6 +187,7 @@ actions:
       type: object
       properties:
         count: { type: integer }
+        truncated: { type: boolean, description: More customers ordered than the 500 listed }
         customers:
           type: array
           items:

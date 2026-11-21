@@ -744,6 +744,10 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkReady(r.Context(), tx, p.TenantID, wf, v); err != nil {
 			return err
 		}
+		// What only some may give a workflow (customers' details).
+		if err := publishMayRead(r.Context(), tx, p, wf, v); err != nil {
+			return err
+		}
 		// Four-eyes: a publish to an environment that needs a second person
 		// waits for one.
 		g, err := governanceTx(r.Context(), tx)

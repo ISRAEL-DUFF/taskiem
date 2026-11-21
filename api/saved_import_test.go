@@ -192,6 +192,12 @@ func TestSavedFromOrderCustomer(t *testing.T) {
 	if r := stringOf(ada.must(200, "GET", "/v1/saved/resolve?name=bola-ade", nil)); !strings.Contains(r, "12 Admiralty Way") {
 		t.Errorf("its address: %s", r)
 	}
-	ada.must(409, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{})
-	ada.must(201, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{"name": "bola"})
+	// Saved already (by phone): not again, under any name.
+	if again := ada.must(409, "POST", "/v1/storefront/orders/"+ref+"/save-customer", map[string]any{"name": "bola"}); again["saved_as"] != "bola-ade" {
+		t.Fatalf("again: %v", again)
+	}
+	// Recorded as a reveal of the order.
+	if !strings.Contains(stringOf(ada.must(200, "GET", "/v1/audit?action=pii.reveal", nil)), "storefront_order:"+ref) {
+		t.Errorf("no reveal recorded")
+	}
 }

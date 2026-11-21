@@ -176,4 +176,32 @@ func TestWhatsAppInvoiceSaveSuggested(t *testing.T) {
 	if r := invoice("7k"); !strings.Contains(r, "You've invoiced Kemi Ade 3 times. Save them as @kemi-ade for next time?") {
 		t.Errorf("third: %q", r)
 	}
+	// A Send left on the invoice's card does not answer the offer; its own
+	// Save button does.
+	w.send(t, on, whatsapptest.ButtonReply("yes", "Yes"))
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Fatalf("saved by an old Send: %v", l)
+	}
+
+	// Someone who may send invoices but not manage saved things: theirs.
+	clerk := w.member(t, owner, "clerk@suggest.test", "operator")
+	const cn = "+2348010000038"
+	w.bind(t, clerk, cn)
+	w.say(t, cn, "invoice Tolu Bello 5k")
+	w.say(t, cn, "0803 555 0002")
+	if r := w.say(t, cn, "yes"); !strings.Contains(r, "Save Tolu Bello as @tolu-bello") {
+		t.Fatalf("clerk offered: %q", r)
+	}
+	if got := w.send(t, cn, whatsapptest.ButtonReply("offer:save", "Save")); len(got) == 0 || !strings.Contains(got[0].Text, "Saved as @tolu-bello") {
+		t.Fatalf("clerk saved: %+v", got)
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Errorf("the business's: %v", l)
+	}
+	// The same phone again under another name: not offered a second time.
+	w.say(t, cn, "invoice Tolu B 5k")
+	w.say(t, cn, "0803 555 0002")
+	if r := w.say(t, cn, "yes"); strings.Contains(r, "for next time") {
+		t.Errorf("a duplicate offered: %q", r)
+	}
 }

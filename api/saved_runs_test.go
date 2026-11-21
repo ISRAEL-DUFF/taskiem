@@ -100,6 +100,14 @@ func TestSavedPriceListToRecentCustomers(t *testing.T) {
 		t.Fatalf("problems: %v", probs)
 	}
 	wf := out["id"].(string)
+	// Listing customers' phones is published only by those who may handle
+	// orders.
+	ada.must(201, "PUT", "/v1/roles/builder_only", map[string]any{"permissions": []string{"workflow.read", "workflow.edit", "workflow.publish"}})
+	ada.must(201, "POST", "/v1/members", map[string]any{"email": "builder@prices.test", "password": testPassword, "roles": []string{"builder_only"}})
+	builder := w.login(t, "builder@prices.test", testPassword)
+	if st, body := builder.do("POST", "/v1/workflows/"+wf+"/versions/1/publish", nil); st != 403 || !strings.Contains(toJSON(body), "may handle orders") {
+		t.Fatalf("a builder publishing: %d %v", st, body)
+	}
 	ada.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
 	run := ada.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{}})["run_id"].(string)
 	w.env.Drain(t)

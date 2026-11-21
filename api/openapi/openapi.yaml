@@ -11056,13 +11056,13 @@ paths:
       tags:
       - Saved
       summary: Save an order's customer as a saved person
-      description: 'The order''s customer kept as one of the business''s saved people (their name as its title, their phone, email and address, read on the server so the page never holds them in full); the name given, else made from theirs. 409 when the name is taken.'
+      description: 'The order''s customer kept as one of the business''s saved people (their name as its title, their phone, email and address, read on the server); the name given, else made from theirs. Needs the right to reveal personal data, as their details are kept in full: recorded as a reveal of the order. 409 `name_taken`; `name_needed` (none given and none can be made); `not_a_customer` (a linked business''s order); `nothing_to_save` (an erased customer); `saved_already` (with `saved_as`).'
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
-      x-taskiem-permission: 'storefront.manage|order.handle,saved.manage'
+      x-taskiem-permission: 'storefront.manage|order.handle,saved.manage,pii.reveal'
       x-taskiem-all-environments: true
       parameters:
       - name: reference
