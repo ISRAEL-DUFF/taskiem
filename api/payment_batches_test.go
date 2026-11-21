@@ -98,8 +98,9 @@ func TestPaySeveral(t *testing.T) {
 		t.Fatalf("copied: %v", cp)
 	}
 
-	// Staff: a row over their limit waits; the owner's one passkey gives
-	// the OK for every row waiting.
+	// Staff: a row over their limit waits, and so does one to an account
+	// the business never paid (Bayo's earlier payment failed); the owner's
+	// one passkey gives the OK for every row waiting.
 	owner.must(201, "PUT", "/v1/roles/payer", map[string]any{"permissions": []string{"money.pay"}})
 	clerk := w.member(t, owner, "clerk@batch.test", "payer")
 	ckey := addPasskey(t, clerk, "Phone")
@@ -110,7 +111,7 @@ func TestPaySeveral(t *testing.T) {
 	}})["batch"].(map[string]any)
 	cid := cb["id"].(string)
 	cs := clerk.must(202, "POST", "/v1/payment-batches/"+cid+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay.batch", "batch:"+cid)})["batch"].(map[string]any)
-	if cs["waiting"] != float64(1) {
+	if cs["waiting"] != float64(2) {
 		t.Fatalf("staff's batch: %v", cs)
 	}
 	clerk.must(403, "POST", "/v1/payment-batches/"+cid+"/approve", map[string]any{})
@@ -123,7 +124,7 @@ func TestPaySeveral(t *testing.T) {
 	// The waiting row's run now passes its check.
 	var wid string
 	for _, x := range ok["payments"].([]any) {
-		if p := x.(map[string]any); p["needs_ok"] != "" {
+		if p := x.(map[string]any); p["needs_ok"] == "limit" {
 			wid = p["id"].(string)
 		}
 	}

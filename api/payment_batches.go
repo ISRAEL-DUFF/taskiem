@@ -678,6 +678,18 @@ func (s *Server) readBatchList(w http.ResponseWriter, r *http.Request) {
 		rd := saved.Read(l)
 		number := rd.Details["account_number"]
 		if number == "" {
+			// In a list to pay, ten digits on a line are its account.
+			for _, run := range append(strings.Fields(l), payDigitRun.FindAllString(l, -1)...) {
+				if n, err := saved.AccountNumber(run); err == nil {
+					number = n
+					if b := saved.BankNamed(l); b != "" {
+						rd.Details["bank_name"] = b
+					}
+					break
+				}
+			}
+		}
+		if number == "" {
 			bl.Problem = "No account number of 10 digits on this line."
 			out = append(out, bl)
 			continue
