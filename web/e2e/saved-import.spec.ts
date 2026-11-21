@@ -91,12 +91,14 @@ for (const width of [390, 360]) {
     await card.scrollIntoViewIfNeeded();
     await shot(page, `saved-import-card-${width}`);
 
-    // The same file again: each name is taken now.
+    // The same file again: each is saved already, so each is skipped and
+    // there is nothing to save.
     await card.getByRole("button", { name: "Import from a file" }).click();
     await pick(page, "good.csv", GOOD);
     await sheet.getByRole("button", { name: "Check the file" }).click();
-    await expect(sheet.getByTestId("import-problem")).toHaveCount(3);
-    await expect(sheet.getByTestId("import-problem").first()).toContainText("@bayo is saved already");
+    await expect(sheet.getByTestId("import-row")).toHaveCount(3);
+    await expect(sheet.getByTestId("import-plan")).toContainText("@bayo is saved already: skipped");
+    await expect(sheet.getByTestId("import-save")).toHaveCount(0);
   });
 }
 
