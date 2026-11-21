@@ -46,6 +46,8 @@ import {
 } from "../lib/invoices";
 import { StorefrontTabs } from "./Storefront";
 import { BookingActions } from "./StorefrontBookings";
+import { SaveAfter, SavedDone } from "./SaveAfter";
+import { customerOffer, type SavedThing } from "../lib/saved";
 
 /** The money matched to an order (docs/matching.md), each with how; a wrong match is undone here while the order has not gone on. */
 function OrderMoney({
@@ -375,6 +377,8 @@ export function StorefrontOrder() {
   const { can } = useAuth();
   const [revealed, setRevealed] = useState<Order>();
   const [changed, setChanged] = useState("");
+  // The customer saved here: said until the page is left.
+  const [savedAs, setSavedAs] = useState("");
   const reveal = useAction();
   const refund = useAction();
   const { data, error, reload } = useLoad(
@@ -383,11 +387,26 @@ export function StorefrontOrder() {
         order: Order;
         payments?: OrderPayment[] | null;
         revealed: boolean;
+        /** How many orders its customer has made here, this one with them. */
+        customer_orders?: number;
+        /** The business's saved person the customer is, by name; "". */
+        customer_saved?: string;
       }>(`/v1/storefront/orders/${encodeURIComponent(reference)}`),
     [reference],
   );
   useLiveRefresh(reload);
   const o = data?.order;
+  // A new customer's first order (saved objects S3): saved for next time
+  // with one click, by whoever may manage the business's saved things.
+  const offer =
+    o &&
+    customerOffer({
+      customerOrders: data?.customer_orders,
+      customerSaved: data?.customer_saved,
+      kind: o.kind,
+      may: can("saved.manage"),
+      name: (revealed?.customer ?? o.customer).name ?? "",
+    });
   return (
     <>
       <p className="crumbs">
@@ -628,6 +647,27 @@ export function StorefrontOrder() {
           <section className="card" aria-labelledby="order-customer">
             <h2 id="order-customer">Customer</h2>
             <CustomerDetails c={revealed?.customer ?? o.customer} />
+            {savedAs ? (
+              <SavedDone name={savedAs} what="people" testid="save-customer" />
+            ) : offer && (
+              <SaveAfter
+                onSaved={setSavedAs}
+                title={offer.title}
+                sub={offer.sub}
+                icon="members"
+                name={offer.name}
+                what="people"
+                testid="save-customer"
+                save={async (name) =>
+                  (
+                    await post<{ saved: SavedThing }>(
+                      `/v1/storefront/orders/${encodeURIComponent(o.reference)}/save-customer`,
+                      name ? { name } : {},
+                    )
+                  ).saved
+                }
+              />
+            )}
             {!revealed && can("pii.reveal") && (
               <>
                 <ErrorBox error={reveal.error} />

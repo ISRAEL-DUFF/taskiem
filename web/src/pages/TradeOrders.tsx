@@ -4,7 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put, whenOff } from "../api";
 import { toast } from "../toast";
 import { SavedFill } from "./SavedFill";
-import { placeAddressFit } from "../lib/saved";
+import { placeAddressFit, placeOffer, type PlaceOffer } from "../lib/saved";
+import { PlaceSaveOffer } from "./SaveAfter";
 import { useAuth } from "../auth";
 import { naira, toKobo } from "../lib/invoices";
 import { daysValue } from "../lib/statements";
@@ -981,6 +982,8 @@ function PurchaseDeliverToCard({ p }: { p: Purchase }) {
   const [changing, setChanging] = useState(false);
   // The server's word that the supplier has it now (409): only shown after.
   const [closed, setClosed] = useState("");
+  // A typed address just saved for it (saved objects S3): offered as a place.
+  const [offer, setOffer] = useState<PlaceOffer | null>(null);
   const d = view.data;
   const open = deliverToOpen(p) && !closed;
   return (
@@ -1036,9 +1039,10 @@ function PurchaseDeliverToCard({ p }: { p: Purchase }) {
           initial={d}
           onClose={() => setChanging(false)}
           onClosed={(why) => (setChanging(false), setClosed(why))}
-          onDone={() => (setChanging(false), view.reload())}
+          onDone={(next) => (setChanging(false), setOffer(next), view.reload())}
         />
       )}
+      {offer && <PlaceSaveOffer key={offer.address} offer={offer} />}
     </section>
   );
 }
@@ -1056,11 +1060,15 @@ function DeliverToModal({
   initial: PurchaseDeliverTo;
   onClose: () => void;
   onClosed: (why: string) => void;
-  onDone: () => void;
+  /** Saved: with the place to offer saving, when it was typed and new. */
+  onDone: (offer: PlaceOffer | null) => void;
 }) {
   const [address, setAddress] = useState(initial.address);
   const [phone, setPhone] = useState(initial.phone);
   const [fitHint, setFitHint] = useState("");
+  // The address a saved place filled, until it is typed in: not offered.
+  const [picked, setPicked] = useState<string>();
+  const { can } = useAuth();
   const act = useAction();
   return (
     <Modal title={`Where ${p.reference} is delivered`} onClose={onClose}>
@@ -1068,8 +1076,9 @@ function DeliverToModal({
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(async () => {
+            const body = { address: address.trim(), phone: phone.trim() };
             try {
-              await put(path, { address: address.trim(), phone: phone.trim() });
+              await put(path, body);
             } catch (err) {
               // The supplier has it now: say so where it was, read-only.
               if (err instanceof ApiError && err.status === 409)
@@ -1077,7 +1086,7 @@ function DeliverToModal({
               throw err;
             }
             toast("Saved");
-            onDone();
+            onDone(placeOffer({ ...body, was: initial.address, picked, may: can("saved.manage") }));
           }, false);
         }}
       >
@@ -1091,6 +1100,7 @@ function DeliverToModal({
             onPick={(x) => {
               const fit = placeAddressFit(x.details, 300);
               setAddress(fit.address);
+              setPicked(fit.address);
               setFitHint(fit.hint);
               if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
             }}
@@ -1103,6 +1113,7 @@ function DeliverToModal({
             placeholder="12 Admiralty Way, Lekki"
             onChange={(e) => {
               setAddress(e.target.value);
+              setPicked(undefined);
               setFitHint("");
             }}
             autoComplete="street-address"

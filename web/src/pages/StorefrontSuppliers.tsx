@@ -29,7 +29,9 @@ import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
 import { SavedFill } from "./SavedFill";
-import { placeAddressFit } from "../lib/saved";
+import { placeAddressFit, placeOffer, type PlaceOffer } from "../lib/saved";
+import { PlaceSaveOffer } from "./SaveAfter";
+import { useAuth } from "../auth";
 
 /** The business's suppliers (docs/stock.md "Suppliers and purchase
  * orders"): who it buys from, where their orders reach them, and what is
@@ -267,6 +269,11 @@ function DeliverToForm({
   const [phone, setPhone] = useState(initial.phone);
   // What a saved place left out to fit the address's 300 letters.
   const [fitHint, setFitHint] = useState("");
+  // The address a saved place filled, until it is typed in: not offered.
+  const [picked, setPicked] = useState<string>();
+  // A typed address just saved (saved objects S3): offered as a place.
+  const [offer, setOffer] = useState<PlaceOffer | null>(null);
+  const { can } = useAuth();
   const act = useAction();
   return (
     <section
@@ -282,6 +289,7 @@ function DeliverToForm({
           onPick={(x) => {
             const fit = placeAddressFit(x.details, 300);
             setAddress(fit.address);
+            setPicked(fit.address);
             setFitHint(fit.hint);
             if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
           }}
@@ -294,16 +302,14 @@ function DeliverToForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(
-            async () => (
-              await put("/v1/stock/deliver-to", {
-                address: address.trim(),
-                phone: phone.trim(),
-              }),
-              onSaved()
-            ),
-            "Saved",
-          );
+          void act.run(async () => {
+            const body = { address: address.trim(), phone: phone.trim() };
+            await put("/v1/stock/deliver-to", body);
+            const next = placeOffer({ ...body, was: initial.address, picked, may: can("saved.manage") });
+            // Only its number changed: the place offered (or saved) stays.
+            setOffer((o) => next ?? (o?.address === body.address ? { ...o, phone: body.phone } : null));
+            onSaved();
+          }, "Saved");
         }}
       >
         <Field label="Address">
@@ -313,6 +319,7 @@ function DeliverToForm({
             placeholder="12 Admiralty Way, Lekki"
             onChange={(e) => {
               setAddress(e.target.value);
+              setPicked(undefined);
               setFitHint("");
             }}
             autoComplete="street-address"
@@ -344,6 +351,7 @@ function DeliverToForm({
           </button>
         </div>
       </form>
+      {offer && <PlaceSaveOffer key={offer.address} offer={offer} />}
     </section>
   );
 }

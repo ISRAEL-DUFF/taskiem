@@ -177,6 +177,18 @@ for (const width of [390, 360]) {
     expect(put).toEqual([{ address: "Plot 7, Epe road, Epe", phone: "08035551234" }]);
     await expect(card).toContainText("Plot 7, Epe road, Epe");
     await expect(card).toContainText("This order's own place");
+    // A saved place picked is not offered to save (saved objects S3).
+    await expect(card.getByTestId("save-place")).toHaveCount(0);
+
+    // A typed one is.
+    await card.getByRole("button", { name: "Change where it is delivered" }).click();
+    await modal.getByLabel("Address").fill("5 Akin Adesola Street, Victoria Island");
+    await modal.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(modal).toHaveCount(0);
+    await expect(card).toContainText("5 Akin Adesola Street, Victoria Island");
+    await expect(card.getByTestId("save-place")).toContainText("Save this place for next time?");
+    await expect(card.getByTestId("save-place")).toContainText("As @5-akin-adesola-street, among your saved places");
+    await axeBoth(page, "a purchase's typed place offered", width);
 
     // Once the supplier has it, the server says so and it is only shown.
     reached = true;
@@ -186,7 +198,7 @@ for (const width of [390, 360]) {
     await expect(modal).toHaveCount(0);
     await expect(card.getByTestId("purchase-deliver-closed")).toHaveText("P-K2M9PA has reached the supplier already: tell them in your conversation with them");
     await expect(card.getByRole("button", { name: "Change where it is delivered" })).toHaveCount(0);
-    await expect(card).toContainText("Plot 7, Epe road, Epe");
+    await expect(card).toContainText("5 Akin Adesola Street, Victoria Island");
     await axeBoth(page, "a purchase's place the supplier has", width);
   });
 

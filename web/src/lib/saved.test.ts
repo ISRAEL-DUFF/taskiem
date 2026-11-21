@@ -27,6 +27,11 @@ import {
   savedDateSub,
   bankCodeFor,
   revealProblem,
+  savedNameFor,
+  placeTitleFor,
+  placeOffer,
+  placeBody,
+  customerOffer,
   type BankList,
   type MadeKind,
   type KindField,
@@ -248,5 +253,58 @@ describe("filling a form from a saved thing (§6.4)", () => {
     expect(revealProblem(new Error("No passkey was used"))).toMatch(/No passkey was used/);
     expect(revealProblem({ name: "NotAllowedError" })).toMatch(/No passkey was used/);
     expect(revealProblem(new Error("boom"))).toMatch(/could not be filled/);
+  });
+});
+
+describe("saving after an action", () => {
+  it("makes a name from a title as the server does", () => {
+    expect(savedNameFor("Bola Ade")).toBe("bola-ade");
+    expect(savedNameFor("  Mama Put's Kitchen!! ")).toBe("mama-put-s-kitchen");
+    expect(savedNameFor("Dangote Cement (Apapa) Nigeria Limited Ltd")).toBe("dangote-cement-apapa-nigeria-lim");
+    expect(savedNameFor("Chíoma Ọkafor")).toBe("ch-oma-kafor");
+    expect(savedNameFor("A")).toBe("");
+    expect(savedNameFor("•••")).toBe("");
+    expect(savedNameFor("abcdefghijklmnopqrstuvwxyzabcde f")).toBe("abcdefghijklmnopqrstuvwxyzabcde");
+  });
+
+  it("titles a typed place by its first part", () => {
+    expect(placeTitleFor("12 Admiralty Way, Lekki")).toBe("12 Admiralty Way");
+    expect(placeTitleFor("Shop 4 (Ikota Market)")).toBe("Shop 4");
+    expect(placeTitleFor(", Lekki")).toBe("Delivery place");
+  });
+
+  it("offers a typed, new place to one who may manage saved things", () => {
+    const base = { address: "12 Admiralty Way, Lekki", phone: " 0803 ", was: "", may: true };
+    expect(placeOffer(base)).toEqual({ address: "12 Admiralty Way, Lekki", phone: "0803", title: "12 Admiralty Way", name: "12-admiralty-way" });
+    expect(placeOffer({ ...base, may: false })).toBeNull();
+    expect(placeOffer({ ...base, was: "12 Admiralty Way, Lekki" })).toBeNull();
+    expect(placeOffer({ ...base, address: "  " })).toBeNull();
+    // A saved place picked: not offered, unless changed after.
+    expect(placeOffer({ ...base, picked: "12 Admiralty Way, Lekki" })).toBeNull();
+    expect(placeOffer({ ...base, picked: "12 Admiralty Way" })?.name).toBe("12-admiralty-way");
+    const offered = { address: "12 Admiralty Way, Lekki", phone: "0803", title: "12 Admiralty Way", name: "12-admiralty-way" };
+    expect(placeBody(offered, "home")).toEqual({
+      name: "home",
+      title: "12 Admiralty Way",
+      kind: "place",
+      details: { line: "12 Admiralty Way, Lekki", phone: "0803" },
+    });
+    expect(placeBody({ ...offered, phone: "" })).toEqual({ name: "12-admiralty-way", title: "12 Admiralty Way", kind: "place", details: { line: "12 Admiralty Way, Lekki" } });
+  });
+
+  it("offers to save a new customer on their first order only", () => {
+    const base = { customerOrders: 1, customerSaved: "", kind: "order", may: true, name: "Ngozi" };
+    expect(customerOffer(base)).toEqual({ title: "Save Ngozi for next time", sub: "As @ngozi, with their phone and address", name: "ngozi" });
+    expect(customerOffer({ ...base, name: "N•••" })).toEqual({
+      title: "Save this customer for next time",
+      sub: "Among your saved people, with their phone and address",
+      name: "",
+    });
+    expect(customerOffer({ ...base, customerOrders: 2 })).toBeNull();
+    expect(customerOffer({ ...base, customerOrders: undefined })).toBeNull();
+    expect(customerOffer({ ...base, customerSaved: "ngozi" })).toBeNull();
+    expect(customerOffer({ ...base, kind: "trade" })).toBeNull();
+    expect(customerOffer({ ...base, may: false })).toBeNull();
+    expect(customerOffer({ ...base, name: "" })).toBeNull();
   });
 });

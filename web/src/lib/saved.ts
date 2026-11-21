@@ -568,3 +568,90 @@ export function revealProblem(e: unknown): string {
   if (x?.name === "NotAllowedError" || x?.name === "AbortError" || x?.message === "No passkey was used") return "No passkey was used: type the account number.";
   return "The account number could not be filled: type it.";
 }
+
+// --- saving after an action (saved objects S3, §9.3: after a new
+// customer's first order, after a delivery to a new address): offered once,
+// quietly, saved with one click; suggested, never done for them. As the
+// app does it (mobile/lib/chat/save_after.dart).
+
+/** A name made from a title, as the server makes one (saved.NameFor):
+ * lowercase letters and digits, every other run one "-", at most 32; ""
+ * when none fits ("Bola Ade" → bola-ade). */
+export function savedNameFor(title: string): string {
+  let n = "";
+  let dash = false;
+  for (const c of title.toLowerCase()) {
+    if (/^[a-z0-9]$/.test(c)) {
+      if (dash && n) n += "-";
+      n += c;
+      dash = false;
+    } else {
+      dash = true;
+    }
+  }
+  if (n.length > 32) n = n.slice(0, 32).replace(/-+$/, "");
+  return nameProblem(n) === null ? n : "";
+}
+
+/** A typed address as a place's title: its first part ("12 Admiralty Way"
+ * of "12 Admiralty Way, Lekki"), else "Delivery place". */
+export function placeTitleFor(address: string): string {
+  const first = (address.split(/[,\n(]/)[0] ?? "").trim();
+  if (!first || !savedNameFor(first)) return "Delivery place";
+  return first.length > 60 ? first.slice(0, 60).trimEnd() : first;
+}
+
+/** A place offered to save: the address and phone saved, its title and
+ * @name. */
+export interface PlaceOffer {
+  address: string;
+  phone: string;
+  title: string;
+  name: string;
+}
+
+/** The offer after an address is saved as where something is delivered:
+ * one typed (not a saved place's, unless changed after it was picked), new
+ * (not the one there before), for whoever may manage saved things; null
+ * otherwise. */
+export function placeOffer(o: { address: string; phone: string; was: string; picked?: string; may: boolean }): PlaceOffer | null {
+  const address = o.address.trim();
+  if (!address || !o.may || address === o.was.trim() || (o.picked !== undefined && address === o.picked.trim())) return null;
+  const title = placeTitleFor(address);
+  const name = savedNameFor(title);
+  if (!name) return null;
+  return { address, phone: o.phone.trim(), title, name };
+}
+
+/** The body a place offered is saved with (POST /v1/saved). */
+export const placeBody = (o: PlaceOffer, name = o.name) => ({
+  name,
+  title: o.title,
+  kind: "place" as const,
+  details: o.phone ? { line: o.address, phone: o.phone } : { line: o.address },
+});
+
+/** The offer on a new customer's first order to save them among the
+ * business's saved people: its words and the @name it is saved by ("" for
+ * the server's own, when their name is hidden or none fits); null for a
+ * repeat customer, one saved already, a linked business's order, or one who
+ * may not manage saved things. */
+export function customerOffer(o: {
+  customerOrders?: number;
+  customerSaved?: string;
+  kind: string;
+  may: boolean;
+  /** The customer's name as shown (masked "N•••" until revealed). */
+  name: string;
+}): { title: string; sub: string; name: string } | null {
+  if (o.customerOrders !== 1 || (o.customerSaved ?? "") !== "" || o.kind === "trade" || !o.may) return null;
+  const shown = o.name.trim();
+  if (!shown) return null;
+  const known = !shown.includes("•••");
+  const name = known ? savedNameFor(shown) : "";
+  return {
+    title: known ? `Save ${shown} for next time` : "Save this customer for next time",
+    sub: name ? `As @${name}, with their phone and address` : "Among your saved people, with their phone and address",
+    name,
+  };
+}
