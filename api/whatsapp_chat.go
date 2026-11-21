@@ -225,6 +225,9 @@ type chat struct {
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
+	// uses are the person's uses of the menus' actions, read once for a
+	// message (chat_menus.go).
+	uses map[string]int
 }
 
 // t is a message in the conversation's language.
@@ -296,6 +299,10 @@ type chatData struct {
 	// Understand is the model's help waiting on the person: a command to
 	// confirm, or a question it asked (chat_understand.go).
 	Understand *chatUnderstand `json:"understand,omitempty"`
+	// Menu is a numbered menu waiting for a number, and Steps an action
+	// asking for its values (chat_menus.go).
+	Menu  *chatMenuState `json:"menu,omitempty"`
+	Steps *chatSteps     `json:"steps,omitempty"`
 }
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
@@ -840,6 +847,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if c.data.Task != nil && c.state != stateIdle {
 		return s.waTaskReply(ctx, c, cmd)
 	}
+	// A menu's row pressed, a number for a numbered menu, an answer to a
+	// question, and help (chat_menus.go).
+	if done, err := s.waMenuWords(ctx, c, text, cmd); done || err != nil {
+		return err
+	}
 	// DONE, CAN'T, "my tasks", and "@Tunde count the float by 7am" from
 	// those who give tasks, before "@" is read as a business; not in the
 	// middle of something else, where "done" is that thing's word.
@@ -1202,10 +1214,30 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// Still not recognised: the model reads the commands this person may
 	// send and helps with the message (chat_understand.go). The whole list
 	// comes only when they ask for help.
+	// A topic's word alone, which nothing above read: its menu.
+	if !c.understood {
+		if done, err := s.menuTopicWord(ctx, c, cmd); done || err != nil {
+			return err
+		}
+	}
 	if c.state == stateIdle && !c.understood {
 		if done, err := s.waUnderstand(ctx, c, text); done || err != nil {
 			return err
 		}
+	}
+	// No model could read it: a topic its words point to, as its menu
+	// (chat-menus.md §8.3).
+	if c.state == stateIdle && !c.understood {
+		if t, ok := s.topicByWords(ctx, c, text); ok {
+			return s.sayMenu(ctx, c, chatMenuMsg{Topic: t.ID, Line: c.t("menu.about", "topic", word(c.lang.Tag, topicWordID(t), t.Name))})
+		}
+	}
+	// In the Taskiem chat, the topics to choose from with the short answer.
+	if c.cards() && c.state == stateIdle {
+		if err := c.say(ctx, s, c.t("wa.not_understood")); err != nil {
+			return err
+		}
+		return s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.say_another")})
 	}
 	return c.say(ctx, s, notUnderstood(c))
 }
@@ -1221,6 +1253,9 @@ func (s *Server) waIntent(ctx context.Context, c *chat, m lang.Match) (bool, err
 	arg := strings.TrimSpace(m.Arg)
 	switch m.Intent {
 	case lang.IntentHelp:
+		if arg == "" {
+			return true, s.sayMenu(ctx, c, chatMenuMsg{Line: c.t("menu.pick_topic")})
+		}
 		return true, c.say(ctx, s, s.waHelp(c))
 	case lang.IntentStatus:
 		return true, s.waStatus(ctx, c)

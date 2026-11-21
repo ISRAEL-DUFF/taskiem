@@ -12,6 +12,7 @@ import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BriefingCard, ChartCard } from "./ChatStaff";
+import { MenuCard, parseMenu } from "./ChatMenu";
 import { useAuth } from "../auth";
 import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
 import { TasksSheet } from "./Tasks";
@@ -492,7 +493,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   // For each of Taskiem's answers with buttons: the one pressed (the
   // person's next message, when it is the button's title); and which of the
   // person's messages Taskiem has answered (their ticks go blue).
-  const { pressed, answered, pressableId } = useMemo(() => {
+  const { pressed, answered, pressableId, lastMenu } = useMemo(() => {
     const pressed = new Map<string, string>();
     const answered = new Set<string>();
     const list = messages ?? [];
@@ -516,7 +517,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         break;
       }
     }
-    return { pressed, answered, pressableId };
+    // The newest menu stays open; every other folds (chat-menus.md §6.1).
+    const lastMenu = [...list].reverse().find((m) => m.kind === "menu")?.id;
+    return { pressed, answered, pressableId, lastMenu };
   }, [messages]);
 
   return (
@@ -563,6 +566,23 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // A menu (chat-menus.md): a topic's actions, or the topics.
+          if (m.kind === "menu") {
+            const menu = parseMenu(m.text);
+            if (menu)
+              return (
+                <div className="tk-menu-wrap" data-msg={m.id}>
+                  <MenuCard
+                    id={m.id}
+                    menu={menu}
+                    open={m.id === lastMenu}
+                    busy={act.busy}
+                    onReply={(reply, text) => say({ reply, text })}
+                    openTool={(k, from, start) => c.openTool(k, from, start)}
+                  />
+                </div>
+              );
+          }
           // "How did we do?" answered: its chart, as a card.
           if (m.kind === "chart") {
             const chart = parseChart(m.text);

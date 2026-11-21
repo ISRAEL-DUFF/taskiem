@@ -194,7 +194,7 @@ func TestSomeoneOnTaskiemIsACustomerElsewhere(t *testing.T) {
 		t.Fatalf("STOP: %+v", got)
 	}
 	// On the shared number they are still themselves.
-	if got := w.say(t, chidi, "help"); !strings.Contains(got, "status") {
+	if got := w.say(t, chidi, "help all"); !strings.Contains(got, "status") {
 		t.Fatalf("the shared number: %q", got)
 	}
 }

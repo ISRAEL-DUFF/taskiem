@@ -117,6 +117,37 @@ func (c *Client) SendButtons(ctx context.Context, to, body string, buttons []But
 	return c.send(ctx, to, "interactive", map[string]any{"type": "button", "body": map[string]any{"text": clip(body, 1024)}, "action": map[string]any{"buttons": bs}})
 }
 
+// SendList sends text with a list of choices behind one button (inside
+// the window only): at most ten rows, the words clipped to WhatsApp's
+// limits.
+func (c *Client) SendList(ctx context.Context, to, body string, l List) (string, error) {
+	rows := l.Rows()
+	if len(rows) == 0 || len(rows) > 10 {
+		return "", errors.New("whatsapp: a list of one to ten rows")
+	}
+	var sections []any
+	for _, s := range l.Sections {
+		var rs []any
+		for _, r := range s.Rows {
+			if r.ID == "" || len(r.ID) > 200 {
+				return "", errors.New("whatsapp: a list row's id must be 1-200 characters")
+			}
+			row := map[string]any{"id": r.ID, "title": clip(r.Title, 24)}
+			if r.Description != "" {
+				row["description"] = clip(r.Description, 72)
+			}
+			rs = append(rs, row)
+		}
+		sec := map[string]any{"rows": rs}
+		if s.Title != "" {
+			sec["title"] = clip(s.Title, 24)
+		}
+		sections = append(sections, sec)
+	}
+	return c.send(ctx, to, "interactive", map[string]any{"type": "list", "body": map[string]any{"text": clip(body, 1024)},
+		"action": map[string]any{"button": clip(l.Button, 20), "sections": sections}})
+}
+
 // SendImage sends a photo by its public https link, with a caption
 // (inside the window only). Meta fetches the link itself.
 func (c *Client) SendImage(ctx context.Context, to, link, caption string) (string, error) {

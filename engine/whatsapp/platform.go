@@ -200,6 +200,40 @@ type Message struct {
 	// Link is a button that opens a page, where a channel has one
 	// (Telegram); elsewhere the link is in Text.
 	Link *LinkButton
+	// List is a list of choices behind one button (WhatsApp's list
+	// message), with Text as its body; the other channels show its rows
+	// as buttons.
+	List *List
+}
+
+// List is a list message: its button's words, and its rows in sections.
+// WhatsApp takes at most ten rows in all, a row's title in 24 characters
+// and its description in 72, and the button's words in 20.
+type List struct {
+	Button   string
+	Sections []ListSection
+}
+
+// ListSection is a list's section: its title (24 characters) and rows.
+type ListSection struct {
+	Title string
+	Rows  []ListRow
+}
+
+// ListRow is one choice of a list: its id comes back when chosen.
+type ListRow struct {
+	ID          string // at most 200 characters
+	Title       string
+	Description string
+}
+
+// Rows are the list's rows, in order.
+func (l *List) Rows() []ListRow {
+	var out []ListRow
+	for _, s := range l.Sections {
+		out = append(out, s.Rows...)
+	}
+	return out
 }
 
 // LinkButton is a button that opens an https page; WebApp opens it as a
@@ -239,6 +273,8 @@ func (p *Platform) send(ctx context.Context, number string, m Message) (string, 
 		switch {
 		case m.Image != "":
 			id, err = p.Client.SendImage(ctx, number, m.Image, m.Text)
+		case m.List != nil:
+			id, err = p.Client.SendList(ctx, number, m.Text, *m.List)
 		case len(m.Buttons) > 0:
 			id, err = p.Client.SendButtons(ctx, number, m.Text, m.Buttons)
 		default:

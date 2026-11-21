@@ -74,10 +74,10 @@ func TestWhatsAppTables(t *testing.T) {
 	if r := w.say(t, an, "tables"); !strings.Contains(r, "table.read") {
 		t.Errorf("approver: %q", r)
 	}
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*tables*") || !strings.Contains(r, "*add to*") || !strings.Contains(r, "*find*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*tables*") || !strings.Contains(r, "*add to*") || !strings.Contains(r, "*find*") {
 		t.Errorf("help: %q", r)
 	}
-	if r := w.say(t, vn, "help"); !strings.Contains(r, "*tables*") || strings.Contains(r, "*add to*") || !strings.Contains(r, "*find*") {
+	if r := w.say(t, vn, "help all"); !strings.Contains(r, "*tables*") || strings.Contains(r, "*add to*") || !strings.Contains(r, "*find*") {
 		t.Errorf("viewer help: %q", r)
 	}
 

@@ -23,7 +23,7 @@ func TestWhatsAppInvoice(t *testing.T) {
 	viewer := w.member(t, owner, "vic@adafoods.test", "viewer")
 	w.bind(t, viewer, vn)
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*invoice*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*invoice*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, vn, "help"); strings.Contains(r, "*invoice*") {

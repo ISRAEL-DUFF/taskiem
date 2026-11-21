@@ -59,6 +59,8 @@ taskiemHistory
 taskiemSay
 getChatBriefing
 chatRefs
+chatActions
+chatActionChoices
 
 # Customers' conversations (M3)
 getCustomerChat
