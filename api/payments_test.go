@@ -116,6 +116,23 @@ func TestPayOnePerson(t *testing.T) {
 		t.Fatalf("paid: %v", p)
 	}
 
+	// Two confirms at once: one sends it, the other is told it was sent.
+	twice := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 120000, "purpose": "bill"})["payment"].(map[string]any)["id"].(string)
+	proofs := []any{stepUp(t, owner, key, "money.pay", "payment:"+twice), stepUp(t, owner, key, "money.pay", "payment:"+twice)}
+	codes := make(chan int, 2)
+	for _, pf := range proofs {
+		go func() {
+			code, _ := owner.do("POST", "/v1/payments/"+twice+"/confirm", map[string]any{"passkey": pf})
+			codes <- code
+		}()
+	}
+	if a, b := <-codes, <-codes; a+b != 202+409 {
+		t.Fatalf("two confirms at once: %d %d", a, b)
+	}
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(twice), "paid", "BAYO RICE MILLS", "trf_2", "", nil); err != nil {
+		t.Fatal(err)
+	}
+
 	// The same again in a day: asked first.
 	again := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 4500000, "purpose": "delivery"})["payment"].(map[string]any)
 	aid := again["id"].(string)

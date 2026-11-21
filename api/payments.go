@@ -448,50 +448,29 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	ctx := r.Context()
 	owner := slices.Contains(p.Roles, "owner")
-	var x payment
-	var needs []string
-	err = s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		if x, err = scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM payments WHERE id = $1 FOR UPDATE`, id)); err != nil {
-			return err
-		}
-		if x.Status != "prepared" {
-			return refusePay(http.StatusConflict, "not_prepared", "This payment was "+paymentStatusWords(x.Status)+" already.")
-		}
-		if x.Again, err = paidAgainTx(ctx, tx, p.TenantID, x); err != nil {
-			return err
-		}
-		if x.Again && !in.Again {
-			return refusePay(http.StatusConflict, "pay_again", fmt.Sprintf("You paid %s %s in the last day. Pay again?", x.Payee, invoicing.Naira(x.AmountKobo)))
-		}
-		if x.ChangedAccount && !owner {
-			needs = append(needs, "changed")
-		}
-		if !owner {
-			one, day, err := payLimitOf(ctx, tx, p.TenantID, p.Roles)
-			if err != nil {
-				return err
-			}
-			var today int64
-			if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM payments WHERE confirmed_by = $1
-				AND status IN ('sending', 'waiting_ok', 'paid', 'unknown') AND confirmed_at > date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos'`,
-				p.Actor()).Scan(&today); err != nil {
-				return err
-			}
-			if x.AmountKobo > one || today+x.AmountKobo > day {
-				needs = append([]string{"limit"}, needs...)
-			}
-		}
-		return nil
-	})
-	if err != nil {
+	// Checked before the passkey is asked (the same payment again is asked
+	// first), and again as the payment is claimed once it is given.
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		_, _, err := confirmCheckTx(ctx, tx, p, owner, id, in.Again, false)
+		return err
+	}); err != nil {
 		s.payFail(w, r, err)
 		return
 	}
 	if _, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "to pay"); !ok {
 		return
 	}
-	run, err := s.sendPayment(r, x, strings.Join(needs, ","), p)
+	var x payment
+	var needs string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		x, needs, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, true)
+		return err
+	}); err != nil {
+		s.payFail(w, r, err)
+		return
+	}
+	run, err := s.sendPayment(r, x, needs, p)
 	if err != nil {
 		s.payFail(w, r, err)
 		return
@@ -510,11 +489,79 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"payment": x})
 }
 
+// confirmCheckTx checks a payment can be confirmed by p, and why the
+// owner's OK is asked (over p's limit, a changed account), if it is. With
+// claim it is claimed for p as it will be sent (sending, or waiting_ok),
+// under a lock on p's payments, so a payment is confirmed once and two at
+// once cannot both fit a day's limit meant for one.
+func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id uuid.UUID, again, claim bool) (payment, string, error) {
+	if claim {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "payments:"+p.TenantID.String()+":"+p.Actor()); err != nil {
+			return payment{}, "", err
+		}
+	}
+	x, err := scanPayment(tx.QueryRow(ctx, `SELECT `+paymentCols+` FROM payments WHERE id = $1 FOR UPDATE`, id))
+	if err != nil {
+		return x, "", err
+	}
+	if x.Status != "prepared" {
+		return x, "", refusePay(http.StatusConflict, "not_prepared", "This payment was "+paymentStatusWords(x.Status)+" already.")
+	}
+	if x.Again, err = paidAgainTx(ctx, tx, p.TenantID, x); err != nil {
+		return x, "", err
+	}
+	if x.Again && !again {
+		return x, "", refusePay(http.StatusConflict, "pay_again", fmt.Sprintf("You paid %s %s in the last day. Pay again?", x.Payee, invoicing.Naira(x.AmountKobo)))
+	}
+	var needs []string
+	if !owner {
+		one, day, err := payLimitOf(ctx, tx, p.TenantID, p.Roles)
+		if err != nil {
+			return x, "", err
+		}
+		var today int64
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(amount_kobo), 0) FROM payments WHERE confirmed_by = $1
+			AND status IN ('sending', 'waiting_ok', 'paid', 'unknown') AND confirmed_at > date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos'`,
+			p.Actor()).Scan(&today); err != nil {
+			return x, "", err
+		}
+		if x.AmountKobo > one || today+x.AmountKobo > day {
+			needs = append(needs, "limit")
+		}
+		if x.ChangedAccount {
+			needs = append(needs, "changed")
+		}
+	}
+	need := strings.Join(needs, ",")
+	if claim {
+		x.Status = "sending"
+		if need != "" {
+			x.Status = "waiting_ok"
+		}
+		if _, err := tx.Exec(ctx, `UPDATE payments SET status = $2, needs_ok = $3, confirmed_by = $4, confirmed_at = now() WHERE id = $1`,
+			x.ID, x.Status, need, p.Actor()); err != nil {
+			return x, "", err
+		}
+	}
+	return x, need, nil
+}
+
 // sendPayment starts the payment's run: the business's pay-person
 // workflow (made, or remade for another payments account, first), and,
 // within the payer's limit, the payer's own confirmation as its approval.
-func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Principal) (uuid.UUID, error) {
+func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Principal) (run uuid.UUID, err error) {
 	ctx := r.Context()
+	// Claimed for this run: given back, to confirm again, if no run starts.
+	defer func() {
+		if run == uuid.Nil && err != nil {
+			if e := db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `UPDATE payments SET status = 'prepared', needs_ok = '', confirmed_by = NULL, confirmed_at = NULL WHERE id = $1 AND run_id IS NULL`, x.ID)
+				return err
+			}); e != nil {
+				s.Logger.Warn("payments: giving a payment back", "payment", x.ID, "err", e)
+			}
+		}
+	}()
 	rl, err := s.payRail(ctx, p.TenantID)
 	if err != nil {
 		return uuid.Nil, err
@@ -558,13 +605,8 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 	if err != nil {
 		return uuid.Nil, err
 	}
-	status := "sending"
-	if needs != "" {
-		status = "waiting_ok"
-	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE payments SET status = $2, needs_ok = $3, run_id = $4, confirmed_by = $5, confirmed_at = now() WHERE id = $1`,
-			x.ID, status, needs, ref.ID, p.Actor())
+		_, err := tx.Exec(ctx, `UPDATE payments SET run_id = $2 WHERE id = $1`, x.ID, ref.ID)
 		return err
 	}); err != nil {
 		return ref.ID, err
