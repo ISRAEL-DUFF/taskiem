@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -131,5 +132,26 @@ func TestBillByTransfer(t *testing.T) {
 		ReplyTo: map[string]any{"buyer": buyerID, "bill": tid, "link": billOf(third)["link"]}}, invoicing.Account{}, invoicing.ErrLimit)
 	if got := buyer.must(200, "GET", "/v1/bills/"+tid+"/transfer", nil)["transfer"].(map[string]any); got["state"] != "failed" || got["problem"] == nil {
 		t.Fatalf("could not be had: %v", got)
+	}
+
+	// On WhatsApp: "pay INV-0004" asks, and the number follows in plain
+	// lines; asked again, it is said at once.
+	const buyerOn = "+2348010000521"
+	w.bind(t, buyer, buyerOn)
+	w.say(t, buyerOn, "links")
+	fourth := send("t-4", 4500000)
+	if r := w.say(t, buyerOn, "pay "+fourth["number"].(string)); !strings.Contains(r, "Getting an account number for "+fourth["number"].(string)) {
+		t.Fatalf("asked in the chat: %q", r)
+	}
+	before := len(w.graph.Sent(buyerOn))
+	drain()
+	if told := w.lastTo(t, buyerOn, before); len(told) == 0 || !strings.Contains(told[len(told)-1].Text, "Send exactly ₦45,000 to 9900112233, Wema Bank") {
+		t.Fatalf("the number in the chat: %+v", told)
+	}
+	if r := w.say(t, buyerOn, "pay "+fourth["number"].(string)); !strings.Contains(r, "Send exactly ₦45,000 to 9900112233") || !strings.Contains(r, "Good for") {
+		t.Fatalf("asked again: %q", r)
+	}
+	if r := w.say(t, buyerOn, "pay INV-9999"); !strings.Contains(r, "No bill INV-9999") {
+		t.Errorf("no such bill: %q", r)
 	}
 }

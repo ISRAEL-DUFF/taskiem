@@ -21908,6 +21908,82 @@ paths:
                     $ref: '#/components/schemas/LinkBooking'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/invoices/{invoice}/transfer:
+    get:
+      operationId: getMyInvoiceTransfer
+      tags:
+      - You
+      summary: An invoice's account number to pay by transfer
+      description: 'Through the door (`customer.pay`): the newest account number given for one of the person''s own invoices from this business, in its state (none, open, part, paid, expired). 404 for an invoice that is not theirs.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: invoice
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The invoice's account number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerTransfer'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: askMyInvoiceTransfer
+      tags:
+      - You
+      summary: Pay an invoice by transfer
+      description: 'Through the door (`customer.pay`; the payments flow, part 1, settled 4): an account number for one of the person''s own invoices, issued by the business''s payments provider for what is due and good for 60 minutes (`longer`: the longest it gives); the open one again rather than a second. 404 for an invoice that is not theirs; 409 when nothing is due or the business''s provider gives no such numbers; 429 when asked for too often.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: invoice
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                longer:
+                  type: boolean
+      responses:
+        '200':
+          description: The invoice's account number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerTransfer'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/chats/{id}/orders/{reference}/pay:
     get:
       operationId: payMyChatOrder
@@ -49689,6 +49765,26 @@ components:
         state:
           type: string
           enum: [none, active, ended, requested, not_accepted, asked_us, blocked]
+    CustomerTransfer:
+      type: object
+      additionalProperties: false
+      required: [invoice, reference, due_kobo, state]
+      properties:
+        invoice: {type: string}
+        reference: {type: string}
+        due_kobo: {type: integer}
+        state:
+          type: string
+          enum: [none, open, part, paid, expired]
+        bank_name: {type: string}
+        account_number: {type: string}
+        account_name: {type: string}
+        amount_kobo:
+          type: integer
+          description: Send exactly this
+        expires_at:
+          type: string
+          format: date-time
     Bill:
       type: object
       additionalProperties: false

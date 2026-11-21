@@ -7800,6 +7800,26 @@
     "wa.pay.confirm_app": {
       "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
       "reviewed": false
+    },
+    "bill.transfer.send": {
+      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "reviewed": false
+    },
+    "bill.transfer.good_for": {
+      "text": "Good for {minutes} minutes.",
+      "reviewed": false
+    },
+    "bill.transfer.next": {
+      "text": "I'll say here when it lands.",
+      "reviewed": false
+    },
+    "bill.transfer.asking": {
+      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "reviewed": false
+    },
+    "bill.transfer.off": {
+      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "reviewed": false
     }
   }
 }

@@ -627,6 +627,10 @@ func billWords(l lang.Tag, b links.Mirror) (string, string) {
 // an invoice, as before: the last word is not an invoice number).
 func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	f := strings.Fields(text)
+	// "pay INV-0042": an account number to pay the bill by transfer.
+	if len(f) >= 2 && strings.EqualFold(f[0], "pay") && billNumberRe.MatchString(f[len(f)-1]) {
+		return s.waPayBill(ctx, c, strings.Join(f[1:], " "))
+	}
 	one := len(f) >= 2 && strings.EqualFold(f[0], "bill") && (len(f) == 2 || billNumberRe.MatchString(f[len(f)-1]))
 	switch {
 	case cmd == "bills" || cmd == "my bills" || cmd == "bills due":

@@ -9398,6 +9398,31 @@
       "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
       "reviewed": true,
       "context": "Where to confirm a prepared payment when there is no link"
+    },
+    "bill.transfer.send": {
+      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "reviewed": true,
+      "context": "Paying a bill by transfer in a chat: the exact amount, the account (number, bank, name) and the bill's number"
+    },
+    "bill.transfer.good_for": {
+      "text": "Good for {minutes} minutes.",
+      "reviewed": true,
+      "context": "How long the account number for a bill is good for"
+    },
+    "bill.transfer.next": {
+      "text": "I'll say here when it lands.",
+      "reviewed": true,
+      "context": "After an account number to pay a bill: the person is told when the payment arrives"
+    },
+    "bill.transfer.asking": {
+      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "reviewed": true,
+      "context": "A bill's account number was asked of the supplier and follows shortly"
+    },
+    "bill.transfer.off": {
+      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "reviewed": true,
+      "context": "The supplier has Money turned off, so no account number can be had"
     }
   }
 }
