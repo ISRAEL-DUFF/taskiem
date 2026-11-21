@@ -204,7 +204,7 @@ A **menu card** in Taskiem's conversation, drawn in the app's own look (Directio
 - **Rows,** as the tools panel's rows (`TkListRow`; the web's `.tk-row`): the action's icon on its colour, its title and its line, one row each. A row with values from the message says so: "Add a rider: *Musa*". **At most five rows** show in the chat (§6.1).
 - **A foot,** with "All 9 for Products" when the topic has more than five (it opens them all in a sheet over the chat, the tools panel's sheet), and "All topics", which turns the card into the topics menu in place.
 - **A tip,** under the card, only when the model picked a row: that row's shortcut, once ("Next time you can type: *add rider Musa 0803… Ikeja*"). No other row carries its shortcut; *help all* has them all.
-- **The topics menu** is a **grid of tiles**, four to a row, as the tools panel draws its tools: each tile the topic's icon on its colour and its name. Sixteen topics fit in four short rows, under half a phone's screen. A tile pressed turns the card into that topic's menu in place.
+- **The topics menu** is a **grid of tiles**, four to a row, as the tools panel draws its tools: each tile the topic's icon on its colour and its name. Sixteen topics fit in four rows of tiles. A tile pressed turns the card into that topic's menu in place.
 
 ### 6.1 Keeping it short
 
@@ -217,7 +217,7 @@ A menu must never fill the screen, so the chat stays a conversation:
 5. **Topics as tiles**, not rows.
 6. **No topic of more than about seven actions:** a topic that grows past that is split, as Products and Your page are.
 
-On a 360 by 640 phone, a topic's menu (a head, five rows, a foot) is at most about 380 px, and the topics grid about 300.
+Measured in the demo (a 390 px wide phone): a topic's menu (a head, five rows, a foot) is about 390 px, and the topics grid about the same. That is under half the screen of a 390 by 844 phone, and about two thirds of the chat's height on a small 360 by 640 one, so the person still sees their own message above it.
 
 **Pressing a row:**
 
