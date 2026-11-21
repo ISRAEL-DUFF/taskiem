@@ -60,6 +60,7 @@ const PAGES = [
   "/money/statements",
   "/money/entries",
   "/money/fees",
+  "/payments",
   "/schools",
   "/schools/families",
   "/schools/classes",

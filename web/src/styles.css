@@ -2502,3 +2502,22 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 @media (pointer: coarse) {
   .saved-fill-button, .saved-fill-use { min-height: 44px; padding-left: 14px; padding-right: 14px; }
 }
+/* Paying one person (pages/PaySheet.tsx, pages/Payments.tsx): the bank's
+   name for the account large, then the facts, then what to know first. */
+.pay-check { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pay-check-label { font-size: 13px; color: var(--muted); }
+.pay-check-name { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; color: var(--text); }
+.pay-check-sub { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.pay-check-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.pay-check-facts dt { font-size: 12px; color: var(--muted); }
+.pay-check-facts dd { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.pay-warns { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pay-warn { padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.45; }
+.pay-warn.warn { color: color-mix(in srgb, var(--warn) 70%, var(--text)); background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.pay-warn.danger { color: color-mix(in srgb, var(--danger) 82%, var(--text)); background: color-mix(in srgb, var(--danger) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); font-weight: 600; }
+.pay-code { display: flex; flex-direction: column; gap: 10px; }
+.pay-sent { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.pay-sent p { margin: 0; }
+.pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+.card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
+@media (max-width: 480px) { .pay-check-name { font-size: 24px; } }

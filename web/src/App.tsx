@@ -147,6 +147,7 @@ import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { SavedPage } from "./pages/Saved";
+import { PaymentPage, PaymentsPage } from "./pages/Payments";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -493,6 +494,8 @@ function SignedIn() {
       "money",
       invoiceAccess(can).see && areaOn(me.areas, "money"),
     ],
+    // Paying people from the business's payments account (pages/Payments.tsx).
+    ["/payments", "Pay people", "send", can("money.pay")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
     [
       "/bills",
@@ -906,6 +909,8 @@ function SignedIn() {
                   />
                   <Route path="/money/entries" element={<MoneyEntries />} />
                   <Route path="/money/fees" element={<MoneyFees />} />
+                  <Route path="/payments" element={<PaymentsPage />} />
+                  <Route path="/payments/:id" element={<PaymentPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />
                   <Route
