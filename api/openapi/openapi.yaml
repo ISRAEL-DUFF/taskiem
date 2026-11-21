@@ -6674,6 +6674,77 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/bills/{id}/transfer:
+    post:
+      operationId: askBillTransfer
+      tags:
+      - Links
+      summary: An account number to pay a bill by transfer
+      description: 'Pay by transfer, in the chat (the payments flow, part 1): the bill''s open account number (200), or one asked of the supplier (202, `transfer.state` asking), issued by the supplier''s payments provider for what is due on their invoice and good for 60 minutes (`longer`: the longest the provider gives). One number is open for a bill at a time: asking again gives the same one, a new one only once it has expired or for what is left after a part payment. The number arrives on the bill within seconds (GET this path). 409 `nothing_due`, `disputed` (a queried bill waits for the query to be settled) or `no_transfer` (the supplier''s provider gives no such numbers); 429 `too_many`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                longer:
+                  type: boolean
+                  description: Ask for the longest the supplier's provider gives ("I need longer")
+      responses:
+        '200':
+          description: The open number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        '202':
+          description: Asked for; it arrives within seconds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: getBillTransfer
+      tags:
+      - Links
+      summary: A bill with its account number to pay by transfer
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The bill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/bills/{id}/pay:
     post:
       operationId: payBill
@@ -49623,6 +49694,39 @@ components:
       additionalProperties: false
       required: [id, link, supplier, supplier_name, reference, lines, amount_kobo, paid_kobo, due_kobo, status, allow_part_payments, disputed, declared_paid_kobo, paying_kobo, sent_kobo, uncounted_kobo, mirrored_at, created_at]
       properties:
+        transfer:
+          type: [object, 'null']
+          description: The account number to pay this bill by transfer, for those who may pay bills (invoice.manage); null when none was asked for.
+          additionalProperties: false
+          required: [state]
+          properties:
+            state:
+              type: string
+              enum: [asking, open, paid, part, expired, failed]
+            bank_name: {type: string}
+            account_number: {type: string}
+            account_name: {type: string}
+            amount_kobo:
+              type: integer
+              description: Send exactly this
+            received_kobo:
+              type: integer
+              description: Part paid, what arrived
+            expires_at:
+              type: string
+              format: date-time
+            problem:
+              type: string
+              description: Why a number could not be had, in plain words
+            next:
+              type: string
+              description: Paid, the same supplier's next bill still to pay
+        ways_to_pay:
+          type: array
+          description: How the bill can be paid now, the default first; transfer (an account number for one payment), taskiem (from the business's payments account), checkout (the supplier's page)
+          items:
+            type: string
+            enum: [transfer, taskiem, checkout]
         id:
           type: string
           format: uuid

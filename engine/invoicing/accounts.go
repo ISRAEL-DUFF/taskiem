@@ -48,8 +48,11 @@ const (
 	MaxPerHour    = 5
 	MaxPerInvoice = 20
 	// AccountMinutes is the lifetime asked for an account, kept within
-	// the rail's range.
-	AccountMinutes = 30
+	// the rail's range (60 minutes: the payments flow, settled 5).
+	AccountMinutes = 60
+	// LongestMinutes asks for the longest the rail gives ("I need
+	// longer").
+	LongestMinutes = -1
 	// WatchAfterExpiry is how long an account is still checked for a
 	// payment after it expires: a transfer started in time can land late.
 	WatchAfterExpiry = 48 * time.Hour
@@ -98,6 +101,13 @@ func (a Account) Open(now time.Time) bool {
 // with the payment id the rail will report, is written before the rail
 // is asked, so money paid into it is found even if the answer is lost.
 func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind string, amountKobo int64) (Account, error) {
+	return s.IssueFor(ctx, tenant, invoice, kind, amountKobo, 0)
+}
+
+// IssueFor is Issue with how long an account number is good for: minutes
+// (0: AccountMinutes; LongestMinutes: the longest the rail gives), kept
+// within the rail's range.
+func (s *Invoices) IssueFor(ctx context.Context, tenant, invoice uuid.UUID, kind string, amountKobo int64, minutes int) (Account, error) {
 	if s.Rails == nil {
 		return Account{}, fmt.Errorf("%w: payments are not set up on this server", ErrNoRail)
 	}
@@ -180,7 +190,14 @@ func (s *Invoices) Issue(ctx context.Context, tenant, invoice uuid.UUID, kind st
 	}
 	in := map[string]any{"amount_kobo": a.AmountKobo, "customer": s.payer(x), "description": "Invoice " + x.Number}
 	if kind == "transfer" {
-		in["expires_minutes"] = min(max(AccountMinutes, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)
+		want := AccountMinutes
+		switch {
+		case minutes == LongestMinutes:
+			want = rail.Transfer.MaxMinutes
+		case minutes > 0:
+			want = minutes
+		}
+		in["expires_minutes"] = min(max(want, rail.Transfer.MinMinutes), rail.Transfer.MaxMinutes)
 	}
 	return s.ask(ctx, tenant, a, rail, capab, in, PaymentKey(tenant, invoice, kind, a.Seq))
 }
@@ -417,7 +434,12 @@ func (s *Invoices) Drain(ctx context.Context) error {
 			}
 			continue
 		}
-		a, err := s.Issue(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo)
+		// A bill's request may ask for the longest the rail gives.
+		minutes := 0
+		if m, ok := q.ReplyTo["minutes"].(float64); ok {
+			minutes = int(m)
+		}
+		a, err := s.IssueFor(ctx, q.Tenant, q.Invoice, q.Kind, q.AmountKobo, minutes)
 		if err != nil {
 			s.log().Warn("invoice account", "tenant", q.Tenant, "invoice", q.Invoice, "kind", q.Kind, "err", err)
 			s.noteUnavailable(ctx, q, err)

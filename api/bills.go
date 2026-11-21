@@ -43,6 +43,8 @@ func (s *Server) billRoutes(r chi.Router) {
 	r.With(read).Get("/bills/{id}", s.getBill)
 	r.With(read).Get("/bills/{id}/payments", s.listBillPayments)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/transfer", s.askBillTransfer)
+	r.With(manage).Get("/bills/{id}/transfer", s.getBillTransfer)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/payments/{payment}/confirm-pair", s.confirmBillPair)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/declare", s.declareBillPaid)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/query", s.queryBill)
@@ -50,7 +52,7 @@ func (s *Server) billRoutes(r chi.Router) {
 }
 
 type billsOut struct {
-	Bills []links.Bill `json:"bills"`
+	Bills []billWithWays `json:"bills"`
 }
 
 func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
@@ -61,9 +63,19 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 	}
 	var out billsOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		out.Bills, err = links.ListBillsTx(r.Context(), tx, status, 200)
-		return err
+		list, err := links.ListBillsTx(r.Context(), tx, status, 200)
+		if err != nil {
+			return err
+		}
+		out.Bills = make([]billWithWays, 0, len(list))
+		for _, b := range list {
+			v, err := s.billView(r.Context(), tx, principalFrom(r.Context()), b)
+			if err != nil {
+				return err
+			}
+			out.Bills = append(out.Bills, v)
+		}
+		return nil
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -72,10 +84,13 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBill(w http.ResponseWriter, r *http.Request) {
-	var b links.Bill
+	var b billWithWays
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		b, err = links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		x, err := links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		b, err = s.billView(r.Context(), tx, principalFrom(r.Context()), x)
 		return err
 	}); err != nil {
 		s.fail(w, r, billErr(err))
@@ -386,6 +401,24 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if x.VoidedAt == nil {
 			if bill.PayLink, err = s.Invoices.PageLink(ctx, tx, seller, x); err != nil {
 				return err
+			}
+		}
+		// Paying by transfer: whether the seller's provider gives a number
+		// for one payment, and the newest the invoice has.
+		if s.Invoices.Rails != nil {
+			if rl, err := s.Invoices.Rails.Resolve(ctx, seller, x.Connection); err == nil {
+				bill.PayByTransfer = rl.Transfer != nil
+			}
+		}
+		all, err := invoicing.Accounts(ctx, tx, x.ID)
+		if err != nil {
+			return err
+		}
+		for _, a := range all {
+			if a.Kind == "transfer" {
+				bill.Transfer = &links.BillTransfer{Seq: a.Seq, BankName: a.BankName, AccountNumber: a.AccountNumber, AccountName: a.AccountName,
+					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, CreatedAt: a.CreatedAt}
+				break
 			}
 		}
 		if err := clear(); err != nil {
