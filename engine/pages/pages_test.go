@@ -2,6 +2,7 @@ package pages
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -312,5 +313,132 @@ func TestFromTable(t *testing.T) {
 	bare := datatables.Table{Name: "readings", Columns: []datatables.Column{{Name: "litres", Type: "number"}}}
 	if _, ps := Parse(FromTable(bare).Marshal()); len(ps) > 0 {
 		t.Errorf("%v", ps)
+	}
+}
+
+// people has personal columns of each kind a page could narrow, add up
+// or rank by.
+var people = datatables.Table{Name: "people", Title: "People", Columns: []datatables.Column{
+	{Name: "name", Title: "Name", Type: "text", Personal: true},
+	{Name: "team", Title: "Team", Type: "text"},
+	{Name: "born", Title: "Born", Type: "date", Personal: true},
+	{Name: "salary", Title: "Salary", Type: "integer", Personal: true},
+	{Name: "joined", Title: "Joined", Type: "date"},
+}}
+
+// Nothing on a page narrows, adds up or compares by a personal column
+// (pages §8, §18): Check refuses it, as it refuses a group by one.
+func TestPersonalColumnsRefused(t *testing.T) {
+	doc := func(filters, blocks string) *Page {
+		return parseOK(t, `{"page": "page/v1", "name": "team-desk", "title": "Staff", "filters": [`+filters+`], "blocks": [`+blocks+`]}`)
+	}
+	list := func(uses string) string {
+		return `{"id": "l", "type": "list", "source": {"table": "people", "uses": [` + uses + `]}, "item": {"title": "=row.team"}}`
+	}
+	for _, c := range []struct {
+		name, path, says string
+		page             *Page
+	}{
+		{"dates on a personal column", "/blocks/0/source/uses/0", "Born is personal", doc(`{"id": "when", "type": "dates", "column": "born"}`, list(`"when"`))},
+		{"choice on a personal column", "/blocks/0/source/uses/0", "Name is personal", doc(`{"id": "who", "type": "choice", "column": "name", "options": [{"value": "Ada"}]}`, list(`"who"`))},
+		{"sum of a personal column", "/blocks/0/of", "cannot add up Salary: it is personal", doc(``, `{"id": "f", "type": "figure", "label": "Pay", "value": "sum", "of": "salary", "source": {"table": "people"}}`)},
+		{"change by a personal date", "/blocks/0/change/column", "cannot compare by Born: it is personal", doc(``, `{"id": "f", "type": "figure", "label": "Birthdays", "value": "count", "change": {"column": "born", "period": "week"}, "source": {"table": "people"}}`)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ps := Check(c.page, Env{Tables: []datatables.Table{people}})
+			if len(ps) != 1 || ps[0].Path != c.path || !strings.Contains(ps[0].Message, c.says) {
+				t.Fatalf("want %s %q, got %v", c.path, c.says, ps)
+			}
+		})
+	}
+	// The same over columns that are not personal is fine.
+	ok := doc(`{"id": "when", "type": "dates", "column": "joined"}, {"id": "t", "type": "choice", "column": "team", "options": [{"value": "a"}]}`,
+		`{"id": "f", "type": "figure", "label": "Joined", "value": "count", "change": {"column": "joined", "period": "week"}, "source": {"table": "people"}}, `+list(`"when", "t"`))
+	if ps := Check(ok, Env{Tables: []datatables.Table{people}}); len(ps) > 0 {
+		t.Fatalf("%v", ps)
+	}
+}
+
+// A figure stays whole: Parse refuses uses on one (and the schema too),
+// and ReadFor ignores it besides.
+func TestFigureStaysWhole(t *testing.T) {
+	doc := edit(t, func(m map[string]any) { block(m, 2)["source"].(map[string]any)["uses"] = []any{"q"} })
+	_, ps := Parse([]byte(doc))
+	if len(ps) != 1 || ps[0].Path != "/blocks/2/source/uses" || !strings.Contains(ps[0].Message, "narrow its lists and tables only") {
+		t.Fatalf("%v", ps)
+	}
+	if len(schema.Validate([]byte(doc))) == 0 {
+		t.Errorf("the schema took uses on a figure")
+	}
+	p := parseOK(t, good)
+	p.Blocks[2].Source.Uses = []string{"q", "st"}
+	v, _ := p.FilterValues(map[string]string{"q": "ink", "st": "open"}, Viewer{}, time.Now())
+	r, err := p.ReadFor(p.Blocks[2], tickets, v, nil)
+	if err != nil || len(r.Filters) != 0 {
+		t.Errorf("a figure narrowed by the page's filters: %v %s", err, mustJSON(r.Filters))
+	}
+}
+
+// Defence in depth: a published page Check would now refuse still never
+// narrows by a personal column for a viewer without table.read, nor puts
+// rows in order by one.
+func TestReadForPersonal(t *testing.T) {
+	p := parseOK(t, `{"page": "page/v1", "name": "team-desk", "title": "Staff",
+	  "filters": [{"id": "when", "type": "dates", "column": "born"}, {"id": "who", "type": "choice", "column": "name", "options": [{"value": "Ada"}]}],
+	  "blocks": [{"id": "l", "type": "table", "source": {"table": "people", "uses": ["when", "who"]}, "columns": [{"column": "name"}, {"column": "team"}]}]}`)
+	now := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	set := map[string]string{"when": "1990-01-01..1990-01-01", "who": "Ada"}
+	staff, _ := p.FilterValues(set, Viewer{}, now)
+	r, err := p.ReadFor(p.Blocks[0], people, staff, nil)
+	if err != nil || len(r.Filters) != 0 {
+		t.Errorf("a viewer without table.read narrowed by personal columns: %v %s", err, mustJSON(r.Filters))
+	}
+	owner, _ := p.FilterValues(set, Viewer{Personal: true}, now)
+	if r, _ := p.ReadFor(p.Blocks[0], people, owner, nil); !strings.Contains(mustJSON(r.Filters), "born") || !strings.Contains(mustJSON(r.Filters), "Ada") {
+		t.Errorf("table.read: %s", mustJSON(r.Filters))
+	}
+	tables := []datatables.Table{people}
+	if !p.HiddenFilter(p.Filters[0], tables, false) || !p.HiddenFilter(p.Filters[1], tables, false) || p.HiddenFilter(p.Filters[1], tables, true) {
+		t.Errorf("a personal choice or dates filter is drawn for a viewer without table.read")
+	}
+	if _, err := p.ReadFor(p.Blocks[0], people, staff, &Order{Column: "name"}); !errors.Is(err, ErrPersonalOrder) {
+		t.Errorf("ordered by a personal column: %v", err)
+	}
+	if _, err := p.ReadFor(p.Blocks[0], people, owner, &Order{Column: "name"}); err != nil {
+		t.Errorf("table.read may order by it: %v", err)
+	}
+}
+
+// More's cursor is Taskiem's: taken back only for the order it was given
+// for, and for rows ranked by a personal column, only a skip.
+func TestCursor(t *testing.T) {
+	b := Block{Type: "list", Source: &Source{Table: "people", Order: []Order{{Column: "name"}}}}
+	if !RankedByPersonal(b, people, nil, false) || RankedByPersonal(b, people, nil, true) || RankedByPersonal(b, people, &Order{Column: "team"}, false) {
+		t.Errorf("ranked")
+	}
+	byTeam := &Order{Column: "team", Desc: true}
+	keyset := Cursor{Order: OrderKey(byTeam), After: "abc"}.String()
+	if c, err := ReadCursor(keyset, byTeam, false); err != nil || c.After != "abc" {
+		t.Errorf("keyset: %v %v", c, err)
+	}
+	for _, bad := range []struct {
+		s      string
+		order  *Order
+		ranked bool
+	}{
+		{keyset, &Order{Column: "team"}, false},          // another order
+		{keyset, nil, false},                             // the part's own order
+		{"abc", byTeam, false},                           // the data API's own cursor, as is
+		{Cursor{Skip: 25}.String(), nil, false},          // a skip where a cursor is due
+		{Cursor{After: "x"}.String(), nil, true},         // a data API cursor for rows ranked by a personal column
+		{Cursor{Skip: MaxSkip + 25}.String(), nil, true}, // past the last
+		{Cursor{Skip: -1}.String(), nil, true},           // before the first
+	} {
+		if _, err := ReadCursor(bad.s, bad.order, bad.ranked); err == nil {
+			t.Errorf("took %q for %v ranked=%v", bad.s, bad.order, bad.ranked)
+		}
+	}
+	if c, err := ReadCursor(Cursor{Skip: 25}.String(), nil, true); err != nil || c.Skip != 25 {
+		t.Errorf("skip: %v %v", c, err)
 	}
 }

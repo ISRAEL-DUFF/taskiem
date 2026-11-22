@@ -179,7 +179,10 @@
             "id": { "$ref": "#/$defs/id" },
             "type": { "const": "figure" },
             "label": { "type": "string", "minLength": 1, "maxLength": 40 },
-            "source": { "$ref": "#/$defs/source" },
+            "source": {
+              "description": "A figure counts every row its own conditions pick: the page's filters (uses) narrow lists and tables only.",
+              "allOf": [{ "$ref": "#/$defs/source" }, { "not": { "required": ["uses"] } }]
+            },
             "value": { "enum": ["count", "sum"] },
             "of": { "$ref": "#/$defs/column" },
             "naira": { "type": "boolean" },

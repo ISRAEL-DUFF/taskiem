@@ -468,6 +468,9 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 	if len(s.Order) > 2 {
 		ps.add(at+"/source/order", "%s is put in order by at most two columns.", name)
 	}
+	if b.Type == "figure" && len(s.Uses) > 0 {
+		ps.add(at+"/source/uses", "%s counts every row its own conditions pick: the page's filters narrow its lists and tables only.", name)
+	}
 	for j, u := range s.Uses {
 		if _, ok := filters[u]; !ok {
 			ps.add(fmt.Sprintf("%s/source/uses/%d", at, j), "%s uses a filter the page does not have: %s.", name, u)

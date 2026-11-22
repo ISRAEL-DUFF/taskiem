@@ -1,7 +1,10 @@
 package pages
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -162,9 +165,20 @@ type Read struct {
 
 var likeEscape = strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`)
 
+// ErrPersonalOrder refuses rows put in order by a personal column for a
+// viewer who may not read it: the order alone would rank what the mask
+// hides.
+var ErrPersonalOrder = errors.New("the rows cannot be put in order by a personal column")
+
 // ReadFor is what part b reads under the viewer's filter values: its own
 // conditions, checked (datatables.CheckQuery), then each filter it uses.
-// An order given overrides the part's (a table sorted by a press).
+// An order given overrides the part's (a table sorted by a press); a
+// personal column is no order for a viewer without table.read.
+//
+// A figure stays whole: the page's filters narrow lists and tables only
+// (Parse refuses uses on a figure; it is ignored here besides). A choice
+// or dates filter on a personal column (Check refuses it) is left out for
+// a viewer without table.read, as a search leaves such columns out.
 func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Read, error) {
 	q, err := b.Source.query(t, nil)
 	if err != nil {
@@ -172,12 +186,19 @@ func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Rea
 	}
 	r := Read{Table: t, Filters: q.ReadFilters()}
 	if order != nil {
-		if _, ok := columnOf(t, order.Column); !ok {
+		col, ok := columnOf(t, order.Column)
+		if !ok {
 			return Read{}, fmt.Errorf("%w: the table has no column %s", datatables.ErrQuery, order.Column)
+		}
+		if col.Personal && !v.Viewer.Personal {
+			return Read{}, ErrPersonalOrder
 		}
 		r.Order = []any{map[string]any{"column": order.Column, "desc": order.Desc}, map[string]any{"column": "id", "desc": true}}
 	} else {
 		r.Order = q.ReadOrder()
+	}
+	if b.Type == "figure" {
+		return r, nil
 	}
 	for _, id := range b.Source.Uses {
 		val := v.Set[id]
@@ -185,6 +206,11 @@ func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Rea
 			continue
 		}
 		f := p.filter(id)
+		if f.Type == "choice" || f.Type == "dates" {
+			if col, ok := columnOf(t, f.Column); ok && col.Personal && !v.Viewer.Personal {
+				continue
+			}
+		}
 		switch f.Type {
 		case "search":
 			var anyOf []any
@@ -218,6 +244,115 @@ func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Rea
 		}
 	}
 	return r, nil
+}
+
+// HiddenFilter says whether a filter is left off the page for a viewer:
+// a choice or dates filter on a column personal in a table the page reads
+// (Check refuses one; a page published before is drawn without it for a
+// viewer without table.read, since its choices may name what is masked).
+func (p *Page) HiddenFilter(f Filter, tables []datatables.Table, personal bool) bool {
+	if personal || (f.Type != "choice" && f.Type != "dates") {
+		return false
+	}
+	for _, name := range p.UsesTables() {
+		if t, ok := datatables.FindQueryTable(tables, name); ok {
+			if col, ok := columnOf(t, f.Column); ok && col.Personal {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// RankedByPersonal says whether part b's rows, read in this order (nil:
+// the part's own), are ranked by a column the viewer may not read: the
+// part's own order may name a personal column (its maker chose it), and
+// the data API's cursor may carry the value a row was ranked by.
+func RankedByPersonal(b Block, t datatables.Table, order *Order, personal bool) bool {
+	if personal || b.Source == nil {
+		return false
+	}
+	var cols []string
+	if order != nil {
+		cols = append(cols, order.Column)
+	} else {
+		for _, o := range b.Source.Order {
+			cols = append(cols, o.Column)
+		}
+	}
+	for _, c := range cols {
+		if col, ok := columnOf(t, c); ok && col.Personal {
+			return true
+		}
+	}
+	return false
+}
+
+// MaxSkip bounds how far More reaches into rows ranked by a personal
+// column for a viewer without table.read (a skip, not the data API's
+// cursor): the rows read for the last page are at most the data API's
+// 1,000.
+const MaxSkip = 1000 - RowsShown
+
+// Cursor is where a list's or a table's More picks up, as Taskiem gives
+// it: opaque to the viewer, and taken back only with the order it was
+// made for. After is the data API's cursor; Skip, the rows already shown,
+// for rows ranked by a personal column the viewer may not read, so that
+// nothing the viewer sends can carry a value to rank against.
+type Cursor struct {
+	Order string `json:"o,omitempty"`
+	After string `json:"a,omitempty"`
+	Skip  int    `json:"n,omitempty"`
+}
+
+// OrderKey names an order for a cursor: "" for the part's own.
+func OrderKey(order *Order) string {
+	if order == nil {
+		return ""
+	}
+	if order.Desc {
+		return order.Column + " desc"
+	}
+	return order.Column
+}
+
+// String is the cursor as handed to the viewer.
+func (c Cursor) String() string {
+	raw, _ := json.Marshal(c)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+// ErrCursor refuses a cursor that is not one Taskiem gave for this order.
+var ErrCursor = errors.New("this is not where these rows left off: open the part again")
+
+// ReadCursor takes back a cursor given for rows in this order: ranked by
+// a personal column the viewer may not read (ranked), only a skip; else
+// only the data API's cursor.
+func ReadCursor(s string, order *Order, ranked bool) (Cursor, error) {
+	var c Cursor
+	if s == "" {
+		return c, nil
+	}
+	if len(s) > 4096 {
+		return c, ErrCursor
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return c, ErrCursor
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if dec.Decode(&c) != nil || c.Order != OrderKey(order) {
+		return Cursor{}, ErrCursor
+	}
+	if ranked {
+		if c.After != "" || c.Skip <= 0 || c.Skip > MaxSkip {
+			return Cursor{}, ErrCursor
+		}
+	} else if c.Skip != 0 || c.After == "" {
+		return Cursor{}, ErrCursor
+	}
+	return c, nil
 }
 
 func (p *Page) filter(id string) Filter {

@@ -450,6 +450,9 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 			refused = ps
 			return nil
 		}
+		if err := pagePublishFourEyes(r.Context(), tx, p, pg.ID); err != nil {
+			return err
+		}
 		version := 1
 		if pg.Version != nil {
 			version = *pg.Version + 1
@@ -485,8 +488,54 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// pagePublishFourEyes holds publishing a page to four-eyes where the
+// business has it (as a workflow's publish is: publishNeedsApproval): a
+// page goes live to everyone its roles let open it, so another person
+// with page.publish publishes it, never the person who last saved its
+// draft (draft_by, a person or their API key). A caller that is no person
+// (a workflow's run, an agent) does not publish under four-eyes.
+func pagePublishFourEyes(ctx context.Context, tx pgx.Tx, p *Principal, page uuid.UUID) error {
+	g, err := governanceTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	wait, err := publishNeedsApproval(ctx, tx, g, nil)
+	if err != nil || !wait {
+		return err
+	}
+	me := p.Human()
+	if me == uuid.Nil || p.Run != uuid.Nil || p.Agent != nil {
+		return fmt.Errorf("%w: with four-eyes publishing, a person publishes a page", errForbidden)
+	}
+	var by *string
+	if err := tx.QueryRow(ctx, `SELECT draft_by FROM pages WHERE id = $1`, page).Scan(&by); err != nil {
+		return err
+	}
+	if by == nil {
+		return nil
+	}
+	saver, _ := uuid.Parse(*by)
+	if key, ok := strings.CutPrefix(*by, "key:"); ok {
+		if id, err := uuid.Parse(key); err == nil {
+			var owner *uuid.UUID
+			if err := tx.QueryRow(ctx, `SELECT owner_id FROM api_keys WHERE id = $1`, id).Scan(&owner); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if owner != nil {
+				saver = *owner
+			}
+		}
+	}
+	if saver == me {
+		return fmt.Errorf("%w: with four-eyes publishing, another person with page.publish publishes this page: you saved its last changes", errForbidden)
+	}
+	return nil
+}
+
 // pinPage is PUT /v1/pages/{name}/pin: a published page shown in the
-// navigation under Your pages (§9), five at most.
+// navigation under Your pages (§9), five at most. Pins are counted under
+// a per-business lock, so two at once cannot make a sixth; pin_order is
+// unique among pinned pages (migration 00530). Only a change is audited.
 func (s *Server) pinPage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Pinned bool `json:"pinned"`
@@ -495,12 +544,17 @@ func (s *Server) pinPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	p := principalFrom(r.Context())
 	var out map[string]any
 	err := s.tx(r, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended('page-pins:' || $1::text, 0))`, p.TenantID); err != nil {
+			return err
+		}
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
 		if err != nil {
 			return err
 		}
+		changed := req.Pinned != pg.Pinned
 		if req.Pinned && !pg.Pinned {
 			if pg.Version == nil {
 				return fmt.Errorf("%w: publish the page before pinning it", errConflict)
@@ -521,8 +575,10 @@ func (s *Server) pinPage(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		if err := auditTx(r, tx, "page.pin", pg.Name, map[string]any{"pinned": req.Pinned}); err != nil {
-			return err
+		if changed {
+			if err := auditTx(r, tx, "page.pin", pg.Name, map[string]any{"pinned": req.Pinned}); err != nil {
+				return err
+			}
 		}
 		if pg, err = loadPage(r.Context(), tx, pg.Name); err != nil {
 			return err
@@ -537,12 +593,19 @@ func (s *Server) pinPage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// deletePage is DELETE /v1/pages/{name}: the page and its versions.
+// deletePage is DELETE /v1/pages/{name}: the page and its versions. A
+// page that was ever published is taken away from those who open it, so
+// that needs page.publish; page.edit alone deletes a draft never
+// published.
 func (s *Server) deletePage(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
 		if err != nil {
 			return err
+		}
+		if pg.Version != nil && !p.Can(PermPagePublish) {
+			return fmt.Errorf("%w: this page is published: deleting it needs the right to publish pages", errForbidden)
 		}
 		if _, err := tx.Exec(r.Context(), `DELETE FROM pages WHERE id = $1`, pg.ID); err != nil {
 			return err
@@ -698,10 +761,13 @@ func (s *Server) viewPage(w http.ResponseWriter, r *http.Request) {
 			}
 			continue // left out for everyone else (§11)
 		}
-		blocks = append(blocks, s.drawBlock(r.Context(), pc, b, "", nil))
+		blocks = append(blocks, s.drawBlock(r.Context(), pc, b, pages.Cursor{}, nil))
 	}
 	filters := []map[string]any{}
 	for _, f := range pc.page.Filters {
+		if pc.page.HiddenFilter(f, pc.tables, pc.values.Viewer.Personal) {
+			continue
+		}
 		label := f.Label
 		if label == "" {
 			label = map[string]string{"search": "Search", "choice": "Show", "dates": "When", "mine": "Mine"}[f.Type]
@@ -764,13 +830,29 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "a list keeps its own order")
 			return
 		}
+		if columnNamed(pc.table(b), col).Personal && !pc.values.Viewer.Personal {
+			writeErr(w, http.StatusBadRequest, "this column is personal: only someone who may read the table can put the rows in order by it")
+			return
+		}
 	}
-	writeJSON(w, http.StatusOK, s.drawBlock(r.Context(), pc, b, r.URL.Query().Get("cursor"), order))
+	ranked := pages.RankedByPersonal(b, pc.table(b), order, pc.values.Viewer.Personal)
+	cur, err := pages.ReadCursor(r.URL.Query().Get("cursor"), order, ranked)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, s.drawBlock(r.Context(), pc, b, cur, order))
 }
 
 // drawBlock works out one part for the viewer. A part that cannot be read
 // just now says so in plain words; the rest of the page still draws.
-func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, cursor string, order *pages.Order) map[string]any {
+//
+// More's cursor is Taskiem's own (pages.Cursor), taken back only with the
+// order it was given for. Rows ranked by a personal column the viewer may
+// not read (the part's own order names one) go on by a skip of the rows
+// shown, never by the data API's cursor, which may carry the value a row
+// was ranked by; such a part shows its first 1,000 rows.
+func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, cursor pages.Cursor, order *pages.Order) map[string]any {
 	out := map[string]any{"id": b.ID, "type": b.Type}
 	if b.Type == "heading" {
 		out["title"], out["text"] = b.Title, b.Text
@@ -887,9 +969,12 @@ func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, curs
 	var more any
 	count := int64(0)
 	if !read.None {
+		ranked := pages.RankedByPersonal(b, t, order, pc.values.Viewer.Personal)
 		in := map[string]any{"filters": read.Filters, "order": read.Order, "limit": pages.RowsShown, "count": "exact"}
-		if cursor != "" {
-			in["cursor"] = cursor
+		if ranked {
+			in["limit"] = cursor.Skip + pages.RowsShown
+		} else if cursor.After != "" {
+			in["cursor"] = cursor.After
 		}
 		res, err := readRows(in)
 		if err != nil {
@@ -901,10 +986,19 @@ func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, curs
 				rows = append(rows, m)
 			}
 		}
+		if ranked {
+			rows = rows[min(cursor.Skip, len(rows)):]
+		}
 		shown = pages.Shape(b, t, rows, pc.values)
 		count = countOf(res)
 		if c, _ := res["next_cursor"].(string); c != "" {
-			more = c
+			next := pages.Cursor{Order: pages.OrderKey(order), After: c}
+			if ranked {
+				next = pages.Cursor{Order: pages.OrderKey(order), Skip: cursor.Skip + pages.RowsShown}
+			}
+			if !ranked || next.Skip <= pages.MaxSkip {
+				more = next.String()
+			}
 		}
 	}
 	out["rows"], out["more"], out["count"] = shown, more, count

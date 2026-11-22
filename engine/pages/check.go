@@ -29,6 +29,11 @@ func ReservedName(name string) bool { return wdcheck.ReservedCommand(name) }
 // (through datatables.CheckQuery, the checked query of decision 0060);
 // a sum adds up a number; a filter fits each table that uses it; and
 // every expression reads only columns the table has.
+//
+// Nothing on a page may narrow, add up or group by a personal column
+// (§8, §18): a viewer without table.read sees such a column masked, and a
+// figure over it, a group by it, or a choice or dates filter on it would
+// give back what the mask hides (a birth date found a day at a time).
 func Check(p *Page, env Env) []Problem {
 	var ps problems
 	if ReservedName(p.Name) {
@@ -66,13 +71,21 @@ func Check(p *Page, env Env) []Problem {
 		switch b.Type {
 		case "figure":
 			if b.Value == "sum" {
-				if c, ok := col(at+"/of", b.Of, "adds up the column"); ok && c.Type != "integer" && c.Type != "number" {
-					ps.add(at+"/of", "%s adds up %s, which does not hold numbers.", name, columnTitle(c))
+				if c, ok := col(at+"/of", b.Of, "adds up the column"); ok {
+					if c.Type != "integer" && c.Type != "number" {
+						ps.add(at+"/of", "%s adds up %s, which does not hold numbers.", name, columnTitle(c))
+					} else if c.Personal {
+						ps.add(at+"/of", "%s cannot add up %s: it is personal.", name, columnTitle(c))
+					}
 				}
 			}
 			if ch := b.Change; ch != nil {
-				if c, ok := col(at+"/change/column", ch.Column, "compares by the column"); ok && c.Type != "date" && c.Type != "datetime" {
-					ps.add(at+"/change/column", "%s compares by %s, which does not hold dates.", name, columnTitle(c))
+				if c, ok := col(at+"/change/column", ch.Column, "compares by the column"); ok {
+					if c.Type != "date" && c.Type != "datetime" {
+						ps.add(at+"/change/column", "%s compares by %s, which does not hold dates.", name, columnTitle(c))
+					} else if c.Personal {
+						ps.add(at+"/change/column", "%s cannot compare by %s: it is personal.", name, columnTitle(c))
+					}
 				}
 			}
 		case "list":
@@ -120,7 +133,9 @@ func Check(p *Page, env Env) []Problem {
 	return ps
 }
 
-// fits says why a filter cannot narrow a table ("" when it can).
+// fits says why a filter cannot narrow a table ("" when it can). A choice
+// or dates filter on a personal column cannot: its values are masked for
+// a viewer without table.read, and narrowing by them would show them.
 func (f Filter) fits(t datatables.Table) string {
 	switch f.Type {
 	case "search":
@@ -147,6 +162,9 @@ func (f Filter) fits(t datatables.Table) string {
 		if col.Type != "text" {
 			return fmt.Sprintf("%s does not hold words", columnTitle(col))
 		}
+		if col.Personal {
+			return fmt.Sprintf("%s is personal, and choosing by it would show what is hidden", columnTitle(col))
+		}
 	case "dates":
 		col, ok := columnOf(t, f.Column)
 		if !ok {
@@ -154,6 +172,9 @@ func (f Filter) fits(t datatables.Table) string {
 		}
 		if col.Type != "date" && col.Type != "datetime" {
 			return fmt.Sprintf("%s does not hold dates", columnTitle(col))
+		}
+		if col.Personal {
+			return fmt.Sprintf("%s is personal, and narrowing by its dates would show what is hidden", columnTitle(col))
 		}
 	case "mine":
 		col, ok := columnOf(t, f.Column)

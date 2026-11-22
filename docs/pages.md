@@ -21,8 +21,9 @@ Each figure, list and table reads one table, with conditions every row it shows 
 
 - **Who may open it** is the page's roles: owners always; none chosen, everyone in the business. Publishing says so in plain words, with what it shows: "Support will be able to open Tickets. It shows: Title, Customer, Status."
 - **A page shows what its maker chose** to those allowed to open it. Like a tool's answer, it reads with the business's connection, not with the rights of whoever opens it: a page over salaries shows them to everyone who may open it. Choose who may open it with that in mind.
-- **Personal columns** (phones, emails, and any column marked personal) are masked (•••5678) for someone without `table.read`, and a search by them never looks in those columns.
-- **Making and changing pages** needs `page.edit` and `table.read`; **publishing** needs `page.publish`. Owners and admins have both; give them to other roles in the role editor.
+- **Personal columns** (phones, emails, and any column marked personal) are masked (•••5678) for someone without `table.read`, and a search by them never looks in those columns, nor can they put a table in order by one. A page never adds up, compares by, groups by, or offers a choice or dates filter on a personal column: the editor does not offer it and publishing refuses it, since narrowing by one a day at a time would show what is masked. Figures count every row their own conditions pick; the filters at the top narrow lists and tables only.
+- **Making and changing pages** needs `page.edit` and `table.read`; **publishing** needs `page.publish`, and so does deleting a page that was ever published (`page.edit` alone deletes a draft never published). Owners and admins have both; give them to other roles in the role editor.
+- **Four-eyes:** where the business has four-eyes publishing (Settings, governance), another person with `page.publish` publishes a page: the person who last saved its draft cannot.
 
 ## Making and changing one
 
@@ -52,12 +53,12 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `PUT /v1/pages/{name}/draft` | Save the draft |
 | `POST /v1/pages/{name}/publish` | Publish the draft, once it has no problem left |
 | `PUT /v1/pages/{name}/pin` | `{"pinned": true}` |
-| `DELETE /v1/pages/{name}` | Delete the page and its versions |
+| `DELETE /v1/pages/{name}` | Delete the page and its versions (a published one needs `page.publish`) |
 | `POST /v1/pages/validate` | A document's problems, nothing saved |
 | `GET /v1/pages/{name}/view?filters=` | The page as drawn for you: every part's figures and rows worked out on the server, masked for you (`draft=1` for the draft) |
 | `GET /v1/pages/{name}/blocks/{id}?cursor=` | More rows of a list or table, or a table in a column's order (`order`, `desc=1`) |
 
-The web and the app both draw from `view`: neither reads a table for a page itself. Reads are recorded in the connection reads (`GET /v1/secrets/reads`, purpose `pages.view`). Making, saving, publishing, pinning and deleting are audited (`page.create`, `page.draft`, `page.publish` with who may open it and what it shows, `page.pin`, `page.delete`), never with a row's values.
+The web and the app both draw from `view`: neither reads a table for a page itself. Reads are recorded in the connection reads (`GET /v1/secrets/reads`, purpose `pages.view`). Making, saving, publishing, pinning and deleting are audited (`page.create`, `page.draft`, `page.publish` with who may open it and what it shows, `page.pin` when it changes, `page.delete`), never with a row's values.
 
 ## Not yet
 

@@ -39223,7 +39223,7 @@ paths:
       - Pages
       summary: Delete a page
       description: >-
-        The page and its versions. Audited as `page.delete`.
+        The page and its versions. Audited as `page.delete`. A page that was ever published also needs page.publish; page.edit alone deletes a draft never published.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -39241,6 +39241,13 @@ paths:
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
+        '403':
+          description: >-
+            The page is published, and the caller lacks page.publish.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             No such page.
@@ -39301,7 +39308,7 @@ paths:
       - Pages
       summary: Publish a page
       description: >-
-        The draft becomes what people open, as the next version, once no problem is left. Who may open it (`roles`) and what it shows are recorded in the audit (`page.publish`).
+        The draft becomes what people open, as the next version, once no problem is left. Who may open it (`roles`) and what it shows are recorded in the audit (`page.publish`). Where the business has four-eyes publishing, another person with page.publish publishes it: the person who last saved the draft (or their API key) is refused with 403, as is a caller that is no person.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -39330,6 +39337,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: >-
+            Four-eyes publishing: the caller saved the draft's last changes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           description: >-
             The page has no draft to publish.
@@ -39346,7 +39360,7 @@ paths:
       - Pages
       summary: Pin or unpin a page
       description: >-
-        A pinned page is shown in the navigation under Your pages, five at most, published pages only. Audited as `page.pin`.
+        A pinned page is shown in the navigation under Your pages, five at most (counted under a per-business lock), published pages only. Audited as `page.pin` when it changes.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -39395,7 +39409,7 @@ paths:
       - Pages
       summary: Draw a page
       description: >-
-        The page as drawn for the caller: each part with its figures and rows worked out on the server from the business's data tables, filters applied, at most 25 rows a part (then `more`). A page shows what its maker chose to those its roles let open it; a personal column is masked unless the caller holds table.read, and a search never reads a column masked for them. A part that cannot be drawn (a table or column gone) is `broken` for editors and left out for everyone else; one that cannot be read just now has `error`.
+        The page as drawn for the caller: each part with its figures and rows worked out on the server from the business's data tables, filters applied, at most 25 rows a part (then `more`). A page shows what its maker chose to those its roles let open it; a personal column is masked unless the caller holds table.read, a search never reads a column masked for them, and a choice or dates filter on one (refused at publishing) is neither drawn nor applied for them. Figures stay whole: filters narrow lists and tables only. A part that cannot be drawn (a table or column gone) is `broken` for editors and left out for everyone else; one that cannot be read just now has `error`.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -39456,7 +39470,7 @@ paths:
       - Pages
       summary: More rows of a part
       description: >-
-        One list or table part: the next rows (`cursor`, from `more`), or a table's rows in the order of one of its columns (`order`, `desc`).
+        One list or table part: the next rows (`cursor`, from `more`, opaque and taken only with the order it was given for), or a table's rows in the order of one of its columns (`order`, `desc`). A personal column is no order for a caller without table.read; rows the part itself orders by one go on, for them, through its first 1,000 rows.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -39509,7 +39523,7 @@ paths:
                 $ref: '#/components/schemas/PageBlock'
         '400':
           description: >-
-            Not a list or a table, or a column it does not show.
+            Not a list or a table; a column it does not show, or a personal one the caller may not read; or a cursor not given for this order.
           content:
             application/json:
               schema:

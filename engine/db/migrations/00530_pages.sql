@@ -28,6 +28,9 @@ CREATE TABLE pages (
   UNIQUE (tenant_id, name),
   CHECK (draft IS NOT NULL OR published_version IS NOT NULL)
 );
+-- Pinned pages keep distinct places (pinning counts under a per-business
+-- lock, api/pages.go).
+CREATE UNIQUE INDEX pages_pin_order ON pages (tenant_id, pin_order) WHERE pinned;
 ALTER TABLE pages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pages FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON pages TO taskiem_app
