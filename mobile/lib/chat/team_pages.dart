@@ -29,6 +29,7 @@ import 'book_sheet.dart' show dayLabel;
 import 'give_task.dart' show GiveTask, roleWords, weekdays, whoChoices;
 import 'groups.dart' show askSure, pickOneOf;
 import 'pay_sheet.dart' show PaySheet, paymentSentWords, staffPayAction;
+import 'payroll_page.dart' show PayrollStaffPage, maySeePayroll;
 import 'money_sheets.dart' show dateLabel;
 import 'words.dart' show CardTone, naira;
 import '../kit/icon.dart';
@@ -679,9 +680,10 @@ const staffOpAccount = 'staff.account';
 /// One person of the business: their job, usual hours and pay for the
 /// record, and how they are doing.
 class StaffPersonPage extends StatefulWidget {
-  const StaffPersonPage({super.key, required this.auth, required this.user, this.canRemove = false});
+  const StaffPersonPage({super.key, required this.auth, required this.user, this.canRemove = false, this.backLabel = 'Back to Team'});
   final Auth auth;
   final String user;
+  final String backLabel;
 
   /// Someone other than the person looking: Remove from the business.
   final bool canRemove;
@@ -874,7 +876,21 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
           ),
         if (owner && a != null)
           TkListRow(title: 'Unlink', sub: 'The saved account stays saved', icon: 'b-x', square: look.red, semanticsLabel: 'Unlink $name’s account', onTap: _busy ? null : () => _unlink(name)),
-        TkListRow(title: 'Salaries', sub: 'Paid through Payrolla, not here', icon: 'b-calendar', square: look.orange, chevron: false),
+        if (maySeePayroll(widget.auth))
+          () {
+            final pr = p['payrolla'] is Map ? _map(p['payrolla']) : null;
+            final who = pr == null ? '' : _str(pr['name']);
+            return TkListRow(
+              title: pr == null ? 'In Payrolla' : 'In Payrolla: ${who.isEmpty ? 'linked' : who}',
+              sub: pr == null ? 'Not linked yet · salaries are paid through Payrolla' : 'Their salary is paid through Payrolla',
+              icon: 'b-calendar',
+              square: look.orange,
+              semanticsLabel: pr == null ? '$name is not linked in Payrolla. Staff in Payrolla' : '$name is $who in Payrolla. Staff in Payrolla',
+              onTap: () => _push(context, PayrollStaffPage(auth: widget.auth, backLabel: 'Back to $name')).then((_) => _load()),
+            );
+          }()
+        else
+          TkListRow(title: 'Salaries', sub: 'Paid through Payrolla, not here', icon: 'b-calendar', square: look.orange, chevron: false),
       ],
     );
   }
@@ -913,7 +929,7 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
     return TkPageScreen(
       title: p == null ? 'Staff' : name,
       titleSize: 22,
-      backLabel: 'Back to Team',
+      backLabel: widget.backLabel,
       onRefresh: () async {
         await _load();
         await _loadFigures();

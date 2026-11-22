@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/menu_card.dart' show ActionFormSheet;
 import 'package:taskiem/chat/pay_sheet.dart' show PaySheet;
+import 'package:taskiem/chat/payroll_page.dart' show PayrollPage;
 import 'package:taskiem/chat/tool_sheet.dart' show ToolSheet;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
@@ -313,5 +314,46 @@ void main() {
     await settle(t);
     await t.pump(const Duration(milliseconds: 600));
     expect(said, hasLength(1), reason: 'nothing was sent as words');
+  });
+  testWidgets('Pay › Payroll (page /payroll) opens the Payroll screen, back to Taskiem', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final catalogue = {
+      'topics': [
+        {
+          'id': 'pay', 'name': 'Pay', 'icon': 'money', 'color': 'teal',
+          'actions': [
+            {..._a('pay.payroll', 'Payroll', 'Salaries, paid through Payrolla', 'money', opens: 'page'), 'page': '/payroll'},
+          ],
+        },
+      ],
+    };
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions') return http.Response(jsonEncode(catalogue), 200);
+        if (req.method == 'GET' && req.url.path == '/v1/payroll') return http.Response(jsonEncode({'connected': false, 'runs': <Object>[]}), 200);
+        if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
+          return http.Response(jsonEncode({'messages': [_menu('p1', {'topic': 'pay'}, '2026-11-11T13:40:00Z')]}), 200);
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), 'help pay');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    await t.ensureVisible(find.text('Payroll'));
+    await settle(t);
+    await t.tap(find.text('Payroll'));
+    await settle(t);
+    await t.pump(const Duration(milliseconds: 600));
+    expect(find.byType(PayrollPage), findsOneWidget);
+    expect(find.bySemanticsLabel('Back to Taskiem'), findsOneWidget);
+    expect(find.text('Payroll runs in Payrolla'), findsOneWidget);
   });
 }

@@ -544,6 +544,13 @@ Built 21 November 2026 in the same look, from the plan (no drawing yet).
   name is a lime callout, no account a red one; the message's name that is
   not the bank's an amber one.
 - **Pay on a rider:** a small Pay button on the rider's row.
+- **Payroll** (P4a; Payrolla's, shown in Taskiem): a list page like
+  Payments, the latest run's net pay large on a `TkTopCard` with its status
+  pill; the runs as rows with a calendar tile, "Nov 2026" (the month short
+  beside the amount and pill), Show more a `TkSmallButton`. A run is a
+  one-document page (title 22): net pay on top, Review and approve in
+  Payrolla a `TkCta` with an arrow, Not paid first. Staff in Payrolla: rows
+  with Confirm (primary), Choose or Unlink as small buttons at their end.
 
 ### Paying a bill by transfer
 

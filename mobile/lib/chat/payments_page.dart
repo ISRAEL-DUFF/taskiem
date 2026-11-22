@@ -30,6 +30,7 @@ import 'give_task.dart' show roleWords;
 import 'invoices_page.dart' show shortDay;
 import 'pay_many.dart';
 import 'pay_sheet.dart';
+import 'payroll_page.dart' show maySeePayroll, openPayroll;
 import 'team_pages.dart' show staffRoles;
 import 'words.dart' show naira;
 
@@ -258,6 +259,15 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
               square: look.teal,
               onTap: () => unawaited(_payMany()),
             ),
+            if (maySeePayroll(_auth))
+              TkListRow(
+                title: 'Payroll',
+                sub: 'Salaries, paid through Payrolla',
+                subLines: 1,
+                icon: 'b-calendar',
+                square: look.orange,
+                onTap: () => unawaited(openPayroll(context, _auth, backLabel: 'Back to Payments')),
+              ),
           ],
         ),
         if (list != null && list.isEmpty)
