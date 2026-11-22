@@ -206,6 +206,13 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.HasSizes() {
 			pi.Choices, pi.Sizes = listSizesOf(it, all)
+			// A product with sizes keeps no stock item of its own, so no
+			// unit: its sizes' unit is the list's.
+			for _, z := range all {
+				if pi.Unit == "" && z.VariantOf == it.ID && z.Unit != "" {
+					pi.Unit = z.Unit
+				}
+			}
 			at := map[string]int{}
 			for i, z := range pi.Sizes {
 				at[z.ItemID] = i
