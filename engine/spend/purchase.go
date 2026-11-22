@@ -168,10 +168,24 @@ type Paid struct {
 // label on it (Not labelled lines together, as one with no label), each
 // with its purchase_payments row; the parts add up exactly to what was
 // paid, and a part that comes to no kobo writes nothing. fresh is false
-// when the payment's key was recorded already: nothing is written again.
+// when anything was recorded under the payment's key already (any part,
+// in any channel, however the order is labelled now): nothing is written
+// again.
 func RecordPurchaseTx(ctx context.Context, tx pgx.Tx, log *moneylog.Log, tenant uuid.UUID, in PurchasePay) (paid []Paid, fresh bool, err error) {
 	if log == nil || in.Key == "" || in.AmountKobo <= 0 {
 		return nil, false, errors.New("spend: a payment needs the money log, a key and an amount")
+	}
+	// The parts' references follow the order's labels as they are now: an
+	// order relabelled since the key was first paid groups its lines
+	// otherwise, and a part not written before would pass as new. So a key
+	// with anything written under it, in any part or channel, is paid.
+	var done bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM money_entries WHERE tenant_id = $1 AND channel IN ('cash', 'bank') AND reference = ANY ($2))`,
+		tenant, partRefs(in.Key)).Scan(&done); err != nil {
+		return nil, false, err
+	}
+	if done {
+		return nil, false, nil
 	}
 	if err := OrderLabelsTx(ctx, tx, tenant, in.Order, in.Actor); err != nil {
 		return nil, false, err
@@ -217,6 +231,16 @@ func RecordPurchaseTx(ctx context.Context, tx pgx.Tx, log *moneylog.Log, tenant 
 		}
 	}
 	return paid, fresh, nil
+}
+
+// partRefs is every reference a payment's parts may have: purchase:<key>,
+// then /2 to /50 (an order has at most 50 lines, so as many labels).
+func partRefs(key string) []string {
+	refs := []string{"purchase:" + key}
+	for n := 2; n <= 50; n++ {
+		refs = append(refs, "purchase:"+key+"/"+strconv.Itoa(n))
+	}
+	return refs
 }
 
 // EntryPartsTx is what a purchase's expense bought, by treatment: the
