@@ -30,7 +30,7 @@ import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'groups.dart' show pickOneOf;
 import 'pay_chip.dart' show askToSave, payFromReading;
-import 'photo_text.dart' show PhotoReadButton, readPhotoFromPhone, readingPhoto;
+import 'photo_text.dart' show PhotoAI, PhotoAICallout, PhotoReadButton, PhotoReading, noWordsInPhoto, readPhotoFromPhone, readPhotoWithAI, readingPhoto;
 import 'words.dart' show CardTone, naira;
 
 /// What a payment is for: the catalogue's words ("a delivery") and the
@@ -263,6 +263,9 @@ class _PaySheetState extends State<PaySheet> {
   late String _saidName = widget.said;
   late String _saidIn = widget.saidIn;
   bool _photoBusy = false;
+  // A photo the phone could not read, offered to be read with AI.
+  PhotoReading? _unreadPhoto;
+  late final _ai = PhotoAI(widget.auth);
 
   static const _typed = {'text', 'phone', 'money', 'number', 'signed', 'choice', 'account', 'bank'};
 
@@ -416,21 +419,48 @@ class _PaySheetState extends State<PaySheet> {
   /// From a photo: read on the phone, the words read by Taskiem (`from:
   /// "photo"`), and the form filled in as the chip under a message fills
   /// it: the number, bank and amount, or the saved account by its @name.
+  /// Nothing found: said, or, where the business allows it, "Read it with
+  /// AI" offered under the button (I3).
   Future<void> _fromPhoto() async {
-    final words = await readPhotoFromPhone(context, title: 'Account details from a photo');
-    if (words == null || !mounted) return;
+    setState(() => _unreadPhoto = null);
+    final photo = await readPhotoFromPhone(context, title: 'Account details from a photo');
+    if (photo == null || !mounted) return;
+    if (await _fill(photo.words) || !mounted) return;
+    if (await _ai.offered()) {
+      if (mounted) setState(() => _unreadPhoto = photo);
+      return;
+    }
+    final said = await _ai.offWords(photo.words.isEmpty ? noWordsInPhoto : noAccountInPhoto);
+    if (mounted && said != null) showTkToast(context, said);
+  }
+
+  /// The photo the phone could not read, sent to Taskiem's AI, and its
+  /// words read as the phone's are.
+  Future<void> _readWithAI() async {
+    final photo = _unreadPhoto;
+    if (photo == null || _busy || _photoBusy) return;
+    setState(() => _photoBusy = true);
+    final words = await readPhotoWithAI(context, widget.auth, photo);
+    if (!mounted) return;
+    setState(() => _photoBusy = false);
+    if (words == null) return;
+    setState(() => _unreadPhoto = null);
+    if (!await _fill(words) && mounted) showTkToast(context, noAccountInPhoto);
+  }
+
+  /// A photo's words read by Taskiem and the form filled in: false when
+  /// they hold no account (nothing said), true when filled or said.
+  Future<bool> _fill(String words) async {
+    if (words.isEmpty) return false;
     setState(() => (_photoBusy = true, _error = null));
     try {
       final r = await widget.auth.api.readPayment(body: ReadPaymentRequest(text: words, from: 'photo'));
-      if (!mounted) return;
-      if (!r.found) {
-        showTkToast(context, noAccountInPhoto);
-        return;
-      }
+      if (!mounted) return true;
+      if (!r.found) return false;
       final fill = payFromReading((account: _ofKind('account') != null ? widget.action : null, person: _ofKind('payee') != null ? widget.action : null), r);
       if (fill == null) {
         showTkToast(context, askToSave);
-        return;
+        return true;
       }
       setState(() {
         _saidName = r.name ?? '';
@@ -455,14 +485,25 @@ class _PaySheetState extends State<PaySheet> {
     } finally {
       if (mounted) setState(() => _photoBusy = false);
     }
+    return true;
   }
 
-  /// "From a photo", and that the photo stays on the phone.
-  Widget _photoRow() => PhotoReadButton(
-    label: _photoBusy ? 'Reading…' : 'From a photo',
-    semantics: 'Fill this in from a photo of the account details. Read on this phone, not sent',
-    onPressed: _photoBusy || _busy || readingPhoto ? null : () => unawaited(_fromPhoto()),
-  );
+  /// "From a photo", and that the photo stays on the phone; under it,
+  /// when the phone found nothing and the business allows it, "Read it
+  /// with AI".
+  Widget _photoRow() {
+    final button = PhotoReadButton(
+      label: _photoBusy && _unreadPhoto == null ? 'Reading…' : 'From a photo',
+      semantics: 'Fill this in from a photo of the account details. Read on this phone, not sent',
+      onPressed: _photoBusy || _busy || readingPhoto ? null : () => unawaited(_fromPhoto()),
+    );
+    final photo = _unreadPhoto;
+    if (photo == null) return button;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [button, const SizedBox(height: 10), PhotoAICallout(title: photo.words.isEmpty ? 'No words found' : 'No account number found', busy: _photoBusy, onPressed: () => unawaited(_readWithAI()))],
+    );
+  }
 
   /// The payment prepared, from the form: nothing is sent.
   Future<void> _prepare() async {

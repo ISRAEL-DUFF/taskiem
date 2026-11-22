@@ -60,7 +60,7 @@ import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
-import 'save_as.dart' show saveFromWords, saveNamed;
+import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
 
 /// Conversation.tsx PAGE: a page of messages.
@@ -1301,6 +1301,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final body = m.body ?? '';
     final other = _d.conv.name;
     final mineEmoji = m.reactions?.where((r) => r.mine == true).firstOrNull?.emoji;
+    final photo = card == null && x.out == null && !m.id.startsWith('local-') && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/');
     setState(() {
       _menuFor = m.id;
       _picking = false;
@@ -1319,6 +1320,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
         // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
         if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
+        // A photo (reading account details from photos): read on the phone.
+        if (photo) ...photoAccountItems(context, _d.chats.auth, ChatFiles.path(m), business: true),
         if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
         MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
         if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),

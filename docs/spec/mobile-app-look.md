@@ -354,8 +354,17 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
 - The chats you work from: WhatsApp, Telegram and Slack, each with
   whether it is linked.
 - Saved: Saved things, the business's (saved objects S0, S1).
-- For everyone here: Chat tools, a switch, for owners and admins.
+- For everyone here: Chat tools, a switch, for owners and admins; Read
+  handwriting with AI (I3), a switch beside it where this Taskiem can,
+  that only owners can change (others see it, with "Only an owner can
+  change this"), what it sends in the note under it.
 - Sign out of this phone.
+
+A photo the phone could not read (no account, no line of a list): where
+reading with AI is on, a violet `PhotoAICallout` under "From a photo"
+("No account number found", "Read it with AI", "Sends this photo to
+Taskiem's AI. It is not kept."); from a chat photo's menu, the same as a
+`pickAction` sheet.
 
 Every row that has more opens its own page (`SettingsPage`, Back to
 Settings), with its groups as headings over cards (`SettingsCard`).

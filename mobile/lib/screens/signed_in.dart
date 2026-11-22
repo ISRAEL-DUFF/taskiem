@@ -50,6 +50,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
   TelegramLink? _tg;
   SlackLink? _slack;
   List<Map<String, dynamic>>? _keys;
+  AIPhotoReading? _aiPhoto;
 
   @override
   void initState() {
@@ -85,6 +86,11 @@ class _SignedInScreenState extends State<SignedInScreen> {
         final r = (await widget.auth.transport.send('GET', '/v1/me/passkeys') as Map)['passkeys'] as List;
         if (mounted) setState(() => _keys = [for (final k in r) (k as Map).cast<String, dynamic>()]);
       }),
+      if (!widget.auth.personal)
+        _quiet(() async {
+          final a = await widget.auth.api.getAIPhotoReading();
+          if (mounted) setState(() => _aiPhoto = a);
+        }),
     ]);
   }
 
@@ -304,6 +310,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
           ),
         // Owners and admins turn chat tools on for everyone.
         if (widget.auth.can('member.manage')) ChatToolsCard(auth: widget.auth),
+        // Reading photos with AI (I3): an owner turns it on; others see it.
+        if (!widget.auth.personal && (_aiPhoto?.available ?? false)) AIPhotoReadingCard(auth: widget.auth, start: _aiPhoto!, heading: !widget.auth.can('member.manage')),
         TkSection(
           inset: 56,
           children: [

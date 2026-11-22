@@ -30,7 +30,7 @@ import 'menu_card.dart' show catalogueOf;
 import 'my_chat.dart' show sayFailure;
 import 'pay_save.dart' show PaySaveSheet, PaySaved, maySaveFromMessages;
 import 'pay_sheet.dart' show PaySheet, noAccountInPhoto;
-import 'photo_text.dart' show readChatPhoto;
+import 'photo_text.dart' show PhotoAI, noWordsInPhoto, readChatPhoto;
 import 'words.dart' show naira;
 
 /// Ten digits together (a space or a dash between them allowed), not
@@ -126,10 +126,26 @@ const askToSave = 'Ask an owner to save this account: then you can pay it.';
 /// "Pay this account" on a photo in a chat ([path], where the chat
 /// fetches it): read on the phone, the words read by Taskiem (`from:
 /// "photo"`), and the Pay sheet opened filled in, as the chip under a
-/// message opens it. Nothing found: said.
+/// message opens it. Nothing found: said, or, where the business allows
+/// it, "Read it with AI" offered, and its words read the same way.
 Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) async {
-  final words = await readChatPhoto(context, auth, path);
+  final photo = await readChatPhoto(context, auth, path);
+  if (photo == null || !context.mounted) return;
+  if (await _payFromPhotoWords(context, auth, photo.words) || !context.mounted) return;
+  final words = await PhotoAI(auth).offer(
+    context,
+    photo,
+    title: photo.words.isEmpty ? 'This phone read no words in it' : 'This phone found no account number',
+    said: photo.words.isEmpty ? noWordsInPhoto : noAccountInPhoto,
+  );
   if (words == null || !context.mounted) return;
+  if (!await _payFromPhotoWords(context, auth, words) && context.mounted) showTkToast(context, noAccountInPhoto);
+}
+
+/// A photo's words read by Taskiem and the Pay sheet opened with them:
+/// false when they hold no account (nothing said), true when done or said.
+Future<bool> _payFromPhotoWords(BuildContext context, Auth auth, String words) async {
+  if (words.isEmpty) return false;
   final ReadPaymentResponse r;
   final PayForms forms;
   try {
@@ -137,26 +153,24 @@ Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) asyn
     forms = await payFormsOf(auth);
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
-    return;
+    return true;
   }
-  if (!context.mounted) return;
-  if (!r.found) {
-    showTkToast(context, noAccountInPhoto);
-    return;
-  }
+  if (!context.mounted) return true;
+  if (!r.found) return false;
   if (forms.account == null && forms.person == null) {
     showTkToast(context, 'Paying is not set up for this business yet.');
-    return;
+    return true;
   }
   final fill = payFromReading(forms, r);
   if (fill == null) {
     showTkToast(context, askToSave);
-    return;
+    return true;
   }
   await showTkSheet<Payment>(
     context,
     (_) => PaySheet(auth: auth, action: fill.action, initial: fill.initial, from: 'message', said: r.name ?? '', saidIn: 'photo'),
   );
+  return true;
 }
 
 /// The chip under a message that holds an account number: nothing until

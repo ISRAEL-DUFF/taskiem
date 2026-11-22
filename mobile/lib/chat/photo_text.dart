@@ -6,6 +6,11 @@
 // digits. A test stands in for the reader ([photoText]), the picker
 // ([pickPhotoToRead]) and the folder a chat's photo is put in for a moment
 // ([photoTempDir]).
+//
+// Reading photos with AI (I3): where an owner turned it on, a photo the
+// phone could not read (handwriting) may be sent to Taskiem's AI, once the
+// person taps "Read it with AI" ([PhotoAI], [readPhotoWithAI]); it is not
+// kept, and its words come back to be read as the phone's are.
 
 import 'dart:async';
 import 'dart:io';
@@ -15,10 +20,14 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:path_provider/path_provider.dart';
 
+import '../api/api.g.dart' show AIPhotoReading;
+import '../api/transport.dart' show ApiError, Offline;
 import '../app/auth.dart';
 import '../app/lock.dart' show stepOut;
 import '../kit/kit.dart' show TkSmallButton;
+import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/modal.dart' show showTkToast;
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'groups.dart' show pickAction;
 
@@ -100,11 +109,19 @@ bool _reading = false;
 /// Whether a photo is being read just now.
 bool get readingPhoto => _reading;
 
+/// A photo read on the phone: its words ('' when it had none), and the
+/// photo itself, got again only if it is read with AI ([readPhotoWithAI]).
+class PhotoReading {
+  const PhotoReading(this.words, this.photo);
+  final String words;
+  final Future<List<int>> Function() photo;
+}
+
 /// Camera or the phone's photos (the phone asks for the camera or the
-/// photos only once one is chosen), then the photo read on the phone: its
-/// words, or null when put away or nothing could be read (said in a
-/// toast).
-Future<String?> readPhotoFromPhone(BuildContext context, {String title = 'Read a photo'}) async {
+/// photos only once one is chosen), then the photo read on the phone: what
+/// it read (its words may be ''), or null when put away or it could not be
+/// read (said in a toast).
+Future<PhotoReading?> readPhotoFromPhone(BuildContext context, {String title = 'Read a photo'}) async {
   if (_reading) return null;
   final from = await pickAction(
     context,
@@ -117,7 +134,8 @@ Future<String?> readPhotoFromPhone(BuildContext context, {String title = 'Read a
   try {
     final path = await pickPhotoToRead(from == 'camera' ? ImageSource.camera : ImageSource.gallery);
     if (path == null || !context.mounted) return null;
-    return await _readSaid(context, path);
+    final words = await _readSaid(context, path);
+    return words == null ? null : PhotoReading(words, () => File(path).readAsBytes());
   } on Object {
     if (context.mounted) showTkToast(context, 'That photo could not be opened. Try another.', error: true);
     return null;
@@ -128,9 +146,10 @@ Future<String?> readPhotoFromPhone(BuildContext context, {String title = 'Read a
 
 /// A photo in a chat, which is only on the server ([path], fetched as the
 /// chat fetches it to show or save): put in a file on the phone for a
-/// moment, read on the phone, and the file deleted. Its words, or null
-/// (said in a toast).
-Future<String?> readChatPhoto(BuildContext context, Auth auth, String path) async {
+/// moment, read on the phone, and the file deleted. What it read (its
+/// words may be ''; the photo kept in memory meanwhile, for "Read it with
+/// AI"), or null (said in a toast).
+Future<PhotoReading?> readChatPhoto(BuildContext context, Auth auth, String path) async {
   if (_reading) return null;
   _reading = true;
   File? file;
@@ -140,7 +159,8 @@ Future<String?> readChatPhoto(BuildContext context, Auth auth, String path) asyn
     file = File('${dir.path}/read-${DateTime.now().microsecondsSinceEpoch}.jpg');
     await file.writeAsBytes(bytes, flush: true);
     if (!context.mounted) return null;
-    return await _readSaid(context, file.path);
+    final words = await _readSaid(context, file.path);
+    return words == null ? null : PhotoReading(words, () async => bytes);
   } on Object {
     if (context.mounted) showTkToast(context, 'That photo could not be got just now. Try again.', error: true);
     return null;
@@ -154,19 +174,102 @@ Future<String?> readChatPhoto(BuildContext context, Auth auth, String path) asyn
   }
 }
 
+/// The photo's words, '' for none; null when the phone could not read it
+/// (said).
 Future<String?> _readSaid(BuildContext context, String path) async {
-  final String words;
   try {
-    words = (await photoText.read(path)).trim();
+    return (await photoText.read(path)).trim();
   } on Object {
     if (context.mounted) showTkToast(context, 'This phone could not read that photo. Type it in.', error: true);
     return null;
   }
-  if (words.isEmpty) {
-    if (context.mounted) showTkToast(context, 'No words in that photo. Type it in.');
-    return null;
+}
+
+/// Said when a photo has no words the phone could read.
+const noWordsInPhoto = 'No words in that photo. Type it in.';
+
+/// Beside "Read it with AI": what it does with the photo.
+const photoAINote = 'Sends this photo to Taskiem’s AI. It is not kept.';
+
+/// Reading photos with AI (I3), for one screen: whether the business lets
+/// a photo the phone could not read be sent to Taskiem's AI, asked once,
+/// the first time the phone finds nothing (GET
+/// /v1/settings/ai-photo-reading); not known (it failed) is off.
+class PhotoAI {
+  PhotoAI(this.auth);
+  final Auth auth;
+  Future<AIPhotoReading?>? _setting;
+
+  Future<AIPhotoReading?> _get() => _setting ??= auth.api.getAIPhotoReading().then<AIPhotoReading?>((v) => v, onError: (Object _) => null);
+
+  /// Whether "Read it with AI" is offered: it is on, and can be done here.
+  Future<bool> offered() async {
+    final s = await _get();
+    return s != null && s.available && s.aiPhotoReading;
   }
-  return words;
+
+  /// What is said when the phone found nothing and it is off ([said], or
+  /// nothing): for an owner, that it can be turned on.
+  Future<String?> offWords(String? said) async {
+    final s = await _get();
+    final owner = (auth.me?.roles as List?)?.contains('owner') ?? false;
+    if (s == null || !s.available || s.aiPhotoReading || !owner) return said;
+    const hint = 'Handwriting? You can turn on Read handwriting with AI in Settings.';
+    return said == null ? hint : '$said $hint';
+  }
+
+  /// The phone found nothing in [photo]: "Read it with AI" offered in a
+  /// sheet ([title]: what the phone could not find), or, when it is off,
+  /// [said] in a toast. The AI's words, or null.
+  Future<String?> offer(BuildContext context, PhotoReading photo, {required String title, required String said}) async {
+    if (!await offered()) {
+      final w = await offWords(said);
+      if (w != null && context.mounted) showTkToast(context, w);
+      return null;
+    }
+    if (!context.mounted) return null;
+    final go = await pickAction(context, title: title, note: photoAINote, actions: const [('ai', 'Read it with AI', 'b-bolt', false)]);
+    if (go != 'ai' || !context.mounted) return null;
+    return readPhotoWithAI(context, auth, photo);
+  }
+}
+
+/// The same photo sent to Taskiem's AI to be read (POST /v1/photo-text, a
+/// `photo` part; not kept there): its words, to be read as the phone's are
+/// (`from: "photo"`), or null (the server's refusal, or no words, said in
+/// a toast).
+Future<String?> readPhotoWithAI(BuildContext context, Auth auth, PhotoReading photo) async {
+  try {
+    final bytes = await photo.photo();
+    final kind = _kind(bytes);
+    final j = await auth.transport.upload('/v1/photo-text', bytes: bytes, filename: 'photo.$kind', type: 'image/$kind', field: 'photo');
+    final words = '${(j is Map ? j['text'] : null) ?? ''}'.trim();
+    if (words.isEmpty && context.mounted) showTkToast(context, 'Taskiem’s AI found no words in that photo. Type it in.');
+    return words.isEmpty ? null : words;
+  } on ApiError catch (e) {
+    if (context.mounted) showTkToast(context, e.message, error: true);
+  } on Offline {
+    if (context.mounted) showTkToast(context, 'You’re offline. Try again when you’re back online.', error: true);
+  } on Object {
+    if (context.mounted) showTkToast(context, 'That photo could not be sent just now. Try again.', error: true);
+  }
+  return null;
+}
+
+/// A photo's kind by its first bytes (the server checks it again).
+String _kind(List<int> b) {
+  bool starts(List<int> m, [int at = 0]) {
+    if (b.length < at + m.length) return false;
+    for (var i = 0; i < m.length; i++) {
+      if (b[at + i] != m[i]) return false;
+    }
+    return true;
+  }
+
+  if (starts(const [0x89, 0x50, 0x4E, 0x47])) return 'png';
+  if (starts(const [0x47, 0x49, 0x46])) return 'gif';
+  if (starts(const [0x52, 0x49, 0x46, 0x46]) && starts(const [0x57, 0x45, 0x42, 0x50], 8)) return 'webp';
+  return 'jpeg';
 }
 
 /// A form's "From a photo" button, and beside it (under it when there is
@@ -187,4 +290,30 @@ class PhotoReadButton extends StatelessWidget {
       Text('Read on this phone, not sent.', style: tkText(size: 13, lineHeight: 1.35, color: TkTheme.tokens(context).muted)),
     ],
   );
+}
+
+/// Under a form's "From a photo", when the phone found nothing ([title])
+/// and the business allows it: "Read it with AI", and what that sends.
+class PhotoAICallout extends StatelessWidget {
+  const PhotoAICallout({super.key, required this.title, this.busy = false, required this.onPressed});
+  final String title;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final look = TkLook.of(context);
+    return TkCallout(
+      leading: TkSquare('b-bolt', color: look.violet),
+      title: title,
+      sub: photoAINote,
+      subLines: 3,
+      color: look.violet,
+      button: busy ? 'Reading…' : 'Read it with AI',
+      semantics: 'Read it with AI. $photoAINote',
+      onPressed: () {
+        if (!busy) onPressed();
+      },
+    );
+  }
 }

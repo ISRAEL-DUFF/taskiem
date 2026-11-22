@@ -59,7 +59,7 @@ import 'pick_problem.dart';
 import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
-import 'save_as.dart' show saveFromWords, saveNamed;
+import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
 
 /// How often an open group reads again.
@@ -1071,6 +1071,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
         if (write && live) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
+        // A photo (reading account details from photos): read on the phone.
+        if (live && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
+          ...photoAccountItems(context, d.auth, '${d.base}/files/${Uri.encodeComponent(m.id)}'),
         if (live && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (live) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         if (m.mine && live) MenuItem('info', 'Info', () => showReadBy(context, d, m)),

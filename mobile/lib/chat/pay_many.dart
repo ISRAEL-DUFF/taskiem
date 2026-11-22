@@ -33,7 +33,7 @@ import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'groups.dart' show pickOneOf;
 import 'pay_sheet.dart';
-import 'photo_text.dart' show PhotoReadButton, readPhotoFromPhone, readingPhoto;
+import 'photo_text.dart' show PhotoAI, PhotoAICallout, PhotoReadButton, PhotoReading, noWordsInPhoto, readPhotoFromPhone, readPhotoWithAI, readingPhoto;
 import 'saved_fill.dart' show readSaved;
 import 'words.dart' show CardTone, naira;
 
@@ -200,6 +200,10 @@ class _PayManySheetState extends State<PayManySheet> {
   bool _reading = false;
   // The box holds words read from a photo: sent with `from: "photo"`.
   bool _fromPhoto = false;
+  // A photo the phone read no line of, offered to be read with AI.
+  PhotoReading? _unreadPhoto;
+  bool _aiBusy = false;
+  late final _ai = PhotoAI(widget.auth);
   bool _picking = false;
   bool _busy = false;
   // Lines of the pasted list that could not be read: kept in the box.
@@ -364,11 +368,12 @@ class _PayManySheetState extends State<PayManySheet> {
 
   /// The pasted list read: each line read becomes a row; those that
   /// could not be read stay in the box, with why, to fix and read again.
-  Future<void> _read() async {
+  /// How many lines were read; null when it failed (said).
+  Future<int?> _read() async {
     setState(() => (_reading = true, _error = null));
     try {
       final r = await _auth.api.readPaymentList(body: ReadPaymentListRequest(text: _paste.text, from: _fromPhoto ? 'photo' : null));
-      if (!mounted) return;
+      if (!mounted) return null;
       final good = r.lines.where((l) => (l.problem ?? '').isEmpty).toList();
       final bad = r.lines.where((l) => (l.problem ?? '').isNotEmpty).toList();
       _add([
@@ -398,22 +403,56 @@ class _PayManySheetState extends State<PayManySheet> {
           _fromPhoto = false;
         }
       });
+      return good.length;
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
+      return null;
     } finally {
       if (mounted) setState(() => _reading = false);
     }
   }
 
   /// From a photo of a list: read on the phone, put in the box, and read
-  /// as a pasted list is.
+  /// as a pasted list is. No line read: where the business allows it,
+  /// "Read it with AI" offered under the button (I3).
   Future<void> _photo() async {
-    final words = await readPhotoFromPhone(context, title: 'A photo of a list');
-    if (words == null || !mounted) return;
+    setState(() => _unreadPhoto = null);
+    final photo = await readPhotoFromPhone(context, title: 'A photo of a list');
+    if (photo == null || !mounted) return;
+    if (photo.words.isNotEmpty) {
+      final n = await _readPhotoWords(photo.words);
+      if (n == null || n > 0 || !mounted) return;
+    }
+    if (await _ai.offered()) {
+      if (mounted) setState(() => _unreadPhoto = photo);
+      return;
+    }
+    // Off: as before (a photo with no words said), and for an owner that
+    // it can be turned on.
+    final said = await _ai.offWords(photo.words.isEmpty ? noWordsInPhoto : null);
+    if (mounted && said != null) showTkToast(context, said);
+  }
+
+  /// A photo's words put in the box and read as a pasted list is.
+  Future<int?> _readPhotoWords(String words) async {
     setState(() => (_pasting = true, _unread = const []));
     _paste.text = words;
     _fromPhoto = true;
-    await _read();
+    return _read();
+  }
+
+  /// The photo the phone could not read, sent to Taskiem's AI, and its
+  /// words read as the phone's are.
+  Future<void> _readWithAI() async {
+    final photo = _unreadPhoto;
+    if (photo == null || _aiBusy || _busy) return;
+    setState(() => _aiBusy = true);
+    final words = await readPhotoWithAI(context, _auth, photo);
+    if (!mounted) return;
+    setState(() => _aiBusy = false);
+    if (words == null) return;
+    setState(() => _unreadPhoto = null);
+    await _readPhotoWords(words);
   }
 
   Future<void> _pickFor(PayRow r) async {
@@ -604,8 +643,14 @@ class _PayManySheetState extends State<PayManySheet> {
         PhotoReadButton(
           label: 'From a photo of a list',
           semantics: 'Add people from a photo of a list. Read on this phone, not sent',
-          onPressed: _busy || _reading || readingPhoto ? null : () => unawaited(_photo()),
+          onPressed: _busy || _reading || _aiBusy || readingPhoto ? null : () => unawaited(_photo()),
         ),
+        if (_unreadPhoto case final photo?)
+          PhotoAICallout(
+            title: photo.words.isEmpty ? 'No words found' : 'No line of the list read',
+            busy: _aiBusy || _reading,
+            onPressed: () => unawaited(_readWithAI()),
+          ),
         if (_pasting) ...[
           TkFormGroup(
             children: [

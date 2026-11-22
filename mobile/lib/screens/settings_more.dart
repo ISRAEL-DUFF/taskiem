@@ -8,6 +8,8 @@
 // code (or your password, when there is no stronger way); a passkey comes
 // with M4.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -479,6 +481,84 @@ class _ChatToolsCardState extends _Section<ChatToolsCard> {
         const SizedBox(height: 10),
         const SettingsNote(
           'On WhatsApp, Telegram, Slack and in your Taskiem chat, a message naming linked businesses goes straight to them. Write @Taskiem to ask Taskiem instead. Everyone in the business gets the same.',
+        ),
+      ],
+    );
+  }
+}
+
+// --- reading photos with AI ---
+
+/// Reading photos with AI (I3; GET/PUT /v1/settings/ai-photo-reading): an
+/// owner lets a photo the phone cannot read (handwriting) be sent to
+/// Taskiem's AI. Shown where this Taskiem can do it ([start] read by the
+/// page); others see it, not to change. [heading] when it is the first of
+/// "For everyone here" (chat tools not shown).
+class AIPhotoReadingCard extends StatefulWidget {
+  const AIPhotoReadingCard({super.key, required this.auth, required this.start, this.heading = false});
+  final Auth auth;
+  final AIPhotoReading start;
+  final bool heading;
+
+  @override
+  State<AIPhotoReadingCard> createState() => _AIPhotoReadingCardState();
+}
+
+class _AIPhotoReadingCardState extends State<AIPhotoReadingCard> {
+  late bool _on = widget.start.aiPhotoReading;
+  bool _busy = false;
+
+  bool get _owner => (widget.auth.me?.roles as List?)?.contains('owner') ?? false;
+
+  @override
+  void didUpdateWidget(AIPhotoReadingCard old) {
+    super.didUpdateWidget(old);
+    if (!_busy && old.start.aiPhotoReading != widget.start.aiPhotoReading) _on = widget.start.aiPhotoReading;
+  }
+
+  /// What was chosen shows at once; taken back, and said, if refused.
+  Future<void> _flip() async {
+    if (_busy || !_owner) return;
+    final next = !_on;
+    setState(() => (_on = next, _busy = true));
+    try {
+      final s = await widget.auth.api.putAIPhotoReading(body: PutAIPhotoReadingRequest(aiPhotoReading: next));
+      if (!mounted) return;
+      setState(() => _on = s.aiPhotoReading);
+      showTkToast(context, 'Saved');
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _on = !next);
+      showTkToast(context, _say(e), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = _owner;
+    final may = owner && !_busy;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.heading) const SettingsHeading('For everyone here'),
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'Read handwriting with AI',
+              sub: owner ? 'Photos this phone cannot read' : 'Only an owner can change this',
+              icon: 'b-bolt',
+              square: TkLook.of(context).violet,
+              trailing: TkSwitch(label: 'Read handwriting with AI', on: _on, onChanged: may ? (_) => unawaited(_flip()) : null),
+              onTap: may ? () => unawaited(_flip()) : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const SettingsNote(
+          'A photo a phone cannot read, like handwriting, may be sent to Taskiem’s AI to read. The photo is not kept, and its words go back only to whoever asked. It uses this month’s AI allowance. Only owners can change it.',
         ),
       ],
     );
