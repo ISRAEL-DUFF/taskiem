@@ -126,7 +126,7 @@ test("the menu floats: the reactions above the bubble, the actions below it, the
   await axeBoth(buyer, "the menu open on a computer");
 });
 
-test("arrow keys move through the menu, Esc closes it and the chevron has the focus, a click elsewhere and a scroll close it", async ({
+test("arrow keys move through the menu, Esc closes it and the chevron has the focus, a click elsewhere and the reader scrolling close it, the thread moving does not", async ({
   browser,
 }) => {
   const { seller, buyer, link } = await linked(browser, {
@@ -152,9 +152,16 @@ test("arrow keys move through the menu, Esc closes it and the chevron has the fo
   await buyer.mouse.click(700, 600);
   await expect(menu).toHaveCount(0);
   await b.click({ button: "right" });
+  // A scroll the thread makes (keeping its place as something above it
+  // grows) moves the bubble: the menu goes with it and stays open.
   await buyer
     .getByTestId("chat-stream")
     .evaluate((el) => el.dispatchEvent(new Event("scroll")));
+  await expect(menu).toBeVisible();
+  // The reader's own scrolling closes it.
+  await buyer
+    .getByTestId("chat-stream")
+    .evaluate((el) => el.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true })));
   await expect(menu).toHaveCount(0);
 });
 

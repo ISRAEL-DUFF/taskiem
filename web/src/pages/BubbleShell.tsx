@@ -187,10 +187,13 @@ export function BubbleShell({
     };
   }, [more]);
   // Where the menu floats: the reactions above the bubble, the actions
-  // below it, on the bubble's own side, kept on the screen. A scroll or a
-  // resize closes it (the bubble moves from under it).
+  // below it, on the bubble's own side, kept on the screen. It follows the
+  // bubble when the thread moves it (a banner above, the thread keeping
+  // its place); the reader scrolling, or the bubble leaving the screen,
+  // closes it, and so does a resize.
   const pill = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
+  const place = useRef<() => void>(undefined);
   const [pos, setPos] = useState<{
     pill?: { top: number; left: number };
     card?: { top: number; left: number };
@@ -227,6 +230,7 @@ export function BubbleShell({
       }
       setPos(next);
     };
+    place.current = placeAll;
     placeAll();
     // Placed again as what floats changes size: the emoji panel loads after
     // its placeholder is placed, and would otherwise grow over the bubble.
@@ -234,16 +238,30 @@ export function BubbleShell({
     const sizes = new ResizeObserver(placeAll);
     if (pill.current) sizes.observe(pill.current);
     if (card.current) sizes.observe(card.current);
-    return () => sizes.disconnect();
+    return () => {
+      sizes.disconnect();
+      place.current = undefined;
+    };
   }, [more, mine]);
   useEffect(() => {
     if (!more) return;
     const shut = () => setMore(false);
+    // A scroll the thread makes moves the bubble: the menu goes with it,
+    // unless the bubble is off the screen. The reader's own scrolling
+    // (a wheel, a finger moving) closes it.
+    const follow = () => {
+      const r = bubbleEl.current?.getBoundingClientRect();
+      if (!r || r.bottom < 0 || r.top > window.innerHeight) shut();
+      else place.current?.();
+    };
+    const reader = ["wheel", "touchmove"] as const;
     window.addEventListener("resize", shut);
-    document.addEventListener("scroll", shut, true);
+    document.addEventListener("scroll", follow, true);
+    for (const e of reader) document.addEventListener(e, shut, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", shut);
-      document.removeEventListener("scroll", shut, true);
+      document.removeEventListener("scroll", follow, true);
+      for (const e of reader) document.removeEventListener(e, shut, true);
     };
   }, [more]);
   const parts =
