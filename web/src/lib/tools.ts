@@ -145,9 +145,11 @@ function stockRows(data: unknown): ToolRow[] {
       const shown: StockItem = sizes
         ? { ...it, stock: sizes.stock, low: sizes.low > 0 }
         : it;
-      const price =
-        it.price_kobo !== undefined
-          ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
+      // A material is counted, never sold (what a business buys §4.1).
+      const price = it.material
+        ? "Not sold"
+        : it.price_kobo !== undefined
+          ? `${formatPrice(it.price_kobo)}${it.unit && (it.uses ?? 1) <= 1 ? ` a ${it.unit}` : ""}`
           : "No price yet";
       return {
         id: it.id,
@@ -272,7 +274,8 @@ export const TOOLS: Tool[] = [
     perm: "table.read",
     url: "/v1/stock",
     page: "/storefront/stock",
-    rows: stockRows,
+    // What is sold: a material is on Stock only.
+    rows: (data) => stockRows(data).filter((r) => !(r.data as StockItem).material),
     line: (r) => count(r.length, "item"),
     chips: [
       { label: "Low stock", tag: "low" },

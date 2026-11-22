@@ -441,6 +441,33 @@ A check, not a data migration; no migration.
 
 **Left for later:** `add …` counting in with **Do you sell it?** in chat, and the list of the owner's workflows that use the old columns (the other S1b parts); Counted by on the screens (S2); `purchase_lines` (U1).
 
+### As built: S2 (web)
+
+No server change. The app's screens are their own part of S2.
+
+**The Stock page** (`StorefrontStock.tsx`) reads `GET /v1/stock/stock-items`:
+
+- **What you count**: each stock item with its count and unit, levels, cost, supplier and what to order when low. **Sold as** names its products, with "(uses 6 bottles)" when one sale takes more than one, or says **Not sold**.
+- A size's or colour's stock item sits under its product (`group_of`), after a line with the product's sizes, total and how many are low.
+- The filter **All / Sold / Not sold** is the endpoint's `show`. The line above the list (how many, worth at cost, how many low) follows it; the low card is of everything.
+- `GET /v1/stock` stays for whether stock is kept, sales and counts. Record a sale offers products only.
+- **Record stock** and **History** name the stock item by its own id, which `POST /v1/stock/movements` and `?item=` take for both kinds.
+- **Change** patches a material by its id, and anything sold through its first product (`sold_as[0]`), which reaches the same stock item. Name and price show only for a material (name) or a stock item sold as one product with uses 1 (both): a name or price there is the product's, and the server renames a product's stock item with it.
+- **Add something to count** replaces Add items. **Do you sell it?** must be answered: Yes sends the product's fields with an optional selling price (unpriced, it is not on the page, as before); No sends `material: true` and no price.
+
+**Chat tools.**
+
+- A product's form (`ProductForm`) has **Counted by**: its stock item, how many one sale uses and the count. **Change** opens a picker over the stock items, with a search, **None**, and a stepper for uses; it saves with `PUT`, or `DELETE` for None. A product sold in sizes and colours gets the reason and no Change.
+- Products and Sell leave materials out. Stock shows a material as Not sold and adds through **Add something to count** (`CountAdd`).
+
+**Gone from the web** (S1a's leftovers): an item's `waiting`, `stuck` changes and their notice, a movement's `pending` status and error, the `outside` reason ("Changed in the table"), and the old Keep my stock words about adding columns to the table.
+
+**Tests.** `lib/stock.test.ts` (Sold as, the rows' words, the grouping, which id a change takes, Counted by's line); `lib/tools.test.ts` (materials in the tools). `e2e/stock.spec.ts`:
+
+- the page with a material **Not sold** and the filter, at 390 and 360 px in both themes;
+- **Add something to count** with No and with Yes, and Change by the right id;
+- **Counted by** set to uses 6 from the chat and shown on the Stock page, and none for a product in sizes.
+
 ## 12. Accept
 
 **The split**
