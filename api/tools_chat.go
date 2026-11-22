@@ -191,7 +191,7 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 	}
 	var input map[string]any
 	if err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
-		v, err := pii.Open(ctx, s.Store.PII, tx, c.tenant.ID, map[string]any(data.Inputs), pii.Taint{})
+		v, err := pii.Open(ctx, s.Store.PII, tx, c.tenant.ID, data.Inputs, pii.Taint{})
 		input, _ = v.(map[string]any)
 		return err
 	}); err != nil {

@@ -120,7 +120,7 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 		}
 		var done history.RunCompletedPayload
 		_ = json.Unmarshal(payload, &done)
-		opened, err := pii.Open(ctx, s.Store.PII, tx, tenant, map[string]any(done.Outputs), pii.Taint{})
+		opened, err := pii.Open(ctx, s.Store.PII, tx, tenant, done.Outputs, pii.Taint{})
 		if err != nil {
 			return err
 		}
