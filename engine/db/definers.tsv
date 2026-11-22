@@ -338,7 +338,7 @@ taskiem_wa_otp_user_for(text,text)	@ISRAEL-DUFF (messaging)	The person a pending
 taskiem_wa_otp_verify(uuid,text,integer)	@ISRAEL-DUFF (messaging)	Binds the number once its code is right, releasing the sign-in name made from a number it replaces (00035, 00389)
 taskiem_wa_own_numbers()	@ISRAEL-DUFF (messaging)	The active own numbers, for the hourly status poll (00224)
 taskiem_wa_platform_template_record(text,text,text,text,text,text,timestamp with time zone)	@ISRAEL-DUFF (messaging)	Records a template's status in the platform number's registry (rows with no tenant), only outside any tenant scope: tenants read those rows but no longer write them (00353)
-taskiem_wa_pin_remove(uuid)	@ISRAEL-DUFF (messaging)	Removes a person's PIN (00061)
+taskiem_wa_pin_remove(uuid)	@ISRAEL-DUFF (messaging)	Removes a person's PIN, remembering that one was removed (00061, 00518)
 taskiem_wa_pin_result(uuid,boolean,integer,interval)	@ISRAEL-DUFF (messaging)	Records a check (00061)
 taskiem_wa_pin_set(uuid,text)	@ISRAEL-DUFF (messaging)	Sets (or replaces) a person's PIN (00061)
 taskiem_wa_pin_state(uuid)	@ISRAEL-DUFF (messaging)	A person's PIN (00061)
@@ -507,3 +507,4 @@ taskiem_saved_reminders_due(date)	@ISRAEL-DUFF (saved objects; to review)	The sa
 taskiem_pin_paid_today(uuid)	@ISRAEL-DUFF (paying people; to review)	The PIN's own day's total for one person (chat-pay-people, Settled row 3: at most ₦200,000 a day by PIN), across every business they pay for: only the sum of their PIN-confirmed payments' amounts today; nothing of who was paid (00516)
 taskiem_pin_pays_from(uuid)	@ISRAEL-DUFF (paying people; to review)	When a person's own PIN may pay from (set behind a passkey: at once; without: 24 hours on); nothing of the PIN itself (00517)
 taskiem_pin_set_hold(uuid,text,interval)	@ISRAEL-DUFF (paying people; to review)	Sets or replaces a person's own PIN with when it may pay from, as taskiem_wa_pin_set does (00517)
+taskiem_pin_was_removed(uuid)	@ISRAEL-DUFF (paying people; to review)	Whether a person ever removed their own PIN, so the next is not a first PIN; nothing of the PIN (00518)

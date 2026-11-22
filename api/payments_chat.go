@@ -13,6 +13,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Paying from the chat (P1; docs/spec/chat-pay-people.md, "On WhatsApp,
@@ -174,7 +175,7 @@ func (s *Server) payPreparedWords(c *chat, x payment) string {
 	if x.PurposeNote != "" {
 		what = x.PurposeNote
 	}
-	lines := []string{c.t("wa.pay.prepared", "amount", invoicing.Naira(x.AmountKobo), "to", to, "bank", x.BankName, "account", x.Account, "for", what)}
+	lines := []string{c.t("wa.pay.prepared", "amount", invoicing.Naira(x.AmountKobo), "to", whatsapp.SafeText(to), "bank", x.BankName, "account", x.Account, "for", whatsapp.SafeText(what))}
 	if x.FirstPayment {
 		lines = append(lines, c.t("wa.pay.first"))
 	}

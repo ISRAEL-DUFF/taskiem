@@ -87,6 +87,9 @@ func pinPaidTodayTx(ctx context.Context, tx pgx.Tx, user uuid.UUID) (int64, erro
 // one the PIN may confirm, given what the PIN paid today; it answers how
 // much the PIN may still pay in one payment now.
 func pinFits(x payment, needs string, today int64) (int64, error) {
+	if x.BatchID != nil {
+		return 0, refusePay(http.StatusForbidden, "pin_passkey_only", "This one is part of a list: confirm it with your passkey.")
+	}
 	if x.ChangedAccount {
 		return 0, refusePay(http.StatusForbidden, "pin_passkey_only", "The account changed since it was last paid: confirm this one with your passkey.")
 	}
@@ -180,7 +183,7 @@ func (s *Server) confirmPaymentPin(w http.ResponseWriter, r *http.Request, id uu
 func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool) (payment, error) {
 	ctx := r.Context()
 	p := principalFrom(ctx)
-	if p == nil || p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
+	if p == nil || p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil || p.Agent != nil || p.Run != uuid.Nil {
 		return payment{}, refusePay(http.StatusForbidden, "passkey", "Payments are confirmed by a person, not an API key.")
 	}
 	owner := slices.Contains(p.Roles, "owner")
@@ -208,8 +211,7 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 	}); err != nil {
 		return x, err
 	}
-	st, err := s.pinForPay(ctx, p.UserID)
-	if err != nil {
+	if _, err := s.pinForPay(ctx, p.UserID); err != nil {
 		return x, err
 	}
 	if !revote {
@@ -220,14 +222,17 @@ func (s *Server) payByPin(r *http.Request, id uuid.UUID, pin string, again bool)
 			return x, s.dropChanged(r, x.ID, err)
 		}
 	}
-	// The PIN, counted with the approvals' tries.
-	ok := validPin(pin) && checkPassword(st.hash, pin)
-	var failures int
-	var locked bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, p.UserID, ok, waPinMaxFailures, waPinWindow.String()).
-		Scan(&failures, &locked); err != nil {
+	// The PIN, counted with the approvals' tries, under its row lock.
+	t, err := s.tryPin(ctx, p.UserID, pin)
+	switch {
+	case err != nil:
 		return x, err
+	case t.None:
+		return x, refusePay(http.StatusForbidden, "no_pin", "You have no PIN set. Use your passkey.")
+	case t.LockedUntil != nil:
+		return x, refusePay(http.StatusForbidden, "pin_locked", "Your PIN is locked after too many wrong tries: use your passkey instead.")
 	}
+	ok, failures, locked := t.Right, t.Failures, t.NowLocked
 	if !ok {
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			if err := auditTx(r, tx, "payment.pin.fail", id.String(), map[string]any{"failures": failures, "via": p.AuthMethod}); err != nil || !locked {

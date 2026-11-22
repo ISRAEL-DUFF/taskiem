@@ -797,6 +797,8 @@ payments.confirmed_at
 payments.confirmed_by
 payments.confirmed_with
 payments.status
+pin_removals.removed_at
+pin_removals.user_id
 plan_worker_pools.assigned_at
 plan_worker_pools.assigned_by
 plan_worker_pools.plan_id

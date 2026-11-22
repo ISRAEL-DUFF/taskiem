@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -46,6 +48,92 @@ type mePin struct {
 	ChangeWithout bool `json:"change_without"`
 	// ChangeWithoutUntil: when that ends, after a sign-in moments ago.
 	ChangeWithoutUntil *time.Time `json:"change_without_until,omitempty"`
+	// first: none set and none removed before.
+	first bool
+}
+
+// pinWasRemoved: the person removed a PIN before, so the next one is not
+// a first PIN.
+func (s *Server) pinWasRemoved(ctx context.Context, user uuid.UUID) (bool, error) {
+	var removed bool
+	err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_pin_was_removed($1)`, user).Scan(&removed)
+	return removed, err
+}
+
+// pinFactors is whether p can prove themselves with a passkey or an
+// authenticator. A personal session has no business, so no authenticator
+// (they are per business): the passkey only.
+func (s *Server) pinFactors(ctx context.Context, p *Principal) (passkey, totp bool, err error) {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_has_passkey($1)`, p.UserID).Scan(&passkey); err != nil {
+		return false, false, err
+	}
+	if p.Personal || p.TenantID == uuid.Nil {
+		return passkey, false, nil
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		totp = s.totpEnrolled(ctx, tx, p.UserID)
+		return nil
+	})
+	return passkey, totp, err
+}
+
+// pinProof checks what proves a change to p's PIN (set, change, remove):
+// a fresh passkey or authenticator code the person really has (hold 0,
+// via "passkey" or "totp"); else, with neither, a first PIN or a change
+// moments after signing in again (a 24-hour hold; via "first" or
+// "signed_in_again"). A password, a junk code or a sign-in alone never
+// lifts the hold. False when it answered the request (refused).
+func (s *Server) pinProof(w http.ResponseWriter, r *http.Request, proof factorProof, action string) (time.Duration, string, bool) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	if s.refuseUnproved(w, r) {
+		return 0, "", false
+	}
+	hasPasskey, hasTOTP, err := s.pinFactors(ctx, p)
+	if err != nil {
+		s.fail(w, r, err)
+		return 0, "", false
+	}
+	methods := []string{}
+	if hasPasskey {
+		methods = append(methods, "passkey")
+	}
+	if hasTOTP {
+		methods = append(methods, "totp")
+	}
+	switch {
+	case proof.Passkey != nil && hasPasskey:
+		if _, err := s.verifyPasskey(ctx, *proof.Passkey, "step_up", &p.UserID, stepUpScope("account.reauth", action)); err != nil {
+			if passkeyRefused(err) {
+				writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": methods, "error": "that passkey response is not valid; try again"})
+				return 0, "", false
+			}
+			s.fail(w, r, err)
+			return 0, "", false
+		}
+		return 0, "passkey", true
+	case proof.TOTP != "" && hasTOTP:
+		ok, err := s.verifyTOTP(ctx, p.TenantID, p.UserID, proof.TOTP)
+		if err != nil || !ok {
+			s.totpRefused(w, r, err, map[string]any{"code": "proof_needed", "error": "that authenticator code is not right, or was already used", "reauth": methods})
+			return 0, "", false
+		}
+		return 0, "totp", true
+	}
+	st, err := s.mePinOf(r, p)
+	if err != nil {
+		s.fail(w, r, err)
+		return 0, "", false
+	}
+	if !st.ChangeWithout {
+		writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": methods,
+			"error": "To change your PIN, confirm with your passkey; or sign out, sign in again and change it within 10 minutes (it can then pay from 24 hours on)."})
+		return 0, "", false
+	}
+	if !st.first {
+		return pinHoldWithout, "signed_in_again", true
+	}
+	return pinHoldWithout, "first", true
 }
 
 func (s *Server) mePinOf(r *http.Request, p *Principal) (mePin, error) {
@@ -62,9 +150,19 @@ func (s *Server) mePinOf(r *http.Request, p *Principal) (mePin, error) {
 			return mePin{}, err
 		}
 	}
+	// A PIN removed before is not a first PIN when set again.
+	first := !info.Set
+	if first {
+		removed, err := s.pinWasRemoved(r.Context(), p.UserID)
+		if err != nil {
+			return mePin{}, err
+		}
+		first = !removed
+	}
 	fresh := !p.SignedInAt.IsZero() && time.Since(p.SignedInAt) <= recentSignIn
-	out.ChangeWithout = !info.Set || fresh
-	if info.Set && fresh {
+	out.first = first
+	out.ChangeWithout = first || fresh
+	if !first && fresh {
 		until := p.SignedInAt.Add(recentSignIn)
 		out.ChangeWithoutUntil = &until
 	}
@@ -112,45 +210,9 @@ func (s *Server) putMePin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: choose a PIN that is not one digit repeated or a run like 123456", errBadRequest))
 		return
 	}
-	hold, via := pinHoldWithout, ""
-	if req.Passkey != nil || req.TOTP != "" {
-		if !s.proveFactor(w, r, req.factorProof, "pin.set") {
-			return
-		}
-		hold, via = 0, "passkey"
-		if req.Passkey == nil {
-			via = "totp"
-		}
-	} else {
-		if s.refuseUnproved(w, r) {
-			return
-		}
-		st, err := s.mePinOf(r, p)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !st.ChangeWithout {
-			f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID)
-			if err != nil {
-				s.fail(w, r, err)
-				return
-			}
-			methods := []string{}
-			if f.Passkey {
-				methods = append(methods, "passkey")
-			}
-			if f.TOTP {
-				methods = append(methods, "totp")
-			}
-			writeJSON(w, http.StatusForbidden, map[string]any{"code": "proof_needed", "reauth": methods,
-				"error": "To change your PIN, confirm with your passkey; or sign out, sign in again and change it within 10 minutes (it can then pay from 24 hours on)."})
-			return
-		}
-		via = "first"
-		if st.Set {
-			via = "signed_in_again"
-		}
+	hold, via, ok := s.pinProof(w, r, req.factorProof, "pin.set")
+	if !ok {
+		return
 	}
 	if _, err := s.Store.Pool.Exec(r.Context(), `SELECT taskiem_pin_set_hold($1, $2, $3::interval)`, p.UserID, hashPassword(req.Pin), hold.String()); err != nil {
 		s.fail(w, r, err)

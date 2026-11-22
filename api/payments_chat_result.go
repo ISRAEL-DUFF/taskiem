@@ -78,10 +78,16 @@ func chatPayResultTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) error
 
 // chatBatchClosedTx tells a chat batch's result when its last open rows
 // were let go (cancelled) rather than ended by the bank: the rows that
-// went are told, as when the last of them ends. Nothing when no row went.
+// went are told, as when the last of them ends. Nothing when no row went
+// (reached the bank: paid or failed; one the owner declined did not).
 func chatBatchClosedTx(ctx context.Context, tx pgx.Tx, tenant, batch uuid.UUID) error {
+	// Held first, as the last row's end holds it (chatPayResultTx): a row
+	// let go while another ends sees that one's end, or it sees this.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM payment_batches WHERE id = $1 FOR UPDATE`, batch); err != nil {
+		return err
+	}
 	var row uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM payments WHERE batch_id = $1 AND status = ANY ($2) ORDER BY finished_at DESC NULLS LAST LIMIT 1`, batch, payEnded).Scan(&row)
+	err := tx.QueryRow(ctx, `SELECT id FROM payments WHERE batch_id = $1 AND status IN ('paid', 'failed') ORDER BY finished_at DESC NULLS LAST LIMIT 1`, batch).Scan(&row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -98,7 +104,8 @@ func firstChatTx(ctx context.Context, tx pgx.Tx, user uuid.UUID) (string, error)
 	for _, q := range []struct{ channel, sql string }{
 		{"whatsapp", `SELECT EXISTS (SELECT 1 FROM taskiem_wa_numbers($1))`},
 		{"telegram", `SELECT EXISTS (SELECT 1 FROM taskiem_tg_accounts($1))`},
-		{"slack", `SELECT EXISTS (SELECT 1 FROM slack_bindings WHERE verified_at IS NOT NULL AND user_id = ANY ($1))`},
+		{"slack", `SELECT EXISTS (SELECT 1 FROM slack_bindings b WHERE b.verified_at IS NOT NULL AND b.user_id = ANY ($1)
+			AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = b.user_id AND m.tenant_id = b.tenant_id))`},
 	} {
 		var linked bool
 		if err := tx.QueryRow(ctx, q.sql, []uuid.UUID{user}).Scan(&linked); err != nil {
@@ -208,7 +215,15 @@ func (s *Server) sendPayResultItem(ctx context.Context, it whatsapp.OutboxItem) 
 	if err != nil {
 		return err
 	}
-	ch, addr, err := s.chatAddrOf(ctx, it.Channel, it.Tenant, it.User)
+	// The channel chosen when it was queued; else, when that one is off
+	// here or no longer linked, the next the person has.
+	var ch chatChannel
+	var addr string
+	for _, c := range append([]string{it.Channel}, s.chatChannelsOn()...) {
+		if ch, addr, err = s.chatAddrOf(ctx, c, it.Tenant, it.User); !errors.Is(err, whatsapp.ErrNothingToSend) {
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}

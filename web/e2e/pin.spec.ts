@@ -42,7 +42,7 @@ test("Your PIN: a first PIN set without a passkey pays a day on, and is removed"
   await page.emulateMedia({ colorScheme: "light" });
 
   // Two different PINs are refused here; the same twice is saved.
-  await card.getByLabel("PIN", { exact: true }).fill("482913");
+  await card.getByRole("textbox", { name: /^PIN / }).fill("482913");
   await card.getByLabel("The same PIN again").fill("482914");
   await card.getByRole("button", { name: "Set PIN" }).click();
   await expect(card.getByText("The two PINs are not the same.")).toBeVisible();

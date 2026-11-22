@@ -522,29 +522,20 @@ func (s *Server) waFlowPin(ctx context.Context, row flowRow, req whatsapp.FlowRe
 		const m = "You cannot decide approvals in this organisation any more."
 		return finish("refused", m, m)
 	}
-	var hash string
-	var locked *time.Time
-	err := s.Store.Pool.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_state($1)`, user).Scan(&hash, &locked)
+	pin, _ := req.Data["pin"].(string)
+	t, err := s.tryPin(ctx, user, pin)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		s.Logger.Error("whatsapp: checking a PIN", "err", err)
+		return screen("Something went wrong; try again.")
+	case t.None:
 		const m = "You have no WhatsApp PIN set. Decide in Taskiem instead."
 		return finish("refused", m, m)
-	case err != nil:
-		s.Logger.Error("whatsapp: reading a PIN", "err", err)
-		return screen("Something went wrong; try again.")
-	case locked != nil:
-		m := "Your PIN is locked after too many wrong tries, until " + locked.UTC().Format("15:04") + " UTC. Decide in Taskiem instead."
+	case t.LockedUntil != nil:
+		m := "Your PIN is locked after too many wrong tries, until " + t.LockedUntil.UTC().Format("15:04") + " UTC. Decide in Taskiem instead."
 		return finish("refused", m, m)
 	}
-	pin, _ := req.Data["pin"].(string)
-	ok := validPin(pin) && checkPassword(hash, pin)
-	var failures int
-	var nowLocked bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, user, ok, waPinMaxFailures, waPinWindow.String()).
-		Scan(&failures, &nowLocked); err != nil {
-		s.Logger.Error("whatsapp: recording a PIN check", "err", err)
-		return screen("Something went wrong; try again.")
-	}
+	ok, failures, nowLocked := t.Right, t.Failures, t.NowLocked
 	if !ok {
 		audit("whatsapp.pin.fail", map[string]any{"failures": failures})
 		if nowLocked {

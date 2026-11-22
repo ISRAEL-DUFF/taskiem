@@ -308,9 +308,10 @@ class _PinScreenState extends State<PinScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
-  /// Removing it takes no proof: it only takes a way to approve and pay.
+  /// Removing it takes no proof: it only takes a way to approve and pay
+  /// (and the next one is set as a change is, not as a first PIN).
   Future<void> _remove() async {
-    final yes = await askSure(context, title: 'Remove your PIN?', body: 'It will no longer approve on WhatsApp or pay. You can set one again.', ok: 'Remove', danger: true);
+    final yes = await askSure(context, title: 'Remove your PIN?', body: 'It will no longer approve on WhatsApp or pay. Setting one again takes your passkey, or signing in again.', ok: 'Remove', danger: true);
     if (!yes || !mounted) return;
     setState(() => (_busy = true, _error = null));
     try {

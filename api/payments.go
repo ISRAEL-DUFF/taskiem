@@ -857,6 +857,21 @@ func (s *Server) stillAsPrepared(ctx context.Context, tenant uuid.UUID, x paymen
 	return rl, nil
 }
 
+// lockPayBatchTx holds payment id's batch, if it has one, before the
+// payment is changed: batches are held before their rows, as cancelBatch
+// and the batch's result (chatBatchClosedTx) hold them.
+func lockPayBatchTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*uuid.UUID, error) {
+	var batch *uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT batch_id FROM payments WHERE id = $1`, id).Scan(&batch); err != nil || batch == nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = nil
+		}
+		return nil, err
+	}
+	_, err := tx.Exec(ctx, `SELECT 1 FROM payment_batches WHERE id = $1 FOR UPDATE`, *batch)
+	return batch, err
+}
+
 // isChanged says whether err refuses a payment for its account, or the
 // payments account, having changed since it was prepared.
 func isChanged(err error) bool {
@@ -876,12 +891,23 @@ func (s *Server) dropChanged(r *http.Request, id uuid.UUID, err error) error {
 	r = r.WithContext(context.WithoutCancel(r.Context()))
 	ctx := r.Context()
 	if e := s.tx(r, func(tx pgx.Tx) error {
+		batch, err := lockPayBatchTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', reason = $2, needs_ok = '', finished_at = now()
 			WHERE id = $1 AND status IN ('prepared', 'sending', 'waiting_ok') AND run_id IS NULL`, id, pr.msg)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err
 		}
-		return auditTx(r, tx, "payment.cancel", id.String(), map[string]any{"why": pr.code})
+		if err := auditTx(r, tx, "payment.cancel", id.String(), map[string]any{"why": pr.code}); err != nil {
+			return err
+		}
+		if batch != nil {
+			// Maybe the last of a chat batch's rows: its result told.
+			return chatBatchClosedTx(ctx, tx, principalFrom(ctx).TenantID, *batch)
+		}
+		return nil
 	}); e != nil {
 		s.Logger.Warn("payments: cancelling a changed payment", "payment", id, "err", e)
 	}
@@ -985,13 +1011,26 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 		}
 		bg := context.WithoutCancel(ctx)
 		if e := db.InTenantTx(bg, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(bg, `UPDATE payments SET
+			batch, err := lockPayBatchTx(bg, tx, x.ID)
+			if err != nil {
+				return err
+			}
+			var status string
+			err = tx.QueryRow(bg, `UPDATE payments SET
 				status = CASE WHEN b.status = 'cancelled' THEN 'cancelled' ELSE 'prepared' END,
 				finished_at = CASE WHEN b.status = 'cancelled' THEN now() END,
 				needs_ok = '', confirmed_by = NULL, confirmed_at = NULL, confirmed_with = NULL
 				FROM (SELECT (SELECT status FROM payment_batches WHERE id = (SELECT batch_id FROM payments WHERE id = $1)) AS status) b
-				WHERE payments.id = $1 AND payments.run_id IS NULL AND payments.status IN ('sending', 'waiting_ok')`, x.ID)
-			return err
+				WHERE payments.id = $1 AND payments.run_id IS NULL AND payments.status IN ('sending', 'waiting_ok')
+				RETURNING payments.status`, x.ID).Scan(&status)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			if err != nil || status != "cancelled" || batch == nil {
+				return err
+			}
+			// The batch was let go meanwhile: maybe this was its last row.
+			return chatBatchClosedTx(bg, tx, p.TenantID, *batch)
 		}); e != nil {
 			s.Logger.Warn("payments: giving a payment back", "payment", x.ID, "err", e)
 		}

@@ -171,6 +171,12 @@ func TestPayByPin(t *testing.T) {
 	if st, e := confirm(moved, map[string]any{"pin": "482913"}); st != 403 || e["code"] != "pin_passkey_only" {
 		t.Fatalf("a changed account: %d %v", st, e)
 	}
+	// A row of a list: the passkey only, as the list is.
+	b := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{{"payee": "bayo", "amount_kobo": 2000000, "purpose": "delivery"}}})["batch"].(map[string]any)
+	row := b["payments"].([]any)[0].(map[string]any)["id"].(string)
+	if st, e := confirm(row, map[string]any{"pin": "482913"}); st != 403 || e["code"] != "pin_passkey_only" {
+		t.Fatalf("a row of a list: %d %v", st, e)
+	}
 
 	// No PIN: said.
 	if _, err := w.env.DB.Admin.Exec(ctx, `SELECT taskiem_wa_pin_remove($1)`, userID(t, owner)); err != nil {
@@ -291,6 +297,10 @@ func TestMePin(t *testing.T) {
 	if e := ada.must(403, "PUT", "/v1/me/pin", map[string]any{"pin": "720581"}); e["code"] != "proof_needed" {
 		t.Fatalf("no proof: %v", e)
 	}
+	// A code for an authenticator they do not have proves nothing.
+	if e := ada.must(403, "PUT", "/v1/me/pin", map[string]any{"pin": "720581", "totp": "123456"}); e["code"] != "proof_needed" {
+		t.Fatalf("a junk code: %v", e)
+	}
 	// Behind a passkey: it pays at once.
 	key := addPasskey(t, ada, "Phone")
 	got = ada.must(200, "PUT", "/v1/me/pin", map[string]any{"pin": "720581", "passkey": stepUp(t, ada, key, "account.reauth", "pin.set")})
@@ -307,4 +317,23 @@ func TestMePin(t *testing.T) {
 		t.Fatalf("removed: %v", got)
 	}
 	ada.must(404, "DELETE", "/v1/me/pin", nil)
+
+	// Removed is not "none set": setting one again takes what a change
+	// takes (an old session cannot), and is never a first PIN.
+	if got := ada.must(200, "GET", "/v1/me/pin", nil); got["change_without"] != false {
+		t.Fatalf("after removing, an old sign-in: %v", got)
+	}
+	if e := ada.must(403, "PUT", "/v1/me/pin", map[string]any{"pin": "720581"}); e["code"] != "proof_needed" {
+		t.Fatalf("after removing, no proof: %v", e)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE sessions SET created_at = now() WHERE user_id = $1`, me); err != nil {
+		t.Fatal(err)
+	}
+	if got := ada.must(200, "PUT", "/v1/me/pin", map[string]any{"pin": "720581"}); paysFrom(got) < 23*time.Hour {
+		t.Fatalf("after removing, signed in again: %v", got)
+	}
+	var via string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT detail->>'via' FROM audit_log WHERE action = 'pin.set' ORDER BY id DESC LIMIT 1`).Scan(&via); err != nil || via != "signed_in_again" {
+		t.Fatalf("after removing, via %q %v", via, err)
+	}
 }

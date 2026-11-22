@@ -22,6 +22,38 @@ import (
 // wrong PINs in 15 minutes lock it for 15 minutes, like authenticator
 // codes. Policies asking for "totp" or "passkey" never take it.
 
+// pinTry is one PIN check. The check and its count are one: the PIN's row
+// is locked (taskiem_wa_pin_lock) while the hash is compared, so guesses
+// sent side by side wait for each other and none passes a lock another
+// set; a right PIN while locked is refused (LockedUntil set, not Right).
+type pinTry struct {
+	None        bool       // no PIN set
+	LockedUntil *time.Time // locked before this try: nothing checked
+	Right       bool
+	Failures    int  // after a wrong one
+	NowLocked   bool // this wrong one locked it
+}
+
+// tryPin checks user's PIN against pin and counts the try.
+func (s *Server) tryPin(ctx context.Context, user uuid.UUID, pin string) (pinTry, error) {
+	var t pinTry
+	err := pgx.BeginFunc(ctx, s.Store.Pool, func(tx pgx.Tx) error {
+		var hash string
+		err := tx.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_lock($1)`, user).Scan(&hash, &t.LockedUntil)
+		if errors.Is(err, pgx.ErrNoRows) {
+			t.None = true
+			return nil
+		}
+		if err != nil || t.LockedUntil != nil {
+			return err
+		}
+		t.Right = validPin(pin) && checkPassword(hash, pin)
+		return tx.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, user, t.Right, waPinMaxFailures, waPinWindow.String()).
+			Scan(&t.Failures, &t.NowLocked)
+	})
+	return t, err
+}
+
 type waPinInfo struct {
 	Set         bool       `json:"set"`
 	SetAt       *time.Time `json:"set_at,omitempty"`

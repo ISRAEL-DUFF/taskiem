@@ -15,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Paying several people from the chat (P4; docs/spec/chat-pay-people.md,
@@ -186,7 +187,7 @@ func (s *Server) waPayPasted(ctx context.Context, c *chat, what string, lines []
 	if len(rows) == 0 {
 		out := []string{c.t("wa.pay.list.none")}
 		for _, u := range unread {
-			out = append(out, c.t("wa.pay.list.unread", "line", strconv.Itoa(u.line), "text", u.text, "problem", u.problem))
+			out = append(out, c.t("wa.pay.list.unread", "line", strconv.Itoa(u.line), "text", whatsapp.SafeText(u.text), "problem", whatsapp.SafeText(u.problem)))
 		}
 		return c.say(ctx, s, strings.Join(out, "\n"))
 	}
@@ -227,10 +228,10 @@ func (s *Server) waBatchPrepared(ctx context.Context, c *chat, b batchView, unre
 		}
 	}
 	for _, h := range b.Held {
-		out = append(out, c.t("wa.pay.list.held", "who", h.Payee, "problem", h.Problem))
+		out = append(out, c.t("wa.pay.list.held", "who", whatsapp.SafeText(h.Payee), "problem", whatsapp.SafeText(h.Problem)))
 	}
 	for _, u := range unread {
-		out = append(out, c.t("wa.pay.list.unread", "line", strconv.Itoa(u.line), "text", u.text, "problem", u.problem))
+		out = append(out, c.t("wa.pay.list.unread", "line", strconv.Itoa(u.line), "text", whatsapp.SafeText(u.text), "problem", whatsapp.SafeText(u.problem)))
 	}
 	return c.say(ctx, s, strings.Join(out, "\n"))
 }
