@@ -190,6 +190,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **G0 and G1. Pages: the format, and pages from tables** ([pages](pages.md) G0, G1). Needs: nothing but data tables; started once M2 is under way.
 - The decision record and `page/v1`; figures, grouped lists, tables, details and filters; the Pages area, pinning, roles, draft and publish; **Show as a page**.
 - Done when: an owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone.
+- **Status (22 November 2026): built** ([As built](pages.md#18-as-built-g0-and-g1)), decision 0072 proposed, migration 00530. `page/v1` with its schema, contract and validator; storage with drafts and published versions, roles, pinning and `max_pages`; the API drawing every part on the server, masked for the viewer; the web's Pages, page and editor with **Show as a page**; the app's Pages and page. **Left:** record views and a tab under an area, the change notices, the versions list, the app's ordering of a table by a press.
 
 ### Stage 7: customers, and pages with buttons
 
