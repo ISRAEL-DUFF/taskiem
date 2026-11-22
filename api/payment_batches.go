@@ -363,6 +363,9 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 		if out, err = batchTx(ctx, tx, id, owner); err != nil {
 			return err
 		}
+		if err := markAwaitingTx(ctx, tx, out.Payments, p); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "payment.batch_confirm", id.String(), map[string]any{"rows": len(list), "total_kobo": out.TotalKobo, "waiting": out.Waiting})
 	}); err != nil {
 		s.fail(w, r, err)
@@ -664,8 +667,10 @@ func (s *Server) getBatch(w http.ResponseWriter, r *http.Request) {
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = batchTx(r.Context(), tx, id, isOwnerOf(principalFrom(r.Context())))
-		return err
+		if out, err = batchTx(r.Context(), tx, id, isOwnerOf(principalFrom(r.Context()))); err != nil {
+			return err
+		}
+		return markAwaitingTx(r.Context(), tx, out.Payments, principalFrom(r.Context()))
 	}); err != nil {
 		s.payFail(w, r, err)
 		return

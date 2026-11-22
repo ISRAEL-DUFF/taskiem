@@ -13948,7 +13948,7 @@ class ListPaymentsResponse {
 }
 
 class Payment {
-  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, this.staffId, required this.startedFrom, required this.status});
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, this.staffId, required this.startedFrom, required this.status});
 
   /// The account number masked (••6789).
   final String account;
@@ -13957,6 +13957,9 @@ class Payment {
   /// The same amount to the same payee in the last day.
   final bool? again;
   final int amountKobo;
+  /// Confirmed by you, and its run still waits for your own OK, which did not
+  /// reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.
+  final bool? awaitsYourOk;
   final String bankName;
   /// The list it was paid in, when it was
   final Object? batchId;
@@ -13994,6 +13997,7 @@ class Payment {
         accountName: j['account_name'],
         again: j['again'] == null ? null : j['again'] as bool,
         amountKobo: (j['amount_kobo'] as num).toInt(),
+        awaitsYourOk: j['awaits_your_ok'] == null ? null : j['awaits_your_ok'] as bool,
         bankName: j['bank_name'] as String,
         batchId: j['batch_id'],
         changedAccount: j['changed_account'] == null ? null : j['changed_account'] as bool,
@@ -14025,6 +14029,7 @@ class Payment {
         'account_name': ?accountName,
         'again': ?again,
         'amount_kobo': amountKobo,
+        'awaits_your_ok': ?awaitsYourOk,
         'bank_name': bankName,
         'batch_id': ?batchId,
         'changed_account': ?changedAccount,

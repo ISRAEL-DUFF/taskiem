@@ -106,6 +106,10 @@ type payment struct {
 	// Again: the same amount to the same payee in the last day; confirming
 	// needs again: true.
 	Again bool `json:"again"`
+	// AwaitsYourOK: it was confirmed by the person asking and its run
+	// still waits for their own OK, which did not reach it: confirming it
+	// again gives it.
+	AwaitsYourOK bool `json:"awaits_your_ok"`
 
 	bankCode string
 	sealed   map[string]any
@@ -730,6 +734,19 @@ func awaitsPayerTx(ctx context.Context, tx pgx.Tx, x payment, p *Principal) (boo
 	return waits, err
 }
 
+// markAwaitingTx sets AwaitsYourOK on the payments whose run waits for
+// the asking person's own OK (a batch row that did not get it).
+func markAwaitingTx(ctx context.Context, tx pgx.Tx, list []payment, p *Principal) error {
+	for i := range list {
+		w, err := awaitsPayerTx(ctx, tx, list[i], p)
+		if err != nil {
+			return err
+		}
+		list[i].AwaitsYourOK = w
+	}
+	return nil
+}
+
 // payerVote gives the payer's own OK to a payment's run (within their
 // limit, their passkey is its approval), trying once more if the first
 // does not take (the run may not have reached its approval yet).
@@ -1213,6 +1230,9 @@ func (s *Server) getPayment(w http.ResponseWriter, r *http.Request) {
 		}
 		if x.Status == "prepared" {
 			x.Again, err = paidAgainTx(r.Context(), tx, principalFrom(r.Context()).TenantID, x)
+		}
+		if err == nil {
+			x.AwaitsYourOK, err = awaitsPayerTx(r.Context(), tx, x, principalFrom(r.Context()))
 		}
 		return err
 	})

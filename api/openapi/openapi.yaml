@@ -46106,6 +46106,9 @@ components:
         again:
           type: boolean
           description: The same amount to the same payee in the last day.
+        awaits_your_ok:
+          type: boolean
+          description: 'Confirmed by you, and its run still waits for your own OK, which did not reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.'
     PaymentBatch:
       type: object
       required: [id, title, kind, status, created_by, created_at, payments, total_kobo, count, paid_kobo, waiting, failed]
