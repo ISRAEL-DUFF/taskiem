@@ -42,6 +42,7 @@ import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/welcome.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'made_tools_stub.dart';
 import 'support.dart';
 
 /// How much may differ: under 1% of the screen.
@@ -292,6 +293,46 @@ final screens = <String, Screen>{
       await t.tap(find.bySemanticsLabel('Open tools'));
       await _loaded(t);
       await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+    },
+  ),
+  // Your tools (made tools M1): their tiles after the built-in ones, a
+  // tool's sheet and its Yes, its card and a list answered, every row.
+  'made-tools': (build: _made, drive: (t) => _madeOpen(t, null)),
+  'made-tool-sheet': (build: _made, drive: (t) => _madeOpen(t, 'Log an expense')),
+  'made-tool-yes': (
+    build: _made,
+    drive: (t) async {
+      await _madeOpen(t, 'Log an expense');
+      await _madeFill(t);
+      await t.tap(find.bySemanticsLabel('Next'));
+      await _loaded(t);
+    },
+  ),
+  'made-tool-answers': (
+    build: _made,
+    drive: (t) async {
+      await _madeOpen(t, 'Log an expense');
+      await _madeFill(t);
+      await t.tap(find.bySemanticsLabel('Next'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Yes, run it'));
+      await _loaded(t);
+      await _madeOpen(t, 'Open tickets');
+      await t.tap(find.bySemanticsLabel('Run it'));
+      await _loaded(t);
+    },
+  ),
+  'made-tool-list': (
+    build: _made,
+    drive: (t) async {
+      await _madeOpen(t, 'Open tickets');
+      await t.tap(find.bySemanticsLabel('Run it'));
+      await _loaded(t);
+      final all = find.bySemanticsLabel('See all of Open tickets');
+      await t.ensureVisible(all);
+      await t.pumpAndSettle();
+      await t.tap(all);
       await _loaded(t);
     },
   ),
@@ -657,6 +698,37 @@ Future<void> _contact(WidgetTester t) async {
 
 /// Waits for what is fetched and decoded for real (logos, photos), outside
 /// the test's clock.
+/// Taskiem's conversation with the business's own tools (made_tools_stub.dart).
+Widget _made() {
+  final f = Fixture('chat-tools');
+  final server = MadeServer();
+  final chats = ChatsData(f.auth(also: server.call), now: () => f.at)..load();
+  return TaskiemScreen(data: TaskiemData(chats, follow: false));
+}
+
+/// The tools panel opened, and a tile of Your tools pressed.
+Future<void> _madeOpen(WidgetTester t, String? tool) async {
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel('Open tools'));
+  await _loaded(t);
+  if (tool == null) return;
+  final tile = find.bySemanticsLabel(RegExp('^$tool, '));
+  await t.ensureVisible(tile);
+  await t.pumpAndSettle();
+  await t.tap(tile);
+  await _loaded(t);
+}
+
+/// An expense's form filled in.
+Future<void> _madeFill(WidgetTester t) async {
+  Finder box(String label) => find.descendant(of: find.bySemanticsLabel(RegExp('^$label')), matching: find.byType(EditableText));
+  await t.enterText(box('Amount'), '4,500');
+  await t.enterText(box('What for'), 'Diesel for the generator');
+  await t.tap(find.bySemanticsLabel('Cash'));
+  FocusManager.instance.primaryFocus?.unfocus();
+  await _loaded(t);
+}
+
 Future<void> _loaded(WidgetTester t) async {
   for (var i = 0; i < 8; i++) {
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));

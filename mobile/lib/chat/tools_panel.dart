@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show MadeTool;
 import '../api/transport.dart' show ApiError, Offline;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
@@ -18,6 +19,7 @@ import '../theme/look.dart';
 import 'words.dart' show CardTone;
 import '../theme/theme.dart';
 import 'chats.dart';
+import 'made_tools.dart';
 import 'tools.dart';
 
 /// A tile that does something instead of opening a tool's sheet (Make an
@@ -41,8 +43,45 @@ class ToolsController extends ChangeNotifier {
   bool _open = false;
   String? _slash;
 
-  /// Open: from the button, or "/" and a word as the whole message.
-  bool get shown => chats.chatTools && (_open || _slash != null);
+  /// Open: from the button, or "/" and a word as the whole message. With
+  /// the built-in tools off, the business's own tools still open it.
+  bool get shown => (chats.chatTools || made.isNotEmpty) && (_open || _slash != null);
+
+  // --- your tools (made tools M1), in Taskiem's conversation only ---
+
+  /// The business's own tools the person may use; none until read.
+  List<MadeTool> made = const [];
+  DateTime? _madeAt;
+  bool _readingMade = false;
+
+  /// Reads the business's tools (GET /v1/tools); with [again], when read
+  /// more than a few seconds ago. Not in a business's conversation.
+  Future<void> loadMade({bool again = false}) async {
+    if (scope != null || _readingMade || !can('run.start')) return;
+    final at = _madeAt;
+    if (at != null && !(again && DateTime.now().difference(at) > fresh)) return;
+    _madeAt = DateTime.now();
+    _readingMade = true;
+    try {
+      made = (await chats.api.listTools()).tools;
+    } on Object {
+      // None shown: the built-in tools stand without them.
+    } finally {
+      _readingMade = false;
+    }
+    _notify();
+  }
+
+  /// The business's tools matching what follows "/".
+  List<MadeTool> madeHere([String? q]) => scope != null ? const [] : madeMatching(made, q ?? query);
+
+  /// An owner switched a tool's "Always ask before it runs".
+  void setAlwaysAsk(String command, bool on) {
+    made = [
+      for (final t in made) t.command == command ? MadeTool.fromJson({...t.toJson(), 'always_ask': on}) : t,
+    ];
+    _notify();
+  }
 
   /// What follows "/", when it was typed.
   String get query => _slash ?? '';
@@ -112,8 +151,9 @@ class ToolsController extends ChangeNotifier {
 
   /// The tools this person may open here, matching [query].
   List<Tool> toolsHere([String? q]) => [
-    for (final t in toolsFor(can, query: q ?? query, roles: roles, delivers: delivers))
-      if (scope == null || businessTools.contains(t.key)) t,
+    if (chats.chatTools)
+      for (final t in toolsFor(can, query: q ?? query, roles: roles, delivers: delivers))
+        if (scope == null || businessTools.contains(t.key)) t,
   ];
 
   /// Reads each tool's list not read yet; with [again], those read more
@@ -151,7 +191,10 @@ class ToolsController extends ChangeNotifier {
     _readingScope = true;
     try {
       final r = await chats.auth.transport.send('GET', '/v1/link-chats/${Uri.encodeComponent(scope!)}/refs');
-      _scopeIds = {for (final x in ((r as Map?)?['refs'] as List?) ?? const []) if (x is Map && x['id'] is String) x['id'] as String};
+      _scopeIds = {
+        for (final x in ((r as Map?)?['refs'] as List?) ?? const [])
+          if (x is Map && x['id'] is String) x['id'] as String,
+      };
     } on Object {
       _scopeIds ??= {};
     } finally {
@@ -204,7 +247,16 @@ class ToolsController extends ChangeNotifier {
 /// The panel, floating from the top of the composer over the thread; the
 /// tiles scroll inside it while its heading and Recent stay.
 class ToolsPanel extends StatefulWidget {
-  const ToolsPanel({super.key, required this.tools, required this.onOpen, this.lead = const [], this.extras = const [], this.recent = const [], this.maxHeight});
+  const ToolsPanel({
+    super.key,
+    required this.tools,
+    required this.onOpen,
+    this.lead = const [],
+    this.extras = const [],
+    this.recent = const [],
+    this.maxHeight,
+    this.onMade,
+  });
 
   final ToolsController tools;
 
@@ -220,6 +272,10 @@ class ToolsPanel extends StatefulWidget {
   final List<String> recent;
   final double? maxHeight;
 
+  /// One of the business's own tools pressed (Your tools, after the
+  /// built-in ones); null where they are not offered.
+  final ValueChanged<MadeTool>? onMade;
+
   @override
   State<ToolsPanel> createState() => _ToolsPanelState();
 }
@@ -230,6 +286,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
     super.initState();
     // Opened: the lists read again, for the tiles' lines and badges now.
     widget.tools.load(widget.tools.toolsHere(), again: true);
+    if (widget.onMade != null) unawaited(widget.tools.loadMade(again: true));
   }
 
   @override
@@ -240,14 +297,18 @@ class _ToolsPanelState extends State<ToolsPanel> {
     final q = c.query.trim().toLowerCase();
     final listed = c.toolsHere();
     c.load(listed);
-    bool named(ExtraTile x, [List<String> also = const []]) =>
-        q.isEmpty || x.title.toLowerCase().startsWith(q) || also.any((w) => w.startsWith(q));
+    bool named(ExtraTile x, [List<String> also = const []]) => q.isEmpty || x.title.toLowerCase().startsWith(q) || also.any((w) => w.startsWith(q));
     final lead = [
       for (final x in widget.lead)
         if (named(x, x.key == 'order' ? const ['order', 'their shop', 'shop'] : const [])) x,
     ];
-    final more = [for (final x in widget.extras) if (named(x)) x];
-    final none = lead.isEmpty && listed.isEmpty && more.isEmpty;
+    final more = [
+      for (final x in widget.extras)
+        if (named(x)) x,
+    ];
+    final made = widget.onMade == null ? const <MadeTool>[] : c.madeHere();
+    final builtIn = lead.isNotEmpty || listed.isNotEmpty || more.isNotEmpty;
+    final none = !builtIn && made.isEmpty;
     // The last used, as tiles of this panel.
     final recent = [
       for (final k in widget.recent)
@@ -257,6 +318,11 @@ class _ToolsPanelState extends State<ToolsPanel> {
           () {
             final tool = listed.firstWhere((x) => x.key == k);
             return (title: tool.title, open: () => widget.onOpen(tool));
+          }()
+        else if (made.any((x) => madeKey(x) == k))
+          () {
+            final tool = made.firstWhere((x) => madeKey(x) == k);
+            return (title: tool.name, open: () => widget.onMade!(tool));
           }(),
     ];
     return Semantics(
@@ -288,7 +354,10 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Semantics(header: true, child: Text('Tools', style: tkDisplay(size: 22, letterSpacing: -0.6, color: t.text))),
+                  Semantics(
+                    header: true,
+                    child: Text('Tools', style: tkDisplay(size: 22, letterSpacing: -0.6, color: t.text)),
+                  ),
                   const Spacer(),
                   Flexible(
                     child: Text(
@@ -310,11 +379,33 @@ class _ToolsPanelState extends State<ToolsPanel> {
               Flexible(
                 // `.tk-tools-grid { padding: 2px; margin: -2px }`: none, in all.
                 child: SingleChildScrollView(
-                  child: _Grid(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final x in lead) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
-                      for (final tool in listed) _toolTile(tool),
-                      for (final x in more) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
+                      if (builtIn)
+                        _Grid(
+                          children: [
+                            for (final x in lead) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
+                            for (final tool in listed) _toolTile(tool),
+                            for (final x in more) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
+                          ],
+                        ),
+                      // The business's own tools, after the built-in ones
+                      // (made tools §6), under a heading of their own.
+                      if (made.isNotEmpty) ...[
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(4, builtIn ? 14 : 0, 4, 8),
+                          child: Semantics(
+                            header: true,
+                            child: Text('Your tools', style: tkText(size: 13, weight: 700, color: t.muted)),
+                          ),
+                        ),
+                        _Grid(
+                          children: [
+                            for (final x in made) _Tile(keyName: madeKey(x), title: x.name, icon: madeIcon(x), line: x.about, onTap: () => widget.onMade!(x)),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -324,7 +415,9 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 // `.tk-tools-recent { margin-top: 8px; padding: 8px 6px 2px; border-top }`
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.fromLTRB(6, 8, 6, 2),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: t.border)),
+                ),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -382,7 +475,13 @@ class _Grid extends StatelessWidget {
           spacing: gap,
           runSpacing: gap,
           // chat.css `.tk-tools-grid > *`: each tile rises 40 ms after the last.
-          children: [for (final (i, c) in children.indexed) SizedBox(width: w, child: TkIn.tile(index: i, child: c))],
+          children: [
+            for (final (i, c) in children.indexed)
+              SizedBox(
+                width: w,
+                child: TkIn.tile(index: i, child: c),
+              ),
+          ],
         );
       },
     );
@@ -448,14 +547,24 @@ class _Tile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.25, color: t.text)),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tkText(size: 14, weight: 600, lineHeight: 1.25, color: t.text),
+                    ),
                     if (b != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 3),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                           decoration: BoxDecoration(color: fill.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
-                          child: Text(b.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 10.5, weight: 700, lineHeight: 1.3, color: ink)),
+                          child: Text(
+                            b.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tkText(size: 10.5, weight: 700, lineHeight: 1.3, color: ink),
+                          ),
                         ),
                       )
                     else
@@ -463,7 +572,12 @@ class _Tile extends StatelessWidget {
                       TkRoll(
                         value: line,
                         onShow: false,
-                        child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, lineHeight: 1.3, color: t.muted)),
+                        child: Text(
+                          line,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tkText(size: 11.5, lineHeight: 1.3, color: t.muted),
+                        ),
                       ),
                   ],
                 ),
@@ -609,7 +723,10 @@ class _ToolsAnchorState extends State<ToolsAnchor> with SingleTickerProviderStat
           );
         },
       ),
-      child: CompositedTransformTarget(link: _link, child: SizedBox(key: _at, width: double.infinity)),
+      child: CompositedTransformTarget(
+        link: _link,
+        child: SizedBox(key: _at, width: double.infinity),
+      ),
     );
   }
 }

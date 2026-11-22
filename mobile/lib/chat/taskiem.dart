@@ -32,6 +32,7 @@ import 'chats.dart';
 import 'composer.dart';
 import 'connect.dart';
 import 'live.dart';
+import 'made_tools.dart';
 import 'explore.dart' show showExploreCard;
 import 'menu.dart';
 import 'ref_card.dart';
@@ -83,9 +84,14 @@ const _channels = {'whatsapp': 'WhatsApp', 'telegram': 'Telegram', 'slack': 'Sla
 const _page = 50;
 
 class TaskiemLine {
-  TaskiemLine(this.m, {this.local = false});
+  TaskiemLine(this.m, {this.local = false, this.run, this.echo = false});
   final TaskiemChatMessagesItem m;
   final bool local;
+
+  /// One of the business's tools run from here (made tools M1): what the
+  /// person sent it ([echo]), or its answer.
+  final MadeRun? run;
+  final bool echo;
   String get id => m.id;
 }
 
@@ -535,6 +541,64 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
 
+  // Your tools' runs from here (made tools M1), each read until it ends.
+  late final _runs = MadeRuns(widget.data.chats.auth, now: widget.data.chats.now);
+
+  /// A tool of the business's own: its sheet, then its run here, its
+  /// answer when it ends.
+  Future<void> _openMade(MadeTool tool, {Map<String, dynamic> initial = const {}}) async {
+    _tools.close();
+    unawaited(widget.data.chats.prefs?.rememberTool(madeKey(tool)));
+    final got = await showMadeToolSheet(
+      context,
+      auth: widget.data.chats.auth,
+      tool: tool,
+      initial: initial,
+      onAlwaysAsk: (on) => _tools.setAlwaysAsk(tool.command, on),
+    );
+    if (got == null || !mounted) return;
+    final run = MadeRun(id: got.run, command: tool.command, name: tool.name, values: got.values, at: widget.data.chats.now());
+    _runs.add(run);
+    _reveal(run);
+  }
+
+  /// Where each run's answer is drawn, to bring it into sight.
+  final _runKeys = <String, GlobalKey>{};
+
+  /// Those ended, so one that ends is brought into sight once.
+  late final _ended = {for (final r in _runs.runs) if (!r.going) r.id};
+
+  /// A run's answer into sight: it sits among the messages, before the
+  /// cards that follow them.
+  void _reveal(MadeRun r) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final at = _runKeys[r.id]?.currentContext;
+      if (at == null || !at.mounted) {
+        final s = _threadKey.currentState?.scroll;
+        if (s != null && s.hasClients) s.jumpTo(s.position.maxScrollExtent);
+        return;
+      }
+      unawaited(Scrollable.ensureVisible(at, alignment: 0.95, duration: const Duration(milliseconds: 250), curve: Tk.easeOut));
+    });
+  }
+
+  void _runsChanged() {
+    for (final r in _runs.runs) {
+      if (!r.going && _ended.add(r.id)) _reveal(r);
+    }
+  }
+
+  /// A button on an answer: the tool it names, its form filled.
+  void _answerButton(MadeRun run, ToolButton b, String key) {
+    final tool = _tools.made.where((t) => t.command == b.tool).firstOrNull;
+    if (tool == null) {
+      showTkToast(context, 'That tool isn’t one you can use here.', error: true);
+      return;
+    }
+    if (b.once == true) _runs.pressed(run, key);
+    unawaited(_openMade(tool, initial: b.inputs ?? const {}));
+  }
+
   /// A menu row's page, where the app has it as a screen.
   bool _openPage(String path) {
     final auth = widget.data.chats.auth;
@@ -689,6 +753,10 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     // "/" and a word as the whole message: the panel, filtered by it.
     _text.addListener(() => _tools.typed(_tags.tagging ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
+    // The business's own tools, read now: the tools button shows for them
+    // even with the built-in tools off.
+    unawaited(_tools.loadMade());
+    _runs.addListener(_runsChanged);
     // The menus' catalogue, read now, so a menu is drawn whole at once.
     unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));
     widget.data.chats.viewingTaskiem = true;
@@ -700,6 +768,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   @override
   void dispose() {
     _tools.dispose();
+    _runs.dispose();
     widget.data.chats.viewingTaskiem = false;
     _back?.cancel();
     _tags.dispose();
@@ -722,7 +791,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
           ground: t.chatWallpaper,
           doodle: t.chatDoodle,
           child: ListenableBuilder(
-            listenable: d,
+            listenable: Listenable.merge([d, _runs]),
             builder: (context, _) => Column(
               children: [
                 ColoredBox(
@@ -751,34 +820,45 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 _tags.anchor(context),
                 ToolsAnchor(
                   tools: _tools,
-                  panel: (context, room) =>
-                      ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
+                  panel: (context, room) => ToolsPanel(
+                    tools: _tools,
+                    onOpen: _openTool,
+                    onMade: (x) => unawaited(_openMade(x)),
+                    // Taskiem's own tiles come with the built-in tools.
+                    lead: d.chats.chatTools ? _schoolTiles(d) : const [],
+                    extras: d.chats.chatTools ? _extras(d) : const [],
+                    recent: d.chats.prefs?.recentTools ?? const [],
+                    maxHeight: room,
+                  ),
                 ),
-                Composer(
-                  key: _composer,
-                  tools: d.chats.chatTools ? _tools : null,
-                  text: _text,
-                  // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
-                  // tag"; a phone shows the words before the comma.
-                  hint: 'Ask Taskiem',
-                  label: 'Message to Taskiem',
-                  rules: taskiemFiles,
-                  busy: d.busy,
-                  bottom: pad.bottom,
-                  pickers: widget.pickers,
-                  recorder: widget.recorder,
-                  onSend: (words, file) {
-                    // Tags name things for Taskiem in the words alone.
-                    _tags.take(words);
-                    if (file != null) {
-                      d.sendFile(file, words);
-                    } else if (d.briefs && asksBriefing(words)) {
-                      // Asked for by name: the card, not a message.
-                      _showBriefing(d);
-                    } else {
-                      d.say(text: words);
-                    }
-                  },
+                ListenableBuilder(
+                  listenable: _tools,
+                  builder: (context, _) => Composer(
+                    key: _composer,
+                    tools: d.chats.chatTools || _tools.made.isNotEmpty ? _tools : null,
+                    text: _text,
+                    // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
+                    // tag"; a phone shows the words before the comma.
+                    hint: 'Ask Taskiem',
+                    label: 'Message to Taskiem',
+                    rules: taskiemFiles,
+                    busy: d.busy,
+                    bottom: pad.bottom,
+                    pickers: widget.pickers,
+                    recorder: widget.recorder,
+                    onSend: (words, file) {
+                      // Tags name things for Taskiem in the words alone.
+                      _tags.take(words);
+                      if (file != null) {
+                        d.sendFile(file, words);
+                      } else if (d.briefs && asksBriefing(words)) {
+                        // Asked for by name: the card, not a message.
+                        _showBriefing(d);
+                      } else {
+                        d.say(text: words);
+                      }
+                    },
+                  ),
                 ),
               ],
             ),
@@ -789,6 +869,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   }
 
   final _threadKey = GlobalKey<ThreadViewState<TaskiemLine>>();
+
+  /// What the person sent a tool, as their message: its name, then every
+  /// value as the server read it (the echo of made tools §8), or its
+  /// command when it took none.
+  static String _echoWords(MadeRun r) => ['*${r.name}*', if (r.values.isEmpty) '/${r.command}', for (final v in r.values) '${v.$1}: ${v.$2}'].join('\n');
 
   Future<void> _showBriefing(TaskiemData d) async {
     final ok = await d.showBriefing();
@@ -807,7 +892,35 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   Widget _thread(BuildContext context, TaskiemData d) {
     final t = TkTheme.tokens(context);
     final known = d.known;
-    final list = d.messages;
+    // Your tools' runs among the messages: what the person sent each, then
+    // its answer; the history's own copy of an answer left out.
+    final runs = _runs.runs;
+    final list = d.messages == null
+        ? null
+        : runs.isEmpty
+        ? d.messages
+        : ([
+            for (final x in d.messages!)
+              if (x.m.inbound || !runs.any((r) => isAnswerCopy(r, x.m.text, x.m.createdAt))) x,
+            for (final r in runs) ...[
+              TaskiemLine(
+                TaskiemChatMessagesItem(id: 'run-${r.id}-echo', channel: 'web', inbound: true, kind: 'text', text: _echoWords(r), createdAt: r.at),
+                run: r,
+                echo: true,
+              ),
+              TaskiemLine(
+                TaskiemChatMessagesItem(
+                  id: 'run-${r.id}',
+                  channel: 'web',
+                  inbound: false,
+                  kind: 'text',
+                  text: runWordsOf(r) ?? '',
+                  createdAt: r.at.add(const Duration(milliseconds: 1)),
+                ),
+                run: r,
+              ),
+            ],
+          ]..sort((p, q) => p.m.createdAt.compareTo(q.m.createdAt)));
     // For each of Taskiem's answers with buttons, the one pressed (the
     // person's next message, when it is the button's title); which of the
     // person's messages Taskiem has answered (their ticks go blue); and
@@ -849,7 +962,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         key: _threadKey,
         items: list,
         of: (id: (x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
-        arrival: (x) => x.m.kind == 'diary' ? TkArrival.diary : x.m.kind == 'chart' ? TkArrival.card : TkArrival.bubble,
+        arrival: (x) => x.m.kind == 'diary'
+            ? TkArrival.diary
+            : x.m.kind == 'chart' || (x.run != null && !x.echo && runWordsOf(x.run!) == null)
+            ? TkArrival.card
+            : TkArrival.bubble,
         now: d.chats.now(),
         unread: d.unread,
         hasOlder: d.hasOlder,
@@ -989,6 +1106,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         ),
         render: (x, prev) {
           final m = x.m;
+          // A tool's answer that is more than words: its card.
+          if (x.run != null && !x.echo && runWordsOf(x.run!) == null) {
+            return Padding(
+              key: _runKeys.putIfAbsent(x.run!.id, GlobalKey.new),
+              padding: const EdgeInsets.only(top: 6),
+              child: MadeAnswerCard(run: x.run!, auth: d.chats.auth, onButton: _answerButton),
+            );
+          }
           if (m.kind == 'menu') {
             final menu = MenuMessage.parse(m.text);
             if (menu != null) {
@@ -1018,6 +1143,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
           // startsRun: a run is one side's.
           final first = prev == null || prev.m.inbound != m.inbound;
           return Padding(
+            key: x.run != null && !x.echo ? _runKeys.putIfAbsent(x.run!.id, GlobalKey.new) : null,
             padding: EdgeInsets.only(top: first ? 6 : 0),
             child: _TaskiemBubble(
               x: x,
@@ -1065,15 +1191,17 @@ class TaskiemSignupBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _TaskiemBubble(
-    x: TaskiemLine(TaskiemChatMessagesItem(
-      id: id,
-      inbound: mine,
-      channel: 'web',
-      kind: 'text',
-      text: text,
-      createdAt: at,
-      buttons: [for (final b in buttons) TaskiemChatMessagesItemButtonsItem(id: b.id, title: b.title)],
-    )),
+    x: TaskiemLine(
+      TaskiemChatMessagesItem(
+        id: id,
+        inbound: mine,
+        channel: 'web',
+        kind: 'text',
+        text: text,
+        createdAt: at,
+        buttons: [for (final b in buttons) TaskiemChatMessagesItemButtonsItem(id: b.id, title: b.title)],
+      ),
+    ),
     first: first,
     read: true,
     choice: null,
@@ -1178,7 +1306,9 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     // A connect link or a workflow's canvas (§3.5) is pressed to open it;
     // other addresses stay words, as on the web.
     List<InlineSpan> linked(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
-      final links = widget.onLink == null ? const <({int start, int end, Uri uri})>[] : linksIn(text).where((l) => widget.anyLink || opensFromTaskiem(l.uri)).toList();
+      final links = widget.onLink == null
+          ? const <({int start, int end, Uri uri})>[]
+          : linksIn(text).where((l) => widget.anyLink || opensFromTaskiem(l.uri)).toList();
       if (links.isEmpty) return [TextSpan(text: text, style: style)];
       final out = <InlineSpan>[];
       var at = 0;

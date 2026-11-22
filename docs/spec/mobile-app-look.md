@@ -330,6 +330,13 @@ web's pictures (the parity test still builds and drives them).
   Back and Close on the card's colour, the title in Inter Tight, the search
   on a card, filters as the switch, the rows on one card. Sell and Order:
   − and + round on a soft track, lime once picked; the total a pine bar.
+- **Your tools** (made tools M1, 22 November 2026): the business's own
+  tools follow the built-in tiles under a small "Your tools" heading, in
+  the same tiles. A tool's sheet is a `TkFormSheet` (`/command` over its
+  name); Yes is a second step of the same sheet ("What will run" as
+  `TkLines`). Its answer stands in the chat as the cards do: a text in
+  Taskiem's bubble, a card or a list in the card frame (`cardDecoration`),
+  the person's values as their own bubble before it.
 - **Left as it was:** the product form keeps its order (the photo's ways
   under the picture, the fields one under another) in the new colours; the
   documents named in a message (`RefCard`).
