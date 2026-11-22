@@ -2475,7 +2475,9 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 
 /* The question on a line bought (what a business buys §6, TreatLine.tsx). */
 fieldset.treat, div.treat { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 4px; margin: 0 0 12px; min-width: 0; background: var(--panel); color: var(--text); text-align: left; }
-fieldset.treat > legend { padding: 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+/* The heading inside the box, at its top (a float takes a legend off the border). */
+fieldset.treat > legend { float: left; width: 100%; padding: 0; margin: 0 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+fieldset.treat > legend + * { clear: both; }
 .treat .block { display: block; }
 .treat .treat-ask { display: block; font-weight: 600; margin-top: 2px; }
 div.treat-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 12px; }
