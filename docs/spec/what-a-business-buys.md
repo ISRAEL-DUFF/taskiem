@@ -356,8 +356,8 @@ The split comes first, because Add to stock and every count after it point at st
 
 **Left for S1b:**
 
-- `uses` above 1 when selling and when saying how many are left (always 1 now);
-- `taskiem_product_left` and the public pages reading it, in place of the catalogue copy's count;
+- `uses` above 1 when selling and when saying how many are left (always 1 now) (done: below);
+- `taskiem_product_left` and the public pages reading it, in place of the catalogue copy's count (done: below);
 - purchase lines on stock items (U1's `purchase_lines`), in place of a row id resolved through `productstock`;
 - `add …` counting in with **Do you sell it?** in chat (done: below);
 - the list of the owner's workflows that use the old columns (done: below).
