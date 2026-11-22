@@ -20,7 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
-	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -278,21 +278,7 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return s.syncServices(ctx, tenant, sf)
 	}
-	// A catalogue keeping stock: counts changed in the table by hand are
-	// recorded as outside movements, against the database's clock read
-	// before the rows (docs/spec/stock.md §4).
-	var mark *time.Time
-	if s.Stock.Ready() && sf.CatalogueColumns.Stock != "" {
-		if t, err := s.Stock.ReadMark(ctx); err == nil {
-			mark = &t
-		}
-	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
-	if rerr == nil && mark != nil {
-		if _, err := s.Stock.Outside(ctx, tenant, stock.SeenRows(rows, sf.CatalogueColumns), *mark); err != nil {
-			s.Logger.Warn("stock: recording changes made in the table", "tenant", tenant, "err", err)
-		}
-	}
 	var items []storefront.Item
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
@@ -302,9 +288,21 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 			return rerr
 		}
 		var err error
-		if items, err = storefront.Items(ctx, tx, tenant, rows, sf.CatalogueColumns); err != nil {
+		if items, err = storefront.CatalogueItems(ctx, tx, tenant, rows, sf.CatalogueColumns); err != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, err)
 			return err
+		}
+		// The catalogue read whole: a product deleted from it is counted
+		// no longer, and its stock item stays, a material with its count
+		// and history (what-a-business-buys §4.1).
+		present := make([]string, 0, len(rows))
+		for _, r := range rows {
+			present = append(present, fmt.Sprint(r["id"]))
+		}
+		if n, err := productstock.DropGoneTx(ctx, tx, tenant, present); err != nil {
+			return err
+		} else if n > 0 {
+			s.Logger.Info("stock: products gone from the catalogue are no longer counted", "tenant", tenant, "links", n)
 		}
 		return nil
 	})

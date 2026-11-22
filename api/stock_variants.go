@@ -15,6 +15,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/variants"
@@ -23,8 +24,11 @@ import (
 // Sizes and colours (docs/spec/chat-categories-and-variants.md, Part B):
 // a product's choices make a grid, and each combination sold is a
 // catalogue row of its own, pointing at the product's (variant_of), so
-// stock, sales and orders work on it as on any item. The product keeps no
-// stock of its own.
+// sales and orders work on it as on any item. Each is counted by a stock
+// item of its own (docs/spec/what-a-business-buys.md §4.1), made at 0
+// with the product's unit, cost and levels when the row is made, grouped
+// under the product, and retired with the row, keeping its movements. The
+// product keeps no stock of its own.
 
 // variantColumns are the columns a catalogue gets the first time a
 // product has sizes and colours.
@@ -251,9 +255,7 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 	}
 	rows := make([]any, 0, len(plan.Create))
 	for _, c := range plan.Create {
-		row := stockCells(m, product.Unit, product.CostKobo, product.Reorder, product.Target, product.Supplier)
-		row[m.Name] = variants.Name(product.Name, c.Variant, choices)
-		row[m.Stock] = 0
+		row := map[string]any{m.Name: variants.Name(product.Name, c.Variant, choices)}
 		row[m.VariantOf] = id
 		row[m.Variant] = variants.JSON(c.Variant)
 		row[m.Available] = true
@@ -296,6 +298,23 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			return stock.Item{}, nil, err
 		}
 		made := rowsOf(out)
+		// Each new size's or colour's stock item, at 0, before its count.
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			for i, c := range plan.Create {
+				if i >= len(made) {
+					break
+				}
+				mr, _ := made[i].(map[string]any)
+				if rid := cell(mr["id"]); rid != "" {
+					if err := sizeStockTx(ctx, tx, p.TenantID, *product, rid, variants.Name(product.Name, c.Variant, choices), p.Actor()); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}); err != nil {
+			return stock.Item{}, nil, err
+		}
 		for i, c := range plan.Create {
 			if i >= len(made) {
 				break
@@ -356,6 +375,23 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			return stock.Item{}, nil, err
 		}
 		old := was[k.ID]
+		// Its stock item: brought back with it, renamed with it; made at 0
+		// for a size kept from before it had one.
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			if old.StockItemID == "" {
+				return sizeStockTx(ctx, tx, p.TenantID, *product, k.ID, k.Name, p.Actor())
+			}
+			sid := uuid.MustParse(old.StockItemID)
+			if k.Revive {
+				if err := stock.RetireItemTx(ctx, tx, p.TenantID, sid, true); err != nil {
+					return err
+				}
+			}
+			_, err := stock.SetItemTx(ctx, tx, p.TenantID, sid, stock.ItemSet{Name: &k.Name})
+			return err
+		}); err != nil {
+			return stock.Item{}, nil, err
+		}
 		if k.Cell.Count != nil && (old.Stock == nil || *old.Stock != *k.Cell.Count) {
 			if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: k.ID, Item: k.Name, Reason: stock.Count, SetTo: k.Cell.Count,
 				Note: "Counted in its sizes and colours", Actor: p.Actor(), Key: "api-" + key + "-count-" + k.ID, CostKobo: old.CostKobo}, audit); err != nil {
@@ -363,10 +399,18 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			}
 		}
 	}
-	// Rows the grid no longer has: off sale, kept for their history.
+	// Rows the grid no longer has: off sale, and their stock items
+	// retired, each kept with its movements for its history.
 	for _, rid := range plan.Retire {
 		if err := s.stockSetCells(ctx, p.TenantID, sh, rid, "api-"+key+"-retire-"+rid, map[string]any{m.Available: false}); err != nil {
 			return stock.Item{}, nil, err
+		}
+		if sid := was[rid].StockItemID; sid != "" {
+			if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+				return stock.RetireItemTx(ctx, tx, p.TenantID, uuid.MustParse(sid), false)
+			}); err != nil {
+				return stock.Item{}, nil, err
+			}
 		}
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
@@ -420,6 +464,22 @@ func quietSizes(ctx context.Context) context.Context {
 func quietSized(ctx context.Context) bool {
 	q, _ := ctx.Value(quietSizesKey{}).(bool)
 	return q
+}
+
+// sizeStockTx makes the stock item a size or colour of product is
+// counted by (row, its catalogue row), at 0, with the product's unit,
+// cost, levels and supplier, grouped under it; one counted already is
+// left as it is.
+func sizeStockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product stock.Item, row, name, actor string) error {
+	if _, ok, err := productstock.ItemOfTx(ctx, tx, tenant, row); err != nil || ok {
+		return err
+	}
+	x, err := stock.CreateItemTx(ctx, tx, tenant, stock.NewItem{Name: name, Unit: product.Unit, CostKobo: product.CostKobo, Low: product.Reorder,
+		Target: product.Target, SupplierID: product.SupplierID, GroupOf: product.ID, Actor: actor})
+	if err != nil {
+		return err
+	}
+	return productstock.LinkTx(ctx, tx, tenant, row, x.ID)
 }
 
 // maxVariantPriceKobo bounds a size's or colour's own price: ₦10m.
@@ -577,12 +637,13 @@ func (s *Server) moveStockGrid(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"movements": moved})
 }
 
-// sizesFollow passes a change of a product (set: its cells as written)
-// on to its sizes and colours: a new name into theirs ("Air Max 95 – 42,
-// Black"); its unit, cost, levels, supplier and category; its price to
-// those without one of their own. It returns the ones whose category
-// changed, for the price lists. key, when given, keys each write.
-func (s *Server) sizesFollow(ctx context.Context, tenant uuid.UUID, sh stockShop, product stock.Item, name, key string, set map[string]any) []string {
+// sizesFollow passes a change of a product (set: its cells as written;
+// d: its stock item's details) on to its sizes and colours: a new name
+// into theirs ("Air Max 95 – 42, Black"); its category; its price to
+// those without one of their own; its unit, cost, levels and supplier to
+// their stock items. It returns the ones whose category changed, for the
+// price lists. key, when given, keys each write.
+func (s *Server) sizesFollow(ctx context.Context, tenant uuid.UUID, sh stockShop, product stock.Item, name, key string, set map[string]any, d stockDetails) []string {
 	if !product.HasSizes() {
 		return nil
 	}
@@ -596,9 +657,20 @@ func (s *Server) sizesFollow(ctx context.Context, tenant uuid.UUID, sh stockShop
 	var recategorised []string
 	for _, v := range variantsOf(items, product.ID) {
 		vset := map[string]any{}
-		for _, col := range []string{m.Unit, m.CostPrice, m.ReorderLevel, m.TargetLevel, m.Supplier, m.Category} {
-			if x, ok := set[col]; ok && col != "" {
-				vset[col] = x
+		if x, ok := set[m.Category]; ok && m.Category != "" {
+			vset[m.Category] = x
+		}
+		vd := stockDetails{Unit: d.Unit, CostKobo: d.CostKobo, Reorder: d.Reorder, Target: d.Target, Supplier: d.Supplier}
+		if name != "" && name != product.Name && v.Variant != nil {
+			n := variants.Name(name, v.Variant, product.Choices)
+			vd.Name = &n
+		}
+		if v.StockItemID != "" && vd.any() {
+			if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+				_, err := stockSetDetailsTx(ctx, tx, tenant, v, vd, "taskiem")
+				return err
+			}); err != nil {
+				s.Logger.Warn("stock: a size or colour following its product", "tenant", tenant, "item", v.ID, "err", err)
 			}
 		}
 		if x, ok := set[m.Price]; ok && m.Price != "" && !own.Owns(variants.Key(v.Variant)) {

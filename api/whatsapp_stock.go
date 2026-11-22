@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -681,9 +682,22 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
-		set := stockCells(shop.cols(), in.Unit, in.CostKobo, nil, nil, "")
-		if err := s.stockSetCells(tctx, c.tenant.ID, shop, sh.Row, key+"-cells", set); err != nil {
-			return s.stockChatFail(ctx, c, err)
+		// Its unit and the price paid go on its stock item.
+		if in.Unit != "" || in.CostKobo != nil {
+			it, err := s.stockItem(tctx, c.tenant.ID, shop, sh.Row)
+			if err != nil {
+				return s.stockChatFail(ctx, c, err)
+			}
+			d := stockDetails{CostKobo: in.CostKobo}
+			if u := in.Unit; u != "" {
+				d.Unit = &u
+			}
+			if err := db.InTenantTx(tctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+				_, err := stockSetDetailsTx(tctx, tx, c.tenant.ID, it, d, c.p.Actor())
+				return err
+			}); err != nil {
+				return s.stockChatFail(ctx, c, err)
+			}
 		}
 		q := in.Quantity
 		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Actor: c.p.Actor(),

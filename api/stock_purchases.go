@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/stock"
 )
 
@@ -126,30 +126,39 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 		s.purchaseFail(w, r, err)
 		return
 	}
-	if err := s.supplyItems(r.Context(), p.TenantID, x.Name, in.Items, "sup-"+x.ID.String()); err != nil {
+	if err := s.supplyItems(r.Context(), p.TenantID, x.Name, in.Items, p.Actor()); err != nil {
 		s.Logger.Warn("stock: naming a supplier on items", "tenant", p.TenantID, "err", err)
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"supplier": x})
 }
 
-// supplyItems sets the catalogue's supplier on the items named (row ids).
-func (s *Server) supplyItems(ctx context.Context, tenant uuid.UUID, name string, ids []string, key string) error {
+// supplyItems makes the supplier named the usual one of the items named
+// (their ids): their stock items', a product not counted yet starting
+// to be.
+func (s *Server) supplyItems(ctx context.Context, tenant uuid.UUID, name string, ids []string, actor string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	sh, err := s.stockShopOf(ctx, tenant)
+	_, items, err := s.stockItems(ctx, tenant)
 	if err != nil {
 		return err
 	}
-	if sh.cols().Supplier == "" {
-		return nil
+	byID := make(map[string]stock.Item, len(items))
+	for _, it := range items {
+		byID[it.ID] = it
 	}
-	for _, id := range ids {
-		if err := s.stockSetCells(ctx, tenant, sh, id, key+"-"+id, map[string]any{sh.cols().Supplier: name}); err != nil {
-			return err
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		for _, id := range ids {
+			it, ok := byID[id]
+			if !ok {
+				continue
+			}
+			if _, err := stockSetDetailsTx(ctx, tx, tenant, it, stockDetails{Supplier: &name}, actor); err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 // patchSupplier is PATCH /v1/stock/suppliers/{id}: a new name, carried to
@@ -171,30 +180,15 @@ func (s *Server) patchSupplier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	var before, x stock.Supplier
+	// Their stock items name them by id: the new name is theirs at once.
+	var x stock.Supplier
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if before, err = s.Purchases.SupplierTx(r.Context(), tx, p.TenantID, id); err != nil {
-			return err
-		}
 		x, err = s.Purchases.RenameSupplierTx(r.Context(), tx, p.TenantID, id, in.Name, p.Actor())
 		return err
 	}); err != nil {
 		s.purchaseFail(w, r, err)
 		return
-	}
-	if before.Name != x.Name {
-		if _, items, err := s.stockItems(r.Context(), p.TenantID); err == nil {
-			var ids []string
-			for _, it := range items {
-				if strings.EqualFold(strings.TrimSpace(it.Supplier), before.Name) {
-					ids = append(ids, it.ID)
-				}
-			}
-			if err := s.supplyItems(r.Context(), p.TenantID, x.Name, ids, "sup-rename-"+x.ID.String()+"-"+strconv.Itoa(len(x.Name))); err != nil {
-				s.Logger.Warn("stock: renaming a supplier on items", "tenant", p.TenantID, "err", err)
-			}
-		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"supplier": x})
 }
@@ -605,15 +599,4 @@ func (s *Server) payPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"purchase": x})
-}
-
-// StockCost sets an item's cost price in the catalogue (after goods are
-// received on an order): stock.Purchases.Cost.
-func (s *Server) StockCost(ctx context.Context, tenant uuid.UUID, row string, kobo int64, key string) error {
-	sh, err := s.stockShopOf(ctx, tenant)
-	if err != nil || sh.cols().CostPrice == "" {
-		return err
-	}
-	set := stockCells(sh.cols(), "", &kobo, nil, nil, "")
-	return s.stockSetCells(ctx, tenant, sh, row, key, set)
 }

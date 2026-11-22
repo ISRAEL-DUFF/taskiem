@@ -120,7 +120,7 @@ func repricedDeposit(sub Submission, total int64, opts ActionOptions) int64 {
 
 // Items reads rows of the catalogue or services table through the
 // tenant's data tables connection, mapped as the copy is (without photos).
-func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error) {
+func (x *XenibaseCatalogue) Items(ctx context.Context, tenant uuid.UUID, from Source, ids []string) (map[string]Item, error) {
 	var table string
 	var m Columns
 	err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -164,8 +164,18 @@ func (x *XenibaseStock) Items(ctx context.Context, tenant uuid.UUID, from Source
 			rows = append(rows, row)
 		}
 	}
-	m.Photo = "" // no photos: Items needs no transaction
-	items, err := Items(ctx, nil, tenant, rows, m)
+	m.Photo = "" // no photos: only the catalogue's counts are read
+	var items []Item
+	if from.Table == nil && !from.Services {
+		// The catalogue's: with how many are left of each product counted.
+		err = db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			items, err = CatalogueItems(ctx, tx, tenant, rows, m)
+			return err
+		})
+	} else {
+		items, err = Items(ctx, nil, tenant, rows, m)
+	}
 	if err != nil {
 		return nil, err
 	}

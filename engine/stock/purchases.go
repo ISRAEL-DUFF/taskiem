@@ -94,12 +94,9 @@ type Purchases struct {
 	// PageBase is the form host's address, where the business's tap-in
 	// page is; "" sends no link.
 	PageBase string
-	// Stock sends the received movements to the table.
+	// Stock reads the items for drafting.
 	Stock *Stock
-	// Cost sets an item's cost price in the catalogue after a receipt;
-	// nil leaves it.
-	Cost func(ctx context.Context, tenant uuid.UUID, row string, kobo int64, key string) error
-	Now  func() time.Time
+	Now   func() time.Time
 }
 
 func (p *Purchases) now() time.Time {
@@ -1086,24 +1083,18 @@ var StatusWords = map[string]string{
 	Drafted: "a draft", Sent: "sent", Confirmed: "confirmed", PartReceived: "part received", FullReceived: "received", Cancelled: "cancelled",
 }
 
-// Cost is an item's cost price to set after a receipt.
-type Cost struct {
-	ItemID string
-	Kobo   int64
-}
-
 // ReceiveTx records goods received on an order: a received movement per
 // item naming the order, the lines' received quantities, the value
 // received (owed to the supplier until paid), and the status, received
-// once every line has come. got is how many came, by item id; key makes a
-// receipt once.
-func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, []Movement, []Cost, error) {
+// once every line has come; and each stock item's cost price, set to the
+// order's. got is how many came, by item id; key makes a receipt once.
+func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, []Movement, error) {
 	x, err := PurchaseTx(ctx, tx, tenant, id, true)
 	if err != nil {
-		return x, nil, nil, err
+		return x, nil, err
 	}
 	if key == "" {
-		return x, nil, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
+		return x, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
 	key = FitKey(key)
 	// A receipt already made answers as it did, whatever the order's
@@ -1115,19 +1106,19 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	}
 	var done bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key = ANY ($2))`, tenant, keys).Scan(&done); err != nil {
-		return x, nil, nil, err
+		return x, nil, err
 	}
 	if done {
-		return x, nil, nil, nil
+		return x, nil, nil
 	}
 	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
-		return x, nil, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
+		return x, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
 	if x.LinkID != nil && x.SellerStatus != nil && !strings.HasPrefix(key, LinkReceiptKey) {
 		// An order in a linked supplier's business is received by the
 		// link's own steps (All came, Not all came, or the day's end from
 		// the supplier's count), never by hand (business links §7).
-		return x, nil, nil, ErrLinked
+		return x, nil, ErrLinked
 	}
 	known := map[string]bool{}
 	left, names := map[string]int64{}, map[string]string{}
@@ -1138,10 +1129,10 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	}
 	for item, n := range got {
 		if !known[item] {
-			return x, nil, nil, fmt.Errorf("%w: that item is not on %s", ErrPurchase, x.Reference)
+			return x, nil, fmt.Errorf("%w: that item is not on %s", ErrPurchase, x.Reference)
 		}
 		if n < 0 || n > MaxDelta {
-			return x, nil, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
+			return x, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
 		}
 		// An order takes what it ordered and no more: what came beyond it
 		// would be owed to the supplier at the order's price with nobody
@@ -1150,14 +1141,13 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		// taken as it is: that order is received by the link's own steps.
 		if n > left[item] && !strings.HasPrefix(key, LinkReceiptKey) {
 			if left[item] == 0 {
-				return x, nil, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, names[item], x.Reference)
+				return x, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, names[item], x.Reference)
 			}
-			return x, nil, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
+			return x, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
 				ErrPurchase, left[item], names[item], x.Reference, left[item])
 		}
 	}
 	var moves []Movement
-	var costs []Cost
 	var value int64
 	all := true
 	for i, l := range x.Lines {
@@ -1166,13 +1156,15 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Received, Delta: &n, Reference: x.Reference,
 				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
 			if err != nil {
-				return x, nil, nil, err
+				return x, nil, err
 			}
 			moves = append(moves, m)
 			x.Lines[i].Received += n
 			value += n * l.CostKobo
 			if l.CostKobo > 0 {
-				costs = append(costs, Cost{ItemID: l.ItemID, Kobo: l.CostKobo})
+				if _, err := tx.Exec(ctx, `UPDATE stock_items SET cost_kobo = $3 WHERE tenant_id = $1 AND id = $2::uuid`, tenant, m.ItemID, l.CostKobo); err != nil {
+					return x, nil, err
+				}
 			}
 		}
 		if x.Lines[i].Received < l.Quantity {
@@ -1180,7 +1172,7 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		}
 	}
 	if len(moves) == 0 {
-		return x, nil, nil, fmt.Errorf("%w: say how many came of at least one item", ErrPurchase)
+		return x, nil, fmt.Errorf("%w: say how many came of at least one item", ErrPurchase)
 	}
 	status := PartReceived
 	if all {
@@ -1191,13 +1183,13 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		received_at = CASE WHEN $4 = 'received' THEN now() ELSE received_at END,
 		confirmed_at = COALESCE(confirmed_at, now()), confirmed_how = COALESCE(confirmed_how, 'owner'), updated_at = now()
 		WHERE tenant_id = $1 AND id = $2`, tenant, id, lines, status, value); err != nil {
-		return x, nil, nil, err
+		return x, nil, err
 	}
 	if err := stockAudit(ctx, tx, tenant, "purchase.received", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "status": status, "by": actor}); err != nil {
-		return x, nil, nil, err
+		return x, nil, err
 	}
 	out, err := PurchaseTx(ctx, tx, tenant, id, false)
-	return out, moves, costs, err
+	return out, moves, err
 }
 
 // LinkReceiptKey starts the idempotency key of a receipt made by the
@@ -1261,44 +1253,15 @@ func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts 
 	return out, moves, err
 }
 
-// Receive records goods received on an order, then sends the movements to
-// the table and sets the items' cost prices; what is not sent is left for
-// the sweep.
+// Receive records goods received on an order (ReceiveTx).
 func (p *Purchases) Receive(ctx context.Context, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, error) {
 	var x Purchase
-	var moves []Movement
-	var costs []Cost
 	err := p.inTx(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
-		x, moves, costs, err = ReceiveTx(ctx, tx, tenant, id, got, actor, key)
+		x, _, err = ReceiveTx(ctx, tx, tenant, id, got, actor, key)
 		return err
 	})
-	if err != nil {
-		return x, err
-	}
-	p.after(ctx, tenant, moves, costs, key)
-	return x, nil
-}
-
-// Apply is after for a receipt made in a caller's own transaction
-// (ReceiveTx), once it commits.
-func (p *Purchases) Apply(ctx context.Context, tenant uuid.UUID, moves []Movement, costs []Cost, key string) {
-	p.after(ctx, tenant, moves, costs, key)
-}
-
-// after sends movements recorded and sets cost prices; failures are left
-// for the sweep (movements) or the next receipt (costs).
-func (p *Purchases) after(ctx context.Context, tenant uuid.UUID, moves []Movement, costs []Cost, key string) {
-	if p.Stock != nil && p.Stock.Ready() {
-		for _, m := range moves {
-			_, _ = p.Stock.Apply(ctx, tenant, m.ID)
-		}
-	}
-	if p.Cost != nil {
-		for _, c := range costs {
-			_ = p.Cost(ctx, tenant, c.ItemID, c.Kobo, "po-cost:"+FitKey(key)+":"+c.ItemID)
-		}
-	}
+	return x, err
 }
 
 // Paid ways for a purchase.

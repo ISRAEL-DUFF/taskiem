@@ -28,7 +28,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/riders"
-	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -630,11 +629,10 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 		if !s.Stock.Ready() {
 			return nil
 		}
-		cat, ok := s.Stock.Table.(stock.Catalogue)
-		if !ok {
+		if s.Stock.Catalogue == nil {
 			return nil
 		}
-		rows, m, err := cat.Rows(ctx, c.tenant.ID)
+		rows, m, err := s.Stock.Catalogue.Rows(ctx, c.tenant.ID)
 		if err != nil || m.Name == "" {
 			return nil
 		}

@@ -78,11 +78,8 @@ type Orders struct {
 	Vault    *secrets.Vault
 	InboxKey []byte
 	Payments Payments
-	// Stock lowers the catalogue's stock on Accept (nil: not tracked).
-	Stock Stock
-	// Moves records the lowering as stock movements and sends them
-	// (engine/stock, docs/spec/stock.md §4); nil lowers through Stock
-	// alone.
+	// Moves lowers the stock items of an accepted order's products, as
+	// movements (engine/stock); nil lowers none.
 	Moves    Mover
 	Messages *sender.Queue
 	// Start starts a run (runtime.Store.Start); Signal delivers a signal
@@ -1100,7 +1097,6 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 				errs = append(errs, err)
 				continue
 			}
-			o.sendReturns(ctx, tenant, d.id)
 			// A booking's run is ended and the customer told: its slot is
 			// free again.
 			if d.kind == "booking" {
@@ -1196,10 +1192,6 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 	})
 	if err != nil {
 		return out, err
-	}
-	switch out["status"] {
-	case "declined", "cancelled", "refund_due":
-		o.sendReturnsOf(ctx, tenant, reference)
 	}
 	if accepted == nil {
 		return out, nil

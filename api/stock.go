@@ -20,34 +20,22 @@ import (
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
-// Stock by chat (docs/spec/stock.md, decision 0057), the web's and the
-// API's door: the Stock page's items, read from the catalogue table
-// itself with the columns stock maps; movements; adding items, changing
-// their stock columns, and moving their stock. Chat (whatsapp_stock.go)
-// goes through the same functions.
+// Stock (docs/spec/stock.md, docs/spec/what-a-business-buys.md §4;
+// decisions 0057 and 0070), the web's and the API's door: the Stock page's
+// items, the catalogue's products each with the stock item it is counted
+// by, and the materials; movements; adding items, changing their details,
+// and moving their stock. Counts are kept on stock items in Taskiem's
+// database, never in the catalogue table. Chat (whatsapp_stock.go) goes
+// through the same functions.
 
 var (
-	// errStockOff: the business has no catalogue keeping stock yet.
-	errStockOff = errors.New("stock: no catalogue keeps stock yet")
-	// errItemExists: an item of that name is in the catalogue already.
+	// errStockOff: the business has no catalogue yet.
+	errStockOff = errors.New("stock: no catalogue yet")
+	// errItemExists: an item of that name is there already.
 	errItemExists = errors.New("stock: an item of that name is there already")
-	// errNoItem: no item has that row id.
+	// errNoItem: no item has that id.
 	errNoItem = errors.New("stock: no such item")
 )
-
-// stockColumns are the columns Keep my stock adds to a catalogue that
-// lacks them, by the mapping field each is for.
-var stockColumns = []struct {
-	field func(*storefront.Columns) *string
-	col   datatables.Column
-}{
-	{func(m *storefront.Columns) *string { return &m.Stock }, datatables.Column{Name: "stock", Title: "Stock", Type: "integer"}},
-	{func(m *storefront.Columns) *string { return &m.Unit }, datatables.Column{Name: "unit", Title: "Unit", Type: "text"}},
-	{func(m *storefront.Columns) *string { return &m.CostPrice }, datatables.Column{Name: "cost_price", Title: "Cost price (₦)", Type: "number"}},
-	{func(m *storefront.Columns) *string { return &m.ReorderLevel }, datatables.Column{Name: "reorder_level", Title: "Reorder at", Type: "integer"}},
-	{func(m *storefront.Columns) *string { return &m.TargetLevel }, datatables.Column{Name: "target_level", Title: "Order up to", Type: "integer"}},
-	{func(m *storefront.Columns) *string { return &m.Supplier }, datatables.Column{Name: "supplier", Title: "Supplier", Type: "text"}},
-}
 
 // maxCategory is how long a category may be, in characters.
 const maxCategory = 60
@@ -115,8 +103,8 @@ func checkCategory(c string) (string, error) {
 	return c, nil
 }
 
-// stockShop is a business's catalogue keeping stock: its storefront (a
-// draft, when the shop has no page) and the table.
+// stockShop is a business's catalogue: its storefront (a draft, when the
+// shop has no page) and the table.
 type stockShop struct {
 	sf    storefront.Storefront
 	table datatables.Table
@@ -124,7 +112,7 @@ type stockShop struct {
 
 func (sh stockShop) cols() storefront.Columns { return sh.sf.CatalogueColumns }
 
-// stockShopOf is the business's catalogue keeping stock, or errStockOff.
+// stockShopOf is the business's catalogue, or errStockOff.
 func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, error) {
 	var sh stockShop
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -132,7 +120,7 @@ func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, 
 		if sh.sf, err = storefront.Get(ctx, tx, tenant); err != nil {
 			return err
 		}
-		if sh.sf.CatalogueTable == nil || sh.sf.CatalogueColumns.Stock == "" {
+		if sh.sf.CatalogueTable == nil {
 			return errStockOff
 		}
 		sh.table, err = datatables.GetTable(ctx, tx, *sh.sf.CatalogueTable)
@@ -144,7 +132,8 @@ func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, 
 	return sh, err
 }
 
-// stockItems reads the business's items from the catalogue table itself.
+// stockItems reads the business's items: the catalogue table's products,
+// each with the stock item it is counted by, and the materials.
 func (s *Server) stockItems(ctx context.Context, tenant uuid.UUID) (stockShop, []stock.Item, error) {
 	sh, err := s.stockShopOf(ctx, tenant)
 	if err != nil {
@@ -154,17 +143,48 @@ func (s *Server) stockItems(ctx context.Context, tenant uuid.UUID) (stockShop, [
 	if err != nil {
 		return sh, nil, err
 	}
-	return sh, stock.Items(rows, sh.cols()), nil
+	var items []stock.Item
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		items, err = stock.ItemsTx(ctx, tx, tenant, rows, sh.cols())
+		return err
+	})
+	return sh, items, err
 }
 
-// stockItem reads one item by its row id.
+// stockItem reads one item by its id: a product's row id, or a stock
+// item's (a material; the product it counts, for one that counts one).
 func (s *Server) stockItem(ctx context.Context, tenant uuid.UUID, sh stockShop, id string) (stock.Item, error) {
+	row := id
+	if sid, err := uuid.Parse(id); err == nil {
+		var x stock.StockItem
+		var product string
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			if x, err = stock.StockItemTx(ctx, tx, tenant, sid); err != nil {
+				return err
+			}
+			err = tx.QueryRow(ctx, `SELECT product_id FROM product_stock WHERE tenant_id = $1 AND stock_item_id = $2 ORDER BY created_at LIMIT 1`, tenant, sid).Scan(&product)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil
+			}
+			return err
+		}); errors.Is(err, stock.ErrNoItem) {
+			return stock.Item{}, errNoItem
+		} else if err != nil {
+			return stock.Item{}, err
+		}
+		if product == "" {
+			return stock.FromStockItem(x), nil
+		}
+		row = product
+	}
 	tr, err := s.tableRowsFor(ctx, tenant, sh.table, storefrontPurpose)
 	if err != nil {
 		return stock.Item{}, err
 	}
 	page, err := tr.call(ctx, s, "read_rows", map[string]any{"table": sh.table.Name, "limit": 1,
-		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": id}}}, "")
+		"filters": []any{map[string]any{"column": "id", "op": "eq", "value": row}}}, "")
 	if err != nil {
 		return stock.Item{}, err
 	}
@@ -174,22 +194,29 @@ func (s *Server) stockItem(ctx context.Context, tenant uuid.UUID, sh stockShop, 
 			rows = append(rows, m)
 		}
 	}
-	items := stock.Items(rows, sh.cols())
-	if len(items) == 0 {
-		return stock.Item{}, errNoItem
+	var items []stock.Item
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		items, err = stock.ItemsTx(ctx, tx, tenant, rows, sh.cols())
+		return err
+	}); err != nil {
+		return stock.Item{}, err
 	}
-	return items[0], nil
+	for _, it := range items {
+		if it.ID == row {
+			return it, nil
+		}
+	}
+	return stock.Item{}, errNoItem
 }
 
 // stockAudit records what a person did, in the transaction given.
 type stockAudit func(tx pgx.Tx, action, target string, detail map[string]any) error
 
-// stockSetup makes the business's catalogue keep stock (Keep my stock):
-// a draft storefront under the business's name when there is none, a
-// products table with the stock columns when there is no catalogue, and
-// the stock columns added and mapped where an existing catalogue lacks
-// them (the stock column always; the others while the plan's column limit
-// allows).
+// stockSetup readies a business to keep stock (Keep my stock): a draft
+// storefront under the business's name when there is none, and a
+// products table when there is no catalogue. Counts are kept on stock
+// items, so an existing catalogue needs nothing more.
 func (s *Server) stockSetup(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit) (stockShop, error) {
 	inTx := func(fn func(pgx.Tx) error) error { return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, fn) }
 	var sf storefront.Storefront
@@ -211,89 +238,23 @@ func (s *Server) stockSetup(ctx context.Context, tenant uuid.UUID, actor string,
 	if err != nil {
 		return stockShop{}, err
 	}
-	if sf.CatalogueTable == nil {
-		t := datatables.Table{Name: "products", Title: "Products", Description: "The shop's items and their stock", Columns: productColumns}
-		if err := s.makeOwnTable(ctx, tenant, actor, audit, &t, "products", "shop_products", "products_2", "products_3"); err != nil {
-			return stockShop{}, err
-		}
-		m := productMapping
-		err := inTx(func(tx pgx.Tx) error {
-			if err := m.Check(tableColumns(t)); err != nil {
-				return err
-			}
-			var err error
-			if sf, err = storefront.Save(ctx, tx, tenant, sf.Slug, sf.Draft, &t.ID, m, actor); err != nil {
-				return err
-			}
-			return audit(tx, "stock.setup", t.Name, map[string]any{"table_id": t.ID, "made": true})
-		})
-		if err != nil {
-			return stockShop{}, err
-		}
-		if err := s.SyncStorefront(ctx, tenant); err != nil {
-			s.Logger.Warn("stock: refreshing the catalogue", "tenant", tenant, "err", err)
-		}
+	if sf.CatalogueTable != nil {
 		return s.stockShopOf(ctx, tenant)
 	}
-	// An existing catalogue: map the stock columns it has, add those it
-	// lacks.
-	var t datatables.Table
-	if err := inTx(func(tx pgx.Tx) error {
-		var err error
-		t, err = datatables.GetTable(ctx, tx, *sf.CatalogueTable)
-		return err
-	}); err != nil {
+	t := datatables.Table{Name: "products", Title: "Products", Description: "The shop's products", Columns: productColumns}
+	if err := s.makeOwnTable(ctx, tenant, actor, audit, &t, "products", "shop_products", "products_2", "products_3"); err != nil {
 		return stockShop{}, err
 	}
-	if err := datatables.Writable(t); err != nil {
-		return stockShop{}, err
-	}
-	lim, err := s.Store.LimitsFor(ctx, tenant)
-	if err != nil {
-		return stockShop{}, err
-	}
-	m := sf.CatalogueColumns
-	var added []string
-	for i, sc := range stockColumns {
-		field := sc.field(&m)
-		if *field != "" {
-			continue
-		}
-		have, typ := "", ""
-		for _, c := range t.Columns {
-			if c.Name == sc.col.Name {
-				have, typ = c.Name, c.Type
-			}
-		}
-		if have != "" {
-			if typ == sc.col.Type || sc.col.Type == "number" && typ == "integer" {
-				*field = have
-			}
-			continue
-		}
-		if lim.MaxDataTableColumns > 0 && len(t.Columns) >= lim.MaxDataTableColumns {
-			if i == 0 {
-				return stockShop{}, fmt.Errorf("%w: the catalogue table has as many columns as the plan allows; add a whole-number stock column to it", datatables.ErrInvalid)
-			}
-			continue
-		}
-		if err := s.addOwnColumn(ctx, tenant, actor, audit, &t, sc.col); err != nil {
-			return stockShop{}, err
-		}
-		*field = sc.col.Name
-		added = append(added, sc.col.Name)
-	}
-	if m.Stock == "" {
-		return stockShop{}, fmt.Errorf("%w: the catalogue's column named stock is not a whole number; map another stock column on the storefront page", datatables.ErrInvalid)
-	}
+	m := productMapping
 	if err := inTx(func(tx pgx.Tx) error {
 		if err := m.Check(tableColumns(t)); err != nil {
 			return err
 		}
-		if _, err := storefront.Save(ctx, tx, tenant, sf.Slug, sf.Draft, &t.ID, m, actor); err != nil {
+		var err error
+		if sf, err = storefront.Save(ctx, tx, tenant, sf.Slug, sf.Draft, &t.ID, m, actor); err != nil {
 			return err
 		}
-		return audit(tx, "stock.setup", t.Name, map[string]any{"table_id": t.ID, "added": added})
+		return audit(tx, "stock.setup", t.Name, map[string]any{"table_id": t.ID, "made": true})
 	}); err != nil {
 		return stockShop{}, err
 	}
@@ -355,15 +316,16 @@ func (s *Server) addOwnColumn(ctx context.Context, tenant uuid.UUID, actor strin
 	})
 }
 
-// stockMove records a movement with its audit entry, then sends it.
+// stockMove records a movement, its count and its audit entry, in one
+// transaction.
 func (s *Server) stockMove(ctx context.Context, tenant uuid.UUID, mv stock.Move, audit stockAudit) (stock.Movement, error) {
 	var m stock.Movement
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
 		if m, err = stock.RecordTx(ctx, tx, tenant, mv); err != nil {
 			return err
 		}
-		detail := map[string]any{"item_id": mv.ItemID, "reason": mv.Reason, "movement_id": m.ID}
+		detail := map[string]any{"item_id": mv.ItemID, "stock_item_id": m.ItemID, "reason": mv.Reason, "movement_id": m.ID}
 		if mv.Delta != nil {
 			detail["change"] = *mv.Delta
 		}
@@ -371,18 +333,66 @@ func (s *Server) stockMove(ctx context.Context, tenant uuid.UUID, mv stock.Move,
 			detail["count"] = *mv.SetTo
 		}
 		return audit(tx, "stock.move", mv.Item, detail)
-	}); err != nil {
-		return m, err
+	})
+	return m, err
+}
+
+// supplierOfTx is the current supplier of a name, for a stock item's
+// usual supplier: nil for "" (none). A name that is none of the business's
+// suppliers is refused: they are added first, with how to reach them.
+func supplierOfTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string) (*uuid.UUID, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, nil
 	}
-	out, err := s.Stock.Apply(ctx, tenant, m.ID)
-	if err != nil || out.ID == uuid.Nil {
-		// Recorded: the sweep sends it again.
-		if err != nil {
-			s.Logger.Warn("stock: sending a movement", "tenant", tenant, "movement", m.ID, "err", err)
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM suppliers WHERE tenant_id = $1 AND retired_at IS NULL AND lower(name) = lower($2)`, tenant, name).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: %s is not one of your suppliers yet: add them on the Suppliers page first", errBadRequest, name)
+	}
+	return &id, err
+}
+
+// stockDetails is what to change of an item's stock item: its unit, cost,
+// levels and supplier (by name: "" for none). nil leaves each as it is.
+type stockDetails struct {
+	Unit     *string
+	CostKobo *int64
+	Reorder  *int64
+	Target   *int64
+	Supplier *string
+	// Name and Category, for a material (a product's are its catalogue
+	// row's), or to follow a product renamed.
+	Name     *string
+	Category *string
+}
+
+func (d stockDetails) any() bool {
+	return d.Unit != nil || d.CostKobo != nil || d.Reorder != nil || d.Target != nil || d.Supplier != nil || d.Name != nil || d.Category != nil
+}
+
+// stockSetDetailsTx changes an item's stock item, in tx: a product not
+// counted yet starts being counted by one of its name.
+func stockSetDetailsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, it stock.Item, d stockDetails, actor string) (uuid.UUID, error) {
+	var sid uuid.UUID
+	if it.StockItemID != "" {
+		sid = uuid.MustParse(it.StockItemID)
+	} else {
+		var err error
+		if sid, err = stock.StartCountingTx(ctx, tx, tenant, it.ID, it.Name, "", actor); err != nil {
+			return sid, err
 		}
-		return m, nil
 	}
-	return out, nil
+	set := stock.ItemSet{Name: d.Name, Unit: d.Unit, Category: d.Category, CostKobo: d.CostKobo, Low: d.Reorder, Target: d.Target}
+	if d.Supplier != nil {
+		id, err := supplierOfTx(ctx, tx, tenant, *d.Supplier)
+		if err != nil {
+			return sid, err
+		}
+		set.SupplierID, set.ClearSupplier = id, id == nil
+	}
+	_, err := stock.SetItemTx(ctx, tx, tenant, sid, set)
+	return sid, err
 }
 
 // stockNew is an item to add: its name, how many there are, its unit,
@@ -397,6 +407,8 @@ type stockNew struct {
 	Target    *int64 `json:"target_level"`
 	Supplier  string `json:"supplier"`
 	Category  string `json:"category"`
+	// GroupOf is, for a size's or colour's stock item, its product.
+	GroupOf string `json:"-"`
 }
 
 func (in *stockNew) check() error {
@@ -421,36 +433,20 @@ func (in *stockNew) check() error {
 	return nil
 }
 
-// stockCells is an item's stock columns as the table holds them.
-func stockCells(m storefront.Columns, unit string, cost, reorder, target *int64, supplier string) map[string]any {
-	set := map[string]any{}
-	if m.Unit != "" && unit != "" {
-		set[m.Unit] = unit
-	}
-	if m.CostPrice != "" && cost != nil {
-		set[m.CostPrice] = priceCell(*cost, m)
-	}
-	if m.ReorderLevel != "" && reorder != nil {
-		set[m.ReorderLevel] = *reorder
-	}
-	if m.TargetLevel != "" && target != nil {
-		set[m.TargetLevel] = *target
-	}
-	if m.Supplier != "" && supplier != "" {
-		set[m.Supplier] = supplier
-	}
-	return set
-}
-
-// stockAdd adds an item to the catalogue with a count of 0, then records
-// its quantity as received, so the count is explained from the start. An
-// item not priced for sale is not shown on the page until it is.
+// stockAdd adds a product to the catalogue, counted by a stock item of
+// its own at 0, then records its quantity as received, so the count is
+// explained from the start. A product not priced for sale is not shown on
+// the page until it is.
 func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key string, in stockNew, audit stockAudit) (stock.Item, stock.Movement, error) {
 	sh, items, err := s.stockItems(ctx, tenant)
 	if err != nil {
 		return stock.Item{}, stock.Movement{}, err
 	}
+	products := 0
 	for _, it := range items {
+		if !it.Material {
+			products++
+		}
 		if matchKey(it.Name) == matchKey(in.Name) {
 			// This key was adding it (a retry after a failure part way):
 			// finish, rather than refuse the item it made.
@@ -458,13 +454,13 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 			if err != nil {
 				return it, stock.Movement{}, err
 			}
-			if !mine {
+			if !mine || it.Material {
 				return it, stock.Movement{}, fmt.Errorf("%w: %s", errItemExists, it.Name)
 			}
 			return s.stockAdded(ctx, tenant, actor, key, in, sh, it.ID, audit)
 		}
 	}
-	if len(items) >= storefront.MaxItems {
+	if products >= storefront.MaxItems {
 		return stock.Item{}, stock.Movement{}, fmt.Errorf("%w: the catalogue holds at most %d items", errConflict, storefront.MaxItems)
 	}
 	if in.Category != "" {
@@ -473,8 +469,7 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 		}
 	}
 	m := sh.cols()
-	row := stockCells(m, in.Unit, in.CostKobo, in.Reorder, in.Target, in.Supplier)
-	row[m.Name], row[m.Stock] = in.Name, 0
+	row := map[string]any{m.Name: in.Name}
 	if in.Category != "" {
 		row[m.Category] = in.Category
 	}
@@ -487,6 +482,15 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	checked, err := datatables.CheckRow(sh.table.Columns, row, true, false)
 	if err != nil {
 		return stock.Item{}, stock.Movement{}, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
+	}
+	// The supplier is one of the business's before the row is made.
+	if in.Supplier != "" {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := supplierOfTx(ctx, tx, tenant, in.Supplier)
+			return err
+		}); err != nil {
+			return stock.Item{}, stock.Movement{}, err
+		}
 	}
 	tr, err := s.tableRowsFor(ctx, tenant, sh.table, storefrontPurpose)
 	if err != nil {
@@ -525,9 +529,9 @@ func (s *Server) stockAdding(ctx context.Context, tenant uuid.UUID, key, name st
 	return mine, err
 }
 
-// stockAdded finishes adding item id, whose row is in the table: its
-// audit entry and its quantity as received, in one transaction, once;
-// then sends the movement and reads the item.
+// stockAdded finishes adding product id, whose row is in the table: its
+// audit entry, the stock item it is counted by with its details, and its
+// quantity as received, in one transaction, once; then reads the item.
 func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key string, in stockNew, sh stockShop, id string, audit stockAudit) (stock.Item, stock.Movement, error) {
 	var mv stock.Movement
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -539,6 +543,16 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 		if !done {
 			if err := audit(tx, "storefront.item_add", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "for": "stock", "key": key}); err != nil {
 				return err
+			}
+			d := stockDetails{Unit: &in.Unit, CostKobo: in.CostKobo, Reorder: in.Reorder, Target: in.Target, Supplier: &in.Supplier}
+			sid, err := stockSetDetailsTx(ctx, tx, tenant, stock.Item{ID: id, Name: in.Name}, d, actor)
+			if err != nil {
+				return err
+			}
+			if in.GroupOf != "" {
+				if _, err := tx.Exec(ctx, `UPDATE stock_items SET group_of = $3 WHERE tenant_id = $1 AND id = $2`, tenant, sid, in.GroupOf); err != nil {
+					return err
+				}
 			}
 		}
 		if in.Quantity <= 0 {
@@ -554,13 +568,6 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 	}); err != nil {
 		return stock.Item{}, mv, err
 	}
-	if mv.ID != uuid.Nil {
-		if out, err := s.Stock.Apply(ctx, tenant, mv.ID); err != nil {
-			s.Logger.Warn("stock: sending a movement", "tenant", tenant, "movement", mv.ID, "err", err) // recorded: the sweep sends it again
-		} else if out.ID != uuid.Nil {
-			mv = out
-		}
-	}
 	if err := s.SyncStorefront(ctx, tenant); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", tenant, "err", err)
 	}
@@ -568,14 +575,11 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 	return it, mv, err
 }
 
-// stockSetCells writes an item's columns other than its stock (its name,
-// prices, unit, levels, supplier).
+// stockSetCells writes a product's columns of the catalogue (its name,
+// price, whether it is shown, its category, its sizes).
 func (s *Server) stockSetCells(ctx context.Context, tenant uuid.UUID, sh stockShop, id, key string, set map[string]any) error {
 	if len(set) == 0 {
 		return nil
-	}
-	if _, ok := set[sh.cols().Stock]; ok {
-		return fmt.Errorf("%w: the stock changes by movements only", errBadRequest)
 	}
 	checked, err := datatables.CheckRow(sh.table.Columns, set, false, false)
 	if err != nil {
@@ -605,16 +609,14 @@ type stockItemView struct {
 	stock.Item
 	Low     bool  `json:"low"`
 	Suggest int64 `json:"suggest,omitempty"`
-	// Waiting is how many of its movements are still on their way to
-	// the table.
-	Waiting int `json:"waiting,omitempty"`
 	// Photo is, on a size or colour, its own photo (a colour's), read
 	// from the table, so the owner sees it on a product not on the page.
 	Photo storefront.Image `json:"photo,omitempty"`
 }
 
-// getStock is GET /v1/stock: whether the catalogue keeps stock, and its
-// items with their stock, low ones first.
+// getStock is GET /v1/stock: whether the business keeps stock (has a
+// catalogue), and its items with their stock (products and materials),
+// with how many are low and what the stock is worth at cost.
 func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	sh, items, err := s.stockItems(r.Context(), p.TenantID)
@@ -630,25 +632,8 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
-	waiting := map[string]int{}
 	photos := map[string]storefront.Image{}
-	var stuck []stock.Movement
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT item_id, count(*) FROM stock_movements WHERE tenant_id = $1 AND status = 'pending' GROUP BY item_id`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var id string
-			var n int
-			if err := rows.Scan(&id, &n); err != nil {
-				return err
-			}
-			waiting[id] = n
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
 		for _, it := range items {
 			if it.VariantOf == "" || it.PhotoID == "" {
 				continue
@@ -662,13 +647,7 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 			}
 			photos[it.ID] = img
 		}
-		list, err := stock.ListTx(r.Context(), tx, p.TenantID, stock.Filter{Limit: 50})
-		for _, m := range list {
-			if m.Status == "pending" && m.Error != "" {
-				stuck = append(stuck, m)
-			}
-		}
-		return err
+		return nil
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -676,16 +655,13 @@ func (s *Server) getStock(w http.ResponseWriter, r *http.Request) {
 	views := make([]stockItemView, len(items))
 	low := 0
 	for i, it := range items {
-		views[i] = stockItemView{Item: it, Low: it.Low(), Suggest: it.Suggest(), Waiting: waiting[it.ID], Photo: photos[it.ID]}
+		views[i] = stockItemView{Item: it, Low: it.Low(), Suggest: it.Suggest(), Photo: photos[it.ID]}
 		if it.Low() {
 			low++
 		}
 	}
-	if stuck == nil {
-		stuck = []stock.Movement{}
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"keeps_stock": true, "catalogue": sh.table.Name, "columns": sh.cols(), "items": views,
-		"low": low, "stuck": stuck, "published": sh.sf.PublishedVersion > 0})
+		"low": low, "value_kobo": stock.ValueKobo(items), "published": sh.sf.PublishedVersion > 0})
 }
 
 // listStockMovements is GET /v1/stock/movements?item=&reason=&since=&until=&limit=.
@@ -714,7 +690,7 @@ func (s *Server) listStockMovements(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if f.Reason != "" && !validReason(f.Reason) {
-		writeErr(w, http.StatusBadRequest, "reason is order, sale, received, adjustment, count, outside or moved")
+		writeErr(w, http.StatusBadRequest, "reason is order, sale, received, adjustment, count or moved")
 		return
 	}
 	var list []stock.Movement
@@ -734,7 +710,7 @@ func (s *Server) listStockMovements(w http.ResponseWriter, r *http.Request) {
 
 func validReason(r string) bool {
 	switch r {
-	case stock.Order, stock.Sale, stock.Received, stock.Adjustment, stock.Count, stock.Outside, stock.Moved:
+	case stock.Order, stock.Sale, stock.Received, stock.Adjustment, stock.Count, stock.Moved:
 		return true
 	}
 	return false
@@ -843,6 +819,19 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
+	id := chi.URLParam(r, "id")
+	// What it was: for which record each change goes to, and the diary
+	// line (chat_changes.go).
+	before, err := s.stockItem(r.Context(), p.TenantID, sh, id)
+	if err != nil {
+		s.stockFail(w, r, err)
+		return
+	}
+	id = before.ID
+	if before.Material && (in.PriceKobo != nil || in.Available != nil) {
+		s.fail(w, r, fmt.Errorf("%w: %s is not sold, so it has no price and is not on your storefront", errBadRequest, before.Name))
+		return
+	}
 	if in.Category != nil {
 		c, err := checkCategory(*in.Category)
 		if err != nil {
@@ -850,7 +839,9 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.Category = &c
-		if c != "" {
+		if before.Material {
+			// A material's category is its stock item's.
+		} else if c != "" {
 			audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
 				return auditTx(r, tx, action, target, detail)
 			}
@@ -863,7 +854,11 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	m := sh.cols()
+	// A product's own columns go to its catalogue row; what is counted
+	// (unit, cost, levels, supplier), and a material's name and category,
+	// to its stock item.
 	set := map[string]any{}
+	var d stockDetails
 	put := func(col, what string, v any) error {
 		if col == "" {
 			return fmt.Errorf("%w: the catalogue has no %s column", errConflict, what)
@@ -881,46 +876,41 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			if n == "" || len([]rune(n)) > 120 {
 				return fmt.Errorf("%w: an item's name is 1 to 120 characters", errBadRequest)
 			}
+			if before.StockItemID != "" {
+				d.Name = &n // its stock item follows its name
+			}
+			if before.Material {
+				return nil
+			}
 			return put(m.Name, "name", n)
 		},
 		func() error {
 			if in.Unit == nil {
 				return nil
 			}
-			if len([]rune(strings.TrimSpace(*in.Unit))) > 30 {
+			u := strings.TrimSpace(*in.Unit)
+			if len([]rune(u)) > 30 {
 				return fmt.Errorf("%w: the unit is up to 30 characters", errBadRequest)
 			}
-			return put(m.Unit, "unit", strings.TrimSpace(*in.Unit))
+			d.Unit = &u
+			return nil
 		},
 		func() error {
-			if in.Supplier == nil {
-				return nil
+			if in.Supplier != nil {
+				v := strings.TrimSpace(*in.Supplier)
+				d.Supplier = &v
 			}
-			return put(m.Supplier, "supplier", strings.TrimSpace(*in.Supplier))
+			return nil
 		},
 		func() error {
-			if in.CostKobo == nil {
-				return nil
-			}
-			return put(m.CostPrice, "cost price", priceCell(*in.CostKobo, m))
+			d.CostKobo, d.Reorder, d.Target = in.CostKobo, in.Reorder, in.Target
+			return nil
 		},
 		func() error {
 			if in.PriceKobo == nil {
 				return nil
 			}
 			return put(m.Price, "price", priceCell(*in.PriceKobo, m))
-		},
-		func() error {
-			if in.Reorder == nil {
-				return nil
-			}
-			return put(m.ReorderLevel, "reorder level", *in.Reorder)
-		},
-		func() error {
-			if in.Target == nil {
-				return nil
-			}
-			return put(m.TargetLevel, "target level", *in.Target)
 		},
 		func() error {
 			if in.Available == nil {
@@ -930,6 +920,10 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		},
 		func() error {
 			if in.Category == nil {
+				return nil
+			}
+			if before.Material {
+				d.Category = in.Category
 				return nil
 			}
 			return put(m.Category, "category", *in.Category)
@@ -948,21 +942,32 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, perr)
 		return
 	}
-	id := chi.URLParam(r, "id")
-	// What it was, for the diary line (chat_changes.go).
-	before, _ := s.stockItem(r.Context(), p.TenantID, sh, id)
-	if err := s.stockSetCells(r.Context(), p.TenantID, sh, id, key, set); err != nil {
-		s.stockFail(w, r, err)
-		return
+	if !before.Material {
+		if err := s.stockSetCells(r.Context(), p.TenantID, sh, id, key, set); err != nil {
+			s.stockFail(w, r, err)
+			return
+		}
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if d.any() {
+			sid, err := stockSetDetailsTx(r.Context(), tx, p.TenantID, before, d, p.Actor())
+			if err != nil {
+				return err
+			}
+			if err := auditTx(r, tx, "stock.item_change", before.Name, map[string]any{"stock_item_id": sid}); err != nil {
+				return err
+			}
+		}
+		if len(set) == 0 {
+			return nil
+		}
 		cols := make([]string, 0, len(set))
 		for c := range set {
 			cols = append(cols, c)
 		}
 		return auditTx(r, tx, "storefront.item_change", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "columns": cols})
 	}); err != nil {
-		s.fail(w, r, err)
+		s.stockFail(w, r, err)
 		return
 	}
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
@@ -974,7 +979,7 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if n, ok := set[m.Name].(string); ok {
 		newName = n
 	}
-	recategorised := s.sizesFollow(r.Context(), p.TenantID, sh, before, newName, key, set)
+	recategorised := s.sizesFollow(r.Context(), p.TenantID, sh, before, newName, key, set, d)
 	if before.HasSizes() && newName != "" && newName != before.Name {
 		s.refreshListSizes(r.Context(), p.TenantID, id)
 	}
@@ -1082,12 +1087,8 @@ func (s *Server) moveStock(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
-	status := http.StatusOK
-	if m.Status == "pending" {
-		status = http.StatusAccepted
-	}
 	s.diaryChange(r.Context(), p, moveWords(it, in.Reason, in.Change, in.Count))
-	writeJSON(w, status, map[string]any{"movement": m})
+	writeJSON(w, http.StatusOK, map[string]any{"movement": m})
 }
 
 // requiredKey is the request's Idempotency-Key, which a stock change must

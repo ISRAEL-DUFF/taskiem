@@ -655,13 +655,11 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 
 // settleReceipt records what came of a delivered linked order (the
 // seller's count, or the buyer's when short is given) and settles the
-// receipt with the seller, in one transaction; then sends the stock
-// movements. audit writes the business's own record of who did it, before
+// receipt with the seller, with its stock movements, in one transaction.
+// audit writes the business's own record of who did it, before
 // the transaction enters the seller's side.
 func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short []int64, by links.Actor, actor string, audit func(tx pgx.Tx, ref string) error) (*links.Told, error) {
 	var told *links.Told
-	var moves []stock.Movement
-	var costs []stock.Cost
 	key := stock.LinkReceiptKey + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		got, ref, err := links.ToReceive(ctx, tx, id, short)
@@ -674,7 +672,7 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 			}
 		}
 		if len(got) > 0 {
-			if _, moves, costs, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
+			if _, _, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
 				return err
 			}
 		}
@@ -684,7 +682,6 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 	if err != nil {
 		return nil, err
 	}
-	s.Purchases.Apply(ctx, tenant, moves, costs, key)
 	return told, nil
 }
 
@@ -970,7 +967,6 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 	if s.Purchases == nil {
 		return errors.New("purchases are not configured")
 	}
-	var moves []stock.Movement
 	key := "link-short-" + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
 		if err := links.Undue(ctx, tx, buyer, "adjust", id); err != nil {
@@ -989,13 +985,12 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 		if err := json.Unmarshal(short, &counts); err != nil {
 			return err
 		}
-		_, moves, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
+		_, _, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	s.Purchases.Apply(ctx, buyer, moves, nil, key)
 	return nil
 }
 

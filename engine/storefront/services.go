@@ -15,7 +15,6 @@ func (m *Columns) CheckServices(known func(string) (typ string, ok bool)) error 
 	if m.Duration == "" {
 		return fmt.Errorf("%w: the services need a duration column (minutes)", ErrInvalid)
 	}
-	m.Stock = "" // services have availability, not stock
 	return m.Check(known)
 }
 

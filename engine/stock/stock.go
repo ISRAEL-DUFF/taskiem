@@ -1,23 +1,15 @@
-// Package stock is a shop's stock kept by chat (docs/spec/stock.md,
-// decision 0057): the catalogue table in the business's Xenibase project
-// holds the count, and every change to it is a movement Taskiem records
-// first, in the transaction of what caused it (an order accepted, a sale,
-// goods received, an adjustment, a count).
+// Package stock is what a business counts (docs/spec/stock.md,
+// docs/spec/what-a-business-buys.md §4; decisions 0057 and 0070): stock
+// items kept in Taskiem's database, apart from the products the business
+// sells, and every change to a count a movement with its reason (an order
+// accepted, a sale, goods received, an adjustment, a count).
 //
-// The table is reached over Xenibase's API, so no transaction spans it and
-// Taskiem's database. A movement is therefore pending until the table
-// holds it: the count read and the count to send are recorded on the
-// movement before the change is sent under a key of the movement and that
-// count, and the change is made only while the table still holds the count
-// read (the storefront's rule for orders, lifted here). A retried send
-// replays the first answer, so a movement lands once; when the count moved
-// first, it is read again. Done, the movement's change is what landed, and
-// an item's count is the sum of its movements' changes.
-//
-// The table is the owner's: anyone with table.edit may change a count by
-// hand. A count that differs from the sum of the item's movements while
-// no movement of Taskiem's is on its way is recorded as an "outside"
-// movement, so the count is always explained.
+// A stock item's count is the sum of its movements. A movement and the
+// count it sets are written in one transaction, the transaction of what
+// caused it: the database refuses any other change to a count (migration
+// 00501). A product of the catalogue may be counted by a stock item
+// (product_stock, engine/productstock): selling it lowers that stock
+// item. A stock item no product is counted by is a material.
 package stock
 
 import (
@@ -26,7 +18,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +27,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -46,7 +38,6 @@ const (
 	Received   = "received"
 	Adjustment = "adjustment"
 	Count      = "count"
-	Outside    = "outside"
 	// Moved is stock that went from one item to another of the business's
 	// own (a product's count shared out among its sizes and colours): out
 	// of one, into the other, neither received, sold nor lost.
@@ -56,37 +47,33 @@ const (
 var (
 	// ErrInvalid refuses a movement that cannot be recorded.
 	ErrInvalid = errors.New("stock: invalid")
-	// ErrNotTracked: the business's catalogue keeps no stock.
-	ErrNotTracked = errors.New("stock: the catalogue keeps no stock")
+	// ErrNotTracked: the business keeps no stock yet (no catalogue and no
+	// stock item).
+	ErrNotTracked = errors.New("stock: no stock is kept yet")
+	// ErrNotCounted: a product sold or ordered is counted by no stock
+	// item, so nothing moves.
+	ErrNotCounted = errors.New("stock: the product is not counted")
 )
 
-// Table reads and changes the stock column of a business's catalogue table
-// (storefront.XenibaseStock).
-type Table interface {
-	// Read returns a row's stock; tracked is false when the catalogue maps
-	// no stock column, or the row is gone or holds no count.
-	Read(ctx context.Context, tenant uuid.UUID, row string) (n int64, tracked bool, err error)
-	// Change sets a row's stock to to only while it is still from; applied
-	// is false when it had moved. The same key again replays the first
-	// answer.
-	Change(ctx context.Context, tenant uuid.UUID, row string, from, to int64, key string) (applied bool, err error)
-}
-
-// Stock records movements and sends them to the table. Times it compares
-// are the database's (ReadMark), never the application's.
+// Stock records movements and reads stock items. Catalogue reads the
+// business's products for workflows (stock@1) and the watch, which run
+// outside the API; nil reads none.
 type Stock struct {
-	Pool  *pgxpool.Pool
-	Table Table
+	Pool      *pgxpool.Pool
+	Catalogue Catalogue
 	// MoneyLog takes a cash sale's takings (Sell, for workflows); the API
 	// passes its own.
 	MoneyLog *moneylog.Log
 }
 
 // Ready reports whether stock can be kept here.
-func (s *Stock) Ready() bool { return s != nil && s.Pool != nil && s.Table != nil }
+func (s *Stock) Ready() bool { return s != nil && s.Pool != nil }
 
 // Move is a movement asked for: a change (Delta) or a count (SetTo).
 type Move struct {
+	// ItemID names what moves: a stock item's id, or a product's (a
+	// catalogue row's id), which moves the stock item it is counted by
+	// (productstock.ItemOfTx).
 	ItemID string
 	Item   string
 	Reason string
@@ -106,17 +93,17 @@ type Move struct {
 
 // Movement is a recorded movement.
 type Movement struct {
-	ID     uuid.UUID `json:"id"`
-	ItemID string    `json:"item_id"`
-	Item   string    `json:"item"`
-	Reason string    `json:"reason"`
-	// Status is pending (on its way to the table), done, or void (the item
-	// is gone, or the catalogue keeps no stock).
+	ID uuid.UUID `json:"id"`
+	// ItemID is the stock item that moved.
+	ItemID string `json:"item_id"`
+	Item   string `json:"item"`
+	Reason string `json:"reason"`
+	// Status is always done: a movement is made with its count.
 	Status string `json:"status"`
 	Delta  *int64 `json:"delta,omitempty"`
 	SetTo  *int64 `json:"set_to,omitempty"`
-	// Before and After are the count the table held and the count it was
-	// set to; Change is what landed (After - Before).
+	// Before and After are the stock item's count before and after it;
+	// Change is After - Before.
 	Before *int64 `json:"before"`
 	After  *int64 `json:"after"`
 	Change *int64 `json:"change"`
@@ -125,11 +112,8 @@ type Movement struct {
 	Note      string     `json:"note,omitempty"`
 	Reference string     `json:"reference,omitempty"`
 	Actor     string     `json:"by"`
-	Error     string     `json:"error,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	DoneAt    *time.Time `json:"done_at"`
-	// claims is how many times its count was read to send it (changeKey).
-	claims int
 }
 
 // MaxDelta bounds a change asked for at once.
@@ -177,18 +161,26 @@ func FitKey(key string) string {
 	return "h-" + hex.EncodeToString(h[:16])
 }
 
-const movementCols = `id, item_id, item, reason, status, delta, set_to, count_before, count_after, change, short, COALESCE(note, ''),
-	COALESCE(reference, ''), actor, COALESCE(error, ''), created_at, done_at, claims`
+const movementCols = `id, stock_item_id::text, item, reason, delta, set_to, count_before, count_after, change, short, COALESCE(note, ''),
+	COALESCE(reference, ''), actor, created_at`
 
 func scanMovement(r pgx.Row) (Movement, error) {
 	var m Movement
-	err := r.Scan(&m.ID, &m.ItemID, &m.Item, &m.Reason, &m.Status, &m.Delta, &m.SetTo, &m.Before, &m.After, &m.Change, &m.Short, &m.Note,
-		&m.Reference, &m.Actor, &m.Error, &m.CreatedAt, &m.DoneAt, &m.claims)
+	var before, after, change int64
+	err := r.Scan(&m.ID, &m.ItemID, &m.Item, &m.Reason, &m.Delta, &m.SetTo, &before, &after, &change, &m.Short, &m.Note,
+		&m.Reference, &m.Actor, &m.CreatedAt)
+	m.Status = "done"
+	m.Before, m.After, m.Change = &before, &after, &change
+	at := m.CreatedAt
+	m.DoneAt = &at
 	return m, err
 }
 
-// RecordTx records a movement in tx, the transaction of what caused it;
-// the same key again answers the movement it made. Apply sends it.
+// RecordTx records a movement in tx, the transaction of what caused it,
+// and sets its stock item's count with it; the same key again answers the
+// movement it made. A product sold or ordered that no stock item counts
+// is ErrNotCounted; a product received, adjusted, counted or moved that
+// none counts yet starts being counted, by a stock item of its name.
 func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Movement, error) {
 	mv.Item = strings.TrimSpace(mv.Item)
 	mv.Note = strings.TrimSpace(mv.Note)
@@ -198,14 +190,63 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Moveme
 	if err := mv.check(); err != nil {
 		return Movement{}, err
 	}
-	m, err := scanMovement(tx.QueryRow(ctx, `INSERT INTO stock_movements (id, tenant_id, item_id, item, reason, delta, set_to, status, note, reference, actor, key, cost_kobo)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NULLIF($8, ''), NULLIF($9, ''), $10, $11, $12)
-		ON CONFLICT (tenant_id, key) DO NOTHING RETURNING `+movementCols,
-		uuid.Must(uuid.NewV7()), tenant, mv.ItemID, mv.Item, mv.Reason, mv.Delta, mv.SetTo, mv.Note, mv.Reference, mv.Actor, mv.Key, mv.CostKobo))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return scanMovement(tx.QueryRow(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND key = $2`, tenant, mv.Key))
+	if m, err := byKeyTx(ctx, tx, tenant, mv.Key); err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return m, err
 	}
-	return m, err
+	c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, mv.ItemID)
+	if err != nil {
+		return Movement{}, err
+	}
+	if !ok {
+		if mv.Reason == Sale || mv.Reason == Order {
+			return Movement{}, ErrNotCounted
+		}
+		if c.StockItemID, err = StartCountingTx(ctx, tx, tenant, mv.ItemID, mv.Item, "", mv.Actor); err != nil {
+			return Movement{}, err
+		}
+	}
+	// The stock item, locked: its movements are made one at a time.
+	var n int64
+	if err := tx.QueryRow(ctx, `SELECT count FROM stock_items WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, c.StockItemID).Scan(&n); err != nil {
+		return Movement{}, err
+	}
+	// The same key, made meanwhile by another transaction holding the lock.
+	if m, err := byKeyTx(ctx, tx, tenant, mv.Key); err == nil || !errors.Is(err, pgx.ErrNoRows) {
+		return m, err
+	}
+	to, short := target(n, mv)
+	m, err := scanMovement(tx.QueryRow(ctx, `INSERT INTO stock_movements (id, tenant_id, stock_item_id, item, reason, delta, set_to, count_before, count_after, change,
+			short, note, reference, actor, key, cost_kobo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9 - $8, $10, NULLIF($11, ''), NULLIF($12, ''), $13, $14, $15) RETURNING `+movementCols,
+		uuid.Must(uuid.NewV7()), tenant, c.StockItemID, cut(mv.Item, 200), mv.Reason, mv.Delta, mv.SetTo, n, to, short, mv.Note, mv.Reference, mv.Actor, mv.Key, mv.CostKobo))
+	if err != nil {
+		return m, err
+	}
+	return m, copyCountTx(ctx, tx, tenant, c.StockItemID, to)
+}
+
+func byKeyTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, key string) (Movement, error) {
+	return scanMovement(tx.QueryRow(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND key = $2`, tenant, key))
+}
+
+// StartCountingTx makes the stock item a product is counted by, at 0, of
+// the product's name, and links it; a product counted already answers
+// its stock item.
+func StartCountingTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product, name, unit, actor string) (uuid.UUID, error) {
+	if _, err := uuid.Parse(product); err == nil {
+		return uuid.Nil, fmt.Errorf("%w: no such stock item", ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('product_stock ' || $1::text || ' ' || $2, 0))`, tenant, product); err != nil {
+		return uuid.Nil, err
+	}
+	if c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, product); err != nil || ok {
+		return c.StockItemID, err
+	}
+	it, err := CreateItemTx(ctx, tx, tenant, NewItem{Name: name, Unit: unit, Actor: actor})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return it.ID, productstock.LinkTx(ctx, tx, tenant, product, it.ID)
 }
 
 // GetTx reads one movement.
@@ -213,155 +254,10 @@ func GetTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) (Movement, erro
 	return scanMovement(tx.QueryRow(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND id = $2`, tenant, id))
 }
 
-// Attempts bounds how often Apply reads the count again when other
-// changes keep moving it; the sweep tries again later.
-const Attempts = 5
-
-// ErrMoving: the count kept changing while a movement was sent.
-var ErrMoving = errors.New("stock: the count kept changing; it is sent again shortly")
-
-// Apply sends a movement to the table until it lands (or is void), and
-// answers it. An error leaves it pending for the sweep, which sends the
-// same change again.
-func (s *Stock) Apply(ctx context.Context, tenant, id uuid.UUID) (Movement, error) {
-	for attempt := 0; attempt < Attempts; attempt++ {
-		m, err := s.get(ctx, tenant, id)
-		if err != nil || m.Status != "pending" {
-			return m, err
-		}
-		from, to := m.Before, m.After
-		if from == nil {
-			if m.SetTo != nil {
-				if err := s.landOlder(ctx, tenant, m); err != nil {
-					s.failed(ctx, tenant, m.ID, err)
-					return m, err
-				}
-			}
-			if m, err = s.claim(ctx, tenant, m); err != nil || m.Status != "pending" {
-				return m, err
-			}
-			from, to = m.Before, m.After
-			if from == nil { // claimed by another sender meanwhile: theirs is read next time round
-				continue
-			}
-		}
-		applied, err := s.Table.Change(ctx, tenant, m.ItemID, *from, *to, changeKey(m.ID, *from, m.claims))
-		if err != nil {
-			s.failed(ctx, tenant, m.ID, err)
-			return m, err
-		}
-		if applied {
-			return s.done(ctx, tenant, m.ID, *from)
-		}
-		// The count moved first: read it again.
-		if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE stock_movements SET count_before = NULL, count_after = NULL, short = 0
-				WHERE tenant_id = $1 AND id = $2 AND status = 'pending' AND count_before = $3`, tenant, m.ID, *from)
-			return err
-		}); err != nil {
-			return m, err
-		}
-	}
-	return s.get(ctx, tenant, id)
-}
-
-// ErrBehind: a count waits for a change made before it that has not
-// reached the table yet.
-var ErrBehind = errors.New("stock: an earlier change to this item has not reached the table yet; the count lands after it")
-
-// landOlder sends the item's movements made before a count and still on
-// their way, oldest first. A count is what was on the shelf when it was
-// taken, and the shelf already showed every sale, receipt and adjustment
-// made before it: so those land first, as what they were, and the count
-// then sets the number, booking only the difference they do not explain.
-// Landing the count first would let an older sale come off the counted
-// number later, and book what was sold as lost. While one of them cannot
-// land, the count waits too.
-func (s *Stock) landOlder(ctx context.Context, tenant uuid.UUID, m Movement) error {
-	var ids []uuid.UUID
-	if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id FROM stock_movements WHERE tenant_id = $1 AND item_id = $2 AND status = 'pending'
-			AND (created_at, id) < ($3, $4) ORDER BY created_at, id`, tenant, m.ItemID, m.CreatedAt, m.ID)
-		if err != nil {
-			return err
-		}
-		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		return err
-	}); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		older, err := s.Apply(ctx, tenant, id)
-		if err != nil {
-			return fmt.Errorf("%w: %w", ErrBehind, err)
-		}
-		if older.Status == "pending" {
-			return ErrBehind
-		}
-	}
-	return nil
-}
-
-func (s *Stock) inTx(ctx context.Context, tenant uuid.UUID, fn func(pgx.Tx) error) error {
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
-}
-
-func (s *Stock) get(ctx context.Context, tenant, id uuid.UUID) (Movement, error) {
-	var m Movement
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		var err error
-		m, err = GetTx(ctx, tx, tenant, id)
-		return err
-	})
-	return m, err
-}
-
-// claim reads the table's count and records what the movement sends: the
-// count read and the count it becomes. A difference from the item's
-// movements that no change of Taskiem's on its way explains is recorded
-// first as an outside movement.
-func (s *Stock) claim(ctx context.Context, tenant uuid.UUID, m Movement) (Movement, error) {
-	readAt, err := s.ReadMark(ctx)
-	if err != nil {
-		return m, err
-	}
-	n, tracked, err := s.Table.Read(ctx, tenant, m.ItemID)
-	if err != nil {
-		s.failed(ctx, tenant, m.ID, err)
-		return m, err
-	}
-	err = s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		if err := lockItem(ctx, tx, tenant, m.ItemID); err != nil {
-			return err
-		}
-		cur, err := scanMovement(tx.QueryRow(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, m.ID))
-		if err != nil {
-			return err
-		}
-		if cur.Status != "pending" || cur.Before != nil {
-			m = cur
-			return nil
-		}
-		if !tracked {
-			m, err = scanMovement(tx.QueryRow(ctx, `UPDATE stock_movements SET status = 'void', error = 'The item is gone, or the catalogue keeps no stock'
-				WHERE tenant_id = $1 AND id = $2 RETURNING `+movementCols, tenant, m.ID))
-			return err
-		}
-		if _, err := outsideTx(ctx, tx, tenant, m.ItemID, m.Item, n, readAt, m.ID); err != nil {
-			return err
-		}
-		to, short := target(n, cur)
-		m, err = scanMovement(tx.QueryRow(ctx, `UPDATE stock_movements SET count_before = $3, count_after = $4, short = $5, claimed_at = now(),
-			attempts = attempts + 1, claims = claims + 1, error = NULL WHERE tenant_id = $1 AND id = $2 RETURNING `+movementCols, tenant, m.ID, n, to, short))
-		return err
-	})
-	return m, err
-}
-
 // target is the count a movement sets n to, and what a decrease asked
 // for beyond the stock there was. A decrease never takes the count below
-// zero, nor further below it when the table already held less.
-func target(n int64, m Movement) (to, short int64) {
+// zero, nor further below it when it already held less.
+func target(n int64, m Move) (to, short int64) {
 	if m.SetTo != nil {
 		return *m.SetTo, 0
 	}
@@ -375,182 +271,29 @@ func target(n int64, m Movement) (to, short int64) {
 	return 0, -(n + d)
 }
 
-func (s *Stock) done(ctx context.Context, tenant, id uuid.UUID, from int64) (Movement, error) {
-	var m Movement
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		var err error
-		m, err = scanMovement(tx.QueryRow(ctx, `UPDATE stock_movements SET status = 'done', change = count_after - count_before, done_at = now(), error = NULL
-			WHERE tenant_id = $1 AND id = $2 AND status = 'pending' AND count_before = $3 RETURNING `+movementCols, tenant, id, from))
-		if errors.Is(err, pgx.ErrNoRows) { // another sender marked it
-			m, err = GetTx(ctx, tx, tenant, id)
-			return err
-		}
-		if err != nil {
-			return err
-		}
-		if err := returnLandedTx(ctx, tx, tenant, m); err != nil {
-			return err
-		}
-		return copyCount(ctx, tx, tenant, m.ItemID, *m.After)
-	})
-	return m, err
-}
-
-// copyCount puts an item's new count into the storefront's catalogue copy,
-// so the page and forms show it at once rather than at the next refresh.
-func copyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string, n int64) error {
-	// Stock is kept on the catalogue's table only (fronts §5.2): a front's
-	// list from another table may share a row's id.
-	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
-		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.item ? 'stock' AND c.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`, tenant, item, n)
+// copyCountTx puts a stock item's new count into the storefront's
+// catalogue copy, for each product it counts, so the page and forms show
+// how many are left at once.
+func copyCountTx(ctx context.Context, tx pgx.Tx, tenant, item uuid.UUID, n int64) error {
+	products, err := productstock.ProductsOfTx(ctx, tx, tenant, item)
 	if err != nil {
 		return err
 	}
-	return storefront.CopySizeCount(ctx, tx, tenant, item, n)
-}
-
-func (s *Stock) failed(ctx context.Context, tenant, id uuid.UUID, cause error) {
-	msg := cause.Error()
-	if len(msg) > 300 {
-		msg = msg[:300]
-	}
-	_ = s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE stock_movements SET error = $3, claimed_at = now(), attempts = attempts + 1
-			WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`, tenant, id, msg)
-		return err
-	})
-}
-
-// changeKey is the Idempotency-Key of one change: the movement, the count
-// it changes from, and its claim. A retry of the same claim (an answer
-// lost) is the same change; a later claim reading the same count is a new
-// one, not answered from a refusal of the earlier claim.
-func changeKey(id uuid.UUID, from int64, claims int) string {
-	text := id.String() + "\x00" + strconv.FormatInt(from, 10)
-	if claims > 0 {
-		text += "\x00" + strconv.Itoa(claims)
-	}
-	h := sha256.Sum256([]byte(text))
-	return "tsk-st-" + hex.EncodeToString(h[:16])
-}
-
-// lockItem serialises, per item, the claims and the outside checks.
-func lockItem(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string) error {
-	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('stock ' || $1::text || ' ' || $2, 0))`, tenant, item)
-	return err
-}
-
-// outsideTx records an outside movement when the table's count n, read at
-// readAt, is not the sum of the item's movements and nothing of Taskiem's
-// explains it: no other movement on its way to the table, and none landed
-// or claimed since the read. Call it under lockItem. except is a movement
-// not counted as on its way (the one being claimed).
-func outsideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, itemID, item string, n int64, readAt time.Time, except uuid.UUID) (bool, error) {
-	var sum int64
-	var busy bool
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(change) FILTER (WHERE status = 'done'), 0),
-			COALESCE(bool_or(id <> $4 AND (status = 'pending' AND count_before IS NOT NULL OR done_at >= $3 OR claimed_at >= $3)), false)
-		FROM stock_movements WHERE tenant_id = $1 AND item_id = $2`, tenant, itemID, readAt, except).Scan(&sum, &busy); err != nil {
-		return false, err
-	}
-	if busy || sum == n {
-		return false, nil
-	}
-	note := "Changed in the table"
-	var any bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND item_id = $2 AND status = 'done')`,
-		tenant, itemID).Scan(&any); err != nil {
-		return false, err
-	}
-	if !any {
-		note = "First count seen in the table"
-	}
-	id := uuid.Must(uuid.NewV7())
-	_, err := tx.Exec(ctx, `INSERT INTO stock_movements (id, tenant_id, item_id, item, reason, delta, status, count_before, count_after, change,
-			note, actor, key, done_at)
-		VALUES ($1, $2, $3, $4, 'outside', $5, 'done', $6, $7, $5, $8, 'table', $9, now())`,
-		id, tenant, itemID, cut(item, 200), n-sum, sum, n, note, "outside:"+id.String())
-	return err == nil, err
-}
-
-// ReadMark is the database's clock, taken just before the table is read:
-// what Outside and the claims compare movements' times with, so the
-// application's clock never enters it.
-func (s *Stock) ReadMark(ctx context.Context) (time.Time, error) {
-	var t time.Time
-	err := s.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&t)
-	return t, err
-}
-
-// Seen is an item's count as a refresh of the catalogue read it.
-type Seen struct {
-	ItemID string
-	Item   string
-	Count  int64
-}
-
-// Outside records, for each item a refresh read at readAt (ReadMark), an outside
-// movement where its count is not explained by its movements (outsideTx).
-// It answers how many it recorded.
-func (s *Stock) Outside(ctx context.Context, tenant uuid.UUID, seen []Seen, readAt time.Time) (int, error) {
-	n := 0
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		n = 0
-		for _, it := range seen {
-			if err := lockItem(ctx, tx, tenant, it.ItemID); err != nil {
-				return err
-			}
-			ok, err := outsideTx(ctx, tx, tenant, it.ItemID, it.Item, it.Count, readAt, uuid.Nil)
-			if err != nil {
-				return err
-			}
-			if ok {
-				n++
-			}
-		}
-		return nil
-	})
-	return n, err
-}
-
-// LedgerTx is the sum of an item's done movements: its count, as Taskiem
-// knows it.
-func LedgerTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string) (int64, error) {
-	var n int64
-	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(change), 0) FROM stock_movements WHERE tenant_id = $1 AND item_id = $2 AND status = 'done'`,
-		tenant, item).Scan(&n)
-	return n, err
-}
-
-// ApplyPending sends a business's movements still on their way, oldest
-// first: those never sent, and those whose send failed or was cut off,
-// waiting a minute more after each attempt (up to an hour).
-func (s *Stock) ApplyPending(ctx context.Context, tenant uuid.UUID) error {
-	var ids []uuid.UUID
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id FROM stock_movements WHERE tenant_id = $1 AND status = 'pending'
-			AND COALESCE(claimed_at, '-infinity') <= now() - make_interval(mins => LEAST(GREATEST(attempts, 1), 60))
-			ORDER BY created_at, id LIMIT 200`, tenant)
-		if err != nil {
+	for p, uses := range products {
+		if err := storefront.CopyCount(ctx, tx, tenant, p, productstock.Counted{Count: n, Uses: uses}.Left()); err != nil {
 			return err
 		}
-		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		return err
-	})
-	if err != nil {
-		return err
 	}
-	var first error
-	for _, id := range ids {
-		if _, err := s.Apply(ctx, tenant, id); err != nil && first == nil {
-			first = err
-		}
-	}
-	return first
+	return nil
+}
+
+func (s *Stock) inTx(ctx context.Context, tenant uuid.UUID, fn func(pgx.Tx) error) error {
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
 }
 
 // Filter narrows a list of movements.
 type Filter struct {
+	// ItemID is a stock item's id, or a product's: its stock item's.
 	ItemID string
 	Reason string
 	Since  *time.Time
@@ -558,16 +301,23 @@ type Filter struct {
 	Limit  int
 }
 
-// ListTx lists movements, the latest to land first (pending ones by when
-// they were made).
+// ListTx lists movements, the latest first.
 func ListTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f Filter) ([]Movement, error) {
 	if f.Limit <= 0 || f.Limit > 500 {
 		f.Limit = 100
 	}
+	var item *uuid.UUID
+	if f.ItemID != "" {
+		c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, f.ItemID)
+		if err != nil || !ok {
+			return []Movement{}, err
+		}
+		item = &c.StockItemID
+	}
 	rows, err := tx.Query(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1
-		AND ($2 = '' OR item_id = $2) AND ($3 = '' OR reason = $3) AND status <> 'void'
+		AND ($2::uuid IS NULL OR stock_item_id = $2) AND ($3 = '' OR reason = $3)
 		AND ($4::timestamptz IS NULL OR created_at >= $4) AND ($5::timestamptz IS NULL OR created_at < $5)
-		ORDER BY COALESCE(done_at, created_at) DESC, id DESC LIMIT $6`, tenant, f.ItemID, f.Reason, f.Since, f.Until, f.Limit)
+		ORDER BY created_at DESC, id DESC LIMIT $6`, tenant, item, f.Reason, f.Since, f.Until, f.Limit)
 	if err != nil {
 		return nil, err
 	}

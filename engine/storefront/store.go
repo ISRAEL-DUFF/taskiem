@@ -619,6 +619,17 @@ type Rows func(ctx context.Context, tenant uuid.UUID, table string, limit int) (
 // photos through the tenant's media. Rows without a name are left out;
 // rejected or unknown photos are dropped, never the item.
 func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, false)
+}
+
+// CatalogueItems is Items for the catalogue's own table: each product
+// counted by a stock item also says how many are left of it
+// (engine/productstock), read in tx.
+func CatalogueItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, true)
+}
+
+func mapItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns, withCounts bool) ([]Item, error) {
 	if len(rows) > MaxItems {
 		return nil, fmt.Errorf("%w: the catalogue has more than %d items", ErrInvalid, MaxItems)
 	}
@@ -639,18 +650,9 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Category != "" {
 			it.Category = str(r[m.Category])
 		}
-		if m.Unit != "" {
-			it.Unit = str(r[m.Unit])
-		}
 		if m.Available != "" {
 			if b, ok := r[m.Available].(bool); ok {
 				it.Available = b
-			}
-		}
-		if m.Stock != "" {
-			if f, ok := num(r[m.Stock]); ok {
-				n := max(0, int64(f))
-				it.Stock = &n
 			}
 		}
 		if m.Options != "" {
@@ -733,6 +735,12 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 	items := make([]Item, len(out))
 	for i, s := range out {
 		items[i] = s.item
+	}
+	// How many are left of each product counted by a stock item.
+	if withCounts && tx != nil {
+		if err := counted(ctx, tx, tenant, items); err != nil {
+			return nil, err
+		}
 	}
 	rollUpVariants(items)
 	return items, nil

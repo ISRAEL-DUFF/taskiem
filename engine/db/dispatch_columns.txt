@@ -1099,13 +1099,15 @@ staff_task_repeats.stopped_at
 staff_task_repeats.tenant_id
 staff_tasks.state
 staff_tasks.tenant_id
+stock_items.mirrored_at
+stock_items.retired_at
+stock_items.tenant_id
+stock_items.updated_at
 stock_movements.change
-stock_movements.claimed_at
 stock_movements.count_after
 stock_movements.mirrored_at
 stock_movements.reason
 stock_movements.short
-stock_movements.status
 stock_movements.tenant_id
 stock_sales.amount_kobo
 stock_sales.entry_id
@@ -1245,9 +1247,9 @@ storefront_snapshots.storefront_id
 storefront_snapshots.version
 storefronts.availability
 storefronts.catalogue_synced_at
+storefronts.catalogue_table
 storefronts.closed_message
 storefronts.id
-storefronts.keeps_stock
 storefronts.orders_paused
 storefronts.published_slug
 storefronts.published_version
@@ -1709,3 +1711,4 @@ saved_files.tenant_id
 saved_files.object_id
 saved_files.path
 saved_files.created_at
+product_stock.tenant_id

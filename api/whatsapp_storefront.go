@@ -106,15 +106,8 @@ var (
 		{Name: "price", Title: "Price (₦)", Type: "number"},
 		{Name: "photo", Title: "Photo", Type: "text"},
 		{Name: "available", Title: "Available", Type: "boolean"},
-		{Name: "stock", Title: "Stock", Type: "integer"},
-		{Name: "unit", Title: "Unit", Type: "text"},
-		{Name: "cost_price", Title: "Cost price (₦)", Type: "number"},
-		{Name: "reorder_level", Title: "Reorder at", Type: "integer"},
-		{Name: "target_level", Title: "Order up to", Type: "integer"},
-		{Name: "supplier", Title: "Supplier", Type: "text"},
 	}
-	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available", Stock: "stock",
-		Unit: "unit", CostPrice: "cost_price", ReorderLevel: "reorder_level", TargetLevel: "target_level", Supplier: "supplier"}
+	productMapping = storefront.Columns{Name: "name", Price: "price", PriceUnit: "naira", Photo: "photo", Available: "available"}
 	serviceColumns = []datatables.Column{
 		{Name: "name", Title: "Name", Type: "text", Required: true},
 		{Name: "price", Title: "Price (₦)", Type: "number"},
@@ -794,6 +787,16 @@ func (s *Server) shopCatalogue(ctx context.Context, c *chat, create bool) (store
 	return sf, t, err == nil, err
 }
 
+// countColumn stands for where a product's count is kept, for the chat's
+// "stock <item> <n>": on stock items, not a column of the catalogue, so
+// it is there whenever stock can be kept ("" when it cannot).
+func (s *Server) countColumn() string {
+	if s.Stock.Ready() {
+		return "stock"
+	}
+	return ""
+}
+
 // shopColumn says the catalogue has no column for what (ok false).
 func (s *Server) shopColumn(ctx context.Context, c *chat, col, what string) (bool, error) {
 	if col != "" {
@@ -1071,7 +1074,7 @@ func (s *Server) waShopChange(ctx context.Context, c *chat, action, args string)
 		return err
 	}
 	col := map[string]string{"price": sf.CatalogueColumns.Price, "hide": sf.CatalogueColumns.Available, "show": sf.CatalogueColumns.Available,
-		"stock": sf.CatalogueColumns.Stock}[action]
+		"stock": s.countColumn()}[action]
 	what := map[string]string{"price": "price", "hide": "available", "show": "available", "stock": "stock"}[action]
 	if ok, err := s.shopColumn(ctx, c, col, what); !ok || err != nil {
 		return err
@@ -1615,7 +1618,7 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		return err
 	}
 	m := sf.CatalogueColumns
-	if sh.Action == "stock" && s.Stock.Ready() && m.Stock != "" {
+	if sh.Action == "stock" && s.Stock.Ready() {
 		return s.shopCountItem(ctx, c, sf)
 	}
 	set := map[string]any{}
@@ -1624,8 +1627,6 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		set[m.Price] = priceCell(*sh.PriceKobo, m)
 	case "hide", "show":
 		set[m.Available] = sh.Action == "show"
-	case "stock":
-		set[m.Stock] = *sh.Stock
 	}
 	for col := range set {
 		if col == "" {
@@ -1654,7 +1655,7 @@ func (s *Server) shopChangeItem(ctx context.Context, c *chat) error {
 		return err
 	}
 	if product.HasSizes() {
-		s.sizesFollow(ctx, c.tenant.ID, ssh, product, "", "wa-"+sh.Nonce, set)
+		s.sizesFollow(ctx, c.tenant.ID, ssh, product, "", "wa-"+sh.Nonce, set, stockDetails{})
 	}
 	if product.VariantOf != "" {
 		s.markOwnPrice(ctx, c.tenant.ID, ssh, product)
