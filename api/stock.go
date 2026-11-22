@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -366,6 +367,10 @@ type stockDetails struct {
 	Name     *string
 	Category *string
 }
+
+// maxStockLevel is the most a stock item's cost or level may be (the
+// table's bound).
+const maxStockLevel = 1_000_000_000_000
 
 func (d stockDetails) any() bool {
 	return d.Unit != nil || d.CostKobo != nil || d.Reorder != nil || d.Target != nil || d.Supplier != nil || d.Name != nil || d.Category != nil
@@ -1007,37 +1012,87 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			perr = fmt.Errorf("%w: prices and levels are 0 or more", errBadRequest)
 		}
 	}
+	for _, v := range []*int64{in.CostKobo, in.Reorder, in.Target} {
+		if v != nil && *v > maxStockLevel {
+			perr = fmt.Errorf("%w: a cost or level is at most %d", errBadRequest, int64(maxStockLevel))
+		}
+	}
 	if perr != nil {
 		s.fail(w, r, perr)
 		return
 	}
-	if !before.Material {
-		if err := s.stockSetCells(r.Context(), p.TenantID, sh, id, key, set); err != nil {
+	// What its own stock item gets (pd): a product in sizes and colours
+	// keeps no stock of its own, so its unit, cost, levels and supplier go
+	// to its sizes' stock items (sizesFollow below), never to one made for
+	// it.
+	pd := d
+	if before.HasSizes() {
+		pd = stockDetails{Name: d.Name}
+	}
+	// Everything that can be refused is checked before anything is
+	// written: the cells as the table takes them, the supplier.
+	if !before.Material && len(set) > 0 {
+		if _, err := datatables.CheckRow(sh.table.Columns, set, false, false); err != nil {
+			s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "invalid: ")))
+			return
+		}
+	}
+	if d.Supplier != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			_, err := supplierOfTx(r.Context(), tx, p.TenantID, *d.Supplier)
+			return err
+		}); err != nil {
 			s.stockFail(w, r, err)
 			return
 		}
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		if d.any() {
-			sid, err := stockSetDetailsTx(r.Context(), tx, p.TenantID, before, d, p.Actor())
+	// Its stock item first (where the database may still refuse, as at
+	// too many stock items), then its catalogue row.
+	if pd.any() {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			if !before.Material && before.StockItemID != "" && pd.Name != nil {
+				// A stock item that counts other products too ("Coke"
+				// counting "Coke bottle" and "Coke pack of 6") keeps its
+				// name: the product's new name is its own. Its unit, cost,
+				// levels and supplier are the stock item's (a product has
+				// none of its own), and the Stock page changes them
+				// through any product it is sold as.
+				products, err := productstock.ProductsOfTx(r.Context(), tx, p.TenantID, uuid.MustParse(before.StockItemID))
+				if err != nil {
+					return err
+				}
+				if len(products) > 1 {
+					pd.Name = nil
+				}
+			}
+			if !pd.any() {
+				return nil
+			}
+			sid, err := stockSetDetailsTx(r.Context(), tx, p.TenantID, before, pd, p.Actor())
 			if err != nil {
 				return err
 			}
-			if err := auditTx(r, tx, "stock.item_change", before.Name, map[string]any{"stock_item_id": sid}); err != nil {
-				return err
-			}
+			return auditTx(r, tx, "stock.item_change", before.Name, map[string]any{"stock_item_id": sid})
+		}); err != nil {
+			s.stockFail(w, r, err)
+			return
 		}
-		if len(set) == 0 {
-			return nil
+	}
+	if !before.Material && len(set) > 0 {
+		if err := s.stockSetCells(r.Context(), p.TenantID, sh, id, key, set); err != nil {
+			s.stockFail(w, r, err)
+			return
 		}
 		cols := make([]string, 0, len(set))
 		for c := range set {
 			cols = append(cols, c)
 		}
-		return auditTx(r, tx, "storefront.item_change", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "columns": cols})
-	}); err != nil {
-		s.stockFail(w, r, err)
-		return
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return auditTx(r, tx, "storefront.item_change", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "columns": cols})
+		}); err != nil {
+			s.stockFail(w, r, err)
+			return
+		}
 	}
 	if err := s.SyncStorefront(r.Context(), p.TenantID); err != nil {
 		s.Logger.Warn("stock: refreshing the catalogue", "tenant", p.TenantID, "err", err)

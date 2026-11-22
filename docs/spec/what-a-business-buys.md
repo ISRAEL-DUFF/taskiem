@@ -341,6 +341,9 @@ The split comes first, because Add to stock and every count after it point at st
 
 - `POST /v1/stock/items` takes `material: true` for a stock item with no product: the demo world's supplies are made this way.
 - `PATCH /v1/stock/items/{id}` writes a product's own fields to its row, and the rest to its stock item.
+  - Review fix: everything it can refuse (the cells as the table takes them, the supplier, costs and levels up to 1,000,000,000,000) is checked before anything is written, and the stock item is written before the row, so a 400 changes nothing.
+  - Review fix: a product's new name renames its stock item only when that stock item counts no other product ("Coke" counting "Coke bottle" and "Coke pack of 6" keeps its name); its unit, cost, levels and supplier are the stock item's and still reach it, as the Stock page's Change sends them through the first product it is sold as.
+  - Review fix: a product in sizes and colours gets no stock item from it: its unit, cost, levels and supplier go to its sizes' stock items only (`sizesFollow`), as the sizes editor makes them from the product's.
 - `GET /v1/stock` no longer has `stuck` nor an item's `waiting`.
 - A movement's `status` is always `done`.
 - OpenAPI and `mobile/lib/api/api.g.dart` follow. The web and app screens are unchanged (S2).
