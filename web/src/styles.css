@@ -2498,3 +2498,10 @@ div.treat-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6p
 .treat-ask-box p { margin: 0 0 8px; }
 .treat-mark { display: block; color: var(--muted); font-size: 12.5px; }
 .treat-went { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
+.things-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 18px 0 8px; font-size: 16px; }
+.things-head .hint { font-weight: 500; font-size: 13px; }
+.spending-sum { margin-bottom: 12px; }
+.spending-sum .hint { display: block; font-size: 12.5px; }
+.spending-profit { margin: 12px 0 0; }
+.spending-profit .hint { display: block; }

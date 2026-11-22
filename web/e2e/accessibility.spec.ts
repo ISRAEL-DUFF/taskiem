@@ -62,6 +62,8 @@ const PAGES = [
   "/money/entries",
   "/money/fees",
   "/money/labels",
+  "/money/things",
+  "/money/things?all=true",
   "/schools",
   "/schools/families",
   "/schools/classes",

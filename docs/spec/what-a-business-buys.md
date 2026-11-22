@@ -600,6 +600,18 @@ No schema change. `api/chat_purchase_treat.go`; the words in `engine/lang` (`Mat
 - **Tests:** `api/chat_purchase_treat_test.go`: WhatsApp (a new item asked, the label as a list, sent with the line as answered, the seller's order without it, remembered asking nothing, `keep track of it, machines`, Add to stock picking a material with Stock bought, Another typed, 60 asked and just recorded, 60 kept track of, 300 recorded), the Taskiem chat (buttons, A new one as a material, Another, Pidgin's words), Telegram, Slack; `TestMentionsOrderFromTwo` answers two orders' lines typed; `engine/lang` `TestMatchTreat`.
 - **Not done:** the model (`chat_understand`) is not given the question; a line's uses are not asked (a product's own, else 1).
 
+### As built: U3 (web)
+
+No server change. The words and requests in `web/src/lib/things.ts`; the screens in `web/src/pages/Things.tsx` and `MoneySpending.tsx`.
+
+- **Things we have** (`/money/things`, a Money tab for `table.read`, before Labels): a pine hero with what those had cost and how many; rows by label (`GET /v1/things?group=label`, the server's groups in order, Not labelled last), each with its cost, from whom, when it came and a status badge; **Show those no longer had** (`all=true`, `?all=true`) puts them under their labels, after those had, out of the totals.
+- **A row's page** (`/money/things/{id}`): hero with its cost and status; label, from whom, when it came, the order it came on (`/purchases/{id}`, or Added by hand), serial, warranty end, note; **Change the details** (serial, warranty, note, label picked or typed, found or made; `clear_label` for none). **What happened to it**: Have, Sold, Broken, Given away, Gone (`PATCH`, with an `Idempotency-Key`). Sold asks **What it sold for (optional)** and Paid (cash, transfer): money in, Sale of things we had. Without `invoice.manage` the price is disabled with the reason, and it can be marked sold without one. Without `table.edit`: nothing to change, said.
+- **Add something we have** (`table.edit`): name, label (`LabelPick`, the question's label field taken out of `TreatQuestion`; a typed name found or made through `POST /v1/money/labels`), supplier (optional, `GET /v1/stock/suppliers`), cost, when it came (noon in Lagos that day), serial, warranty end, note.
+- **Cards:** an order line kept track of with something come links its **On Things we have** to `/money/things?line={line id}`, the rows of that line (filtered on the page from `all=true`).
+- **Spending by label** on Money's overview, for the period chosen (`GET /v1/money/spending?from&to`): running costs, **Bought to sell or make with** and **Bought to keep** (left out of profit, said) apart; each label with its amount and parts, Not labelled for none; profit (money in less fees and costs, Bought to keep left out), a loss said as one.
+- **Tests:** `lib/things.test.ts` (13); `e2e/things.spec.ts` (7): the list grouped by label with those no longer had, a row sold with a price, a cashier without `invoice.manage` selling without one, a viewer without `table.edit`, added by hand with a new label, an order line leading to its rows, the spending card; axe at 390 and 360 in both themes. `/money/things` and `?all=true` in `accessibility.spec.ts`; the pages in `plainwords.test.ts`.
+- **Not done:** the Money tab in the menu still needs `invoice.read`, so someone with `table.read` only reaches Things we have by its address; the add form offers the business's labels, not suggestions from the name; a label merged since shows on cards as Not labelled (as U2a).
+
 ## 12. Accept
 
 **The split**

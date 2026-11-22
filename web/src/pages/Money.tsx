@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { EmptyState, ErrorBox, Field, Items, PageHeader, Row, Skeleton, useAction, useLiveRefresh, useLoad } from "../ui";
 import { Icon } from "../icons";
 import { MoneyBars, MoneySources } from "./MoneyParts";
+import { SpendingCard } from "./MoneySpending";
 import { UNMATCHED_PATH, channelWords, dateLabel, naira, newRequestKey, plainMessage, type UnmatchedMoney } from "../lib/invoices";
 import {
   CLOSE_CHOICES,
@@ -97,8 +98,8 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
 /** The periods one press away; the rest are under "Other". */
 const QUICK_PERIODS = PERIOD_CHOICES.filter((c) => c.value === "today" || c.value === "week" || c.value === "month");
 
-/** Overview, Leaks, Upload statement, Cash and expenses, Fees; Labels for
- * those who manage money. */
+/** Overview, Leaks, Upload statement, Cash and expenses, Fees; Things we
+ * have for those who may see stock; Labels for those who manage money. */
 export function MoneyTabs() {
   const { can } = useAuth();
   return (
@@ -110,6 +111,7 @@ export function MoneyTabs() {
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
+      {can("table.read") && <NavLink to="/money/things">Things we have</NavLink>}
       {moneyAccess(can).manage && <NavLink to="/money/labels">Labels</NavLink>}
     </nav>
   );
@@ -250,6 +252,7 @@ export function MoneyOverview() {
             {s.unit && s.buckets && s.buckets.length > 1 && <MoneyBars key={key} buckets={s.buckets} unit={s.unit} caption={`Money in and out, ${periodWords(p)}`} />}
           </section>
           <MoneySources channels={channels} total={s.in_settled_kobo} />
+          <SpendingCard period={p} />
           <section className="money-panel to-look" aria-labelledby="look-h" data-testid="overview-leaks">
             <h2 id="look-h">To look at</h2>
             {waiting.length > 0 && (
