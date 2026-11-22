@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
 // A tool's care is worked out from its steps when it is published and kept
@@ -117,5 +119,65 @@ func TestToolUse(t *testing.T) {
 	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/"+toJSON(v)+"/publish", nil)
 	if got := op.must(200, "GET", "/v1/tools", nil)["tools"].([]any); len(got) != 0 {
 		t.Errorf("after a version without a tool: %v", got)
+	}
+}
+
+// A tool from WhatsApp (made tools M1): called by its command (the rest of
+// the message is its one input), started at once with the echo when it
+// only reads, its answer sent when the run ends; asked yes when an owner
+// makes it always ask; listed by tools; refused, in words, to a member
+// outside its roles.
+func TestToolInChat(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@toolchat.test")
+	def := json.RawMessage(`{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave left","trigger":{"type":"manual"},"roles":["operator"],
+		"inputs":{"schema":{"type":"object","required":["who"],"properties":{"who":{"type":"string","title":"Who"}}}},
+		"outputs":[{"name":"left","type":"integer","title":"Left","description":"Days left","value":"=steps.look.output.left"},
+		           {"name":"who","type":"string","title":"Who","description":"Who","value":"=steps.look.output.who"}],
+		"tool":{"name":"Leave left","command":"leave-left","about":"Days of leave left","says":["days left for"],
+		        "answer":{"type":"text","text":"=outputs.who + ' has ' + string(outputs.left) + ' days of leave left'"}},
+		"steps":[{"id":"look","type":"transform","config":{"output":{"left":12,"who":"=trigger.body.who"}}}]}`)
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Leave left", "definition": def})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	op := w.member(t, owner, "op@toolchat.test", "operator")
+	const on = "+2348010000041"
+	w.bind(t, op, on)
+
+	if r := w.say(t, on, "tools"); !strings.Contains(r, "/leave-left: Leave left. Days of leave left") {
+		t.Errorf("tools: %q", r)
+	}
+	got := w.send(t, on, whatsapptest.Text("leave-left Musa"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Starting Leave left with:") || !strings.Contains(got[0].Text, "Musa") {
+		t.Fatalf("echo: %+v", got)
+	}
+	w.env.Drain(t)
+	w.tick(t)
+	if last := w.graph.Last(t, on); !strings.Contains(last.Text, "Musa has 12 days of leave left") {
+		t.Errorf("answer: %+v", last)
+	}
+	// By a phrase it says.
+	if got := w.send(t, on, whatsapptest.Text("days left for Ada")); len(got) != 1 || !strings.Contains(got[0].Text, "Ada") {
+		t.Errorf("phrase: %+v", got)
+	}
+
+	// Always ask: what will run, then yes.
+	owner.must(204, "PUT", "/v1/tools/leave-left/settings", map[string]any{"always_ask": true})
+	if r := w.say(t, on, "/leave-left Bayo"); !strings.Contains(r, "Bayo") || strings.Contains(r, "Starting") {
+		t.Errorf("asks: %q", r)
+	}
+	if got := w.send(t, on, whatsapptest.ButtonReply("yes", "Yes, run it")); len(got) != 0 && strings.Contains(got[0].Text, "not") {
+		t.Errorf("yes: %+v", got)
+	}
+	w.env.Drain(t)
+	w.tick(t)
+	if last := w.graph.Last(t, on); !strings.Contains(last.Text, "Bayo has 12 days") {
+		t.Errorf("answer after yes: %+v", last)
+	}
+
+	// Outside its roles: told who may.
+	bo := w.member(t, owner, "bo@toolchat.test", "builder")
+	w.bind(t, bo, "+2348010000042")
+	if r := w.say(t, "+2348010000042", "leave-left Musa"); !strings.Contains(r, "Only operator can start Leave left") {
+		t.Errorf("builder: %q", r)
 	}
 }

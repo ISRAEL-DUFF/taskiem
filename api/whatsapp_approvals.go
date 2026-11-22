@@ -474,6 +474,15 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	title := tr(l, outcome, "workflow", wf, "env", env)
 	body := tr(l, "wa.outcome.body")
+	// A tool's run answers with its answer (tools_answer.go): the person
+	// who started it is the one it goes to.
+	if status == "completed" {
+		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string) bool { return true }); err == nil && a.Type != "outcome" {
+			if words := toolAnswerWords(l, a); words != "" {
+				title, body = words, ""
+			}
+		}
+	}
 	// Why, in plain words: the step that failed (N5).
 	if status == "failed" {
 		if why := s.runFailureText(ctx, it.Tenant, *it.Run); why != "" {

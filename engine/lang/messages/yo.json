@@ -3976,6 +3976,36 @@
       "text": "Ẹ kò lè bẹ̀rẹ̀ iṣẹ́ nínú {org} mọ́.",
       "reviewed": false
     },
+    "wa.tool.yours": {
+      "text": "Your business's tools (type the word):",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Heading over the business's own tools listed by tools"
+    },
+    "wa.tool.echo": {
+      "text": "Starting {tool}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A tool that only reads, started at once with nothing to show back"
+    },
+    "wa.tool.echo_values": {
+      "text": "Starting {tool} with:\n{values}",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
+    },
+    "wa.tool.step_up": {
+      "text": "{tool} moves money, so it is confirmed with your passkey in the app or on the web, not here.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A tool whose steps move money, called from a chat app"
+    },
+    "wa.tool.list_empty": {
+      "text": "Nothing to show.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A tool's list answer with no rows and no empty text of its own"
+    },
+    "wa.tool.list_more": {
+      "text": "\u2026and {count} more: see them all in the app.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A tool's list answer with more than ten rows"
+    },
     "wa.run.not_yours": {
       "text": "Only {roles} can start {workflow}. Ask an owner if you need it.",
       "reviewed": false,

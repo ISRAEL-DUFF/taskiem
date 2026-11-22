@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -246,6 +247,9 @@ type chatData struct {
 	Index       int            `json:"index,omitempty"`
 	Inputs      map[string]any `json:"inputs,omitempty"` // personal fields sealed
 	Nonce       string         `json:"nonce,omitempty"`  // the start's idempotency key
+	// Tool is the command of the tool being called (tools_chat.go): the
+	// run is the tool's, at its care.
+	Tool string `json:"tool,omitempty"`
 	// Ask names what is waiting for an answer, new each time the session
 	// is saved: a Yes button carries it (yesButton), so a Yes shown under
 	// an earlier summary confirms nothing.
@@ -916,6 +920,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {
 		return err
 	}
+	// A business's own tool by "/command" (tools_chat.go), before the
+	// built-in tools' "/" links.
+	if strings.HasPrefix(strings.TrimSpace(text), "/") {
+		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			return err
+		}
+	}
 	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
 	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
 		return err
@@ -1241,6 +1252,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if matched {
 		if done, err := s.waIntent(ctx, c, m); done || err != nil {
+			return err
+		}
+	}
+	// A business's own tool by its plain command or a phrase it says,
+	// after Taskiem's own words, which always win (tools_chat.go).
+	if !matched {
+		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
 			return err
 		}
 	}
@@ -1840,6 +1858,12 @@ func confirmButtonsIn(l lang.Tag) []whatsapp.Button {
 // waAskConfirm summarises exactly what will run (spec 11.5) and waits for
 // an explicit yes.
 func (s *Server) waAskConfirm(ctx context.Context, c *chat, data chatData) error {
+	if data.Tool != "" {
+		// A tool that only reads starts at once, with the echo.
+		if done, err := s.waToolReady(ctx, c, data); done || err != nil {
+			return err
+		}
+	}
 	data.Nonce = uuid.NewString()
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return err
@@ -1876,6 +1900,18 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	}
 	if !c.p.Can(PermRunStart) {
 		return c.say(ctx, s, c.t("wa.run.denied_now", "org", c.tenant.Name))
+	}
+	if data.Tool != "" {
+		// A tool's run, held to its care and the workflow's roles as it is
+		// deployed now (tools_chat.go).
+		t, err := s.chatToolNow(ctx, c, data)
+		if err != nil || t == nil {
+			return err
+		}
+		if t.Asks() == wdcheck.CareStepUp {
+			return c.say(ctx, s, c.t("wa.tool.step_up", "tool", t.Name))
+		}
+		return s.waToolRun(ctx, c, *t, data)
 	}
 	if !s.limiter("wa-run:"+c.addr, 20*time.Second, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.run.too_many"))
