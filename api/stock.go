@@ -407,6 +407,10 @@ type stockNew struct {
 	Target    *int64 `json:"target_level"`
 	Supplier  string `json:"supplier"`
 	Category  string `json:"category"`
+	// Material: something counted and not sold (what-a-business-buys
+	// §4.5, "Do you sell it?" No): a stock item with no product, nothing
+	// added to the catalogue.
+	Material bool `json:"material"`
 	// GroupOf is, for a size's or colour's stock item, its product.
 	GroupOf string `json:"-"`
 }
@@ -424,6 +428,9 @@ func (in *stockNew) check() error {
 		return fmt.Errorf("%w: the quantity is 0 to %d", errBadRequest, stock.MaxDelta)
 	case len([]rune(in.Unit)) > 30 || len([]rune(in.Supplier)) > 120:
 		return fmt.Errorf("%w: the unit is up to 30 characters, the supplier up to 120", errBadRequest)
+	}
+	if in.Material && in.PriceKobo != nil {
+		return fmt.Errorf("%w: something not sold has no selling price", errBadRequest)
 	}
 	for _, v := range []*int64{in.CostKobo, in.PriceKobo, in.Reorder, in.Target} {
 		if v != nil && (*v < 0 || *v > 1e12) {
@@ -447,6 +454,13 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 		if !it.Material {
 			products++
 		}
+		if matchKey(it.Name) == matchKey(in.Name) && in.Material {
+			// This key made it (a retry): the same answer.
+			if out, mv, err := s.stockAddMaterial(ctx, tenant, actor, key, in, audit, true); !errors.Is(err, errItemExists) {
+				return out, mv, err
+			}
+			return it, stock.Movement{}, fmt.Errorf("%w: %s", errItemExists, it.Name)
+		}
 		if matchKey(it.Name) == matchKey(in.Name) {
 			// This key was adding it (a retry after a failure part way):
 			// finish, rather than refuse the item it made.
@@ -459,6 +473,9 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 			}
 			return s.stockAdded(ctx, tenant, actor, key, in, sh, it.ID, audit)
 		}
+	}
+	if in.Material {
+		return s.stockAddMaterial(ctx, tenant, actor, key, in, audit, false)
 	}
 	if products >= storefront.MaxItems {
 		return stock.Item{}, stock.Movement{}, fmt.Errorf("%w: the catalogue holds at most %d items", errConflict, storefront.MaxItems)
@@ -516,6 +533,55 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 		return stock.Item{}, stock.Movement{}, errors.New("stock: the table gave no id for the new item")
 	}
 	return s.stockAdded(ctx, tenant, actor, key, in, sh, id, audit)
+}
+
+// stockAddMaterial makes a material: a stock item no product is counted
+// by, with its details and its quantity as received, in one transaction;
+// the same key again answers the one it made (replay: only that, else
+// errItemExists). Nothing reaches the
+// catalogue.
+func (s *Server) stockAddMaterial(ctx context.Context, tenant uuid.UUID, actor, key string, in stockNew, audit stockAudit, replay bool) (stock.Item, stock.Movement, error) {
+	var x stock.StockItem
+	var mv stock.Movement
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var made string
+		err := tx.QueryRow(ctx, `SELECT detail->>'stock_item_id' FROM audit_log WHERE tenant_id = $1 AND action = 'stock.material_add' AND detail->>'key' = $2`,
+			tenant, key).Scan(&made)
+		switch {
+		case err == nil:
+			if x, err = stock.StockItemTx(ctx, tx, tenant, uuid.MustParse(made)); err != nil {
+				return err
+			}
+		case errors.Is(err, pgx.ErrNoRows) && replay:
+			return errItemExists
+		case errors.Is(err, pgx.ErrNoRows):
+			supplier, err := supplierOfTx(ctx, tx, tenant, in.Supplier)
+			if err != nil {
+				return err
+			}
+			if x, err = stock.CreateItemTx(ctx, tx, tenant, stock.NewItem{Name: in.Name, Unit: in.Unit, Category: in.Category, CostKobo: in.CostKobo,
+				Low: in.Reorder, Target: in.Target, SupplierID: supplier, Actor: actor}); err != nil {
+				return err
+			}
+			if err := audit(tx, "stock.material_add", x.Name, map[string]any{"key": key, "stock_item_id": x.ID}); err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+		if in.Quantity <= 0 {
+			return nil
+		}
+		q := in.Quantity
+		mv, err = stock.RecordTx(ctx, tx, tenant, stock.Move{ItemID: x.ID.String(), Item: x.Name, Reason: stock.Received, Delta: &q, Actor: actor,
+			Key: key + "-received", CostKobo: in.CostKobo})
+		if err != nil {
+			return err
+		}
+		x, err = stock.StockItemTx(ctx, tx, tenant, x.ID)
+		return err
+	})
+	return stock.FromStockItem(x), mv, err
 }
 
 // stockAdding says key was adding an item named name (stockAdd's record
@@ -772,6 +838,9 @@ func (s *Server) addStockItem(w http.ResponseWriter, r *http.Request) {
 		out["movement"] = mv
 	}
 	line := "New product: " + it.Name
+	if it.Material {
+		line = "Now counting: " + it.Name
+	}
 	if it.PriceKobo != nil {
 		line += ", " + naira(*it.PriceKobo)
 		if it.Unit != "" {
