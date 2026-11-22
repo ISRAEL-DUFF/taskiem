@@ -33,7 +33,8 @@ import {
   useLoad,
 } from "../ui";
 import { naira } from "../lib/invoices";
-import { PhotoReadButton, readingPhoto, readPhotoWords } from "./PhotoRead";
+import { AIReadOffer, PhotoReadButton, readingPhoto, usePhotoAI } from "./PhotoRead";
+import { aiOffered, aiPhotoSetting, noLineRead } from "../lib/photoAI";
 import type { PayLine } from "../lib/dispatch";
 import type { SavedList, SavedThing } from "../lib/saved";
 import {
@@ -127,17 +128,41 @@ export function PayListPage() {
   // paste box and read as a pasted list is (from: "photo").
   const [photoWords, setPhotoWords] = useState<string>();
   const [photoBusy, setPhotoBusy] = useState(false);
-  const fromPhoto = async (photo: File) => {
+  // Nothing read in it on this device, or not one line of it: "Read it
+  // with AI" where an owner turned it on (I3), its words then read as the
+  // device's are. The photo is kept here only until the list is read.
+  const photoAI = usePhotoAI();
+  const [photo, setPhoto] = useState<{ file: Blob; byAI: boolean }>();
+  const takeWords = (words: string) => {
+    setPhotoWords(words);
+    setAdding("paste");
+    return null;
+  };
+  const fromPhoto = async (file: File) => {
     if (readingPhoto()) return;
     setPhotoBusy(true);
+    photoAI.clear();
     try {
-      const words = await readPhotoWords(photo);
-      if (!words) return;
-      setPhotoWords(words);
-      setAdding("paste");
+      await photoAI.read(file, async (words, byAI) => {
+        setPhoto({ file, byAI });
+        return takeWords(words);
+      });
     } finally {
       setPhotoBusy(false);
     }
+  };
+  // The list read, and not one line of it could be: offered with AI
+  // (true) where it is on; off, its lines go in the list to fix, as today.
+  const noLines = async () => {
+    if (!photo || photo.byAI || !aiOffered(await aiPhotoSetting())) return false;
+    const file = photo.file;
+    setAdding(undefined);
+    setPhotoWords(undefined);
+    await photoAI.nothing(file, "Not one line of that photo could be read.", async (words) => {
+      setPhoto({ file, byAI: true });
+      return takeWords(words);
+    });
+    return true;
   };
   const batch = useMakeBatch();
   const { can } = useAuth();
@@ -246,6 +271,9 @@ export function PayListPage() {
           onPhoto={(p) => void fromPhoto(p)}
           testid="add-photo"
         />
+        {photoAI.offer && (
+          <AIReadOffer offer={photoAI.offer} onClose={photoAI.clear} />
+        )}
         {news && (
           <div className="notice" role="status">
             {news}
@@ -329,12 +357,15 @@ export function PayListPage() {
         <PasteList
           key={photoWords ?? ""}
           photoWords={photoWords}
+          noLines={noLines}
           onClose={() => {
             setAdding(undefined);
             setPhotoWords(undefined);
+            setPhoto(undefined);
           }}
           onAdd={(r) => {
             setPhotoWords(undefined);
+            setPhoto(undefined);
             add(r);
           }}
         />
@@ -638,9 +669,13 @@ function PasteList({
   onClose,
   onAdd,
   photoWords,
+  noLines,
 }: {
   onClose: () => void;
   onAdd: (rows: DraftRow[]) => void;
+  /** A photo's list read and not one line could be: true when that is
+   * taken from here ("Read it with AI" offered). */
+  noLines?: () => Promise<boolean>;
   /** The words of a photo of a list, read on this device: put in the box
    * and read at once, with from: "photo" while the box holds them. */
   photoWords?: string;
@@ -655,6 +690,7 @@ function PasteList({
         text: words,
         ...(fromPhoto ? { from: "photo" } : {}),
       });
+      if (fromPhoto && words === photoWords && noLineRead(r.lines) && noLines && (await noLines())) return;
       onAdd(r.lines.map(rowFromLine));
     }, false);
   // A photo's words: read as soon as they are in the box; what cannot be

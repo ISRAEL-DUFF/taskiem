@@ -1,14 +1,23 @@
 // Reading account details from photos (I2; the app's photo_text.dart): a
 // form's "From a photo" button, and the words of a photo read on this
-// device (src/lib/photoText.ts). The photo is never sent to be read: a
-// photo chosen stays in the browser, and a chat's photo is fetched the way
-// the chat shows it (same origin, with the session) and read here. Only
-// the words go on, to Taskiem's readers, with from: "photo".
+// device (src/lib/photoText.ts). A photo chosen stays in the browser, and
+// a chat's photo is fetched the way the chat shows it (same origin, with
+// the session) and read here. Only the words go on, to Taskiem's readers,
+// with from: "photo".
+// When this device finds nothing in it (handwriting, mostly) and an owner
+// turned on reading with AI (I3, src/lib/photoAI.ts), "Read it with AI" is
+// offered: only on that tap is the photo sent, to POST /v1/photo-text, and
+// its words go on as the device's would. Off, an owner is told where to
+// turn it on.
 
+import { useState } from "react";
 import { getBlob } from "../api";
+import { useAuth } from "../auth";
 import { Icon } from "../icons";
+import { aiHinted, aiOffered, aiOfferLine, aiPhotoSetting, aiSettingsPath, offerSaid, readPhotoAI } from "../lib/photoAI";
 import { readOnDevice, readPhotoText } from "../lib/photoText";
-import { toast } from "../toast";
+import { toast, untoast, type ToastKind } from "../toast";
+import { Modal } from "../ui";
 
 /** One photo read at a time. */
 let reading = false;
@@ -16,9 +25,12 @@ let reading = false;
 /** Whether a photo is being read just now. */
 export const readingPhoto = () => reading;
 
-/** The words in a photo, read on this device; null when none could be
- * read (said in a toast). */
-export async function readPhotoWords(photo: Blob): Promise<string | null> {
+/** What this device read in a photo: its words, or what to say instead. */
+export type DeviceRead = { words: string } | { said: string; kind: ToastKind };
+
+/** The words in a photo, read on this device; null while another is
+ * being read. Nothing said. */
+export async function devicePhotoWords(photo: Blob): Promise<DeviceRead | null> {
   if (reading) return null;
   reading = true;
   try {
@@ -26,32 +38,137 @@ export async function readPhotoWords(photo: Blob): Promise<string | null> {
     try {
       words = (await readPhotoText(photo)).trim();
     } catch {
-      toast("This browser could not read that photo. Type it in.", "error");
-      return null;
+      return { said: "This browser could not read that photo. Type it in.", kind: "error" };
     }
-    if (!words) {
-      toast("No words in that photo. Type it in.", "info");
-      return null;
-    }
-    return words;
+    if (!words) return { said: "No words in that photo. Type it in.", kind: "info" };
+    return { words };
   } finally {
     reading = false;
   }
 }
 
-/** A photo in a chat (only on the server, at url): fetched as the chat
- * fetches it to show it, then read on this device. Never uploaded. */
-export async function readChatPhoto(url: string): Promise<string | null> {
+/** Said while a chat's photo is read. */
+export const readingWords = "Reading the photo…";
+
+/** A photo in a chat (only on the server, at url), fetched as the chat
+ * fetches it to show it, to be read on this device (usePhotoAI's read);
+ * null when it could not be (said). Never uploaded. */
+export async function chatPhoto(url: string): Promise<Blob | null> {
   if (reading) return null;
-  let photo: Blob;
   try {
-    photo = await getBlob(url);
+    return await getBlob(url);
   } catch {
     toast("That photo could not be got just now. Try again.", "error");
     return null;
   }
-  toast("Reading the photo…", "info");
-  return readPhotoWords(photo);
+}
+
+/** What a flow does with a photo's words: null when it used them (or said
+ * why not), else what to say because nothing was found in them. */
+export type UseWords = (words: string, byAI: boolean) => Promise<string | null>;
+
+/** "Read it with AI" waiting to be tapped: the photo, and what to do with
+ * the words that come back. */
+export interface AIOffer {
+  photo: Blob;
+  /** What the device found, said above the button. */
+  said: string;
+  use: UseWords;
+}
+
+/** A photo read on this device and, where it finds nothing and reading
+ * with AI is on, "Read it with AI" offered (offer, shown by the caller
+ * with AIReadOffer). */
+export function usePhotoAI() {
+  const { me } = useAuth();
+  const owner = !!me?.roles.includes("owner");
+  const [offer, setOffer] = useState<AIOffer>();
+
+  /** Nothing found in the photo: offered with AI where on (true), else
+   * said, with where an owner turns it on. */
+  const nothing = async (photo: Blob, said: string, use: UseWords, kind: ToastKind = "info"): Promise<boolean> => {
+    const s = await aiPhotoSetting();
+    // "Reading the photo…" is over: it would cover what is said now.
+    untoast(readingWords);
+    if (aiOffered(s)) {
+      setOffer({ photo, said, use });
+      return true;
+    }
+    toast(said, kind, aiHinted(s, owner) ? { href: aiSettingsPath, linkText: "Turn on reading with AI" } : {});
+    return false;
+  };
+
+  /** Reads photo on this device and gives its words to use; what finds
+   * nothing goes to nothing(). Errors from use are thrown. */
+  const read = async (photo: Blob, use: UseWords): Promise<void> => {
+    const d = await devicePhotoWords(photo);
+    if (!d) return;
+    if ("said" in d) {
+      await nothing(photo, d.said, use, d.kind);
+      return;
+    }
+    const said = await use(d.words, false);
+    if (said !== null) await nothing(photo, said, use);
+  };
+
+  return { read, nothing, offer, clear: () => setOffer(undefined) };
+}
+
+/** "Read it with AI": what the device found, the button, and that the
+ * photo is sent and not kept. The words that come back go on as the
+ * device's do; a refusal is said in the server's words. */
+export function AIReadOffer({ offer, onClose, testid = "photo-ai" }: { offer: AIOffer; onClose: () => void; testid?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const go = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const text = await readPhotoAI(offer.photo);
+      if (!text) {
+        setError("No words could be read in that photo. Type it in.");
+        return;
+      }
+      const said = await offer.use(text, true);
+      onClose();
+      if (said !== null) toast(said, "info");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The photo could not be read just now. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="photo-ai" data-testid={testid}>
+      <p className="photo-ai-said">{offerSaid(offer.said)}</p>
+      <div className="photo-ai-row">
+        <button type="button" className="primary small" onClick={() => void go()} disabled={busy} data-testid={`${testid}-go`}>
+          <Icon name="sparkle" />
+          {busy ? "Reading with AI…" : "Read it with AI"}
+        </button>
+        <button type="button" className="small" onClick={onClose} disabled={busy} data-testid={`${testid}-no`}>
+          Type it in
+        </button>
+      </div>
+      <p className="photo-ai-note">{aiOfferLine}</p>
+      {error && (
+        <p className="photo-ai-error" role="alert" data-testid={`${testid}-error`}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The offer in a dialog of its own: for a chat's photo, whose menu has
+ * closed. */
+export function AIReadOfferModal({ offer, onClose }: { offer: AIOffer | undefined; onClose: () => void }) {
+  if (!offer) return null;
+  return (
+    <Modal title="Read the photo with AI?" onClose={onClose}>
+      <AIReadOffer offer={offer} onClose={onClose} />
+    </Modal>
+  );
 }
 
 /** A form's "From a photo" button: the file picker (a phone offers its

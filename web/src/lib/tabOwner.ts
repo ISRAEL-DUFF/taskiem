@@ -11,6 +11,7 @@ import { clearOutbox } from "./outboxStore";
 import { clearRecent } from "./schoolClearance";
 import { keepInflight } from "./taskiemchat";
 import { forgetChatTools } from "./useChatTools";
+import { forgetAIPhotoSetting } from "./photoAI";
 
 const OWNER = "taskiem-owner";
 
@@ -20,6 +21,7 @@ function clearPersonal() {
   keepInflight(undefined);
   clearRecent();
   forgetChatTools();
+  forgetAIPhotoSetting();
   setAgentSession(null);
 }
 

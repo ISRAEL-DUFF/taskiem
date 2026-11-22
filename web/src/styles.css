@@ -2557,6 +2557,19 @@ button.pay-chip.save:hover { background: var(--panel-2); }
 .photo-read-pick.off { cursor: default; opacity: 0.7; }
 .photo-read-note { font-size: 13px; line-height: 1.4; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
 .toolbar + .photo-read, .photo-read + .notice { margin-top: 10px; }
+/* "Read it with AI" (I3): after this device found nothing in a photo,
+   where an owner turned it on; the photo goes only on that tap. */
+.photo-ai { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--tint); color: var(--text); }
+.photo-read + .photo-ai, .photo-ai + .notice { margin-top: 10px; }
+.card > .photo-ai { margin-bottom: 14px; }
+.photo-ai p { margin: 0; overflow-wrap: anywhere; }
+.photo-ai-said { font-size: 14px; font-weight: 600; }
+.photo-ai-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-ai-row button { display: inline-flex; align-items: center; gap: 6px; }
+.photo-ai-row svg { width: 16px; height: 16px; flex: none; }
+.photo-ai-note { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.photo-ai-error { font-size: 14px; color: var(--danger); }
+.modal .photo-ai { background: none; padding: 0; }
 .save-as-value { display: block; min-height: 40px; padding: 9px 12px; border-radius: 12px; background: var(--panel-2); color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .save-as-done { margin: 0 0 8px; font-size: 15px; overflow-wrap: anywhere; }
 .pay-likely .tk-chips { flex-wrap: wrap; padding: 0; overflow: visible; }

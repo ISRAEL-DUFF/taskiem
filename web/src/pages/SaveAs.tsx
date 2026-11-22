@@ -7,7 +7,7 @@ import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type FileMeta, typ
 import { PopItem } from "./BubbleShell";
 import { AccountSheet, ThingSheet } from "./Saved";
 import { CustomSheet, FileSheet, uploadSaved } from "./SavedKinds";
-import { readChatPhoto } from "./PhotoRead";
+import { AIReadOfferModal, chatPhoto, readingWords, usePhotoAI } from "./PhotoRead";
 
 // Saving from a message, and from the picker (saved objects S1, part 4;
 // saved-objects §9): Save as… on a message reads its words (POST
@@ -73,22 +73,24 @@ export function useSaveAs({ business = false, onSaved }: { business?: boolean; o
    * photos, I2): the photo fetched as the chat shows it and read on this
    * device, its words read by Taskiem (from: "photo"), and the sheet for
    * an account opened with them. No account in it: said. */
+  // Nothing found on this device: "Read it with AI" where an owner turned
+  // it on (I3), its words read as the device's are.
+  const photoAI = usePhotoAI();
   const fromPhoto = (url: string) =>
     void (async () => {
-      const words = await readChatPhoto(url);
-      if (!words) return;
-      let r: SavedReading;
+      const photo = await chatPhoto(url);
+      if (!photo) return;
+      toast(readingWords, "info");
       try {
-        r = await post<SavedReading>("/v1/me/saved/read", { text: words, from: "photo" });
+        await photoAI.read(photo, async (words) => {
+          const r = await post<SavedReading>("/v1/me/saved/read", { text: words, from: "photo" });
+          if (r.kind !== "bank_account" || !String(r.details?.account_number ?? "")) return "No account number in that photo.";
+          setStart(readingCard(r));
+          return null;
+        });
       } catch (e) {
         toast(e instanceof Error ? e.message : "That photo could not be read just now. Try again.", "error");
-        return;
       }
-      if (r.kind !== "bank_account" || !String(r.details?.account_number ?? "")) {
-        toast("No account number in that photo.", "info");
-        return;
-      }
-      setStart(readingCard(r));
     })();
 
   /** Save "mum"… in the picker: what kind, then its sheet. */
@@ -108,6 +110,7 @@ export function useSaveAs({ business = false, onSaved }: { business?: boolean; o
 
   const node: ReactNode = (
     <>
+      <AIReadOfferModal offer={photoAI.offer} onClose={photoAI.clear} />
       {naming !== undefined && (
         <Modal title={`Save @${naming}`} onClose={() => setNaming(undefined)}>
           <Items label="What to save">

@@ -40,7 +40,7 @@ import {
   type SaidIn,
 } from "../lib/paymessage";
 import { toast } from "../toast";
-import { readChatPhoto } from "./PhotoRead";
+import { AIReadOfferModal, chatPhoto, readingWords, usePhotoAI } from "./PhotoRead";
 import { PopItem } from "./BubbleShell";
 import { PaySheet } from "./PaySheet";
 import { SaveAsSheet } from "./SaveAsSheet";
@@ -65,6 +65,8 @@ interface PayFrom {
   paidAt: number;
   open: (r: PayReading, text: string, from: DOMRect, saidIn?: SaidIn) => void;
   keep: (r: PayReading, text: string, from: DOMRect) => void;
+  /** A chat photo's words, read on this device or, offered, with AI. */
+  photoAI: ReturnType<typeof usePhotoAI>;
 }
 
 const Ctx = createContext<PayFrom | null>(null);
@@ -96,12 +98,14 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
       setKeeping({ r, text, from }),
     [],
   );
+  const photoAI = usePhotoAI();
   if (!can("money.pay")) return <>{children}</>;
   const fill = paying && messageFill(paying.r);
   const mayKeep = can("saved.manage");
   return (
-    <Ctx.Provider value={{ owner, mayKeep, paidAt, open, keep }}>
+    <Ctx.Provider value={{ owner, mayKeep, paidAt, open, keep, photoAI }}>
       {children}
+      <AIReadOfferModal offer={photoAI.offer} onClose={photoAI.clear} />
       {keeping && (
         <SaveAsSheet
           r={keeping.r}
@@ -149,25 +153,28 @@ export function usePayFromPhoto(): ((url: string, from: DOMRect) => void) | null
   if (!ctx) return null;
   return (url, from) =>
     void (async () => {
-      const words = await readChatPhoto(url);
-      if (!words) return;
-      let r: PayReading;
+      const photo = await chatPhoto(url);
+      if (!photo) return;
+      toast(readingWords, "info");
       try {
-        r = await post<PayReading>("/v1/payments/read", {
-          text: words,
-          from: "photo",
+        // Nothing found on this device: "Read it with AI" where it is on.
+        await ctx.photoAI.read(photo, async (words) => {
+          const r = await post<PayReading>("/v1/payments/read", {
+            text: words,
+            from: "photo",
+          });
+          const kind = chipFor(r, ctx.owner);
+          if (!kind) return noAccountInPhoto;
+          if (kind === "ask") toast(askToSave, "info");
+          else ctx.open(r, words, from, "photo");
+          return null;
         });
       } catch (e) {
         toast(
           e instanceof Error ? e.message : "That photo could not be read just now. Try again.",
           "error",
         );
-        return;
       }
-      const kind = chipFor(r, ctx.owner);
-      if (!kind) return toast(noAccountInPhoto, "info");
-      if (kind === "ask") return toast(askToSave, "info");
-      ctx.open(r, words, from, "photo");
     })();
 }
 
@@ -178,12 +185,17 @@ export function PhotoAccountItems({
   url,
   close,
   saveAccount,
+  payable = true,
 }: {
   url: string;
   close: () => void;
   saveAccount: (url: string) => void;
+  /** Whether Pay this account is offered at all (a chat whose chip shows
+   * only under the other side's messages passes false for our own). */
+  payable?: boolean;
 }) {
-  const pay = usePayFromPhoto();
+  const payFrom = usePayFromPhoto();
+  const pay = payable ? payFrom : null;
   return (
     <>
       {pay && (

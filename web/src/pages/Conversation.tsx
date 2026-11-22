@@ -6,7 +6,7 @@ import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import { BillTransferLive } from "./PayByTransfer";
-import { PayChip, PayFromMessages } from "./PayChip";
+import { PayChip, PayFromMessages, PhotoAccountItems } from "./PayChip";
 import {
   useCallback,
   useEffect,
@@ -642,6 +642,7 @@ function Bubble({
   onDone = () => undefined,
   onForward,
   onSaveAs,
+  onSavePhoto,
   onHide,
   onJump,
   flash = false,
@@ -670,6 +671,9 @@ function Bubble({
   onForward?: (m: LinkMessage) => void;
   /** Save as… on its words (saved objects S1, part 4). */
   onSaveAs?: (text: string) => void;
+  /** Save the account on a photo (reading account details from photos):
+   * given where the conversation fetches it. */
+  onSavePhoto?: (url: string) => void;
   onHide?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
@@ -704,10 +708,15 @@ function Bubble({
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
   const local = m.local;
+  // A photo has Pay this account (from the other side, as the chip under
+  // words is) and Save the account: fetched with the session, read on
+  // this device.
+  const photo = !card && !local && m.attachment?.kind === "photo" && !!onSavePhoto;
   const hasMenu =
     !local &&
     (!!(onReact || onStar || onInfo) ||
       canReply ||
+      photo ||
       (!card && !!(onForward || onHide || m.body)));
   const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
   const what = card
@@ -777,6 +786,14 @@ function Bubble({
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
                   {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
+                  {photo && onSavePhoto && (
+                    <PhotoAccountItems
+                      url={fileURL(m)}
+                      close={close}
+                      saveAccount={onSavePhoto}
+                      payable={!m.mine}
+                    />
+                  )}
                   {!card && onForward && (
                     <PopItem
                       icon="forward"
@@ -2017,6 +2034,7 @@ export function ConversationPane({
               onDiscard={discard}
               onReply={setReply}
               onSaveAs={saveAs.fromWords}
+              onSavePhoto={saveAs.fromPhoto}
               onJump={jump}
               first={first}
               flash={flashId === m.id}

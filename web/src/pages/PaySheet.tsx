@@ -29,7 +29,7 @@ import {
   type SaidIn,
 } from "../lib/paymessage";
 import { toast } from "../toast";
-import { PhotoReadButton, readingPhoto, readPhotoWords } from "./PhotoRead";
+import { AIReadOffer, PhotoReadButton, readingPhoto, usePhotoAI } from "./PhotoRead";
 import {
   accountDigits,
   outcomeWords,
@@ -767,36 +767,48 @@ export function PaySheet({
   // From a photo (reading account details from photos, I2): read on this
   // device, the words read by Taskiem (from: "photo"), and the form
   // filled in as the chip under a message fills it.
+  // Nothing found on this device: "Read it with AI" where an owner turned
+  // it on (I3), the words it gives used as the device's are.
+  const photoAI = usePhotoAI();
+  // What the fields hold when the words come back (the AI's come later).
+  const valuesNow = useRef(values);
+  valuesNow.current = values;
+  const takeWords = async (words: string): Promise<string | null> => {
+    const values = valuesNow.current;
+    const r = await post<PayReading>("/v1/payments/read", {
+      text: words,
+      from: "photo",
+    });
+    if (!r.found) return noAccountInPhoto;
+    const fill = photoFill(fields, r);
+    if (!fill) {
+      toast(askToSave, "info");
+      return null;
+    }
+    const next = { ...values, ...fill };
+    // A new number: the bank it is with is chosen again.
+    for (const f of fields)
+      if (f.kind === "bank" && !fill[f.key]) next[f.key] = "";
+    setStart(next);
+    setValues(next);
+    setExpectName(r.name?.trim() || undefined);
+    setSaidIn("photo");
+    setFilled((n) => n + 1);
+    toast("Filled in from the photo. Check it before you pay.", "success");
+    return null;
+  };
   const fromPhoto = async (photo: File) => {
     setPhotoBusy(true);
     setError(undefined);
+    photoAI.clear();
     try {
-      const words = await readPhotoWords(photo);
-      if (!words) return;
-      const r = await post<PayReading>("/v1/payments/read", {
-        text: words,
-        from: "photo",
-      });
-      if (!r.found) return toast(noAccountInPhoto, "info");
-      const fill = photoFill(fields, r);
-      if (!fill) return toast(askToSave, "info");
-      const next = { ...values, ...fill };
-      // A new number: the bank it is with is chosen again.
-      for (const f of fields)
-        if (f.kind === "bank" && !fill[f.key]) next[f.key] = "";
-      setStart(next);
-      setValues(next);
-      setExpectName(r.name?.trim() || undefined);
-      setSaidIn("photo");
-      setFilled((n) => n + 1);
-      toast("Filled in from the photo. Check it before you pay.", "success");
+      await photoAI.read(photo, takeWords);
     } catch (e) {
       setError(e);
     } finally {
       setPhotoBusy(false);
     }
   };
-
   if (sent)
     return (
       <Sheet title={title} from={rect} onClose={onClose} testid="pay-sheet">
@@ -883,6 +895,9 @@ export function PaySheet({
               }}
               testid="pay-photo"
             />
+          )}
+          {photoAI.offer && (
+            <AIReadOffer offer={photoAI.offer} onClose={photoAI.clear} />
           )}
           {fields.map((f) => (
             <PayFieldInput

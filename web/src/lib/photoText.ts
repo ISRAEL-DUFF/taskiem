@@ -37,7 +37,11 @@ let reader: PhotoTextReader = tesseract;
 
 /** The text in a photo, read on this device: lines trimmed, blank ones dropped. */
 export async function readPhotoText(file: Blob): Promise<string> {
-  const text = await reader(file);
+  return tidyLines(await reader(file));
+}
+
+/** A photo's text as it is read on: lines trimmed, blank ones dropped. */
+export function tidyLines(text: string): string {
   return text
     .split(/\r?\n/)
     .map((l) => l.trim())
