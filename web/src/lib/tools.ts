@@ -706,7 +706,7 @@ export const madeIcon = (icon?: string): string =>
   !icon ? "bolt" : (MADE_ICONS[icon] ?? icon);
 
 /** The tools what follows "/" names: by the start of their command, or of
- * their name or a word of it ("/exp", "/log", "/expense"). */
+ * their name or a word of it (slash and exp, log or expense). */
 export function madeToolsFor(tools: MadeTool[], query = ""): MadeTool[] {
   const q = query.trim().toLowerCase().replace(/^\//, "");
   if (q === "") return tools;
