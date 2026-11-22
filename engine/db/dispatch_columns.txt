@@ -792,6 +792,11 @@ password_resets.secret_hash
 password_resets.selector
 password_resets.used_at
 password_resets.user_id
+payments.amount_kobo
+payments.confirmed_at
+payments.confirmed_by
+payments.confirmed_with
+payments.status
 plan_worker_pools.assigned_at
 plan_worker_pools.assigned_by
 plan_worker_pools.plan_id
