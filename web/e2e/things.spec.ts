@@ -160,8 +160,12 @@ test("Things we have, grouped by label, with those no longer had kept in the his
   await expect(groups.nth(0).getByTestId("thing-row").first()).toContainText("From Singer Ltd · came 2 Nov 2026");
   await expect(page.getByText("Old pressing iron")).toHaveCount(0);
   await axeAt(page, "Things we have");
-  await page.getByLabel("Show those no longer had").check();
+  // The box follows the page's address, which changes a moment after the
+  // click: click it, then wait for the address and the box.
+  const noLonger = page.getByLabel("Show those no longer had");
+  await noLonger.click();
   await expect(page).toHaveURL(/all=true/);
+  await expect(noLonger).toBeChecked();
   const iron = page.getByTestId("thing-row").filter({ hasText: "Old pressing iron" });
   await expect(iron).toContainText("Broken");
   // Out of the totals still.
@@ -300,7 +304,7 @@ test("spending by label in the money overview: Bought to keep apart, out of prof
   await page.goto("/money?period=custom&from=2026-11-01&to=2026-11-22");
   const card = page.getByTestId("spending");
   await expect(card.getByRole("heading", { name: "Spending by label" })).toBeVisible();
-  expect(asked).toBe("?from=2026-11-01&to=2026-11-22");
+  await expect.poll(() => asked).toBe("?from=2026-11-01&to=2026-11-22");
   await expect(card.getByTestId("spending-keep")).toContainText("₦450,000");
   await expect(card.getByTestId("spending-keep")).toContainText("left out of profit");
   await expect(card.getByTestId("spending-sell")).toContainText("₦60,000");
