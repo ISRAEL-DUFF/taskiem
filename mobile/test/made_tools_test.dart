@@ -275,14 +275,14 @@ void main() {
     await open(t, 'Open tickets');
     await t.tap(find.bySemanticsLabel('Run it'));
     await settle(t);
-    server.taken['tok-row-1'] = 'Already done: taken by Ada Obi at 10:42 on 22 Nov.';
+    server.taken['tok-row-1'] = 'Already done: Ada Obi took it at 10:42 on 22 Nov.';
     await t.tap(find.bySemanticsLabel('See all of Open tickets'));
     await settle(t);
     await t.tap(find.text('Wrong size delivered'));
     await t.pump();
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
     await t.pump();
-    expect(find.text('Already done: taken by Ada Obi at 10:42 on 22 Nov.'), findsOneWidget);
+    expect(find.text('Already done: Ada Obi took it at 10:42 on 22 Nov.'), findsOneWidget);
     await snap(t, 'made-taken');
     expect(find.text('/expense'), findsNothing, reason: 'no sheet');
     await t.tap(find.bySemanticsLabel('Dismiss'));

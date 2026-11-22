@@ -110,7 +110,7 @@ type errButtonTaken struct {
 }
 
 func (e errButtonTaken) Error() string {
-	return "taken by " + e.By + " at " + e.At.In(lagosTZ).Format("15:04 on 2 Jan")
+	return e.By + " took it at " + e.At.In(lagosTZ).Format("15:04 on 2 Jan")
 }
 
 // pressButton reads a button for p: its tool as deployed now (held to the

@@ -214,7 +214,7 @@ test("a list's Assign to me opens its tool filled in, once: the next person is t
   await sheet.getByRole("button", { name: "See all" }).click();
   const take = sheet.getByRole("button", { name: /^Assign to me\s*: No Wi-Fi$/ });
   await take.click();
-  await expect(sheet.getByRole("status").filter({ hasText: "Already done" })).toContainText(/Already done: taken by .+ at \d\d:\d\d/);
+  await expect(sheet.getByRole("status").filter({ hasText: "Already done" })).toContainText(/Already done: .+ took it at \d\d:\d\d/);
   await expect(take).toBeDisabled();
   await expect(sheet.getByRole("heading", { name: "Open tickets" })).toBeVisible();
   expect(await axe(bo)).toEqual([]);

@@ -60,8 +60,8 @@ describe("the answer", () => {
 
 describe("pressErrorWords", () => {
   it("says who took a once button, and greys it", () => {
-    expect(pressErrorWords(new ApiError(409, "Already done: taken by Ada at 10:42 on 22 Nov.", [], { taken_by: "Ada" }))).toEqual({
-      words: "Already done: taken by Ada at 10:42 on 22 Nov.",
+    expect(pressErrorWords(new ApiError(409, "Already done: Ada took it at 10:42 on 22 Nov.", [], { taken_by: "Ada" }))).toEqual({
+      words: "Already done: Ada took it at 10:42 on 22 Nov.",
       spent: true,
     });
   });

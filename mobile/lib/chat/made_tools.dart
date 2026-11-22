@@ -825,7 +825,7 @@ List<(int, ToolButton)> pressableButtons(List<ToolButton>? bs) => [
 ];
 
 /// Why a button did not open its tool, and whether it is spent (greyed):
-/// someone was first (the server's words: "Already done: taken by Ada at
+/// someone was first (the server's words: "Already done: Ada took it at
 /// 10:42 on 22 Nov."), or it is gone.
 ({String words, bool spent}) pressRefused(Object e) => switch (e) {
   ApiError(status: 409) => (words: _sentence(e.message), spent: true),

@@ -1460,6 +1460,9 @@ whatsapp_pins.pays_from
 whatsapp_pins.pin_hash
 whatsapp_pins.set_at
 whatsapp_pins.user_id
+whatsapp_run_watches.channel
+whatsapp_run_watches.notified_at
+whatsapp_run_watches.tenant_id
 whatsapp_templates.language
 whatsapp_templates.meta_id
 whatsapp_templates.name
