@@ -48,14 +48,24 @@ func scanThing(r pgx.CollectableRow) (Thing, error) {
 	return t, err
 }
 
-// MaxThings is the most rows ThingsTx lists.
+// MaxThings is the most rows ThingsTx lists; ThingTotalsTx counts them all.
 const MaxThings = 2000
 
-// ThingsTx lists Things we have, the newest first; all includes those no
-// longer had (sold, broken, given away, gone).
-func ThingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, all bool) ([]Thing, error) {
-	rows, err := tx.Query(ctx, `SELECT `+thingCols+` FROM kept_things t WHERE t.tenant_id = $1 AND ($2 OR t.status = 'have')
-		ORDER BY COALESCE(t.received_at, t.created_at) DESC, t.id DESC LIMIT $3`, tenant, all, MaxThings)
+// ThingFilter narrows Things we have: All includes those no longer had
+// (sold, broken, given away, gone); Order and Line keep the rows that came
+// on that order or line.
+type ThingFilter struct {
+	All   bool
+	Order *uuid.UUID
+	Line  *uuid.UUID
+}
+
+const thingWhere = `t.tenant_id = $1 AND ($2 OR t.status = 'have') AND ($3::uuid IS NULL OR t.purchase_order_id = $3) AND ($4::uuid IS NULL OR t.purchase_line_id = $4)`
+
+// ThingsTx lists Things we have, the newest first, up to MaxThings.
+func ThingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f ThingFilter) ([]Thing, error) {
+	rows, err := tx.Query(ctx, `SELECT `+thingCols+` FROM kept_things t WHERE `+thingWhere+`
+		ORDER BY COALESCE(t.received_at, t.created_at) DESC, t.id DESC LIMIT $5`, tenant, f.All, f.Order, f.Line, MaxThings)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +74,16 @@ func ThingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, all bool) ([]Thi
 		out = []Thing{}
 	}
 	return out, err
+}
+
+// ThingTotalsTx is the number and cost of the things had (status have)
+// that the filter keeps, all of them, not only the rows ThingsTx lists.
+func ThingTotalsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f ThingFilter) (int, int64, error) {
+	var count int
+	var total int64
+	err := tx.QueryRow(ctx, `SELECT count(*)::int, COALESCE(sum(t.cost_kobo), 0)::bigint FROM kept_things t WHERE `+thingWhere+` AND t.status = 'have'`,
+		tenant, f.All, f.Order, f.Line).Scan(&count, &total)
+	return count, total, err
 }
 
 // ThingTx is one row.
@@ -88,47 +108,28 @@ type ThingGroup struct {
 	TotalKobo int64      `json:"total_kobo"`
 }
 
-// GroupThings groups the things had (status have) by label, the label
-// with the most cost first; Not labelled last.
-func GroupThings(list []Thing) []ThingGroup {
-	var out []ThingGroup
-	at := map[string]int{}
-	for _, t := range list {
-		if t.Status != KeptHave {
-			continue
-		}
-		k := ""
-		if t.LabelID != nil {
-			k = strings.ToLower(t.Label)
-		}
-		i, ok := at[k]
-		if !ok {
-			g := ThingGroup{Label: t.Label}
-			if t.LabelID != nil {
-				id := *t.LabelID
-				g.LabelID = &id
-			}
-			out = append(out, g)
-			i = len(out) - 1
-			at[k] = i
-		}
-		out[i].Count++
-		if t.CostKobo != nil {
-			out[i].TotalKobo += *t.CostKobo
-		}
+// ThingGroupsTx groups the things had (status have) that the filter keeps
+// by label kept, all of them: the label with the most cost first; Not
+// labelled last.
+func ThingGroupsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f ThingFilter) ([]ThingGroup, error) {
+	rows, err := tx.Query(ctx, `SELECT k.id, COALESCE(k.name, ''), count(*)::int, COALESCE(sum(t.cost_kobo), 0)::bigint
+		FROM kept_things t
+		LEFT JOIN spend_labels b ON b.tenant_id = t.tenant_id AND b.id = t.label_id
+		LEFT JOIN spend_labels k ON k.tenant_id = t.tenant_id AND k.id = COALESCE(b.merged_into, b.id)
+		WHERE `+thingWhere+` AND t.status = 'have'
+		GROUP BY k.id, k.name ORDER BY k.id IS NULL, 4 DESC, 2, 1`, tenant, f.All, f.Order, f.Line)
+	if err != nil {
+		return nil, err
 	}
-	for i := 0; i < len(out); i++ {
-		for j := i + 1; j < len(out); j++ {
-			a, b := out[i], out[j]
-			if (a.LabelID == nil && b.LabelID != nil) || (a.LabelID != nil) == (b.LabelID != nil) && b.TotalKobo > a.TotalKobo {
-				out[i], out[j] = b, a
-			}
-		}
-	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ThingGroup, error) {
+		var g ThingGroup
+		err := r.Scan(&g.LabelID, &g.Label, &g.Count, &g.TotalKobo)
+		return g, err
+	})
 	if out == nil {
 		out = []ThingGroup{}
 	}
-	return out
+	return out, err
 }
 
 // NewThing is a row added by hand: anything bought before Taskiem or
@@ -236,13 +237,33 @@ func (c ThingChange) Sells() bool {
 	return c.Status != nil && *c.Status == KeptSold && c.SalePriceKobo != nil
 }
 
+// SaleReference is the money log's reference of a thing's sale: one per
+// thing, whatever it was paid in.
+func SaleReference(id uuid.UUID) string { return "thing-sale:" + id.String() }
+
 // ChangeThingTx changes a row: its status (sold, broken, given away, gone,
 // or had again), serial, warranty, note or label. Sold with a price
-// records the money in once (log), the row naming it; key makes it once.
+// records the money in once (log), the row naming it and keeping key: the
+// same sale with the same key again changes nothing and returns the row
+// (a retry whose answer was lost); another is refused, recorded already.
+// The row is locked first, so two sales at once are one after the other.
 func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c ThingChange, actor, key string, log *moneylog.Log) (Thing, error) {
+	var saleKey string
+	var saleKobo *int64
+	err := tx.QueryRow(ctx, `SELECT COALESCE(t.sale_key, ''), (SELECT e.amount_kobo FROM money_entries e WHERE e.tenant_id = t.tenant_id AND e.id = t.sale_entry_id)
+		FROM kept_things t WHERE t.tenant_id = $1 AND t.id = $2 FOR UPDATE OF t`, tenant, id).Scan(&saleKey, &saleKobo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Thing{}, ErrNoThing
+	}
+	if err != nil {
+		return Thing{}, err
+	}
 	t, err := ThingTx(ctx, tx, tenant, id)
 	if err != nil {
 		return t, err
+	}
+	if c.Sells() && t.SaleEntryID != nil && key != "" && saleKey == key && saleKobo != nil && *saleKobo == *c.SalePriceKobo {
+		return t, nil
 	}
 	if c.Status != nil {
 		switch *c.Status {
@@ -287,8 +308,17 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 		if c.SalePaidHow != Cash && c.SalePaidHow != Transfer {
 			return t, fmt.Errorf("%w: paid in cash or by transfer", ErrPurchase)
 		}
-		if log == nil || key == "" {
-			return t, fmt.Errorf("%w: an idempotency key", ErrPurchase)
+		if log == nil || key == "" || len(key) > 255 {
+			return t, fmt.Errorf("%w: an idempotency key, up to 255 characters", ErrPurchase)
+		}
+		// One sale's money whatever it was paid in: the log's key holds the
+		// channel, so look for the reference on any.
+		var had bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM money_entries WHERE tenant_id = $1 AND channel IN ('cash', 'bank') AND reference = $2)`, tenant, SaleReference(id)).Scan(&had); err != nil {
+			return t, err
+		}
+		if had {
+			return t, fmt.Errorf("%w: the sale of %s was recorded already", ErrPurchase, t.Name)
 		}
 		channel := "cash"
 		if c.SalePaidHow == Transfer {
@@ -298,7 +328,7 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 		// The money in: never the thing's own label (a machine sold is not
 		// negative spending on machines), labelled by its category.
 		e, _, err := log.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "in", Kind: "cash", Status: "settled", Channel: channel,
-			Reference: "thing-sale:" + id.String(), AmountKobo: &amount, OccurredAt: &now, Source: "entered", Category: SaleCategory,
+			Reference: SaleReference(id), AmountKobo: &amount, OccurredAt: &now, Source: "entered", Category: SaleCategory,
 			Description: cut("Sold: "+t.Name, 300), EnteredBy: actor})
 		if err != nil {
 			return t, err
@@ -307,9 +337,10 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 	}
 	if _, err := tx.Exec(ctx, `UPDATE kept_things SET status = COALESCE($3, status), serial = CASE WHEN $4 THEN NULLIF($5, '') ELSE serial END,
 		warranty_until = CASE WHEN $6 THEN $7::date ELSE warranty_until END, note = CASE WHEN $8 THEN NULLIF($9, '') ELSE note END,
-		label_id = CASE WHEN $10 THEN NULL WHEN $11::uuid IS NOT NULL THEN $11 ELSE label_id END, sale_entry_id = COALESCE($12, sale_entry_id)
+		label_id = CASE WHEN $10 THEN NULL WHEN $11::uuid IS NOT NULL THEN $11 ELSE label_id END, sale_entry_id = COALESCE($12, sale_entry_id),
+		sale_key = CASE WHEN $12::uuid IS NOT NULL THEN $13 ELSE sale_key END
 		WHERE tenant_id = $1 AND id = $2`, tenant, id, c.Status, c.Serial != nil, deref(c.Serial), c.WarrantyUntil != nil, warranty, c.Note != nil, deref(c.Note),
-		c.ClearLabel, c.LabelID, entry); err != nil {
+		c.ClearLabel, c.LabelID, entry, key); err != nil {
 		return t, err
 	}
 	detail := map[string]any{"thing_id": id, "by": actor}

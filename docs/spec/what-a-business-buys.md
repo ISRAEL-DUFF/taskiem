@@ -166,6 +166,7 @@ There is no live stock to move. The new tables replace the catalogue's stock col
 - **No label** is allowed, and shows as **Not labelled**, so buying is never blocked by naming.
 - **Money reports** group spending by label. Lines added to stock are shown as **Bought to sell or make with**, and tracked lines as **Bought to keep**. Neither is a running cost.
   - In profit for a period, **Bought to keep** is left out: it is something the business has, not money spent running it.
+  - When a thing kept is sold with a price, profit counts the sale as what it sold for less what it cost: a gain or a loss.
   - **Bought to sell or make with** counts as today's stock bought.
   - Just-recorded lines are running costs under their labels.
 - **Expenses entered by hand** (`paid 15,000 diesel`) take a label like any other.
@@ -537,6 +538,10 @@ Names are keyed one way (review fix): the line's `name_key` and `supplier_items.
 
 **Things we have.** `GET /v1/things` (`table.read`; `all=true` with those no longer had; `group=label`, merged labels under the kept one), `GET /v1/things/{id}`, `POST /v1/things` and `PATCH /v1/things/{id}` (`table.edit`). Sold with `sale_price_kobo` needs `invoice.manage`: one money-log entry in (`thing-sale:<id>`, category **Sale of things we had**, no label), its id on the row.
 
+- **Two sales at once** (U3 review fix): `ChangeThingTx` locks the row `FOR UPDATE` before it reads it, and refuses a sale when any entry has the reference `thing-sale:<id>` (cash or bank: the log's key holds the channel, so one sold in cash and one by transfer at once had made two entries). Test: `stock.TestThingSoldTwiceAtOnce`, two transactions.
+- **A sale retried** (U3 review fix, migration 00506): the row keeps the sale's key (`kept_things.sale_key`); the same sale with the same `Idempotency-Key` and price again answers 200 with the row as it is (a retry whose answer was lost); another key or price is 400, recorded already. Without a header the key is the row's id. Tests: `TestBuyingByTreatment`, `api.TestBuyingThroughALink`.
+- **Counted over every row** (U3 review fix): `GET /v1/things` lists up to 2,000 rows (`stock.MaxThings`), but `count`, `total_kobo` and `groups` are summed in SQL over every row had (`ThingTotalsTx`, `ThingGroupsTx`), not over the rows listed. `?order=<purchase_order_id>` and `?line=<purchase_line_id>` keep the rows that came on that order or line (with `all=true`, those no longer had too); `count`, `total_kobo` and `groups` are then of the rows had that they keep. Test: `stock.TestThingTotalsAndFilters`.
+
 **Web and app.** Types only: `PurchaseLine` and `ItemLink` follow; Prices and the order sheet find our item through the memory's stock item. The app's client is unchanged (it calls none of these). No screens (U2a).
 
 **Not done:** labels made or suggested by name (the money side's); U2b's chat question (chat drafts as suggested).
@@ -553,6 +558,7 @@ Names are keyed one way (review fix): the line's `name_key` and `supplier_items.
 - **Merges at once** (review fix, migration 00505): `taskiem_spend_label_merge` locks the label merged into `FOR SHARE` whatever it is and reads its `merged_into` after the lock (00503 locked it only when already merged, so merging L into K and K into M at once made a chain L→K→M); merging a label others are merged into is refused as before, with its own row locked. `MergeTx` locks the label kept `FOR UPDATE` when `into` is merged and reads it again. Two merges at once may deadlock: one is rolled back (40P01, retried by `InTenantTxRetry`). Test: `spend.TestLabelMergeRace`, two transactions in both orders.
 - **A key paid once** (review fix): `RecordPurchaseTx` writes nothing when any `purchase:<key>` or `purchase:<key>/2`…`/50` entry exists (cash or bank), so an order relabelled since its key was paid gets no part written again. (`PayTx` checked `purchase:<key>` on the order already, so its `paid_kobo` was not doubled.) Test: `spend.TestPurchaseKeyAfterRelabel`.
 - **Report.** `GET /v1/money/spending` (`moneyreport.SpendingOf`): settled expenses and bill payouts by label kept, each split by treatment: a purchase's entry by its order's lines under the same label kept now (`spend.EntryPartsTx`; the whole order if no line has it any more), a payout by its bill's lines. Profit is own money in less fees and costs, leaving out Bought to keep.
+- **A thing we had, sold** (U3 review fix): its sale's money in (Sale of things we had) was all profit, though what it cost was never a cost (Bought to keep). `costs_kobo` now adds the `cost_kobo` of each row on Things we have whose sale's entry (`sale_entry_id`) is settled money in in the period, so the sale counts as price less cost, a gain or a loss; a row with no cost counts the whole price. A thing bought in one period and sold in another counts its cost when sold. Test: `moneyreport.TestSpendingThingSoldAtALoss` (bought for ₦500,000, sold for ₦300,000: profit −₦200,000).
 
 ### As built: U2a (web)
 

@@ -14126,7 +14126,7 @@ paths:
       tags:
       - Stock
       summary: Things we have
-      description: 'What the business keeps track of (what a business buys §5.3), the newest first: those had, or with all=true also those sold, broken, given away or gone (in the history, out of the totals); count and total_kobo of those had, and with group=label, by label.'
+      description: 'What the business keeps track of (what a business buys §5.3), the newest first, up to 2,000 rows: those had, or with all=true also those sold, broken, given away or gone (in the history, out of the totals); order= and line= keep those that came on that purchase order or line. count and total_kobo are of every row had (status have) that the filters keep, not only the rows listed; with group=label, the same by label.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -14142,6 +14142,18 @@ paths:
         schema:
           type: string
           enum: [label]
+      - name: order
+        in: query
+        description: A purchase order's id; only the rows that came on it.
+        schema:
+          type: string
+          format: uuid
+      - name: line
+        in: query
+        description: A purchase line's id; only the rows that came on it.
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Done
@@ -14157,8 +14169,10 @@ paths:
                       $ref: '#/components/schemas/Thing'
                   count:
                     type: integer
+                    description: The rows had (status have) that the filters keep, all of them.
                   total_kobo:
                     type: integer
+                    description: What those had cost.
                   groups:
                     type: array
                     items:
@@ -14272,7 +14286,7 @@ paths:
       tags:
       - Stock
       summary: Change one of Things we have
-      description: 'Its status (sold, broken, given away, gone, or had again), serial, warranty, note or label. Sold with sale_price_kobo is money in, labelled Sale of things we had, recorded once: it needs invoice.manage too (403 without).'
+      description: 'Its status (sold, broken, given away, gone, or had again), serial, warranty, note or label. Sold with sale_price_kobo is money in, labelled Sale of things we had, recorded once: it needs invoice.manage too (403 without). The same sale again with the same Idempotency-Key and price (a retry) answers 200 with the row as it is; another is 400, recorded already.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -14292,7 +14306,7 @@ paths:
         schema:
           type: string
           maxLength: 255
-        description: Records a sale's money once
+        description: Records a sale's money once; the same sale with the same key again answers the row as it is
       requestBody:
         required: true
         content:
@@ -50024,7 +50038,7 @@ components:
               type: integer
             costs_kobo:
               type: integer
-              description: Spending less Bought to keep.
+              description: Spending less Bought to keep, plus what the things we had cost whose sale's money (Sale of things we had) came in in the period, so each sale counts as price less cost.
             profit_kobo:
               type: integer
     MoneySummary:

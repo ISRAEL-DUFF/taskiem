@@ -49,7 +49,10 @@ type LabelSpend struct {
 
 // Profit is a period's own money in less what running the business cost:
 // fees, running costs and stock bought (Bought to sell or make with).
-// Bought to keep is left out: it is something the business has.
+// Bought to keep is left out: it is something the business has. A thing
+// we had, sold with a price (money in labelled Sale of things we had),
+// counts its cost when sold: CostsKobo holds the cost of the things whose
+// sale's money came in in the period, so each counts price less cost.
 type Profit struct {
 	InKobo     int64 `json:"in_kobo"`
 	FeesKobo   int64 `json:"fees_kobo"`
@@ -197,7 +200,16 @@ func SpendingOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.
 	if err != nil {
 		return out, err
 	}
-	out.Profit = Profit{InKobo: s.OwnInSettled, FeesKobo: s.FeesKobo, CostsKobo: out.TotalKobo - out.ToKeepKobo}
+	// A thing we had, sold with a price in the period: its money in is in
+	// InKobo, and what it cost (Bought to keep when bought, so never a
+	// cost) counts now, so the sale is a gain or a loss of price less cost.
+	var sold int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(sum(t.cost_kobo), 0)::bigint FROM (`+latest+`) m
+		JOIN kept_things t ON t.tenant_id = $1 AND t.sale_entry_id = m.movement
+		WHERE m.currency = 'NGN' AND m.direction = 'in' AND m.status = 'settled'`, tenant, from, to).Scan(&sold); err != nil {
+		return out, err
+	}
+	out.Profit = Profit{InKobo: s.OwnInSettled, FeesKobo: s.FeesKobo, CostsKobo: out.TotalKobo - out.ToKeepKobo + sold}
 	out.Profit.ProfitKobo = out.Profit.InKobo - out.Profit.FeesKobo - out.Profit.CostsKobo
 	return out, nil
 }

@@ -1679,8 +1679,8 @@ class TaskiemApi {
   }
 
   /// Things we have (`GET /v1/things`)
-  Future<ListThingsResponse> listThings({String? all, String? group}) async {
-    final j = await _t.send('GET', '/v1/things', query: {'all': ?all, 'group': ?group});
+  Future<ListThingsResponse> listThings({String? all, String? group, String? order, String? line}) async {
+    final j = await _t.send('GET', '/v1/things', query: {'all': ?all, 'group': ?group, 'order': ?order, 'line': ?line});
     return ListThingsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -14390,9 +14390,11 @@ class MergeSpendLabelRequest {
 class ListThingsResponse {
   const ListThingsResponse({required this.count, this.groups, required this.things, required this.totalKobo});
 
+  /// The rows had (status have) that the filters keep, all of them.
   final int count;
   final List<ListThingsResponseGroupsItem>? groups;
   final List<Thing> things;
+  /// What those had cost.
   final int totalKobo;
 
   factory ListThingsResponse.fromJson(Map<String, dynamic> j) => ListThingsResponse(
@@ -14695,7 +14697,9 @@ class MoneySpendingLabelsItem {
 class MoneySpendingProfit {
   const MoneySpendingProfit({required this.costsKobo, required this.feesKobo, required this.inKobo, required this.profitKobo});
 
-  /// Spending less Bought to keep.
+  /// Spending less Bought to keep, plus what the things we had cost whose
+  /// sale's money (Sale of things we had) came in in the period, so each sale
+  /// counts as price less cost.
   final int costsKobo;
   final int feesKobo;
   /// The period's own money in, settled (less money collected for others).
