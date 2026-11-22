@@ -136,7 +136,7 @@ func (s *Server) putMePin(w http.ResponseWriter, r *http.Request) {
 				s.fail(w, r, err)
 				return
 			}
-			var methods []string
+			methods := []string{}
 			if f.Passkey {
 				methods = append(methods, "passkey")
 			}

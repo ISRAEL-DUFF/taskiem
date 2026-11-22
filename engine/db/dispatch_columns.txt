@@ -1453,6 +1453,7 @@ whatsapp_outbox.tenant_id
 whatsapp_pins.failed_since
 whatsapp_pins.failures
 whatsapp_pins.locked_until
+whatsapp_pins.pays_from
 whatsapp_pins.pin_hash
 whatsapp_pins.set_at
 whatsapp_pins.user_id
