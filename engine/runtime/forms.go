@@ -97,7 +97,7 @@ func starterOf(ctx context.Context, tx pgx.Tx, run uuid.UUID) (map[string]any, e
 			parent, _, _ := strings.Cut(rest, "/")
 			id, err := uuid.Parse(parent)
 			if err != nil {
-				return out, nil
+				return out, nil //nolint:nilerr // a parent no id names: nobody to ask
 			}
 			run = id
 			continue
