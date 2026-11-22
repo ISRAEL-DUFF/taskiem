@@ -272,7 +272,7 @@ for (const width of [390, 360])
       bank_name: "Guaranty Trust Bank",
       amount_kobo: 4_500_000,
       name: "Chidi Okeke",
-      source: { kind: "link", chat: link, message: expect.any(String) },
+      source: expect.objectContaining({ kind: "link", chat: link, message: expect.any(String) }),
     });
     const bar = pane.getByTestId("pay-list-bar");
     await expect(bar.getByTestId("pay-list-count")).toHaveText("1 to pay · ₦45,000");
@@ -293,7 +293,7 @@ for (const width of [390, 360])
     await cmsg("Pay Tunde").getByTestId("pay-chip-add").click();
     await expect(cbar.getByTestId("pay-list-count")).toHaveText("3 to pay · ₦95,000");
     await expect(cbar.getByTestId("pay-list-needs")).toHaveText("1 needs an amount");
-    expect(api.s.calls.filter((c) => c.method === "POST" && c.path === "/v1/pay-collection").pop()?.body.source).toEqual({ kind: "customer", chat: CUSTOMER, message: "cm0" });
+    expect(api.s.calls.filter((c) => c.method === "POST" && c.path === "/v1/pay-collection").pop()?.body.source).toMatchObject({ kind: "customer", chat: CUSTOMER, message: "cm0" });
     // (The toasts dismissed, so the foot is seen.)
     for (const x of await page.locator(".toast-close").all()) await x.click();
     await expect(page.locator(".toast")).toHaveCount(0);

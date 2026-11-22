@@ -20,6 +20,8 @@ export interface CollectedSource {
   kind: ChatKind | "photo";
   chat: string;
   message: string;
+  /** Who sent it (a group's name), kept by the server for every device. */
+  from?: string;
 }
 
 /** A row of the list (GET /v1/pay-collection), the account masked. */
@@ -59,7 +61,8 @@ export interface ChatPlace {
 
 /** The source a message's row is added with. */
 export function sourceFor(chat: ChatPlace, message: string, photo = false): CollectedSource {
-  return photo ? { kind: "photo", chat: `${chat.kind}:${chat.id}`, message } : { kind: chat.kind, chat: chat.id, message };
+  const from = chat.name?.trim() ? { from: chat.name.trim().slice(0, 80) } : {};
+  return photo ? { kind: "photo", chat: `${chat.kind}:${chat.id}`, message, ...from } : { kind: chat.kind, chat: chat.id, message, ...from };
 }
 
 /** The body of POST /v1/pay-collection for a message's reading: the saved
@@ -141,7 +144,7 @@ export const chatKey = (kind: ChatKind, id: string) => `${kind}:${id}`;
 export function sourceWords(s: CollectedSource | null, names: Record<string, string> = {}): string {
   const c = sourceChat(s);
   if (!c) return "added by hand";
-  const name = names[chatKey(c.kind, c.id)]?.trim();
+  const name = s?.from?.trim() || names[chatKey(c.kind, c.id)]?.trim();
   const what = c.photo ? "a photo" : "a message";
   if (c.kind === "taskiem") return `from ${what} in your chat with Taskiem`;
   if (c.kind === "group") return name ? `from ${what} in ${name}` : `from ${what} in a group`;

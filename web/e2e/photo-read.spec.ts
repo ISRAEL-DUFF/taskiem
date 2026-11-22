@@ -312,7 +312,13 @@ test("a customer chat's photo: Pay this account and Save the account", async ({ 
   await menu("Add to the list");
   await expect(page.locator(".toast").filter({ hasText: "Added: 1 to pay" })).toBeVisible();
   expect(added).toEqual([
-    { account_number: "0123456789", bank_name: "Access Bank", amount_kobo: 4_500_000, name: "Chidi Okafor", source: { kind: "photo", chat: `customer:${chat.id}`, message: "m2" } },
+    {
+      account_number: "0123456789",
+      bank_name: "Access Bank",
+      amount_kobo: 4_500_000,
+      name: "Chidi Okafor",
+      source: expect.objectContaining({ kind: "photo", chat: `customer:${chat.id}`, message: "m2" }),
+    },
   ]);
   await expect(pane.getByTestId("pay-list-count")).toHaveText("1 to pay · ₦45,000");
   // On the list already: said, and not sent again.

@@ -96,7 +96,7 @@ The same sheet with a list: each row is a person, an amount and what it is for. 
 **Filling the list:**
 
 - **Pick** from payees, staff, riders, and suppliers you owe (each bill's balance prefilled).
-- **From messages:** "Pay this account" on several messages adds each to one list ("3 to pay" stays at the foot of the chat until sent or cleared).
+- **From messages:** **Add to the list** beside "Pay this account" adds each message to one list, the person's own across every chat and kept by Taskiem (so it is the same on the web and the phone), once per message and checked as a payee is (staff add saved accounts); "3 to pay" stays at the foot of each chat until sent or cleared. **Pay these** makes it a batch once every row has an amount; its rows leave the list when it is sent and come back if it is cancelled.
 - **Paste or photograph a list:** "Chidi 0123456789 GTBank 45k" one per line, or a photo of a handwritten list. Each line becomes a row to check; a line that can't be read is shown as it was, to fix.
 - **Copy last time's:** "Same as last Friday" for the riders' weekly pay.
 
