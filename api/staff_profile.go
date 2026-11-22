@@ -148,6 +148,8 @@ func (s *Server) getStaff(w http.ResponseWriter, r *http.Request) {
 		Profile staffProfile `json:"profile"`
 		// PayAccount: the saved account payments outside payroll go to.
 		PayAccount *staffPayAccount `json:"pay_account"`
+		// Payrolla: who they are in the business's Payrolla.
+		Payrolla *staffPayrolla `json:"payrolla"`
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		people, err := staffPeopleTx(r.Context(), tx, p, user, show)
@@ -161,7 +163,10 @@ func (s *Server) getStaff(w http.ResponseWriter, r *http.Request) {
 		if out.Profile, err = staffProfileTx(r.Context(), tx, p.TenantID, user); err != nil {
 			return err
 		}
-		out.PayAccount, err = staffPayAccountTx(r.Context(), tx, p.TenantID, user)
+		if out.PayAccount, err = staffPayAccountTx(r.Context(), tx, p.TenantID, user); err != nil {
+			return err
+		}
+		out.Payrolla, err = staffPayrollaTx(r.Context(), tx, p.TenantID, user)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)

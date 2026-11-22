@@ -881,6 +881,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
+			// Payroll is Payrolla's (payroll.go): its runs in Taskiem's screens,
+			// and staff linked to its employees.
+			r.With(s.need(PermPayrollRead)).Get("/payroll", s.getPayroll)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/runs/{run}", s.getPayrollRun)
+			r.With(s.need(PermPayrollRead)).Get("/payroll/staff", s.getPayrollStaff)
+			r.With(s.need(PermPayrollRead), s.tenantWide).Put("/staff/{user}/payrolla", s.putStaffPayrolla)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

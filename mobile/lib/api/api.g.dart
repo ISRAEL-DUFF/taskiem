@@ -1663,6 +1663,30 @@ class TaskiemApi {
     return PutStaffPayAccountResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The payroll, from Payrolla (`GET /v1/payroll`)
+  Future<GetPayrollResponse> getPayroll({String? cursor, String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll', query: {'cursor': ?cursor, 'connection': ?connection});
+    return GetPayrollResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One payroll run, from Payrolla (`GET /v1/payroll/runs/{run}`)
+  Future<GetPayrollRunResponse> getPayrollRun({required String run, String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll/runs/${Uri.encodeComponent(run)}', query: {'connection': ?connection});
+    return GetPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Staff and who they are in Payrolla (`GET /v1/payroll/staff`)
+  Future<GetPayrollStaffResponse> getPayrollStaff({String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll/staff', query: {'connection': ?connection});
+    return GetPayrollStaffResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Who a staff member is in Payrolla (`PUT /v1/staff/{user}/payrolla`)
+  Future<PutStaffPayrollaResponse> putStaffPayrolla({required PutStaffPayrollaRequest body, required String user}) async {
+    final j = await _t.send('PUT', '/v1/staff/${Uri.encodeComponent(user)}/payrolla', body: body.toJson());
+    return PutStaffPayrollaResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Batches of payments, the newest first (`GET /v1/payment-batches`)
   Future<ListPaymentBatchesResponse> listPaymentBatches() async {
     final j = await _t.send('GET', '/v1/payment-batches');
@@ -14334,6 +14358,309 @@ class PutStaffPayAccountResponse {
 
   Map<String, dynamic> toJson() => {
         'pay_account': ?payAccount,
+      };
+}
+
+class GetPayrollResponse {
+  const GetPayrollResponse({this.company, required this.connected, this.connection, this.nextCursor, required this.runs, this.test});
+
+  final GetPayrollResponseCompany? company;
+  final bool connected;
+  final String? connection;
+  final String? nextCursor;
+  final List<PayrollRun> runs;
+  final bool? test;
+
+  factory GetPayrollResponse.fromJson(Map<String, dynamic> j) => GetPayrollResponse(
+        company: j['company'] == null ? null : GetPayrollResponseCompany.fromJson(j['company'] as Map<String, dynamic>),
+        connected: j['connected'] as bool,
+        connection: j['connection'] == null ? null : j['connection'] as String,
+        nextCursor: j['next_cursor'] == null ? null : j['next_cursor'] as String,
+        runs: (j['runs'] as List).map((e) => PayrollRun.fromJson(e as Map<String, dynamic>)).toList(),
+        test: j['test'] == null ? null : j['test'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'company': ?company?.toJson(),
+        'connected': connected,
+        'connection': ?connection,
+        'next_cursor': ?nextCursor,
+        'runs': runs.map((e) => e.toJson()).toList(),
+        'test': ?test,
+      };
+}
+
+class GetPayrollResponseCompany {
+  const GetPayrollResponseCompany({required this.name, required this.payFrequency});
+
+  final String name;
+  final String payFrequency;
+
+  factory GetPayrollResponseCompany.fromJson(Map<String, dynamic> j) => GetPayrollResponseCompany(
+        name: j['name'] as String,
+        payFrequency: j['pay_frequency'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'pay_frequency': payFrequency,
+      };
+}
+
+/// A payroll run as Payrolla keeps it
+class PayrollRun {
+  const PayrollRun({required this.awaitingApproval, required this.employeeCount, required this.payDate, required this.periodEnd, required this.periodStart, required this.runId, required this.runType, required this.status, required this.totalGrossKobo, required this.totalNetKobo});
+
+  final bool awaitingApproval;
+  final int employeeCount;
+  final String payDate;
+  final String periodEnd;
+  final String periodStart;
+  final String runId;
+  final String runType;
+  /// DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED,
+  /// PARTIALLY_COMPLETED, CANCELLED or FAILED
+  final String status;
+  final int totalGrossKobo;
+  final int totalNetKobo;
+
+  factory PayrollRun.fromJson(Map<String, dynamic> j) => PayrollRun(
+        awaitingApproval: j['awaiting_approval'] as bool,
+        employeeCount: (j['employee_count'] as num).toInt(),
+        payDate: j['pay_date'] as String,
+        periodEnd: j['period_end'] as String,
+        periodStart: j['period_start'] as String,
+        runId: j['run_id'] as String,
+        runType: j['run_type'] as String,
+        status: j['status'] as String,
+        totalGrossKobo: (j['total_gross_kobo'] as num).toInt(),
+        totalNetKobo: (j['total_net_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'awaiting_approval': awaitingApproval,
+        'employee_count': employeeCount,
+        'pay_date': payDate,
+        'period_end': periodEnd,
+        'period_start': periodStart,
+        'run_id': runId,
+        'run_type': runType,
+        'status': status,
+        'total_gross_kobo': totalGrossKobo,
+        'total_net_kobo': totalNetKobo,
+      };
+}
+
+class GetPayrollRunResponse {
+  const GetPayrollRunResponse({this.approvalUrl, required this.connection, required this.counts, required this.lines, required this.run});
+
+  final String? approvalUrl;
+  final String connection;
+  final GetPayrollRunResponseCounts counts;
+  final List<GetPayrollRunResponseLinesItem> lines;
+  final GetPayrollRunResponseRun run;
+
+  factory GetPayrollRunResponse.fromJson(Map<String, dynamic> j) => GetPayrollRunResponse(
+        approvalUrl: j['approval_url'] == null ? null : j['approval_url'] as String,
+        connection: j['connection'] as String,
+        counts: GetPayrollRunResponseCounts.fromJson(j['counts'] as Map<String, dynamic>),
+        lines: (j['lines'] as List).map((e) => GetPayrollRunResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        run: GetPayrollRunResponseRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approval_url': ?approvalUrl,
+        'connection': connection,
+        'counts': counts.toJson(),
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'run': run.toJson(),
+      };
+}
+
+class GetPayrollRunResponseCounts {
+  const GetPayrollRunResponseCounts({required this.failed, required this.paid, required this.returned, required this.waiting});
+
+  final int failed;
+  final int paid;
+  final int returned;
+  final int waiting;
+
+  factory GetPayrollRunResponseCounts.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseCounts(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'returned': returned,
+        'waiting': waiting,
+      };
+}
+
+class GetPayrollRunResponseLinesItem {
+  const GetPayrollRunResponseLinesItem({required this.employeeId, required this.name, required this.netKobo, required this.payslipId, this.reason, this.reference, this.staff, required this.state, required this.status});
+
+  final String employeeId;
+  final String name;
+  final int netKobo;
+  final String payslipId;
+  final String? reason;
+  final String? reference;
+  final Object? staff;
+  final String state;
+  final String status;
+
+  factory GetPayrollRunResponseLinesItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseLinesItem(
+        employeeId: j['employee_id'] as String,
+        name: j['name'] as String,
+        netKobo: (j['net_kobo'] as num).toInt(),
+        payslipId: j['payslip_id'] as String,
+        reason: j['reason'] == null ? null : j['reason'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        staff: j['staff'],
+        state: j['state'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee_id': employeeId,
+        'name': name,
+        'net_kobo': netKobo,
+        'payslip_id': payslipId,
+        'reason': ?reason,
+        'reference': ?reference,
+        'staff': ?staff,
+        'state': state,
+        'status': status,
+      };
+}
+
+class GetPayrollRunResponseRun {
+  const GetPayrollRunResponseRun({this.approvedAt, this.createdAt, this.lockedAt, required this.summary, this.updatedAt});
+
+  final Object? approvedAt;
+  final Object? createdAt;
+  final Object? lockedAt;
+  final PayrollRun summary;
+  final Object? updatedAt;
+
+  factory GetPayrollRunResponseRun.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseRun(
+        approvedAt: j['approved_at'],
+        createdAt: j['created_at'],
+        lockedAt: j['locked_at'],
+        summary: PayrollRun.fromJson(j['summary'] as Map<String, dynamic>),
+        updatedAt: j['updated_at'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approved_at': ?approvedAt,
+        'created_at': ?createdAt,
+        'locked_at': ?lockedAt,
+        'summary': summary.toJson(),
+        'updated_at': ?updatedAt,
+      };
+}
+
+class GetPayrollStaffResponse {
+  const GetPayrollStaffResponse({required this.connection, required this.employees, required this.staff});
+
+  final String connection;
+  final List<GetPayrollStaffResponseEmployeesItem> employees;
+  final List<GetPayrollStaffResponseStaffItem> staff;
+
+  factory GetPayrollStaffResponse.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponse(
+        connection: j['connection'] as String,
+        employees: (j['employees'] as List).map((e) => GetPayrollStaffResponseEmployeesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        staff: (j['staff'] as List).map((e) => GetPayrollStaffResponseStaffItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': connection,
+        'employees': employees.map((e) => e.toJson()).toList(),
+        'staff': staff.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GetPayrollStaffResponseEmployeesItem {
+  const GetPayrollStaffResponseEmployeesItem({this.department, required this.id, this.linkedTo, required this.name, required this.status});
+
+  final String? department;
+  final String id;
+  final Object? linkedTo;
+  final String name;
+  final String status;
+
+  factory GetPayrollStaffResponseEmployeesItem.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponseEmployeesItem(
+        department: j['department'] == null ? null : j['department'] as String,
+        id: j['id'] as String,
+        linkedTo: j['linked_to'],
+        name: j['name'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'department': ?department,
+        'id': id,
+        'linked_to': ?linkedTo,
+        'name': name,
+        'status': status,
+      };
+}
+
+class GetPayrollStaffResponseStaffItem {
+  const GetPayrollStaffResponseStaffItem({required this.name, this.payrolla, this.suggested, required this.userId});
+
+  final String name;
+  final Object? payrolla;
+  final Object? suggested;
+  final String userId;
+
+  factory GetPayrollStaffResponseStaffItem.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponseStaffItem(
+        name: j['name'] as String,
+        payrolla: j['payrolla'],
+        suggested: j['suggested'],
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'payrolla': ?payrolla,
+        'suggested': ?suggested,
+        'user_id': userId,
+      };
+}
+
+class PutStaffPayrollaRequest {
+  const PutStaffPayrollaRequest({this.connection, this.employeeId});
+
+  final String? connection;
+  final Object? employeeId;
+
+  factory PutStaffPayrollaRequest.fromJson(Map<String, dynamic> j) => PutStaffPayrollaRequest(
+        connection: j['connection'] == null ? null : j['connection'] as String,
+        employeeId: j['employee_id'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': ?connection,
+        'employee_id': ?employeeId,
+      };
+}
+
+class PutStaffPayrollaResponse {
+  const PutStaffPayrollaResponse({this.payrolla});
+
+  final Object? payrolla;
+
+  factory PutStaffPayrollaResponse.fromJson(Map<String, dynamic> j) => PutStaffPayrollaResponse(
+        payrolla: j['payrolla'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payrolla': ?payrolla,
       };
 }
 

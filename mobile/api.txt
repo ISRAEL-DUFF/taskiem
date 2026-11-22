@@ -355,6 +355,10 @@ getPayLimits
 putPayLimit
 # Where a staff member is paid, outside payroll (Pay on their page)
 putStaffPayAccount
+getPayroll
+getPayrollRun
+getPayrollStaff
+putStaffPayrolla
 
 # Pay several people (P3, docs/spec/chat-pay-people.md)
 listPaymentBatches

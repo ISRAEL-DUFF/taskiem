@@ -62,6 +62,8 @@ const (
 	// PermSavedManage is changing the business's saved things.
 	PermSavedManage = access.SavedManage
 	PermMoneyPay    = access.MoneyPay
+	// PermPayrollRead is seeing the payroll Payrolla keeps.
+	PermPayrollRead = access.PayrollRead
 	// PermTaskGive is giving staff tasks and seeing everyone's: those who
 	// run the business (staff_tasks.go).
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage

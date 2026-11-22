@@ -6247,6 +6247,195 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/payroll:
+    get:
+      operationId: getPayroll
+      tags:
+      - Payments
+      summary: The payroll, from Payrolla
+      description: 'Payroll is Payrolla''s (P4a): the company in the business''s Payrolla and its runs, newest first, read through the Payrolla connection; `{connected: false}` without one. Nothing here approves or pays: a run waiting for approval (`awaiting_approval`) is approved in Payrolla for now. 409 `scope_required` when the key cannot read payroll, `reconnect` when Payrolla refuses the key; 502 `payrolla_down`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The runs
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [connected, runs]
+                properties:
+                  connected: {type: boolean}
+                  connection: {type: string}
+                  test: {type: boolean}
+                  company:
+                    type: object
+                    required: [name, pay_frequency]
+                    properties:
+                      name: {type: string}
+                      pay_frequency: {type: string}
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PayrollRun'
+                  next_cursor: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/runs/{run}:
+    get:
+      operationId: getPayrollRun
+      tags:
+      - Payments
+      summary: One payroll run, from Payrolla
+      description: 'The run and its timeline, each person''s net pay and whether it arrived (`state`: paid, waiting, failed or returned, with Payrolla''s reason), the staff member each is in Taskiem, and Payrolla''s approval link while it waits for approval.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The run
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [run, lines, counts, connection]
+                properties:
+                  connection: {type: string}
+                  run:
+                    type: object
+                    required: [summary]
+                    properties:
+                      summary:
+                        $ref: '#/components/schemas/PayrollRun'
+                      created_at: {type: [string, 'null']}
+                      updated_at: {type: [string, 'null']}
+                      approved_at: {type: [string, 'null']}
+                      locked_at: {type: [string, 'null']}
+                  approval_url: {type: string, format: uri}
+                  counts:
+                    type: object
+                    required: [paid, waiting, failed, returned]
+                    properties:
+                      paid: {type: integer}
+                      waiting: {type: integer}
+                      failed: {type: integer}
+                      returned: {type: integer}
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [payslip_id, employee_id, name, net_kobo, status, state, staff]
+                      properties:
+                        payslip_id: {type: string}
+                        employee_id: {type: string}
+                        name: {type: string}
+                        net_kobo: {type: integer}
+                        status: {type: string}
+                        state: {type: string, enum: [paid, waiting, failed, returned]}
+                        reference: {type: string}
+                        reason: {type: string}
+                        staff:
+                          oneOf:
+                          - type: 'null'
+                          - type: object
+                            required: [user_id, name]
+                            properties:
+                              user_id: {type: string, format: uuid}
+                              name: {type: string}
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/payroll/staff:
+    get:
+      operationId: getPayrollStaff
+      tags:
+      - Payments
+      summary: Staff and who they are in Payrolla
+      description: 'Each staff member with who they are in the business''s Payrolla (`payrolla`), or who they look to be (`suggested`: the one employee with the same sign-in email or chat number, not linked yet and not terminated) for an owner to confirm; and Payrolla''s employees (up to 500) for choosing by hand.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      parameters:
+      - name: connection
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The staff and the employees
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [staff, employees, connection]
+                properties:
+                  connection: {type: string}
+                  staff:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [user_id, name, payrolla, suggested]
+                      properties:
+                        user_id: {type: string, format: uuid}
+                        name: {type: string}
+                        payrolla:
+                          oneOf:
+                          - type: 'null'
+                          - $ref: '#/components/schemas/StaffPayrolla'
+                        suggested:
+                          oneOf:
+                          - type: 'null'
+                          - type: object
+                            required: [employee_id, name, by]
+                            properties:
+                              employee_id: {type: string}
+                              name: {type: string}
+                              by: {type: string, enum: [email, phone]}
+                  employees:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name, status, linked_to]
+                      properties:
+                        id: {type: string}
+                        name: {type: string}
+                        department: {type: string}
+                        status: {type: string}
+                        linked_to: {type: [string, 'null'], format: uuid}
+        default:
+          $ref: '#/components/responses/Error'
   /v1/payments:
     get:
       operationId: listPayments
@@ -30253,6 +30442,10 @@ paths:
                     oneOf:
                     - type: 'null'
                     - $ref: '#/components/schemas/StaffPayAccount'
+                  payrolla:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/StaffPayrolla'
         default:
           $ref: '#/components/responses/Error'
   /v1/staff/{user}/pay-account:
@@ -30304,6 +30497,54 @@ paths:
                     oneOf:
                     - type: 'null'
                     - $ref: '#/components/schemas/StaffPayAccount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/payrolla:
+    put:
+      operationId: putStaffPayrolla
+      tags:
+      - Account
+      summary: Who a staff member is in Payrolla
+      description: 'An owner confirms which of the business''s Payrolla employees a staff member is (`employee_id`; left out or null removes the link): the Payroll page names them, and Payrolla''s messages about their pay reach their own chat. Only Payrolla''s id and name are kept. 403 `owner_only` for anyone else; 404 `no_employee`; 409 `taken` when another staff member is that employee.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: payroll.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                employee_id:
+                  type: [string, 'null']
+                connection:
+                  type: string
+      responses:
+        '200':
+          description: Linked (or unlinked)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [payrolla]
+                properties:
+                  payrolla:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/StaffPayrolla'
         default:
           $ref: '#/components/responses/Error'
   /v1/staff/{user}/profile:
@@ -45621,6 +45862,32 @@ components:
               payment: {type: string, format: uuid}
               code: {type: string}
               problem: {type: string}
+    PayrollRun:
+      type: object
+      additionalProperties: false
+      description: A payroll run as Payrolla keeps it
+      required: [run_id, period_start, period_end, pay_date, run_type, status, employee_count, total_gross_kobo, total_net_kobo, awaiting_approval]
+      properties:
+        run_id: {type: string}
+        period_start: {type: string}
+        period_end: {type: string}
+        pay_date: {type: string}
+        run_type: {type: string}
+        status: {type: string, description: 'DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED, PARTIALLY_COMPLETED, CANCELLED or FAILED'}
+        employee_count: {type: integer}
+        total_gross_kobo: {type: integer}
+        total_net_kobo: {type: integer}
+        awaiting_approval: {type: boolean}
+    StaffPayrolla:
+      type: object
+      additionalProperties: false
+      description: Who a staff member is in the business's Payrolla
+      required: [employee_id, name]
+      properties:
+        employee_id: {type: string}
+        name: {type: string}
+        linked_by_name: {type: string}
+        linked_at: {type: string, format: date-time}
     StaffPayAccount:
       type: object
       description: The saved account payments to a staff member go to (outside payroll), masked

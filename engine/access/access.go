@@ -84,6 +84,11 @@ const (
 	// within the limits the owner sets for the role (pay_limits); over them,
 	// the owner's OK. The owner's alone unless given to a role.
 	MoneyPay = "money.pay"
+	// PayrollRead sees the business's payroll as Payrolla keeps it (P4a;
+	// payroll is Payrolla's): its runs, each person's net pay and whether
+	// it arrived, and links staff to Payrolla's employees. The owner's
+	// alone unless given to a role: it shows what people earn.
+	PayrollRead = "payroll.read"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -91,7 +96,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -132,6 +137,7 @@ var Descriptions = map[string]string{
 	OrderHandle:      "Work the orders: see them, accept or decline, ready and send them out, and offer them to riders (not the storefront's settings, prices or refunds)",
 	SavedManage:      "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
 	MoneyPay:         "Pay people from the business's payments account, each payment with a passkey, within the limits the owner sets (over them, the owner's OK)",
+	PayrollRead:      "See the payroll from Payrolla: each run, what each person is paid and whether it arrived (it shows what people earn)",
 }
 
 // Gate is the built-in role of the person at the school gate: the gate
