@@ -40,12 +40,16 @@ void main() {
     final auth = f.auth(
       also: (req) async {
         if (req.method == 'GET') sent.add('GET ${req.url.path}${req.url.query.isEmpty ? '' : '?${req.url.query}'}');
+        if (req.method == 'GET' && req.url.path.startsWith('/v1/things/')) {
+          final m = _more.where((x) => x['id'] == req.url.path.split('/').last).firstOrNull;
+          if (m != null) return ok({'thing': m});
+        }
         final a = thingsAnswers(req) ?? treatAnswers(req);
         if (a != null) return a;
         if (req.method == 'GET') return null;
         sent.add('${req.method} ${req.url.path} ${req.body}${req.headers['Idempotency-Key'] != null ? ' keyed' : ''}');
         if (req.method == 'PATCH' && req.url.path.startsWith('/v1/things/')) {
-          final was = things.firstWhere((t) => t['id'] == req.url.path.split('/').last);
+          final was = [...things, ..._more].firstWhere((t) => t['id'] == req.url.path.split('/').last);
           final b = jsonDecode(req.body) as Map<String, dynamic>;
           return ok({
             'thing': {...was, if (b['status'] != null) 'status': b['status'], 'status_at': '2026-11-22T10:00:00Z', if (b['sale_price_kobo'] != null) 'sale_entry_id': 'me-new'},
@@ -132,6 +136,46 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('sold without a price: the price added later, as money in', (t) async {
+    final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-5')));
+    expect(find.text('Add what it sold for'), findsOneWidget);
+    await snap(t, 'thing-sold-no-price');
+    await t.tap(find.text('Sold').last);
+    await t.pumpAndSettle();
+    expect(find.text('What it sold for'), findsOneWidget, reason: 'tapping Sold again asks the price too');
+    expect(find.text('Sold for (optional)'), findsNothing);
+    await snap(t, 'thing-add-price');
+    await t.tap(find.bySemanticsLabel('Add the price'));
+    await t.pumpAndSettle();
+    expect(sent.where((s) => s.startsWith('PATCH')), isEmpty, reason: 'no price, nothing to send');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Sold for')), matching: find.byType(EditableText)), '60000');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Sold for ₦60,000'));
+    await settle(t);
+    expect(sent.last, 'PATCH /v1/things/th-5 {"sale_paid_how":"cash","sale_price_kobo":6000000,"status":"sold"} keyed');
+    expect(find.text('₦60,000 in for Bicycle'), findsOneWidget);
+    expect(find.textContaining('its sale is in money in'), findsOneWidget);
+    expect(find.text('Add what it sold for'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+
+    // Someone who may not enter money is not offered it.
+    await open(t, (a) => ThingPage(auth: a, thing: _of('th-5')), perms: const ['table.read', 'table.edit', 'invoice.read']);
+    expect(find.text('Add what it sold for'), findsNothing);
+    await t.tap(find.text('Sold').last);
+    await t.pumpAndSettle();
+    expect(find.text('What it sold for'), findsNothing);
+  });
+
+  testWidgets('its sale recorded already: sold again without asking a price', (t) async {
+    final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-6')));
+    await t.tap(find.text('Sold').last);
+    await settle(t);
+    expect(find.text('Sold for (optional)'), findsNothing, reason: 'the server takes no second price');
+    expect(sent.last, 'PATCH /v1/things/th-6 {"status":"sold"}');
+    expect(find.text('Marked sold; its sale was recorded already'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('seen, not changed, without table.edit', (t) async {
     final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-2')), perms: const ['table.read']);
     expect(find.text('You can see this, not change it'), findsOneWidget);
@@ -199,5 +243,12 @@ void main() {
   });
 }
 
+/// Rows only these tests read: sold without a price, and had again after
+/// a sale with one.
+final _more = [
+  thing('th-5', 'Bicycle', status: 'sold', cost: 9000000, received: '2026-08-10T10:00:00Z'),
+  thing('th-6', 'Chest freezer', cost: 15000000, received: '2026-07-01T10:00:00Z', sale: 'me-7'),
+];
+
 /// A row of the fixture as the app reads it.
-Thing _of(String id) => Thing.fromJson(jsonDecode(jsonEncode(things.firstWhere((t) => t['id'] == id))) as Map<String, dynamic>);
+Thing _of(String id) => Thing.fromJson(jsonDecode(jsonEncode([...things, ..._more].firstWhere((t) => t['id'] == id))) as Map<String, dynamic>);
