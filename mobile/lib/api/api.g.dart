@@ -1830,6 +1830,12 @@ class TaskiemApi {
     return ListToolsResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Read words for a tool (`POST /v1/tools/{command}/read`)
+  Future<ReadToolResponse> readTool({required ReadToolRequest body, required String command}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/read', body: body.toJson());
+    return ReadToolResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Start a tool (`POST /v1/tools/{command}/start`)
   Future<ToolStart> startTool({required StartToolRequest body, required String command, String? idempotencyKey}) async {
     final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/start', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
@@ -15774,6 +15780,43 @@ class MadeToolCare {
   Map<String, dynamic> toJson() => {
         'because': ?because?.map((e) => e).toList(),
         'level': level,
+      };
+}
+
+class ReadToolRequest {
+  const ReadToolRequest({this.environment, required this.text});
+
+  final String? environment;
+  final String text;
+
+  factory ReadToolRequest.fromJson(Map<String, dynamic> j) => ReadToolRequest(
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'environment': ?environment,
+        'text': text,
+      };
+}
+
+class ReadToolResponse {
+  const ReadToolResponse({required this.command, required this.notes, required this.values});
+
+  final String command;
+  final List<String> notes;
+  final Map<String, dynamic> values;
+
+  factory ReadToolResponse.fromJson(Map<String, dynamic> j) => ReadToolResponse(
+        command: j['command'] as String,
+        notes: (j['notes'] as List).map((e) => e as String).toList(),
+        values: j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'command': command,
+        'notes': notes.map((e) => e).toList(),
+        'values': values,
       };
 }
 

@@ -36920,6 +36920,64 @@ paths:
                     format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/tools/{command}/read:
+    post:
+      operationId: readTool
+      tags:
+      - Tools
+      summary: Read words for a tool
+      description: 'The reader for a tool''s form (made tools M3): words in, proposed values out, so "/expense 4500 diesel" opens the form filled in. A tool with one input takes the words as it; any other is read by the model within the business''s AI budget, told only the tool''s name, about and inputs. A value written @name is the business''s saved thing of that name, looked up here (an address, a name, a phone; never a bank account or anything sealed). Nothing is started: the values are shown in the form and started as any start is.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - text
+              properties:
+                text:
+                  type: string
+                  maxLength: 300
+                environment:
+                  type: string
+      responses:
+        '200':
+          description: The values read, by input name (none when nothing could be read), and notes on what could not be (a saved thing that does not exist or cannot fill an input)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - command
+                - values
+                - notes
+                properties:
+                  command:
+                    type: string
+                  values:
+                    type: object
+                    additionalProperties: true
+                  notes:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/tools/{command}/start:
     post:
       operationId: startTool

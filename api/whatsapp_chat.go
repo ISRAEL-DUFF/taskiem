@@ -310,6 +310,9 @@ type chatData struct {
 	// SavedPick is a command waiting for which of two saved things of one
 	// name (saved_pick.go).
 	SavedPick *chatSavedPick `json:"saved_pick,omitempty"`
+	// ToolPick is two of the business's tools that fit a message, waiting
+	// for a number (tools_read.go).
+	ToolPick *chatToolPick `json:"tool_pick,omitempty"`
 	// Understand is the model's help waiting on the person: a command to
 	// confirm, or a question it asked (chat_understand.go).
 	Understand *chatUnderstand `json:"understand,omitempty"`
@@ -1004,6 +1007,13 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 	}
+	if c.data.ToolPick != nil && c.state != stateIdle {
+		// A number picks a tool; anything else lets the pick go
+		// (tools_read.go).
+		if done, err := s.waToolPickReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
+	}
 	if c.data.Found != nil && c.state != stateIdle {
 		// A message that is not about the rows found lets them go and is
 		// read as a new one.
@@ -1301,8 +1311,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 	}
 	// In a language other than English, the model may route it
-	// (engine/ai/intent); it never confirms anything.
-	if c.state == stateIdle && !matched && !c.understood {
+	// (engine/ai/intent); it never confirms anything. With tools of the
+	// business's own, the model below, which is told them beside every
+	// command, reads it instead (tools_read.go).
+	if c.state == stateIdle && !matched && !c.understood && !s.hasModelTools(ctx, c) {
 		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
 			if done, err := s.waIntent(ctx, c, m); done || err != nil {
 				return err
@@ -1837,13 +1849,25 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 		return s.waAskConfirm(ctx, c, c.data)
 	}
 	f := fields[c.data.Index]
-	v, perr := f.ParseIn(text, c.lang.Tag)
-	if perr != nil {
-		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.PromptIn(c.lang.Tag)))
-	}
 	data := c.data
 	if data.Inputs == nil {
 		data.Inputs = map[string]any{}
+	}
+	if data.Tool != "" && savedRef(text) != "" {
+		// A tool's input answered with a saved thing's @name: its own
+		// words for it, looked up here (tools_read.go).
+		v, note, err := s.toolValueOf(ctx, c.tenant.ID, c.p, c.lang.Tag, f, text)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return c.say(ctx, s, note+"\n\n"+f.PromptIn(c.lang.Tag))
+		}
+		return s.waCollected(ctx, c, data, fields, v)
+	}
+	v, perr := f.ParseIn(text, c.lang.Tag)
+	if perr != nil {
+		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.PromptIn(c.lang.Tag)))
 	}
 	// Personal data waits sealed, like run history.
 	if f.PII != "" {
@@ -1856,7 +1880,14 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 			return err
 		}
 	}
-	data.Inputs[f.Name] = v
+	return s.waCollected(ctx, c, data, fields, v)
+}
+
+// waCollected keeps the answer for the field being asked and asks the next
+// one not yet given (a tool's reader may have filled some), or shows what
+// will run.
+func (s *Server) waCollected(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field, v any) error {
+	data.Inputs[fields[data.Index].Name] = v
 	data.Index++
 	// Fields a button filled in are not asked again.
 	for data.Index < len(fields) {

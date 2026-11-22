@@ -87,6 +87,11 @@ func (s *Server) waMadeTool(ctx context.Context, c *chat, text string) (bool, er
 	if !ok {
 		return false, nil
 	}
+	// Two tools saying the same words: a numbered pick (made tools M3,
+	// tools_read.go).
+	if alts := toolsSaying(tools, c.p, text); len(alts) > 1 && !strings.HasPrefix(strings.TrimSpace(text), "/") && strings.ToLower(strings.Fields(text)[0]) != t.Command {
+		return true, s.waToolPick(ctx, c, alts, nil, rest)
+	}
 	if !mayStart(c.p, t.Roles) {
 		if err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
 			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, "tool:"+t.Command, t.Roles)
@@ -113,6 +118,13 @@ func (s *Server) waMadeTool(ctx context.Context, c *chat, text string) (bool, er
 	data := chatData{Workflow: t.Workflow, Name: t.Name, Version: t.Version, Environment: t.Environment, Inputs: map[string]any{}, Tool: t.Command}
 	if len(fields) == 0 {
 		return true, s.waAskConfirm(ctx, c, data)
+	}
+	if len(fields) > 1 && rest != "" {
+		// Words after it for several inputs: read by the model, shown
+		// filled in before anything runs (made tools M3, tools_read.go).
+		if values := s.chatToolWords(ctx, c, t, fields, rest); len(values) > 0 {
+			return true, s.waToolFill(ctx, c, data, fields, values)
+		}
 	}
 	if len(fields) == 1 && rest != "" {
 		// One input: the rest of the message is it, read as an answer.
