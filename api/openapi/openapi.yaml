@@ -36841,7 +36841,7 @@ paths:
                   tools:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Tool'
+                      $ref: '#/components/schemas/MadeTool'
         default:
           $ref: '#/components/responses/Error'
   /v1/tools/{command}/start:
@@ -41147,7 +41147,7 @@ components:
           description: Whether newer edits were merged in.
         problems:
           $ref: '#/components/schemas/Problems'
-    Tool:
+    MadeTool:
       type: object
       required:
       - workflow_id

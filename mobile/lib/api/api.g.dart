@@ -15614,10 +15614,10 @@ class AskMyInvoiceTransferRequest {
 class ListToolsResponse {
   const ListToolsResponse({required this.tools});
 
-  final List<Tool> tools;
+  final List<MadeTool> tools;
 
   factory ListToolsResponse.fromJson(Map<String, dynamic> j) => ListToolsResponse(
-        tools: (j['tools'] as List).map((e) => Tool.fromJson(e as Map<String, dynamic>)).toList(),
+        tools: (j['tools'] as List).map((e) => MadeTool.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -15625,14 +15625,14 @@ class ListToolsResponse {
       };
 }
 
-class Tool {
-  const Tool({required this.about, required this.alwaysAsk, this.answer, required this.care, required this.command, required this.environment, this.icon, this.inputs, required this.name, required this.says, required this.version, required this.workflowId});
+class MadeTool {
+  const MadeTool({required this.about, required this.alwaysAsk, this.answer, required this.care, required this.command, required this.environment, this.icon, this.inputs, required this.name, required this.says, required this.version, required this.workflowId});
 
   final String about;
   final bool alwaysAsk;
   /// text, card or list; left out when the tool answers with how its run ended
   final String? answer;
-  final ToolCare care;
+  final MadeToolCare care;
   final String command;
   final String environment;
   final String? icon;
@@ -15643,11 +15643,11 @@ class Tool {
   final int version;
   final String workflowId;
 
-  factory Tool.fromJson(Map<String, dynamic> j) => Tool(
+  factory MadeTool.fromJson(Map<String, dynamic> j) => MadeTool(
         about: j['about'] as String,
         alwaysAsk: j['always_ask'] as bool,
         answer: j['answer'] == null ? null : j['answer'] as String,
-        care: ToolCare.fromJson(j['care'] as Map<String, dynamic>),
+        care: MadeToolCare.fromJson(j['care'] as Map<String, dynamic>),
         command: j['command'] as String,
         environment: j['environment'] as String,
         icon: j['icon'] == null ? null : j['icon'] as String,
@@ -15674,13 +15674,13 @@ class Tool {
       };
 }
 
-class ToolCare {
-  const ToolCare({this.because, required this.level});
+class MadeToolCare {
+  const MadeToolCare({this.because, required this.level});
 
   final List<String>? because;
   final String level;
 
-  factory ToolCare.fromJson(Map<String, dynamic> j) => ToolCare(
+  factory MadeToolCare.fromJson(Map<String, dynamic> j) => MadeToolCare(
         because: j['because'] == null ? null : (j['because'] as List).map((e) => e as String).toList(),
         level: j['level'] as String,
       );
