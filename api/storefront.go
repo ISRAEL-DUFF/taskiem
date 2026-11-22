@@ -469,6 +469,7 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 			for _, t := range tenants {
 				tctx, cancel := context.WithTimeout(ctx, storefrontSyncTimeout)
 				serr := s.SyncStorefront(tctx, t)
+				s.checkOldColumnsOnce(tctx, t)
 				cancel()
 				if serr != nil && ctx.Err() == nil {
 					s.Logger.Warn("storefront catalogue refresh", "tenant", t, "err", serr)

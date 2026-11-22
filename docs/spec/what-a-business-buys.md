@@ -362,6 +362,22 @@ The split comes first, because Add to stock and every count after it point at st
 - `add …` counting in with **Do you sell it?** in chat;
 - the list of the owner's workflows that use the old columns.
 
+### As built: S1b (workflows on the old columns)
+
+A check, not a data migration; no migration.
+
+- **What it reads.** The catalogue's table and its stored mapping (`storefronts.catalogue_columns` as saved: S1a refuses a mapping naming the old columns and leaves a stored one as it was). An old column's name is the mapping's own when it holds one, else the name Keep my stock gave it (`stock`, `unit`, `cost_price`, `reorder_level`, `target_level`, `supplier`). Then each workflow's published version, and its latest draft when newer.
+- **What it finds** (`stock.OldColumnsIn`), in every step, those in containers and `on_error` too:
+  - a `xenibase` step on the table (connection `data_tables` or none) naming the column in `select`, `filters` (and `any`) or `order`: **reads**; in `set`, `row`, `rows` or `on_conflict`: **sets** (or reads);
+  - such a read with no `select` (every column), when a step fed by its output reads the column off a row (`.stock`, `['stock']`), in turn (a foreach over its rows, the steps inside);
+  - a `row_changed` trigger on the table that watches the column, or whose row the workflow reads it off (`trigger.…`): **reads**.
+  - Steps on `stock@1`, the kept copy `stock_items` or another table, and another project's connection, are not.
+- **Instead** (§4.3): reading `stock` → `count` in the kept copy `stock_items` (read-only), or `stock@1` `get_item` / `list_items`; `cost_price` → `cost_kobo`; `reorder_level` → `low_level` or `low_items`; `unit`, `target_level`, `supplier` → the kept copy's. Setting `stock` → `stock@1` `adjust`, `count` or `receive`; any other → the item on the Stock page.
+- **Where.** `GET /v1/stock/old-columns` (`workflow.read`) runs it: each use's workflow, version, published or draft, step, old column, the table's column, reads or sets, and instead. The storefront sweep runs it once per business after each start, after the catalogue refresh.
+- **Told once.** Either way the owners are told, the first time anything is found: an alert `stock.old_columns` (`alerts.TellOwners`, one dedup key per business), in their notifications and on their chat as a setup problem, linking to Workflows, each use a line. Running it again tells nothing more.
+- OpenAPI follows. The app does not call it, so `mobile/lib/api/api.g.dart` is unchanged; no screens.
+- **Not caught:** a column named only inside an expression (`"select": "=…"`, `"set": "=…"`, `"rows": "=…"`), or a table named by one.
+
 ## 12. Accept
 
 **The split**

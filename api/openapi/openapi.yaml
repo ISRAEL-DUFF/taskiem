@@ -12428,6 +12428,37 @@ paths:
                       type: object
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/old-columns:
+    get:
+      operationId: getStockOldColumns
+      tags:
+      - Stock
+      summary: Workflows on the catalogue's old stock columns
+      description: >-
+        The steps of the business's workflows (each one's published version, and its latest draft when newer) that read or set
+        the catalogue table's old stock columns (stock, unit, cost_price, reorder_level, target_level, supplier), each with what
+        to use instead: the kept copy stock_items (read-only) or stock@1. Running it tells the owners of them once, in their
+        notifications and on their chat.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: workflow.read
+      responses:
+        '200':
+          description: The steps; empty when none uses them
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uses]
+                properties:
+                  uses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockOldColumnUse'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/movements:
     get:
       operationId: listStockMovements
@@ -47959,6 +47990,38 @@ components:
         suggest:
           type: integer
           description: How many to order, when low
+    StockOldColumnUse:
+      type: object
+      required: [workflow_id, workflow, version, published, step, column, table_column, uses, instead]
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+        workflow:
+          type: string
+        version:
+          type: integer
+        published:
+          type: boolean
+          description: The version that runs; else the latest draft, listed for what the published version does not show
+        step:
+          type: string
+          description: The step's id, or trigger for a row-changed trigger on the catalogue's table
+        step_name:
+          type: string
+        column:
+          type: string
+          enum: [stock, unit, cost_price, reorder_level, target_level, supplier]
+          description: The old mapping key
+        table_column:
+          type: string
+          description: The column of the business's table it named
+        uses:
+          type: string
+          enum: [reads, sets]
+        instead:
+          type: string
+          description: What to use instead
     StockMovement:
       type: object
       required: [id, item_id, item, reason, status, by, created_at]

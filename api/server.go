@@ -146,6 +146,9 @@ type Server struct {
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
+	// oldColumnsChecked are the businesses whose workflows were checked
+	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
+	oldColumnsChecked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -684,6 +687,7 @@ func (s *Server) Handler() http.Handler {
 			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
 			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
 			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermWorkflowRead)).Get("/stock/old-columns", s.getStockOldColumns)
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
