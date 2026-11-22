@@ -17,6 +17,8 @@ import 'attachments.dart' show PickedFile;
 import 'groups.dart' show pickOneOf;
 import 'menu.dart' show MenuItem;
 import 'my_chat.dart' show sayFailure;
+import 'pay_chip.dart' show mayPayFromMessages, payFromChatPhoto;
+import 'photo_text.dart' show readChatPhoto;
 import 'saved_files.dart' show SavedFileSheet, uploadSavedFile;
 import 'saved_accounts.dart';
 import 'saved_kinds.dart' show SavedCustomSheet;
@@ -120,15 +122,42 @@ Future<void> saveFromChatFile(BuildContext context, Auth auth, String path, Stri
   }
 }
 
+/// Save the account on a photo in a chat (reading account details from
+/// photos, I1): the photo read on the phone, its words read by Taskiem
+/// (POST /v1/me/saved/read, `from: "photo"`), and Save as…'s sheet for an
+/// account opened with them. No account in it: said.
+Future<void> saveAccountFromChatPhoto(BuildContext context, Auth auth, String path, {bool business = false}) async {
+  final words = await readChatPhoto(context, auth, path);
+  if (words == null || !context.mounted) return;
+  final ReadSavedWordsResponse r;
+  try {
+    r = await auth.api.readSavedWords(body: ReadSavedWordsRequest(text: words, from: 'photo'));
+  } on Object catch (e) {
+    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+    return;
+  }
+  if (!context.mounted) return;
+  if (r.kind != 'bank_account' || '${r.details['account_number'] ?? ''}'.isEmpty) {
+    showTkToast(context, 'No account number in that photo.');
+    return;
+  }
+  await _open(context, _savedFor(auth, business), readingCard(r.kind, r.title, r.details));
+}
+
 /// A customer chat message's menu (saved objects S1): Copy and Save as… on
 /// its words, and on a photo or document Save as… ("Save the words as…" and
 /// "Save the file as…" when it has both). [filePath] is where its
-/// file is fetched; empty when it has none to save.
+/// file is fetched; empty when it has none to save. A photo also has Pay
+/// this account (for those who may pay, as the chip under a message) and
+/// Save the account, each read from the photo on the phone first.
 List<MenuItem> saveAsItems(BuildContext context, Auth auth, {required String words, required String filePath, required String fileName, required String fileType, bool business = false}) {
   final both = words.isNotEmpty && filePath.isNotEmpty;
+  final photo = filePath.isNotEmpty && fileType.startsWith('image/');
   return [
     if (words.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: words)), done: 'Copied'),
     if (words.isNotEmpty) MenuItem('note', both ? 'Save the words as…' : 'Save as…', () => saveFromWords(context, auth, words, business: business)),
     if (filePath.isNotEmpty) MenuItem('note', both ? 'Save the file as…' : 'Save as…', () => saveFromChatFile(context, auth, filePath, fileName, fileType, business: business)),
+    if (photo && mayPayFromMessages(auth)) MenuItem('money', 'Pay this account', () => payFromChatPhoto(context, auth, filePath)),
+    if (photo) MenuItem('card', 'Save the account', () => saveAccountFromChatPhoto(context, auth, filePath, business: business)),
   ];
 }

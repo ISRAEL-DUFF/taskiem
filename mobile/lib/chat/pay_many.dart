@@ -2,7 +2,9 @@
 // people"): the Pay sheet with a list. Rows come from saved accounts,
 // riders (what each is due, GET /v1/riders/pay), staff with an account
 // linked (GET /v1/payments/staff) or a pasted list (read by
-// POST /v1/payment-batches/read, a line that cannot be read kept to fix);
+// POST /v1/payment-batches/read, a line that cannot be read kept to fix),
+// or a photo of a list, read on the phone and sent as words (`from:
+// "photo"`) through the same flow;
 // each row is who, how much and what for. Check prepares the batch (POST
 // /v1/payment-batches): each row as one payment is, those failing a check
 // held out in amber with why. One passkey sends the rows shown (money.pay.
@@ -31,6 +33,7 @@ import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'groups.dart' show pickOneOf;
 import 'pay_sheet.dart';
+import 'photo_text.dart' show PhotoReadButton, readPhotoFromPhone, readingPhoto;
 import 'saved_fill.dart' show readSaved;
 import 'words.dart' show CardTone, naira;
 
@@ -195,6 +198,8 @@ class _PayManySheetState extends State<PayManySheet> {
   final _paste = TextEditingController();
   bool _pasting = false;
   bool _reading = false;
+  // The box holds words read from a photo: sent with `from: "photo"`.
+  bool _fromPhoto = false;
   bool _picking = false;
   bool _busy = false;
   // Lines of the pasted list that could not be read: kept in the box.
@@ -209,7 +214,9 @@ class _PayManySheetState extends State<PayManySheet> {
   @override
   void initState() {
     super.initState();
-    _paste.addListener(() => setState(() {}));
+    _paste.addListener(() => setState(() {
+      if (_paste.text.trim().isEmpty) _fromPhoto = false;
+    }));
     for (final r in _rows) {
       r.amount.addListener(_changed);
     }
@@ -360,7 +367,7 @@ class _PayManySheetState extends State<PayManySheet> {
   Future<void> _read() async {
     setState(() => (_reading = true, _error = null));
     try {
-      final r = await _auth.api.readPaymentList(body: ReadPaymentListRequest(text: _paste.text));
+      final r = await _auth.api.readPaymentList(body: ReadPaymentListRequest(text: _paste.text, from: _fromPhoto ? 'photo' : null));
       if (!mounted) return;
       final good = r.lines.where((l) => (l.problem ?? '').isEmpty).toList();
       final bad = r.lines.where((l) => (l.problem ?? '').isNotEmpty).toList();
@@ -386,13 +393,27 @@ class _PayManySheetState extends State<PayManySheet> {
       setState(() {
         _unread = bad;
         _paste.text = bad.map((l) => l.text).join('\n');
-        if (bad.isEmpty) _pasting = false;
+        if (bad.isEmpty) {
+          _pasting = false;
+          _fromPhoto = false;
+        }
       });
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
     } finally {
       if (mounted) setState(() => _reading = false);
     }
+  }
+
+  /// From a photo of a list: read on the phone, put in the box, and read
+  /// as a pasted list is.
+  Future<void> _photo() async {
+    final words = await readPhotoFromPhone(context, title: 'A photo of a list');
+    if (words == null || !mounted) return;
+    setState(() => (_pasting = true, _unread = const []));
+    _paste.text = words;
+    _fromPhoto = true;
+    await _read();
   }
 
   Future<void> _pickFor(PayRow r) async {
@@ -552,7 +573,7 @@ class _PayManySheetState extends State<PayManySheet> {
           TkCallout(
             leading: TkSquare('b-people', color: look.teal),
             title: 'Add the people to pay',
-            sub: 'Pick saved accounts, riders or staff, or paste a list: one person a line.',
+            sub: 'Pick saved accounts, riders or staff, or paste a list or read one from a photo: one person a line.',
             color: look.teal,
           ),
         if (widget.note != null)
@@ -580,6 +601,11 @@ class _PayManySheetState extends State<PayManySheet> {
           ),
           TkSmallButton(label: 'Paste', icon: 'b-note', semantics: 'Paste a list', onPressed: _busy ? null : () => setState(() => _pasting = !_pasting)),
         ]),
+        PhotoReadButton(
+          label: 'From a photo of a list',
+          semantics: 'Add people from a photo of a list. Read on this phone, not sent',
+          onPressed: _busy || _reading || readingPhoto ? null : () => unawaited(_photo()),
+        ),
         if (_pasting) ...[
           TkFormGroup(
             children: [

@@ -27,8 +27,10 @@ import '../kit/sheet.dart' show showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'menu_card.dart' show catalogueOf;
+import 'my_chat.dart' show sayFailure;
 import 'pay_save.dart' show PaySaveSheet, PaySaved, maySaveFromMessages;
-import 'pay_sheet.dart' show PaySheet;
+import 'pay_sheet.dart' show PaySheet, noAccountInPhoto;
+import 'photo_text.dart' show readChatPhoto;
 import 'words.dart' show naira;
 
 /// Ten digits together (a space or a dash between them allowed), not
@@ -74,6 +76,89 @@ String paidWords(ReadPaymentResponsePaid p) {
 /// Naira as the Pay sheet's box takes it: 45000, or 450.50.
 String _nairaTyped(int kobo) => kobo % 100 == 0 ? '${kobo ~/ 100}' : (kobo / 100).toStringAsFixed(2);
 
+/// The catalogue's Pay forms this person may use (those with a passkey):
+/// by account number (owners), and by the business's saved account.
+typedef PayForms = ({ChatAction? account, ChatAction? person});
+
+Future<PayForms> payFormsOf(Auth auth) async {
+  final topics = await catalogueOf(auth).catchError((Object _) => <ChatTopic>[]);
+  ChatAction? find(String id) => [for (final t in topics) ...t.actions].where((a) => a.id == id && a.confirm == 'passkey').firstOrNull;
+  return (account: find('pay.account'), person: find('pay.person'));
+}
+
+/// Said when staff are shown an account not saved yet.
+const askToSave = 'Ask an owner to save this account: then you can pay it.';
+
+/// The Pay sheet's form for what Taskiem read ([r]), and what it starts
+/// with: the number, bank and amount by account number for an owner; the
+/// business's saved account with that number, by its @name, for staff
+/// (who pay saved accounts only), or when [byName] (saved just now). Null
+/// when neither can pay it (staff, and the account not saved).
+({ChatAction action, Map<String, String> initial})? payFromReading(PayForms forms, ReadPaymentResponse r, {bool byName = false}) {
+  final amount = (r.amountKobo ?? 0) >= 100 ? _nairaTyped(r.amountKobo!) : '';
+  final payee = (r.payee ?? '').trim();
+  Map<String, String> byPayee(ChatAction action) => {
+    for (final f in action.fields ?? const <ChatField>[])
+      if (f.kind == 'payee')
+        f.key: '@$payee'
+      else if (f.kind == 'money' && amount.isNotEmpty)
+        f.key: amount,
+  };
+  if (byName && forms.person != null && payee.isNotEmpty) return (action: forms.person!, initial: byPayee(forms.person!));
+  if (forms.account case final a?) {
+    return (
+      action: a,
+      initial: {
+        for (final f in a.fields ?? const <ChatField>[])
+          if (f.kind == 'account')
+            f.key: r.accountNumber ?? ''
+          else if (f.kind == 'bank' && (r.bankName ?? '').isNotEmpty)
+            f.key: r.bankName!
+          else if (f.kind == 'money' && amount.isNotEmpty)
+            f.key: amount,
+      },
+    );
+  }
+  if (forms.person != null && payee.isNotEmpty) return (action: forms.person!, initial: byPayee(forms.person!));
+  return null;
+}
+
+/// "Pay this account" on a photo in a chat ([path], where the chat
+/// fetches it): read on the phone, the words read by Taskiem (`from:
+/// "photo"`), and the Pay sheet opened filled in, as the chip under a
+/// message opens it. Nothing found: said.
+Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) async {
+  final words = await readChatPhoto(context, auth, path);
+  if (words == null || !context.mounted) return;
+  final ReadPaymentResponse r;
+  final PayForms forms;
+  try {
+    r = await auth.api.readPayment(body: ReadPaymentRequest(text: words, from: 'photo'));
+    forms = await payFormsOf(auth);
+  } on Object catch (e) {
+    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+    return;
+  }
+  if (!context.mounted) return;
+  if (!r.found) {
+    showTkToast(context, noAccountInPhoto);
+    return;
+  }
+  if (forms.account == null && forms.person == null) {
+    showTkToast(context, 'Paying is not set up for this business yet.');
+    return;
+  }
+  final fill = payFromReading(forms, r);
+  if (fill == null) {
+    showTkToast(context, askToSave);
+    return;
+  }
+  await showTkSheet<Payment>(
+    context,
+    (_) => PaySheet(auth: auth, action: fill.action, initial: fill.initial, from: 'message', said: r.name ?? '', saidIn: 'photo'),
+  );
+}
+
 /// The chip under a message that holds an account number: nothing until
 /// Taskiem has read one in it.
 class PayChip extends StatefulWidget {
@@ -107,9 +192,7 @@ class _PayChipState extends State<PayChip> {
   Future<void> _load() async {
     final auth = widget.auth;
     if (!mayPayFromMessages(auth) || !mayHoldAccount(widget.text)) return;
-    final topics = await catalogueOf(auth).catchError((Object _) => <ChatTopic>[]);
-    ChatAction? find(String id) => [for (final t in topics) ...t.actions].where((a) => a.id == id && a.confirm == 'passkey').firstOrNull;
-    final account = find('pay.account'), person = find('pay.person');
+    final (:account, :person) = await payFormsOf(auth);
     // No Pay in the catalogue: no payments account, or not theirs to use.
     if (account == null && person == null) return;
     final r = await _read(auth, widget.id, widget.text);
@@ -120,34 +203,12 @@ class _PayChipState extends State<PayChip> {
   Future<void> _open() async {
     final r = _r;
     if (r == null || _opening) return;
-    final amount = (r.amountKobo ?? 0) >= 100 ? _nairaTyped(r.amountKobo!) : '';
-    // An owner pays the number and bank; staff the business's saved account
-    // with that number.
-    final payee = (r.payee ?? '').trim();
-    final ChatAction action;
-    final Map<String, String> initial;
-    // Saved from here: paid by its @name.
-    if (_savedHere && _person != null && payee.isNotEmpty) {
-      action = _person!;
-      initial = _personInitial(action, payee, amount);
-    } else if (_account case final a?) {
-      action = a;
-      initial = {
-        for (final f in a.fields ?? const <ChatField>[])
-          if (f.kind == 'account')
-            f.key: r.accountNumber ?? ''
-          else if (f.kind == 'bank' && (r.bankName ?? '').isNotEmpty)
-            f.key: r.bankName!
-          else if (f.kind == 'money' && amount.isNotEmpty)
-            f.key: amount,
-      };
-    } else if (_person != null && payee.isNotEmpty) {
-      action = _person!;
-      initial = _personInitial(action, payee, amount);
-    } else {
-      showTkToast(context, 'Ask an owner to save this account: then you can pay it.');
+    final fill = payFromReading((account: _account, person: _person), r, byName: _savedHere);
+    if (fill == null) {
+      showTkToast(context, askToSave);
       return;
     }
+    final (:action, :initial) = fill;
     _opening = true;
     final paid = await showTkSheet<Payment>(
       context,
@@ -160,14 +221,6 @@ class _PayChipState extends State<PayChip> {
     final again = await _read(widget.auth, widget.id, widget.text);
     if (mounted && again != null) setState(() => _r = again);
   }
-
-  Map<String, String> _personInitial(ChatAction action, String payee, String amount) => {
-    for (final f in action.fields ?? const <ChatField>[])
-      if (f.kind == 'payee')
-        f.key: '@$payee'
-      else if (f.kind == 'money' && amount.isNotEmpty)
-        f.key: amount,
-  };
 
   /// Save as…: the account kept in the business's saved things, and the
   /// chip says its @name from then on (the reading kept with it).

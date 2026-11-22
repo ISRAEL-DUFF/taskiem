@@ -29,6 +29,8 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'groups.dart' show pickOneOf;
+import 'pay_chip.dart' show askToSave, payFromReading;
+import 'photo_text.dart' show PhotoReadButton, readPhotoFromPhone, readingPhoto;
 import 'words.dart' show CardTone, naira;
 
 /// What a payment is for: the catalogue's words ("a delivery") and the
@@ -121,13 +123,14 @@ bool sameName(String said, String bank) {
   return a.every(b.contains) || b.every(a.contains);
 }
 
-/// The name a message gave against the bank's, in amber, when they differ.
-Widget? nameDiffers(BuildContext context, String said, String bank) {
+/// The name a message (or a photo: [saidIn]) gave against the bank's, in
+/// amber, when they differ.
+Widget? nameDiffers(BuildContext context, String said, String bank, {String saidIn = 'message'}) {
   if (said.trim().isEmpty || bank.trim().isEmpty || sameName(said, bank)) return null;
   final look = TkLook.of(context);
   return TkCallout(
     leading: TkSquare('b-alert', color: look.orange),
-    title: 'The message says ${said.trim()}; the bank says ${bank.trim()}.',
+    title: 'The $saidIn says ${said.trim()}; the bank says ${bank.trim()}.',
     sub: 'Check with them before you pay.',
     subLines: 3,
     color: look.orange,
@@ -199,11 +202,14 @@ ChatAction staffPayAction(String name) => ChatAction.fromJson({
   ],
 });
 
+/// Said when a photo has no account number in it.
+const noAccountInPhoto = 'No account number in that photo. Type it in.';
+
 /// The Pay sheet over the chat (an action with `confirm: "passkey"`): its
 /// form, then the payment prepared to check and pay. Closes with the
 /// payment once it is sent, or null.
 class PaySheet extends StatefulWidget {
-  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = ''});
+  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = '', this.saidIn = 'message'});
   final Auth auth;
   final ChatAction action;
   final Map<String, String> initial;
@@ -219,6 +225,9 @@ class PaySheet extends StatefulWidget {
 
   /// The name the message gave for the account, set against the bank's.
   final String said;
+
+  /// Where that name was read: a message, or a photo.
+  final String saidIn;
 
   @override
   State<PaySheet> createState() => _PaySheetState();
@@ -249,6 +258,11 @@ class _PaySheetState extends State<PaySheet> {
   Payment? _payment;
   bool _busy = false;
   String? _error;
+  // The name read for the account, and where (a photo read here replaces
+  // the message's).
+  late String _saidName = widget.said;
+  late String _saidIn = widget.saidIn;
+  bool _photoBusy = false;
 
   static const _typed = {'text', 'phone', 'money', 'number', 'signed', 'choice', 'account', 'bank'};
 
@@ -394,6 +408,61 @@ class _PaySheetState extends State<PaySheet> {
     final code = _codeOf(name);
     if (code.isNotEmpty && _number != null && !_said.containsKey(code)) unawaited(_check([code]));
   }
+
+  /// Offered on a sheet opened empty that pays an account number or a
+  /// saved account.
+  bool get _photoOffered => widget.initial.isEmpty && (_ofKind('account') != null || _ofKind('payee') != null);
+
+  /// From a photo: read on the phone, the words read by Taskiem (`from:
+  /// "photo"`), and the form filled in as the chip under a message fills
+  /// it: the number, bank and amount, or the saved account by its @name.
+  Future<void> _fromPhoto() async {
+    final words = await readPhotoFromPhone(context, title: 'Account details from a photo');
+    if (words == null || !mounted) return;
+    setState(() => (_photoBusy = true, _error = null));
+    try {
+      final r = await widget.auth.api.readPayment(body: ReadPaymentRequest(text: words, from: 'photo'));
+      if (!mounted) return;
+      if (!r.found) {
+        showTkToast(context, noAccountInPhoto);
+        return;
+      }
+      final fill = payFromReading((account: _ofKind('account') != null ? widget.action : null, person: _ofKind('payee') != null ? widget.action : null), r);
+      if (fill == null) {
+        showTkToast(context, askToSave);
+        return;
+      }
+      setState(() {
+        _saidName = r.name ?? '';
+        _saidIn = 'photo';
+        // The bank first: a new number checks the bank chosen.
+        for (final f in _fields.where((f) => f.kind == 'bank')) {
+          final v = fill.initial[f.key] ?? '';
+          if (v.isEmpty) {
+            _banksChosen.remove(f.key);
+          } else {
+            _banksChosen[f.key] = v;
+          }
+        }
+      });
+      for (final f in _fields) {
+        final v = fill.initial[f.key];
+        if (f.kind != 'bank' && v != null) _boxes[f.key]!.text = v;
+      }
+      showTkToast(context, 'Filled in from the photo. Check it before you pay.');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  /// "From a photo", and that the photo stays on the phone.
+  Widget _photoRow() => PhotoReadButton(
+    label: _photoBusy ? 'Reading…' : 'From a photo',
+    semantics: 'Fill this in from a photo of the account details. Read on this phone, not sent',
+    onPressed: _photoBusy || _busy || readingPhoto ? null : () => unawaited(_fromPhoto()),
+  );
 
   /// The payment prepared, from the form: nothing is sent.
   Future<void> _prepare() async {
@@ -554,7 +623,7 @@ class _PaySheetState extends State<PaySheet> {
           sub: 'Try another bank: the number stays.',
           color: look.red,
         ),
-      if (ok) ?nameDiffers(context, widget.said, b.accountName!),
+      if (ok) ?nameDiffers(context, _saidName, b.accountName!, saidIn: _saidIn),
     ];
   }
 
@@ -562,7 +631,7 @@ class _PaySheetState extends State<PaySheet> {
   Widget build(BuildContext context) {
     final p = _payment;
     if (p != null) {
-      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, said: widget.said, onBack: () => setState(() => _payment = null));
+      return PaymentSheet(key: ValueKey(p.id), auth: widget.auth, payment: p, fresh: true, said: _saidName, saidIn: _saidIn, onBack: () => setState(() => _payment = null));
     }
     final problem = _problem;
     final look = TkLook.of(context);
@@ -574,6 +643,7 @@ class _PaySheetState extends State<PaySheet> {
       second: 'Cancel',
       onSecond: () => Navigator.of(context).pop(),
       children: [
+        if (_photoOffered) _photoRow(),
         TkFormGroup(children: [for (final f in _fields) _field(f)]),
         ?_answers(),
         ..._bankSays(),
@@ -601,12 +671,15 @@ class _PaySheetState extends State<PaySheet> {
 /// first. A payment not sent yet has Pay (the passkey) and Cancel. Closes
 /// with the payment once sent.
 class PaymentSheet extends StatefulWidget {
-  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack, this.said = ''});
+  const PaymentSheet({super.key, required this.auth, required this.payment, this.fresh = false, this.onBack, this.said = '', this.saidIn = 'message'});
   final Auth auth;
   final Payment payment;
 
   /// The name the message gave, set against the bank's.
   final String said;
+
+  /// Where that name was read: a message, or a photo.
+  final String saidIn;
 
   /// Prepared in this sheet just now: let go if the sheet closes unpaid.
   final bool fresh;
@@ -734,7 +807,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       if (reason.isNotEmpty) ('Why', reason),
     ];
     final warnings = <Widget>[
-      if (p.accountName is String) ?nameDiffers(context, widget.said, p.accountName as String),
+      if (p.accountName is String) ?nameDiffers(context, widget.said, p.accountName as String, saidIn: widget.saidIn),
       if (p.changedAccount == true)
         TkCallout(
           leading: TkSquare('b-warn', color: look.red),

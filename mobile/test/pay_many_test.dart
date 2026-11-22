@@ -163,7 +163,7 @@ void main() {
   final chidi = payment('p2', payee: 'Account ••6789', name: 'Chidi Okeke', bank: 'Guaranty Trust Bank', account: '••6789', kobo: 2000000, purpose: 'wages');
 
   testWidgets('a pasted list read, a line kept to fix; Check holds one out in amber; one passkey sends the rows shown', (t) async {
-    phone(t, 1100);
+    phone(t, 1200);
     final keys = fakeKeys();
     final api = _Api();
     api.routes['POST /v1/payment-batches/read'] = (r) {
