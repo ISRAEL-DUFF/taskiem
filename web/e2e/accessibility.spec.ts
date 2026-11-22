@@ -8,6 +8,20 @@ import { PUBLIC, familyLink, familySchool } from "./familyschool";
 // the page, which the console's Content Security Policy would refuse.
 test.use({ bypassCSP: true });
 
+// The app is light unless the reader picks a theme (src/theme.ts), so the
+// emulated colour scheme alone never showed the dark theme: follow the
+// device ("system") unless a test picks one itself, so each dark run below
+// checks the dark theme.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("taskiem-theme")) localStorage.setItem("taskiem-theme", "system");
+    } catch {
+      // no storage: light
+    }
+  });
+});
+
 const PAGES = [
   "/home",
   "/workflows",

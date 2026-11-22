@@ -336,7 +336,9 @@ img.tk-live-tile { object-fit: cover; }
 .composer > .send-button:disabled { opacity: 1; background: var(--brand); color: var(--brand-dark); }
 .composer > .send-button svg, .composer > .icon-button.primary svg { color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .composer > .send-button, :root[data-theme="dark"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button, :root[data-theme="system"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); } }
 :root[data-theme="dark"] .composer > .send-button svg, :root[data-theme="dark"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button svg, :root[data-theme="system"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); } }
 .composer-tools { background: var(--panel); color: var(--brand); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
 :root[data-theme="dark"] .composer-tools { color: var(--text); }
 /* The head: on a phone only search (the board), Order as a pine pill on a
@@ -347,6 +349,7 @@ img.tk-live-tile { object-fit: cover; }
 .chat-head .chat-sub { font-size: 13px; color: var(--muted); }
 .chat-head .chat-sub .typing { color: var(--brand); font-weight: 600; }
 :root[data-theme="dark"] .chat-head .chat-sub .typing { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .chat-head .chat-sub .typing { color: var(--brand-dark); } }
 /* Diary lines: the pill alone (when it was is for a screen reader). */
 .tk-diary-when:not(:has(button)) { display: contents; }
 
@@ -362,6 +365,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-row-tile[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
 .tk-cta svg { width: 20px; height: 20px; color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .tk-cta svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-cta svg { color: var(--brand-dark-text); } }
 .tk-sheet-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 14px auto 4px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
 .tk-sheet-more:hover { color: var(--text); text-decoration: none; }
 .tk-sheet-more svg { width: 16px; height: 16px; }
@@ -431,6 +435,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-share-box > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tk-share-change, .tk-share-change:hover:not(:disabled) { flex: none; min-height: 36px; padding: 0 4px; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 700; color: var(--brand); }
 :root[data-theme="dark"] .tk-share-change { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-share-change { color: var(--brand-dark); } }
 .tk-share-pick { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 0; padding: 6px 14px; border: 1px solid var(--border); border-radius: 14px; }
 .tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
 .tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }

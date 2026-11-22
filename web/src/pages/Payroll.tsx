@@ -67,8 +67,8 @@ function NotConnected() {
         business's Payrolla here to see each payroll, who was paid and who was
         not, without leaving Taskiem.
       </p>
-      <Link className="button" to="/connections" data-testid="payroll-connect">
-        Connect Payrolla in Connections
+      <Link className="button" to="/connections?connect=payrolla" data-testid="payroll-connect">
+        Connect Payrolla
       </Link>
     </div>
   );

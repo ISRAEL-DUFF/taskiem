@@ -228,9 +228,19 @@ class _PayrollPageState extends State<PayrollPage> {
           TkCallout(
             leading: TkSquare('b-calendar', color: look.violet),
             title: 'Payroll runs in Payrolla',
-            sub: 'Connect Payrolla to see its runs here: on the web, open Connections and add Payrolla with the key from Payrolla’s Connected apps.',
+            sub: 'Connect Payrolla to see its runs here, with the key from Payrolla’s Connected apps.',
             subLines: 4,
             color: look.violet,
+          ),
+        if (got != null && !got.connected)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TkSmallButton(
+              label: 'Connect Payrolla',
+              primary: true,
+              onPressed: () => unawaited(openOrSay(
+                  context, () => openOutside(Uri.parse('${widget.auth.transport.base}/connections?connect=payrolla')), 'Connections could not be opened.')),
+            ),
           ),
         if (got != null && got.connected) ...[
           if (got.test == true)

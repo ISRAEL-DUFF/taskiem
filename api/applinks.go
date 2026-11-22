@@ -83,7 +83,7 @@ func (a AppLinks) PasskeyOrigins() []string {
 // You's settings stay on the web. A payment (/payments/{id}, the link
 // the chat sends to confirm one) opens in the app. A person's link, /p/{code}
 // (people-chatting §5.2), opens the app as a business's chat link does.
-var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/payments", "/payments/*", "/reset-password"}
+var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/payments", "/payments/*", "/payroll", "/payroll/*", "/reset-password"}
 
 // assetLinks is Android's Digital Asset Links: the app handles these links
 // and shares these sign-ins (passkeys).

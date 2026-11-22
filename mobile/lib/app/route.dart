@@ -3,7 +3,7 @@
 // belongs to, and the screen over it, if any.
 
 /// What opens over the tab.
-enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments }
+enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments, payroll }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
 enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request, standing, group, groupInvites }
@@ -125,6 +125,16 @@ AppRoute routeOf(String path) {
       return (tab: tabMoney, screen: RouteScreen.payments, id: pay[1] == null ? '' : Uri.decodeComponent(pay[1]!));
     } on FormatException {
       return (tab: tabMoney, screen: RouteScreen.payments, id: '');
+    }
+  }
+  // Payroll (Payrolla's runs), and one run (/payroll/runs/{run}): over
+  // Money; id '' for the list. Staff in Payrolla opens the list too.
+  final payroll = RegExp(r'^/payroll(?:/runs/([^/]+)|/staff)?$').firstMatch(p);
+  if (payroll != null) {
+    try {
+      return (tab: tabMoney, screen: RouteScreen.payroll, id: payroll[1] == null ? '' : Uri.decodeComponent(payroll[1]!));
+    } on FormatException {
+      return (tab: tabMoney, screen: RouteScreen.payroll, id: '');
     }
   }
   final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);

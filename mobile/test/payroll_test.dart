@@ -13,7 +13,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/app/applinks.dart';
 import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/config.dart' show taskiemUrl;
+import 'package:taskiem/app/route.dart';
 import 'package:taskiem/app/links.dart' show openOutside;
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/payments_page.dart';
@@ -251,7 +254,7 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PayrollPage(auth: api.auth())));
     await settle(t);
     expect(find.text('Payroll runs in Payrolla'), findsOneWidget);
-    expect(find.textContaining('open Connections and add Payrolla'), findsOneWidget);
+    expect(find.text('Connect Payrolla'), findsOneWidget);
     expect(find.text('Staff in Payrolla'), findsNothing);
     await snap(t, 'payroll-not-connected');
 
@@ -439,5 +442,13 @@ void main() {
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: PayrollPage(auth: auth)), drive: settle);
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: PayrollRunPage(auth: auth, run: _r1)), drive: settle);
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: PayrollStaffPage(auth: auth)), drive: settle);
+  });
+
+  test('a link to the payroll or one run opens it over Money', () {
+    expect(appPageOf(Uri.parse('$taskiemUrl/payroll/runs/11111111-1111-4111-8111-111111111111')), '/payroll/runs/11111111-1111-4111-8111-111111111111');
+    final one = routeOf('/payroll/runs/11111111-1111-4111-8111-111111111111');
+    expect((one.tab, one.screen, one.id), (tabMoney, RouteScreen.payroll, '11111111-1111-4111-8111-111111111111'));
+    expect((routeOf('/payroll').screen, routeOf('/payroll').id), (RouteScreen.payroll, ''));
+    expect(routeOf('/payroll/staff').screen, RouteScreen.payroll);
   });
 }
