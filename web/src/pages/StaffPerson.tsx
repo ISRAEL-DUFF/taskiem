@@ -26,6 +26,7 @@ import {
   type StaffPersonView,
 } from "../lib/team";
 import { PaySheet } from "./PaySheet";
+import { InPayrollaCard } from "./Payroll";
 
 /** One person of the business (phase 3): who they are, their usual hours
  * and their pay, for the record, where payments to them go (outside
@@ -96,6 +97,7 @@ export function StaffPerson() {
         </section>
       )}
       {p && <WherePaid user={user} name={name} acct={acct} onChanged={view.reload} />}
+      {p && can("payroll.read") && <InPayrollaCard payrolla={p.payrolla} />}
       {p && <PersonFigures user={user} name={name} />}
       {paying !== undefined && acct && (
         <PaySheet

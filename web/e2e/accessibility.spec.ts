@@ -62,6 +62,7 @@ const PAGES = [
   "/money/fees",
   "/payments",
   "/payments/several",
+  "/payroll",
   "/schools",
   "/schools/families",
   "/schools/classes",
@@ -1507,6 +1508,67 @@ for (const scheme of ["light", "dark"] as const)
       vs = await axe(page);
       expect(vs, describe("Add staff in Pay several people", vs)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+// Payroll, read from Payrolla (P4a): the runs, one run waiting for
+// approval with someone not paid, and Staff in Payrolla with a likely
+// match. Payrolla's answers are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Payroll passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Payroll ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@payroll.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const id = "0192e2e0-0000-7000-8000-00000000d201";
+      const musa = "0192e2e0-0000-7000-8000-00000000a301";
+      const run = { run_id: id, period_start: "2026-11-01", period_end: "2026-11-30", pay_date: "2026-11-30", run_type: "REGULAR", status: "COMPUTED", employee_count: 2, total_gross_kobo: 36_000_000, total_net_kobo: 30_000_000, awaiting_approval: true };
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/payroll"),
+        (q) => {
+          const p = new URL(q.request().url()).pathname;
+          if (p === "/v1/payroll") return q.fulfill(fulfil({ connected: true, connection: "payrolla", test: true, company: { name: "Mama's Kitchen Ltd", pay_frequency: "MONTHLY" }, runs: [run, { ...run, run_id: "0192e2e0-0000-7000-8000-00000000d202", period_start: "2026-10-01", period_end: "2026-10-31", status: "COMPLETED" }], next_cursor: "c2" }));
+          if (p === "/v1/payroll/staff")
+            return q.fulfill(
+              fulfil({
+                connection: "payrolla",
+                staff: [
+                  { user_id: musa, name: "Musa Bello", payrolla: null, suggested: { employee_id: "e1", name: "Musa Bello", by: "phone" } },
+                  { user_id: "0192e2e0-0000-7000-8000-00000000a302", name: "Kemi Ade", payrolla: { employee_id: "e2", name: "Kemi Ade", linked_by_name: "Ada Owner", linked_at: new Date().toISOString() }, suggested: null },
+                ],
+                employees: [{ id: "e1", name: "Musa Bello", status: "ACTIVE", linked_to: null }, { id: "e2", name: "Kemi Ade", status: "ACTIVE", linked_to: "0192e2e0-0000-7000-8000-00000000a302" }],
+              }),
+            );
+          return q.fulfill(
+            fulfil({
+              connection: "payrolla",
+              run: { summary: run, created_at: null, updated_at: null, approved_at: null, locked_at: null },
+              lines: [
+                { payslip_id: "p1", employee_id: "e1", name: "Musa Bello", net_kobo: 15_000_000, status: "CONFIRMED", state: "paid", staff: { user_id: musa, name: "Musa Bello" } },
+                { payslip_id: "p2", employee_id: "e2", name: "Kemi Ade", net_kobo: 15_000_000, status: "REVERSED", state: "returned", reason: "The bank sent it back", staff: null },
+              ],
+              counts: { paid: 1, waiting: 0, failed: 0, returned: 1 },
+              approval_url: "https://app.payrolla.example/approve",
+            }),
+          );
+        },
+      );
+      for (const [path, ready] of [
+        ["/payroll", "payroll-hero"],
+        [`/payroll/runs/${id}`, "payroll-approve-open"],
+        ["/payroll/staff", "payroll-staff-confirm"],
+      ] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(ready).first()).toBeVisible();
+        const vs = await axe(page);
+        expect(vs, describe(path, vs)).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
     });
 
 // Save as… beside a message's Pay this account (paying people, phase 2):

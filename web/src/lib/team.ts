@@ -120,6 +120,8 @@ export interface StaffPersonView extends StaffPerson {
   profile: StaffProfile;
   /** Where payments to them go (outside payroll), masked; null when none is linked. */
   pay_account?: StaffPayAccount | null;
+  /** Who they are in Payrolla (shown to those who see payroll); null when not linked. */
+  payrolla?: { employee_id: string; name: string; linked_by_name?: string; linked_at?: string } | null;
 }
 
 // --- where they are paid (outside payroll: salaries are Payrolla's) ---

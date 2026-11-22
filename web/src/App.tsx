@@ -149,6 +149,7 @@ import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { SavedPage } from "./pages/Saved";
 import { PaymentPage, PaymentsPage } from "./pages/Payments";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
+import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
 import { PasskeyNudge } from "./pages/PasskeyNudge";
@@ -497,6 +498,8 @@ function SignedIn() {
     ],
     // Paying people from the business's payments account (pages/Payments.tsx).
     ["/payments", "Pay people", "send", can("money.pay")],
+    // Payroll, read from Payrolla (pages/Payroll.tsx).
+    ["/payroll", "Payroll", "billing", can("payroll.read")],
     // Linked suppliers' invoices (business links, pages/Bills.tsx).
     [
       "/bills",
@@ -914,6 +917,9 @@ function SignedIn() {
                   <Route path="/payments/several" element={<PayListPage />} />
                   <Route path="/payments/batches/:id" element={<BatchPage />} />
                   <Route path="/payments/:id" element={<PaymentPage />} />
+                  <Route path="/payroll" element={<PayrollPage />} />
+                  <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
+                  <Route path="/payroll/staff" element={<PayrollStaffPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />
                   <Route
