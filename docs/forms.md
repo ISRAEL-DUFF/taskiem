@@ -55,9 +55,23 @@ The form is part of the workflow: its questions are the workflow's inputs schema
 } }
 ```
 
-- **To:** a phone or email from the run, or `role` for members of a role, who find it in the app (and are alerted).
+- **To:** a person ([device fields §2](spec/device-fields.md#2-who-is-asked)): a phone or email from the run, `role` for members of a role, or `member` for one member (their id, or an expression giving one), who find it under To fill in in the app and on the web (and are alerted). `link` (the person working a business link) and `"starter"` are refused until device fields D1 and made tools M4.
 - **The link** goes by the first channel that reaches the person, through the platform's message outbox, and again at each `remind`. It is a one-time link: answered, it is used up; the run cancelled, it is withdrawn.
-- **The step's output** is the answers, with `respondent`. Not answered by the `timeout` (default 7 days): `on_timeout` `fail` fails the step (its `on_error` can handle it); `continue` completes it with `timed_out: true`.
+- **The step's output** is the answers, with `respondent` and `device` (below). Not answered by the `timeout` (default 7 days): `on_timeout` `fail` fails the step (its `on_error` can handle it); `continue` completes it with `timed_out: true`.
+
+## Device fields
+
+A form step may ask the person's device ([the app as a node](spec/device-fields.md), D0 built): a field of `type` `location`, `photo`, `scan` or `signature`, each with `why` (one sentence the person reads before the device is asked), and `require_source` (`device` on a location, `camera` on a photo), `max_accuracy_m` and `max_age` (a location), `formats` (a scan) and `allow_typed` (a location or a scan; default true). At most one of each in a question; a signature cannot be required of a phone or an email. They are asked by form steps only, not by a form that starts a workflow.
+
+```json
+"where": { "type": "location", "why": "so the delivery is recorded where it was handed over", "max_accuracy_m": 100 }
+```
+
+Each answer is `{state, source, ...}`: `state` is `answered`, `refused` or `unavailable` (with a `reason`), or `unverified` when its source is weaker than `require_source`; `source` is set by the server from where the answer came (a location read at the tap is `device`, typed `typed`, sent in a chat `sent`), never from the answer. A location is `{lat, lng, accuracy_m, at}` (with `coarse: true` past `max_accuracy_m`) or `{address}`. **A location is personal data**: sealed as `location`, masked to about 100 m wherever masked values are shown, exactly only with `pii.reveal`, and never given to an AI step (it is told only that one was answered, and how). Photos and signatures are files, below.
+
+Today the app and the web answer through `POST /v1/form-requests/{id}/answers`, which takes a location and a scan as values; the web's form and the form host's page do not ask a device yet and send such fields `unavailable`. D1 asks them in the app, the web, WhatsApp and Telegram.
+
+**Every answer** (a form step's, and a form's in `trigger.form`) carries `device: {app, version, online, at, received_at}`: the app that answered (`app`, `web` or `link`), its version, whether it was online, the time by its clock, and the time the server received it, which is the one to rely on; `clock_differs: true` when the two differ by more than five minutes beyond what answering offline explains.
 
 ## Files
 
@@ -103,7 +117,7 @@ Claims are one table (`storefront_claims`), taken by the public host with the su
 | `GET /v1/form-submissions`, `GET /v1/form-submissions/{id}` | Submissions, masked; `?reveal=true` with `pii.reveal` |
 | `GET /v1/form-files/{id}` | A file's download link (`pii.reveal`, audited) |
 | `GET /v1/forms/{id}/view`, `POST /v1/forms/{id}/submissions` | A members form, and sending it |
-| `GET /v1/form-requests`, `GET /v1/form-requests/{id}`, `POST /v1/form-requests/{id}/answers` | Form steps for your roles |
+| `GET /v1/form-requests`, `GET /v1/form-requests/{id}`, `POST /v1/form-requests/{id}/answers` | Form steps for you or your roles; answers take `device` (`app`, `version`, `online`, `at`) |
 
 ## How it is kept safe
 

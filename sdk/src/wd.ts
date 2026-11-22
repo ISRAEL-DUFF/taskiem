@@ -183,8 +183,8 @@ export interface FormStep extends StepBase {
   config: {
     title: string;
     description?: string;
-    /** Exactly one: a phone or email (usually an expression over the run), or members with a role. */
-    to: { phone: string } | { email: string } | { role: string };
+    /** A person (docs/spec/device-fields.md §2): a phone or email (usually an expression over the run), members with a role, or one member (an id or an expression). `link` waits for device fields D1 and "starter" for made tools M4; both are refused until then. */
+    to: { phone: string } | { email: string } | { role: string } | { member: string } | { link: string } | "starter";
     via?: ("sms" | "email")[];
     verify?: boolean;
     /** The questions, as an inputs schema (x-form hints per property). */

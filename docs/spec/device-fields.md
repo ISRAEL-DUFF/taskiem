@@ -1,6 +1,6 @@
 # The app as a node: a device's senses in a workflow
 
-Status: **plan; not built** (19 November 2026). Taken from the founder's discussion recorded in pull request #211, where it was §13 of the made tools plan, and made a plan of its own because it is about the form step and needs little from made tools. Two points were settled by the founder there (§12, 1 and 2), and the third on the same day (§12, 3). Three things were added on review (§11). Its phases are D0 to D2 in [the build plan](build-plan-saved-tools-payments.md).
+Status: **D0 built** (22 November 2026; [as built](#14-as-built-d0)); D1 and D2 are plans. First written 19 November 2026. Taken from the founder's discussion recorded in pull request #211, where it was §13 of the made tools plan, and made a plan of its own because it is about the form step and needs little from made tools. Two points were settled by the founder there (§12, 1 and 2), and the third on the same day (§12, 3). Three things were added on review (§11). Its phases are D0 to D2 in [the build plan](build-plan-saved-tools-payments.md).
 
 Builds on: [forms](../forms.md) (the form step, files), [made tools](made-tools.md) (a tool's inputs, `to: "starter"`), [dispatch](dispatch.md) and [riders in the chat](chat-riders.md) (the delivery to be proved), [offline](offline.md), [privacy](../privacy.md).
 
@@ -168,3 +168,37 @@ The phone app's parts are built with its screens guide and picture tests, in lig
 - **The phone app:** the permission asked only at the tap, after `why`; an answer made offline and sent later; the camera, not the gallery; picture tests of the form in both themes.
 - **Web end-to-end:** the browser's prompts allowed and refused; a file in place of the camera marked `sent`.
 - **WhatsApp and Telegram:** a location and a photo message answering a question; a signature `unavailable`.
+
+## 14. As built (D0)
+
+Built 22 November 2026. No migration: a form request's `recipient` is already JSON, and an answer's `device` travels with the answer.
+
+**The declaration.** A device field is a property of a form step's `schema` whose `type` is `location`, `photo`, `scan` or `signature` (`engine/wd/devicefields.go`). Such a schema is not plain JSON Schema, so it is never compiled as written: `wd.AnswerSchema` gives the schema the server checks its answers against (each device field the object it keeps), and `wd.WithoutDeviceFields` the one a page that cannot ask a device shows. `wd.Validate` checks:
+
+| Refused | Message, in short |
+| --- | --- |
+| A device field without `why`, or a `why` over 200 characters | say why in one sentence, so the person knows before their device is asked |
+| An option the kind does not take (`max_age` on a signature), a wrong `require_source` (`device` on a location, `camera` on a photo), `max_accuracy_m` not in (0, 100000], `max_age` not a duration, `allow_typed` not a boolean, `formats` empty or naming a code the scanner does not read (`qr`, `ean_13`, `ean_8`, `upc_a`, `upc_e`, `code_128`), `x-pii` on a location other than `location` or on a photo or signature | names the option |
+| Two fields of one kind, or more than four device fields | at most one of each |
+| A required `signature` with `to: {phone}` or `{email}` | they may answer in WhatsApp or Telegram, where there is no pad; make it optional |
+| A device field in a workflow's inputs (any trigger, a form's included) or its types | asked by a form step; inputs cannot ask a device yet |
+
+`require_source: "device"` where the question can only be answered in WhatsApp or Telegram: no `to` today is answered only there (a phone or an email gets a one-time link that opens in a browser, which can read a location; members answer in the app or the web), so the row refuses nothing yet. A link's person may be reached only in a chat, which is known when the run asks, not at validation: when `to: {link}` arrives in D1 it is a deploy warning and the run's waiting message, as §8 says for an empty role. The rows for a `location` on a customers' tool and a `device` trigger wait for made tools (M0, M1) and D2.
+
+**Who is asked.** `to` is `{phone}`, `{email}`, `{role}`, `{member}` (a member's id, or an expression giving one: the step fails at run time if it is not a UUID) or `{link}`, or the string `"starter"`. A member's request is listed for them alone under To fill in (`GET /v1/form-requests` carries `member`), with an alert naming them; a member not in the business gets a note on the request and no alert. `{link}` and `"starter"` are in the schema so the contract is stable, and refused by the validator until D1 and M4.
+
+**The answer.** The server reads each device field (`engine/forms/device.go`):
+
+- `state` is `answered`, `refused` or `unavailable` (sent so by the person, with an optional `reason`), or `unverified` when the source is weaker than `require_source`.
+- `source` is set from the channel, never from the body: a location read in the app, the web or a link's browser is `device`, an address typed is `typed`, one sent in WhatsApp or Telegram `sent`; a photo from the phone app is `camera`, any other `sent`; a scan with a format is `camera`, without one `typed`; a signature `drawn`.
+- A location is `{lat, lng, accuracy_m, at, fix}` or `{address}` (when `allow_typed`, the default); `coarse: true` when its accuracy is unknown or worse than `max_accuracy_m`; refused when read longer than `max_age` before the answer was made. Keys the field does not keep are dropped.
+- A device field a channel cannot answer yet, left out, is `unavailable`: today the member API takes a location and a scan as values, and photos and signatures need an upload it does not take yet; the form host's page asks no device before D1. A required location left out of the member API is refused as any missing answer is.
+- Every answer, of a form step (`steps.<id>.output.device`) and of a form (`trigger.form.device`), carries `device: {app, version, online, at, received_at}` and `clock_differs`. `app` is `app` or `web` from the member API (what the client says; anything else is `web`), `link` from the form host; `received_at` is the server's clock; `at` is the device's from the member API, else the server's. `clock_differs` when the device's clock is more than 5 minutes ahead, or, online, more than 5 minutes behind: an answer made offline may be any age.
+
+**Kept and shown.** `pii.SchemaPaths` seals a location's `lat`, `lng` and `address` as `location` (each coordinate its own value, so once opened it is remembered as personal); its state, source and accuracy stay readable. `whatsapp.MaskValue` masks a coordinate to three decimal places (`≈6.452`, about 110 m), and a typed address wholly; the run view without reveal shows the sealed value, and reveal shows it exactly. An ai step's input passes through `pii.HideLocations` before anything else, even fields it lets personal data through: a location becomes `{location: answered, state, source}`; coordinates in its prompt are masked by the run's known values. A location goes with the run's data when retention purges it. Photos and signatures are files under the forms' rules (scanned, cleaned, private; JPEG or PNG, a signature PNG), and a form step that asks for one needs the malware scanner to deploy.
+
+**The web and the form host.** Not asked yet: the form host leaves device fields off its page and the web's form shows a line saying this page cannot read it; both send them `unavailable`. The web sends `device` with each answer. The phone app lists requests but does not answer them in the app, so it is unchanged.
+
+**Left for D1.** The fields asked in the app (offline too), the web and WhatsApp and Telegram; `to: {link}` delivered through the rider steps' door and `"starter"` (M4); photo uploads on the member API; the map pin and area name on cards; and a location sealed under its respondent's own subject, so erasing a person erases where they were. That needs the run's taint to carry a subject: a copy of a location in a later step is sealed again from the taint, under the value's own subject, so binding only the answer would have erased one copy of several. Until then a location goes with the run's data when retention purges it, and with the submission when its respondent is erased.
+
+**Tests.** `engine/wd/devicefields_test.go` (each row, the options, `to`, the answer schemas); `engine/forms/device_test.go` (`device`, `clock_differs`, `source` from the channel, states, refusals); `engine/forms/device_db_test.go` (a location sealed in history, masked to 100 m, opened exactly; gone with the run's purge; nothing of it in what an ai step sends); `engine/pii/location_test.go`; `api/forms_device_test.go` (a form step to one member, the alert, a location answered from the app); `web/src/lib/forms.test.ts`.

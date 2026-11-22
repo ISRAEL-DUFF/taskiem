@@ -210,7 +210,8 @@ func num(v any) (float64, bool) {
 	return 0, false
 }
 
-// HasFileFields reports whether a schema asks for files.
+// HasFileFields reports whether a schema asks for files: file fields, and
+// photos and signatures, which are kept as files.
 func HasFileFields(schema map[string]any) bool {
 	props, _ := schema["properties"].(map[string]any)
 	for _, v := range props {
@@ -218,12 +219,15 @@ func HasFileFields(schema map[string]any) bool {
 		if f, _ := p["format"].(string); f == "file" {
 			return true
 		}
+		if k := DeviceKind(p); k == DevicePhoto || k == DeviceSignature {
+			return true
+		}
 	}
 	return false
 }
 
 func checkForms(d *Definition) []Problem {
-	var out []Problem
+	out := deviceFieldsOutsideSteps(d)
 	if d.Trigger.Type == "form" {
 		out = append(out, checkFormTrigger(d)...)
 	}
@@ -322,21 +326,24 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	if strings.TrimSpace(f.Title) == "" {
 		add("/title", "a form step needs a title")
 	}
-	n := 0
-	for _, v := range []string{f.To.Phone, f.To.Email, f.To.Role} {
-		if v != "" {
-			n++
+	switch f.To.Kind() {
+	case "", "several":
+		add("/to", "to is exactly one of phone, email, role or member")
+	case "starter":
+		add("/to", `to: "starter" (the person who started the run from a chat or a page) comes with made tools; ask by phone, email, role or member for now`)
+	case "link":
+		add("/to/link", "asking the person working a business link comes with the next part of device fields (D1); ask by phone, email, role or member for now")
+	case "member":
+		if m := strings.TrimSpace(f.To.Member); !strings.HasPrefix(m, "=") && !uuidRe.MatchString(m) {
+			add("/to/member", "member is a member's id, or an expression giving one (=trigger.form.respondent.member_id)")
 		}
-	}
-	if n != 1 {
-		add("/to", "to is exactly one of phone, email or role")
 	}
 	for _, v := range f.Via {
 		if !slices.Contains(FormVia, v) {
 			add("/via", "via is sms and email")
 		}
 	}
-	if f.Verify && f.To.Role != "" {
+	if f.Verify && (f.To.Role != "" || f.To.Member != "") {
 		add("/verify", "members are signed in: verify is for a phone or email")
 	}
 	if f.OnTimeout != "" && f.OnTimeout != "fail" && f.OnTimeout != "continue" {
@@ -359,5 +366,8 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	}
 	// A one-time link to a person named in the run's data: not anonymous.
 	out = append(out, FormFieldProblems(f.Schema, false, path+"/schema")...)
+	out = append(out, DeviceFieldProblems(f.Schema, f.To, path+"/schema")...)
 	return out
 }
+
+var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

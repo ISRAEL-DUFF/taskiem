@@ -270,6 +270,15 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		// Files stored before the error are stored again on the retry.
 		return errors.Join(err, s.discard(ctx, in.Tenant, files))
 	}
+	received := in.Submission.Submitted
+	if received.IsZero() {
+		received = s.now()
+	}
+	device := deviceMeta(in.Submission, received)
+	if why == "" {
+		deviceAt, _ := time.Parse(time.RFC3339, device["at"].(string))
+		why = deviceAnswers(tg.schema, answers, in.Submission, deviceAt)
+	}
 	if why == "" {
 		why = s.check(tg, answers, files)
 	}
@@ -330,6 +339,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 				payload[k] = v
 			}
 			payload["respondent"] = resp
+			payload["device"] = device
 			signal = payload
 		}
 		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
@@ -341,7 +351,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	if tg.request != nil {
 		return s.answerStep(ctx, in, tg, id, signal)
 	}
-	return s.startRun(ctx, in, tg, id, answers)
+	return s.startRun(ctx, in, tg, id, answers, device)
 }
 
 // roundTrip makes v plain JSON values (file references become maps).
@@ -436,8 +446,15 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 	var out []storedFile
 	for _, u := range in.Uploads {
 		p, _ := props[u.Meta.Field].(map[string]any)
-		if f, _ := p["format"].(string); f != "file" {
+		kind := wd.DeviceKind(p)
+		if f, _ := p["format"].(string); f != "file" && kind != wd.DevicePhoto && kind != wd.DeviceSignature {
 			return nil, out, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
+		}
+		switch kind {
+		case wd.DevicePhoto:
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/jpeg", "image/png"}}}
+		case wd.DeviceSignature:
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/png"}}}
 		}
 		if why := fileRule(p, u); why != "" {
 			return nil, out, why, nil
@@ -567,8 +584,11 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 	for k, v := range answers {
 		probe[k] = v
 	}
+	props, _ := tg.schema["properties"].(map[string]any)
 	for _, f := range files {
-		probe[f.field] = f.ref.ID
+		if wd.DeviceKind(props[f.field]) == "" {
+			probe[f.field] = f.ref.ID
+		}
 	}
 	var msgs []string
 	if tg.def != nil {
@@ -585,7 +605,8 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/"+tg.def.ID+".json", raw).Validate(body)
 	} else {
 		body, _ := json.Marshal(probe)
-		raw, _ := json.Marshal(tg.schema)
+		// Device fields as the answers the server made of them.
+		raw, _ := json.Marshal(wd.AnswerSchema(tg.schema))
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/request.json", raw).Validate(body)
 	}
 	if len(msgs) > 0 {
@@ -612,10 +633,10 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	return out, nil
 }
 
-func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers map[string]any) error {
+func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers, device map[string]any) error {
 	sub := in.Submission
 	form := map[string]any{"submission_id": id.String(), "reference": in.Reference, "submitted_at": sub.Submitted.UTC().Format(time.RFC3339),
-		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents)}
+		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents), "device": device}
 	if sub.Site != "" {
 		form["site"] = sub.Site
 	}

@@ -2309,23 +2309,38 @@
               "maxLength": 1000
             },
             "to": {
-              "type": "object",
-              "additionalProperties": false,
-              "minProperties": 1,
-              "maxProperties": 1,
-              "description": "Who is asked: a phone or email from the run (expressions), or a role of members",
-              "properties": {
-                "phone": {
-                  "type": "string"
+              "description": "Who is asked, a person (docs/spec/device-fields.md §2): a phone or email from the run (expressions, by a one-time link), a role of members, one member (an id or an expression), or the person working a business link (expression; refused until device fields D1). \"starter\" is made tools M4 and refused until then.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "properties": {
+                    "phone": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                    },
+                    "member": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "link": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
                 },
-                "email": {
-                  "type": "string"
-                },
-                "role": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                {
+                  "const": "starter"
                 }
-              }
+              ]
             },
             "via": {
               "type": "array",

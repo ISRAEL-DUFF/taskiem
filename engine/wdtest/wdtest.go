@@ -716,7 +716,25 @@ func (r *runner) formMock(id string) (FormMock, bool)         { return lookup(r.
 // submitForm delivers a mocked submission as the form host would: the
 // answers checked against the step's schema, and who answered.
 func (r *runner) submitForm(id string, p history.ScheduledPayload, m FormMock) {
-	if raw, err := json.Marshal(p.Form.Schema); err == nil && len(p.Form.Schema) > 0 {
+	// A device field mocked without its state is answered, from the
+	// device (device fields §3), as the server would mark it.
+	if dev := wd.DeviceFields(p.Form.Schema); len(dev) > 0 && m.Answers != nil {
+		answers := make(map[string]any, len(m.Answers))
+		for k, v := range m.Answers {
+			answers[k] = v
+		}
+		m.Answers = answers
+	}
+	for name, kind := range wd.DeviceFields(p.Form.Schema) {
+		if a, ok := m.Answers[name].(map[string]any); ok && a["state"] == nil {
+			c := map[string]any{"state": "answered", "source": map[string]string{wd.DeviceLocation: "device", wd.DevicePhoto: "camera", wd.DeviceScan: "camera", wd.DeviceSignature: "drawn"}[kind]}
+			for k, v := range a {
+				c[k] = v
+			}
+			m.Answers[name] = c
+		}
+	}
+	if raw, err := json.Marshal(wd.AnswerSchema(p.Form.Schema)); err == nil && len(p.Form.Schema) > 0 {
 		answers := m.Answers
 		if answers == nil {
 			answers = map[string]any{}
@@ -734,7 +752,7 @@ func (r *runner) submitForm(id string, p history.ScheduledPayload, m FormMock) {
 	if resp == nil {
 		resp = map[string]any{"kind": "link"}
 		switch {
-		case p.Form.To["role"] != nil:
+		case p.Form.To["role"] != nil, p.Form.To["member"] != nil:
 			resp = map[string]any{"kind": "member", "member_id": "test-member"}
 		case p.Form.To["phone"] != nil:
 			resp["phone"] = p.Form.To["phone"]

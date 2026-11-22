@@ -8,11 +8,13 @@ import {
   answersToSend,
   coerceAnswer,
   coerceAnswers,
+  deviceKindOf,
   formatNaira,
   labelOf,
   pagesOf,
   parseNaira,
   shownPages,
+  unavailableDeviceAnswers,
   widgetOf,
   type FieldSchema,
   type FormPage,
@@ -52,14 +54,38 @@ function rawOf(schema: FormSchema | undefined, initial: Raw | undefined): Raw {
     if (!p || v === undefined || v === null) continue;
     const w = widgetOf(p);
     if (w === "money" && typeof v === "number") out[k] = formatNaira(v, false);
-    else if ((w === "number" || w === "text" || w === "textarea" || w === "tel" || w === "email" || w === "url") && typeof v !== "string") out[k] = typeof v === "object" ? JSON.stringify(v) : String(v as number);
-    else if (w === "datetime-local" && typeof v === "string") out[k] = v.slice(0, 16);
+    else if (
+      (w === "number" ||
+        w === "text" ||
+        w === "textarea" ||
+        w === "tel" ||
+        w === "email" ||
+        w === "url") &&
+      typeof v !== "string"
+    )
+      out[k] = typeof v === "object" ? JSON.stringify(v) : String(v as number);
+    else if (w === "datetime-local" && typeof v === "string")
+      out[k] = v.slice(0, 16);
     else out[k] = v;
   }
   return out;
 }
 
-export function FormView({ title, description, schema, pages, initial, locked = [], filesNote, preview, submitLabel = "Send", busy, onSubmit, footer, level = 2 }: FormViewProps) {
+export function FormView({
+  title,
+  description,
+  schema,
+  pages,
+  initial,
+  locked = [],
+  filesNote,
+  preview,
+  submitLabel = "Send",
+  busy,
+  onSubmit,
+  footer,
+  level = 2,
+}: FormViewProps) {
   const all = useMemo(() => pagesOf(pages, schema), [pages, schema]);
   const [raw, setRaw] = useState<Raw>(() => rawOf(schema, initial));
   const [at, setAt] = useState(0);
@@ -67,7 +93,9 @@ export function FormView({ title, description, schema, pages, initial, locked = 
   const [sent, setSent] = useState(false);
   const answers = coerceAnswers(schema, raw);
   const shown = shownPages(all, answers);
-  const page = shown.includes(at) ? at : (shown.filter((i) => i < at).at(-1) ?? shown[0] ?? 0);
+  const page = shown.includes(at)
+    ? at
+    : (shown.filter((i) => i < at).at(-1) ?? shown[0] ?? 0);
   const pos = shown.indexOf(page);
   const last = pos === shown.length - 1;
   const props = schema?.properties ?? {};
@@ -76,7 +104,12 @@ export function FormView({ title, description, schema, pages, initial, locked = 
 
   const asked = (name: string) => {
     const p = props[name];
-    return !!p && widgetOf(p) !== "hidden" && !(filesNote && widgetOf(p) === "file");
+    return (
+      !!p &&
+      widgetOf(p) !== "hidden" &&
+      !deviceKindOf(p) &&
+      !(filesNote && widgetOf(p) === "file")
+    );
   };
   const check = (names: string[]) => {
     const e: Record<string, string> = {};
@@ -100,8 +133,13 @@ export function FormView({ title, description, schema, pages, initial, locked = 
       return;
     }
     // Files are not sent from the app.
-    const out = Object.fromEntries(Object.entries(answersToSend(schema, all, raw)).filter(([k]) => !(filesNote && props[k] && widgetOf(props[k]) === "file")));
-    onSubmit?.(out);
+    const out = Object.fromEntries(
+      Object.entries(answersToSend(schema, all, raw)).filter(
+        ([k]) => !(filesNote && props[k] && widgetOf(props[k]) === "file"),
+      ),
+    );
+    // The web does not ask a device yet: those questions are sent as unavailable.
+    onSubmit?.({ ...out, ...unavailableDeviceAnswers(schema) });
   };
 
   return (
@@ -114,7 +152,12 @@ export function FormView({ title, description, schema, pages, initial, locked = 
         else next();
       }}
     >
-      {title && (level === 1 ? <h1 className="form-title">{title}</h1> : <h2 className="form-title">{title}</h2>)}
+      {title &&
+        (level === 1 ? (
+          <h1 className="form-title">{title}</h1>
+        ) : (
+          <h2 className="form-title">{title}</h2>
+        ))}
       {description && <p className="hint">{description}</p>}
       {shown.length > 1 && (
         <p className="hint" aria-live="polite">
@@ -126,6 +169,14 @@ export function FormView({ title, description, schema, pages, initial, locked = 
       {(current?.fields ?? []).map((name) => {
         const p = props[name];
         if (!p || widgetOf(p) === "hidden") return null;
+        if (deviceKindOf(p))
+          return (
+            <p key={name} className="hint">
+              <strong>{labelOf(name, p)}</strong>: this question needs your
+              phone or browser to read it, which this page cannot do yet. It is
+              sent as not available here.
+            </p>
+          );
         return (
           <FormField
             key={name}
@@ -170,7 +221,12 @@ export function FormView({ title, description, schema, pages, initial, locked = 
   );
 }
 
-const ACCEPT_NAMES: Record<string, string> = { "application/pdf": "PDF", "image/*": "images", "image/jpeg": "JPEG", "image/png": "PNG" };
+const ACCEPT_NAMES: Record<string, string> = {
+  "application/pdf": "PDF",
+  "image/*": "images",
+  "image/jpeg": "JPEG",
+  "image/png": "PNG",
+};
 
 export function FormField({
   name,
@@ -198,11 +254,24 @@ export function FormField({
   const help = h.help ?? p.description;
   const helpId = `${id}-help`;
   const errId = `${id}-err`;
-  const describedBy = [help ? helpId : "", error ? errId : ""].filter(Boolean).join(" ") || undefined;
-  const common = { id, name, "aria-describedby": describedBy, "aria-invalid": error ? true : undefined, readOnly: locked, required };
+  const describedBy =
+    [help ? helpId : "", error ? errId : ""].filter(Boolean).join(" ") ||
+    undefined;
+  const common = {
+    id,
+    name,
+    "aria-describedby": describedBy,
+    "aria-invalid": error ? true : undefined,
+    readOnly: locked,
+    required,
+  };
   const str = typeof value === "string" ? value : "";
   const choices = (w === "checkboxes" ? p.items?.enum : p.enum) ?? [];
-  const mark = required ? <span aria-hidden="true"> *</span> : <span className="hint"> (optional)</span>;
+  const mark = required ? (
+    <span aria-hidden="true"> *</span>
+  ) : (
+    <span className="hint"> (optional)</span>
+  );
   const below = (
     <>
       {help && (
@@ -230,13 +299,25 @@ export function FormField({
         {choices.map((c, i) => (
           <label key={i} className="choice">
             {w === "radio" ? (
-              <input type="radio" name={`${id}-${name}`} checked={value === c} disabled={locked} onChange={() => onChange(c)} />
+              <input
+                type="radio"
+                name={`${id}-${name}`}
+                checked={value === c}
+                disabled={locked}
+                onChange={() => onChange(c)}
+              />
             ) : (
               <input
                 type="checkbox"
                 checked={picked.includes(c)}
                 disabled={locked}
-                onChange={(e) => onChange(e.target.checked ? [...picked, c] : picked.filter((x) => x !== c))}
+                onChange={(e) =>
+                  onChange(
+                    e.target.checked
+                      ? [...picked, c]
+                      : picked.filter((x) => x !== c),
+                  )
+                }
               />
             )}
             {String(c)}
@@ -250,10 +331,18 @@ export function FormField({
     return (
       <div className="form-field">
         <label className="choice" htmlFor={id}>
-          <input type="checkbox" {...common} checked={value === true} disabled={locked} onChange={(e) => onChange(e.target.checked)} />
+          <input
+            type="checkbox"
+            {...common}
+            checked={value === true}
+            disabled={locked}
+            onChange={(e) => onChange(e.target.checked)}
+          />
           <span>
             {w === "consent" ? h.text || label : label}
-            {w === "consent" && required ? <span aria-hidden="true"> *</span> : null}
+            {w === "consent" && required ? (
+              <span aria-hidden="true"> *</span>
+            ) : null}
           </span>
         </label>
         {below}
@@ -263,11 +352,30 @@ export function FormField({
   let input: ReactNode;
   switch (w) {
     case "textarea":
-      input = <textarea {...common} rows={4} placeholder={h.placeholder} value={str} onChange={(e) => onChange(e.target.value)} />;
+      input = (
+        <textarea
+          {...common}
+          rows={4}
+          placeholder={h.placeholder}
+          value={str}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
       break;
     case "select":
       input = (
-        <select {...common} disabled={locked} value={String(choices.findIndex((c) => c === value))} onChange={(e) => onChange(e.target.value === "-1" ? undefined : choices[Number(e.target.value)])}>
+        <select
+          {...common}
+          disabled={locked}
+          value={String(choices.findIndex((c) => c === value))}
+          onChange={(e) =>
+            onChange(
+              e.target.value === "-1"
+                ? undefined
+                : choices[Number(e.target.value)],
+            )
+          }
+        >
           <option value="-1">Choose…</option>
           {choices.map((c, i) => (
             <option key={i} value={i}>
@@ -289,7 +397,8 @@ export function FormField({
             onChange={(e) => onChange(e.target.value)}
             onBlur={() => {
               const n = parseNaira(str);
-              if (n !== undefined && !Number.isNaN(n)) onChange(formatNaira(n, false));
+              if (n !== undefined && !Number.isNaN(n))
+                onChange(formatNaira(n, false));
             }}
           />
         </div>
@@ -305,19 +414,40 @@ export function FormField({
           accept={(h.accept ?? []).join(",") || undefined}
           onChange={(e) => {
             const f = e.target.files?.[0];
-            onChange(f ? { name: f.name, type: f.type, size: f.size } : undefined);
+            onChange(
+              f ? { name: f.name, type: f.type, size: f.size } : undefined,
+            );
           }}
         />
       );
       break;
     default: {
-      const type = { number: "number", email: "email", tel: "tel", url: "url", date: "date", time: "time", "datetime-local": "datetime-local" }[w as string] ?? "text";
+      const type =
+        {
+          number: "number",
+          email: "email",
+          tel: "tel",
+          url: "url",
+          date: "date",
+          time: "time",
+          "datetime-local": "datetime-local",
+        }[w as string] ?? "text";
       input = (
         <input
           {...common}
           type={type}
-          inputMode={w === "number" ? "decimal" : w === "tel" ? "tel" : undefined}
-          autoComplete={p["x-pii"] === "name" ? "name" : w === "email" ? "email" : w === "tel" ? "tel" : undefined}
+          inputMode={
+            w === "number" ? "decimal" : w === "tel" ? "tel" : undefined
+          }
+          autoComplete={
+            p["x-pii"] === "name"
+              ? "name"
+              : w === "email"
+                ? "email"
+                : w === "tel"
+                  ? "tel"
+                  : undefined
+          }
           placeholder={h.placeholder}
           value={str}
           onChange={(e) => onChange(e.target.value)}
@@ -334,7 +464,9 @@ export function FormField({
       {input}
       {w === "file" && !filesNote && (
         <div className="hint">
-          {(h.accept ?? []).map((a) => ACCEPT_NAMES[a] ?? a).join(", ") || "Any file"}, up to {h.max_mb ?? 10} MB
+          {(h.accept ?? []).map((a) => ACCEPT_NAMES[a] ?? a).join(", ") ||
+            "Any file"}
+          , up to {h.max_mb ?? 10} MB
         </div>
       )}
       {below}

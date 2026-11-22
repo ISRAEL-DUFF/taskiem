@@ -18,7 +18,12 @@ type Submission struct {
 	// under UploadAAD(reference, field, n) with n counting that field's.
 	Files     []FileMeta `json:"files,omitempty"`
 	StatusKey string     `json:"status_key,omitempty"`
-	Submitted time.Time  `json:"submitted_at"`
+	// Submitted is when the server received it: the form host's clock,
+	// or the api's for a member's answer.
+	Submitted time.Time `json:"submitted_at"`
+	// Device is what the app or the web says of the device that answered
+	// (device fields §3); the form host sets none.
+	Device *Device `json:"device,omitempty"`
 }
 
 // Respondent is who filled it in (forms 8.2).

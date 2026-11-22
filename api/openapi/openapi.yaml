@@ -15739,6 +15739,9 @@ paths:
               properties:
                 answers:
                   type: object
+                  description: The answers by field. A location field (device fields) takes {lat, lng, accuracy_m, at, fix} read at the tap, {address} typed where the field allows it, or {state refused or unavailable, reason}; its source, state and coarse are set by the server.
+                device:
+                  $ref: '#/components/schemas/FormDevice'
       responses:
         '201':
           description: The submission
@@ -15873,7 +15876,7 @@ paths:
       operationId: listFormRequests
       tags:
       - Forms
-      summary: Form steps waiting for members of your roles
+      summary: Form steps waiting for you, or for members of your roles
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -15898,7 +15901,7 @@ paths:
       operationId: getFormRequest
       tags:
       - Forms
-      summary: A form step addressed to one of your roles, with its prefill
+      summary: A form step addressed to you or one of your roles, with its prefill
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -15924,7 +15927,7 @@ paths:
       operationId: answerFormRequest
       tags:
       - Forms
-      summary: Answer a form step addressed to one of your roles
+      summary: Answer a form step addressed to you or one of your roles
       description: The waiting run goes on with the answers. 409 when it is no longer waiting.
       security:
       - sessionCookie: []
@@ -15949,6 +15952,9 @@ paths:
               properties:
                 answers:
                   type: object
+                  description: The answers by field. A location field (device fields) takes {lat, lng, accuracy_m, at, fix} read at the tap, {address} typed where the field allows it, or {state refused or unavailable, reason}; its source, state and coarse are set by the server.
+                device:
+                  $ref: '#/components/schemas/FormDevice'
       responses:
         '201':
           description: The submission
@@ -51856,6 +51862,9 @@ components:
           type: object
         role:
           type: string
+        member:
+          type: string
+          description: The member asked by name (a form step to one member); absent when asked by role
         status:
           type: string
         expires_at:
@@ -51866,6 +51875,25 @@ components:
           format: date-time
         prefill:
           type: object
+    FormDevice:
+      type: object
+      additionalProperties: false
+      description: The app or the web that answered, and its clock (docs/spec/device-fields.md §3). The server keeps the time it received the answer beside it, and marks clock_differs when the two differ beyond what offline explains.
+      properties:
+        app:
+          type: string
+          enum: [app, web]
+          description: app is the phone app; anything else is taken as web
+        version:
+          type: string
+          maxLength: 40
+        online:
+          type: boolean
+          description: false for an answer made offline and sent later
+        at:
+          type: string
+          format: date-time
+          description: When the answer was made, by the device's clock
     EmbedSiteRequest:
       type: object
       required: [origin]

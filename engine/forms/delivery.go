@@ -158,15 +158,32 @@ func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 		return err
 	}
 	link := s.RequestLink(p.id)
-	if role, _ := to["role"].(string); role != "" {
-		// Members by role: their link opens in the app.
+	role, _ := to["role"].(string)
+	member, _ := to["member"].(string)
+	if role != "" || member != "" {
+		// Members by role, or one member: their request opens in the app
+		// and the web, under To fill in.
 		if !first {
 			_, err = tx.Exec(ctx, `UPDATE form_requests SET reminders_sent = reminders_sent + 1 WHERE id = $1`, p.id)
 			return err
 		}
 		app := strings.TrimRight(s.AppURL, "/") + "/forms/requests/" + p.id.String()
-		if _, err := alerts.Notify(ctx, tx, tenant, alerts.Alert{Kind: AlertFormRequest, Dedup: p.id.String(), Title: "To fill in: " + p.title,
-			Body: "For members with the role " + role + ".", Link: app, Detail: map[string]any{"role": role, "request": p.id.String()}}); err != nil {
+		al := alerts.Alert{Kind: AlertFormRequest, Dedup: p.id.String(), Title: "To fill in: " + p.title,
+			Body: "For members with the role " + role + ".", Link: app, Detail: map[string]any{"role": role, "request": p.id.String()}}
+		if member != "" {
+			var name string
+			if err := tx.QueryRow(ctx, `SELECT COALESCE(NULLIF(u.name, ''), 'a member') FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.tenant_id = $2 AND m.user_id = $1 LIMIT 1`, member, tenant).Scan(&name); err != nil {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				// Not a member of this business: nobody can answer it.
+				s.log().Warn("forms: a form step's member is not a member", "request", p.id)
+				_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: the member named is not a member of this business")
+				return err
+			}
+			al.Body, al.Detail = "For "+name+".", map[string]any{"member": member, "request": p.id.String()}
+		}
+		if _, err := alerts.Notify(ctx, tx, tenant, al); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now() WHERE id = $1`, p.id)

@@ -270,8 +270,8 @@ type ApprovalConfig struct {
 type FormConfig struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
-	// To is who is asked: a phone or email expression, or a role of
-	// members (whose link opens in the app).
+	// To is who is asked: a phone or email expression, a role of members
+	// or one member (whose request opens in the app), or a link's person.
 	To FormTo `json:"to"`
 	// Via are the channels, in order: sms, email.
 	Via []string `json:"via,omitempty"`
@@ -290,11 +290,61 @@ type FormConfig struct {
 	OnTimeout string `json:"on_timeout,omitempty"`
 }
 
-// FormTo is a form step's recipient: exactly one of the three.
+// FormTo is a form step's recipient, a person (docs/spec/device-fields.md
+// §2): exactly one of a phone or an email (expressions over the run, asked
+// by a one-time link), a role of members, one member (an id, or an
+// expression giving one), or the person working a business link. Starter
+// is the string "starter" written as `to` (made tools M4), parsed so the
+// validator can refuse it in plain words.
 type FormTo struct {
-	Phone string `json:"phone,omitempty"`
-	Email string `json:"email,omitempty"`
-	Role  string `json:"role,omitempty"`
+	Phone   string `json:"phone,omitempty"`
+	Email   string `json:"email,omitempty"`
+	Role    string `json:"role,omitempty"`
+	Member  string `json:"member,omitempty"`
+	Link    string `json:"link,omitempty"`
+	Starter bool   `json:"-"`
+}
+
+type formToFields FormTo
+
+// UnmarshalJSON reads an object, or the string "starter".
+func (t *FormTo) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*t = FormTo{Starter: s == "starter"}
+		return nil
+	}
+	return json.Unmarshal(b, (*formToFields)(t))
+}
+
+// MarshalJSON writes "starter", or the object.
+func (t FormTo) MarshalJSON() ([]byte, error) {
+	if t.Starter {
+		return json.Marshal("starter")
+	}
+	return json.Marshal(formToFields(t))
+}
+
+// Kind is which of the recipient's shapes is set: phone, email, role,
+// member, link or starter; "" for none and "several" for more than one.
+func (t FormTo) Kind() string {
+	kind := ""
+	for _, kv := range [][2]string{{"phone", t.Phone}, {"email", t.Email}, {"role", t.Role}, {"member", t.Member}, {"link", t.Link}} {
+		if kv[1] == "" {
+			continue
+		}
+		if kind != "" {
+			return "several"
+		}
+		kind = kv[0]
+	}
+	if t.Starter {
+		if kind != "" {
+			return "several"
+		}
+		return "starter"
+	}
+	return kind
 }
 
 type TransformConfig struct {

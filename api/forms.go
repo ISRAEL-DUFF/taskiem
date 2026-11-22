@@ -581,6 +581,8 @@ func (s *Server) submitMemberForm(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Answers map[string]any `json:"answers"`
+		// Device is the app or the web that answered, and its clock (device fields §3).
+		Device *forms.Device `json:"device"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -615,7 +617,7 @@ func (s *Server) submitMemberForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.processMember(w, r, forms.Incoming{Tenant: p.TenantID, Endpoint: &f.ID, StartedBy: p.Actor(),
-		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now()}})
+		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now(), Device: req.Device}})
 }
 
 func (s *Server) processMember(w http.ResponseWriter, r *http.Request, in forms.Incoming) {
@@ -659,23 +661,26 @@ type requestOut struct {
 	Description *string        `json:"description"`
 	Schema      map[string]any `json:"schema"`
 	Role        string         `json:"role"`
-	Status      string         `json:"status"`
-	ExpiresAt   time.Time      `json:"expires_at"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Prefill     map[string]any `json:"prefill,omitempty"`
+	// Member is set when the step asks one member (to: {member}).
+	Member    string         `json:"member,omitempty"`
+	Status    string         `json:"status"`
+	ExpiresAt time.Time      `json:"expires_at"`
+	CreatedAt time.Time      `json:"created_at"`
+	Prefill   map[string]any `json:"prefill,omitempty"`
 }
 
 // listFormRequests are the form steps waiting for members of the
-// caller's roles.
+// caller's roles, and for the caller by name (to: {member}).
 func (s *Server) listFormRequests(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var list []requestOut
 	err := s.tx(r, func(tx pgx.Tx) error {
 		// The caller's roles in the query, so a page of requests for
 		// other roles does not hide theirs.
-		rows, err := tx.Query(r.Context(), `SELECT id, run_id, title, description, schema, recipient->>'role', status, expires_at, created_at FROM form_requests
-			WHERE status = 'pending' AND expires_at > now() AND recipient ? 'role' AND ($1 OR recipient->>'role' = ANY($2))
-			ORDER BY created_at DESC LIMIT 100`, p.HasRole("owner"), p.Roles)
+		rows, err := tx.Query(r.Context(), `SELECT id, run_id, title, description, schema, recipient->>'role', recipient->>'member', status, expires_at, created_at FROM form_requests
+			WHERE status = 'pending' AND expires_at > now()
+			  AND ((recipient ? 'role' AND ($1 OR recipient->>'role' = ANY($2))) OR recipient->>'member' = $3)
+			ORDER BY created_at DESC LIMIT 100`, p.HasRole("owner"), p.Roles, p.UserID.String())
 		if err != nil {
 			return err
 		}
@@ -702,17 +707,21 @@ type requestOutRow struct {
 	Description *string
 	Schema      map[string]any
 	Role        *string
+	Member      *string
 	Status      string
 	ExpiresAt   time.Time
 	CreatedAt   time.Time
 }
 
 func (x requestOutRow) out() requestOut {
-	role := ""
+	role, member := "", ""
 	if x.Role != nil {
 		role = *x.Role
 	}
-	return requestOut{ID: x.ID, RunID: x.RunID, Title: x.Title, Description: x.Description, Schema: x.Schema, Role: role, Status: x.Status,
+	if x.Member != nil {
+		member = *x.Member
+	}
+	return requestOut{ID: x.ID, RunID: x.RunID, Title: x.Title, Description: x.Description, Schema: x.Schema, Role: role, Member: member, Status: x.Status,
 		ExpiresAt: x.ExpiresAt, CreatedAt: x.CreatedAt}
 }
 
@@ -723,11 +732,14 @@ func (s *Server) memberRequest(ctx context.Context, tx pgx.Tx, id string) (reque
 	}
 	var x requestOutRow
 	var prefill any
-	if err := tx.QueryRow(ctx, `SELECT id, run_id, title, description, schema, recipient->>'role', status, expires_at, created_at FROM form_requests WHERE id = $1`, rid).
-		Scan(&x.ID, &x.RunID, &x.Title, &x.Description, &x.Schema, &x.Role, &x.Status, &x.ExpiresAt, &x.CreatedAt); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id, run_id, title, description, schema, recipient->>'role', recipient->>'member', status, expires_at, created_at FROM form_requests WHERE id = $1`, rid).
+		Scan(&x.ID, &x.RunID, &x.Title, &x.Description, &x.Schema, &x.Role, &x.Member, &x.Status, &x.ExpiresAt, &x.CreatedAt); err != nil {
 		return requestOut{}, err
 	}
-	if x.Role == nil || !principalFrom(ctx).HasRole(*x.Role) {
+	p := principalFrom(ctx)
+	byRole := x.Role != nil && p.HasRole(*x.Role)
+	byName := x.Member != nil && p.UserID != uuid.Nil && *x.Member == p.UserID.String()
+	if !byRole && !byName {
 		return requestOut{}, pgx.ErrNoRows
 	}
 	out := x.out()
@@ -765,6 +777,8 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Answers map[string]any `json:"answers"`
+		// Device is the app or the web that answered, and its clock (device fields §3).
+		Device *forms.Device `json:"device"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -788,7 +802,7 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 		req.Answers = map[string]any{}
 	}
 	s.processMember(w, r, forms.Incoming{Tenant: p.TenantID, Request: &x.ID,
-		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now()}})
+		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now(), Device: req.Device}})
 }
 
 // RunForms takes form submissions from the inbox every second, and every
