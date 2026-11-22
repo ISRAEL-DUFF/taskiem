@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -159,10 +160,21 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 // chatToolNow is the tool a session's data names as it is deployed now:
 // nil (and said why) when it is gone, changed, or no longer the person's.
 func (s *Server) chatToolNow(ctx context.Context, c *chat, data chatData) (*toolRow, error) {
+	if !c.p.Can(PermRunStart) {
+		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+			return nil, err
+		}
+		return nil, c.say(ctx, s, c.t("wa.run.denied_now", "org", c.tenant.Name))
+	}
 	var t toolRow
 	err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
 		var err error
 		t, err = s.toolFor(ctx, tx, c.p, data.Environment, data.Tool)
+		if errors.Is(err, errForbidden) {
+			if aerr := auditStartRefused(ctx, tx, c.ch.Name(), c.p, "tool:"+data.Tool, t.Roles); aerr != nil {
+				return aerr
+			}
+		}
 		return err
 	})
 	switch {
@@ -171,7 +183,7 @@ func (s *Server) chatToolNow(ctx context.Context, c *chat, data chatData) (*tool
 			return nil, err
 		}
 		return nil, c.say(ctx, s, c.t("wa.run.not_yours", "workflow", t.Name, "roles", startRolesWords(t.Roles)))
-	case errors.Is(err, errNotFound) || err == nil && t.Version != data.Version:
+	case errors.Is(err, errNotFound) || err == nil && (t.Workflow != data.Workflow || t.Version != data.Version):
 		if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 			return nil, err
 		}
@@ -196,6 +208,20 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 		return err
 	}); err != nil {
 		return err
+	}
+	// The values, checked against the tool's form as every start is.
+	var def []byte
+	if err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, t.Workflow, t.Version).Scan(&def)
+	}); err != nil {
+		return err
+	}
+	if input == nil {
+		input = map[string]any{}
+	}
+	raw, _ := json.Marshal(input)
+	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {
+		return c.say(ctx, s, c.t("wa.run.bad_inputs", "workflow", t.Name, "problems", whatsapp.SafeText(strings.Join(probs, "; "))))
 	}
 	_, _, err := s.runTool(ctx, c.p, t, input, c.ch.Name(), data.Nonce)
 	if le, ok := runtime.IsLimit(err); ok {

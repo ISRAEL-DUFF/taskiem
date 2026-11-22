@@ -477,7 +477,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	// A tool's run answers with its answer (tools_answer.go): the person
 	// who started it is the one it goes to.
 	if status == "completed" {
-		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string) bool { return true }); err == nil && a.Type != "outcome" {
+		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }); err == nil && a.Type != "outcome" {
 			if words := toolAnswerWords(l, a); words != "" {
 				title, body = words, ""
 			}

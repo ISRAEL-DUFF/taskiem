@@ -32,9 +32,8 @@ const (
 
 // ToolCare works out a definition's care, its template steps expanded with
 // find (a template step is judged by the steps it becomes). A
-// customers' tool never answers without yes (made tools §11). The
-// business's policies may still ask for step-up when the tool is started;
-// that is read then, since policies change after publishing.
+// customers' tool never answers without yes (made tools §11). No
+// approval policy names a workflow's start, so none is read at start.
 func ToolCare(doc []byte, reg connector.Lookup, find expansion.Templates) (Care, error) {
 	def, err := expandedDef(doc, find)
 	if err != nil {
@@ -78,6 +77,9 @@ func stepCare(st *wd.Step, reg connector.Lookup) string {
 	case "branch", "parallel", "foreach", "transform", "ai":
 		return CareAnswers
 	case "connector", "capability", "http", "container", "subflow":
+		if st.Type == "connector" && spendsMoney[st.Connector+"/"+st.Action] {
+			return CareStepUp
+		}
 		switch templates.StepEffect(st, reg) {
 		case templates.EffectMovesMoney:
 			return CareStepUp
@@ -89,6 +91,13 @@ func stepCare(st *wd.Step, reg connector.Lookup) string {
 	// code, form, approval, wait, signal, callback, respond, and anything
 	// not known.
 	return CareYes
+}
+
+// spendsMoney are actions outside the payments connectors that spend the
+// business's money all the same (airtime from its balance): a tool with one
+// asks a passkey too.
+var spendsMoney = map[string]bool{
+	"africastalking@1/send_airtime": true,
 }
 
 // toolProblems are the tool rules that need the platform: a command or a
@@ -134,6 +143,12 @@ var extraReserved = []string{
 	"count", "stock", "take", "order", "orders", "customer", "customers", "product", "products", "price", "prices",
 	"save", "saved", "remind", "reminder", "done", "can", "add", "invite", "link", "sign", "pin", "switch", "language",
 	"tables", "find", "search", "publish", "build", "connect",
+	// Building a workflow from words (the chat's build words).
+	"create", "automate", "automatically", "every", "each", "whenever", "when", "daily", "weekly", "monthly", "once",
+	"remind", "notify", "alert", "tell", "text", "sms", "whatsapp", "message", "email",
+	// The built-in tools' own "/" words.
+	"products", "sell", "handover", "services", "purchases", "students", "payment", "payments", "debtors", "clearance",
+	"receipts", "money", "riders", "staff", "tasks", "schools", "fees", "attendance", "bookings", "clock", "briefing",
 }
 
 // ReservedCommand reports whether word starts one of Taskiem's own

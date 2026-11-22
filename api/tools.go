@@ -273,12 +273,20 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 		out.Run, out.Created, err = s.runTool(ctx, p, t, input, channel, dedup)
 		return out, err
 	}
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
+		// A key cannot say yes: a tool that asks is started by a person.
+		return toolStart{}, fmt.Errorf("%w: %s asks before it runs, and only a person can answer; start it in the app, on the web or in a chat", errForbidden, t.Name)
+	}
 	id, _ := uuid.NewV7()
 	until := time.Now().Add(toolConfirmFor)
-	digest := sha256.Sum256(canonicalJSON(input))
+	digest := confirmDigest(id, input)
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+		// Confirms gone a day are let go here, the business's own.
+		if _, err := tx.Exec(ctx, `DELETE FROM tool_confirms WHERE expires_at < now() - interval '1 day'`); err != nil {
+			return err
+		}
 		_, err := tx.Exec(ctx, `INSERT INTO tool_confirms (id, tenant_id, user_id, workflow_id, version, environment, command, care, input_digest, channel, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, id, p.TenantID, p.UserID, t.Workflow, t.Version, t.Environment, t.Command, out.Care, digest[:], channel, until)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, id, p.TenantID, p.UserID, t.Workflow, t.Version, t.Environment, t.Command, out.Care, digest, channel, until)
 		return err
 	}); err != nil {
 		return toolStart{}, err
@@ -294,18 +302,19 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 	if input == nil {
 		input = map[string]any{}
 	}
-	digest := sha256.Sum256(canonicalJSON(input))
+	digest := confirmDigest(confirm, input)
 	var c struct {
-		user    uuid.UUID
-		version int
-		digest  []byte
-		expires time.Time
-		run     *uuid.UUID
-		channel string
+		user     uuid.UUID
+		workflow uuid.UUID
+		version  int
+		digest   []byte
+		expires  time.Time
+		run      *uuid.UUID
+		channel  string
 	}
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT user_id, version, input_digest, expires_at, run_id, channel FROM tool_confirms WHERE id = $1 AND command = $2 AND environment = $3 FOR UPDATE`,
-			confirm, t.Command, t.Environment).Scan(&c.user, &c.version, &c.digest, &c.expires, &c.run, &c.channel)
+		return tx.QueryRow(ctx, `SELECT user_id, workflow_id, version, input_digest, expires_at, run_id, channel FROM tool_confirms WHERE id = $1 AND command = $2 AND environment = $3`,
+			confirm, t.Command, t.Environment).Scan(&c.user, &c.workflow, &c.version, &c.digest, &c.expires, &c.run, &c.channel)
 	})
 	switch {
 	case errors.Is(err, pgx.ErrNoRows) || err == nil && c.user != p.UserID:
@@ -316,9 +325,9 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 		return *c.run, false, nil
 	case time.Now().After(c.expires):
 		return uuid.Nil, false, fmt.Errorf("%w: that confirmation has expired; start the tool again", errConflict)
-	case c.version != t.Version:
+	case c.workflow != t.Workflow || c.version != t.Version:
 		return uuid.Nil, false, fmt.Errorf("%w: the tool changed since you started it; start it again", errConflict)
-	case !bytes.Equal(c.digest, digest[:]):
+	case !bytes.Equal(c.digest, digest):
 		return uuid.Nil, false, fmt.Errorf("%w: those are not the values you were shown; start the tool again", errConflict)
 	}
 	run, created, err := s.runTool(ctx, p, t, input, c.channel, "tool-confirm:"+confirm.String())
@@ -401,7 +410,16 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 	if req.AnswerInChat {
 		channel = "web"
 	}
-	out, err := s.startTool(r.Context(), p, t, req.Input, channel, r.Header.Get("Idempotency-Key"))
+	// An Idempotency-Key is the caller's own: two people's keys never meet.
+	key := r.Header.Get("Idempotency-Key")
+	if len(key) > 255 {
+		s.fail(w, r, fmt.Errorf("%w: Idempotency-Key is longer than 255 characters", errBadRequest))
+		return
+	}
+	if key != "" {
+		key = p.Actor() + ":" + key
+	}
+	out, err := s.startTool(r.Context(), p, t, req.Input, channel, key)
 	if err != nil {
 		s.toolRefused(w, r, err, t.Command)
 		return
@@ -439,6 +457,11 @@ func (s *Server) confirmToolRoute(w http.ResponseWriter, r *http.Request) {
 		return err
 	}); err != nil {
 		s.toolRefused(w, r, err, chi.URLParam(r, "command"))
+		return
+	}
+	// The confirm is checked before a passkey is spent on it.
+	if err := s.confirmUsable(r.Context(), p, t, req.Confirm, req.Input); err != nil {
+		s.toolRefused(w, r, err, t.Command)
 		return
 	}
 	if t.Asks() == wdcheck.CareStepUp {
@@ -534,6 +557,16 @@ func (s *Server) setToolSettings(w http.ResponseWriter, r *http.Request) {
 // errNotFound is a refusal that says what was not found (404).
 var errNotFound = errors.New("not found")
 
+// confirmDigest is what a confirm keeps of the values it was shown: a
+// digest salted with the confirm's own id, so low-entropy values (a phone,
+// an amount) cannot be looked up from it.
+func confirmDigest(id uuid.UUID, input map[string]any) []byte {
+	h := sha256.New()
+	h.Write(id[:])
+	h.Write(canonicalJSON(input))
+	return h.Sum(nil)
+}
+
 // canonicalJSON is v as JSON with its keys in order, for a digest.
 func canonicalJSON(v any) []byte {
 	b, _ := json.Marshal(v)
@@ -553,4 +586,37 @@ func waAuditAs(ctx context.Context, tx pgx.Tx, channel string, p *Principal, act
 	raw, _ := json.Marshal(detail)
 	_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, $2, $3, $4, $5, $6)`, p.TenantID, p.ActorType(), p.Actor(), action, target, raw)
 	return err
+}
+
+// confirmUsable says whether a confirm can still start its run for p with
+// these values, without starting it (a confirm used before is usable: it
+// answers with its run).
+func (s *Server) confirmUsable(ctx context.Context, p *Principal, t toolRow, confirm uuid.UUID, input map[string]any) error {
+	if input == nil {
+		input = map[string]any{}
+	}
+	var user, wf uuid.UUID
+	var version int
+	var digest []byte
+	var expires time.Time
+	var run *uuid.UUID
+	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT user_id, workflow_id, version, input_digest, expires_at, run_id FROM tool_confirms WHERE id = $1 AND command = $2 AND environment = $3`,
+			confirm, t.Command, t.Environment).Scan(&user, &wf, &version, &digest, &expires, &run)
+	})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows) || err == nil && user != p.UserID:
+		return fmt.Errorf("%w: that confirmation is not yours, or has gone; start the tool again", errNotFound)
+	case err != nil:
+		return err
+	case run != nil:
+		return nil
+	case time.Now().After(expires):
+		return fmt.Errorf("%w: that confirmation has expired; start the tool again", errConflict)
+	case wf != t.Workflow || version != t.Version:
+		return fmt.Errorf("%w: the tool changed since you started it; start it again", errConflict)
+	case !bytes.Equal(digest, confirmDigest(confirm, input)):
+		return fmt.Errorf("%w: those are not the values you were shown; start the tool again", errConflict)
+	}
+	return nil
 }

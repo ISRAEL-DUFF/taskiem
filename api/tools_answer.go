@@ -81,7 +81,13 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	a, err := s.answerOf(r.Context(), p.TenantID, id, func(startedBy string) bool { return p.Can(PermRunRead) || startedBy == p.Actor() })
+	a, err := s.answerOf(r.Context(), p.TenantID, id, func(startedBy, env string) bool {
+		// An environment-scoped key reads only its environment's runs.
+		if p.Environment != "" && env != p.Environment {
+			return false
+		}
+		return p.Can(PermRunRead) || startedBy == p.Actor()
+	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -91,20 +97,21 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 
 // answerOf draws run id's answer; may says whether the asker may see the
 // run (by who started it).
-func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(startedBy string) bool) (madeAnswer, error) {
+func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(startedBy, env string) bool) (madeAnswer, error) {
 	var a madeAnswer
 	var wf uuid.UUID
 	var version int
 	var startedBy *string
+	var env string
 	var def []byte
 	var outputs map[string]any
 	err := db0(ctx, s, tenant, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT r.workflow_id, r.version, r.status, r.started_by, wv.definition FROM runs r
+		if err := tx.QueryRow(ctx, `SELECT r.workflow_id, r.version, r.status, r.started_by, r.environment, wv.definition FROM runs r
 			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, id).
-			Scan(&wf, &version, &a.Status, &startedBy, &def); err != nil {
+			Scan(&wf, &version, &a.Status, &startedBy, &env, &def); err != nil {
 			return err
 		}
-		if !may(strOr(startedBy)) {
+		if !may(strOr(startedBy), env) {
 			return pgx.ErrNoRows
 		}
 		if a.Status != "completed" {
@@ -120,11 +127,9 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 		}
 		var done history.RunCompletedPayload
 		_ = json.Unmarshal(payload, &done)
-		opened, err := pii.Open(ctx, s.Store.PII, tx, tenant, done.Outputs, pii.Taint{})
-		if err != nil {
-			return err
-		}
-		outputs, _ = opened.(map[string]any)
+		// Personal data the run sealed is never opened for an answer: it
+		// shows masked, and the full value only to whoever may open the run.
+		outputs, _ = maskEnvelopes(any(done.Outputs)).(map[string]any)
 		return nil
 	})
 	if err != nil {
@@ -196,6 +201,9 @@ func drawAnswer(a *madeAnswer, ans *wd.Answer, outputs map[string]any) {
 			in := map[string]any{}
 			for k, v := range b.Inputs {
 				if got, err := answerEngine.Resolve(v, act, false); err == nil {
+					if str, ok := got.(string); ok {
+						got = maskWords(str)
+					}
 					in[k] = got
 				}
 			}
@@ -287,4 +295,27 @@ func strOr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// maskEnvelopes replaces every value the run sealed as personal data with a
+// mask, at any depth, without opening it.
+func maskEnvelopes(v any) any {
+	if pii.IsEnvelope(v) {
+		return "•••"
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[k] = maskEnvelopes(e)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = maskEnvelopes(e)
+		}
+		return out
+	}
+	return v
 }

@@ -33,7 +33,7 @@ The plan's nine questions were settled with the founder on 19 November 2026 ([ma
 
 - `tool` and `answer` in `wd/v1` and the definition model, with `public` and `x-pii` on outputs; the SDK, `wddiff` and `wdmerge`.
 - The validator's rules of [made tools §12](../spec/made-tools.md#12-what-the-validator-refuses) that need no later phase: in `engine/wd` (the trigger, the answer's outputs and limits, customers' public outputs and flat inputs; `linked` refused until T7), in `engine/wdcheck` (Taskiem's own words, in every language, and a step that moves money in a customers' tool) and at deploy (a command another workflow deployed in the environment has).
-- Care worked out from the steps (`wdcheck.ToolCare`) when a version is published, and kept with it (`workflow_versions.tool_care`, migration 00519). The business's policies are read when a tool is started (M1), since they change after publishing.
+- Care worked out from the steps (`wdcheck.ToolCare`) when a version is published, and kept with it (`workflow_versions.tool_care`, migration 00519). No approval policy names a workflow's start today, so none is read when a tool starts; approval steps inside the workflow keep their own step-up. A tool's answer never opens what the run sealed as personal data: it shows masked.
 
 ## Alternatives considered
 

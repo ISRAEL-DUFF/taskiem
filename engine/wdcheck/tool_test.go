@@ -85,7 +85,7 @@ func TestToolCare(t *testing.T) {
 }
 
 func TestReservedWords(t *testing.T) {
-	for _, w := range []string{"invoice", "run", "yes", "help", "tools", "pay", "approvals"} {
+	for _, w := range []string{"invoice", "run", "yes", "help", "tools", "pay", "approvals", "every", "daily", "when", "debtors", "handover"} {
 		if !wdcheck.ReservedCommand(w) {
 			t.Errorf("%q not reserved", w)
 		}

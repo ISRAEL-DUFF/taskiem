@@ -113,6 +113,14 @@ func TestToolUse(t *testing.T) {
 		t.Errorf("audited: %q %v", tool, err)
 	}
 
+	// A key cannot say yes to a tool that asks.
+	k := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "ci", "permissions": []string{"run.start", "run.read"}})["key"].(string)
+	key := &client{t: t, base: w.base, token: k}
+	key.must(403, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{"who": "Ada"}})
+	// A key kept to another environment reads no prod answer.
+	devKey := &client{t: t, base: w.base, token: owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "dev", "permissions": []string{"run.read"}, "environment": "dev"})["key"].(string)}
+	devKey.must(404, "GET", "/v1/runs/"+run+"/answer", nil)
+
 	// Deployed without the block: no tool.
 	plain := strings.Replace(string(def), `"tool":{"name":"Leave left","command":"leave-left","about":"Days of leave left","answer":{"type":"text","text":"=outputs.who + ' has ' + string(outputs.left) + ' days of leave left'"}},`, "", 1)
 	v := owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": json.RawMessage(plain)})["version"]

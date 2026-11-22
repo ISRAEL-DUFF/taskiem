@@ -22,7 +22,7 @@ Worked out from its steps when it is published, never chosen by whoever made it:
 | **Asks yes** | Anything else: it writes, sends, asks a person, waits, runs code | What will run, and **Yes** |
 | **Asks yes and a passkey** | A step moves money out of the business | **Yes**, then a passkey (on WhatsApp, Telegram and Slack, the link to confirm) |
 
-An owner may make a tool **always ask** (`PUT /v1/tools/{command}/settings`), never less careful than its steps. A tool's run counts against the plan's run limits as any run.
+Some actions outside payments spend the business's money all the same (airtime from its balance): they ask for a passkey too. An owner may make a tool **always ask** (`PUT /v1/tools/{command}/settings`), never less careful than its steps. A tool's run counts against the plan's run limits as any run.
 
 ## The API
 
@@ -33,4 +33,4 @@ An owner may make a tool **always ask** (`PUT /v1/tools/{command}/settings`), ne
 | `POST /v1/tools/{command}/confirm` | The confirm and the same values (and a passkey for a tool that moves money): the run, once |
 | `GET /v1/runs/{id}/answer` | The run's answer as data, masked as messages are: text, card or list; how it ended while it runs or when it failed |
 
-What a tool shows is read with the business's connections, not with the rights of whoever calls it: a tool that reads salaries shows them to everyone who may use it. Choose its **Who can start it** with that in mind.
+An API key may start a tool that only reads; one that asks waits for a person. An `Idempotency-Key` is the caller's own. What the run sealed as personal data is never opened for an answer: it shows masked (•••), and in full only on the run, to whoever may reveal it. What a tool shows is read with the business's connections, not with the rights of whoever calls it: a tool that reads salaries shows them to everyone who may use it. Choose its **Who can start it** with that in mind.

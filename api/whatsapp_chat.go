@@ -1260,15 +1260,16 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 			return err
 		}
 	}
+	if goal, ok := waBuildGoal(text, cmd); ok && c.state == stateIdle {
+		return s.waStartBuild(ctx, c, goal)
+	}
 	// A business's own tool by its plain command or a phrase it says,
-	// after Taskiem's own words, which always win (tools_chat.go).
+	// after Taskiem's own words, building included, which always win
+	// (tools_chat.go).
 	if !matched {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
 			return err
 		}
-	}
-	if goal, ok := waBuildGoal(text, cmd); ok && c.state == stateIdle {
-		return s.waStartBuild(ctx, c, goal)
 	}
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
