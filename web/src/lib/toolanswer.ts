@@ -21,12 +21,46 @@ export interface ToolStart {
   values: ToolValue[];
 }
 
-/** A button on an answer: it opens the tool it names, filled in. */
+/** A button on an answer: pressed by its token (POST
+ * /v1/tools/buttons/{token}), it opens the tool it names, filled in. */
 export interface ToolButton {
   label: string;
   tool: string;
   inputs?: Record<string, unknown>;
   once?: boolean;
+  token?: string;
+}
+
+/** POST /v1/tools/buttons/{token}: the tool a button opens for whoever
+ * pressed it, and the values it fills in. */
+export interface PressedButton {
+  button: string;
+  command: string;
+  name: string;
+  inputs: Record<string, unknown>;
+  once: boolean;
+}
+
+/** The buttons that can be pressed: those the server minted (a button
+ * without its token is left out), each with its place among them all. */
+export const pressable = (bs: ToolButton[] | undefined) =>
+  (bs ?? []).flatMap((b, i) => (b.token ? [{ b, i }] : []));
+
+/** Why a button did not open its tool, and whether it is spent (greyed):
+ * someone was first (the server's words), or it is gone. */
+export function pressErrorWords(e: unknown): { words: string; spent: boolean } {
+  if (e instanceof ApiError && e.status === 409)
+    return { words: sentence(e.message || "Already done."), spent: true };
+  if (e instanceof ApiError && e.status === 404)
+    return { words: "This button is not available any more.", spent: true };
+  return { words: startErrorWords(e), spent: false };
+}
+
+/** Words as a sentence: a capital, a full stop. */
+function sentence(s: string): string {
+  const w = s.trim();
+  const up = w.charAt(0).toUpperCase() + w.slice(1);
+  return /[.!?]$/.test(up) ? up : `${up}.`;
 }
 
 export interface AnswerState {
@@ -107,14 +141,6 @@ export function answerWords(a: ToolAnswer): string | undefined {
 /** A list's rows to show at first, and how many more there are. */
 export function firstRows<T>(rows: T[], n = 10): { shown: T[]; more: number } {
   return { shown: rows.slice(0, n), more: Math.max(0, rows.length - n) };
-}
-
-/** A button's inputs as a form's first values (only what fits a field). */
-export function buttonValues(b: ToolButton): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(b.inputs ?? {}))
-    if (v !== null && v !== undefined) out[k] = v;
-  return out;
 }
 
 /** "Amount: 4500 · What for: Diesel": the values in a line. */

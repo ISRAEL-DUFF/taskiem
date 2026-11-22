@@ -71,13 +71,17 @@ export interface FormTriggerConfig {
 export interface FormStepConfig {
   title?: string;
   description?: string;
-  to?: {
-    phone?: string;
-    email?: string;
-    role?: string;
-    member?: string;
-    link?: string;
-  };
+  /** Who answers: a phone, an email, members with a role, one member, a
+   * business link, or "starter", whoever started the run (made tools M4). */
+  to?:
+    | "starter"
+    | {
+        phone?: string;
+        email?: string;
+        role?: string;
+        member?: string;
+        link?: string;
+      };
   via?: string[];
   verify?: boolean;
   schema?: FormSchema;
@@ -1253,12 +1257,19 @@ export function stepProblems(cfg: FormStepConfig, path = ""): Problem[] {
   const add = (sub: string, message: string) =>
     out.push({ path: path + sub, message });
   if (!cfg.title?.trim()) add("/title", "a form step needs a title");
-  const to = cfg.to ?? {};
+  const starter = cfg.to === "starter";
+  const to = typeof cfg.to === "object" ? cfg.to : {};
   const set = [to.phone, to.email, to.role, to.member, to.link].filter(
     (v) => v !== undefined && v !== "",
   );
-  if (set.length !== 1)
-    add("/to", "to is exactly one of phone, email, role, member or link");
+  if (starter) {
+    if (cfg.verify)
+      add(
+        "/verify",
+        "the person who started it is signed in: verify is for a phone or email",
+      );
+  } else if (set.length !== 1)
+    add("/to", "to is exactly one of phone, email, role, member, link or starter");
   else if (
     to.link &&
     !to.link.trim().startsWith("=") &&

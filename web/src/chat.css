@@ -762,6 +762,8 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-answer-note p { margin: 0; }
 .tk-answer-note.bad { background: var(--tint-warn); color: var(--tint-warn-text); }
 .tk-answer-note a { color: inherit; text-decoration: underline; }
+/* A button someone else used first, or one gone: why, under its row. */
+.tk-answer-taken { display: block; color: var(--muted); font-size: 13.5px; }
 .tk-answer-card { background: var(--panel-2); box-shadow: 0 0 0 1px var(--border); }
 .tk-answer-amount { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tk-answer-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

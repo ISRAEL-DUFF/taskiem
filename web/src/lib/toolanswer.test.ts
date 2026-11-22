@@ -3,10 +3,11 @@ import { ApiError } from "../api";
 import {
   answerTone,
   answerWords,
-  buttonValues,
   careWords,
   firstRows,
   nextAsk,
+  pressable,
+  pressErrorWords,
   startErrorWords,
   stillGoing,
   valuesLine,
@@ -43,12 +44,35 @@ describe("the answer", () => {
     expect(firstRows(rows)).toEqual({ shown: rows.slice(0, 10), more: 14 });
     expect(firstRows([1, 2])).toEqual({ shown: [1, 2], more: 0 });
   });
-  it("fills a tool's form from a button", () => {
-    expect(buttonValues({ label: "Close", tool: "close-ticket", inputs: { ref: "T-1", gone: null } })).toEqual({ ref: "T-1" });
-    expect(buttonValues({ label: "Open", tool: "x" })).toEqual({});
+  it("shows only the buttons the server minted, each in its place", () => {
+    const bs = [
+      { label: "Assign to me", tool: "assign", token: "b1" },
+      { label: "Old", tool: "assign" },
+      { label: "Close", tool: "close", token: "b3" },
+    ];
+    expect(pressable(bs).map(({ b, i }) => [b.label, i])).toEqual([["Assign to me", 0], ["Close", 2]]);
+    expect(pressable(undefined)).toEqual([]);
   });
   it("puts the values in a line", () => {
     expect(valuesLine([{ name: "a", label: "Amount", value: "4500" }, { name: "w", label: "What for", value: "Diesel" }])).toBe("Amount: 4500 · What for: Diesel");
+  });
+});
+
+describe("pressErrorWords", () => {
+  it("says who took a once button, and greys it", () => {
+    expect(pressErrorWords(new ApiError(409, "Already done: taken by Ada at 10:42 on 22 Nov.", [], { taken_by: "Ada" }))).toEqual({
+      words: "Already done: taken by Ada at 10:42 on 22 Nov.",
+      spent: true,
+    });
+  });
+  it("says a button that is gone is not available, and greys it", () => {
+    expect(pressErrorWords(new ApiError(404, "this button is not available any more"))).toEqual({
+      words: "This button is not available any more.",
+      spent: true,
+    });
+  });
+  it("leaves the button for anything else", () => {
+    expect(pressErrorWords(new ApiError(0, ""))).toEqual({ words: "You are offline. Try again when you are back online.", spent: false });
   });
 });
 

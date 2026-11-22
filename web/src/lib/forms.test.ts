@@ -404,6 +404,22 @@ describe("client-side checks", () => {
         schema: q,
       }).map((p) => p.path),
     ).toEqual(["/to/link"]);
+    // Whoever started the run (made tools M4), signed in: no code to send.
+    const branch = {
+      type: "object",
+      properties: { branch: { type: "string", "x-saved": "place" } },
+    };
+    expect(
+      stepProblems({ title: "Which branch?", to: "starter", schema: branch }),
+    ).toEqual([]);
+    expect(
+      stepProblems({
+        title: "Which branch?",
+        to: "starter",
+        verify: true,
+        schema: branch,
+      }).map((p) => p.path),
+    ).toEqual(["/verify"]);
     // The web's device answers (D1).
     expect(
       locationAnswer({

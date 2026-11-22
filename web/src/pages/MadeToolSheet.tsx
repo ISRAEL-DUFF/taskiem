@@ -8,12 +8,14 @@ import { naira } from "../lib/invoices";
 import {
   answerTone,
   answerWords,
-  buttonValues,
   careWords,
   firstRows,
   nextAsk,
+  pressable,
+  pressErrorWords,
   startErrorWords,
   stillGoing,
+  type PressedButton,
   type ToolAnswer,
   type ToolButton,
   type ToolStart,
@@ -33,8 +35,13 @@ import { EmptyState, ErrorBox, PageHeader, Skeleton } from "../ui";
 // answer (§7), asked for gently until the run ends: a sentence, a card in
 // the chat's card frame, or a list whose buttons open the tools they name.
 
-/** A tool to open, with the values its form starts with (a button's). */
-export type OpenTool = (command: string, values?: Record<string, unknown>) => void;
+/** A tool to open, with the values its form starts with, and the button
+ * pressed to open it (its token, sent with the start). */
+export type OpenTool = (
+  command: string,
+  values?: Record<string, unknown>,
+  button?: string,
+) => void;
 
 type Phase =
   | { at: "form" }
@@ -102,26 +109,66 @@ function Values({ values, label }: { values: ToolValue[]; label: string }) {
   );
 }
 
-/** A button on an answer: opens the tool it names, filled in. */
-function AnswerButton({
-  b,
+/** An answer's buttons: each pressed by its token, which opens the tool
+ * the server says with the values it gives, for whoever pressed it (made
+ * tools M2). A once button someone used says who took it and greys; one
+ * that is gone says so. */
+function AnswerButtons({
+  bs,
   onOpenTool,
   row,
 }: {
-  b: ToolButton;
+  bs?: ToolButton[];
   onOpenTool?: OpenTool;
   row?: string;
 }) {
+  const [busy, setBusy] = useState<number>();
+  const [spent, setSpent] = useState<Record<number, true>>({});
+  const [note, setNote] = useState<string>();
+  const shown = pressable(bs);
+  if (shown.length === 0) return null;
+  const press = async (b: ToolButton, i: number) => {
+    if (!onOpenTool || !b.token) return;
+    setBusy(i);
+    setNote(undefined);
+    try {
+      const p = await post<PressedButton>(
+        `/v1/tools/buttons/${encodeURIComponent(b.token)}`,
+      );
+      onOpenTool(p.command, p.inputs ?? {}, b.token);
+    } catch (e) {
+      const why = pressErrorWords(e);
+      if (why.spent) {
+        setSpent((s) => ({ ...s, [i]: true }));
+        setNote(why.words);
+      } else toast(why.words, "error");
+    } finally {
+      setBusy(undefined);
+    }
+  };
   return (
-    <button
-      type="button"
-      className="small"
-      onClick={() => onOpenTool?.(b.tool, buttonValues(b))}
-      disabled={!onOpenTool}
-    >
-      {b.label}
-      {row && <span className="sr-only">: {row}</span>}
-    </button>
+    <>
+      <span className="tk-chatcard-actions">
+        {shown.map(({ b, i }) => (
+          <button
+            key={i}
+            type="button"
+            className="small"
+            onClick={() => void press(b, i)}
+            disabled={!onOpenTool || busy !== undefined || !!spent[i]}
+            data-spent={spent[i] ? "" : undefined}
+          >
+            {b.label}
+            {row && <span className="sr-only">: {row}</span>}
+          </button>
+        ))}
+      </span>
+      {note && (
+        <span className="tk-answer-taken" role="status">
+          {note}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -200,13 +247,7 @@ export function AnswerView({
             ))}
           </dl>
         )}
-        {(a.buttons ?? []).length > 0 && (
-          <span className="tk-chatcard-actions">
-            {(a.buttons ?? []).map((b, i) => (
-              <AnswerButton key={i} b={b} onOpenTool={onOpenTool} />
-            ))}
-          </span>
-        )}
+        <AnswerButtons bs={a.buttons} onOpenTool={onOpenTool} />
       </article>
     );
   const rows = a.rows ?? [];
@@ -235,24 +276,19 @@ export function AnswerView({
                   <Pill tone={answerTone(r.state.tone)}>{r.state.text}</Pill>
                 )}
               </span>
-              {all && (r.actions ?? []).length > 0 && (
-                <span className="tk-chatcard-actions">
-                  {(r.actions ?? []).map((b, j) => (
-                    <AnswerButton
-                      key={j}
-                      b={b}
-                      onOpenTool={onOpenTool}
-                      row={r.title}
-                    />
-                  ))}
-                </span>
+              {all && (
+                <AnswerButtons
+                  bs={r.actions}
+                  onOpenTool={onOpenTool}
+                  row={r.title}
+                />
               )}
             </li>
           ))}
         </ul>
       )}
       {!all &&
-        (more > 0 || rows.some((r) => (r.actions ?? []).length > 0)) && (
+        (more > 0 || rows.some((r) => pressable(r.actions).length > 0)) && (
           <span className="tk-chatcard-actions">
             <button type="button" className="small" onClick={() => setAll(true)}>
               {more > 0 ? `See all (${more} more)` : "See all"}
@@ -270,12 +306,16 @@ type NeedsKey = { methods: string[] };
 export function ToolRunner({
   tool,
   values,
+  button,
   onOpenTool,
   onStarted,
 }: {
   tool: MadeTool;
   /** The form's first values (a button's). */
   values?: Record<string, unknown>;
+  /** The button pressed to open it: sent with the start, which spends a
+   * once button (the confirm keeps it). */
+  button?: string;
   onOpenTool?: OpenTool;
   /** A run started (the conversation may show what is newer). */
   onStarted?: (run: string) => void;
@@ -315,6 +355,7 @@ export function ToolRunner({
         input: input ?? {},
         // The web's Taskiem conversation also keeps the answer's words.
         answer_in_chat: true,
+        ...(button && { button }),
       });
       if (r.run_id) started(r.run_id, r.values, true);
       else setPhase({ at: "confirm", start: r });
@@ -503,14 +544,19 @@ export function MadeToolSheet({
 }) {
   const { can } = useAuth();
   const tools = useMadeTools(can("run.start"));
-  const [open, setOpen] = useState({ command, values, n: 0 });
+  const [open, setOpen] = useState<{
+    command: string;
+    values?: Record<string, unknown>;
+    button?: string;
+    n: number;
+  }>({ command, values, n: 0 });
   const tool = tools.find((t) => t.command === open.command);
-  const openTool: OpenTool = (c, v) => {
+  const openTool: OpenTool = (c, v, button) => {
     if (!tools.some((t) => t.command === c)) {
       toast("This is not available: that tool is not one of yours.", "error");
       return;
     }
-    setOpen((o) => ({ command: c, values: v, n: o.n + 1 }));
+    setOpen((o) => ({ command: c, values: v, button, n: o.n + 1 }));
   };
   return (
     <Sheet
@@ -526,6 +572,7 @@ export function MadeToolSheet({
           key={`${tool.command}:${open.n}`}
           tool={tool}
           values={open.values}
+          button={open.button}
           onOpenTool={openTool}
           onStarted={onStarted}
         />
