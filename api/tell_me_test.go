@@ -70,3 +70,48 @@ func TestTellMe(t *testing.T) {
 		t.Errorf("run: %s", toJSON(runs))
 	}
 }
+
+const payStaffFlow = `{"schema":"wd/v1","id":"wf_paid","version":1,"name":"Paid","trigger":{"type":"manual"},
+  "inputs":{"schema":{"type":"object","properties":{"employee":{"type":"string"},"phone":{"type":"string","x-pii":"phone"}}}},
+  "steps":[
+    {"id":"tell","type":"connector","name":"Tell them they were paid","connector":"notify@1","action":"message",
+     "input":{"phone":"=trigger.body.phone","payrolla_employee":"=trigger.body.employee","about":"your pay","message":"Your pay of NGN 250000 has been paid."}}]}`
+
+// Payroll messages (P4a): about a Payrolla employee an owner linked to a
+// staff member, they reach that staff member's own chat with the business,
+// not their phone as someone outside it; an employee linked to no one is
+// messaged by phone as before.
+func TestTellPayrollaStaff(t *testing.T) {
+	w := newWAWorld(t)
+	ctx := context.Background()
+	if err := w.env.Registry.Register(notify.New(&notify.Notifier{Pool: w.env.Store.Pool, Chat: []string{"whatsapp"},
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}})); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Ada Stores", "ada@paidstaff.test")
+	musa := w.member(t, owner, "musa@paidstaff.test", "cashier")
+	const on = "+2348010000072"
+	w.bind(t, musa, on)
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO staff_profiles (tenant_id, user_id, payrolla_employee_id, payrolla_name, updated_by)
+		VALUES ($1, $2, 'emp-musa', 'Musa Bello', 'user:test')`, tenantOf(t, owner), idOf(t, musa)); err != nil {
+		t.Fatal(err)
+	}
+	wf := publishFlow(t, owner, payStaffFlow)
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"employee": "emp-musa", "phone": "08031119999"}})
+	w.env.Drain(t)
+	w.tick(t)
+	if got := w.graph.Last(t, on); !strings.Contains(got.Text, "Your pay of NGN 250000") {
+		t.Fatalf("on their own chat: %+v", got)
+	}
+	var sms int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE channel = 'sms'`).Scan(&sms); err != nil || sms != 0 {
+		t.Fatalf("texted as well: %d %v", sms, err)
+	}
+
+	// Linked to no one: by phone, as before.
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"employee": "emp-other", "phone": "08031119999"}})
+	w.env.Drain(t)
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE channel = 'sms'`).Scan(&sms); err != nil || sms != 1 {
+		t.Fatalf("by SMS: %d %v", sms, err)
+	}
+}

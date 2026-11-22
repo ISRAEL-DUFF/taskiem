@@ -62,7 +62,10 @@ type Outside struct {
 	Title       string
 	Text        string
 	About       string
-	Key         string
+	// PayrollaEmployee: the Payrolla employee it is about; a staff member
+	// linked to them hears it on their own chat instead.
+	PayrollaEmployee string
+	Key              string
 }
 
 // Delivery is how a message to someone outside goes.
@@ -203,11 +206,12 @@ func New(t Teller) *connector.Connector {
 			m.Title, _ = req.Input["title"].(string)
 			m.Text, _ = req.Input["message"].(string)
 			m.About, _ = req.Input["about"].(string)
-			m.Phone, m.Email = strings.TrimSpace(m.Phone), strings.TrimSpace(m.Email)
+			m.PayrollaEmployee, _ = req.Input["payrolla_employee"].(string)
+			m.Phone, m.Email, m.PayrollaEmployee = strings.TrimSpace(m.Phone), strings.TrimSpace(m.Email), strings.TrimSpace(m.PayrollaEmployee)
 			switch {
 			case strings.TrimSpace(m.Text) == "":
 				return connector.Response{}, fmt.Errorf("a message is required: %w", effects.ErrFatal)
-			case m.Phone == "" && m.Email == "":
+			case m.Phone == "" && m.Email == "" && m.PayrollaEmployee == "":
 				return connector.Response{}, fmt.Errorf("their phone number or email is required: %w", effects.ErrFatal)
 			}
 			d, err := t.Message(ctx, m)

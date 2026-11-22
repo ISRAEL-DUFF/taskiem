@@ -1,8 +1,8 @@
 {
   "id": "payrolla-tell-staff",
   "title": "Tell each employee when Payrolla pays them",
-  "summary": "When Payrolla pays an employee, message them the amount on WhatsApp or by SMS, and send their payslip link.",
-  "description": "Whenever Payrolla reports that it paid an employee, Taskiem messages them that their pay has arrived, with the amount, on the WhatsApp they asked for updates on, or else by SMS. If you allow it, they also get a link to their payslip, which opens after they confirm the last four digits of their phone. Payrolla pays; Taskiem only tells. Payslip links need Payrolla's Read payroll and Send payslip links permissions, with payslip links switched on in Payrolla.",
+  "summary": "When Payrolla pays an employee, message them the amount on their own chat, WhatsApp or SMS, and send their payslip link.",
+  "description": "Whenever Payrolla reports that it paid an employee, Taskiem messages them that their pay has arrived, with the amount, on their own chat with the business when an owner has linked them to their Taskiem staff member, else on the WhatsApp they asked for updates on, or else by SMS. If you allow it, they also get a link to their payslip, which opens after they confirm the last four digits of their phone. Payrolla pays; Taskiem only tells. Payslip links need Payrolla's Read payroll and Send payslip links permissions, with payslip links switched on in Payrolla.",
   "category": "payroll",
   "tags": [
     "payrolla",
@@ -137,12 +137,12 @@
           "settings",
           "employee"
         ],
-        "when": "=steps.employee.output.employee.phone != '' || steps.employee.output.employee.email != ''",
         "input": {
           "phone": "=steps.employee.output.employee.phone",
           "email": "=steps.employee.output.employee.email",
           "about": "your pay",
-          "message": "=steps.settings.output.business_name + ': hello ' + steps.employee.output.employee.first_name + ', your pay of NGN ' + string(trigger.body.data.amount_kobo / 100) + ' has been paid.'"
+          "message": "=steps.settings.output.business_name + ': hello ' + steps.employee.output.employee.first_name + ', your pay of NGN ' + string(trigger.body.data.amount_kobo / 100) + ' has been paid.'",
+          "payrolla_employee": "=trigger.body.data.employee_id"
         },
         "on_error": {
           "steps": [
@@ -201,7 +201,8 @@
           "phone": "=steps.employee.output.employee.phone",
           "email": "=steps.employee.output.employee.email",
           "about": "your payslip",
-          "message": "=steps.settings.output.business_name + ': your payslip is here, for 7 days: ' + steps.payslip.output.url + ' (you will be asked for the last four digits of your phone).'"
+          "message": "=steps.settings.output.business_name + ': your payslip is here, for 7 days: ' + steps.payslip.output.url + ' (you will be asked for the last four digits of your phone).'",
+          "payrolla_employee": "=trigger.body.data.employee_id"
         },
         "on_error": {
           "steps": [
