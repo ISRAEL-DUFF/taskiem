@@ -494,6 +494,7 @@ Migration 00503; the rows are declared in `engine/stock/purchaselines.go`.
 - **`money_entries.label_id`**; `taskiem_money_entry_kept` now refuses any change but marking an entry copied. The kept `money_log` gains `label_id`.
 - **`kept_things`**, with `purchase_line_id` and `unit_no` (unique together: receiving writes each unit once) and `sale_entry_id` (the money in of a sale).
 - Composite foreign keys keep every reference in the business. None of the new tables is copied to the owner's project.
+- Review fixes, migration 00504: **`purchase_receipts`** `(tenant_id, purchase_order_id, kind, key)` (kind `received` or `short_adjusted`; RLS; keys already in `audit_log` copied in); **`purchase_lines.name_key`**, the engine's `NameKey` of the line's name, written with the line and indexed (a line inserted without one gets a SQL key from a trigger); **`purchase_lines.to_confirm`**; `supplier_items`' name-key CHECK is now what Go's key always holds (trimmed, single ASCII spaces), not the SQL copy of the key.
 
 ### As built: U1 (buying)
 
@@ -504,13 +505,17 @@ No migration: on 00503. `engine/stock/purchases_lines.go` (lines, memory, sugges
 - `item_id`, how the order's steps name a line: the linked supplier's item, else a stock line's stock item, else the line's own id. Receiving takes it, the line's id, or a product counted by a stock line's stock item (chat's `received …`, `stock@1`);
 - `unconfirmed`: the business has no memory of the item from this supplier, so the treatment and label are Taskiem's suggestion, for U2a's sheets to ask.
 
-Every way of buying writes lines through `stock.PutNewLinesTx`: by hand, from the low list (stock lines), from a price list or their shop, chat and mentions, a workflow's `stock@1`/`link@1`, and an order a linked supplier drafts for us (`links.PlaceOrderTx`). The seller's steps change only quantity, price, received and delivered (`stock.SaveLinesTx`): a change accepted or countered drops the lines it zeroes and numbers the rest again; a tracked line grown past 200 is recorded. `change` and `short` stay JSON by position.
+Every way of buying writes lines through `stock.PutNewLinesTx`: by hand, from the low list (stock lines), from a price list or their shop, chat and mentions, a workflow's `stock@1`/`link@1`, and an order a linked supplier drafts for us (`links.PlaceOrderTx`, through `stock.PutPlacedLinesTx`). The seller's steps change only quantity, price, received and delivered (`stock.SaveLinesTx`): a change accepted or countered drops the lines it zeroes and numbers the rest again; a tracked line grown past 200 is recorded. `SaveLinesTx` refuses an empty list, and accepting a change that leaves no line is refused (409, cancel instead), as a counter is (review fix). `change` and `short` stay JSON by position.
 
 **Treatment on drafting** (`treatLinesTx`), per line:
 
 1. said on it (`treatment`, `stock_item_id`, `uses`, `label_id`, `track_many`), checked; remembered when nothing was (the first time is the confirmation); a line that differs from a memory changes only itself;
 2. else as remembered: `item_links` by `seller_item_id` for a linked supplier, else `supplier_items` by `NameKey`;
 3. else suggested (`stock.SuggestTx`): a current stock item of that name, to stock; a name tracked before (a tracked line or a row of Things we have), track; else record. The label is the last one a line of that name had. A suggested track over 50, and any track over 200 from memory or suggestion, is recorded instead.
+
+A remembered track over 50 without `track_many` asks (`track_ask`), except on an order a linked supplier placed (`PutPlacedLinesTx`), where no one can say yes and the refusal would tell the supplier the buyer's treatment (§7): the line is recorded and left unconfirmed (`to_confirm`) for the buyer to confirm; confirming it keeps the memory as it was (review fix).
+
+Names are keyed one way (review fix): the line's `name_key` and `supplier_items.name_key` are both `stock.NameKey` (Go: Unicode spaces such as a non-breaking space are spaces), so `unconfirmed` reads the memory the drafting found; `SuggestTx` matches lines by `name_key`, and stock items and Things we have by `NameKey` of their names (narrowed in SQL first).
 
 `item_id` on a line by hand, on a price-list line or in `confirm-proposed`'s `items` still names one of our items (a product or a material): the line goes into its stock item, with the product's uses (a product counted by none starts being counted, `stock.LineOf`). Chat and mentions suggest (not remember) the stock item of an own item of the same name. A line by hand into a stock item, to a linked supplier, gets the one `seller_item_id` remembered as going into it, so it reaches them as their own item.
 
@@ -520,7 +525,7 @@ Every way of buying writes lines through `stock.PutNewLinesTx`: by hand, from th
 
 **Memory.** `item_links` and `supplier_items` read as `stock.Remembered` (with the stock item's and label's names). `GET|PUT /v1/item-links/{link}` (PUT `{seller_item_id, seller_item?, item_id? | treatment…}`), `DELETE /v1/item-links/{link}/{seller_item_id}`; `GET|PUT|DELETE /v1/stock/suppliers/{id}/items` (`?name=` to forget). A change applies to orders drafted after it.
 
-**Receiving** (`stock.ReceiveTx`, the same transaction and key): stock lines move their stock item by quantity × uses at the cost over uses and set its cost; tracked lines insert one `kept_things` row per unit that came, `unit_no` after those received, `ON CONFLICT DO NOTHING`; recorded lines nothing. A repeated receipt is found by its audit entry (`purchase.received` with its key, written in the receipt's transaction), so a receipt with no stock line is repeat-safe too. `AdjustShortTx` (a short count agreed after the day) moves stock lines back and marks the rows of units that did not come `gone`.
+**Receiving** (`stock.ReceiveTx`, the same transaction and key): stock lines move their stock item by quantity × uses at the cost over uses and set its cost; tracked lines insert one `kept_things` row per unit that came, `unit_no` after those received, `ON CONFLICT DO NOTHING`; recorded lines nothing. A receipt's key is inserted into `purchase_receipts` (00504) at its start, in its transaction, `ON CONFLICT DO NOTHING`: a repeat inserts nothing and makes nothing, so a receipt with no stock line is repeat-safe too, and a refused receipt keeps no key (review fix: in place of scanning `audit_log` by its key, which no index covers, under the order's lock). `AdjustShortTx` (a short count agreed after the day) moves stock lines back and marks the rows of units that did not come `gone`; its key is kept the same way (`short_adjusted`).
 
 **Open orders.** `stock.OnOrderTx` is the stock items on open orders: the low list's drafting, the low-a-week watch, low cards in chat and `link@1` `low_orders` read it (`Item.OnOrder`). Low cards and `low_orders` find a linked supplier's item through the memory's stock item; a size's card finds their product through its size.
 
