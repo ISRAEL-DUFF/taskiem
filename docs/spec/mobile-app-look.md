@@ -154,8 +154,25 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   count and what went missing. Running low, each item with a bar of what is
   left against its level, and Order them. One row to Supplies (how many are
   open, how many need you). The terminal's sales to say, today's sales,
-  your items (a row opens Record stock, Change, History), the counts and
-  every change.
+  What you count (a row opens Record stock, Change, History), the counts
+  and every change.
+- **What you count** (S2, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §4.5). Its head, the filter All, Sold,
+  Not sold as `TkChips` under it, then the stock items on one panel: each
+  a row with its letters, its count and unit at the end, a Low pill and a
+  level bar, and under its name what it is **Sold as** (a product using
+  more than one a sale says so: "Malt, pack of 6 (6 a sale)") or **Not
+  sold**, then its cost, levels and supplier. A product's sizes and
+  colours are one row with their count together, and each size a tag row
+  under it ("Of Ankara shirt"). The head's + is **Add something to
+  count**, a form sheet that asks **Do you sell it?** first (two radio
+  rows), then the name, how many and the unit, the selling price only
+  for Yes, and the cost, levels and supplier.
+- **Counted by**, on a product's sheet, a form row above In stock: its
+  stock item, how many a sale uses and its count, with Change opening a
+  form sheet (the stock item as a pick box over `pickOneOf`, how many a
+  sale uses, Count by none in red). A product in sizes and colours says
+  why it cannot be chosen there.
 - **Supplies** (from Stock and from Orders' "To suppliers"). Open, Received
   or Cancelled. A top card of what is on order and still owed, the orders as
   a flow (draft, sent, confirmed, coming in; violet, blue, teal, orange),
