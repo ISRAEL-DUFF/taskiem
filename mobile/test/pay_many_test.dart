@@ -28,7 +28,7 @@ import 'guidelines.dart';
 import 'looks.dart';
 import 'passkey_test.dart' show FakePasskeys;
 import 'pay_test.dart' show payment;
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, snap;
 
 const _json = {'content-type': 'application/json; charset=utf-8'};
 
@@ -480,6 +480,73 @@ void main() {
     await settle(t);
     expect(api.sent('POST', '/v1/payment-batches/B7/cancel'), hasLength(1));
     expect(find.text('Check'), findsOneWidget);
+    await t.tap(find.text('Cancel').last);
+    await settle(t);
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('Staff: those with an account linked as staff_id rows for wages; those without shown, not payable, with why', (t) async {
+    phone(t);
+    final api = _Api();
+    api.routes['GET /v1/staff'] = (_) => {
+      'people': [
+        {'user_id': 'U1', 'name': 'Ada Obi', 'roles': ['owner'], 'chat': true, 'you': true},
+        {'user_id': 'U2', 'name': 'Tunde Bakare', 'roles': ['cashier'], 'chat': true},
+        {'user_id': 'U3', 'name': 'Kemi Ade', 'roles': ['packer'], 'chat': true},
+      ],
+      'invites': <Object>[],
+    };
+    Map<String, dynamic> person(String id, String name, Map<String, dynamic>? account) => {
+      'user_id': id,
+      'name': name,
+      'roles': ['cashier'],
+      'chat': true,
+      'profile': {'title': '', 'note': '', 'rota': <Object>[]},
+      'pay_account': account,
+    };
+    api.routes['GET /v1/staff/U1'] = (_) => person('U1', 'Ada Obi', null);
+    api.routes['GET /v1/staff/U2'] = (_) => person('U2', 'Tunde Bakare', {'saved_id': 'A1', 'name': 'tunde_bank', 'title': 'Tunde (Moniepoint)', 'bank_name': 'Moniepoint', 'last4': '4821'});
+    api.routes['GET /v1/staff/U3'] = (_) => person('U3', 'Kemi Ade', {'saved_id': 'A2', 'name': 'kemi', 'title': 'Kemi', 'bank_name': 'Opay', 'last4': '7790'});
+    api.routes['POST /v1/payment-batches'] = (_) => http.Response(
+      jsonEncode({'batch': batch('B8', [payment('s1', payee: 'Tunde Bakare', name: 'TUNDE BAKARE', bank: 'Moniepoint', kobo: 2500000, purpose: 'wages')])}),
+      201,
+      headers: _json,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: _Host((c) => openPayMany(c, api.auth()))));
+    await settle(t);
+    await snap(t, 'pay-many-buttons');
+    await t.tap(find.bySemanticsLabel('Add staff, to the account linked to each'));
+    await settle(t);
+    expect(find.text('Tunde Bakare'), findsOneWidget);
+    expect(find.text('Staff · Moniepoint ••4821'), findsOneWidget);
+    expect(find.text('Not payable yet'), findsOneWidget);
+    expect(find.text('No account linked: an owner links one on their page'), findsOneWidget);
+    await looks(t, 'pay-many-staff');
+    await t.tap(find.text('Tunde Bakare'));
+    await t.pump();
+    await t.tap(find.text('Ada Obi'));
+    await t.pump();
+    await t.tap(find.text('Add 1'));
+    await settle(t);
+    expect(find.text('Tunde Bakare'), findsOneWidget);
+    final box = find.descendant(of: find.byType(PayManySheet), matching: find.byType(EditableText));
+    await t.enterText(box.first, '25000');
+    await settle(t);
+    await t.tap(find.text('Check'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/payment-batches').single['rows'], [
+      {'staff_id': 'U2', 'amount_kobo': 2500000, 'purpose': 'wages'},
+    ]);
+    // Staff already in the list are not offered again; the rest still are.
+    api.routes['POST /v1/payment-batches/B8/cancel'] = (_) => {'batch': batch('B8', const [], status: 'cancelled')};
+    await t.tap(find.text('Back').last);
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Add staff, to the account linked to each'));
+    await settle(t);
+    expect(find.text('Kemi Ade'), findsOneWidget);
+    expect(find.text('Staff · Moniepoint ••4821'), findsOneWidget, reason: 'on its row in the list, not offered again');
+    await t.tap(find.text('Cancel').last);
+    await settle(t);
     await t.tap(find.text('Cancel').last);
     await settle(t);
     await t.pump(const Duration(seconds: 4));

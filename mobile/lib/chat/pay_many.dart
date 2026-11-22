@@ -1,6 +1,7 @@
 // Pay several people (P3; docs/spec/chat-pay-people.md "Pay several
 // people"): the Pay sheet with a list. Rows come from saved accounts,
-// riders (what each is due, GET /v1/riders/pay) or a pasted list (read by
+// riders (what each is due, GET /v1/riders/pay), staff with an account
+// linked (GET /v1/staff, then each one's page) or a pasted list (read by
 // POST /v1/payment-batches/read, a line that cannot be read kept to fix);
 // each row is who, how much and what for. Check prepares the batch (POST
 // /v1/payment-batches): each row as one payment is, those failing a check
@@ -108,6 +109,37 @@ Future<({List<PayRow> rows, int noBank})> ridersDue(Auth auth) async {
     );
   }
   return (rows: rows, noBank: noBank);
+}
+
+/// The staff with an account linked, as rows to pay (to that account, for
+/// wages); [off], those without one, by name, with why.
+Future<({List<PayRow> rows, List<(String, String)> off})> staffPayable(Auth auth) async {
+  Map<String, dynamic> map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
+  String str(Object? v) => v as String? ?? '';
+  final people = [for (final x in (map(await auth.transport.send('GET', '/v1/staff'))['people'] as List? ?? const [])) map(x)];
+  final pages = await Future.wait([
+    for (final x in people)
+      auth.transport.send('GET', '/v1/staff/${Uri.encodeComponent(str(x['user_id']))}').then(map, onError: (Object _) => {...x, 'unread': true}),
+  ]);
+  final rows = <PayRow>[];
+  final off = <(String, String)>[];
+  for (final x in pages) {
+    final id = str(x['user_id']);
+    if (id.isEmpty) continue;
+    final name = str(x['name']).isNotEmpty ? str(x['name']) : (str(x['email']).isNotEmpty ? str(x['email']) : 'Someone');
+    if (x['unread'] == true) {
+      off.add((name, 'Their page could not be read just now'));
+      continue;
+    }
+    final a = x['pay_account'] is Map ? map(x['pay_account']) : null;
+    if (a == null) {
+      off.add((name, 'No account linked: an owner links one on their page'));
+      continue;
+    }
+    final bank = [str(a['bank_name']), if (str(a['last4']).isNotEmpty) '••${str(a['last4'])}'].where((w) => w.isNotEmpty).join(' ');
+    rows.add(PayRow(who: name, sub: ['Staff', bank].where((w) => w.isNotEmpty).join(' · '), ask: {'staff_id': id}, purpose: 'wages'));
+  }
+  return (rows: rows, off: off);
 }
 
 /// Opens Pay several people over [context], with [rows] in it already;
@@ -278,6 +310,36 @@ class _PayManySheetState extends State<PayManySheet> {
     }
   }
 
+  /// Staff with an account linked, several picked; those without one
+  /// shown as not payable, with why.
+  Future<void> _pickStaff() async {
+    setState(() => _picking = true);
+    try {
+      final got = await staffPayable(_auth);
+      if (!mounted) return;
+      final have = {for (final r in _rows) if (r.ask['staff_id'] != null) '${r.ask['staff_id']}'};
+      final rows = got.rows.where((r) => !have.contains('${r.ask['staff_id']}')).toList();
+      if (rows.isEmpty && got.off.isEmpty) {
+        showTkToast(context, got.rows.isEmpty ? 'No staff to pay yet.' : 'All the staff with an account are in the list already.');
+        return;
+      }
+      final keys = await pickSeveral(
+        context,
+        title: 'Staff',
+        icon: 'b-people',
+        choices: [for (final r in rows) ('${r.ask['staff_id']}', r.who, r.sub)],
+        off: got.off,
+        empty: got.rows.isEmpty ? 'No one has an account linked yet.' : null,
+      );
+      if (keys == null || !mounted) return;
+      _add([for (final r in rows) if (keys.contains('${r.ask['staff_id']}')) r]);
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   /// The pasted list read: each line read becomes a row; those that
   /// could not be read stay in the box, with why, to fix and read again.
   Future<void> _read() async {
@@ -433,13 +495,17 @@ class _PayManySheetState extends State<PayManySheet> {
           TkCallout(
             leading: TkSquare('b-people', color: look.teal),
             title: 'Add the people to pay',
-            sub: 'Pick saved accounts or riders, or paste a list: one person a line.',
+            sub: 'Pick saved accounts, riders or staff, or paste a list: one person a line.',
             color: look.teal,
           ),
         if (widget.note != null) TkCallout(leading: TkSquare('b-alert', color: look.orange), title: widget.note!, color: look.orange),
         TkButtonRow([
           TkSmallButton(label: 'Saved', icon: 'b-bank', semantics: 'Add saved accounts', onPressed: _picking || _busy ? null : () => unawaited(_pickSaved())),
           TkSmallButton(label: 'Riders', icon: 'b-bike', semantics: 'Add riders, with what each is due', onPressed: _picking || _busy ? null : () => unawaited(_pickRiders())),
+        ]),
+        // Four side by side do not fit a phone: two rows of two.
+        TkButtonRow([
+          TkSmallButton(label: 'Staff', icon: 'b-people', semantics: 'Add staff, to the account linked to each', onPressed: _picking || _busy ? null : () => unawaited(_pickStaff())),
           TkSmallButton(label: 'Paste', icon: 'b-note', semantics: 'Paste a list', onPressed: _busy ? null : () => setState(() => _pasting = !_pasting)),
         ]),
         if (_pasting) ...[
@@ -894,15 +960,24 @@ class _BatchSheetState extends State<BatchSheet> {
 }
 
 /// Several of [choices] (key, title, sub) picked at once: the keys, or
-/// null when put away.
-Future<Set<String>?> pickSeveral(BuildContext context, {required String title, required List<(String, String, String)> choices, String icon = 'b-person'}) =>
-    showTkSheet<Set<String>>(context, (_) => TkAppLook(child: _PickSeveral(title: title, choices: choices, icon: icon)));
+/// null when put away. [off] (title, why) are shown under them, not to be
+/// picked; [empty] is said when there are no choices.
+Future<Set<String>?> pickSeveral(
+  BuildContext context, {
+  required String title,
+  required List<(String, String, String)> choices,
+  String icon = 'b-person',
+  List<(String, String)> off = const [],
+  String? empty,
+}) => showTkSheet<Set<String>>(context, (_) => TkAppLook(child: _PickSeveral(title: title, choices: choices, icon: icon, off: off, empty: empty)));
 
 class _PickSeveral extends StatefulWidget {
-  const _PickSeveral({required this.title, required this.choices, required this.icon});
+  const _PickSeveral({required this.title, required this.choices, required this.icon, this.off = const [], this.empty});
   final String title;
   final List<(String, String, String)> choices;
   final String icon;
+  final List<(String, String)> off;
+  final String? empty;
 
   @override
   State<_PickSeveral> createState() => _PickSeveralState();
@@ -923,7 +998,7 @@ class _PickSeveralState extends State<_PickSeveral> {
       onSecond: () => Navigator.of(context).pop(),
       children: [
         TkSection(
-          empty: 'All of them are in the list already.',
+          empty: widget.empty ?? 'All of them are in the list already.',
           children: [
             for (final (key, title, sub) in widget.choices)
               Semantics(
@@ -940,6 +1015,13 @@ class _PickSeveralState extends State<_PickSeveral> {
               ),
           ],
         ),
+        if (widget.off.isNotEmpty)
+          TkSection(
+            title: 'Not payable yet',
+            children: [
+              for (final (title, why) in widget.off) TkListRow(title: title, sub: why, subLines: 2, icon: 'b-lock', square: TkLook.of(context).orange, chevron: false),
+            ],
+          ),
       ],
     );
   }

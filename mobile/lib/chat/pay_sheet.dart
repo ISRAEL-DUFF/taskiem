@@ -175,11 +175,35 @@ ChatAction riderPayAction(String name) => ChatAction.fromJson({
   ],
 });
 
+/// The Pay sheet's form for a staff member, paid to the saved account
+/// linked to them (outside payroll, which is Payrolla's): how much, what
+/// for (wages unless changed) and a note.
+ChatAction staffPayAction(String name) => ChatAction.fromJson({
+  'id': 'pay.staff',
+  'title': 'Pay $name',
+  'line': 'To the account linked to them',
+  'icon': 'money',
+  'does': 'asks',
+  'opens': 'form',
+  'tool': 'pay',
+  'confirm': 'passkey',
+  'fields': [
+    {'key': 'amount', 'label': 'How much?', 'kind': 'money'},
+    {
+      'key': 'for',
+      'label': 'What is it for?',
+      'kind': 'choice',
+      'choices': [for (final (w, _) in payPurposes) w],
+    },
+    {'key': 'note', 'label': 'A few words for their bank statement?', 'kind': 'text', 'optional': true},
+  ],
+});
+
 /// The Pay sheet over the chat (an action with `confirm: "passkey"`): its
 /// form, then the payment prepared to check and pay. Closes with the
 /// payment once it is sent, or null.
 class PaySheet extends StatefulWidget {
-  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.said = ''});
+  const PaySheet({super.key, required this.auth, required this.action, this.initial = const {}, this.from = 'chat', this.riderId, this.staffId, this.said = ''});
   final Auth auth;
   final ChatAction action;
   final Map<String, String> initial;
@@ -189,6 +213,9 @@ class PaySheet extends StatefulWidget {
 
   /// One of the business's riders, paid to their kept bank account.
   final String? riderId;
+
+  /// A staff member, paid to the saved account linked to them.
+  final String? staffId;
 
   /// The name the message gave for the account, set against the bank's.
   final String said;
@@ -380,6 +407,7 @@ class _PaySheetState extends State<PaySheet> {
     CreatePaymentRequest body({bool mine = false}) => CreatePaymentRequest(
       amountKobo: _kobo!,
       riderId: widget.riderId,
+      staffId: widget.staffId,
       payee: payee == null ? null : values[payee.key]!.replaceFirst(RegExp('^@'), ''),
       mine: mine ? true : null,
       accountNumber: account == null ? null : values[account.key],

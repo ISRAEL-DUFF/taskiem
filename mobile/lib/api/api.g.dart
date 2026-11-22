@@ -1657,6 +1657,12 @@ class TaskiemApi {
     return PayLimit.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Where a staff member is paid, outside payroll (`PUT /v1/staff/{user}/pay-account`)
+  Future<PutStaffPayAccountResponse> putStaffPayAccount({required PutStaffPayAccountRequest body, required String user}) async {
+    final j = await _t.send('PUT', '/v1/staff/${Uri.encodeComponent(user)}/pay-account', body: body.toJson());
+    return PutStaffPayAccountResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Batches of payments, the newest first (`GET /v1/payment-batches`)
   Future<ListPaymentBatchesResponse> listPaymentBatches() async {
     final j = await _t.send('GET', '/v1/payment-batches');
@@ -14294,6 +14300,40 @@ class PayLimit {
         'day_kobo': ?dayKobo,
         'one_kobo': ?oneKobo,
         'role': ?role,
+      };
+}
+
+class PutStaffPayAccountRequest {
+  const PutStaffPayAccountRequest({this.passkey, this.savedId, this.totp});
+
+  final Map<String, dynamic>? passkey;
+  final Object? savedId;
+  final String? totp;
+
+  factory PutStaffPayAccountRequest.fromJson(Map<String, dynamic> j) => PutStaffPayAccountRequest(
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        savedId: j['saved_id'],
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey,
+        'saved_id': ?savedId,
+        'totp': ?totp,
+      };
+}
+
+class PutStaffPayAccountResponse {
+  const PutStaffPayAccountResponse({this.payAccount});
+
+  final Object? payAccount;
+
+  factory PutStaffPayAccountResponse.fromJson(Map<String, dynamic> j) => PutStaffPayAccountResponse(
+        payAccount: j['pay_account'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pay_account': ?payAccount,
       };
 }
 
