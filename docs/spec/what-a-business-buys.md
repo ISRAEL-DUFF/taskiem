@@ -540,6 +540,22 @@ Every way of buying writes lines through `stock.PutNewLinesTx`: by hand, from th
 - **Entered by hand.** `POST /v1/money/entries` takes `label` (found or made) or `label_id` (the label kept), for an expense only; the category is then the label's name, as written. `paid 15,000 diesel` (and `spent …`, `expense …`, and the other languages' words) labels the expense from its description with a capital (Diesel), shown in the business's own spelling of a label it has, found or made at Yes. The chat's word map to fixed categories (fuel, rent …) is gone.
 - **Report.** `GET /v1/money/spending` (`moneyreport.SpendingOf`): settled expenses and bill payouts by label kept, each split by treatment: a purchase's entry by its order's lines under the same label kept now (`spend.EntryPartsTx`; the whole order if no line has it any more), a payout by its bill's lines. Profit is own money in less fees and costs, leaving out Bought to keep.
 
+### As built: U2a (web)
+
+No server change. The words and requests in `web/src/lib/treat.ts`; the screens' parts in `web/src/pages/TreatLine.tsx`.
+
+- **The question** (`TreatQuestion`): "**item** from **supplier**: How should we treat it?", Just record it / Add to stock (Which stock item?, from `GET /v1/stock/stock-items`, or **A new stock item…** asking **Do you sell it?**: Yes makes a product with an optional price, No a material, `POST /v1/stock/items`) / Keep track of it; **Label** typed, or picked from chips: a suggestion of the business's own, its labels by use, then new names (`GET /v1/money/labels?item=&category=`). A typed name is found or made (`POST /v1/money/labels`) when the order is drafted.
+  - Not remembered: opens on a suggestion (a stock item of the name: to stock; a name on Things we have: track; else record; the first label suggested), or on the line's own when the server suggested it (`unconfirmed`).
+  - Remembered: one line ("Keep track of it · Machines") with **Change for this order**, which opens the question with **Remember for next time** and **As remembered**. Received: locked ("It came, so it stays as it is").
+  - 409 `track_ask` and 422 `track_too_many` show "Put 60 Nylon bags on Things we have, one row each?" with **Yes, one row each** and **Just record them**, and draft again.
+- **Sheets.** A supplier's price list (`PriceLists.tsx`) and their shop's review (`ChatBuyer.tsx` `OrderSheet`) send each line's treatment, or nothing for one as remembered; a change with Remember is `PATCH …/lines/{position}` with `remember` after drafting. A product sold in sizes keeps "Which of your items" (`item_id`, its sizes matched by the server). A supplier-drafted order (`PurchaseView` in chat, `ConfirmProposed` on its page) asks each line and sends `confirm-proposed` `lines`. **New order** on the Stock page's orders (`OrderByHandModal`) is an order by hand to a supplier not on Taskiem, asking each line unless `GET /v1/stock/suppliers/{id}/items` remembers its name.
+- **An order's page** (`/purchases/{id}`, now opened for every order): **How each is treated**, the unconfirmed lines asked and the others changed for this order, saved by `PATCH` per line. The Stock page's order row says "Say how to treat 2 items".
+- **Cards** (buyer's side): each line of an order (its page, the chat card) and of a bill (its page, the chat card, through the bill line's `purchase_id` and `seller_item_id`) shows its label, or **Not labelled**, and **To stock** or **On Things we have**.
+- **Suppliers**: **What you buy** lists what is remembered (item links, or a supplier not on Taskiem's items), with Change and Forget for `storefront.manage`.
+- **Money > Labels** (`/money/labels`, the tab for `invoice.manage` only): the labels with how often each is used, **Rename** (refusing another label's name: merge instead) and **Merge** into another.
+- **Tests:** `lib/treat.test.ts` (15); `e2e/buying.spec.ts`: the sewing machine kept track of as Machines and the next order asking nothing, 60 nylon bags asked first and just recorded, an order's lines asked, changed with Remember and locked, the Suppliers page's change and forget, a label renamed and merged, at 390 and 360 in both themes. `price-lists`, `chat-buyer` and `link-orders` follow the question.
+- **Not done:** Things we have's page and U2b's chat question; a line's label merged since shows Not labelled on cards (the list reads labels kept).
+
 ## 12. Accept
 
 **The split**
