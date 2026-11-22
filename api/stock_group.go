@@ -450,7 +450,16 @@ func foldedItem(prod stock.Item, items []stock.Item, held []links.PriceItem) lin
 			break
 		}
 	}
-	pi := links.PriceItem{ItemID: prod.ID, Name: prod.Name, Unit: prod.Unit, Category: prod.Category, PriceKobo: price,
+	// The product keeps no stock item of its own, so no unit of its own:
+	// it is sold by what its sizes are.
+	unit := prod.Unit
+	for _, v := range variantsOf(items, prod.ID) {
+		if unit != "" {
+			break
+		}
+		unit = v.Unit
+	}
+	pi := links.PriceItem{ItemID: prod.ID, Name: prod.Name, Unit: unit, Category: prod.Category, PriceKobo: price,
 		MinQuantity: max(1, minQ), Available: avail, Breaks: breaks}
 	pi.Choices, pi.Sizes = listSizesOf(prod, items)
 	was := map[string]links.PriceItem{}

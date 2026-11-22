@@ -340,14 +340,14 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			from := min(*c.Count, share-moved)
 			if from > 0 {
 				if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: rid, Item: name, Reason: stock.Moved, Delta: &from,
-					Note: "From " + product.Name, Actor: p.Actor(), Key: "api-" + key + "-from-" + strconv.Itoa(i), CostKobo: product.CostKobo}, audit); err != nil {
+					Note: "From " + product.Name, Actor: p.Actor(), Key: "api-" + key + "-from-" + strconv.Itoa(i), CostKobo: tmpl.CostKobo}, audit); err != nil {
 					return stock.Item{}, nil, err
 				}
 				moved += from
 			}
 			if rest := *c.Count - from; rest > 0 {
 				if _, err := s.stockMove(ctx, p.TenantID, stock.Move{ItemID: rid, Item: name, Reason: stock.Received,
-					Delta: &rest, Note: "Sizes and colours set up", Actor: p.Actor(), Key: "api-" + key + "-in-" + strconv.Itoa(i), CostKobo: product.CostKobo}, audit); err != nil {
+					Delta: &rest, Note: "Sizes and colours set up", Actor: p.Actor(), Key: "api-" + key + "-in-" + strconv.Itoa(i), CostKobo: tmpl.CostKobo}, audit); err != nil {
 					return stock.Item{}, nil, err
 				}
 			}

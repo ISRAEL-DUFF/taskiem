@@ -329,6 +329,8 @@ The split comes first, because Add to stock and every count after it point at st
 - `make one product` goes through the same path.
   - Review fix: the product it makes gets no stock item (`stockNew.NoStock`); each grouped item keeps its own, with its count and movements, `group_of` the product. Renaming it makes none, and a size added to it later takes its unit, cost, levels and supplier from a size's stock item.
   - Review fix: a product counted before it had sizes has its own stock item retired once its count has moved into them or been counted off (movements and link kept), unless it counts other products too; clearing its sizes brings it back (`productOwnStock`). So the Stock page and the low list no longer show it at 0.
+    This applies from the product's next save of its sizes: a product given sizes before it keeps its own stock item at 0 until then. No migration moves them, because nothing is in production (§4.4); the demo seed gives its sized products their sizes through the same save, so a fresh seed has none.
+  - Review fix: a product with no stock item of its own still has a unit and a cost: its row on a price list takes the unit of one of its sizes (`foldedItem`), and a new size's opening count is recorded at the cost the size's stock item is given (`tmpl`), not the product's (none).
 
 **Deleted rows.** The catalogue refresh (`SyncStorefront`), having read the whole table, drops the `product_stock` links of rows that are gone. Their stock items stay, as materials.
 

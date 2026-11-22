@@ -148,3 +148,54 @@ func TestSizesRetireTheProductsOwnStock(t *testing.T) {
 		t.Fatal("the product's own stock item is not brought back")
 	}
 }
+
+// Make one product with no stock item of its own still knows what it is
+// sold by and what it costs: its row on a price list reads the sizes'
+// unit, and a size added later with a count comes in at a size's cost.
+func TestGroupedProductUnitAndCost(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Zuri Atelier", "ada@zuri.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	add := func(name string, qty int) map[string]any {
+		return owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": name, "quantity": qty, "unit": "piece", "price_kobo": 2500000,
+			"cost_kobo": 1200000, "category": "Kaftans"}, "Idempotency-Key", "add-"+strings.ReplaceAll(name, " ", "-"))["item"].(map[string]any)
+	}
+	sBlue, mBlue, mRed := add("Kaftan S Blue", 4), add("Kaftan M Blue", 6), add("Kaftan M Red", 3)
+	list := owner.must(201, "POST", "/v1/price-lists", map[string]any{"name": "Trade prices"})["list"].(map[string]any)["id"].(string)
+	owner.must(200, "PUT", "/v1/price-lists/"+list+"/items", map[string]any{"items": []any{
+		map[string]any{"item_id": sBlue["id"], "price_kobo": 2000000, "min_quantity": 1},
+		map[string]any{"item_id": mBlue["id"], "price_kobo": 2000000, "min_quantity": 1},
+		map[string]any{"item_id": mRed["id"], "price_kobo": 2000000, "min_quantity": 1},
+	}})
+	item := func(it map[string]any, size, colour string) map[string]any {
+		return map[string]any{"item_id": it["id"], "variant": map[string]any{"Size": size, "Colour": colour}}
+	}
+	pid := owner.must(200, "POST", "/v1/stock/group", map[string]any{"name": "Kaftan", "choices": []string{"Size", "Colour"},
+		"items": []any{item(sBlue, "S", "Blue"), item(mBlue, "M", "Blue"), item(mRed, "M", "Red")}}, "Idempotency-Key", "g1")["item"].(map[string]any)["id"].(string)
+	got := owner.must(200, "GET", "/v1/price-lists", nil)["lists"].([]any)[0].(map[string]any)["items"].([]any)
+	if len(got) != 1 || got[0].(map[string]any)["item_id"] != pid || got[0].(map[string]any)["unit"] != "piece" {
+		t.Fatalf("the product on the list, per piece: %v", got)
+	}
+
+	// L/Red added with 5: they came in at a size's cost.
+	owner.must(200, "PUT", "/v1/stock/items/"+pid+"/variants", map[string]any{"choices": []any{
+		map[string]any{"name": "Size", "values": []string{"S", "M", "L"}},
+		map[string]any{"name": "Colour", "values": []string{"Blue", "Red"}},
+	}, "cells": []any{
+		map[string]any{"id": sBlue["id"], "variant": map[string]any{"Size": "S", "Colour": "Blue"}},
+		map[string]any{"id": mBlue["id"], "variant": map[string]any{"Size": "M", "Colour": "Blue"}},
+		map[string]any{"id": mRed["id"], "variant": map[string]any{"Size": "M", "Colour": "Red"}},
+		map[string]any{"variant": map[string]any{"Size": "L", "Colour": "Red"}, "count": 5},
+	}}, "Idempotency-Key", "v1")
+	var delta int64
+	var cost *int64
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT delta, cost_kobo FROM stock_movements
+		WHERE item = 'Kaftan – L, Red' AND reason = 'received'`).Scan(&delta, &cost); err != nil {
+		t.Fatal(err)
+	}
+	if delta != 5 || cost == nil || *cost != 1200000 {
+		t.Fatalf("L/Red received %d at %v, want 5 at a size's cost", delta, cost)
+	}
+}
