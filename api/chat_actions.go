@@ -199,6 +199,13 @@ var chatActions = []chatAction{
 		Shortcut: "add 50 cartons of Indomie at 8,500", Tool: "stock", Add: true,
 		Fields: []chatField{f("what", "What came in? Say how many, like 50 cartons of Indomie.", "text"), opt(f("cost", "What did each cost? Send skip if you'd rather not say.", "money"))},
 		Make:   fill("add {what}[ at {cost}]"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
+	// Something new to count (what-a-business-buys §4.5): its words ask Do
+	// you sell it? (or, for something there already, a Yes), so it asks by
+	// itself.
+	{ID: "stock.new", Topic: "stock", Title: "Add something to count", Line: "Something new, sold or used: fabric, thread, bags", Icon: "stock", Does: doesAsks,
+		Opens: opensQuestions, Shortcut: "add 20 yards of ankara fabric",
+		Fields: []chatField{f("what", "What is it, and how many? Like 20 yards of ankara fabric.", "text")},
+		Make:   fill("add {what}"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
 	{ID: "stock.adjust", Topic: "stock", Title: "Correct a count", Line: "Spoilt, missing, or counted wrong", Icon: "stock", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "adjust rice -2 spoilt",
 		Fields: []chatField{f("item", "Which item?", "item"), f("by", "By how many? Use a minus for less, like -2.", "signed"),

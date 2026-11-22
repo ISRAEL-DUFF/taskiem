@@ -83,6 +83,19 @@ func ParseAdd(text string) (Added, bool) {
 	return a, true
 }
 
+// ParseCountIn reads words that count something in: "add 20 yards of
+// ankara fabric", "add 50 cartons of Indomie at 8,500" (a cost, what one
+// was bought for) and the same after "stock in". A quantity comes first, so
+// "add product …", "add item …" and "add rider …" are never this; ok is
+// false when the words are not one.
+func ParseCountIn(text string) (Added, bool) {
+	t := strings.TrimSpace(text)
+	if rest, ok := cutPrefixFold(t, "stock in "); ok {
+		t = "add " + rest
+	}
+	return ParseAdd(t)
+}
+
 // unitAndName splits "cartons of Indomie" or "bags rice" into the unit
 // (singular) and the item; "Indomie" alone has no unit.
 func unitAndName(s string) (unit, name string) {

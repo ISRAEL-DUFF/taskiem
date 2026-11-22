@@ -240,6 +240,9 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 			return s.waShopPick(ctx, c, text)
 		}
 	case stateConfirming:
+		if sh.Action == "stock_new" {
+			return s.waStockSellReply(ctx, c, cmd)
+		}
 		switch cmd {
 		case "yes", "y", "confirm":
 			if strings.HasPrefix(sh.Action, "stock_") {

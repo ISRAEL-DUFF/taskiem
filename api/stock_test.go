@@ -215,7 +215,7 @@ func TestStockByChat(t *testing.T) {
 	if r := w.say(t, vn, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "table.edit") {
 		t.Errorf("viewer: %q", r)
 	}
-	if r := w.say(t, on, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "Start keeping stock with *Indomie*: 50 cartons at ₦8,500 each?") {
+	if r := w.say(t, on, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "Start keeping stock with *Indomie*: 50 cartons at ₦8,500 each. Do you sell it?") {
 		t.Fatalf("first add: %q", r)
 	}
 	if r := w.yes(t, on); !strings.Contains(r, "Added *Indomie*: 50 cartons.") || !strings.Contains(r, "send *price Indomie 9500*") {
