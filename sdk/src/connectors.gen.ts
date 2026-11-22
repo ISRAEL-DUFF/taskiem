@@ -1660,6 +1660,8 @@ export interface NotifyMessageInput {
   email?: Val<string>;
   /** The message */
   message: Val<string>;
+  /** Payrolla's id of the employee it is about: a staff member an owner linked to that employee hears it on their own chat with the business (or by email) instead */
+  payrolla_employee?: Val<string>;
   /** Their phone number, in any form (0803 123 4567, +234…) */
   phone?: Val<string>;
   /** A first line, and an email's subject */
