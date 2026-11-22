@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { get, patch, post, postOnce } from "../api";
 import { Icon } from "../icons";
+import { thingsOfLine } from "../lib/things";
 import type { Purchase, PurchaseLine } from "../lib/purchases";
 import type { StockItemRow, StockItemsView } from "../lib/stock";
 import {
@@ -322,32 +324,12 @@ export function TreatQuestion({
           )}
         </div>
       )}
-      <div className="treat-more">
-        <label className="field">
-          <span>Label</span>
-          <input
-            value={c.label}
-            maxLength={60}
-            autoComplete="off"
-            placeholder="Type one, or pick below"
-            onChange={(e) => set({ label: e.target.value })}
-          />
-        </label>
-        {picks.length > 0 && (
-          <div className="treat-chips" role="group" aria-label={`Labels for ${item}`}>
-            {picks.map((n) => (
-              <button
-                key={n}
-                type="button"
-                aria-pressed={c.label.trim().toLowerCase() === n.toLowerCase()}
-                onClick={() => set({ label: n })}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <LabelPick
+        item={item}
+        value={c.label}
+        picks={picks}
+        onChange={(label) => set({ label })}
+      />
       {memory && rememberable && (
         <label className="sf-toggle">
           <input
@@ -365,6 +347,49 @@ export function TreatQuestion({
       )}
       {problem && <p className="hint treat-problem">{problem}</p>}
     </fieldset>
+  );
+}
+
+/** A label typed, or picked from chips (the business's own, by use, then
+ * suggestions): the question's, and Add something we have's. */
+export function LabelPick({
+  item,
+  value,
+  picks,
+  onChange,
+}: {
+  item: string;
+  value: string;
+  picks: string[];
+  onChange: (label: string) => void;
+}) {
+  return (
+    <div className="treat-more">
+      <label className="field">
+        <span>Label</span>
+        <input
+          value={value}
+          maxLength={60}
+          autoComplete="off"
+          placeholder="Type one, or pick below"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </label>
+      {picks.length > 0 && (
+        <div className="treat-chips" role="group" aria-label={`Labels for ${item}`}>
+          {picks.map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-pressed={value.trim().toLowerCase() === n.toLowerCase()}
+              onClick={() => onChange(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -404,19 +429,27 @@ export function LineTreatMark({
   line,
   labels,
 }: {
-  line: Pick<PurchaseLine, "treatment" | "label_id">;
+  line: Pick<PurchaseLine, "treatment" | "label_id"> &
+    Partial<Pick<PurchaseLine, "id" | "received">>;
   labels: SpendLabel[] | undefined;
 }) {
   const mark = lineMark(line.treatment);
   const name = labelName(labels, line.label_id) || "Not labelled";
+  // Kept track of and come: its rows on Things we have.
+  const to = thingsOfLine(line);
   return (
     <span className="treat-mark" data-testid="line-mark">
       {name}
-      {mark && (
-        <span className="treat-went">
-          <Icon name={mark.icon} /> {mark.word}
-        </span>
-      )}
+      {mark &&
+        (to ? (
+          <Link className="treat-went" to={to}>
+            <Icon name={mark.icon} /> {mark.word}
+          </Link>
+        ) : (
+          <span className="treat-went">
+            <Icon name={mark.icon} /> {mark.word}
+          </span>
+        ))}
     </span>
   );
 }

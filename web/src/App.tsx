@@ -109,6 +109,7 @@ import {
   MoneyStatements,
 } from "./pages/Money";
 import { MoneyLabels } from "./pages/MoneyLabels";
+import { ThingPage, ThingsPage } from "./pages/Things";
 import {
   SchoolClasses,
   SchoolFamilies,
@@ -910,6 +911,8 @@ function SignedIn() {
                   <Route path="/money/entries" element={<MoneyEntries />} />
                   <Route path="/money/fees" element={<MoneyFees />} />
                   <Route path="/money/labels" element={<MoneyLabels />} />
+                  <Route path="/money/things" element={<ThingsPage />} />
+                  <Route path="/money/things/:id" element={<ThingPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />
                   <Route
