@@ -97,8 +97,10 @@ async function plainly<T>(p: Promise<T>): Promise<T> {
 /** The periods one press away; the rest are under "Other". */
 const QUICK_PERIODS = PERIOD_CHOICES.filter((c) => c.value === "today" || c.value === "week" || c.value === "month");
 
-/** Overview, Leaks, Upload statement, Cash and expenses, Fees. */
-function MoneyTabs() {
+/** Overview, Leaks, Upload statement, Cash and expenses, Fees; Labels for
+ * those who manage money. */
+export function MoneyTabs() {
+  const { can } = useAuth();
   return (
     <nav className="tabs" aria-label="Money">
       <NavLink to="/money" end>
@@ -108,6 +110,7 @@ function MoneyTabs() {
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
+      {moneyAccess(can).manage && <NavLink to="/money/labels">Labels</NavLink>}
     </nav>
   );
 }

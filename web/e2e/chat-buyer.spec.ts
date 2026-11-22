@@ -81,6 +81,13 @@ async function trade(page: Page, link: string, name: string) {
   await page.route(`**/v1/link-chats/${link}/items`, (r) => r.fulfill(json({ items: prices, whose: "theirs" })));
   await page.route("**/v1/supplier-prices?*", (r) => r.fulfill(json({ suppliers: [{ link, business: "sup", name, items: prices, updated_at: now }] })));
   await page.route(`**/v1/item-links/${link}`, (r) => r.fulfill(json({ item_links: [] })));
+  // How a line is treated (what a business buys §6): our stock item of the
+  // same name is suggested; no labels yet.
+  await page.route("**/v1/stock/stock-items", (r) =>
+    r.fulfill(json({ keeps_stock: true, value_kobo: 0, low: 0, items: [{ id: "si1", name: "Rice, 50kg bag", unit: "bag", category: "", count: 3, cost_kobo: null, low_level: null, target_level: null, supplier_id: null, supplier: "", group_of: "", group_name: "", low: false, suggest: null, value_kobo: 0, retired: false, sold_as: [] }] })),
+  );
+  await page.route("**/v1/money/labels**", (r) => (r.request().method() === "GET" ? r.fulfill(json({ labels: [], suggestions: [] })) : r.fallback()));
+  await page.route("**/v1/things**", (r) => r.fulfill(json({ things: [] })));
   await page.route("**/v1/stock", (r) =>
     r.fulfill(json({ keeps_stock: true, catalogue: "products", items: [{ id: "s1", name: "Rice, 50kg bag", available: true, stock: 3, unit: "bag" }] })),
   );
@@ -135,18 +142,20 @@ for (const [size, viewport] of [
       await buyer.screenshot({ path: "test-results/buyer-order.png" });
     }
 
-    // Review: which of our items each is (the same name found), a note.
+    // Review: how each is treated (our stock item of the same name
+    // suggested), a note.
     await order.getByRole("button", { name: "Review order" }).click();
     await expect(order.getByRole("heading", { name: "Review your order" })).toBeVisible();
     await expect(order).toContainText("3 × Rice, 50kg bag");
-    await expect(order.getByLabel("Rice, 50kg bag")).toHaveValue("s1");
+    await expect(order.getByTestId("treat")).toContainText("How should we treat it?");
+    await expect(order.getByLabel("Which stock item?")).toHaveValue("si1");
     await order.getByLabel("A note for them (optional)").fill("Before Friday, please");
     await axeBoth(buyer, "reviewing an order");
     await order.getByRole("button", { name: "Place order" }).click();
     await expect(buyer.getByRole("status").filter({ hasText: `Order sent to ${name}` })).toBeVisible();
     await expect(order).toHaveCount(0, { timeout: 5000 });
     expect(sent.find((x) => x.path.endsWith("/order"))?.body).toEqual({
-      lines: [{ seller_item_id: "p1", quantity: 3, item_id: "s1" }],
+      lines: [{ seller_item_id: "p1", quantity: 3, treatment: "stock", stock_item_id: "si1" }],
       note: "Before Friday, please",
     });
     expect(sent.some((x) => x.path === "/v1/stock/purchases/u2/send")).toBe(true);
@@ -234,7 +243,7 @@ test("a quote is confirmed with our own items, and not all of a delivery came", 
     confirmed_how: null, counter: null, counter_at: null, received_at: null, cancelled_at: null, received_kobo: 0, paid_kobo: 0, owed_kobo: 0, created_at: now,
   };
   const quote = { ...base, id: "q1", reference: "PO-0050", status: "drafted", seller_status: "proposed", total_kobo: 15_600_000,
-    lines: [{ item_id: "x", item: "Rice, 50kg bag", unit: "bag", quantity: 2, cost_kobo: 7_800_000, received: 0 }] };
+    lines: [{ item_id: "x", position: 0, item: "Rice, 50kg bag", unit: "bag", quantity: 2, cost_kobo: 7_800_000, received: 0, treatment: "stock", stock_item_id: "si1", uses: 1, unconfirmed: true }] };
   const came = { ...base, id: "d1", reference: "PO-0051", status: "confirmed", seller_status: "delivered", total_kobo: 23_400_000, delivered_at: now,
     lines: [{ item_id: "s1", item: "Rice, 50kg bag", unit: "bag", quantity: 3, cost_kobo: 7_800_000, received: 0, delivered: 3 }] };
   await buyer.route("**/v1/stock/purchases", (r) => r.fulfill(json({ purchases: [quote, came] })));
@@ -253,15 +262,15 @@ test("a quote is confirmed with our own items, and not all of a delivery came", 
   await yourOrders();
   await expect(buyer.getByRole("region", { name: "Tools" })).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: "New order" })).toBeVisible();
-  // Their quote: which of ours each line is (the same name found), then confirmed.
+  // Their quote: how each line is treated (as suggested), then confirmed.
   await sheet.getByRole("button", { name: /PO-0050/ }).click();
   await expect(sheet.getByRole("heading", { name: "PO-0050" })).toBeVisible();
   await sheet.getByRole("button", { name: "Confirm their quote" }).click();
-  await expect(sheet.getByLabel("Their Rice, 50kg bag")).toHaveValue("s1");
+  await expect(sheet.getByLabel("Which stock item?")).toHaveValue("si1");
   await axeBoth(buyer, "confirming a quote");
   await sheet.getByRole("button", { name: "Confirm the order" }).click();
   await expect(sheet).toHaveCount(0, { timeout: 5000 });
-  expect(sent.find((x) => x.path === "/v1/stock/purchases/q1/confirm-proposed")?.body).toEqual({ items: ["s1"] });
+  expect(sent.find((x) => x.path === "/v1/stock/purchases/q1/confirm-proposed")?.body).toEqual({ lines: [{ treatment: "stock", stock_item_id: "si1" }] });
 
   // A delivery: two of three came.
   await yourOrders();

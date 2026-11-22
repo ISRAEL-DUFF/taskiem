@@ -1,5 +1,15 @@
 import { useRef, useState } from "react";
 import { DocThread } from "./Conversation";
+import {
+  LineTreatMark,
+  OrderLinesTreat,
+  orderBodies,
+  orderLineKeys,
+  saveOrderLines,
+  useLabels,
+  useSheetTreat,
+  type Choices,
+} from "./TreatLine";
 import { Link, useParams } from "react-router-dom";
 import { get, post, postOnce, put, whenOff } from "../api";
 import { useAuth } from "../auth";
@@ -8,7 +18,6 @@ import { daysValue } from "../lib/statements";
 import {
   buyerSteps,
   linesTotal,
-  sameName,
   sellerAsk,
   sellerLine,
   sellerSteps,
@@ -976,6 +985,7 @@ export function PurchasePage() {
   );
   const { can } = useAuth();
   const p = data?.purchase;
+  const labels = useLabels();
   return (
     <>
       <p className="crumbs">
@@ -1037,7 +1047,12 @@ export function PurchasePage() {
               <tbody>
                 {p.lines.map((l) => (
                   <tr key={l.item_id}>
-                    <td data-label="Item">{l.item}</td>
+                    <td data-label="Item">
+                      {l.item}
+                      {l.treatment && (
+                        <LineTreatMark line={l} labels={labels.data} />
+                      )}
+                    </td>
                     <td data-label="Ordered">{quantity(l.quantity, l.unit)}</td>
                     <td className="sf-price" data-label="Price each">
                       {naira(l.cost_kobo)}
@@ -1095,6 +1110,11 @@ export function PurchasePage() {
           {can("storefront.manage") && buyerSteps(p).confirmProposed && (
             <ConfirmProposed p={p} onDone={reload} />
           )}
+          {can("table.edit") &&
+            !buyerSteps(p).confirmProposed &&
+            p.status !== "cancelled" && (
+              <LinesTreatCard key={p.lines.map((l) => `${l.treatment}${l.label_id}${l.received}`).join()} p={p} onDone={reload} />
+            )}
           <BuyerActions
             p={p}
             onDone={reload}
@@ -1108,16 +1128,23 @@ export function PurchasePage() {
   );
 }
 
-/** Confirming an order a linked supplier drafted for us: which of our own
- * items each line is (what comes is received into it). */
+/** Confirming an order a linked supplier drafted for us: how each line is
+ * treated (what a business buys §6), remembered for next time. */
 function ConfirmProposed({ p, onDone }: { p: Purchase; onDone: () => void }) {
-  const items = useOwnItems();
+  const treat = useSheetTreat();
   const act = useAction();
-  const own = items.data ?? [];
-  const [chosen, setChosen] = useState<Record<number, string>>({});
-  const pick = (i: number) =>
-    chosen[i] ?? sameName(own, p.lines[i]?.item ?? "");
-  const all = p.lines.map((_, i) => pick(i));
+  const answered = treat.ready(orderLineKeys(p));
+  const confirm = (cs?: Choices) =>
+    void act.run(async () => {
+      const lines = await orderBodies(p, treat, cs);
+      try {
+        await post(`/v1/stock/purchases/${p.id}/confirm-proposed`, { lines });
+      } catch (e) {
+        if (treat.refused(e, orderLineKeys(p).map((x) => x.key))) return;
+        throw e;
+      }
+      onDone();
+    }, "Confirmed, and the supplier is told");
   return (
     <section
       className="card"
@@ -1125,51 +1152,72 @@ function ConfirmProposed({ p, onDone }: { p: Purchase; onDone: () => void }) {
       data-testid="purchase-confirm"
     >
       <h2 id="purchase-confirm">Confirm it</h2>
-      {items.data && own.length === 0 ? (
-        <p className="hint">
-          Keep your stock on Taskiem to confirm it, so what comes is received
-          into your items. <Link to="/storefront/stock">Stock</Link>
-        </p>
+      <p className="hint">
+        How should we treat each? Said once, it is remembered for next time.
+      </p>
+      {!treat.data.ready ? (
+        <Skeleton rows={2} label="Loading your labels and stock…" />
       ) : (
-        <>
-          <p className="hint">
-            Which of your items each is. What comes is received into it.
-          </p>
-          {p.lines.map((l, i) => (
-            <Field key={i} label={`Their ${l.item}`}>
-              <select
-                value={pick(i)}
-                onChange={(e) => setChosen({ ...chosen, [i]: e.target.value })}
-              >
-                <option value="">Choose your item</option>
-                {own.map((it) => (
-                  <option key={it.id} value={it.id}>
-                    {it.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          ))}
-          <ErrorBox error={act.error} />
-          <button
-            type="button"
-            className="primary"
-            disabled={act.busy || all.some((x) => !x)}
-            onClick={() =>
-              void act.run(
-                async () => (
-                  await post(`/v1/stock/purchases/${p.id}/confirm-proposed`, {
-                    items: all,
-                  }),
-                  onDone()
-                ),
-                "Confirmed, and the supplier is told",
-              )
-            }
-          >
-            Confirm the order
-          </button>
-        </>
+        <OrderLinesTreat
+          purchase={p}
+          treat={treat}
+          rememberable={false}
+          onAsked={confirm}
+        />
+      )}
+      <ErrorBox error={act.error} />
+      <button
+        type="button"
+        className="primary"
+        disabled={act.busy || !answered}
+        onClick={() => confirm()}
+      >
+        Confirm the order
+      </button>
+    </section>
+  );
+}
+
+/** How each line of an order is treated when it comes: those not yet
+ * confirmed asked, the others changed for this order (or remembered), each
+ * locked once something on it came. */
+function LinesTreatCard({ p, onDone }: { p: Purchase; onDone: () => void }) {
+  const treat = useSheetTreat();
+  const act = useAction();
+  const waiting = p.lines.filter((l) => l.unconfirmed).length;
+  const changed = Object.values(treat.choices).some(Boolean);
+  const answered = treat.ready(orderLineKeys(p));
+  const save = (cs?: Choices) =>
+    void act.run(async () => {
+      if (await saveOrderLines(p, treat, cs)) onDone();
+    }, "Saved");
+  return (
+    <section
+      className="card"
+      aria-labelledby="purchase-treat"
+      data-testid="purchase-treat"
+    >
+      <h2 id="purchase-treat">How each is treated</h2>
+      <p className="hint">
+        {waiting > 0
+          ? "Say how to treat what is new from this supplier. It is remembered for next time."
+          : "As you said for each item. A change here is for this order, unless you remember it."}
+      </p>
+      {!treat.data.ready ? (
+        <Skeleton rows={2} label="Loading your labels and stock…" />
+      ) : (
+        <OrderLinesTreat purchase={p} treat={treat} onAsked={save} />
+      )}
+      <ErrorBox error={act.error} />
+      {(waiting > 0 || changed) && (
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy || !answered || (!changed && waiting === 0)}
+          onClick={() => save()}
+        >
+          Save
+        </button>
       )}
     </section>
   );
