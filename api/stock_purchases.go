@@ -360,7 +360,8 @@ func (s *Server) draftPurchase(w http.ResponseWriter, r *http.Request) {
 		case l.CostKobo != nil:
 			cost = *l.CostKobo
 		case it.CostKobo != nil:
-			cost = *it.CostKobo
+			// One of the line is one sale of the product: its uses.
+			cost = *it.SaleCostKobo()
 		}
 		lines = append(lines, stock.PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: cost})
 	}

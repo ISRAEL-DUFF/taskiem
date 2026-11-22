@@ -12103,6 +12103,89 @@ paths:
                     $ref: '#/components/schemas/StockItem'
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/products/{id}/counted-by:
+    put:
+      operationId: putCountedBy
+      tags:
+      - Stock
+      summary: Say what a product is counted by
+      description: 'A product of the catalogue (by its row id) is counted by one of the business''s stock items, uses of it one sale (a whole number, 1 when not said): a "pack of 6" uses 6 of a single item, rice sold as "500 g" 500 of a stock item kept in grams. Several products may be counted by one stock item. Selling or ordering the product lowers the stock item by the quantity times its uses, and the storefront shows it sold out when the stock item cannot cover one sale. A product counted by another stock item is counted by this one instead. Not for a material, nor for a product sold in sizes and colours (each size is counted by its own stock item).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's catalogue row id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stock_item_id]
+              properties:
+                stock_item_id:
+                  type: string
+                  format: uuid
+                uses:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000000
+                  description: How many of the stock item one sale takes; 1 when not said
+      responses:
+        '200':
+          description: The product, counted by the stock item
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteCountedBy
+      tags:
+      - Stock
+      summary: Count a product by no stock item
+      description: Selling the product moves no stock from now, and the storefront shows no count for it. Its stock item stays, with its count and history (a material, when it counts no other product).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.edit
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The product's catalogue row id
+      responses:
+        '200':
+          description: The product, not counted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/StockItem'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/group:
     post:
       operationId: groupStockItems
@@ -44230,6 +44313,13 @@ components:
               delivered:
                 type: integer
                 description: What a linked supplier says it delivered, mirrored from its order
+              stock_item_id:
+                type: string
+                format: uuid
+                description: The stock item receiving the line moves, named when the order was made (absent for a product counted by none then, counted from when it comes)
+              uses:
+                type: integer
+                description: How many of the stock item one of the line is, as it was when the order was made; receiving moves it by the quantity times this, at the line's cost over it
         total_kobo:
           type: integer
         status:
@@ -47945,13 +48035,17 @@ components:
           type: boolean
         stock:
           type: [integer, 'null']
+          description: Its stock item's count, in the stock item's unit; null when it is not counted
+        uses:
+          type: integer
+          description: On a product counted by a stock item, how many of it one sale takes (a "pack of 6" uses 6)
         unit:
           type: string
         price_kobo:
           type: integer
         cost_kobo:
           type: integer
-          description: The last price paid for one
+          description: The last price paid for one of its stock item
         reorder_level:
           type: integer
         target_level:

@@ -993,11 +993,11 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		} else if said.AmountKobo == nil {
 			return c.say(ctx, s, c.t("wa.sale.no_price", "name", whatsapp.SafeText(it.Name)))
 		}
-		unit := it.Unit
+		unit := it.SaleUnit()
 		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity,
 			CostKobo: it.CostKobo})
 		total += price * x.Quantity
-		if it.Stock != nil && *it.Stock < x.Quantity {
+		if it.Beyond(x.Quantity) {
 			sale.Beyond = append(sale.Beyond, it.Name)
 		}
 	}

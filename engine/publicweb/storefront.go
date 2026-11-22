@@ -19,7 +19,8 @@ import (
 )
 
 // StorefrontPage is what the public host renders for a storefront: its
-// newest snapshot and catalogue copy.
+// newest snapshot and catalogue copy, with how many are left of each
+// counted product (taskiem_product_left).
 type StorefrontPage struct {
 	Status        string // published, closed or suspended
 	Model         storefront.Model
@@ -35,14 +36,15 @@ type StorefrontPage struct {
 	Lists map[string][]storefront.Item
 }
 
-// Storefronts reads a storefront's page; ok is false when it is not
-// served (a draft, an inactive tenant).
-type Storefronts func(ctx context.Context, id uuid.UUID) (page StorefrontPage, ok bool, err error)
+// Storefronts reads a business's storefront's page; ok is false when it
+// is not served (a draft, an inactive tenant).
+type Storefronts func(ctx context.Context, tenant, id uuid.UUID) (page StorefrontPage, ok bool, err error)
 
 // DBStorefronts reads pages with taskiem_public_storefront and
-// taskiem_public_storefront_catalogue.
+// taskiem_public_storefront_catalogue, and how many are left with
+// taskiem_product_left: the copy holds no count.
 func DBStorefronts(pool *pgxpool.Pool) Storefronts {
-	return func(ctx context.Context, id uuid.UUID) (StorefrontPage, bool, error) {
+	return func(ctx context.Context, tenant, id uuid.UUID) (StorefrontPage, bool, error) {
 		var p StorefrontPage
 		var version int
 		var model []byte
@@ -72,6 +74,9 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 		if err := json.Unmarshal(items, &p.Items); err != nil {
 			return StorefrontPage{}, false, err
 		}
+		if err := productLeft(ctx, pool, tenant, p.Items); err != nil {
+			return StorefrontPage{}, false, err
+		}
 		// Each other front's list, its table read once.
 		for _, f := range p.Model.Fronts {
 			if f.Slug == "" {
@@ -99,6 +104,35 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 	}
 }
 
+// productLeft puts on a page's items how many are left of each counted
+// product, from taskiem_product_left: all the public role may read of the
+// business's stock.
+func productLeft(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, items []storefront.Item) error {
+	if len(items) == 0 {
+		return nil
+	}
+	rows, err := pool.Query(ctx, `SELECT product_id, sales_left FROM taskiem_product_left($1, $2)`, tenant, storefront.LeftIDs(items))
+	if err != nil {
+		return err
+	}
+	left := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var n int64
+		if err := rows.Scan(&id, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		left[id] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	storefront.WithLeft(items, left)
+	return nil
+}
+
 type pageEntry struct {
 	page StorefrontPage
 	ok   bool
@@ -106,7 +140,8 @@ type pageEntry struct {
 
 // storefrontPage reads a page through a cache as short as the host
 // cache's: an edit or a publish shows within 30 seconds on every replica.
-func (s *Server) storefrontPage(ctx context.Context, id uuid.UUID) (StorefrontPage, bool, error) {
+func (s *Server) storefrontPage(ctx context.Context, site Site) (StorefrontPage, bool, error) {
+	id := site.ID
 	if s.Storefronts == nil {
 		return StorefrontPage{}, false, nil
 	}
@@ -116,7 +151,7 @@ func (s *Server) storefrontPage(ctx context.Context, id uuid.UUID) (StorefrontPa
 	if e, ok := s.pages.Get(id); ok {
 		return e.page, e.ok, nil
 	}
-	p, ok, err := s.Storefronts(ctx, id)
+	p, ok, err := s.Storefronts(ctx, site.Tenant, id)
 	if err != nil {
 		return StorefrontPage{}, false, err
 	}
@@ -252,7 +287,7 @@ type hoursRow struct {
 var weekdays = [7]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
 func (s *Server) serveStorefront(w http.ResponseWriter, r *http.Request, site Site) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
@@ -306,7 +341,7 @@ func frontOf(p StorefrontPage, slug string) (storefront.PublicFront, bool) {
 // serveFront answers /<slug>: a front's page (fronts F3, §7.3), the
 // business's card above the front's own header, list and buttons.
 func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, slug string) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)
@@ -353,7 +388,7 @@ func (s *Server) serveFront(w http.ResponseWriter, r *http.Request, site Site, s
 // same one the web app prints (storefront.QRPNG), for the owner to share
 // from chat. It holds nothing but the address.
 func (s *Server) serveQR(w http.ResponseWriter, r *http.Request, site Site) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront QR", "storefront", site.ID, "err", err)

@@ -18,11 +18,14 @@ import (
 )
 
 // Stock is kept on stock items apart from the catalogue
-// (docs/spec/what-a-business-buys.md §4, decision 0070): the catalogue
-// holds no count. A product is counted by a stock item (product_stock),
-// and how many are left of it is that stock item's count, read through
-// engine/productstock into the catalogue copy when it is refreshed and
-// whenever a movement changes it (CopyCount).
+// (docs/spec/what-a-business-buys.md §4, decision 0070): neither the
+// catalogue table nor its copy holds a count. A product is counted by a
+// stock item (product_stock), and how many are left of it is how many
+// whole sales that stock item covers (its count over the product's uses).
+// It is read when the copy is read: by the business through
+// engine/productstock (Catalogue, CatalogueItems), by the public page and
+// a linked buyer through taskiem_product_left (WithLeft), so a sale
+// changes no copy.
 
 // Mover records an accepted order's lines as stock movements (reason
 // order), answering the items there were not enough of (engine/stock).
@@ -75,40 +78,86 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 	return append(short, more...), nil
 }
 
-// CopyCount puts how many are left of a product into the catalogue copy,
-// so the page and forms show it at once rather than at the next refresh;
-// a size's or colour's into its product's entry too (CopySizeCount).
-// Stock is kept on the catalogue's table only (fronts §5.2): a front's
-// list from another table may share a row's id.
-func CopyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, row string, n int64) error {
-	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
-		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.table_name = `+CatalogueTableSQL, tenant, row, n)
+// LeftIDs is the ids how many are left is asked for of items: each item's,
+// and each of its sizes'.
+func LeftIDs(items []Item) []string {
+	ids := make([]string, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		for _, z := range it.Sizes {
+			ids = append(ids, z.ID)
+		}
+	}
+	return ids
+}
+
+// WithLeft puts on items how many are left of each, by id (what
+// productstock.LeftTx or taskiem_product_left answers): an item's own, and
+// a product sold in sizes and colours each size's and theirs together
+// (unknown when a size is not counted, as rollUpVariants has it). An item
+// not in left is not counted, and keeps no count.
+func WithLeft(items []Item, left map[string]int64) {
+	for i := range items {
+		it := &items[i]
+		it.Stock = nil
+		if len(it.Sizes) == 0 {
+			if n, ok := left[it.ID]; ok {
+				it.Stock = &n
+			}
+			continue
+		}
+		var sum int64
+		all := true
+		for j := range it.Sizes {
+			z := &it.Sizes[j]
+			z.Stock = nil
+			n, ok := left[z.ID]
+			if !ok {
+				all = false
+				continue
+			}
+			z.Stock = &n
+			sum += n
+		}
+		if all {
+			it.Stock = &sum
+		}
+	}
+}
+
+// withoutCounts is items as the copy keeps them: with no count.
+func withoutCounts(items []Item) []Item {
+	out := make([]Item, len(items))
+	for i, it := range items {
+		it.Stock = nil
+		if len(it.Sizes) > 0 {
+			sizes := make([]Size, len(it.Sizes))
+			for j, z := range it.Sizes {
+				z.Stock = nil
+				sizes[j] = z
+			}
+			it.Sizes = sizes
+		}
+		out[i] = it
+	}
+	return out
+}
+
+// LeftTx puts on the business's items how many are left of each, read in
+// its scope (productstock.LeftTx).
+func LeftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item) error {
+	left, err := productstock.LeftTx(ctx, tx, tenant, LeftIDs(items))
 	if err != nil {
 		return err
 	}
-	return CopySizeCount(ctx, tx, tenant, row, n)
-}
-
-// CopySizeCount puts a size's or colour's new count into its product's
-// entry in the catalogue copy (the sizes are carried on the product, not
-// as entries of their own), and the product's count, theirs together
-// (unknown when a size keeps no count, as rollUpVariants has it).
-// Like the item's own count, only on the catalogue's table: a front's list
-// from another table may carry a size of the same row id.
-func CopySizeCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, row string, n int64) error {
-	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(x.item, '{stock}',
-			COALESCE((SELECT CASE WHEN bool_and(z ? 'stock') THEN to_jsonb(sum((z->>'stock')::bigint)) END FROM jsonb_array_elements(x.item->'sizes') z), 'null'::jsonb))
-		FROM (SELECT c2.storefront_id, c2.table_name, c2.row_id, jsonb_set(c2.item, '{sizes}', (SELECT jsonb_agg(CASE WHEN z->>'id' = $2 THEN jsonb_set(z, '{stock}', to_jsonb(GREATEST($3::bigint, 0))) ELSE z END ORDER BY o)
-				FROM jsonb_array_elements(c2.item->'sizes') WITH ORDINALITY AS a(z, o))) AS item
-			FROM storefront_catalogue c2 WHERE c2.tenant_id = $1 AND c2.item->'sizes' @> jsonb_build_array(jsonb_build_object('id', $2::text))
-				AND c2.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c2.storefront_id), '')) x
-		WHERE c.storefront_id = x.storefront_id AND c.table_name = x.table_name AND c.row_id = x.row_id`, tenant, row, n)
-	return err
+	WithLeft(items, left)
+	return nil
 }
 
 // counted puts on each item counted by a stock item how many are left of
-// it and the stock item's unit (productstock), before sizes are rolled up
-// into their products. Items not counted keep no count.
+// it (productstock), before sizes are rolled up into their products, and
+// the stock item's unit where one sale uses one of it. Items not counted
+// keep no count.
 func counted(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item) error {
 	ids := make([]string, len(items))
 	for i, it := range items {
@@ -121,7 +170,10 @@ func counted(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item) err
 	for i := range items {
 		if c, ok := counts[items[i].ID]; ok {
 			n := c.Left()
-			items[i].Stock, items[i].Unit = &n, c.Unit
+			items[i].Stock = &n
+			if c.Uses <= 1 {
+				items[i].Unit = c.Unit
+			}
 		}
 	}
 	return nil

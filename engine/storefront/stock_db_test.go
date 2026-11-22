@@ -2,12 +2,15 @@ package storefront_test
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/productstock"
+	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -32,7 +35,7 @@ func newShelf(w *world, counts map[string]int64) *shelf {
 				return err
 			}
 			sh.items[row] = x.ID
-			if err := productstock.LinkTx(ctx, tx, w.env.Tenant, row, x.ID); err != nil {
+			if err := productstock.LinkTx(ctx, tx, w.env.Tenant, row, x.ID, 1); err != nil {
 				return err
 			}
 			if n > 0 {
@@ -146,7 +149,7 @@ func TestAcceptLowersStock(t *testing.T) {
 	}
 }
 
-// The catalogue copy reads how many are left of each product from the
+// The catalogue's items read how many are left of each product from the
 // stock item it is counted by, and the page shows it sold out from there;
 // the catalogue table holds no count, and a front's own list none.
 func TestCatalogueCountsFromStockItems(t *testing.T) {
@@ -173,7 +176,7 @@ func TestCatalogueCountsFromStockItems(t *testing.T) {
 		}
 		return nil
 	})
-	// A count changed by a movement reaches the copy at once.
+	// A count changed by a movement is read at once with the copy.
 	w.in(func(tx pgx.Tx) error {
 		items, err := storefront.CatalogueItems(ctx, tx, w.env.Tenant, rows, m)
 		if err != nil {
@@ -187,55 +190,133 @@ func TestCatalogueCountsFromStockItems(t *testing.T) {
 	}
 }
 
-// A size's new count goes into its product on the catalogue's copy only:
-// a front's list from another table that carries a size of the same row
-// id keeps its own. The product's count is the sizes' together, unknown
-// when one keeps no count.
-func TestCopySizeCountCatalogueOnly(t *testing.T) {
+// The copy holds no count, its sizes none either: how many are left of a
+// product sold in sizes is read with it, each size's from its stock item
+// and the product's theirs together, unknown when a size is not counted.
+func TestCopyHoldsNoCount(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	n := func(v int64) *int64 { return &v }
-	product := func(m *int64) storefront.Item {
-		return storefront.Item{ID: "1", Name: "Tee", Available: true, Stock: n(5), Variants: 2,
-			Sizes: []storefront.Size{{ID: "2", Variant: map[string]string{"Size": "S"}, Stock: n(3)}, {ID: "3", Variant: map[string]string{"Size": "M"}, Stock: m}}}
-	}
+	st := newShelf(w, map[string]int64{"2": 3, "3": 2})
+	product := storefront.Item{ID: "1", Name: "Tee", Available: true, Stock: n(5), Variants: 2,
+		Sizes: []storefront.Size{{ID: "2", Variant: map[string]string{"Size": "S"}, Stock: n(3)}, {ID: "3", Variant: map[string]string{"Size": "M"}, Stock: n(2)}}}
 	w.in(func(tx pgx.Tx) error {
-		if err := storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{product(n(2))}); err != nil {
-			return err
-		}
-		if err := storefront.SyncList(ctx, tx, w.env.Tenant, "other", []storefront.Item{product(n(2))}); err != nil {
-			return err
-		}
-		return storefront.CopySizeCount(ctx, tx, w.env.Tenant, "2", 1)
+		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{product})
 	})
-	if got := w.copiedStock("1"); got != 3 {
-		t.Errorf("the catalogue's product: %d, want 3", got)
-	}
+	var raw string
 	w.in(func(tx pgx.Tx) error {
-		items, err := storefront.ListItems(ctx, tx, w.env.Tenant, "other")
-		if err != nil {
-			return err
-		}
-		if len(items) != 1 || *items[0].Stock != 5 || *items[0].Sizes[0].Stock != 3 {
-			t.Errorf("the other table's list was changed: %+v", items)
-		}
-		return nil
+		return tx.QueryRow(ctx, `SELECT item::text FROM storefront_catalogue WHERE tenant_id = $1`, w.env.Tenant).Scan(&raw)
 	})
-	// One size keeps no count: the product's count is unknown.
+	if strings.Contains(raw, "stock") {
+		t.Fatalf("the copy holds a count: %s", raw)
+	}
+	st.set("2", 1)
 	w.in(func(tx pgx.Tx) error {
-		if err := storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{product(nil)}); err != nil {
-			return err
-		}
-		if err := storefront.CopySizeCount(ctx, tx, w.env.Tenant, "2", 0); err != nil {
-			return err
-		}
 		items, err := storefront.Catalogue(ctx, tx, w.env.Tenant)
 		if err != nil {
 			return err
 		}
-		if len(items) != 1 || items[0].Stock != nil || items[0].SoldOut() {
+		if len(items) != 1 || items[0].Stock == nil || *items[0].Stock != 3 || *items[0].Sizes[0].Stock != 1 || *items[0].Sizes[1].Stock != 2 {
+			t.Errorf("the product read with its sizes' counts: %+v", items)
+		}
+		// A size counted by none: the product's count is unknown.
+		if err := productstock.UnlinkTx(ctx, tx, w.env.Tenant, "3"); err != nil {
+			return err
+		}
+		items, err = storefront.Catalogue(ctx, tx, w.env.Tenant)
+		if err != nil {
+			return err
+		}
+		if len(items) != 1 || items[0].Stock != nil || items[0].SoldOut() || items[0].Sizes[1].Stock != nil {
 			t.Errorf("a product with an uncounted size: %+v", items)
 		}
 		return nil
 	})
+}
+
+// A "pack of 6" and a single, both counted by one stock item (what a
+// business buys §12): selling one pack on the storefront lowers the stock
+// item by 6, once, as one order movement; with fewer than 6 left the
+// storefront (the owner's read and the public page, through
+// taskiem_product_left as the public role) shows the pack sold out and
+// the single not.
+func TestPackOfSixOnOneStockItem(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	st := newShelf(w, map[string]int64{"2": 10})
+	w.in(func(tx pgx.Tx) error {
+		// The pack, row 1, uses 6 of the single's stock item.
+		return productstock.LinkTx(ctx, tx, w.env.Tenant, "1", st.items["2"], 6)
+	})
+	w.in(func(tx pgx.Tx) error {
+		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{{ID: "1", Name: "Malt, pack of 6", Available: true}, {ID: "2", Name: "Malt", Available: true}})
+	})
+	public := publicweb.DBStorefronts(w.env.DB.PublicPool(t, 1))
+	shown := func() (pack, single *int64) {
+		t.Helper()
+		p, ok, err := public(ctx, w.env.Tenant, w.sf.ID)
+		if err != nil || !ok || len(p.Items) != 2 {
+			t.Fatalf("the public page: %+v %v %v", p, ok, err)
+		}
+		return p.Items[0].Stock, p.Items[1].Stock
+	}
+	if pack, single := shown(); pack == nil || *pack != 1 || single == nil || *single != 10 {
+		t.Fatalf("10 left: the pack %v, the single %v; want 1 and 10", pack, single)
+	}
+
+	// One pack sold on the storefront: the stock item goes down by 6.
+	ref := w.storefrontOrder("1", 1)
+	if st.count("2") != 4 {
+		t.Fatalf("after a pack: %d, want 4", st.count("2"))
+	}
+	if out, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test"); err != nil || st.count("2") != 4 || len(out["short"].([]string)) != 0 {
+		t.Fatalf("retry: %v %v, stock %d", out, err, st.count("2"))
+	}
+	var list []stock.Movement
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		list, err = stock.ListTx(ctx, tx, w.env.Tenant, stock.Filter{ItemID: "2", Reason: stock.Order})
+		return err
+	})
+	if len(list) != 1 || *list[0].Change != -6 || list[0].Reference != ref {
+		t.Fatalf("one movement of -6: %+v", list)
+	}
+
+	// 4 left: the pack is sold out, the single is not.
+	if pack, single := shown(); pack == nil || *pack != 0 || single == nil || *single != 4 {
+		t.Fatalf("4 left: the pack %v, the single %v; want 0 and 4", pack, single)
+	}
+	if w.copiedStock("1") != 0 || w.copiedStock("2") != 4 {
+		t.Fatalf("the owner's read: pack %d, single %d", w.copiedStock("1"), w.copiedStock("2"))
+	}
+	w.in(func(tx pgx.Tx) error {
+		items, err := storefront.Catalogue(ctx, tx, w.env.Tenant)
+		if err != nil {
+			return err
+		}
+		if !items[0].SoldOut() || items[1].SoldOut() {
+			t.Errorf("sold out: %+v", items)
+		}
+		return nil
+	})
+}
+
+// storefrontOrder submits and accepts an order of qty of one row, as the
+// public host and the owner do.
+func (w *world) storefrontOrder(row string, qty int) string {
+	w.t.Helper()
+	ctx := context.Background()
+	ref := storefront.NewReference("ada-kitchen")
+	key, hash := storefront.NewStatusKey()
+	w.keys[ref] = key
+	sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: "Bola", Phone: "+2348031234567"},
+		Basket: []storefront.Line{{ID: row, Name: "Item " + row, Quantity: qty, PriceKobo: 100000, LineKobo: int64(qty) * 100000}}, TotalKobo: int64(qty) * 100000,
+		Fulfilment: "pickup", Payment: "after_accept", Channel: "direct", Submitted: time.Now(), StatusKey: key}
+	w.send(ref, hash, sub)
+	if err := w.orders.Drain(ctx); err != nil {
+		w.t.Fatal(err)
+	}
+	w.env.Drain(w.t)
+	w.decide(ref, "decide", "approved")
+	return ref
 }

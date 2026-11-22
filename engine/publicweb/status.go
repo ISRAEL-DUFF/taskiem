@@ -106,7 +106,7 @@ func (s *Server) statusHead(ctx context.Context, site Site, ref string, embed bo
 	if embed {
 		d.Home = ""
 	}
-	p, ok, err := s.storefrontPage(ctx, site.ID)
+	p, ok, err := s.storefrontPage(ctx, site)
 	if err == nil && ok {
 		c := p.Model.Card
 		d.Business = c.Name

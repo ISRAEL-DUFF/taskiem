@@ -272,7 +272,7 @@ func (s *Server) serveFrontForm(w http.ResponseWriter, r *http.Request, site Sit
 		s.page(w, r, http.StatusMethodNotAllowed, "notfound", pageData{Title: "Page not found"})
 		return
 	}
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: storefront", "storefront", site.ID, "err", err)

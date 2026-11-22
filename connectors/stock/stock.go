@@ -426,6 +426,9 @@ func ItemOut(it stock.Item) map[string]any {
 			out[k] = *v
 		}
 	}
+	if it.Uses > 0 {
+		out["uses"] = it.Uses
+	}
 	if it.Unit != "" {
 		out["unit"] = it.Unit
 	}

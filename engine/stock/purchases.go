@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -577,6 +578,52 @@ type PurchaseLine struct {
 	// Delivered is what a linked supplier says it delivered, mirrored
 	// from its order (docs/spec/business-links.md §7); nil otherwise.
 	Delivered *int64 `json:"delivered,omitempty"`
+	// StockItemID is the stock item receiving the line moves, and Uses
+	// how many of it one of the line is, as they were when the order was
+	// made (ResolveLinesTx): a product's stock item and its uses, or a
+	// stock item named directly, 1. Receiving moves it by the quantity
+	// times the uses, at the line's cost over the uses (the cost of one of
+	// the stock item, in whole kobo). A line of a product counted by none
+	// when the order was made is resolved when it is received: what the
+	// product is counted by then, else receiving starts counting it.
+	StockItemID *uuid.UUID `json:"stock_item_id,omitempty"`
+	Uses        int64      `json:"uses,omitempty"`
+}
+
+// ResolveLinesTx names on each line the stock item it moves when received,
+// with its uses (PurchaseLine.StockItemID), where the line does not say
+// already: what the line's item is counted by now.
+func ResolveLinesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, lines []PurchaseLine) error {
+	for i := range lines {
+		l := &lines[i]
+		if l.StockItemID != nil {
+			l.Uses = max(l.Uses, 1)
+			continue
+		}
+		c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, l.ItemID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			id := c.StockItemID
+			l.StockItemID, l.Uses = &id, max(c.Uses, 1)
+		} else {
+			l.Uses = 0
+		}
+	}
+	return nil
+}
+
+// lineMove is what receiving n of a line moves: the stock item it names
+// (or its item, to be counted from now), how many of it one of the line
+// is, and the cost of one of it.
+func lineMove(l PurchaseLine) (item string, uses, unitCost int64) {
+	uses = max(l.Uses, 1)
+	item = l.ItemID
+	if l.StockItemID != nil {
+		item = l.StockItemID.String()
+	}
+	return item, uses, l.CostKobo / uses
 }
 
 // Purchase is a purchase order.
@@ -784,6 +831,9 @@ func DraftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in DraftIn) (Purc
 	if err != nil {
 		return Purchase{}, err
 	}
+	if err := ResolveLinesTx(ctx, tx, tenant, in.Lines); err != nil {
+		return Purchase{}, err
+	}
 	if len([]rune(in.Note)) > 500 {
 		return Purchase{}, fmt.Errorf("%w: a note is up to 500 characters", ErrPurchase)
 	}
@@ -853,11 +903,28 @@ func (p *Purchases) DraftLowTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	for _, id := range ids {
 		onOrder[id] = true
 	}
+	// The stock items on an open order too: a low stock item counting two
+	// products is ordered once.
+	rows, err = tx.Query(ctx, `SELECT l->>'stock_item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
+		WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received') AND l ? 'stock_item_id'`, tenant)
+	if err != nil {
+		return nil, nil, err
+	}
+	ids, err = pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, id := range ids {
+		onOrder[id] = true
+	}
 	by := map[uuid.UUID][]PurchaseLine{}
 	var order []uuid.UUID
 	for _, it := range Low(items) {
-		if onOrder[it.ID] {
+		if onOrder[it.ID] || it.StockItemID != "" && onOrder[it.StockItemID] {
 			continue
+		}
+		if it.StockItemID != "" {
+			onOrder[it.StockItemID] = true
 		}
 		s, _, err := FindSupplier(suppliers, it.Supplier)
 		if it.Supplier == "" || err != nil || !strings.EqualFold(s.Name, strings.TrimSpace(it.Supplier)) {
@@ -871,7 +938,13 @@ func (p *Purchases) DraftLowTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if _, ok := by[s.ID]; !ok {
 			order = append(order, s.ID)
 		}
-		by[s.ID] = append(by[s.ID], PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: it.Suggest(), CostKobo: cost})
+		// What is low is the stock item: its line is counted in it, one of
+		// the line one of the stock item, at its cost.
+		line := PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: it.Suggest(), CostKobo: cost}
+		if sid, err := uuid.Parse(it.StockItemID); err == nil {
+			line.StockItemID, line.Uses = &sid, 1
+		}
+		by[s.ID] = append(by[s.ID], line)
 	}
 	for _, sid := range order {
 		x, err := DraftTx(ctx, tx, tenant, DraftIn{Supplier: sid, Lines: by[sid], Actor: actor, Key: key + ":" + sid.String()})
@@ -1084,10 +1157,12 @@ var StatusWords = map[string]string{
 }
 
 // ReceiveTx records goods received on an order: a received movement per
-// item naming the order, the lines' received quantities, the value
+// line naming the order, on the stock item the line names, by how many
+// came times the line's uses; the lines' received quantities, the value
 // received (owed to the supplier until paid), and the status, received
 // once every line has come; and each stock item's cost price, set to the
-// order's. got is how many came, by item id; key makes a receipt once.
+// line's over its uses. got is how many came, by the lines' item ids; key
+// makes a receipt once.
 func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, []Movement, error) {
 	x, err := PurchaseTx(ctx, tx, tenant, id, true)
 	if err != nil {
@@ -1147,22 +1222,36 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 				ErrPurchase, left[item], names[item], x.Reference, left[item])
 		}
 	}
+	// A line of a product counted by none when the order was made: what
+	// it is counted by now, if anything.
+	if err := ResolveLinesTx(ctx, tx, tenant, x.Lines); err != nil {
+		return x, nil, err
+	}
 	var moves []Movement
 	var value int64
 	all := true
 	for i, l := range x.Lines {
 		n := got[l.ItemID]
 		if n > 0 {
-			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Received, Delta: &n, Reference: x.Reference,
-				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
+			// The stock item named when the order was made, by the line's
+			// quantity times its uses, at the cost of one of it.
+			item, uses, unit := lineMove(l)
+			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: item, Item: l.Item, Reason: Received, Delta: &n, Uses: uses, Reference: x.Reference,
+				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(unit)})
 			if err != nil {
 				return x, nil, err
 			}
 			moves = append(moves, m)
 			x.Lines[i].Received += n
+			if x.Lines[i].StockItemID == nil {
+				// Counted from now, by the stock item receiving made.
+				if sid, err := uuid.Parse(m.ItemID); err == nil {
+					x.Lines[i].StockItemID, x.Lines[i].Uses = &sid, 1
+				}
+			}
 			value += n * l.CostKobo
-			if l.CostKobo > 0 {
-				if _, err := tx.Exec(ctx, `UPDATE stock_items SET cost_kobo = $3 WHERE tenant_id = $1 AND id = $2::uuid`, tenant, m.ItemID, l.CostKobo); err != nil {
+			if unit > 0 {
+				if _, err := tx.Exec(ctx, `UPDATE stock_items SET cost_kobo = $3 WHERE tenant_id = $1 AND id = $2::uuid`, tenant, m.ItemID, unit); err != nil {
 					return x, nil, err
 				}
 			}
@@ -1229,8 +1318,9 @@ func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts 
 			continue
 		}
 		delta := -over
-		m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Adjustment, Delta: &delta, Reference: x.Reference,
-			Note: "not all came from " + x.Supplier + ", as agreed", Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
+		item, uses, unit := lineMove(l)
+		m, err := RecordTx(ctx, tx, tenant, Move{ItemID: item, Item: l.Item, Reason: Adjustment, Delta: &delta, Uses: uses, Reference: x.Reference,
+			Note: "not all came from " + x.Supplier + ", as agreed", Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(unit)})
 		if err != nil {
 			return x, nil, err
 		}

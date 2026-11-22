@@ -6926,7 +6926,7 @@ class StorefrontColumns {
 }
 
 class StockItem {
-  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, this.material, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.stockItemId, this.suggest, this.supplier, this.supplierId, this.targetLevel, this.unit, this.variant, this.variantOf});
+  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, this.material, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.stockItemId, this.suggest, this.supplier, this.supplierId, this.targetLevel, this.unit, this.uses, this.variant, this.variantOf});
 
   final bool available;
   /// The kind of thing it is ("Sneakers"), when the catalogue has a category
@@ -6935,7 +6935,7 @@ class StockItem {
   /// A product's choices, when it has sizes and colours (it keeps no stock of
   /// its own then)
   final List<VariantChoice>? choices;
-  /// The last price paid for one
+  /// The last price paid for one of its stock item
   final int? costKobo;
   /// Its words on the storefront, when the catalogue maps them
   final String? description;
@@ -6951,6 +6951,8 @@ class StockItem {
   final List<String>? ownPrice;
   final int? priceKobo;
   final int? reorderLevel;
+  /// Its stock item's count, in the stock item's unit; null when it is not
+  /// counted
   final Object? stock;
   /// The stock item that counts it; absent for a product not counted
   final String? stockItemId;
@@ -6960,6 +6962,9 @@ class StockItem {
   final String? supplierId;
   final int? targetLevel;
   final String? unit;
+  /// On a product counted by a stock item, how many of it one sale takes (a
+  /// "pack of 6" uses 6)
+  final int? uses;
   /// Its values: {"Size": "42", "Colour": "Black"}
   final Map<String, dynamic>? variant;
   /// The product this is a size or colour of
@@ -6985,6 +6990,7 @@ class StockItem {
         supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
         targetLevel: j['target_level'] == null ? null : (j['target_level'] as num).toInt(),
         unit: j['unit'] == null ? null : j['unit'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
         variant: j['variant'] == null ? null : j['variant'] as Map<String, dynamic>,
         variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
       );
@@ -7009,6 +7015,7 @@ class StockItem {
         'supplier_id': ?supplierId,
         'target_level': ?targetLevel,
         'unit': ?unit,
+        'uses': ?uses,
         'variant': ?variant,
         'variant_of': ?variantOf,
       };

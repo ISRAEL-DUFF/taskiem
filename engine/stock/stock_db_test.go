@@ -64,7 +64,7 @@ func (w *world) counted(row string) uuid.UUID {
 			return err
 		}
 		w.items[row] = x.ID
-		return productstock.LinkTx(context.Background(), tx, w.env.Tenant, row, x.ID)
+		return productstock.LinkTx(context.Background(), tx, w.env.Tenant, row, x.ID, 1)
 	})
 	return w.items[row]
 }
