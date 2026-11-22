@@ -461,8 +461,9 @@ func (s *Server) listSupplierPrices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// listItemLinks is GET /v1/item-links/{link}: which of the business's own
-// items each of a linked supplier's items is.
+// listItemLinks is GET /v1/item-links/{link}: what the business
+// remembers of each of a linked supplier's items (what a business buys
+// §6): how it is treated, its stock item and uses, its label.
 func (s *Server) listItemLinks(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -470,10 +471,10 @@ func (s *Server) listItemLinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
-	var out []links.ItemLink
+	var out []stock.Remembered
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = links.ItemLinksTx(r.Context(), tx, p.TenantID, link)
+		out, err = stock.ItemLinksTx(r.Context(), tx, p.TenantID, link)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -482,9 +483,12 @@ func (s *Server) listItemLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"item_links": out})
 }
 
-// putItemLink is PUT /v1/item-links/{link}: {item_id, seller_item_id}:
-// which of the business's own items a supplier's item (on its price list)
-// is. Its orders then reach the supplier as that item.
+// putItemLink is PUT /v1/item-links/{link}: {seller_item_id, treatment,
+// stock_item_id, uses, label_id}: how to treat a linked supplier's item
+// from now on (on its price list, or seller_item naming it); item_id, one
+// of the business's own items (a product or a material), says: added to
+// its stock item. Orders drafted after it are filled from it; nothing
+// drafted or received before changes.
 func (s *Server) putItemLink(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -492,36 +496,54 @@ func (s *Server) putItemLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		ItemID       string `json:"item_id"`
 		SellerItemID string `json:"seller_item_id"`
+		SellerItem   string `json:"seller_item"`
+		ItemID       string `json:"item_id"`
+		stock.LineChoice
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	own, err := s.ownItem(r.Context(), p.TenantID, in.ItemID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
+	var own stock.Item
+	if in.ItemID != "" && in.Treatment == "" {
+		var err error
+		if own, err = s.ownItem(r.Context(), p.TenantID, in.ItemID); err != nil {
+			s.stockFail(w, r, err)
+			return
+		}
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		theirs, err := sellerItemOn(r.Context(), tx, p.TenantID, link, in.SellerItemID)
-		if err != nil {
+		if _, err := links.GetTx(r.Context(), tx, link); err != nil {
 			return err
 		}
-		if err := links.SetItemLinkTx(r.Context(), tx, p.TenantID, link, own.ID, theirs.ItemID, theirs.Name, p.Actor()); err != nil {
+		if own.ID != "" {
+			l, err := stock.LineOf(r.Context(), tx, p.TenantID, own, 1, nil, p.Actor())
+			if err != nil {
+				return err
+			}
+			in.Treatment, in.StockItemID, in.Uses = l.Treatment, l.StockItemID, l.Uses
+		}
+		name := in.SellerItem
+		if theirs, err := sellerItemOn(r.Context(), tx, p.TenantID, link, in.SellerItemID); err == nil {
+			name = theirs.Name
+		} else if strings.TrimSpace(name) == "" {
 			return err
 		}
-		return auditTx(r, tx, "item_link.set", link.String(), map[string]any{"item": own.ID, "seller_item": theirs.ItemID})
+		if err := stock.SetItemLinkTx(r.Context(), tx, p.TenantID, link, in.SellerItemID, name, in.LineChoice, p.Actor()); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "item_link.set", link.String(), map[string]any{"seller_item": in.SellerItemID, "treatment": in.Treatment})
 	}); err != nil {
-		s.fail(w, r, linkMessageErr(err))
+		s.purchaseFail(w, r, linkMessageErr(err))
 		return
 	}
 	s.listItemLinks(w, r)
 }
 
-// deleteItemLink is DELETE /v1/item-links/{link}/{item}.
+// deleteItemLink is DELETE /v1/item-links/{link}/{item}: forgets a linked
+// supplier's item (by its id); its next order asks again.
 func (s *Server) deleteItemLink(w http.ResponseWriter, r *http.Request) {
 	link, err := linkParam(r)
 	if err != nil {
@@ -531,12 +553,12 @@ func (s *Server) deleteItemLink(w http.ResponseWriter, r *http.Request) {
 	item := chi.URLParam(r, "item")
 	p := principalFrom(r.Context())
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if err := links.UnlinkItemTx(r.Context(), tx, p.TenantID, link, item); err != nil {
+		if err := stock.ClearItemLinkTx(r.Context(), tx, p.TenantID, link, item, p.Actor()); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "item_link.remove", link.String(), map[string]any{"item": item})
+		return auditTx(r, tx, "item_link.remove", link.String(), map[string]any{"seller_item": item})
 	}); err != nil {
-		s.fail(w, r, linkMessageErr(err))
+		s.purchaseFail(w, r, linkMessageErr(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -577,7 +599,11 @@ func sellerItemOn(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, id str
 }
 
 // orderLineIn is a line ordered from a supplier's price list: its item,
-// how many, and, the first time, which of the business's own items it is.
+// how many, and how the business treats it (what a business buys §6):
+// as said (treatment, with a stock item and uses for stock, a label, and
+// track_many to put more than 50 on Things we have), or added to the
+// stock of one of its own items (item_id: a product, or a material),
+// else as remembered, else as suggested.
 type orderLineIn struct {
 	SellerItemID string `json:"seller_item_id"`
 	Quantity     int64  `json:"quantity"`
@@ -585,6 +611,26 @@ type orderLineIn struct {
 	// PriceKobo is the buyer's offered price for the line (an offer,
 	// chat tools phase 7); none: the supplier's.
 	PriceKobo int64 `json:"price_kobo"`
+	stock.LineChoice
+	// suggest is one of the business's own items the line is guessed to
+	// add to (an item of the same name), used when it has no memory of
+	// the supplier's item, and not remembered.
+	suggest string
+}
+
+// sameNamed is the one own item of a name (a product or a material), or
+// "" when none or several are.
+func sameNamed(items []stock.Item, name string) string {
+	var same []string
+	for _, o := range items {
+		if !o.HasSizes() && strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(name)) {
+			same = append(same, o.ID)
+		}
+	}
+	if len(same) == 1 {
+		return same[0]
+	}
+	return ""
 }
 
 // dealIn is an offer on an order from a price list (chat tools phase 7):
@@ -627,14 +673,6 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 			together[links.ProductOf(it)] += l.Quantity
 		}
 	}
-	linked, err := links.ItemLinksTx(ctx, tx, p.TenantID, link)
-	if err != nil {
-		return stock.Purchase{}, err
-	}
-	mine := map[string]string{}
-	for _, l := range linked {
-		mine[l.SellerItemID] = l.ItemID
-	}
 	var supplier uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT id FROM suppliers WHERE tenant_id = $1 AND link_id = $2 AND retired_at IS NULL ORDER BY created_at LIMIT 1`, p.TenantID, link).Scan(&supplier)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -649,25 +687,29 @@ func (s *Server) draftFromPricesTx(ctx context.Context, tx pgx.Tx, p *Principal,
 	lines := make([]stock.PurchaseLine, 0, len(in))
 	for _, l := range in {
 		it := listed[l.SellerItemID]
-		item := mine[it.ItemID]
-		if l.ItemID != "" && l.ItemID != item {
-			if _, ok := own[l.ItemID]; !ok {
+		// The quantity's price: a quantity break once reached (phase 7).
+		line := stock.PurchaseLine{Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: links.PriceAt(it, together[links.ProductOf(it)]),
+			SellerItemID: it.ItemID, TrackMany: l.TrackMany}
+		switch {
+		case l.Treatment != "":
+			line.Treatment, line.StockItemID, line.Uses, line.LabelID = l.Treatment, l.StockItemID, l.Uses, l.LabelID
+		case l.ItemID != "":
+			o, ok := own[l.ItemID]
+			if !ok {
 				return stock.Purchase{}, fmt.Errorf("%w: %q is not one of your items", links.ErrInvalid, l.ItemID)
 			}
-			if err := links.SetItemLinkTx(ctx, tx, p.TenantID, link, l.ItemID, it.ItemID, it.Name, p.Actor()); err != nil {
+			to, err := stock.LineOf(ctx, tx, p.TenantID, o, l.Quantity, &line.CostKobo, p.Actor())
+			if err != nil {
 				return stock.Purchase{}, err
 			}
-			item = l.ItemID
+			line.Treatment, line.StockItemID, line.Uses, line.LabelID = to.Treatment, to.StockItemID, to.Uses, l.LabelID
+		case l.suggest != "":
+			if o, ok := own[l.suggest]; ok && o.StockItemID != "" {
+				sid := uuid.MustParse(o.StockItemID)
+				line.Treatment, line.StockItemID, line.Uses, line.Suggested = stock.AddToStock, &sid, max(o.Uses, 1), true
+			}
 		}
-		if item == "" {
-			return stock.Purchase{}, errUnlinkedItem{Item: it}
-		}
-		o, ok := own[item]
-		if !ok {
-			return stock.Purchase{}, errUnlinkedItem{Item: it}
-		}
-		// The quantity's price: a quantity break once reached (phase 7).
-		lines = append(lines, stock.PurchaseLine{ItemID: o.ID, Item: o.Name, Unit: o.Unit, Quantity: l.Quantity, CostKobo: links.PriceAt(it, together[links.ProductOf(it)])})
+		lines = append(lines, line)
 	}
 	offer := len(deal) > 0 && deal[0].Offer
 	if offer {
@@ -824,7 +866,7 @@ func (s *Server) orderFromPrices(w http.ResponseWriter, r *http.Request) {
 	case errors.As(err, &unlinked):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": unlinked.Error(), "code": "item_unlinked", "item": unlinked.Item})
 		return
-	case errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier):
+	case errors.Is(err, stock.ErrPurchase), errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrTrackAsk), errors.Is(err, stock.ErrTrackTooMany):
 		s.purchaseFail(w, r, err)
 		return
 	case err != nil:

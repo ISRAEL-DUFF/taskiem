@@ -34,10 +34,28 @@ func (s *Server) purchasesReady(w http.ResponseWriter) bool {
 func (s *Server) purchaseFail(w http.ResponseWriter, r *http.Request, err error) {
 	msg := err.Error()
 	for _, p := range []string{"stock: that does not fit the order: ", "stock: already a supplier: ", "stock: a second person approves this order: ",
-		"stock: the link was sent a moment ago: "} {
+		"stock: the link was sent a moment ago: ", "stock: the line's treatment is locked: "} {
 		msg = strings.ReplaceAll(msg, p, "")
 	}
+	// Tracking many asks first (409 track_ask: "Put 500 nylon bags on
+	// Things we have, one row each?", with Just record them); more than
+	// stock.MaxTracked cannot be tracked (422 track_too_many).
+	var track *stock.TrackError
+	if errors.As(err, &track) {
+		status, code := http.StatusConflict, "track_ask"
+		if errors.Is(err, stock.ErrTrackTooMany) {
+			status, code = http.StatusUnprocessableEntity, "track_too_many"
+		}
+		writeJSON(w, status, map[string]any{"error": track.Error(), "code": code, "line": track.Position, "item": track.Item, "quantity": track.Quantity,
+			"ask_over": stock.TrackAsk, "most": stock.MaxTracked})
+		return
+	}
 	switch {
+	case errors.Is(err, stock.ErrLineLocked):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": msg, "code": "line_locked"})
+		return
+	case errors.Is(err, stock.ErrNoThing), errors.Is(err, stock.ErrNoItem):
+		err = pgx.ErrNoRows
 	case errors.Is(err, stock.ErrNoSupplier), errors.Is(err, stock.ErrNoPurchase):
 		err = pgx.ErrNoRows
 	case errors.Is(err, stock.ErrPurchase):
@@ -313,9 +331,55 @@ func (s *Server) listPurchases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"purchases": list})
 }
 
+// draftLineIn is a line of a purchase order to draft (what a business
+// buys §5, §6): one of the business's own items whose stock it adds to
+// (item_id: a product or a material), or anything by its name (item, with
+// a unit); how many, the price of one (the item's last cost when
+// absent); and how it is treated when said (treatment record, stock with
+// stock_item_id and uses, or track; label_id; track_many to put more
+// than 50 on Things we have), else as remembered, else as suggested.
+type draftLineIn struct {
+	ItemID   string `json:"item_id"`
+	Item     string `json:"item"`
+	Unit     string `json:"unit"`
+	Quantity int64  `json:"quantity"`
+	CostKobo *int64 `json:"cost_kobo"`
+	stock.LineChoice
+}
+
+// draftLinesTx makes the lines to draft.
+func draftLinesTx(ctx context.Context, tx pgx.Tx, p *Principal, in []draftLineIn, byID map[string]stock.Item) ([]stock.PurchaseLine, error) {
+	lines := make([]stock.PurchaseLine, 0, len(in))
+	for _, l := range in {
+		var line stock.PurchaseLine
+		if l.ItemID != "" {
+			it, ok := byID[l.ItemID]
+			if !ok {
+				return nil, errNoItem
+			}
+			var err error
+			if line, err = stock.LineOf(ctx, tx, p.TenantID, it, l.Quantity, l.CostKobo, p.Actor()); err != nil {
+				return nil, err
+			}
+			if l.Treatment == "" {
+				l.Treatment, l.StockItemID, l.Uses = line.Treatment, line.StockItemID, line.Uses
+			}
+		} else {
+			line = stock.PurchaseLine{Item: l.Item, Unit: strings.TrimSpace(l.Unit), Quantity: l.Quantity}
+			if l.CostKobo != nil {
+				line.CostKobo = *l.CostKobo
+			}
+		}
+		line.Treatment, line.StockItemID, line.Uses, line.LabelID, line.TrackMany = l.Treatment, l.StockItemID, l.Uses, l.LabelID, l.TrackMany
+		lines = append(lines, line)
+	}
+	return lines, nil
+}
+
 // draftPurchase is POST /v1/stock/purchases, with an Idempotency-Key: an
-// order to a supplier, its lines (item ids, how many, the price of one,
-// the item's last cost when absent).
+// order to a supplier and its lines (draftLineIn). Each line answers its
+// treatment, and unconfirmed when it is Taskiem's suggestion, for the
+// business to confirm (PATCH …/lines/{position}).
 func (s *Server) draftPurchase(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -326,51 +390,42 @@ func (s *Server) draftPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		SupplierID uuid.UUID `json:"supplier_id"`
-		Lines      []struct {
-			ItemID   string `json:"item_id"`
-			Quantity int64  `json:"quantity"`
-			CostKobo *int64 `json:"cost_kobo"`
-		} `json:"lines"`
-		Note string `json:"note"`
+		SupplierID uuid.UUID     `json:"supplier_id"`
+		Lines      []draftLineIn `json:"lines"`
+		Note       string        `json:"note"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	_, items, err := s.stockItems(r.Context(), p.TenantID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
-	}
 	byID := map[string]stock.Item{}
-	for _, it := range items {
-		byID[it.ID] = it
-	}
-	lines := make([]stock.PurchaseLine, 0, len(in.Lines))
 	for _, l := range in.Lines {
-		it, ok := byID[l.ItemID]
-		if !ok {
-			s.stockFail(w, r, errNoItem)
-			return
+		if l.ItemID != "" {
+			_, items, err := s.stockItems(r.Context(), p.TenantID)
+			if err != nil {
+				s.stockFail(w, r, err)
+				return
+			}
+			for _, it := range items {
+				byID[it.ID] = it
+			}
+			break
 		}
-		var cost int64
-		switch {
-		case l.CostKobo != nil:
-			cost = *l.CostKobo
-		case it.CostKobo != nil:
-			// One of the line is one sale of the product: its uses.
-			cost = *it.SaleCostKobo()
-		}
-		lines = append(lines, stock.PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: cost})
 	}
 	var x stock.Purchase
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
+		lines, err := draftLinesTx(r.Context(), tx, p, in.Lines, byID)
+		if err != nil {
+			return err
+		}
 		x, err = stock.DraftTx(r.Context(), tx, p.TenantID, stock.DraftIn{Supplier: in.SupplierID, Lines: lines, Note: in.Note, Actor: p.Actor(), Key: "api-" + key})
 		return err
 	}); err != nil {
+		if errors.Is(err, errNoItem) {
+			s.stockFail(w, r, err)
+			return
+		}
 		s.purchaseFail(w, r, err)
 		return
 	}

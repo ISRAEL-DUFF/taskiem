@@ -189,7 +189,7 @@ func TestStockWatch(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if po, err = stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: s.ID, Lines: []stock.PurchaseLine{{ItemID: "rice", Item: "Rice", Quantity: 10}},
+		if po, err = stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: s.ID, Lines: []stock.PurchaseLine{{Item: "Rice", Quantity: 10, Treatment: stock.AddToStock, StockItemID: ref(w.items["rice"])}},
 			Actor: "user:owner", Key: "d"}); err != nil {
 			return err
 		}

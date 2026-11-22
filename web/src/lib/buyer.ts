@@ -178,7 +178,8 @@ export function reorderQty(
   const orderable = flatItems(items);
   for (const l of last.lines) {
     const seller =
-      links.find((x) => x.item_id === l.item_id)?.seller_item_id ??
+      l.seller_item_id ??
+      links.find((x) => x.seller_item_id === l.item_id)?.seller_item_id ??
       orderable.find((it) => it.name === l.item)?.item_id;
     const it = orderable.find((x) => x.item_id === seller);
     if (it && it.available)

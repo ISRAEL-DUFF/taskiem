@@ -492,6 +492,43 @@ Migration 00503; the rows are declared in `engine/stock/purchaselines.go`.
 - **`kept_things`**, with `purchase_line_id` and `unit_no` (unique together: receiving writes each unit once) and `sale_entry_id` (the money in of a sale).
 - Composite foreign keys keep every reference in the business. None of the new tables is copied to the owner's project.
 
+### As built: U1 (buying)
+
+No migration: on 00503. `engine/stock/purchases_lines.go` (lines, memory, suggestions), `purchases_things.go` (Things we have); the API in `api/stock_purchases_u1.go`.
+
+**Lines.** `stock.PurchaseLine` is a row of `purchase_lines` (`id`, `position`, `item`, `unit`, `quantity`, `cost_kobo`, `received`, `delivered`, `treatment`, `stock_item_id`, `uses`, `label_id`, `seller_item_id`) plus:
+
+- `item_id`, how the order's steps name a line: the linked supplier's item, else a stock line's stock item, else the line's own id. Receiving takes it, the line's id, or a product counted by a stock line's stock item (chat's `received …`, `stock@1`);
+- `unconfirmed`: the business has no memory of the item from this supplier, so the treatment and label are Taskiem's suggestion, for U2a's sheets to ask.
+
+Every way of buying writes lines through `stock.PutNewLinesTx`: by hand, from the low list (stock lines), from a price list or their shop, chat and mentions, a workflow's `stock@1`/`link@1`, and an order a linked supplier drafts for us (`links.PlaceOrderTx`). The seller's steps change only quantity, price, received and delivered (`stock.SaveLinesTx`): a change accepted or countered drops the lines it zeroes and numbers the rest again; a tracked line grown past 200 is recorded. `change` and `short` stay JSON by position.
+
+**Treatment on drafting** (`treatLinesTx`), per line:
+
+1. said on it (`treatment`, `stock_item_id`, `uses`, `label_id`, `track_many`), checked; remembered when nothing was (the first time is the confirmation); a line that differs from a memory changes only itself;
+2. else as remembered: `item_links` by `seller_item_id` for a linked supplier, else `supplier_items` by `NameKey`;
+3. else suggested (`stock.SuggestTx`): a current stock item of that name, to stock; a name tracked before (a tracked line or a row of Things we have), track; else record. The label is the last one a line of that name had. A suggested track over 50, and any track over 200 from memory or suggestion, is recorded instead.
+
+`item_id` on a line by hand, on a price-list line or in `confirm-proposed`'s `items` still names one of our items (a product or a material): the line goes into its stock item, with the product's uses (a product counted by none starts being counted, `stock.LineOf`). Chat and mentions suggest (not remember) the stock item of an own item of the same name. A line by hand into a stock item, to a linked supplier, gets the one `seller_item_id` remembered as going into it, so it reaches them as their own item.
+
+**Confirming and changing.** `PATCH /v1/stock/purchases/{id}/lines/{position}` (`table.edit`): `{treatment, stock_item_id, uses, label_id, track_many, remember}`, until anything on the line is received (409 `line_locked`; the 00503 trigger too). The memory is written the first time, or with `remember`. `confirm-proposed` takes `lines` (a choice or null per line) or `items`, or nothing, and remembers every unconfirmed line as it then is. Sending does not confirm: nothing is remembered without the business saying so.
+
+**Tracking many.** Over 50 without `track_many`: 409 `track_ask` with `line`, `item`, `quantity` (and `stock.TrackError`); over 200: 422 `track_too_many`.
+
+**Memory.** `item_links` and `supplier_items` read as `stock.Remembered` (with the stock item's and label's names). `GET|PUT /v1/item-links/{link}` (PUT `{seller_item_id, seller_item?, item_id? | treatment…}`), `DELETE /v1/item-links/{link}/{seller_item_id}`; `GET|PUT|DELETE /v1/stock/suppliers/{id}/items` (`?name=` to forget). A change applies to orders drafted after it.
+
+**Receiving** (`stock.ReceiveTx`, the same transaction and key): stock lines move their stock item by quantity × uses at the cost over uses and set its cost; tracked lines insert one `kept_things` row per unit that came, `unit_no` after those received, `ON CONFLICT DO NOTHING`; recorded lines nothing. A repeated receipt is found by its audit entry (`purchase.received` with its key, written in the receipt's transaction), so a receipt with no stock line is repeat-safe too. `AdjustShortTx` (a short count agreed after the day) moves stock lines back and marks the rows of units that did not come `gone`.
+
+**Open orders.** `stock.OnOrderTx` is the stock items on open orders: the low list's drafting, the low-a-week watch, low cards in chat and `link@1` `low_orders` read it (`Item.OnOrder`). Low cards and `low_orders` find a linked supplier's item through the memory's stock item; a size's card finds their product through its size.
+
+**The supplier** sees the same order: `WriteOrderTx` sends name, unit, quantity, price and the seller's own item (`seller_item_id`, so a bill line's `item_id` is still the order line's `seller_item_id`); never a treatment, stock item or label (tested).
+
+**Things we have.** `GET /v1/things` (`table.read`; `all=true` with those no longer had; `group=label`, merged labels under the kept one), `GET /v1/things/{id}`, `POST /v1/things` and `PATCH /v1/things/{id}` (`table.edit`). Sold with `sale_price_kobo` needs `invoice.manage`: one money-log entry in (`thing-sale:<id>`, category **Sale of things we had**, no label), its id on the row.
+
+**Web and app.** Types only: `PurchaseLine` and `ItemLink` follow; Prices and the order sheet find our item through the memory's stock item. The app's client is unchanged (it calls none of these). No screens (U2a).
+
+**Not done:** labels made or suggested by name (the money side's); U2b's chat question (chat drafts as suggested).
+
 ## 12. Accept
 
 **The split**

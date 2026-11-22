@@ -201,26 +201,12 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 	}
 	var x stock.Purchase
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		linked, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, p.LinkID)
-		if err != nil {
-			return err
+		// Unremembered, an own item of the same name (a product, or a
+		// material) is suggested: added to its stock item.
+		if line.ItemID == "" {
+			line.suggest = sameNamed(items, it.Name)
 		}
-		known := it.VariantOf != "" // its size is the buyer's already
-		for _, l := range linked {
-			known = known || l.SellerItemID == it.ItemID
-		}
-		// The first time, an own item of the same name is the one.
-		if !known {
-			var same []stock.Item
-			for _, o := range items {
-				if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(it.Name)) {
-					same = append(same, o)
-				}
-			}
-			if len(same) == 1 {
-				line.ItemID = same[0].ID
-			}
-		}
+		var err error
 		x, err = s.draftFromPricesTx(ctx, tx, c.p, p.LinkID, []orderLineIn{line}, own, "", key)
 		return err
 	})

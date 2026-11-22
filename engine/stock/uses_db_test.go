@@ -131,12 +131,10 @@ func TestOrderLinesByUses(t *testing.T) {
 	}
 }
 
-// Receiving a product's line moves its stock item by the quantity times
-// the uses the line was made with, at the line's cost over the uses (whole
-// kobo); a line naming a stock item directly moves it by the quantity, at
-// the line's cost; uses changed after the order was made do not change
-// what it receives, and a product counted by none then is read when it
-// comes.
+// Receiving a stock line moves its stock item by the quantity times the
+// uses the line was made with, at the line's cost over the uses (whole
+// kobo); uses changed after the order was made do not change what it
+// receives; a recorded line moves nothing.
 func TestReceiveProductLineWithUses(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, nil)
@@ -150,53 +148,48 @@ func TestReceiveProductLineWithUses(t *testing.T) {
 			return err
 		}
 		po, err = stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: s.ID, Actor: "user:owner", Key: "po-malt", Lines: []stock.PurchaseLine{
-			{ItemID: "pack", Item: "Malt, pack of 6", Quantity: 3, CostKobo: 600005},
-			{ItemID: corks.String(), Item: "Crown corks", Quantity: 50, CostKobo: 200},
-			{ItemID: "crate", Item: "Malt, crate of 24", Quantity: 1, CostKobo: 2400000},
+			{Item: "Malt, pack of 6", Quantity: 3, CostKobo: 600005, Treatment: stock.AddToStock, StockItemID: &malt, Uses: 6},
+			{Item: "Crown corks", Quantity: 50, CostKobo: 200, Treatment: stock.AddToStock, StockItemID: &corks},
+			{Item: "Malt, crate of 24", Quantity: 1, CostKobo: 2400000, Treatment: stock.Record},
 		}})
 		return err
 	})
-	if l := po.Lines[0]; l.StockItemID == nil || *l.StockItemID != malt || l.Uses != 6 {
+	if l := po.Lines[0]; l.StockItemID == nil || *l.StockItemID != malt || l.Uses != 6 || l.ItemID != malt.String() {
 		t.Fatalf("the pack's line names its stock item: %+v", l)
 	}
 	if l := po.Lines[1]; l.StockItemID == nil || *l.StockItemID != corks || l.Uses != 1 {
 		t.Fatalf("the corks' line: %+v", l)
 	}
-	if l := po.Lines[2]; l.StockItemID != nil || l.Uses != 0 {
-		t.Fatalf("the crate's line, counted by none: %+v", l)
+	if l := po.Lines[2]; l.StockItemID != nil || l.Treatment != stock.Record || l.ItemID != l.ID.String() {
+		t.Fatalf("the crate's line, recorded: %+v", l)
 	}
 	// The pack is counted 12 a sale from now: the order was made at 6.
 	w.in(func(tx pgx.Tx) error {
-		if err := productstock.LinkTx(ctx, tx, w.env.Tenant, "pack", malt, 12); err != nil {
-			return err
-		}
-		// The crate, counted by none when the order was made, is counted
-		// by the malt, 24 a sale, before it comes: what it moves is read
-		// when it comes.
-		return productstock.LinkTx(ctx, tx, w.env.Tenant, "crate", malt, 24)
+		return productstock.LinkTx(ctx, tx, w.env.Tenant, "pack", malt, 12)
 	})
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE purchase_orders SET status = 'sent', approved_by = 'user:owner', sent_at = now() WHERE id = $1`, po.ID); err != nil {
 		t.Fatal(err)
 	}
-	got, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"pack": 3, corks.String(): 50, "crate": 1}, "user:owner", "r1")
+	// A line is named by its ItemID, its own id, or a product counted by
+	// its stock item.
+	got, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"pack": 3, corks.String(): 50, po.Lines[2].ID.String(): 1}, "user:owner", "r1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, cost := w.countOf(malt); n != 42 || cost == nil || *cost != 100000 {
-		t.Fatalf("the malt: %d at %v; want 42 (3 packs of 6, a crate of 24) at 100000 (600005 / 6, 2400000 / 24)", n, cost)
+	if n, cost := w.countOf(malt); n != 18 || cost == nil || *cost != 100000 {
+		t.Fatalf("the malt: %d at %v; want 18 (3 packs of 6) at 100000 (600005 / 6)", n, cost)
 	}
 	if n, cost := w.countOf(corks); n != 50 || cost == nil || *cost != 200 {
 		t.Fatalf("the corks: %d at %v", n, cost)
 	}
-	if got.Status != stock.FullReceived || got.ReceivedKobo != 3*600005+50*200+2400000 || got.Lines[0].Received != 3 ||
-		got.Lines[2].StockItemID == nil || *got.Lines[2].StockItemID != malt || got.Lines[2].Uses != 24 {
+	if got.Status != stock.FullReceived || got.ReceivedKobo != 3*600005+50*200+2400000 || got.Lines[0].Received != 3 || got.Lines[2].Received != 1 {
 		t.Fatalf("the order: %+v", got)
 	}
 	// The same receipt again moves nothing.
 	if _, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"pack": 3}, "user:owner", "r1"); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := w.countOf(malt); n != 42 {
+	if n, _ := w.countOf(malt); n != 18 {
 		t.Fatalf("received twice: %d", n)
 	}
 	// Not all came, as agreed: 1 pack of the 3 is taken off, 6 bottles.
@@ -204,7 +197,7 @@ func TestReceiveProductLineWithUses(t *testing.T) {
 		_, _, err := stock.AdjustShortTx(ctx, tx, w.env.Tenant, po.ID, []int64{2, 50, 1}, "user:owner", "short-1")
 		return err
 	})
-	if n, _ := w.countOf(malt); n != 36 {
-		t.Fatalf("after one pack short: %d, want 36", n)
+	if n, _ := w.countOf(malt); n != 12 {
+		t.Fatalf("after one pack short: %d, want 12", n)
 	}
 }

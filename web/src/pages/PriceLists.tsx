@@ -8,6 +8,7 @@ import {
   lineProblem,
   priceWords,
   type ItemLink,
+  ownLinked,
   type PriceItem,
   type PriceList,
   type SupplierPrices,
@@ -739,7 +740,7 @@ export function SupplierPricesPage() {
   const p = view.data?.suppliers[0];
   const own = stock.data?.items ?? [];
   const linkOf = (seller: string) =>
-    linked.data?.item_links.find((l) => l.seller_item_id === seller)?.item_id;
+    ownLinked(linked.data?.item_links, seller, own);
   const lines = (p?.items ?? []).filter(
     (it) => (qty[it.item_id] ?? "").trim() !== "",
   );

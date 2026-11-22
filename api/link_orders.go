@@ -1443,8 +1443,12 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // confirmProposed is POST /v1/stock/purchases/{id}/confirm-proposed: an
-// order a linked supplier drafted for us, confirmed, each line said to be
-// one of our items (items, in order). It is then accepted on both sides.
+// order a linked supplier drafted for us, confirmed. How each line is
+// treated (what a business buys §6): lines, in order, each a treatment
+// (null: as remembered or suggested), or items, in order, each one of our
+// items whose stock the line adds to; neither: every line as it is. A
+// line we had no memory of is remembered as confirmed. It is then
+// accepted on both sides.
 func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -1455,26 +1459,27 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Items []string `json:"items"`
+		Items []string            `json:"items"`
+		Lines []*stock.LineChoice `json:"lines"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	byID, err := s.itemsByID(r.Context(), p.TenantID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
-	}
-	items := make([]links.BuyerItem, len(in.Items))
-	for i, x := range in.Items {
-		it, ok := byID[x]
-		if !ok {
-			s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+	var byID map[string]stock.Item
+	if len(in.Items) > 0 {
+		var err error
+		if byID, err = s.itemsByID(r.Context(), p.TenantID); err != nil {
+			s.stockFail(w, r, err)
 			return
 		}
-		items[i] = links.BuyerItem{ID: it.ID, Name: it.Name, Unit: it.Unit}
+		for i, x := range in.Items {
+			if _, ok := byID[x]; !ok {
+				s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+				return
+			}
+		}
 	}
 	var told *links.Told
 	var x stock.Purchase
@@ -1487,7 +1492,21 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		if err := auditTx(r, tx, "purchase.confirm_proposed", x.Reference, map[string]any{"purchase_id": x.ID}); err != nil {
 			return err
 		}
-		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, items, p.Actor(), actorOf(p))
+		choices := in.Lines
+		if len(in.Items) > 0 {
+			if len(in.Items) != len(x.Lines) {
+				return fmt.Errorf("%w: say which of your items each of the %d lines is", links.ErrInvalid, len(x.Lines))
+			}
+			choices = make([]*stock.LineChoice, len(in.Items))
+			for i, item := range in.Items {
+				l, err := stock.LineOf(r.Context(), tx, p.TenantID, byID[item], x.Lines[i].Quantity, &x.Lines[i].CostKobo, p.Actor())
+				if err != nil {
+					return err
+				}
+				choices[i] = &stock.LineChoice{Treatment: l.Treatment, StockItemID: l.StockItemID, Uses: l.Uses, LabelID: x.Lines[i].LabelID}
+			}
+		}
+		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, choices, p.Actor(), actorOf(p))
 		return err
 	}); err != nil {
 		s.purchaseOrOrderFail(w, r, err)

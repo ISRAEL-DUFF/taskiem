@@ -723,6 +723,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/cancel", s.cancelPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
+			// What a business buys, U1 (stock_purchases_u1.go): a line's
+			// treatment, the memory of a supplier's items, Things we have.
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/purchases/{id}/lines/{position}", s.setPurchaseLine)
+			r.With(s.need(PermTableRead)).Get("/stock/suppliers/{id}/items", s.listSupplierItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/suppliers/{id}/items", s.putSupplierItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/suppliers/{id}/items", s.deleteSupplierItem)
+			r.With(s.need(PermTableRead)).Get("/things", s.listThings)
+			r.With(s.need(PermTableRead)).Get("/things/{id}", s.getThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/things", s.addThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/things/{id}", s.patchThing)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermOrders)).Get("/deliveries", s.listDeliveries)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)

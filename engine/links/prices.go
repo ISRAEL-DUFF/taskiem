@@ -877,69 +877,6 @@ func leftTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, items []PriceItem)
 	return nil
 }
 
-// ItemLink is which of the buyer's own items a linked seller's item is.
-type ItemLink struct {
-	LinkID       uuid.UUID `json:"link"`
-	ItemID       string    `json:"item_id"`
-	SellerItemID string    `json:"seller_item_id"`
-	SellerItem   string    `json:"seller_item"`
-}
-
-// ItemLinksTx is the business in scope's item links with a link.
-func ItemLinksTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([]ItemLink, error) {
-	rows, err := tx.Query(ctx, `SELECT link_id, item_id, seller_item_id, seller_item FROM item_links WHERE tenant_id = $1 AND link_id = $2 ORDER BY lower(seller_item)`, tenant, link)
-	if err != nil {
-		return nil, err
-	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ItemLink, error) {
-		var l ItemLink
-		return l, r.Scan(&l.LinkID, &l.ItemID, &l.SellerItemID, &l.SellerItem)
-	})
-	if out == nil {
-		out = []ItemLink{}
-	}
-	return out, err
-}
-
-// SetItemLinkTx says which of the buyer's own items a seller's item is:
-// one each way (a link made again replaces the old one, either way).
-func SetItemLinkTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, item, sellerItem, sellerName, by string) error {
-	if item == "" || sellerItem == "" || strings.TrimSpace(sellerName) == "" {
-		return fmt.Errorf("%w: your item and theirs", ErrInvalid)
-	}
-	if _, err := GetTx(ctx, tx, link); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND (item_id = $3 OR seller_item_id = $4)`, tenant, link, item, sellerItem); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `INSERT INTO item_links (tenant_id, link_id, item_id, seller_item_id, seller_item, updated_by) VALUES ($1, $2, $3, $4, $5, $6)`,
-		tenant, link, item, sellerItem, cutRunes(strings.TrimSpace(sellerName), 120), by)
-	return err
-}
-
-// UnlinkItemTx removes one of the buyer's item links.
-func UnlinkItemTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, item string) error {
-	tag, err := tx.Exec(ctx, `DELETE FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND item_id = $3`, tenant, link, item)
-	if err == nil && tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return err
-}
-
-// sellerItemsOf is the buyer's item links with a link, by its own item.
-func sellerItemsOf(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) (map[string]string, error) {
-	got, err := ItemLinksTx(ctx, tx, tenant, link)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]string{}
-	for _, l := range got {
-		out[l.ItemID] = l.SellerItemID
-	}
-	return out, nil
-}
-
 func ownList(ctx context.Context, tx pgx.Tx, tenant, list uuid.UUID) error {
 	var ok bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM price_lists WHERE tenant_id = $1 AND id = $2)`, tenant, list).Scan(&ok); err != nil {

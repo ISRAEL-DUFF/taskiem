@@ -309,26 +309,11 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	var unlinkedFrom string
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		for _, d := range drafts {
-			known, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, d.link.ID)
-			if err != nil {
-				return err
-			}
 			in := make([]orderLineIn, 0, len(d.lines))
 			for _, l := range d.lines {
-				line := orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity}
-				if !slices.ContainsFunc(known, func(k links.ItemLink) bool { return k.SellerItemID == l.Item.ItemID }) {
-					// The first time, an own item of the same name is the one.
-					var same []stock.Item
-					for _, o := range items {
-						if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(l.Item.Name)) {
-							same = append(same, o)
-						}
-					}
-					if len(same) == 1 {
-						line.ItemID = same[0].ID
-					}
-				}
-				in = append(in, line)
+				// Unremembered, an own item of the same name (a product, or
+				// a material) is suggested: added to its stock item.
+				in = append(in, orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity, suggest: sameNamed(items, l.Item.Name)})
 			}
 			x, err := s.draftFromPricesTx(ctx, tx, c.p, d.link.ID, in, own, "", "wa-"+uuid.NewString())
 			if errAs(err, &unlinked) {

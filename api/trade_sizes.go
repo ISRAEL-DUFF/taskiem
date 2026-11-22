@@ -21,9 +21,10 @@ import (
 // buyer's product is the one the line names, else the one linked to the
 // supplier's product; its size is the one of the same values (42, Black),
 // and a size it lacks is added to it (at 0, the delivery brings the
-// stock in), so the goods come into the size they are. The size pairs are
-// then linked as any item is, so the order reaches the supplier as its
-// own sizes.
+// stock in), so the goods come into the size they are. Each line is then
+// added to its size's stock item, remembered for the supplier's size the
+// first time (what a business buys §6), so the next order of it asks
+// nothing; it reaches the supplier as its own sizes.
 
 // errSizesDiffer: the buyer's product varies by other choices than the
 // supplier's (Size alone against Size and Colour).
@@ -42,14 +43,15 @@ func (e errSizesFirst) Error() string {
 }
 
 // resolveSizeLines gives each line of a supplier's size its buyer's own
-// size, making those the buyer's product lacks. Lines of other items are
-// left as they are. Nothing is made for an order that cannot be placed:
+// size, making those the buyer's product lacks, where a line names the
+// buyer's product (or one of its sizes). Lines of other items, and of a
+// product no line names, are left as they are (as remembered, else as
+// suggested). Nothing is made for an order that cannot be placed:
 // the lines are checked first (checkPriceLines), and the supplier must be
 // one of the business's. audit records the sizes made.
 func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stockAudit, link uuid.UUID, in []orderLineIn, key string) ([]orderLineIn, error) {
 	var listed []links.PriceItem
 	var business string
-	var mine map[string]string
 	supplier := false
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		got, err := links.SupplierPricesTx(ctx, tx, p.TenantID, link)
@@ -57,14 +59,6 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 			return err
 		}
 		listed, business = got[0].Items, got[0].Business
-		ls, err := links.ItemLinksTx(ctx, tx, p.TenantID, link)
-		if err != nil {
-			return err
-		}
-		mine = map[string]string{}
-		for _, l := range ls {
-			mine[l.SellerItemID] = l.ItemID
-		}
 		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM suppliers WHERE tenant_id = $1 AND link_id = $2 AND retired_at IS NULL)`, p.TenantID, link).Scan(&supplier)
 	})
 	if err != nil || len(listed) == 0 {
@@ -125,7 +119,7 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 			bp = named
 		}
 		if bp == "" {
-			bp = mine[product]
+			continue
 		}
 		mineP, ok := own[bp]
 		if !ok || mineP.VariantOf != "" {
@@ -168,14 +162,6 @@ func (s *Server) resolveSizeLines(ctx context.Context, p *Principal, audit stock
 				return nil, errUnlinkedItem{Item: flat[out[i].SellerItemID]}
 			}
 			out[i].ItemID = x.ID
-		}
-		// The products linked too, so the next order finds the buyer's.
-		if mine[product] != bp {
-			if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-				return links.SetItemLinkTx(ctx, tx, p.TenantID, link, bp, product, products[product].Name, p.Actor())
-			}); err != nil {
-				return nil, err
-			}
 		}
 	}
 	return out, nil

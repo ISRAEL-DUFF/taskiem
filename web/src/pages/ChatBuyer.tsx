@@ -32,6 +32,7 @@ import { breakWords, dealKobo, offWords } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
+import { ownLinked } from "../lib/pricelists";
 import type { Purchase } from "../lib/purchases";
 import type { StockView } from "../lib/stock";
 import type { Supplier } from "../lib/purchases";
@@ -227,8 +228,7 @@ export function OrderSheet({
           ? `An offer is under their price, ${formatPrice(bag.total)}.`
           : "";
   const linkedTo = (sellerItem: string) =>
-    links.data?.item_links.find((l) => l.seller_item_id === sellerItem)
-      ?.item_id;
+    ownLinked(links.data?.item_links, sellerItem, own.data);
   // A line not linked to one of our items: which it is (the same name found
   // first), or a new item of ours.
   const ownFor = (it: PriceItem) =>

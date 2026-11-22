@@ -38,6 +38,10 @@ export interface SuppliersView {
 }
 
 export interface PurchaseLine {
+  id?: string;
+  position?: number;
+  /** How the order's steps name the line: the linked supplier's item, the
+   * stock item of a stock line, else the line's own id. */
   item_id: string;
   item: string;
   unit?: string;
@@ -46,6 +50,14 @@ export interface PurchaseLine {
   received: number;
   /** What a linked supplier says it delivered. */
   delivered?: number;
+  /** What happens when it arrives (what a business buys §5). */
+  treatment?: "record" | "stock" | "track";
+  stock_item_id?: string;
+  uses?: number;
+  label_id?: string;
+  seller_item_id?: string;
+  /** Taskiem's suggestion, not yet confirmed. */
+  unconfirmed?: boolean;
 }
 
 export type PurchaseStatus =
