@@ -859,6 +859,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermConnectionManage)).Put("/connections/{id}/credentials", s.mergeConnectionCredentials)
 			r.With(s.need(PermConnectionManage)).Delete("/connections/{id}", s.deleteConnection)
 			r.Group(s.tablesRoutes) // data tables (datatables.go)
+			r.Group(s.pageRoutes)   // the business's own pages (pages.go)
 			r.With(s.need(PermSecretManage)).Get("/secrets", s.listSecrets)
 			r.With(s.need(PermAuditRead)).Get("/secrets/reads", s.listSecretReads)
 			r.With(s.need(PermSecretManage)).Put("/secrets/{env}/{name}", s.putSecret)

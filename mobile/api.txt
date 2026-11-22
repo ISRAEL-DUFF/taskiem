@@ -401,3 +401,9 @@ listFormRequests
 getFormRequest
 answerFormRequest
 pressToolButton
+
+# Pages (decision 0072, pages G1): the pages a person may open, drawn by
+# the server; making and changing them stays on the web
+listPages
+viewPage
+getPageBlock

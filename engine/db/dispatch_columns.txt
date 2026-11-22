@@ -1330,6 +1330,7 @@ tenant_limits.link_messages_daily
 tenant_limits.max_connections
 tenant_limits.max_data_table_columns
 tenant_limits.max_data_tables
+tenant_limits.max_pages
 tenant_limits.max_payload_bytes
 tenant_limits.max_queued_runs
 tenant_limits.max_retention_days

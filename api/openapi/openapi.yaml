@@ -175,6 +175,9 @@ tags:
 - name: Languages
   description: Languages beyond English and voice notes on WhatsApp, USSD and SMS (drafts until reviewed by native speakers).
   x-taskiem-guide: languages
+- name: Pages
+  description: A business's own pages (decision 0072) — screens made from figures, lists and tables over its data tables, drawn by Taskiem on the web and in the app.
+  x-taskiem-guide: pages
 paths:
   /v1/ai/build:
     post:
@@ -39093,6 +39096,433 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/pages:
+    get:
+      operationId: listPages
+      tags:
+      - Pages
+      summary: List pages
+      description: >-
+        The business's pages the caller may open (docs/pages.md): published pages whose roles let them (owners always; none named, everyone), and every page, drafts too, for someone with page.edit. Pinned pages first, in their order.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPage
+      tags:
+      - Pages
+      summary: Make a page
+      description: >-
+        A new page, kept as a draft: a page/v1 `document`, or `from_table` (Show as a page), which makes a figure of how many rows, one of how many were added this week, and the rows as a list grouped by a status column, with a search. A page made from a table whose name is taken gets the next free one (`tickets-2`). Drafts count against the plan's `max_pages` (429 `limit_exceeded`). Audited as `page.create`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageDocumentRequest'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDetail'
+        '400':
+          description: >-
+            A document that is not a page, or a name that is taken or one of Taskiems own words (`code` `page_problems`, with `problems`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/validate:
+    post:
+      operationId: validatePage
+      tags:
+      - Pages
+      summary: Check a page
+      description: >-
+        A page/v1 document's problems, in plain words, held against the business's tables, and what it shows; nothing is saved.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageDocumentRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCheck'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}:
+    get:
+      operationId: getPage
+      tags:
+      - Pages
+      summary: Get a page
+      description: >-
+        A page with its published document; for someone with page.edit also its draft, the draft's problems and what it shows (`shows`).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDetail'
+        '404':
+          description: >-
+            No such page, or one the caller may not open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePage
+      tags:
+      - Pages
+      summary: Delete a page
+      description: >-
+        The page and its versions. Audited as `page.delete`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '404':
+          description: >-
+            No such page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/draft:
+    put:
+      operationId: putPageDraft
+      tags:
+      - Pages
+      summary: Save a page's draft
+      description: >-
+        Replaces the page's draft. A draft may still have problems (they are answered in `problems`); publishing refuses it until they are put right. The short name does not change. Audited as `page.draft`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageDocumentRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDetail'
+        '400':
+          description: >-
+            Not a page, or another name (`code` `page_problems`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/publish:
+    post:
+      operationId: publishPage
+      tags:
+      - Pages
+      summary: Publish a page
+      description: >-
+        The draft becomes what people open, as the next version, once no problem is left. Who may open it (`roles`) and what it shows are recorded in the audit (`page.publish`).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.publish,table.read
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDetail'
+        '400':
+          description: >-
+            The draft has problems (`code` `page_problems`, with `problems`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The page has no draft to publish.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/pin:
+    put:
+      operationId: pinPage
+      tags:
+      - Pages
+      summary: Pin or unpin a page
+      description: >-
+        A pinned page is shown in the navigation under Your pages, five at most, published pages only. Audited as `page.pin`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageSummary'
+        '409':
+          description: >-
+            Five pages are pinned already, or the page is not published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/view:
+    get:
+      operationId: viewPage
+      tags:
+      - Pages
+      summary: Draw a page
+      description: >-
+        The page as drawn for the caller: each part with its figures and rows worked out on the server from the business's data tables, filters applied, at most 25 rows a part (then `more`). A page shows what its maker chose to those its roles let open it; a personal column is masked unless the caller holds table.read, and a search never reads a column masked for them. A part that cannot be drawn (a table or column gone) is `broken` for editors and left out for everyone else; one that cannot be read just now has `error`.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: draft
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+        description: '1: the draft, for someone with page.edit (else the published page)'
+      - name: filters
+        in: query
+        schema:
+          type: string
+        description: 'A JSON object of each filter''s value by its id: a search''s words, a choice''s value, dates (`today`, `week`, `month` or `2026-11-01..2026-11-30`), `on` for Mine.'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDrawing'
+        '400':
+          description: >-
+            A filter the page lacks, or a value it cannot take (`code` `page_problems`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such page, or one the caller may not open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The page is not published yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/blocks/{block}:
+    get:
+      operationId: getPageBlock
+      tags:
+      - Pages
+      summary: More rows of a part
+      description: >-
+        One list or table part: the next rows (`cursor`, from `more`), or a table's rows in the order of one of its columns (`order`, `desc`).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: block
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The part's id
+      - name: cursor
+        in: query
+        schema:
+          type: string
+      - name: order
+        in: query
+        schema:
+          type: string
+        description: A column the table part shows
+      - name: desc
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      - name: draft
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+        description: '1: the draft, for someone with page.edit (else the published page)'
+      - name: filters
+        in: query
+        schema:
+          type: string
+        description: 'A JSON object of each filter''s value by its id: a search''s words, a choice''s value, dates (`today`, `week`, `month` or `2026-11-01..2026-11-30`), `on` for Mine.'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageBlock'
+        '400':
+          description: >-
+            Not a list or a table, or a column it does not show.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such page or part.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/tables:
     get:
       operationId: listTables
@@ -53327,6 +53757,9 @@ components:
         max_saved_objects:
           type: integer
           description: Saved things a business keeps (2,000 by default; 0 no limit).
+        max_pages:
+          type: integer
+          description: Pages a business makes, drafts counted (10 by default; 0 no limit).
       additionalProperties: false
     Usage:
       type: object
@@ -59792,6 +60225,354 @@ components:
       type: object
       description: 'A row: id, the columns, created_at and updated_at, typed as the data API returns them.'
       additionalProperties: true
+    PageDocument:
+      type: object
+      description: A page/v1 document (`schemas/page-v1.schema.json`, docs/contracts/page-v1.md).
+      additionalProperties: true
+    PageDocumentRequest:
+      type: object
+      properties:
+        document:
+          $ref: '#/components/schemas/PageDocument'
+        from_table:
+          type: string
+          format: uuid
+          description: Make the page from this table (Show as a page); give this or document.
+      additionalProperties: false
+    PageProblem:
+      type: object
+      required: [path, message]
+      properties:
+        path:
+          type: string
+          description: Where in the document (/blocks/2/source/table).
+        message:
+          type: string
+          description: What is wrong, in plain words an owner can act on.
+      additionalProperties: false
+    PageCheck:
+      type: object
+      required: [problems, shows]
+      properties:
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageProblem'
+        shows:
+          type: array
+          items:
+            type: string
+          description: 'What the page shows of each table ("Tickets: Title, Customer, Status").'
+      additionalProperties: false
+    PageSummary:
+      type: object
+      required: [name, title, icon, about, roles, pinned, published, has_draft, version, updated_at]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        icon:
+          type: string
+        about:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+          description: Who may open it (owners always; empty, everyone in the business).
+        pinned:
+          type: boolean
+        published:
+          type: boolean
+        has_draft:
+          type: boolean
+        version:
+          type:
+          - integer
+          - 'null'
+          description: The published version.
+        published_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    PageList:
+      type: object
+      required: [pages, can_edit, can_publish, max_pinned, max_pages]
+      properties:
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageSummary'
+        can_edit:
+          type: boolean
+        can_publish:
+          type: boolean
+        max_pinned:
+          type: integer
+        max_pages:
+          type: integer
+          description: The plan's limit, drafts counted (0 no limit).
+      additionalProperties: false
+    PageDetail:
+      type: object
+      description: A page as its editor reads it (PageSummary's fields, its documents, problems and what it shows).
+      required: [name, title, icon, about, roles, pinned, published, has_draft, version, updated_at, document]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        icon:
+          type: string
+        about:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        pinned:
+          type: boolean
+        published:
+          type: boolean
+        has_draft:
+          type: boolean
+        version:
+          type:
+          - integer
+          - 'null'
+        published_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        document:
+          description: The published document, null before the first publish.
+          type:
+          - object
+          - 'null'
+        draft:
+          description: The draft, for page.edit holders; null when there is none.
+          type:
+          - object
+          - 'null'
+        draft_at:
+          type: string
+          format: date-time
+        problems:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageProblem'
+          description: For page.edit holders, the draft's (or the published page's) problems.
+        shows:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    PageFilter:
+      type: object
+      required: [id, type, label, value]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [search, choice, dates, mine]
+        label:
+          type: string
+        value:
+          type: string
+          description: The value the page was drawn with; empty for none.
+        options:
+          type: array
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+            additionalProperties: false
+      additionalProperties: false
+    PageRow:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        sub:
+          type: string
+        state:
+          type: object
+          required: [text, tone]
+          properties:
+            text:
+              type: string
+            tone:
+              type: string
+              enum: [plain, good, warn, bad]
+          additionalProperties: false
+        group:
+          type: string
+          description: The key of the group the row is under (a grouped list).
+        cells:
+          type: array
+          items:
+            type: string
+          description: A table's cells, in its columns' order, written as people read them.
+        detail:
+          type: object
+          required: [title, lines]
+          properties:
+            title:
+              type: string
+            lines:
+              type: array
+              items:
+                type: object
+                required: [label, value]
+                properties:
+                  label:
+                    type: string
+                  value:
+                    type: string
+                additionalProperties: false
+          additionalProperties: false
+      additionalProperties: false
+    PageBlock:
+      type: object
+      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). broken or error replace the rest.
+      required: [id, type]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [heading, figure, list, table]
+        title:
+          type: string
+        text:
+          type: string
+        label:
+          type: string
+        value:
+          type: number
+        shown:
+          type: string
+          description: The figure as drawn (a count, or naira).
+        tone:
+          type: string
+          enum: [plain, good, warn, bad]
+        lead:
+          type: boolean
+        naira:
+          type: boolean
+        over:
+          type: string
+          description: Said when a sum stopped at its first 5,000 rows.
+        change:
+          type: object
+          required: [before, words, up, down]
+          properties:
+            before:
+              type: number
+            words:
+              type: string
+              description: '"up 12% on last week"'
+            up:
+              type: boolean
+            down:
+              type: boolean
+          additionalProperties: false
+        size:
+          type: string
+          enum: [full, half]
+        empty:
+          type: string
+        count:
+          type: integer
+          description: How many rows match, beyond those shown.
+        has_detail:
+          type: boolean
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageRow'
+        more:
+          type:
+          - string
+          - 'null'
+          description: The cursor for the next rows; null at the end.
+        groups:
+          type: array
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+            additionalProperties: false
+        columns:
+          type: array
+          items:
+            type: object
+            required: [column, label, naira]
+            properties:
+              column:
+                type: string
+              label:
+                type: string
+              naira:
+                type: boolean
+            additionalProperties: false
+        order:
+          type: object
+          required: [column, desc]
+          properties:
+            column:
+              type: string
+            desc:
+              type: boolean
+          additionalProperties: false
+        broken:
+          type: string
+          description: For editors, why this part cannot be drawn ("This part needs fixing").
+        error:
+          type: string
+          description: Why this part could not be read just now.
+      additionalProperties: false
+    PageDrawing:
+      type: object
+      required: [page, draft, filters, blocks, can_edit, drawn_at]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageSummary'
+        draft:
+          type: boolean
+          description: Whether this is the draft.
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageFilter'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        can_edit:
+          type: boolean
+        drawn_at:
+          type: string
+          format: date-time
+      additionalProperties: false
     RowPage:
       type: object
       required:

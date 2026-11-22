@@ -1882,6 +1882,24 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/tools/buttons/${Uri.encodeComponent(button)}');
     return PressToolButtonResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// List pages (`GET /v1/pages`)
+  Future<PageList> listPages() async {
+    final j = await _t.send('GET', '/v1/pages');
+    return PageList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Draw a page (`GET /v1/pages/{name}/view`)
+  Future<PageDrawing> viewPage({required String name, String? draft, String? filters}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/view', query: {'draft': ?draft, 'filters': ?filters});
+    return PageDrawing.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// More rows of a part (`GET /v1/pages/{name}/blocks/{block}`)
+  Future<PageBlock> getPageBlock({required String name, required String block, String? cursor, String? order, String? desc, String? draft, String? filters}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/blocks/${Uri.encodeComponent(block)}', query: {'cursor': ?cursor, 'order': ?order, 'desc': ?desc, 'draft': ?draft, 'filters': ?filters});
+    return PageBlock.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -16322,5 +16340,405 @@ class PressToolButtonResponse {
         'inputs': inputs,
         'name': name,
         'once': once,
+      };
+}
+
+class PageList {
+  const PageList({required this.canEdit, required this.canPublish, required this.maxPages, required this.maxPinned, required this.pages});
+
+  final bool canEdit;
+  final bool canPublish;
+  /// The plan's limit, drafts counted (0 no limit).
+  final int maxPages;
+  final int maxPinned;
+  final List<PageSummary> pages;
+
+  factory PageList.fromJson(Map<String, dynamic> j) => PageList(
+        canEdit: j['can_edit'] as bool,
+        canPublish: j['can_publish'] as bool,
+        maxPages: (j['max_pages'] as num).toInt(),
+        maxPinned: (j['max_pinned'] as num).toInt(),
+        pages: (j['pages'] as List).map((e) => PageSummary.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_edit': canEdit,
+        'can_publish': canPublish,
+        'max_pages': maxPages,
+        'max_pinned': maxPinned,
+        'pages': pages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PageSummary {
+  const PageSummary({required this.about, required this.hasDraft, required this.icon, required this.name, required this.pinned, required this.published, this.publishedAt, required this.roles, required this.title, required this.updatedAt, this.version});
+
+  final String about;
+  final bool hasDraft;
+  final String icon;
+  final String name;
+  final bool pinned;
+  final bool published;
+  final DateTime? publishedAt;
+  /// Who may open it (owners always; empty, everyone in the business).
+  final List<String> roles;
+  final String title;
+  final DateTime updatedAt;
+  /// The published version.
+  final Object? version;
+
+  factory PageSummary.fromJson(Map<String, dynamic> j) => PageSummary(
+        about: j['about'] as String,
+        hasDraft: j['has_draft'] as bool,
+        icon: j['icon'] as String,
+        name: j['name'] as String,
+        pinned: j['pinned'] as bool,
+        published: j['published'] as bool,
+        publishedAt: j['published_at'] == null ? null : DateTime.parse(j['published_at'] as String),
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        title: j['title'] as String,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+        version: j['version'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'has_draft': hasDraft,
+        'icon': icon,
+        'name': name,
+        'pinned': pinned,
+        'published': published,
+        'published_at': ?publishedAt?.toUtc().toIso8601String(),
+        'roles': roles.map((e) => e).toList(),
+        'title': title,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+        'version': ?version,
+      };
+}
+
+class PageDrawing {
+  const PageDrawing({required this.blocks, required this.canEdit, required this.draft, required this.drawnAt, required this.filters, required this.page});
+
+  final List<PageBlock> blocks;
+  final bool canEdit;
+  /// Whether this is the draft.
+  final bool draft;
+  final DateTime drawnAt;
+  final List<PageFilter> filters;
+  final PageSummary page;
+
+  factory PageDrawing.fromJson(Map<String, dynamic> j) => PageDrawing(
+        blocks: (j['blocks'] as List).map((e) => PageBlock.fromJson(e as Map<String, dynamic>)).toList(),
+        canEdit: j['can_edit'] as bool,
+        draft: j['draft'] as bool,
+        drawnAt: DateTime.parse(j['drawn_at'] as String),
+        filters: (j['filters'] as List).map((e) => PageFilter.fromJson(e as Map<String, dynamic>)).toList(),
+        page: PageSummary.fromJson(j['page'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocks': blocks.map((e) => e.toJson()).toList(),
+        'can_edit': canEdit,
+        'draft': draft,
+        'drawn_at': drawnAt.toUtc().toIso8601String(),
+        'filters': filters.map((e) => e.toJson()).toList(),
+        'page': page.toJson(),
+      };
+}
+
+/// One part as drawn. A heading has title and text; a figure label, value,
+/// shown, tone, lead, naira and maybe change and over; a list or table title,
+/// size, empty, count, rows, more and has_detail (a list groups, a table
+/// columns and order). broken or error replace the rest.
+class PageBlock {
+  const PageBlock({this.broken, this.change, this.columns, this.count, this.empty, this.error, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.shown, this.size, this.text, this.title, this.tone, required this.type, this.value});
+
+  /// For editors, why this part cannot be drawn ("This part needs fixing").
+  final String? broken;
+  final PageBlockChange? change;
+  final List<PageBlockColumnsItem>? columns;
+  /// How many rows match, beyond those shown.
+  final int? count;
+  final String? empty;
+  /// Why this part could not be read just now.
+  final String? error;
+  final List<PageBlockGroupsItem>? groups;
+  final bool? hasDetail;
+  final String id;
+  final String? label;
+  final bool? lead;
+  /// The cursor for the next rows; null at the end.
+  final Object? more;
+  final bool? naira;
+  final PageBlockOrder? order;
+  /// Said when a sum stopped at its first 5,000 rows.
+  final String? over;
+  final List<PageRow>? rows;
+  /// The figure as drawn (a count, or naira).
+  final String? shown;
+  final String? size;
+  final String? text;
+  final String? title;
+  final String? tone;
+  final String type;
+  final double? value;
+
+  factory PageBlock.fromJson(Map<String, dynamic> j) => PageBlock(
+        broken: j['broken'] == null ? null : j['broken'] as String,
+        change: j['change'] == null ? null : PageBlockChange.fromJson(j['change'] as Map<String, dynamic>),
+        columns: j['columns'] == null ? null : (j['columns'] as List).map((e) => PageBlockColumnsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        count: j['count'] == null ? null : (j['count'] as num).toInt(),
+        empty: j['empty'] == null ? null : j['empty'] as String,
+        error: j['error'] == null ? null : j['error'] as String,
+        groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => PageBlockGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        hasDetail: j['has_detail'] == null ? null : j['has_detail'] as bool,
+        id: j['id'] as String,
+        label: j['label'] == null ? null : j['label'] as String,
+        lead: j['lead'] == null ? null : j['lead'] as bool,
+        more: j['more'],
+        naira: j['naira'] == null ? null : j['naira'] as bool,
+        order: j['order'] == null ? null : PageBlockOrder.fromJson(j['order'] as Map<String, dynamic>),
+        over: j['over'] == null ? null : j['over'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => PageRow.fromJson(e as Map<String, dynamic>)).toList(),
+        shown: j['shown'] == null ? null : j['shown'] as String,
+        size: j['size'] == null ? null : j['size'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+        tone: j['tone'] == null ? null : j['tone'] as String,
+        type: j['type'] as String,
+        value: j['value'] == null ? null : (j['value'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'broken': ?broken,
+        'change': ?change?.toJson(),
+        'columns': ?columns?.map((e) => e.toJson()).toList(),
+        'count': ?count,
+        'empty': ?empty,
+        'error': ?error,
+        'groups': ?groups?.map((e) => e.toJson()).toList(),
+        'has_detail': ?hasDetail,
+        'id': id,
+        'label': ?label,
+        'lead': ?lead,
+        'more': ?more,
+        'naira': ?naira,
+        'order': ?order?.toJson(),
+        'over': ?over,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'shown': ?shown,
+        'size': ?size,
+        'text': ?text,
+        'title': ?title,
+        'tone': ?tone,
+        'type': type,
+        'value': ?value,
+      };
+}
+
+class PageBlockChange {
+  const PageBlockChange({required this.before, required this.down, required this.up, required this.words});
+
+  final double before;
+  final bool down;
+  final bool up;
+  /// "up 12% on last week"
+  final String words;
+
+  factory PageBlockChange.fromJson(Map<String, dynamic> j) => PageBlockChange(
+        before: (j['before'] as num).toDouble(),
+        down: j['down'] as bool,
+        up: j['up'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'before': before,
+        'down': down,
+        'up': up,
+        'words': words,
+      };
+}
+
+class PageBlockColumnsItem {
+  const PageBlockColumnsItem({required this.column, required this.label, required this.naira});
+
+  final String column;
+  final String label;
+  final bool naira;
+
+  factory PageBlockColumnsItem.fromJson(Map<String, dynamic> j) => PageBlockColumnsItem(
+        column: j['column'] as String,
+        label: j['label'] as String,
+        naira: j['naira'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'column': column,
+        'label': label,
+        'naira': naira,
+      };
+}
+
+class PageBlockGroupsItem {
+  const PageBlockGroupsItem({required this.key, required this.label});
+
+  final String key;
+  final String label;
+
+  factory PageBlockGroupsItem.fromJson(Map<String, dynamic> j) => PageBlockGroupsItem(
+        key: j['key'] as String,
+        label: j['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label,
+      };
+}
+
+class PageBlockOrder {
+  const PageBlockOrder({required this.column, required this.desc});
+
+  final String column;
+  final bool desc;
+
+  factory PageBlockOrder.fromJson(Map<String, dynamic> j) => PageBlockOrder(
+        column: j['column'] as String,
+        desc: j['desc'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'column': column,
+        'desc': desc,
+      };
+}
+
+class PageRow {
+  const PageRow({this.cells, this.detail, this.group, required this.id, this.state, this.sub, this.title});
+
+  /// A table's cells, in its columns' order, written as people read them.
+  final List<String>? cells;
+  final PageRowDetail? detail;
+  /// The key of the group the row is under (a grouped list).
+  final String? group;
+  final String id;
+  final PageRowState? state;
+  final String? sub;
+  final String? title;
+
+  factory PageRow.fromJson(Map<String, dynamic> j) => PageRow(
+        cells: j['cells'] == null ? null : (j['cells'] as List).map((e) => e as String).toList(),
+        detail: j['detail'] == null ? null : PageRowDetail.fromJson(j['detail'] as Map<String, dynamic>),
+        group: j['group'] == null ? null : j['group'] as String,
+        id: j['id'] as String,
+        state: j['state'] == null ? null : PageRowState.fromJson(j['state'] as Map<String, dynamic>),
+        sub: j['sub'] == null ? null : j['sub'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cells': ?cells?.map((e) => e).toList(),
+        'detail': ?detail?.toJson(),
+        'group': ?group,
+        'id': id,
+        'state': ?state?.toJson(),
+        'sub': ?sub,
+        'title': ?title,
+      };
+}
+
+class PageRowDetail {
+  const PageRowDetail({required this.lines, required this.title});
+
+  final List<PageRowDetailLinesItem> lines;
+  final String title;
+
+  factory PageRowDetail.fromJson(Map<String, dynamic> j) => PageRowDetail(
+        lines: (j['lines'] as List).map((e) => PageRowDetailLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'title': title,
+      };
+}
+
+class PageRowDetailLinesItem {
+  const PageRowDetailLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory PageRowDetailLinesItem.fromJson(Map<String, dynamic> j) => PageRowDetailLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+      };
+}
+
+class PageRowState {
+  const PageRowState({required this.text, required this.tone});
+
+  final String text;
+  final String tone;
+
+  factory PageRowState.fromJson(Map<String, dynamic> j) => PageRowState(
+        text: j['text'] as String,
+        tone: j['tone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'tone': tone,
+      };
+}
+
+class PageFilter {
+  const PageFilter({required this.id, required this.label, this.options, required this.type, required this.value});
+
+  final String id;
+  final String label;
+  final List<PageFilterOptionsItem>? options;
+  final String type;
+  /// The value the page was drawn with; empty for none.
+  final String value;
+
+  factory PageFilter.fromJson(Map<String, dynamic> j) => PageFilter(
+        id: j['id'] as String,
+        label: j['label'] as String,
+        options: j['options'] == null ? null : (j['options'] as List).map((e) => PageFilterOptionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        type: j['type'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'options': ?options?.map((e) => e.toJson()).toList(),
+        'type': type,
+        'value': value,
+      };
+}
+
+class PageFilterOptionsItem {
+  const PageFilterOptionsItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory PageFilterOptionsItem.fromJson(Map<String, dynamic> j) => PageFilterOptionsItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
       };
 }

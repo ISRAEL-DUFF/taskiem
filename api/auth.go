@@ -69,6 +69,9 @@ const (
 	PermTaskGive = access.MemberManage + "|" + access.InvoiceManage
 	// PermFormLinks mints one-time links to a link form (forms 8.4).
 	PermFormLinks = access.FormLinks
+	// PermPageEdit and PermPagePublish are the business's pages (pages.go).
+	PermPageEdit    = access.PageEdit
+	PermPagePublish = access.PagePublish
 )
 
 // allPermissions are every permission, in the role editor's order.

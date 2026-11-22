@@ -89,6 +89,12 @@ const (
 	// it arrived, and links staff to Payrolla's employees. The owner's
 	// alone unless given to a role: it shows what people earn.
 	PayrollRead = "payroll.read"
+	// PageEdit makes and changes the business's pages as drafts, and pins
+	// them; PagePublish shows a draft to those its roles let open it
+	// (decision 0072; docs/spec/pages.md §12). Opening a page needs neither:
+	// the page's roles say who may.
+	PageEdit    = "page.edit"
+	PagePublish = "page.publish"
 )
 
 // All are every permission, in the order the role editor lists them.
@@ -96,7 +102,7 @@ var All = []string{WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStar
 	RunResolve, ApprovalDecide, PIIReveal, PIIErase, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage, ConnectorManage, RoleManage, SCIM, AlertManage,
 	TableRead, TableEdit, StorefrontManage, FormLinks,
 	BillingManage, InvoiceRead, InvoiceManage, KeyManage, PartnerRead, PartnerManage,
-	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead}
+	SchoolRead, SchoolManage, SchoolApprove, SchoolGate, LinkManage, ChatTrade, OrderHandle, SavedManage, MoneyPay, PayrollRead, PageEdit, PagePublish}
 
 // Descriptions say what each permission lets a person do, for the role
 // editor.
@@ -138,6 +144,8 @@ var Descriptions = map[string]string{
 	SavedManage:      "Manage saved things: add, change and remove the business's saved accounts (changing an account number needs a passkey)",
 	MoneyPay:         "Pay people from the business's payments account, each payment with a passkey, within the limits the owner sets (over them, the owner's OK)",
 	PayrollRead:      "See the payroll from Payrolla: each run, what each person is paid and whether it arrived (it shows what people earn)",
+	PageEdit:         "Make and change the business's pages as drafts, and pin them to the menu",
+	PagePublish:      "Publish pages: show a page to the people allowed to open it",
 }
 
 // Gate is the built-in role of the person at the school gate: the gate
@@ -150,7 +158,7 @@ var Roles = map[string][]string{
 	"owner": All,
 	"admin": {WorkflowRead, WorkflowEdit, WorkflowPublish, RunRead, RunStart, RunCancel, RunResolve, SecretManage, ConnectionManage, MemberManage, AuditRead, GitManage, PolicyManage,
 		ConnectorManage, RoleManage, SCIM, AlertManage, TableRead, TableEdit, StorefrontManage, FormLinks, InvoiceRead, InvoiceManage, SchoolRead, SchoolManage, LinkManage, ChatTrade,
-		OrderHandle, SavedManage},
+		OrderHandle, SavedManage, PageEdit, PagePublish},
 	// Staff who work from chat (chat tools phase 5): a cashier sells, keeps
 	// the stock and works the orders; a shift manager also takes payments,
 	// writes to linked businesses and hands the shift over.
