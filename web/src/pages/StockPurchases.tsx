@@ -13,7 +13,19 @@ import {
   receiveRequest,
   type Purchase,
   type ReceiveForm,
+  type SuppliersView,
 } from "../lib/purchases";
+import {
+  emptyHandLine,
+  fromMemory,
+  handLineRequest,
+  handProblem,
+  nameKey,
+  toAnswer,
+  type HandLine,
+  type Remembered,
+} from "../lib/treat";
+import { TrackAskBox, TreatQuestion, useSheetTreat, type Choices } from "./TreatLine";
 import { feeInput, feeKobo } from "../lib/orders";
 import { quantity, type StockItem, type StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
@@ -38,6 +50,7 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
   const parents = sizeParents(own.data ?? []);
   const [receiving, setReceiving] = useState<Purchase | null>(null);
   const [paying, setPaying] = useState<Purchase | null>(null);
+  const [byHand, setByHand] = useState(false);
   const [lowKey, setLowKey] = useState(() => crypto.randomUUID());
   const [skipped, setSkipped] = useState<string[]>([]);
   const act = useAction();
@@ -67,6 +80,13 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
         <Link className="button small" to="/storefront/suppliers">
           Suppliers
         </Link>
+        <button
+          type="button"
+          className="small"
+          onClick={() => setByHand(true)}
+        >
+          New order
+        </button>
         <button
           type="button"
           className="small primary"
@@ -131,15 +151,19 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
                         {sellerLine(p)}
                       </>
                     )}
+                    {toAnswer(p) && (
+                      <>
+                        <br />
+                        <span data-testid="purchase-ask">{toAnswer(p)}</span>
+                      </>
+                    )}
                   </span>
                 }
                 testid="purchase"
               >
-                {p.link_id && (
-                  <Link className="button small" to={`/purchases/${p.id}`}>
-                    Open<span className="sr-only"> {p.reference}</span>
-                  </Link>
-                )}
+                <Link className="button small" to={`/purchases/${p.id}`}>
+                  Open<span className="sr-only"> {p.reference}</span>
+                </Link>
                 {can.send && (
                   <button
                     type="button"
@@ -220,6 +244,15 @@ export function PurchasesCard({ onChanged }: { onChanged: () => void }) {
           }}
         />
       )}
+      {byHand && (
+        <OrderByHandModal
+          onClose={() => setByHand(false)}
+          onSaved={() => {
+            setByHand(false);
+            reload();
+          }}
+        />
+      )}
       {paying && (
         <PayModal
           purchase={paying}
@@ -267,8 +300,8 @@ function ReceiveModal({
         }}
       >
         <p className="hint">
-          From {purchase.supplier}. Each item comes into your stock, and its
-          cost price becomes the order's.
+          From {purchase.supplier}. What goes to stock is counted in at the
+          order's cost; what you keep track of goes on Things we have.
         </p>
         {purchase.lines.map((l) => (
           <Field
@@ -380,6 +413,174 @@ function PayModal({
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** An order by hand to a supplier not on Taskiem (what a business buys
+ * §6, Purchases by hand): what, how many and at what price, each line
+ * asked how to treat it unless the supplier's item is remembered. */
+function OrderByHandModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const suppliers = useLoad(
+    () =>
+      get<SuppliersView>("/v1/stock/suppliers").then((v) =>
+        v.suppliers.filter((s) => !s.link_id),
+      ),
+    [],
+  );
+  const [supplier, setSupplier] = useState("");
+  const memory = useLoad(
+    () =>
+      supplier
+        ? get<{ items: Remembered[] }>(
+            `/v1/stock/suppliers/${encodeURIComponent(supplier)}/items`,
+          ).then((r) => r.items)
+        : Promise.resolve(undefined),
+    [supplier],
+  );
+  const [lines, setLines] = useState<HandLine[]>([emptyHandLine()]);
+  const [key] = useState(() => crypto.randomUUID());
+  const treat = useSheetTreat();
+  const act = useAction();
+  const name = suppliers.data?.find((s) => s.id === supplier)?.name ?? "";
+  const filled = lines
+    .map((l, i) => ({ l, k: String(i) }))
+    .filter(({ l }) => l.item.trim() !== "");
+  const memoryOf = (item: string) => {
+    const m = memory.data?.find((x) => x.name_key === nameKey(item));
+    return m ? fromMemory(m) : undefined;
+  };
+  const memoryAt = (k: string | undefined) =>
+    memoryOf(lines[Number(k)]?.item ?? "");
+  const problem = handProblem(supplier, lines);
+  const answered =
+    !!memory.data &&
+    treat.ready(
+      filled.map(({ l, k }) => ({ key: k, memory: memoryOf(l.item) })),
+    );
+  const set = (i: number, patch: Partial<HandLine>) =>
+    setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const draft = (cs?: Choices) =>
+    void act.run(async () => {
+      const body = [];
+      for (const { l, k } of filled)
+        body.push({
+          ...handLineRequest(l),
+          ...(await treat.body(k, undefined, cs)),
+        });
+      let out: { purchase: Purchase };
+      try {
+        out = await postOnce<{ purchase: Purchase }>(
+          "/v1/stock/purchases",
+          `${key}-${JSON.stringify(body)}`,
+          { supplier_id: supplier, lines: body },
+        );
+      } catch (e) {
+        if (treat.refused(e, filled.map(({ k }) => k))) return;
+        throw e;
+      }
+      await treat.remember(
+        out.purchase.id,
+        filled.map(({ k }, i) => ({ key: k, position: i })),
+        cs,
+      );
+      onSaved();
+    }, "Order drafted");
+  return (
+    <Modal title="A new order" onClose={onClose}>
+      <p className="hint">
+        To a supplier not on Taskiem. Approve and send it from the list, and
+        they get it by text message.
+      </p>
+      <ErrorBox error={suppliers.error ?? memory.error ?? act.error} />
+      <Field label="Supplier">
+        <select value={supplier} onChange={(e) => setSupplier(e.target.value)}>
+          <option value="">Choose a supplier</option>
+          {(suppliers.data ?? []).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {lines.map((l, i) => (
+        <div key={i} className="row" data-testid="hand-line">
+          <Field label={`What ${i + 1}`}>
+            <input
+              value={l.item}
+              maxLength={200}
+              onChange={(e) => set(i, { item: e.target.value })}
+            />
+          </Field>
+          <Field label={`How many ${i + 1}`}>
+            <input
+              inputMode="numeric"
+              value={l.quantity}
+              onChange={(e) => set(i, { quantity: e.target.value })}
+            />
+          </Field>
+          <Field label={`Price of one ${i + 1} (₦)`}>
+            <input
+              inputMode="decimal"
+              value={l.price}
+              onChange={(e) => set(i, { price: e.target.value })}
+            />
+          </Field>
+        </div>
+      ))}
+      {lines.length < 50 && (
+        <button
+          type="button"
+          className="small"
+          onClick={() => setLines([...lines, emptyHandLine()])}
+        >
+          Add another
+        </button>
+      )}
+      {supplier && memory.data && filled.length > 0 && (
+        <div className="treat-list" data-testid="treat-lines">
+          <h3>How should we treat each?</h3>
+          {filled.map(({ l, k }) => (
+            <TreatQuestion
+              key={`${k}-${nameKey(l.item)}`}
+              item={l.item.trim()}
+              supplier={name}
+              data={treat.data}
+              memory={memoryOf(l.item)}
+              value={treat.choices[k]}
+              onChange={treat.setter(k)}
+            />
+          ))}
+        </div>
+      )}
+      {treat.ask && (
+        <TrackAskBox
+          ask={treat.ask.ask}
+          busy={act.busy}
+          onYes={() => draft(treat.answer(true, memoryAt(treat.ask?.key)))}
+          onRecord={() => draft(treat.answer(false, memoryAt(treat.ask?.key)))}
+        />
+      )}
+      {problem && supplier && <p className="hint">{problem}</p>}
+      <div className="toolbar">
+        <button
+          type="button"
+          className="primary"
+          disabled={act.busy || !!problem || !answered}
+          onClick={() => draft()}
+        >
+          Draft the order
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
     </Modal>
   );
 }

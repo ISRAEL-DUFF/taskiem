@@ -5,6 +5,7 @@ import { billHero, billPath, billsDue, billStatus, canPay, sentLine, type Bill, 
 import { dateLabel, naira, toKobo } from "../lib/invoices";
 import { useState } from "react";
 import { DocThread } from "./Conversation";
+import { useBillMarks } from "./TreatLine";
 import { EmptyState, ErrorBox, Field, fmtTime, Item, Items, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
 // Bills (business links L1; docs/spec/business-links.md §6): linked
@@ -85,6 +86,8 @@ export function BillPage() {
   const { id = "" } = useParams();
   const { data: b, error, reload } = useLoad(() => get<Bill>(billPath(id)), [id]);
   const { can } = useAuth();
+  // Each line's label, and where it went, from our order (the buyer's side).
+  const mark = useBillMarks(b?.lines);
   const h = b ? billHero(b) : undefined;
   const pct = h ? Math.round(h.paid * 100) : 0;
   return (
@@ -168,7 +171,10 @@ export function BillPage() {
               <tbody>
                 {b.lines.map((l, i) => (
                   <tr key={i}>
-                    <td>{l.description}</td>
+                    <td>
+                      {l.description}
+                      {mark?.(l)}
+                    </td>
                     <td>{l.quantity}</td>
                     <td className="sf-price">{naira(l.unit_kobo)}</td>
                     <td className="sf-price">{naira(l.quantity * l.unit_kobo)}</td>
