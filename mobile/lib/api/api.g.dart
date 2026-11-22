@@ -1823,6 +1823,35 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/invoices/${Uri.encodeComponent(invoice)}/transfer', body: body.toJson());
     return CustomerTransfer.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Your tools (`GET /v1/tools`)
+  Future<ListToolsResponse> listTools({String? environment}) async {
+    final j = await _t.send('GET', '/v1/tools', query: {'environment': ?environment});
+    return ListToolsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start a tool (`POST /v1/tools/{command}/start`)
+  Future<ToolStart> startTool({required StartToolRequest body, required String command, String? idempotencyKey}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/start', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
+    return ToolStart.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Confirm a tool's start (`POST /v1/tools/{command}/confirm`)
+  Future<ToolRun> confirmTool({required ConfirmToolRequest body, required String command}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/confirm', body: body.toJson());
+    return ToolRun.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A run's answer (`GET /v1/runs/{run}/answer`)
+  Future<ToolAnswer> getRunAnswer({required String run}) async {
+    final j = await _t.send('GET', '/v1/runs/${Uri.encodeComponent(run)}/answer');
+    return ToolAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a tool more careful (`PUT /v1/tools/{command}/settings`)
+  Future<void> setToolSettings({required SetToolSettingsRequest body, required String command}) async {
+    await _t.send('PUT', '/v1/tools/${Uri.encodeComponent(command)}/settings', body: body.toJson());
+  }
 }
 
 class AppConfig {
@@ -15579,5 +15608,341 @@ class AskMyInvoiceTransferRequest {
 
   Map<String, dynamic> toJson() => {
         'longer': ?longer,
+      };
+}
+
+class ListToolsResponse {
+  const ListToolsResponse({required this.tools});
+
+  final List<Tool> tools;
+
+  factory ListToolsResponse.fromJson(Map<String, dynamic> j) => ListToolsResponse(
+        tools: (j['tools'] as List).map((e) => Tool.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'tools': tools.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Tool {
+  const Tool({required this.about, required this.alwaysAsk, this.answer, required this.care, required this.command, required this.environment, this.icon, this.inputs, required this.name, required this.says, required this.version, required this.workflowId});
+
+  final String about;
+  final bool alwaysAsk;
+  /// text, card or list; left out when the tool answers with how its run ended
+  final String? answer;
+  final ToolCare care;
+  final String command;
+  final String environment;
+  final String? icon;
+  /// The tool's inputs schema, for its form
+  final Map<String, dynamic>? inputs;
+  final String name;
+  final List<String> says;
+  final int version;
+  final String workflowId;
+
+  factory Tool.fromJson(Map<String, dynamic> j) => Tool(
+        about: j['about'] as String,
+        alwaysAsk: j['always_ask'] as bool,
+        answer: j['answer'] == null ? null : j['answer'] as String,
+        care: ToolCare.fromJson(j['care'] as Map<String, dynamic>),
+        command: j['command'] as String,
+        environment: j['environment'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        says: (j['says'] as List).map((e) => e as String).toList(),
+        version: (j['version'] as num).toInt(),
+        workflowId: j['workflow_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'always_ask': alwaysAsk,
+        'answer': ?answer,
+        'care': care.toJson(),
+        'command': command,
+        'environment': environment,
+        'icon': ?icon,
+        'inputs': ?inputs,
+        'name': name,
+        'says': says.map((e) => e).toList(),
+        'version': version,
+        'workflow_id': workflowId,
+      };
+}
+
+class ToolCare {
+  const ToolCare({this.because, required this.level});
+
+  final List<String>? because;
+  final String level;
+
+  factory ToolCare.fromJson(Map<String, dynamic> j) => ToolCare(
+        because: j['because'] == null ? null : (j['because'] as List).map((e) => e as String).toList(),
+        level: j['level'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'because': ?because?.map((e) => e).toList(),
+        'level': level,
+      };
+}
+
+class StartToolRequest {
+  const StartToolRequest({this.environment, this.input});
+
+  final String? environment;
+  final Map<String, dynamic>? input;
+
+  factory StartToolRequest.fromJson(Map<String, dynamic> j) => StartToolRequest(
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'environment': ?environment,
+        'input': ?input,
+      };
+}
+
+class ToolStart {
+  const ToolStart({required this.care, this.confirm, this.created, this.expiresAt, this.runId, required this.values});
+
+  final String care;
+  final String? confirm;
+  final bool? created;
+  final DateTime? expiresAt;
+  final String? runId;
+  final List<ToolStartValuesItem> values;
+
+  factory ToolStart.fromJson(Map<String, dynamic> j) => ToolStart(
+        care: j['care'] as String,
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
+        created: j['created'] == null ? null : j['created'] as bool,
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        runId: j['run_id'] == null ? null : j['run_id'] as String,
+        values: (j['values'] as List).map((e) => ToolStartValuesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'care': care,
+        'confirm': ?confirm,
+        'created': ?created,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'run_id': ?runId,
+        'values': values.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ToolStartValuesItem {
+  const ToolStartValuesItem({required this.label, required this.name, required this.value});
+
+  final String label;
+  final String name;
+  final String value;
+
+  factory ToolStartValuesItem.fromJson(Map<String, dynamic> j) => ToolStartValuesItem(
+        label: j['label'] as String,
+        name: j['name'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'name': name,
+        'value': value,
+      };
+}
+
+class ConfirmToolRequest {
+  const ConfirmToolRequest({required this.confirm, this.environment, this.input, this.passkey, this.totp});
+
+  final String confirm;
+  final String? environment;
+  final Map<String, dynamic>? input;
+  final Map<String, dynamic>? passkey;
+  final String? totp;
+
+  factory ConfirmToolRequest.fromJson(Map<String, dynamic> j) => ConfirmToolRequest(
+        confirm: j['confirm'] as String,
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': confirm,
+        'environment': ?environment,
+        'input': ?input,
+        'passkey': ?passkey,
+        'totp': ?totp,
+      };
+}
+
+class ToolRun {
+  const ToolRun({required this.created, required this.runId});
+
+  final bool created;
+  final String runId;
+
+  factory ToolRun.fromJson(Map<String, dynamic> j) => ToolRun(
+        created: j['created'] as bool,
+        runId: j['run_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created': created,
+        'run_id': runId,
+      };
+}
+
+class ToolAnswer {
+  const ToolAnswer({this.amountKobo, this.buttons, this.empty, this.error, this.lines, this.ref, this.rows, this.state, required this.status, this.text, this.title, this.tool, required this.type});
+
+  final int? amountKobo;
+  final List<ToolButton>? buttons;
+  final String? empty;
+  final String? error;
+  final List<ToolAnswerLinesItem>? lines;
+  final String? ref;
+  final List<ToolAnswerRowsItem>? rows;
+  final ToolAnswerState? state;
+  final String status;
+  final String? text;
+  final String? title;
+  final String? tool;
+  final String type;
+
+  factory ToolAnswer.fromJson(Map<String, dynamic> j) => ToolAnswer(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => ToolButton.fromJson(e as Map<String, dynamic>)).toList(),
+        empty: j['empty'] == null ? null : j['empty'] as String,
+        error: j['error'] == null ? null : j['error'] as String,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => ToolAnswerLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        ref: j['ref'] == null ? null : j['ref'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => ToolAnswerRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        state: j['state'] == null ? null : ToolAnswerState.fromJson(j['state'] as Map<String, dynamic>),
+        status: j['status'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+        tool: j['tool'] == null ? null : j['tool'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'buttons': ?buttons?.map((e) => e.toJson()).toList(),
+        'empty': ?empty,
+        'error': ?error,
+        'lines': ?lines?.map((e) => e.toJson()).toList(),
+        'ref': ?ref,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'state': ?state?.toJson(),
+        'status': status,
+        'text': ?text,
+        'title': ?title,
+        'tool': ?tool,
+        'type': type,
+      };
+}
+
+class ToolButton {
+  const ToolButton({this.inputs, required this.label, this.once, required this.tool});
+
+  final Map<String, dynamic>? inputs;
+  final String label;
+  final bool? once;
+  final String tool;
+
+  factory ToolButton.fromJson(Map<String, dynamic> j) => ToolButton(
+        inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
+        label: j['label'] as String,
+        once: j['once'] == null ? null : j['once'] as bool,
+        tool: j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'inputs': ?inputs,
+        'label': label,
+        'once': ?once,
+        'tool': tool,
+      };
+}
+
+class ToolAnswerLinesItem {
+  const ToolAnswerLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory ToolAnswerLinesItem.fromJson(Map<String, dynamic> j) => ToolAnswerLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+      };
+}
+
+class ToolAnswerRowsItem {
+  const ToolAnswerRowsItem({this.actions, this.state, this.sub, required this.title});
+
+  final List<ToolButton>? actions;
+  final ToolAnswerState? state;
+  final String? sub;
+  final String title;
+
+  factory ToolAnswerRowsItem.fromJson(Map<String, dynamic> j) => ToolAnswerRowsItem(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => ToolButton.fromJson(e as Map<String, dynamic>)).toList(),
+        state: j['state'] == null ? null : ToolAnswerState.fromJson(j['state'] as Map<String, dynamic>),
+        sub: j['sub'] == null ? null : j['sub'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
+        'state': ?state?.toJson(),
+        'sub': ?sub,
+        'title': title,
+      };
+}
+
+class ToolAnswerState {
+  const ToolAnswerState({required this.text, this.tone});
+
+  final String text;
+  final String? tone;
+
+  factory ToolAnswerState.fromJson(Map<String, dynamic> j) => ToolAnswerState(
+        text: j['text'] as String,
+        tone: j['tone'] == null ? null : j['tone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'tone': ?tone,
+      };
+}
+
+class SetToolSettingsRequest {
+  const SetToolSettingsRequest({required this.alwaysAsk, this.environment});
+
+  final bool alwaysAsk;
+  final String? environment;
+
+  factory SetToolSettingsRequest.fromJson(Map<String, dynamic> j) => SetToolSettingsRequest(
+        alwaysAsk: j['always_ask'] as bool,
+        environment: j['environment'] == null ? null : j['environment'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'always_ask': alwaysAsk,
+        'environment': ?environment,
       };
 }

@@ -387,3 +387,8 @@ askBillTransfer
 getBillTransfer
 getMyInvoiceTransfer
 askMyInvoiceTransfer
+listTools
+startTool
+confirmTool
+getRunAnswer
+setToolSettings
