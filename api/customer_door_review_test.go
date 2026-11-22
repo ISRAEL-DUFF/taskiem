@@ -663,10 +663,6 @@ func TestCustomerDoorDeliveryCard(t *testing.T) {
 func TestCustomerDoorStockAcrossLines(t *testing.T) {
 	w := newDoorShopWorld(t)
 	owner := w.owner
-	sf := owner.must(200, "GET", "/v1/storefront", nil)
-	if inner, ok := sf["storefront"].(map[string]any); ok {
-		sf = inner
-	}
 	withStock(w.world)
 	var jollof string
 	for _, it := range owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)["items"].([]any) {
