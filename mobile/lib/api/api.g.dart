@@ -16062,6 +16062,8 @@ class FormRequest {
   final String? member;
   final Map<String, dynamic>? prefill;
   final String? role;
+  /// The run waiting for the answer; the nil UUID for a request another
+  /// business put to you through a link (its run is theirs)
   final String runId;
   final Map<String, dynamic> schema;
   final String status;
