@@ -24,11 +24,18 @@ Worked out from its steps when it is published, never chosen by whoever made it:
 
 Some actions outside payments spend the business's money all the same (airtime from its balance): they ask for a passkey too. An owner may make a tool **always ask** (`PUT /v1/tools/{command}/settings`), never less careful than its steps. A tool's run counts against the plan's run limits as any run.
 
+## In words
+
+A tool is called by `/command`, by its plain command, by a phrase it says, or by a sentence: when nothing of Taskiem's own reads a message, the model is told the business's tools you may use (their command, name, about and inputs; never what a saved thing or a run holds) after Taskiem's commands, and may take the message to one of them with the values it heard (made tools M3). It never starts anything: what it read is shown first, as the tool's care says (the echo, **Yes**, or the app), and inputs it did not hear are asked. Two tools that fit are a numbered pick. Taskiem's own words always come first: "send 20k to @bayo" is a payment, never a tool, and a tool cannot take a word Taskiem uses.
+
+`@name` as a value is one of the business's **Saved** things, looked up by Taskiem, not the model: a place gives its address (or its phone, for an input about a phone), a person their name (or phone, or email), a text its words. A bank account, a file, and your own saved things never fill a tool's input; you are told so and asked.
+
 ## The API
 
 | Call | What |
 | --- | --- |
 | `GET /v1/tools` | Your tools: command, name, about, inputs, care |
+| `POST /v1/tools/{command}/read` | Words in, proposed values out, for a form filled in (`@name` looked up); nothing started |
 | `POST /v1/tools/{command}/start` | Values in: the run at once (201, with the echo), or a confirm and what will run (200) |
 | `POST /v1/tools/{command}/confirm` | The confirm and the same values (and a passkey for a tool that moves money): the run, once |
 | `GET /v1/runs/{id}/answer` | The run's answer as data, masked as messages are: text, card or list; how it ended while it runs or when it failed |

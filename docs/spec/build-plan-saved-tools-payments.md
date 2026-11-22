@@ -175,6 +175,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **M3. The reader knows your tools** (made tools T3). Needs: M1, S2, P1 (one reader).
 - Tools given to the reader after Taskiem's commands and saved objects' names, in the order S2 fixed; proposed values, including `@objects` as inputs; the numbered pick; evaluation cases in English and Pidgin.
 - Done when: "spent 4,500 on diesel" opens the expense tool filled in; "send 20k to @bayo" still reaches payments; no built-in command is taken by a tool.
+- **Status (22 November 2026): built.** The model that reads what nothing else recognised (`engine/ai/understand`) is told the person's tools after Taskiem's commands and the saved things' names (command, name, about, inputs; a JSON list of the business's own words, one line each and length-limited; at most 40, the nearest by words) and may answer with one and the values it heard, or a second that fits as well. The values go through M1's way in (the echo, **yes**, or the app for money), inputs not heard are asked with what was read shown first; two tools that fit, by the model or by one phrase, are a numbered pick; words after a command for several inputs are read the same way. `@name` as a value is the business's saved thing, looked up on the server (an address, a name, a phone or email, sealed while it waits); never a bank account, a file or a person's own. Taskiem's own words are read first, unchanged; with tools, the shorter non-English router (`engine/ai/intent`) gives way to the reader that knows them. `POST /v1/tools/{command}/read` for the sheets. `evals/chat` kind `tool`, English and Pidgin. **Note:** `spent` is Taskiem's own (the money log, and a reserved word for tools), so "spent 4,500 on diesel" reaches a tool only where Money is off; with Money on it is the money log, as "Taskiem's commands always win" says. **Left:** the web's and the app's sheets do not call `/read` yet (screens); a tool's optional inputs are not read from words (only those its chat form asks); on WhatsApp a tool partly filled is asked one input at a time, not by a form filled in (Flows take no starting values here).
 
 **M4. A question inside a run** (made tools T4). Needs: M1.
 - `to: "starter"` on the form step: a run asks in the chat it was started from, and goes on.
@@ -244,7 +245,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 - [ ] F1 (built, in review) · [ ] P1 (built, in review)
 - [ ] P2 (built, in review) · [ ] P3 (built, in review) · [ ] P4
 - [ ] M0 · [ ] M1 · [ ] D0
-- [ ] M2 · [ ] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
+- [ ] M2 · [x] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
 - [ ] M5 · [ ] G2 · [ ] G3 · [ ] D2
 - [ ] M6 · [ ] G4 · [ ] G5
 
