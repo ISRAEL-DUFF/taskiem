@@ -55,10 +55,27 @@ func TestMirrorKeepsStockItemsAndMovements(t *testing.T) {
 		fabric, err = stock.CreateItemTx(ctx, tx, w.env.Tenant, stock.NewItem{Name: "Ankara fabric", Unit: "yard", Low: n(5), Actor: "user:owner"})
 		return err
 	})
+	// The sweep finds the business (taskiem_stock_due_tenants, as the app
+	// calls it) and copies; the evening total and the watch find it too.
+	for _, q := range []string{`SELECT count(*) FROM taskiem_stock_due_tenants(now()) WHERE tenant_id = $1`,
+		`SELECT count(*) FROM taskiem_stock_tenants() WHERE tenant_id = $1`} {
+		var found int
+		if err := w.env.DB.App.QueryRow(ctx, q, w.env.Tenant).Scan(&found); err != nil || found != 1 {
+			t.Fatalf("%s: %d %v", q, found, err)
+		}
+	}
+	sweep := &stock.Sweeper{Stock: w.s, Mirror: m}
 	for range 2 {
-		if err := m.Tenant(ctx, w.env.Tenant); err != nil {
+		if err := sweep.Tick(ctx); err != nil {
 			t.Fatal(err)
 		}
+	}
+	var due int
+	if err := w.env.DB.App.QueryRow(ctx, `SELECT count(*) FROM taskiem_stock_due_tenants(now())`).Scan(&due); err != nil || due != 0 {
+		t.Fatalf("due after the sweep: %d %v", due, err)
+	}
+	if err := w.env.DB.App.QueryRow(ctx, `SELECT count(*) FROM taskiem_storefronts_due(now())`).Scan(&due); err != nil {
+		t.Fatal(err)
 	}
 	items := read(stock.KeptItemsTable)
 	if len(items) != 2 || len(read(stock.KeptTable)) != 1 {

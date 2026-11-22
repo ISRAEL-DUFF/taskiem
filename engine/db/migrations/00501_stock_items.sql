@@ -171,7 +171,7 @@ RETURNS TABLE (tenant_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT m.tenant_id FROM stock_movements m
     JOIN tenants t ON t.id = m.tenant_id AND t.status = 'active'
-   WHERE m.mirrored_at IS NULL AND m.created_at <= p_before
+   WHERE m.mirrored_at IS NULL
   UNION
   SELECT i.tenant_id FROM stock_items i
     JOIN tenants t ON t.id = i.tenant_id AND t.status = 'active'
