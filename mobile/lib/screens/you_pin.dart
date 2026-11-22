@@ -19,6 +19,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
 import '../chat/approve.dart' show TkTextBox;
+import '../chat/groups.dart' show askSure;
 import '../chat/words.dart' show clock, dayWords;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
@@ -307,6 +308,21 @@ class _PinScreenState extends State<PinScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// Removing it takes no proof: it only takes a way to approve and pay.
+  Future<void> _remove() async {
+    final yes = await askSure(context, title: 'Remove your PIN?', body: 'It will no longer approve on WhatsApp or pay. You can set one again.', ok: 'Remove', danger: true);
+    if (!yes || !mounted) return;
+    setState(() => (_busy = true, _error = null));
+    try {
+      await widget.auth.api.deleteMePin();
+      if (mounted) showTkToast(context, 'PIN removed');
+      await _load();
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = _say(e));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final look = TkLook.of(context);
@@ -358,8 +374,10 @@ class _PinScreenState extends State<PinScreen> {
             subLines: 3,
             color: look.orange,
           ),
-        if (!_changing)
-          TkCta(label: 'Change PIN', onTap: () => setState(() => (_changing = true, _error = null)))
+        if (!_changing) ...[
+          TkCta(label: 'Change PIN', onTap: () => setState(() => (_changing = true, _error = null))),
+          Center(child: TkLink(label: 'Remove my PIN', bold: true, onTap: _busy ? null : _remove)),
+        ]
         else if (!p.changeWithout && !_passkey && !_totpOnly)
           Semantics(
             liveRegion: true,

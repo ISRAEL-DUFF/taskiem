@@ -533,6 +533,7 @@ func (s *Server) Handler() http.Handler {
 			// The person's PIN, set at sign-up and reset with a passkey (pin_me.go).
 			r.Get("/me/pin", s.getMePin)
 			r.Put("/me/pin", s.putMePin)
+			r.Delete("/me/pin", s.removeWhatsAppPin)
 			r.Delete("/me/whatsapp/pin", s.removeWhatsAppPin)
 			r.Get("/me/telegram", s.getTelegram)
 			r.Post("/me/telegram", s.startTelegramLink)

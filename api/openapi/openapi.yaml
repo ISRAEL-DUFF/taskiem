@@ -29737,6 +29737,22 @@ paths:
                 $ref: '#/components/schemas/MePin'
         default:
           $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteMePin
+      tags:
+      - Account
+      summary: Remove your PIN
+      description: No proof needed (it only takes a way to approve and pay away). 404 when none is set. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/whatsapp/pin:
     put:
       operationId: setWhatsAppPin

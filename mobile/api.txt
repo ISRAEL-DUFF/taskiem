@@ -359,6 +359,7 @@ putPayLimit
 putStaffPayAccount
 getMePin
 putMePin
+deleteMePin
 getPayCollection
 addPayCollection
 clearPayCollection

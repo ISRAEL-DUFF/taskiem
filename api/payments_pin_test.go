@@ -301,4 +301,10 @@ func TestMePin(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'pin.set'`).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("audited: %d %v", n, err)
 	}
+	// Removed with no proof; then none is set.
+	ada.must(204, "DELETE", "/v1/me/pin", nil)
+	if got := ada.must(200, "GET", "/v1/me/pin", nil); got["set"] != false {
+		t.Fatalf("removed: %v", got)
+	}
+	ada.must(404, "DELETE", "/v1/me/pin", nil)
 }

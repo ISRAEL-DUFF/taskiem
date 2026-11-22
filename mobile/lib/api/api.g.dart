@@ -1687,6 +1687,11 @@ class TaskiemApi {
     return MePin.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Remove your PIN (`DELETE /v1/me/pin`)
+  Future<void> deleteMePin() async {
+    await _t.send('DELETE', '/v1/me/pin');
+  }
+
   /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
   Future<PayCollection> getPayCollection() async {
     final j = await _t.send('GET', '/v1/pay-collection');

@@ -22,10 +22,11 @@ import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/look.dart' show TkEyebrow, TkFace, TkTopCard, tkFigure;
 import '../kit/forms.dart' show TkSwitch;
-import '../kit/mobile.dart' show TkListRow, TkSection, tkInitials;
+import '../kit/mobile.dart' show TkListRow, TkSection, tkInitials, tkPush;
 import '../kit/page.dart' show TkPageScreen;
 import '../theme/look.dart';
 import '../theme/theme.dart';
+import 'you_pin.dart' show PinScreen;
 
 /// A settings page of its own (docs/spec/mobile-app-look.md, "Settings"):
 /// the app's head with Back to Settings, its cards on the ground. A card
@@ -584,14 +585,11 @@ class WhatsAppCard extends StatefulWidget {
 class _WhatsAppCardState extends _Section<WhatsAppCard> {
   WhatsAppBinding? _b;
   bool _sent = false;
-  // Linking another number, and setting the PIN: each opened when asked for.
+  // Linking another number: opened when asked for.
   bool _another = false;
-  bool _pinOpen = false;
   final _number = TextEditingController();
   final _code = TextEditingController();
   final _proof = TextEditingController();
-  final _pin = TextEditingController();
-  final _pinProof = TextEditingController();
 
   @override
   void initState() {
@@ -601,7 +599,7 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
 
   @override
   void dispose() {
-    for (final c in [_number, _code, _proof, _pin, _pinProof]) {
+    for (final c in [_number, _code, _proof]) {
       c.dispose();
     }
     super.dispose();
@@ -745,88 +743,32 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
     ]);
   }
 
-  /// Account.tsx WhatsAppPin.
+  /// The PIN for approving here is the person's one PIN: its own page
+  /// (you_pin.dart), shared with paying and the sign-up step.
   Widget _pinPart(TkTokens t, WhatsAppPin pin) {
-    final api = widget.auth.api;
     final look = TkLook.of(context);
-    final f = factorsOf(widget.auth);
-    final strong = f.passkey || f.totp;
-    // As drawn: the PIN set, with Remove; Change the PIN (or Set a PIN)
-    // opening its form; what the PIN is for under them.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SettingsHeading('Approval PIN'),
+        const SettingsHeading('Your PIN'),
         TkSection(
           inset: 56,
           children: [
-            if (pin.set)
-              TkListRow(
-                title: 'PIN set${pin.setAt != null ? ' ${_fmt(pin.setAt!)}' : ''}',
-                sub: pin.lockedUntil != null ? 'Locked until ${_fmt(pin.lockedUntil!)}' : 'Stands in for your passkey in WhatsApp',
-                icon: 'b-shield',
-                square: look.violet,
-                trailing: TkSmallButton(
-                  label: 'Remove',
-                  semantics: 'Remove the PIN',
-                  onPressed: busy
-                      ? null
-                      : () async {
-                          final yes = await showTkConfirm(context, title: 'Remove your WhatsApp PIN?', ok: 'Remove', danger: true);
-                          if (yes) {
-                            await run(() async {
-                              await api.removeWhatsAppPin();
-                              await _load();
-                            }, done: 'PIN removed');
-                          }
-                        },
-                ),
-              ),
             TkListRow(
-              title: pin.set ? 'Change the PIN' : 'Set a PIN',
-              sub: strong ? '6 digits, not one repeated, nor a run like 123456' : 'Add a passkey or an authenticator first',
+              title: pin.set ? 'Your PIN' : 'Set your PIN',
+              sub: pin.lockedUntil != null
+                  ? 'Locked until ${_fmt(pin.lockedUntil!)}'
+                  : pin.set
+                  ? 'Approves here, and pays small amounts'
+                  : 'To approve here, and pay small amounts',
               icon: 'b-key',
-              square: look.teal,
-              onTap: strong ? () => setState(() => _pinOpen = !_pinOpen) : null,
+              square: look.violet,
+              onTap: () async {
+                await tkPush<void>(context, PinScreen(auth: widget.auth, backLabel: 'Back to WhatsApp'));
+                if (mounted) await _load();
+              },
             ),
           ],
-        ),
-        if (_pinOpen && strong) ...[
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TkField(label: pin.set ? 'New PIN' : 'PIN', controller: _pin, digits: 6, obscure: true, keyboard: TextInputType.number),
-                const SizedBox(height: 12),
-                ProofField(auth: widget.auth, to: 'set the PIN', controller: _pinProof),
-                ListenableBuilder(
-                  listenable: _pin,
-                  builder: (context, _) => TkSmallButton(
-                    label: pin.set ? 'Change PIN' : 'Set PIN',
-                    primary: true,
-                    onPressed: busy || _pin.text.length != 6 || proofAsked(widget.auth) == null
-                        ? null
-                        : () => run(() async {
-                            final p = proofOf(widget.auth, _pinProof.text);
-                            await api.setWhatsAppPin(body: WhatsAppPinRequest(pin: _pin.text, totp: p.totp, password: p.password));
-                            _pin.clear();
-                            _pinProof.clear();
-                            _pinOpen = false;
-                            await _load();
-                          }, done: 'PIN saved'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        if (error != null) ...[const SizedBox(height: 10), TkErrorBox(error!)],
-        const SizedBox(height: 10),
-        const SettingsNote(
-          'Six digits you enter in WhatsApp to confirm approvals whose policy allows a WhatsApp PIN. Policies asking for a passkey or authenticator code still send you here. Five wrong PINs lock it for 15 minutes.',
         ),
       ],
     );

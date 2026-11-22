@@ -188,6 +188,24 @@ void main() {
     await drain(t);
   });
 
+  testWidgets('Remove my PIN, asked first, sends DELETE and shows Set your PIN', (t) async {
+    phone(t);
+    final api = you();
+    var set = true;
+    api.routes['GET /v1/me/pin'] = (_) => set ? pin() : pin(set: false, changeWithout: true);
+    api.routes['DELETE /v1/me/pin'] = (_) {
+      set = false;
+      return null;
+    };
+    await _page(t, api);
+    await press(t, find.text('Remove my PIN'));
+    expect(find.text('Remove your PIN?'), findsOneWidget);
+    await press(t, find.text('Remove'));
+    expect(api.sent('DELETE', '/v1/me/pin'), hasLength(1));
+    expect(find.text('Set your PIN'), findsWidgets);
+    await drain(t);
+  });
+
   testWidgets('Change PIN with the passkey sends {pin, passkey}', (t) async {
     phone(t);
     final api = you();
