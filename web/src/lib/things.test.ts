@@ -3,6 +3,7 @@ import {
   byLabel,
   detailsRequest,
   emptyThing,
+  hadOf,
   priceProblem,
   profitWords,
   rowsOf,
@@ -11,6 +12,7 @@ import {
   spendingPath,
   statusRequest,
   statusSaid,
+  statusSavable,
   thingLine,
   thingProblem,
   thingRequest,
@@ -51,6 +53,46 @@ describe("Things we have", () => {
     expect(out.map((g) => g.label)).toEqual(["Machines", "Furniture", "Not labelled"]);
     expect(out[0]?.rows.map((t) => t.id)).toEqual(["a", "e", "b"]);
     expect(out[1]?.count).toBe(0);
+  });
+
+  it("puts a merged label's rows in one section, matched by name as the server groups them", () => {
+    // Equipment (lab-e) merged into Tools (lab-t): the rows keep their own
+    // label_id, their label is the kept one's name; the server's one group
+    // carries the first row's id.
+    const things = [
+      row({ id: "a", label_id: "lab-e", label: "Tools", cost_kobo: 300 }),
+      row({ id: "b", label_id: "lab-t", label: "Tools", cost_kobo: 200 }),
+      row({ id: "c", label_id: "lab-e", label: "tools", status: "sold", cost_kobo: 50 }),
+    ];
+    const groups = [{ label_id: "lab-e", label: "Tools", count: 2, total_kobo: 500 }];
+    const out = byLabel(things, groups);
+    expect(out.map((g) => g.label)).toEqual(["Tools"]);
+    expect(out[0]?.rows.map((t) => t.id)).toEqual(["a", "b", "c"]);
+    expect(out[0]).toMatchObject({ count: 2, total_kobo: 500 });
+  });
+
+  it("an order line's sections count and total its own rows still had", () => {
+    const things = [
+      row({ id: "a", label_id: "m", label: "Machines", cost_kobo: 400, purchase_line_id: "l1" }),
+      row({ id: "b", label_id: "m", label: "Machines", cost_kobo: 400, purchase_line_id: "l1", status: "sold" }),
+      row({ id: "c", label_id: "m", label: "Machines", cost_kobo: 900, purchase_line_id: "l2" }),
+    ];
+    const rows = rowsOf(things, "l1");
+    const out = byLabel(rows, undefined);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ label: "Machines", count: 1, total_kobo: 400 });
+    expect(hadOf(rows)).toEqual({ count: 1, total_kobo: 400 });
+    expect(thingsPath(false, "l 1")).toBe("/v1/things?line=l%201&all=true&group=label");
+  });
+
+  it("saves a price later on a row sold without one, for someone who manages money", () => {
+    const soldBare = { status: "sold" as const };
+    expect(statusSavable(soldBare, "sold", "", true)).toBe(false);
+    expect(statusSavable(soldBare, "sold", "150,000", true)).toBe(true);
+    expect(statusSavable(soldBare, "sold", "150,000", false)).toBe(false);
+    expect(statusSavable({ status: "sold", sale_entry_id: "e1" }, "sold", "150,000", true)).toBe(false);
+    expect(statusSavable({ status: "have" }, "have", "", true)).toBe(false);
+    expect(statusSavable({ status: "have" }, "broken", "", false)).toBe(true);
   });
 
   it("links an order line kept track of to its rows once something came", () => {

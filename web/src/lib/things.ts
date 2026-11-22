@@ -65,8 +65,10 @@ export const statusTone = (s: ThingStatus) =>
 export const THINGS_PATH = "/v1/things";
 
 /** The list: with those no longer had or not; always grouped by label. */
-export const thingsPath = (all: boolean) =>
-  `${THINGS_PATH}?${all ? "all=true&" : ""}group=label`;
+export const thingsPath = (all: boolean, line?: string | null) =>
+  line
+    ? `${THINGS_PATH}?line=${encodeURIComponent(line)}&all=true&group=label`
+    : `${THINGS_PATH}?${all ? "all=true&" : ""}group=label`;
 
 /** Where an order line kept track of leads: its rows on Things we have,
  * once something on it came; "" otherwise. */
@@ -80,29 +82,49 @@ export function thingsOfLine(l: {
   return `/money/things?line=${encodeURIComponent(l.id)}`;
 }
 
-/** The rows of one order line (?line=), or all of them. */
+/** The rows of one order line (?line=), or all of them. The server filters
+ * them too; this keeps the page right on a server that does not yet. */
 export const rowsOf = (things: Thing[], line: string | null) =>
   line ? things.filter((t) => t.purchase_line_id === line) : things;
 
+/** How many of these rows are still had, and what they cost. */
+export function hadOf(things: Thing[]): { count: number; total_kobo: number } {
+  let count = 0;
+  let total_kobo = 0;
+  for (const t of things)
+    if (t.status === "have") {
+      count++;
+      total_kobo += t.cost_kobo ?? 0;
+    }
+  return { count, total_kobo };
+}
+
+/** What rows and groups are grouped by, as the server's GroupThings does:
+ * the label's name (a merged label's is its kept label's), any case; ""
+ * for none. A row keeps its own label_id after a merge, so not by id. */
+const groupKey = (labelId: string | null | undefined, label: string | undefined) =>
+  labelId ? (label ?? "").toLowerCase() : "";
+
 /** The rows by label, as the list shows them: the server's groups in its
  * order (the most cost first, Not labelled last), each with its rows.
- * Rows no longer had go under their label too, after those had. */
+ * Rows no longer had go under their label too, after those had. Without
+ * the server's groups, each label's count and total are of its rows had. */
 export function byLabel(
   things: Thing[],
   groups: ThingGroup[] | undefined,
 ): { key: string; label: string; count: number; total_kobo: number; rows: Thing[] }[] {
-  const k = (id: string | null | undefined) => id ?? "";
   const out = (groups ?? []).map((g) => ({
-    key: k(g.label_id),
+    key: groupKey(g.label_id, g.label),
     label: g.label || "Not labelled",
     count: g.count,
     total_kobo: g.total_kobo,
     rows: [] as Thing[],
   }));
   for (const t of things) {
-    let g = out.find((x) => x.key === k(t.label_id));
+    const key = groupKey(t.label_id, t.label);
+    let g = out.find((x) => x.key === key);
     if (!g) {
-      g = { key: k(t.label_id), label: t.label || "Not labelled", count: 0, total_kobo: 0, rows: [] };
+      g = { key, label: t.label || "Not labelled", count: 0, total_kobo: 0, rows: [] };
       // A label with only rows no longer had: before Not labelled.
       const none = out.findIndex((x) => x.key === "");
       if (g.key !== "" && none >= 0) out.splice(none, 0, g);
@@ -110,8 +132,10 @@ export function byLabel(
     }
     g.rows.push(t);
   }
-  for (const g of out)
+  for (const g of out) {
     g.rows.sort((a, b) => Number(b.status === "have") - Number(a.status === "have"));
+    if (!groups) Object.assign(g, hadOf(g.rows));
+  }
   return out.filter((g) => g.rows.length > 0);
 }
 
@@ -209,6 +233,18 @@ export function priceProblem(price: string, canEnterMoney: boolean): string {
   if (Number.isNaN(k) || k <= 0) return "What it sold for is an amount more than ₦0, like 150,000.";
   if (!canEnterMoney) return "Only someone who manages money can record what it sold for. Mark it sold without a price, or ask them.";
   return "";
+}
+
+/** Whether Save can go: a new status, or, on a row sold already without
+ * its sale recorded, a price typed now by someone who manages money. */
+export function statusSavable(
+  t: Pick<Thing, "status" | "sale_entry_id">,
+  status: ThingStatus,
+  price: string,
+  canEnterMoney: boolean,
+): boolean {
+  if (status !== t.status) return true;
+  return status === "sold" && !t.sale_entry_id && canEnterMoney && price.trim() !== "";
 }
 
 /** What the row's change does, said back. */
