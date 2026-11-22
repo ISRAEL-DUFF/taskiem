@@ -123,7 +123,10 @@ Map<String, dynamic> expenseCard() => {
       'label': 'Log another',
       'tool': 'expense',
       'inputs': {'paid': 'Cash'},
+      'token': 'tok-card-0',
     },
+    // Not minted by the server (no token): left out.
+    {'label': 'Old button', 'tool': 'expense'},
   ],
 };
 
@@ -153,6 +156,8 @@ Map<String, dynamic> ticketsList() => {
             'label': 'Assign to me',
             'tool': 'expense',
             'inputs': {'what': 'Ticket ${i + 1}'},
+            'once': true,
+            'token': 'tok-row-$i',
           },
         ],
       },
@@ -171,6 +176,12 @@ class MadeServer {
 
   /// The next start or confirm refused with this status and body.
   ({int status, Map<String, dynamic> body})? refuse;
+
+  /// Buttons someone used first: their 409's words.
+  final taken = <String, String>{};
+
+  /// Buttons gone (expired, or their tool turned off): 404.
+  final gone = <String>{};
   int _runs = 0;
 
   static http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
@@ -200,6 +211,25 @@ class MadeServer {
     return id;
   }
 
+  /// POST /v1/tools/buttons/{token}: the tool a button of the answers
+  /// above opens, and its values (api/tools_buttons.go pressButton).
+  http.Response _press(String token) {
+    final words = taken[token];
+    if (words != null) return _json({'error': words, 'taken_by': 'Ada Obi', 'taken_at': '2026-11-22T09:42:00Z'}, 409);
+    if (gone.contains(token)) return _json({'error': 'this button is not available any more'}, 404);
+    final card = RegExp(r'^tok-card-(\d+)$').firstMatch(token);
+    if (card != null) {
+      final b = (expenseCard()['buttons'] as List)[int.parse(card.group(1)!)] as Map;
+      return _json({'button': token, 'command': b['tool'], 'name': 'Log an expense', 'inputs': b['inputs'], 'once': false});
+    }
+    final row = RegExp(r'^tok-row-(\d+)$').firstMatch(token);
+    if (row != null) {
+      final b = (((ticketsList()['rows'] as List)[int.parse(row.group(1)!)] as Map)['actions'] as List).first as Map;
+      return _json({'button': token, 'command': b['tool'], 'name': 'Log an expense', 'inputs': b['inputs'], 'once': true});
+    }
+    return _json({'error': 'this button is not available any more'}, 404);
+  }
+
   Future<http.Response?> call(http.Request req) async {
     final p = req.url.path;
     if (!p.startsWith('/v1/tools') && !p.startsWith('/v1/runs/') && p != '/v1/me/step-up/options') return null;
@@ -217,6 +247,8 @@ class MadeServer {
       if (list == null) return _json({'error': 'not found'}, 404);
       return _json(list.length > 1 ? list.removeAt(0) : list.first);
     }
+    final b = RegExp(r'^/v1/tools/buttons/([^/]+)$').firstMatch(p);
+    if (b != null) return _press(b.group(1)!);
     final m = RegExp(r'^/v1/tools/([^/]+)/(start|confirm|settings)$').firstMatch(p);
     if (m == null) return _json({'error': 'not found'}, 404);
     final tool = tools.where((t) => t['command'] == m.group(1)).firstOrNull;

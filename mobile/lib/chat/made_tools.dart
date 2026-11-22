@@ -347,20 +347,26 @@ class _SchemaForm extends StatelessWidget {
 typedef MadeStarted = ({String run, List<(String, String)> values});
 
 /// Opens a tool's sheet; it closes with the run it started, or nothing.
-/// [initial] fills its form (a button on an answer, with its inputs).
+/// [initial] fills its form (a button on an answer, with its inputs), and
+/// [button] is that button's token, sent with the start.
 Future<MadeStarted?> showMadeToolSheet(
   BuildContext context, {
   required Auth auth,
   required MadeTool tool,
   Map<String, dynamic> initial = const {},
+  String? button,
   ValueChanged<bool>? onAlwaysAsk,
-}) => showTkSheet<MadeStarted>(context, (_) => MadeToolSheet(auth: auth, tool: tool, initial: initial, onAlwaysAsk: onAlwaysAsk));
+}) => showTkSheet<MadeStarted>(context, (_) => MadeToolSheet(auth: auth, tool: tool, initial: initial, button: button, onAlwaysAsk: onAlwaysAsk));
 
 class MadeToolSheet extends StatefulWidget {
-  const MadeToolSheet({super.key, required this.auth, required this.tool, this.initial = const {}, this.onAlwaysAsk});
+  const MadeToolSheet({super.key, required this.auth, required this.tool, this.initial = const {}, this.button, this.onAlwaysAsk});
   final Auth auth;
   final MadeTool tool;
   final Map<String, dynamic> initial;
+
+  /// The button pressed to open it (its token): the start carries it, so a
+  /// once button is spent by the run it starts (the confirm keeps it).
+  final String? button;
 
   /// An owner switched "Always ask before it runs".
   final ValueChanged<bool>? onAlwaysAsk;
@@ -433,7 +439,7 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
     try {
       final s = await widget.auth.api.startTool(
         command: widget.tool.command,
-        body: StartToolRequest(input: input),
+        body: StartToolRequest(input: input, button: widget.button),
         idempotencyKey: _key,
       );
       if (s.runId != null && s.confirm == null) return _done(s.runId!, s.values);
@@ -807,9 +813,26 @@ String? runWordsOf(MadeRun r) {
   };
 }
 
-/// What a card's or a row's button does: opens the named tool's sheet,
-/// filled with its inputs.
+/// What a card's or a row's button does: pressed by its token, opens the
+/// sheet of the tool the server names, filled with the values it gives.
 typedef OnAnswerButton = void Function(MadeRun run, ToolButton b, String key);
+
+/// The buttons that can be pressed: those the server minted (one without
+/// its token is left out), each with its place among them all.
+List<(int, ToolButton)> pressableButtons(List<ToolButton>? bs) => [
+  for (final (i, b) in (bs ?? const <ToolButton>[]).indexed)
+    if ((b.token ?? '').isNotEmpty) (i, b),
+];
+
+/// Why a button did not open its tool, and whether it is spent (greyed):
+/// someone was first (the server's words: "Already done: taken by Ada at
+/// 10:42 on 22 Nov."), or it is gone.
+({String words, bool spent}) pressRefused(Object e) => switch (e) {
+  ApiError(status: 409) => (words: _sentence(e.message), spent: true),
+  ApiError(status: 404) => (words: 'This button is not available any more.', spent: true),
+  ApiError(status: 403) => (words: 'This tool isn’t yours to use. ${_sentence(e.message)}'.trim(), spent: false),
+  _ => (words: errorWords(e), spent: false),
+};
 
 /// A run's answer that is more than words: a card, a list, or how it
 /// failed, in the chat's card frame.
@@ -864,11 +887,13 @@ class MadeAnswerCard extends StatelessWidget {
 
   Widget _buttons(List<ToolButton> bs, String at) => CardActionRows(
     children: [
-      for (final (i, b) in bs.indexed)
+      for (final (i, b) in pressableButtons(bs))
         () {
           final key = '$at:$i';
-          final used = b.once == true && run.pressed.contains(key);
-          return CardButton(label: b.label, primary: i == 0, onTap: used ? null : () => onButton(run, b, key));
+          final used = run.pressed.contains(key);
+          final button = CardButton(label: b.label, primary: i == 0, onTap: used ? null : () => onButton(run, b, key));
+          // Used, or gone: greyed, as the web greys a button it cannot press.
+          return used ? Opacity(opacity: 0.45, child: button) : button;
         }(),
     ],
   );
@@ -878,7 +903,7 @@ class MadeAnswerCard extends StatelessWidget {
     final title = (a.title ?? '').isEmpty ? run.name : a.title!;
     final amount = a.amountKobo;
     final lines = a.lines ?? const <ToolAnswerLinesItem>[];
-    final buttons = a.buttons ?? const <ToolButton>[];
+    final buttons = [for (final (_, b) in pressableButtons(a.buttons)) b];
     return Semantics(
       container: true,
       label: '${run.name}: $title',
@@ -892,7 +917,7 @@ class MadeAnswerCard extends StatelessWidget {
           ] else
             Text(title, style: tkText(size: 15.5, weight: 600, color: t.text)),
           if (lines.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: TkLines([for (final l in lines) (l.label, l.value)])),
-          if (buttons.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: _buttons(buttons, 'card')),
+          if (buttons.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: _buttons(a.buttons!, 'card')),
         ]),
       ),
     );
@@ -902,7 +927,7 @@ class MadeAnswerCard extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final rows = a.rows ?? const <ToolAnswerRowsItem>[];
     final title = (a.title ?? '').isEmpty ? run.name : a.title!;
-    final more = rows.length > shownRows || rows.any((r) => (r.actions ?? const []).isNotEmpty);
+    final more = rows.length > shownRows || rows.any((r) => pressableButtons(r.actions).isNotEmpty);
     return Semantics(
       container: true,
       label: '${run.name}: $title',
@@ -1016,10 +1041,15 @@ class MadeListPage extends StatelessWidget {
             children: [
               for (final (i, r) in rows.indexed)
                 () {
-                  final acts = r.actions ?? const <ToolButton>[];
+                  // Each with its place among the row's buttons; one
+                  // used (or gone) is not offered again.
+                  final acts = [
+                    for (final (j, b) in pressableButtons(r.actions))
+                      if (!run.pressed.contains('row$i:$j')) (j, b),
+                  ];
                   return TkListRow(
                     title: r.title,
-                    sub: [r.sub ?? '', if (acts.isNotEmpty) acts.map((b) => b.label).join(' · ')].where((s) => s.isNotEmpty).join('\n'),
+                    sub: [r.sub ?? '', if (acts.isNotEmpty) acts.map((a) => a.$2.label).join(' · ')].where((s) => s.isNotEmpty).join('\n'),
                     icon: madeIconFor(run),
                     square: acts.isEmpty ? look.blue : look.teal,
                     status: (r.state?.text ?? '').isEmpty ? null : r.state!.text,
@@ -1029,12 +1059,12 @@ class MadeListPage extends StatelessWidget {
                         ? null
                         : () async {
                             final key = acts.length == 1
-                                ? '0'
-                                : await pickAction(context, title: r.title, actions: [for (final (j, b) in acts.indexed) ('$j', b.label, 'b-bolt', false)]);
+                                ? '${acts.single.$1}'
+                                : await pickAction(context, title: r.title, actions: [for (final (j, b) in acts) ('$j', b.label, 'b-bolt', false)]);
                             if (key == null || !context.mounted) return;
                             final j = int.parse(key);
                             Navigator.of(context).pop();
-                            onButton(run, acts[j], 'row$i:$j');
+                            onButton(run, acts.firstWhere((a) => a.$1 == j).$2, 'row$i:$j');
                           },
                   );
                 }(),

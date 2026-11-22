@@ -547,7 +547,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   /// A tool of the business's own: its sheet, then its run here, its
   /// answer when it ends.
-  Future<void> _openMade(MadeTool tool, {Map<String, dynamic> initial = const {}}) async {
+  /// True when a run was started.
+  Future<bool> _openMade(MadeTool tool, {Map<String, dynamic> initial = const {}, String? button}) async {
     _tools.close();
     unawaited(widget.data.chats.prefs?.rememberTool(madeKey(tool)));
     final got = await showMadeToolSheet(
@@ -555,12 +556,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       auth: widget.data.chats.auth,
       tool: tool,
       initial: initial,
+      button: button,
       onAlwaysAsk: (on) => _tools.setAlwaysAsk(tool.command, on),
     );
-    if (got == null || !mounted) return;
+    if (got == null || !mounted) return false;
     final run = MadeRun(id: got.run, command: tool.command, name: tool.name, values: got.values, at: widget.data.chats.now());
     _runs.add(run);
     _reveal(run);
+    return true;
   }
 
   /// Where each run's answer is drawn, to bring it into sight.
@@ -589,16 +592,37 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     }
   }
 
-  /// A button on an answer: the tool it names, its form filled.
-  void _answerButton(MadeRun run, ToolButton b, String key) {
-    final tool = _tools.made.where((t) => t.command == b.tool).firstOrNull;
+  /// A button on an answer, pressed by its token (made tools M2): the
+  /// tool the server names, its form filled with the values it gives, the
+  /// start carrying the button. A once button greys when its run starts,
+  /// or when someone was first (said in the server's words).
+  Future<void> _answerButton(MadeRun run, ToolButton b, String key) async {
+    final token = b.token;
+    if (token == null || token.isEmpty || _pressing) return;
+    _pressing = true;
+    PressToolButtonResponse p;
+    try {
+      p = await widget.data.chats.auth.api.pressToolButton(button: token);
+    } on Object catch (e) {
+      final no = pressRefused(e);
+      if (no.spent) _runs.pressed(run, key);
+      if (mounted) showTkToast(context, no.words, error: true);
+      return;
+    } finally {
+      _pressing = false;
+    }
+    if (!mounted) return;
+    final tool = _tools.made.where((t) => t.command == p.command).firstOrNull;
     if (tool == null) {
       showTkToast(context, 'That tool isn’t one you can use here.', error: true);
       return;
     }
-    if (b.once == true) _runs.pressed(run, key);
-    unawaited(_openMade(tool, initial: b.inputs ?? const {}));
+    final started = await _openMade(tool, initial: p.inputs, button: token);
+    if (started && p.once) _runs.pressed(run, key);
   }
+
+  /// A button's press on its way: one at a time.
+  bool _pressing = false;
 
   /// A menu row's page, where the app has it as a screen.
   bool _openPage(String path) {

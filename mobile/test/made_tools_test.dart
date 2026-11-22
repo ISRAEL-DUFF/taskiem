@@ -234,6 +234,102 @@ void main() {
     expect(find.text('Ticket 7'), findsOneWidget);
   });
 
+  testWidgets('a button is pressed by its token: the sheet filled from the press, the start carrying the button, and a once button spent', (t) async {
+    final server = await taskiem(t);
+    await open(t, 'Open tickets');
+    await t.tap(find.bySemanticsLabel('Run it'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('See all of Open tickets'));
+    await settle(t);
+    await t.tap(find.text('Rice short by two bags'));
+    await settle(t);
+    expect(server.sent.last.path, '/v1/tools/buttons/tok-row-0', reason: 'pressed by its token');
+    // The tool and values the press gave.
+    expect(find.text('/expense'), findsOneWidget);
+    expect(find.text('Ticket 1'), findsOneWidget);
+    await type(t, 'Amount', '4,500');
+    await t.tap(find.bySemanticsLabel('Next'));
+    await settle(t);
+    final start = server.sent.last;
+    expect(start.path, '/v1/tools/expense/start');
+    expect(start.body['button'], 'tok-row-0');
+    expect(start.body['input'], {'amount': 4500, 'what': 'Ticket 1'});
+    await t.tap(find.bySemanticsLabel('Yes, run it'));
+    await settle(t);
+    expect(server.sent.last.path, '/v1/tools/expense/confirm', reason: 'the confirm keeps the button on the server');
+    // Spent: the row offers it no more.
+    await t.ensureVisible(find.bySemanticsLabel('See all of Open tickets').first);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('See all of Open tickets').first);
+    await settle(t);
+    expect(find.text('Change of address'), findsOneWidget, reason: 'every row');
+    final pressed = server.sent.length;
+    await t.tap(find.text('Rice short by two bags'));
+    await settle(t);
+    expect(server.sent.length, pressed);
+    expect(find.text('/expense'), findsNothing);
+  });
+
+  testWidgets('a once button someone used first says who took it, and greys; one that is gone says so', (t) async {
+    final server = await taskiem(t);
+    await open(t, 'Open tickets');
+    await t.tap(find.bySemanticsLabel('Run it'));
+    await settle(t);
+    server.taken['tok-row-1'] = 'Already done: taken by Ada Obi at 10:42 on 22 Nov.';
+    await t.tap(find.bySemanticsLabel('See all of Open tickets'));
+    await settle(t);
+    await t.tap(find.text('Wrong size delivered'));
+    await t.pump();
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+    await t.pump();
+    expect(find.text('Already done: taken by Ada Obi at 10:42 on 22 Nov.'), findsOneWidget);
+    await snap(t, 'made-taken');
+    expect(find.text('/expense'), findsNothing, reason: 'no sheet');
+    await t.tap(find.bySemanticsLabel('Dismiss'));
+    await settle(t);
+    // Greyed: the row is not pressed again.
+    await t.tap(find.bySemanticsLabel('See all of Open tickets'));
+    await settle(t);
+    expect(find.text('Change of address'), findsOneWidget, reason: 'every row');
+    final pressed = server.sent.length;
+    await t.tap(find.text('Wrong size delivered'));
+    await settle(t);
+    expect(server.sent.length, pressed);
+    expect(find.text('Change of address'), findsOneWidget, reason: 'still on the list');
+    await t.tap(find.bySemanticsLabel(RegExp('Back to Taskiem')).first);
+    await settle(t);
+
+    // A card's button that is gone.
+    await open(t, 'Log an expense');
+    await type(t, 'Amount', '4,500');
+    await type(t, 'What for', 'Diesel for the generator');
+    await t.tap(find.bySemanticsLabel('Next'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Yes, run it'));
+    await settle(t);
+    expect(find.text('Log another'), findsOneWidget);
+    expect(find.text('Old button'), findsNothing, reason: 'a button without its token is left out');
+    server.gone.add('tok-card-0');
+    final card = find.bySemanticsLabel('Log another');
+    await t.ensureVisible(card);
+    await t.pumpAndSettle();
+    await t.tap(card);
+    await t.pump();
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+    await t.pump();
+    expect(find.text('This button is not available any more.'), findsOneWidget);
+    await snap(t, 'made-gone');
+    expect(find.text('/expense'), findsNothing);
+    await t.tap(find.bySemanticsLabel('Dismiss'));
+    await settle(t);
+    await snap(t, 'made-greyed');
+    // Greyed: pressed again, nothing is sent.
+    final sent = server.sent.length;
+    await t.tap(card, warnIfMissed: false);
+    await settle(t);
+    expect(server.sent.length, sent);
+  });
+
   testWidgets('refused: values that do not fit stay on the form; not yours and the limit as toasts', (t) async {
     final server = await taskiem(t);
     await open(t, 'Leave left');
