@@ -796,8 +796,22 @@ func checkTwice(lines []PurchaseLine) error {
 
 // PutNewLinesTx writes a new order's lines (the order is written
 // already), each treated as said on it, else as remembered, else as
-// suggested (treatLinesTx).
+// suggested (treatLinesTx). A remembered tracked line of more than
+// TrackAsk not said yes to (TrackMany) is a *TrackError for the caller to
+// ask.
 func PutNewLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string) error {
+	return putNewLinesTx(ctx, tx, tenant, order, supplier, lines, actor, true)
+}
+
+// PutPlacedLinesTx is PutNewLinesTx for an order someone else placed for
+// the business (a linked supplier), whom nothing about the business's
+// treatment of its items is asked or told (§7): a line that would ask
+// first is recorded and left unconfirmed, for the business to say.
+func PutPlacedLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string) error {
+	return putNewLinesTx(ctx, tx, tenant, order, supplier, lines, actor, false)
+}
+
+func putNewLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string, ask bool) error {
 	link, err := supplierLinkTx(ctx, tx, tenant, supplier, &order)
 	if err != nil {
 		return err
@@ -825,7 +839,7 @@ func PutNewLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.
 			}
 		}
 	}
-	if err := treatLinesTx(ctx, tx, tenant, supplier, link, lines, actor); err != nil {
+	if err := treatLinesTx(ctx, tx, tenant, supplier, link, lines, actor, ask); err != nil {
 		return err
 	}
 	if err := checkTwice(lines); err != nil {
@@ -1214,7 +1228,7 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	key = FitKey(key)
 	// A receipt already made answers as it did, whatever the order's
 	// status now (the receipt may have completed it).
-	if done, err := receiptMadeTx(ctx, tx, tenant, "purchase.received", x.Reference, key); err != nil || done {
+	if done, err := receiptMadeTx(ctx, tx, tenant, id, "received", key); err != nil || done {
 		return x, nil, err
 	}
 	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
@@ -1323,14 +1337,18 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 	return out, moves, err
 }
 
-// receiptMadeTx reports whether a receipt (or an adjustment) of an order
-// was made under key: its audit entry, written in its own transaction,
-// names the key.
-func receiptMadeTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, action, ref, key string) (bool, error) {
-	var done bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM audit_log WHERE tenant_id = $1 AND action = $2 AND target = $3 AND detail->>'key' = $4)`,
-		tenant, action, ref, key).Scan(&done)
-	return done, err
+// receiptMadeTx keeps the key of a receipt (kind received) or an
+// adjustment (short_adjusted) of an order, in the transaction making it,
+// and reports whether one was made under that key already: then nothing
+// is kept, and the caller makes nothing. The row is the receipt's (it
+// rolls back with it), on purchase_receipts' key (migration 00504).
+func receiptMadeTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, kind, key string) (bool, error) {
+	tag, err := tx.Exec(ctx, `INSERT INTO purchase_receipts (tenant_id, purchase_order_id, kind, key) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+		tenant, order, kind, key)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 0, nil
 }
 
 // LinkReceiptKey starts the idempotency key of a receipt made by the
@@ -1357,7 +1375,7 @@ func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts 
 		return x, nil, fmt.Errorf("%w: a count for each of the %d items", ErrPurchase, len(x.Lines))
 	}
 	key = FitKey(key)
-	if done, err := receiptMadeTx(ctx, tx, tenant, "purchase.short_adjusted", x.Reference, key); err != nil || done {
+	if done, err := receiptMadeTx(ctx, tx, tenant, id, "short_adjusted", key); err != nil || done {
 		return x, nil, err
 	}
 	var moves []Movement

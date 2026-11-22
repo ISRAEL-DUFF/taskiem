@@ -91,6 +91,11 @@ type PurchaseLine struct {
 	// memory of the item, and not remembered.
 	Suggested bool `json:"-"`
 	order     uuid.UUID
+	// known: the business has a memory of the item. toConfirm: its
+	// remembered treatment asked for a yes no one could give when the line
+	// was written (a supplier placed the order), so the line is recorded
+	// meanwhile and reads Unconfirmed.
+	known, toConfirm bool
 }
 
 // LineChoice is how a line is to be treated, as the business says it.
@@ -177,17 +182,14 @@ func checkChoiceTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *LineChoi
 	return nil
 }
 
-// sqlNameKey is NameKey in SQL, as supplier_items' CHECK makes it.
-const sqlNameKey = `lower(regexp_replace(btrim(%s), '\s+', ' ', 'g'))`
-
 // lineCols reads a line, with whether the business has a memory of it:
 // item_links by the linked supplier's item, else supplier_items by the
 // name.
 var lineCols = `l.id, l.purchase_order_id, l.position, l.name, l.unit, l.quantity, l.cost_kobo, l.received, l.delivered, l.treatment, l.stock_item_id, l.uses,
-	l.label_id, l.seller_item_id,
+	l.label_id, l.seller_item_id, l.to_confirm,
 	CASE WHEN l.seller_item_id IS NOT NULL AND COALESCE(o.link_id, s.link_id) IS NOT NULL
 	  THEN EXISTS (SELECT 1 FROM item_links m WHERE m.tenant_id = l.tenant_id AND m.link_id = COALESCE(o.link_id, s.link_id) AND m.seller_item_id = l.seller_item_id)
-	  ELSE EXISTS (SELECT 1 FROM supplier_items m WHERE m.tenant_id = l.tenant_id AND m.supplier_id = o.supplier_id AND m.name_key = ` + fmt.Sprintf(sqlNameKey, "l.name") + `) END`
+	  ELSE EXISTS (SELECT 1 FROM supplier_items m WHERE m.tenant_id = l.tenant_id AND m.supplier_id = o.supplier_id AND m.name_key = l.name_key) END`
 
 const lineFrom = ` FROM purchase_lines l JOIN purchase_orders o ON o.tenant_id = l.tenant_id AND o.id = l.purchase_order_id
 	JOIN suppliers s ON s.tenant_id = o.tenant_id AND s.id = o.supplier_id`
@@ -197,13 +199,14 @@ func scanLine(r pgx.CollectableRow) (PurchaseLine, error) {
 	var seller *string
 	var known bool
 	if err := r.Scan(&l.ID, &l.order, &l.Position, &l.Item, &l.Unit, &l.Quantity, &l.CostKobo, &l.Received, &l.Delivered, &l.Treatment, &l.StockItemID, &l.Uses,
-		&l.LabelID, &seller, &known); err != nil {
+		&l.LabelID, &seller, &l.toConfirm, &known); err != nil {
 		return l, err
 	}
 	if seller != nil {
 		l.SellerItemID = *seller
 	}
-	l.Unconfirmed = !known && l.Received == 0
+	l.known = known
+	l.Unconfirmed = (!known || l.toConfirm) && l.Received == 0
 	l.ItemID = l.itemKey()
 	return l, nil
 }
@@ -248,10 +251,13 @@ func insertLinesTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, line
 		if l.Treatment == "" {
 			l.Treatment = Record
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO purchase_lines (id, tenant_id, purchase_order_id, position, name, unit, quantity, cost_kobo, treatment,
-			stock_item_id, uses, label_id, seller_item_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			uuid.Must(uuid.NewV7()), tenant, order, i, cut(l.Item, 200), cut(l.Unit, 40), l.Quantity, l.CostKobo, l.Treatment, l.StockItemID, max(l.Uses, 1),
-			l.LabelID, seller); err != nil {
+		// The name's key is the engine's (NameKey), the one the memory of
+		// a supplier's item is kept by.
+		name := cut(l.Item, 200)
+		if _, err := tx.Exec(ctx, `INSERT INTO purchase_lines (id, tenant_id, purchase_order_id, position, name, name_key, unit, quantity, cost_kobo, treatment,
+			stock_item_id, uses, label_id, seller_item_id, to_confirm) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			uuid.Must(uuid.NewV7()), tenant, order, i, name, NameKey(name), cut(l.Unit, 40), l.Quantity, l.CostKobo, l.Treatment, l.StockItemID, max(l.Uses, 1),
+			l.LabelID, seller, l.toConfirm); err != nil {
 			return err
 		}
 	}
@@ -263,8 +269,12 @@ func insertLinesTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, line
 // the order given: a line left out is taken off the order, and those kept
 // are numbered again from 0. Their treatments stay, but a tracked line
 // grown past MaxTracked is recorded instead (nothing was received on it).
-// The order is read in the transaction's scope, by id.
+// The order is read in the transaction's scope, by id. An order keeps at
+// least one line: an empty list is refused.
 func SaveLinesTx(ctx context.Context, tx pgx.Tx, order uuid.UUID, lines []PurchaseLine) error {
+	if len(lines) == 0 {
+		return fmt.Errorf("%w: an order keeps at least one line; cancel it instead", ErrPurchase)
+	}
 	keep := make([]uuid.UUID, len(lines))
 	for i, l := range lines {
 		keep[i] = l.ID
@@ -451,6 +461,17 @@ func rememberTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID, link
 	return SetSupplierItemTx(ctx, tx, tenant, supplier, l.Item, c, actor)
 }
 
+// goSpaces is, as a regular expression class, every rune Go's
+// unicode.IsSpace (so NameKey) takes for a space.
+const goSpaces = `[\t\n\v\f\r \u0085   -     　]`
+
+// mayBeKey is a SQL test, with $2 a NameKey, that col may have that key:
+// every name whose NameKey it is passes (and some others, which the
+// caller drops by NameKey).
+func mayBeKey(col string) string {
+	return fmt.Sprintf(`regexp_replace(lower(%s), '%s+', '', 'g') = regexp_replace(lower($2), '%s+', '', 'g')`, col, goSpaces, goSpaces)
+}
+
 // SuggestTx is Taskiem's guess at how to treat an item of a name the
 // business has no memory of (§6), never a decision: a stock item of that
 // name: add to it; the business has kept track of things of that name
@@ -459,26 +480,57 @@ func rememberTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID, link
 func SuggestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string) (LineChoice, error) {
 	c := LineChoice{Treatment: Record, Uses: 1}
 	key := NameKey(name)
-	var item *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM stock_items WHERE tenant_id = $1 AND retired_at IS NULL AND `+fmt.Sprintf(sqlNameKey, "name")+` = $2
-		ORDER BY created_at LIMIT 1`, tenant, key).Scan(&item)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if key == "" {
+		return c, nil
+	}
+	// Stock items and Things we have keep no key of their own: those whose
+	// names may be it are found in SQL (spaces of any kind dropped, both
+	// lowered there), and kept only when their NameKey is it.
+	type named struct {
+		ID   uuid.UUID
+		Name string
+	}
+	byName := func(q string) ([]named, error) {
+		rows, err := tx.Query(ctx, q, tenant, key)
+		if err != nil {
+			return nil, err
+		}
+		list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[named])
+		if err != nil {
+			return nil, err
+		}
+		out := list[:0]
+		for _, n := range list {
+			if NameKey(n.Name) == key {
+				out = append(out, n)
+			}
+		}
+		return out, nil
+	}
+	items, err := byName(`SELECT id, name FROM stock_items WHERE tenant_id = $1 AND retired_at IS NULL AND ` + mayBeKey("name") + ` ORDER BY created_at LIMIT 20`)
+	if err != nil {
 		return c, err
 	}
 	var tracked bool
-	if item == nil {
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM purchase_lines WHERE tenant_id = $1 AND treatment = 'track' AND `+fmt.Sprintf(sqlNameKey, "name")+` = $2)
-			OR EXISTS (SELECT 1 FROM kept_things WHERE tenant_id = $1 AND `+fmt.Sprintf(sqlNameKey, "name")+` = $2)`, tenant, key).Scan(&tracked); err != nil {
+	if len(items) == 0 {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM purchase_lines WHERE tenant_id = $1 AND treatment = 'track' AND name_key = $2)`, tenant, key).Scan(&tracked); err != nil {
 			return c, err
+		}
+		if !tracked {
+			kept, err := byName(`SELECT id, name FROM kept_things WHERE tenant_id = $1 AND ` + mayBeKey("name") + ` LIMIT 20`)
+			if err != nil {
+				return c, err
+			}
+			tracked = len(kept) > 0
 		}
 	}
 	switch {
-	case item != nil:
-		c.Treatment, c.StockItemID = AddToStock, item
+	case len(items) > 0:
+		c.Treatment, c.StockItemID = AddToStock, &items[0].ID
 	case tracked:
 		c.Treatment = Track
 	}
-	err = tx.QueryRow(ctx, `SELECT label_id FROM purchase_lines WHERE tenant_id = $1 AND label_id IS NOT NULL AND `+fmt.Sprintf(sqlNameKey, "name")+` = $2
+	err = tx.QueryRow(ctx, `SELECT label_id FROM purchase_lines WHERE tenant_id = $1 AND label_id IS NOT NULL AND name_key = $2
 		ORDER BY created_at DESC LIMIT 1`, tenant, key).Scan(&c.LabelID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return c, err
@@ -491,8 +543,11 @@ func SuggestTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string) (L
 // item: the first time is the confirmation), else as remembered, else as
 // suggested (to be confirmed). A remembered or suggested tracked line of
 // more than MaxTracked is recorded, and a suggested one of more than
-// TrackAsk too; a remembered one of more than TrackAsk asks first.
-func treatLinesTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID, link *uuid.UUID, lines []PurchaseLine, actor string) error {
+// TrackAsk too; a remembered one of more than TrackAsk asks first when
+// the caller can ask (ask), else is recorded and left unconfirmed, for the
+// business to say: whoever placed the order (a linked supplier) never
+// learns how the business treats the item (§7).
+func treatLinesTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID, link *uuid.UUID, lines []PurchaseLine, actor string, ask bool) error {
 	for i := range lines {
 		l := &lines[i]
 		mem, known, err := memoryOfTx(ctx, tx, tenant, supplier, link, *l)
@@ -531,6 +586,9 @@ func treatLinesTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID, li
 		}
 		if mem.Treatment == Track && l.Quantity > MaxTracked {
 			mem.Treatment = Record
+		}
+		if known && !ask && mem.Treatment == Track && l.Quantity > TrackAsk && !l.TrackMany {
+			mem.Treatment, l.toConfirm = Record, true
 		}
 		mem.TrackMany = l.TrackMany
 		if err := checkChoiceTx(ctx, tx, tenant, &mem, l.Item, i, l.Quantity); err != nil {
@@ -581,11 +639,11 @@ func SetLineTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, position in
 			return x, fmt.Errorf("%w: %s goes into that stock item already on %s", ErrPurchase, o.Item, x.Reference)
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE purchase_lines SET treatment = $3, stock_item_id = $4, uses = $5, label_id = $6 WHERE tenant_id = $1 AND id = $2`,
+	if _, err := tx.Exec(ctx, `UPDATE purchase_lines SET treatment = $3, stock_item_id = $4, uses = $5, label_id = $6, to_confirm = false WHERE tenant_id = $1 AND id = $2`,
 		tenant, l.ID, l.Treatment, l.StockItemID, l.Uses, l.LabelID); err != nil {
 		return x, err
 	}
-	if remember || l.Unconfirmed {
+	if remember || !l.known {
 		link, err := supplierLinkTx(ctx, tx, tenant, x.SupplierID, &x.ID)
 		if err != nil {
 			return x, err

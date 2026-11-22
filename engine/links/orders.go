@@ -1502,6 +1502,11 @@ func AcceptChangeTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, by Acto
 		lines = append(lines, l)
 		total += l.Quantity * l.CostKobo
 	}
+	if len(lines) == 0 {
+		// Nothing of it can come: a confirmed order of no lines is no
+		// order. Cancel it instead.
+		return nil, fmt.Errorf("%w: their answer leaves nothing on %s; cancel it instead", ErrState, p.Reference)
+	}
 	if err := stock.SaveLinesTx(ctx, tx, id, lines); err != nil {
 		return nil, err
 	}
@@ -2033,7 +2038,7 @@ func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUI
 		po, buyer, ref, supplier, total, note, "link:"+name, "link-proposed:"+id.String(), link); err != nil {
 		return o, nil, err
 	}
-	if err := stock.PutNewLinesTx(ctx, tx, buyer, po, supplier, pl, "link:"+name); err != nil {
+	if err := stock.PutPlacedLinesTx(ctx, tx, buyer, po, supplier, pl, "link:"+name); err != nil {
 		return o, nil, err
 	}
 	return o, &Told{Tenant: buyer, Event: "proposed", Reference: ref, From: name, Order: id, Purchase: po, Link: link, FromTenant: seller}, nil
