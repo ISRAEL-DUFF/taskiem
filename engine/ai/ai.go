@@ -3,7 +3,8 @@
 // self-hosted open models, so the builder (engine/ai/builder) never talks
 // to a vendor SDK directly.
 //
-// The layer is deliberately powerless. It turns text into text: it holds
+// The layer is deliberately powerless. It turns text (and, where a
+// business allowed it, a photo to read: Message.Images) into text: it holds
 // no vault, no database handle, no connector handlers and no principal,
 // and its import graph is tested to exclude the secrets vault, the
 // runtime's workers, approvals and the API (see imports_test.go). Every
