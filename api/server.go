@@ -790,6 +790,12 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermWorkflowEdit), s.tenantCode).Post("/code/compile", s.compileCode)
 
 			r.With(s.need(PermRunStart)).Post("/workflows/{wf}/runs", s.startRun)
+			// Your tools (decision 0070, made tools M1).
+			r.With(s.need(PermRunStart)).Get("/tools", s.listTools)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/start", s.startToolRoute)
+			r.With(s.need(PermRunStart)).Post("/tools/{command}/confirm", s.confirmToolRoute)
+			r.With(s.need(PermRunStart)).Put("/tools/{command}/settings", s.setToolSettings)
+			r.Get("/runs/{run}/answer", s.runAnswer)
 			r.With(s.need(PermRunRead)).Get("/runs", s.listRuns)
 			r.With(s.need(PermRunRead)).Get("/dashboard", s.dashboard)
 			r.With(s.need(PermRunRead)).Get("/runs/{run}", s.getRun)

@@ -52,7 +52,7 @@ func (s *Server) deployTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, 
 	if err := storefrontAnswersDeployable(ctx, tx, d); err != nil {
 		return err
 	}
-	if err := toolDeployable(ctx, tx, wf, env, d); err != nil {
+	if err := s.writeToolIndex(ctx, tx, tenant, wf, env, v, d); err != nil {
 		return err
 	}
 	// Capability steps must be able to run on this environment's

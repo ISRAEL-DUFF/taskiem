@@ -46,6 +46,9 @@ servers:
 - url: /
   description: The deployment the web app is served from (TASKIEM_PUBLIC_URL)
 tags:
+- name: Tools
+  description: Your tools (decision 0070, made tools) — a business's workflows started from the chat by a command, with an answer drawn from their outputs.
+  x-taskiem-guide: tools
 - name: Authentication
   description: Signing in and out, passwords, passkeys, single sign-on and self-serve signup.
   x-taskiem-guide: governance
@@ -33825,6 +33828,34 @@ paths:
                 $ref: '#/components/schemas/RunList'
         default:
           $ref: '#/components/responses/Error'
+  /v1/runs/{run}/answer:
+    get:
+      operationId: getRunAnswer
+      tags:
+      - Tools
+      summary: A run's answer
+      description: The answer of a tool's run, drawn from its outputs when it is asked for (text, card or list), masked as messages are; outcome while it runs, waits or failed, and for a run of no tool. For whoever may read runs or started it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Run id
+      responses:
+        '200':
+          description: The answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/runs/{run}:
     get:
       operationId: getRun
@@ -36776,6 +36807,202 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools:
+    get:
+      operationId: listTools
+      tags:
+      - Tools
+      summary: Your tools
+      description: The business's tools the caller may use (decision 0070, made tools M1) in the environment, each with its inputs and its care (answers at once, asks yes, or asks yes and a passkey).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The environment (prod by default)
+      responses:
+        '200':
+          description: The tools
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - tools
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tool'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools/{command}/start:
+    post:
+      operationId: startTool
+      tags:
+      - Tools
+      summary: Start a tool
+      description: 'Its values checked against its form, then its care: a tool whose steps only read starts at once (201, with the values as read, the echo); any other answers 200 with a confirm and the values to show, to send back with the same values. Held to the workflow''s roles. An Idempotency-Key header makes a start at once safe to retry.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes a start at once safe to retry: the same key answers the same run'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: object
+                environment:
+                  type: string
+      responses:
+        '201':
+          description: Started at once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolStart'
+        '200':
+          description: Waiting for its yes (and a passkey, for a tool that moves money)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolStart'
+        '422':
+          description: The values do not fit the tool's form
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  problems:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools/{command}/confirm:
+    post:
+      operationId: confirmTool
+      tags:
+      - Tools
+      summary: Confirm a tool's start
+      description: The run a start waited for, once, with the same values, by the same person, within ten minutes. A tool that moves money takes a passkey for operation tool.start and target tool:<command> (403 step_up otherwise).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - confirm
+              properties:
+                confirm:
+                  type: string
+                  format: uuid
+                input:
+                  type: object
+                environment:
+                  type: string
+                passkey:
+                  type: object
+                totp:
+                  type: string
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolRun'
+        '200':
+          description: Started before, by this confirm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolRun'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/tools/{command}/settings:
+    put:
+      operationId: setToolSettings
+      tags:
+      - Tools
+      summary: Make a tool more careful
+      description: An owner makes a tool always ask yes before it runs, never less careful than its steps.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The tool's command
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - always_ask
+              properties:
+                always_ask:
+                  type: boolean
+                environment:
+                  type: string
+      responses:
+        '204':
+          description: Saved
         default:
           $ref: '#/components/responses/Error'
   /v1/templates:
@@ -40920,6 +41147,197 @@ components:
           description: Whether newer edits were merged in.
         problems:
           $ref: '#/components/schemas/Problems'
+    Tool:
+      type: object
+      required:
+      - workflow_id
+      - environment
+      - version
+      - command
+      - name
+      - about
+      - says
+      - care
+      - always_ask
+      properties:
+        workflow_id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+        version:
+          type: integer
+        command:
+          type: string
+        name:
+          type: string
+        about:
+          type: string
+        says:
+          type: array
+          items:
+            type: string
+        icon:
+          type: string
+        care:
+          type: object
+          required:
+          - level
+          properties:
+            level:
+              type: string
+              enum:
+              - answers
+              - 'yes'
+              - step_up
+            because:
+              type: array
+              items:
+                type: string
+        answer:
+          type: string
+          description: text, card or list; left out when the tool answers with how its run ended
+        always_ask:
+          type: boolean
+        inputs:
+          type: object
+          description: The tool's inputs schema, for its form
+    ToolStart:
+      type: object
+      required:
+      - care
+      - values
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        care:
+          type: string
+          enum:
+          - answers
+          - 'yes'
+          - step_up
+        confirm:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        created:
+          type: boolean
+        values:
+          type: array
+          items:
+            type: object
+            required:
+            - name
+            - label
+            - value
+            properties:
+              name:
+                type: string
+              label:
+                type: string
+              value:
+                type: string
+    ToolRun:
+      type: object
+      required:
+      - run_id
+      - created
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        created:
+          type: boolean
+    ToolAnswer:
+      type: object
+      required:
+      - status
+      - type
+      properties:
+        status:
+          type: string
+        type:
+          type: string
+          enum:
+          - outcome
+          - text
+          - card
+          - list
+        tool:
+          type: string
+        text:
+          type: string
+        title:
+          type: string
+        ref:
+          type: string
+        state:
+          $ref: '#/components/schemas/ToolAnswerState'
+        lines:
+          type: array
+          items:
+            type: object
+            required:
+            - label
+            - value
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        amount_kobo:
+          type: integer
+        buttons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolButton'
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - title
+            properties:
+              title:
+                type: string
+              sub:
+                type: string
+              state:
+                $ref: '#/components/schemas/ToolAnswerState'
+              actions:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ToolButton'
+        empty:
+          type: string
+        error:
+          type: string
+    ToolAnswerState:
+      type: object
+      required:
+      - text
+      properties:
+        text:
+          type: string
+        tone:
+          type: string
+    ToolButton:
+      type: object
+      required:
+      - label
+      - tool
+      properties:
+        label:
+          type: string
+        tool:
+          type: string
+        inputs:
+          type: object
+        once:
+          type: boolean
     VersionDetail:
       type: object
       required:
