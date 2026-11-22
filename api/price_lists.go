@@ -193,6 +193,9 @@ func (s *Server) putPriceListItems(w http.ResponseWriter, r *http.Request) {
 		case !ok:
 			s.fail(w, r, fmt.Errorf("%w: %q is not one of your items", errBadRequest, x.ItemID))
 			return
+		case it.Material:
+			s.fail(w, r, fmt.Errorf("%w: %s is not sold: only products go on a price list", errBadRequest, it.Name))
+			return
 		case it.VariantOf != "":
 			s.fail(w, r, fmt.Errorf("%w: %s is a size or colour: put its product on the list, and its sizes and colours come with it", errBadRequest, it.Name))
 			return

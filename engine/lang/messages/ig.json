@@ -4443,10 +4443,6 @@
       "text": "Ọ ga-apụta na peeji gị ozugbo o nwere ọnụ ahịa: zipu *price {name} 9500*.",
       "reviewed": false
     },
-    "wa.stock.waiting": {
-      "text": "Edekọọla maka *{name}*. Ọ ga-eru tebụl products gị n'oge na-adịghị anya.",
-      "reviewed": false
-    },
     "wa.stock.now": {
       "text": "Emechala: *{name}* bụ {count} ugbu a.",
       "reviewed": false

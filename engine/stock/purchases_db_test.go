@@ -31,13 +31,8 @@ func TestPurchaseOrders(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 0, "indomie": 0, "garri": 0})
 	p := w.purchases()
-	var costs []stock.Cost
-	p.Cost = func(_ context.Context, _ uuid.UUID, row string, kobo int64, _ string) error {
-		costs = append(costs, stock.Cost{ItemID: row, Kobo: kobo})
-		return nil
-	}
-	w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(3)}).ID)
-	w.apply(w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(4)}).ID)
+	w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(3)})
+	w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(4)})
 
 	var dangote stock.Supplier
 	w.in(func(tx pgx.Tx) error {
@@ -157,9 +152,16 @@ func TestPurchaseOrders(t *testing.T) {
 	if err != nil || po.Status != stock.FullReceived || po.ReceivedAt == nil || po.ReceivedKobo != po.TotalKobo || w.tb.count("indomie") != 50 {
 		t.Fatalf("all: %+v %v", po, err)
 	}
-	if len(costs) != 3 || costs[1] != (stock.Cost{ItemID: "indomie", Kobo: 850000}) {
-		t.Fatalf("costs: %+v", costs)
-	}
+	// Each stock item's cost price is the order's, set with the receipt.
+	w.in(func(tx pgx.Tx) error {
+		for row, want := range map[string]int64{"rice": 4000000, "indomie": 850000} {
+			x, err := stock.StockItemTx(ctx, tx, w.env.Tenant, w.items[row])
+			if err != nil || x.CostKobo == nil || *x.CostKobo != want {
+				t.Errorf("%s cost: %+v %v", row, x.CostKobo, err)
+			}
+		}
+		return nil
+	})
 	// The receipt that completed it, retried (its answer lost): the same
 	// answer, not "received already"; a key's _ is no wildcard.
 	if again, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"rice": 7, "indomie": 46}, "user:owner", "r2"); err != nil ||

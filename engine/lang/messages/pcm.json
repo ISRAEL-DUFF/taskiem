@@ -4443,10 +4443,6 @@
       "text": "E go show for your page once e get price: send *price {name} 9500*.",
       "reviewed": false
     },
-    "wa.stock.waiting": {
-      "text": "E don record for *{name}*. E go reach your products table soon.",
-      "reviewed": false
-    },
     "wa.stock.now": {
       "text": "E don do: *{name}* na {count} now.",
       "reviewed": false

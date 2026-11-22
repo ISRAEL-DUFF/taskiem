@@ -217,7 +217,7 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Moveme
 	to, short := target(n, mv)
 	m, err := scanMovement(tx.QueryRow(ctx, `INSERT INTO stock_movements (id, tenant_id, stock_item_id, item, reason, delta, set_to, count_before, count_after, change,
 			short, note, reference, actor, key, cost_kobo)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9 - $8, $10, NULLIF($11, ''), NULLIF($12, ''), $13, $14, $15) RETURNING `+movementCols,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::bigint, $9::bigint, $9::bigint - $8::bigint, $10, NULLIF($11, ''), NULLIF($12, ''), $13, $14, $15) RETURNING `+movementCols,
 		uuid.Must(uuid.NewV7()), tenant, c.StockItemID, cut(mv.Item, 200), mv.Reason, mv.Delta, mv.SetTo, n, to, short, mv.Note, mv.Reference, mv.Actor, mv.Key, mv.CostKobo))
 	if err != nil {
 		return m, err

@@ -728,12 +728,8 @@ func stockOf(it stock.Item) int64 {
 	return *it.Stock
 }
 
-// stockDone says a movement landed (the count now), or that it is on its
-// way to the table.
+// stockDone says a movement was made: the count now.
 func stockDone(c *chat, sh *chatShop, m stock.Movement) string {
-	if m.Status != "done" {
-		return c.t("wa.stock.waiting", "name", whatsapp.SafeText(sh.Name))
-	}
 	it := stock.Item{Unit: sh.StockChat.Shown}
 	return c.t("wa.stock.now", "name", whatsapp.SafeText(sh.Name), "count", whatsapp.SafeText(it.Quantity(*m.After)))
 }
@@ -762,7 +758,7 @@ func (s *Server) stockChatFail(ctx context.Context, c *chat, err error) error {
 func (s *Server) shopCountItem(ctx context.Context, c *chat, sf storefront.Storefront) error {
 	sh := c.data.Shop
 	n := *sh.Stock
-	m, err := s.stockMove(s.waTablesCtx(ctx, c), c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Count, SetTo: &n,
+	_, err := s.stockMove(s.waTablesCtx(ctx, c), c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Count, SetTo: &n,
 		Actor: c.p.Actor(), Key: "wa-" + sh.Nonce}, func(tx pgx.Tx, action, target string, detail map[string]any) error {
 		return waAudit(ctx, tx, c.ch.Name(), c.p, action, target, detail)
 	})
@@ -771,9 +767,6 @@ func (s *Server) shopCountItem(ctx context.Context, c *chat, sf storefront.Store
 	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
-	}
-	if m.Status != "done" {
-		return c.say(ctx, s, c.t("wa.stock.waiting", "name", whatsapp.SafeText(sh.Name)))
 	}
 	return c.say(ctx, s, c.t("wa.shop.changed", "name", whatsapp.SafeText(sh.Name))+" "+s.shopPublishedNote(c, sf))
 }
@@ -839,12 +832,24 @@ func (s *Server) waStockSale(ctx context.Context, c *chat, args string) error {
 	if !ok || err != nil {
 		return err
 	}
+	items = sold(items)
 	paid := said.PaidHow
 	if said, ok = saleSaid(args, items); !ok {
 		return c.say(ctx, s, c.t("wa.sale.how"))
 	}
 	said.PaidHow = paid // on credit, as found above
 	return s.saleFrom(ctx, c, &saleAsk{Said: said, Customer: customer, CustomerKey: customerKey, CustomerID: customerID})
+}
+
+// sold is the items that can be sold: the products, not the materials.
+func sold(items []stock.Item) []stock.Item {
+	out := make([]stock.Item, 0, len(items))
+	for _, it := range items {
+		if !it.Material {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // saleSaid reads a sale's words as the catalogue has its items: a size
@@ -893,6 +898,7 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 	if !ok || err != nil {
 		return err
 	}
+	items = sold(items)
 	byID := map[string]stock.Item{}
 	for _, it := range items {
 		byID[it.ID] = it

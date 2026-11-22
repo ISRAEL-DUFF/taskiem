@@ -4443,10 +4443,6 @@
       "text": "Yóò hàn lórí ojú-ìwé rẹ nígbà tí ó bá ní iye owó: fi *price {name} 9500* ránṣẹ́.",
       "reviewed": false
     },
-    "wa.stock.waiting": {
-      "text": "A ti kọ ọ́ sílẹ̀ fún *{name}*. Yóò dé tábìlì products rẹ láìpẹ́.",
-      "reviewed": false
-    },
     "wa.stock.now": {
       "text": "Ó ti parí: *{name}* jẹ́ {count} báyìí.",
       "reviewed": false

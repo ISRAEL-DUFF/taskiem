@@ -5249,11 +5249,6 @@
       "reviewed": true,
       "context": "After adding an item with no selling price"
     },
-    "wa.stock.waiting": {
-      "text": "Recorded for *{name}*. It reaches your products table shortly.",
-      "reviewed": true,
-      "context": "A stock change recorded that has not reached the table yet"
-    },
     "wa.stock.now": {
       "text": "Done: *{name}* is {count} now.",
       "reviewed": true,

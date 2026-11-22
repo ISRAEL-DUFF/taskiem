@@ -1,8 +1,8 @@
-# The stock platform connector (docs/stock.md, decision 0057): a shop's
-# items and their stock, as its catalogue table holds them, and the
-# movements that explain each count. It acts on Taskiem's own records and
-# the business's catalogue, for the run's tenant only, and needs no
-# connection. Sales and orders move stock themselves; adjust, receive and
+# The stock platform connector (docs/stock.md, decisions 0057 and 0070):
+# a business's stock items, kept by Taskiem apart from the products it
+# sells, the products each counted by one, and the movements that explain
+# each count. It acts on Taskiem's own records and the business's
+# catalogue, for the run's tenant only, and needs no connection. Sales and orders move stock themselves; adjust, receive and
 # count are the changes a workflow makes.
 manifest: connector/v1
 id: stock
@@ -15,7 +15,7 @@ auth:
 actions:
   list_items:
     title: List items and their stock
-    description: The business's items with their stock, unit, prices, reorder and target levels and supplier, read from the catalogue table itself. low lists only those at or below their reorder level (each with suggest, how many to order); supplier and name narrow the list (name matches part of it, any case).
+    description: The business's items with their stock, unit, prices, reorder and target levels and supplier. An item is a product of the catalogue, with the stock item it is counted by when it is counted, or a material (material true), a stock item no product is counted by. low lists only those at or below their reorder level (each with suggest, how many to order); supplier and name narrow the list (name matches part of it, any case).
     class: read
     input:
       type: object
@@ -30,7 +30,7 @@ actions:
         count: { type: integer }
   get_item:
     title: Read an item's stock
-    description: One item by its catalogue row id.
+    description: One item by its id (a product's catalogue row id, or a material's stock item id).
     class: read
     input:
       type: object
@@ -40,9 +40,11 @@ actions:
     output:
       type: object
       properties:
-        id:            { type: string }
+        id:            { type: string, description: A product's catalogue row id, or a material's stock item id }
+        stock_item_id: { type: string, description: The stock item that counts it; absent for a product not counted }
+        material:      { type: boolean, description: A stock item no product is counted by }
         name:          { type: string }
-        stock:         { type: integer, description: Absent when the row holds no count }
+        stock:         { type: integer, description: Absent when it is not counted }
         unit:          { type: string }
         price_kobo:    { type: integer }
         cost_kobo:     { type: integer, description: The last price paid for one }
@@ -53,7 +55,7 @@ actions:
         suggest:       { type: integer, description: How many to order when low }
   adjust:
     title: Adjust an item's stock
-    description: Changes an item's stock by change (never below zero), with a note saying why (spoilt, found, a gift). Recorded as a movement before it reaches the catalogue table; status is done, or pending while the table is out of reach (it is sent again).
+    description: Changes an item's stock by change (never below zero), with a note saying why (spoilt, found, a gift). Recorded as a movement on the item's stock item, with its count, at once. A product not counted yet starts being counted.
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -255,7 +257,7 @@ actions:
       type: object
       properties:
         id:     { type: string, description: An item's row id; empty for every item }
-        reason: { type: string, enum: [order, sale, received, adjustment, count, outside] }
+        reason: { type: string, enum: [order, sale, received, adjustment, count, moved] }
         since:  { type: string, description: RFC 3339 }
         limit:  { type: integer, minimum: 1, maximum: 500 }
     output:
@@ -267,11 +269,10 @@ actions:
             type: object
             properties:
               id:        { type: string }
-              item_id:   { type: string }
+              item_id:   { type: string, description: The stock item that moved }
               item:      { type: string }
               reason:    { type: string }
-              status:    { type: string, enum: [pending, done, void] }
-              change:    { type: integer, description: What landed, once done }
+              change:    { type: integer }
               before:    { type: integer }
               after:     { type: integer }
               short:     { type: integer, description: What a decrease asked for beyond the stock }

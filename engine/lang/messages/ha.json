@@ -4443,10 +4443,6 @@
       "text": "Zai bayyana a shafinka idan yana da farashi: aika *price {name} 9500*.",
       "reviewed": false
     },
-    "wa.stock.waiting": {
-      "text": "An rubuta don *{name}*. Zai isa teburin products ɗinka nan ba da daɗewa ba.",
-      "reviewed": false
-    },
     "wa.stock.now": {
       "text": "An gama: *{name}* yanzu {count} ne.",
       "reviewed": false
