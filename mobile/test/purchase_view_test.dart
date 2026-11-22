@@ -13,6 +13,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
+import 'treat_fixture.dart';
 
 Map<String, dynamic> _order(Map<String, dynamic> over) => {
   'id': 'P1',
@@ -53,6 +54,8 @@ void main() {
     http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
     final chats = ChatsData(
       f.auth(also: (req) async {
+        final treat = treatAnswers(req);
+        if (treat != null) return treat;
         if (req.method == 'GET') {
           return req.url.path == '/v1/stock'
               ? ok({
@@ -106,17 +109,29 @@ void main() {
     expect(r.said.single, 'Cancelled PO-0007');
   });
 
-  testWidgets('their quote: which of ours each is, then confirmed', (t) async {
-    final r = await open(t, _order({'status': 'drafted', 'seller_status': 'proposed'}));
+  testWidgets('their quote: the question on each line, then confirmed', (t) async {
+    final r = await open(
+      t,
+      _order({
+        'status': 'drafted',
+        'seller_status': 'proposed',
+        'lines': [
+          // Never ordered before: Taskiem's guess, asked.
+          {'id': 'PL0', 'position': 0, 'item': 'Ofada rice', 'item_id': 'si-rice', 'quantity': 2, 'cost_kobo': 4500000, 'received': 0, 'treatment': 'stock', 'stock_item_id': 'si-rice', 'uses': 1, 'unconfirmed': true},
+        ],
+      }),
+    );
     expect(find.text('Their quote: confirm it'), findsOneWidget);
     expect(find.bySemanticsLabel('Decline'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Confirm their quote'));
     await settle(t);
-    // The same name, chosen already.
-    expect(find.bySemanticsLabel('Their Ofada rice: Ofada rice'), findsOneWidget);
+    expect(find.text('How should we treat it?'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Stock item for Ofada rice')), findsOneWidget, reason: 'Add to stock, into Rice, pre-selected');
+    await t.tap(find.bySemanticsLabel(RegExp('^Just record it: Ofada rice')));
+    await t.pump();
     await t.tap(find.bySemanticsLabel('Confirm the order'));
     await settle(t);
-    expect(r.sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"items":["I1"]}');
+    expect(r.sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"lines":[{"treatment":"record"}]}');
   });
 
   testWidgets('delivered: all came, or how many did', (t) async {

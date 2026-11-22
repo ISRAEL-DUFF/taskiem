@@ -36,6 +36,7 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show handOffFile;
 import 'bills_page.dart' show BillsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
+import 'labels_page.dart' show LabelsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'product_form.dart' show formKey;
@@ -514,6 +515,16 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
             TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.lime, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
           ],
         ),
+        // Money's settings: the labels spending is grouped by, renamed and
+        // merged by those who manage money (what a business buys §5.4).
+        if (widget.auth.can('invoice.manage'))
+          TkSection(
+            title: 'Settings',
+            inset: 56,
+            children: [
+              TkListRow(title: 'Labels', sub: 'What you spend on: rename and merge', icon: 'b-hash', square: look.teal, onTap: () => _push(context, LabelsPage(auth: widget.auth))),
+            ],
+          ),
         if (s != null)
           TkSection(
             title: 'In this period',
