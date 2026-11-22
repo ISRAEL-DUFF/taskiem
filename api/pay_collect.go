@@ -67,18 +67,29 @@ type collection struct {
 	InBatch *uuid.UUID `json:"in_batch"`
 }
 
-// collectionTx is the person's list. Rows of a batch that was sent leave
-// it; rows of a cancelled batch come back.
+// collectionTx is the person's list. Rows of a batch sent or cancelled
+// leave it where their payment went, and come back where it did not.
 func collectionTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (collection, error) {
 	out := collection{Rows: []collectedRow{}}
-	// Sent: gone. Cancelled: gone too where the row's own payment went
-	// before the rest was cancelled, so nobody is paid twice from it.
-	if _, err := tx.Exec(ctx, `DELETE FROM pay_collected c USING payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id
-		AND (b.status = 'sent' OR b.status = 'cancelled' AND EXISTS (SELECT 1 FROM payments p WHERE p.id = c.payment_id AND p.status NOT IN ('prepared', 'cancelled', 'rejected')))`,
+	// A batch sent or cancelled: each row goes by what became of its own
+	// payment. Gone where it went (or is going, or waits for the owner's
+	// OK), so nobody is paid twice from it; back on the list only where it
+	// cannot be paid any more (cancelled, failed, refused). A row's payment
+	// still prepared in a cancelled batch is cancelled first, so it cannot
+	// be paid alongside the row come back; one still prepared in a sent
+	// batch stays with it.
+	if _, err := tx.Exec(ctx, `UPDATE payments p SET status = 'cancelled', finished_at = now() FROM pay_collected c, payment_batches b
+		WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id AND b.status = 'cancelled' AND p.id = c.payment_id AND p.status = 'prepared'`,
 		tenant, user); err != nil {
 		return out, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE pay_collected c SET batch_id = NULL, payment_id = NULL FROM payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id AND b.status = 'cancelled'`,
+	if _, err := tx.Exec(ctx, `DELETE FROM pay_collected c USING payment_batches b, payments p WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id
+		AND b.status IN ('sent', 'cancelled') AND p.id = c.payment_id AND p.status IN ('paid', 'sending', 'unknown', 'waiting_ok')`,
+		tenant, user); err != nil {
+		return out, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE pay_collected c SET batch_id = NULL, payment_id = NULL FROM payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id
+		AND b.status IN ('sent', 'cancelled') AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.id = c.payment_id AND p.status NOT IN ('cancelled', 'failed', 'rejected'))`,
 		tenant, user); err != nil {
 		return out, err
 	}

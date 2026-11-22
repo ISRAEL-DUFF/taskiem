@@ -109,6 +109,9 @@ type payment struct {
 
 	bankCode string
 	sealed   map[string]any
+	// provider: the payments account (its channel) it was prepared on,
+	// whose list its bank code is from.
+	provider string
 	// RiderID: the rider paid, when it was one; BatchID the list it was
 	// paid in, when it was.
 	RiderID *uuid.UUID `json:"rider_id"`
@@ -118,14 +121,14 @@ type payment struct {
 }
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
-	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id`
+	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id, provider_channel`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
 	var last4 string
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
-		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID)
+		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID, &x.provider)
 	x.Account = "••" + last4
 	return x, err
 }
@@ -411,9 +414,14 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 			return payment{}, err
 		}
 		if res == nil {
-			why := problem.Words
-			if why == "" {
-				why = "The bank did not say the account's name just now: try again in a moment."
+			// Said as it is for this payment: it is not prepared, and
+			// nothing checks it again later (as a saved account is).
+			why := "The bank did not say the account's name just now: try again in a moment."
+			switch {
+			case problem.Limited:
+				why = "Too many accounts to check at once: add it again in a minute."
+			case problem.Lasting && problem.Words != "":
+				why = problem.Words
 			}
 			return payment{}, refusePay(http.StatusConflict, "name_not_checked", why)
 		}
@@ -452,10 +460,10 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 			// account they were linked to), else the rider, else the saved
 			// account.
 			var last map[string]any
-			var lastCode string
-			err := tx.QueryRow(ctx, `SELECT account_sealed, bank_code FROM payments WHERE tenant_id = $1
+			var lastCode, lastProvider string
+			err := tx.QueryRow(ctx, `SELECT account_sealed, bank_code, provider_channel FROM payments WHERE tenant_id = $1
 				AND CASE WHEN $4::uuid IS NOT NULL THEN staff_id = $4 WHEN $3::uuid IS NOT NULL THEN rider_id = $3 ELSE saved_id = $2 END
-				AND status IN ('paid', 'sending', 'unknown') ORDER BY created_at DESC LIMIT 1`, tenant, payee.saved, payee.rider, payee.staff).Scan(&last, &lastCode)
+				AND status IN ('paid', 'sending', 'unknown') ORDER BY created_at DESC LIMIT 1`, tenant, payee.saved, payee.rider, payee.staff).Scan(&last, &lastCode, &lastProvider)
 			switch {
 			case errors.Is(err, pgx.ErrNoRows):
 			case err != nil:
@@ -465,7 +473,9 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 				if err != nil {
 					return err
 				}
-				changed = fmt.Sprint(was) != payee.bank.AccountNumber || lastCode != code
+				// Bank codes are each payments account's own: compared
+				// only when the last payment went through the same one.
+				changed = fmt.Sprint(was) != payee.bank.AccountNumber || lastProvider == rl.Channel() && lastCode != code
 			}
 		}
 		sealed, err := s.Store.PII.SealTx(ctx, tx, tenant, "account_number", payee.bank.AccountNumber)
@@ -474,10 +484,10 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		}
 		id := uuid.Must(uuid.NewV7())
 		row := tx.QueryRow(ctx, `INSERT INTO payments (id, tenant_id, saved_id, personal, payee_title, bank_name, bank_code, account_sealed, last4, account_name,
-			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING `+paymentCols,
+			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id, provider_channel)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING `+paymentCols,
 			id, tenant, payee.saved, payee.personal, payee.title, payee.bank.BankName, code, sealed, saved.Last4(payee.bank.AccountNumber), payee.checked,
-			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff)
+			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff, rl.Channel())
 		if x, err = scanPayment(row); err != nil {
 			return err
 		}
@@ -563,11 +573,53 @@ type confirmIn struct {
 	Again bool `json:"again"`
 }
 
+// payPasskey is the step-up for paying: a passkey for op on target, never
+// an authenticator code (docs/spec/chat-pay-people.md, Safety: a passkey
+// for every payment; the PIN, its fallback, is not built yet). Asked for
+// with no proof, it names the passkey as the only way; a code given is
+// refused (403 passkey) without being spent.
+func (s *Server) payPasskey(w http.ResponseWriter, r *http.Request, proof stepUpProof, op, target, what, doing string) (string, bool) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": what + " are made by a person who confirms with a passkey, not with an API key", "step_up": "required"})
+		return "", false
+	}
+	if proof.Passkey == nil && proof.TOTP != "" {
+		s.payFail(w, r, refusePay(http.StatusForbidden, "passkey", "Paying is confirmed with a passkey, not an authenticator code."))
+		return "", false
+	}
+	if proof.Passkey == nil {
+		f, _, err := s.factorsOf(r.Context(), p.TenantID, p.UserID)
+		if err != nil {
+			s.fail(w, r, err)
+			return "", false
+		}
+		methods, msg := []string{}, "add a passkey under Account first: "+doing+" needs one"
+		if f.Passkey {
+			methods, msg = []string{"passkey"}, "confirm with your passkey"
+		}
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": msg, "step_up": "required", "methods": methods, "operation": op, "target": target})
+		return "", false
+	}
+	method, ok := s.personStepUp(w, r, stepUpProof{Passkey: proof.Passkey}, op, target, what, doing)
+	if ok && method != "passkey" {
+		s.payFail(w, r, refusePay(http.StatusForbidden, "passkey", "Paying is confirmed with a passkey."))
+		return "", false
+	}
+	return method, ok
+}
+
 // confirmPayment is POST /v1/payments/{id}/confirm {passkey, again?}: a
-// person who may pay sends it, with a passkey for this payment. Within
-// their limit (an owner has none) it goes at once; over it, or to an
-// account changed since it was last paid, it waits for the owner's OK in
-// Approvals.
+// person who may pay sends it, with a passkey for this payment (an
+// authenticator code does not pay). Within their limit (an owner has none)
+// it goes at once; over it, or to an account changed since it was last
+// paid, it waits for the owner's OK in Approvals. An owner's passkey is
+// the OK for a changed account they pay themselves: the payment said so
+// (changed_account) when it was prepared. A payment whose account, or the
+// business's payments account, changed since it was prepared is refused
+// (409 account_changed, provider_changed) and cancelled, to be prepared
+// again. One sent whose payer's own OK did not reach its run is confirmed
+// again here, by that payer, to give it.
 func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -584,14 +636,33 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 	owner := slices.Contains(p.Roles, "owner")
 	// Checked before the passkey is asked (the same payment again is asked
 	// first), and again as the payment is claimed once it is given.
+	var x payment
+	revote := false
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, _, err := confirmCheckTx(ctx, tx, p, owner, id, in.Again, false)
+		var err error
+		x, _, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, false)
+		var pr payRefused
+		if errors.As(err, &pr) && pr.code == "not_prepared" {
+			if revote, err = awaitsPayerTx(ctx, tx, x, p); err != nil {
+				return err
+			}
+			if revote {
+				return nil
+			}
+			return pr
+		}
 		return err
 	}); err != nil {
 		s.payFail(w, r, err)
 		return
 	}
-	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "to pay")
+	if !revote {
+		if _, err := s.stillAsPrepared(ctx, p.TenantID, x); err != nil {
+			s.payFail(w, r, s.dropChanged(r, x.ID, err))
+			return
+		}
+	}
+	method, ok := s.payPasskey(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "paying")
 	if !ok {
 		return
 	}
@@ -599,20 +670,33 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 	// goes away meanwhile.
 	r = r.WithContext(context.WithoutCancel(ctx))
 	ctx = r.Context()
-	var x payment
-	var needs string
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		x, needs, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, true)
-		return err
-	}); err != nil {
-		s.payFail(w, r, err)
-		return
-	}
-	run, err := s.sendPayment(r, x, needs, p, method)
-	if err != nil {
-		s.payFail(w, r, err)
-		return
+	var run uuid.UUID
+	if revote {
+		run = *x.RunID
+		if err := s.payerVote(r, run, p, method, "payment.confirm_again"); err != nil {
+			s.Logger.Warn("payments: the payer's OK again", "payment", id, "err", err)
+			s.payFail(w, r, errPayerOK)
+			return
+		}
+	} else {
+		var needs string
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			var err error
+			x, needs, err = confirmCheckTx(ctx, tx, p, owner, id, in.Again, true)
+			return err
+		}); err != nil {
+			s.payFail(w, r, err)
+			return
+		}
+		run, err = s.sendPayment(r, x, needs, p, method)
+		if err != nil {
+			if run != uuid.Nil {
+				s.Logger.Warn("payments: the payer's OK", "payment", id, "err", err)
+				err = errPayerOK
+			}
+			s.payFail(w, r, err)
+			return
+		}
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
@@ -620,12 +704,156 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		return auditTx(r, tx, "payment.confirm", id.String(), map[string]any{"amount_kobo": x.AmountKobo, "needs_ok": x.NeedsOK, "run": run})
+		return auditTx(r, tx, "payment.confirm", id.String(), map[string]any{"amount_kobo": x.AmountKobo, "needs_ok": x.NeedsOK, "run": run,
+			"changed_account": x.ChangedAccount, "again": revote})
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"payment": x})
+}
+
+// errPayerOK: the run started but the payer's own OK did not reach it, so
+// nothing is paid yet; the payer confirms it again to give it.
+var errPayerOK = refusePay(http.StatusConflict, "not_approved", "Nothing was paid yet: your OK did not reach the payment. Confirm it again in a moment.")
+
+// awaitsPayerTx says whether x was sent by p within their limit and its run
+// still waits for p's own OK (none was recorded): p confirming it again
+// gives it.
+func awaitsPayerTx(ctx context.Context, tx pgx.Tx, x payment, p *Principal) (bool, error) {
+	if x.Status != "sending" || x.NeedsOK != "" || x.RunID == nil || x.ConfirmedBy == nil || *x.ConfirmedBy != p.Actor() {
+		return false, nil
+	}
+	var waits bool
+	err := tx.QueryRow(ctx, `SELECT NOT EXISTS (SELECT 1 FROM approval_decisions WHERE run_id = $1 AND step_id = 'approve')
+		AND NOT EXISTS (SELECT 1 FROM approvals WHERE run_id = $1 AND step_id = 'approve' AND status <> 'open')`, *x.RunID).Scan(&waits)
+	return waits, err
+}
+
+// payerVote gives the payer's own OK to a payment's run (within their
+// limit, their passkey is its approval), trying once more if the first
+// does not take (the run may not have reached its approval yet).
+func (s *Server) payerVote(r *http.Request, run uuid.UUID, p *Principal, method, via string) error {
+	ctx := r.Context()
+	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: "web", IP: clientIP(r), StepUp: method,
+		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
+			return auditTx(r, tx, "approval.decide", run.String()+"/approve", map[string]any{"decision": "approved", "result": res.Status, "via": via})
+		}}
+	ref := runtime.RunRef{ID: run, TenantID: p.TenantID}
+	_, err := s.Store.VoteApproval(ctx, ref, "approve", vote)
+	if err == nil || errors.Is(err, runtime.ErrApprovalClosed) || errors.Is(err, runtime.ErrAlreadyDecided) {
+		return err
+	}
+	select {
+	case <-time.After(700 * time.Millisecond):
+	case <-ctx.Done():
+		return err
+	}
+	_, err = s.Store.VoteApproval(ctx, ref, "approve", vote)
+	return err
+}
+
+// accountChanged and providerChanged refuse a payment prepared to an
+// account, or on a payments account, that is not the one now.
+var (
+	accountChanged  = refusePay(http.StatusConflict, "account_changed", "The account changed since this was prepared: prepare it again.")
+	providerChanged = refusePay(http.StatusConflict, "provider_changed", "Your payments account changed since this was prepared: prepare it again.")
+)
+
+// stillAsPrepared checks a payment still goes where it was prepared to: on
+// the same payments account (its bank code is that account's), and to the
+// payee's account as it is now (the saved account's number and bank, the
+// account a staff member is linked to, a rider's bank) being the one
+// sealed in the payment. It answers the payments account to send from.
+func (s *Server) stillAsPrepared(ctx context.Context, tenant uuid.UUID, x payment) (*invoicing.Rail, error) {
+	rl, err := s.payRail(ctx, tenant)
+	if err != nil {
+		return nil, err
+	}
+	if rl == nil {
+		return nil, refusePay(http.StatusConflict, "no_provider", "Connect a payments account first: people are paid from it.")
+	}
+	if x.provider != rl.Channel() {
+		return rl, providerChanged
+	}
+	var in payIn
+	switch {
+	case x.StaffID != nil:
+		in.StaffID = x.StaffID
+	case x.RiderID != nil:
+		in.RiderID = x.RiderID
+	case x.SavedID != nil:
+		in.SavedID, in.Mine = x.SavedID, x.Personal
+	default:
+		// An account number typed in: the payment's own is the account.
+		return rl, nil
+	}
+	person := uuid.Nil
+	if x.Personal {
+		// An owner's own account, prepared by them.
+		if person, err = uuid.Parse(x.PreparedBy); err != nil {
+			return rl, accountChanged
+		}
+	}
+	now, err := s.payeeOf(ctx, tenant, person, true, in)
+	var pr payRefused
+	if errors.As(err, &pr) {
+		// Gone: deleted, unlinked, no bank kept, no longer staff.
+		return rl, accountChanged
+	}
+	if err != nil {
+		return rl, err
+	}
+	code, err := s.bankCodeFor(ctx, tenant, *rl, now.bank, x.RiderID == nil)
+	if errors.As(err, &pr) {
+		return rl, accountChanged
+	}
+	if err != nil {
+		return rl, err
+	}
+	var number string
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		v, err := s.Store.PII.OpenTx(ctx, tx, tenant, x.sealed)
+		number = fmt.Sprint(v)
+		return err
+	}); err != nil {
+		return rl, err
+	}
+	if number != now.bank.AccountNumber || code != x.bankCode {
+		return rl, accountChanged
+	}
+	return rl, nil
+}
+
+// isChanged says whether err refuses a payment for its account, or the
+// payments account, having changed since it was prepared.
+func isChanged(err error) bool {
+	var pr payRefused
+	return errors.As(err, &pr) && (pr.code == "account_changed" || pr.code == "provider_changed")
+}
+
+// dropChanged cancels a payment not sent (prepared, or claimed with no run
+// yet) when err says its account or payments account changed since it was
+// prepared, with why; it answers err.
+func (s *Server) dropChanged(r *http.Request, id uuid.UUID, err error) error {
+	if !isChanged(err) {
+		return err
+	}
+	var pr payRefused
+	errors.As(err, &pr)
+	r = r.WithContext(context.WithoutCancel(r.Context()))
+	ctx := r.Context()
+	if e := s.tx(r, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', reason = $2, needs_ok = '', finished_at = now()
+			WHERE id = $1 AND status IN ('prepared', 'sending', 'waiting_ok') AND run_id IS NULL`, id, pr.msg)
+		if err != nil || tag.RowsAffected() == 0 {
+			return err
+		}
+		return auditTx(r, tx, "payment.cancel", id.String(), map[string]any{"why": pr.code})
+	}); e != nil {
+		s.Logger.Warn("payments: cancelling a changed payment", "payment", id, "err", e)
+	}
+	return err
 }
 
 // confirmCheckTx checks a payment can be confirmed by p, and why the
@@ -662,6 +890,9 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 		return x, "", refusePay(http.StatusConflict, "pay_again", fmt.Sprintf("You paid %s %s in the last day. Pay again?", x.Payee, invoicing.Naira(x.AmountKobo)))
 	}
 	var needs []string
+	// An owner's own passkey is the owner's OK: a changed account they pay
+	// was said (changed_account) before they confirmed, and is in the
+	// audit with the confirmation.
 	if !owner {
 		one, day, err := payLimitOf(ctx, tx, p.TenantID, p.Roles)
 		if err != nil {
@@ -702,25 +933,40 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 // sendPayment starts the payment's run: the business's pay-person
 // workflow (made, or remade for another payments account, first), and,
 // within the payer's limit, the payer's own confirmation as its approval.
+// The payment is checked first to go where it was prepared to
+// (stillAsPrepared); if not, it is cancelled. A run started whose
+// approval the payer's vote did not reach answers its id with the error.
 func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Principal, method string) (run uuid.UUID, err error) {
 	ctx := r.Context()
-	// Claimed for this run: given back, to confirm again, if no run starts.
+	// Claimed for this run: given back, to confirm again, if no run starts;
+	// cancelled instead if it changed, or if its batch was cancelled
+	// meanwhile (never prepared again in a cancelled batch, where nobody
+	// would see it). Only a claim is given back: a payment ended or
+	// cancelled meanwhile stays so.
 	defer func() {
-		if run == uuid.Nil && err != nil {
-			if e := db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-				_, err := tx.Exec(context.WithoutCancel(ctx), `UPDATE payments SET status = 'prepared', needs_ok = '', confirmed_by = NULL, confirmed_at = NULL WHERE id = $1 AND run_id IS NULL`, x.ID)
-				return err
-			}); e != nil {
-				s.Logger.Warn("payments: giving a payment back", "payment", x.ID, "err", e)
-			}
+		if run != uuid.Nil || err == nil {
+			return
+		}
+		if isChanged(err) {
+			err = s.dropChanged(r, x.ID, err)
+			return
+		}
+		bg := context.WithoutCancel(ctx)
+		if e := db.InTenantTx(bg, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(bg, `UPDATE payments SET
+				status = CASE WHEN b.status = 'cancelled' THEN 'cancelled' ELSE 'prepared' END,
+				finished_at = CASE WHEN b.status = 'cancelled' THEN now() END,
+				needs_ok = '', confirmed_by = NULL, confirmed_at = NULL
+				FROM (SELECT (SELECT status FROM payment_batches WHERE id = (SELECT batch_id FROM payments WHERE id = $1)) AS status) b
+				WHERE payments.id = $1 AND payments.run_id IS NULL AND payments.status IN ('sending', 'waiting_ok')`, x.ID)
+			return err
+		}); e != nil {
+			s.Logger.Warn("payments: giving a payment back", "payment", x.ID, "err", e)
 		}
 	}()
-	rl, err := s.payRail(ctx, p.TenantID)
+	rl, err := s.stillAsPrepared(ctx, p.TenantID, x)
 	if err != nil {
 		return uuid.Nil, err
-	}
-	if rl == nil {
-		return uuid.Nil, refusePay(http.StatusConflict, "no_provider", "Connect a payments account first: people are paid from it.")
 	}
 	var wf uuid.UUID
 	var version int
@@ -769,14 +1015,7 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 		return ref.ID, nil
 	}
 	// Within the limit: the payer's passkey is the approval.
-	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: "web", IP: clientIP(r), StepUp: method,
-		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
-			return auditTx(r, tx, "approval.decide", ref.ID.String()+"/approve", map[string]any{"decision": "approved", "result": res.Status, "via": "payment.confirm"})
-		}}
-	if _, err := s.Store.VoteApproval(ctx, runtime.RunRef{ID: ref.ID, TenantID: p.TenantID}, "approve", vote); err != nil {
-		return ref.ID, err
-	}
-	return ref.ID, nil
+	return ref.ID, s.payerVote(r, ref.ID, p, method, "payment.confirm")
 }
 
 // payWorkflowTx is the business's pay-person workflow on rl, made (or a
@@ -896,22 +1135,30 @@ func writePayPolicyTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, fourEyes boo
 }
 
 // cancelPayment is POST /v1/payments/{id}/cancel: a payment not sent yet
-// is let go.
+// is let go. Who may see it (getPayment: an owner's own only to owners)
+// may cancel it if they prepared it; an owner cancels any.
 func (s *Server) cancelPayment(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+	p := principalFrom(r.Context())
+	owner := isOwnerOf(p)
 	var x payment
 	err = s.tx(r, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(r.Context(), `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE id = $1 AND status = 'prepared'`, id)
+		tag, err := tx.Exec(r.Context(), `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE id = $1 AND status = 'prepared'
+			AND (NOT personal OR $2) AND ($2 OR prepared_by = $3)`, id, owner, p.Actor())
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
-			if _, err := scanPayment(tx.QueryRow(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE id = $1`, id)); err != nil {
+			was, err := scanPayment(tx.QueryRow(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE id = $1 AND (NOT personal OR $2)`, id, owner))
+			if err != nil {
 				return err
+			}
+			if !owner && was.PreparedBy != p.Actor() {
+				return refusePay(http.StatusForbidden, "not_yours", "Only who prepared this payment, or an owner, cancels it.")
 			}
 			return refusePay(http.StatusConflict, "not_prepared", "Only a payment not sent yet is cancelled; one waiting for the owner's OK is refused in Approvals.")
 		}

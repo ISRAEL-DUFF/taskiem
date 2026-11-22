@@ -40,7 +40,8 @@ type staffPayAccount struct {
 	LinkedAt     *time.Time `json:"linked_at,omitempty"`
 }
 
-// staffPayAccountTx is the staff member's linked account, or nil.
+// staffPayAccountTx is the staff member's linked account, or nil (none
+// linked, or the saved account linked was deleted since: not linked).
 func staffPayAccountTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (*staffPayAccount, error) {
 	var id *uuid.UUID
 	var by *string
@@ -52,7 +53,7 @@ func staffPayAccountTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
-	x, err := scanSaved(tx.QueryRow(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE tenant_id = $1 AND id = $2`, tenant, *id))
+	x, err := scanSaved(tx.QueryRow(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE tenant_id = $1 AND id = $2 AND archived_at IS NULL`, tenant, *id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -105,7 +106,7 @@ func (s *Server) putStaffAccount(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		var kind string
-		err := tx.QueryRow(ctx, `SELECT kind FROM saved_objects WHERE tenant_id = $1 AND id = $2`, p.TenantID, *in.SavedID).Scan(&kind)
+		err := tx.QueryRow(ctx, `SELECT kind FROM saved_objects WHERE tenant_id = $1 AND id = $2 AND archived_at IS NULL`, p.TenantID, *in.SavedID).Scan(&kind)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return refusePay(http.StatusNotFound, "no_payee", "There is no such saved account in the business.")
 		}

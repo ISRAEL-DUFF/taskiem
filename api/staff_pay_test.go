@@ -89,8 +89,13 @@ func TestPayStaff(t *testing.T) {
 	owner.must(202, "POST", "/v1/payments/"+p["id"].(string)+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+p["id"].(string))})
 	owner.must(400, "POST", "/v1/payments", map[string]any{"staff_id": musaID, "payee": "musa", "amount_kobo": 500000})
 
-	// Linked to another account: the next payment to them is said changed.
+	// Linked to another account: the next payment to them is said changed,
+	// and one prepared to the old account is not sent there.
+	before := owner.must(201, "POST", "/v1/payments", map[string]any{"staff_id": musaID, "amount_kobo": 410000, "purpose": "wages"})["payment"].(map[string]any)["id"].(string)
 	owner.must(200, "PUT", path, map[string]any{"saved_id": other["id"], "passkey": stepUp(t, owner, key, "staff.account", musaID)})
+	if e := owner.must(409, "POST", "/v1/payments/"+before+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+before)}); e["code"] != "account_changed" {
+		t.Fatalf("prepared before the link changed: %v", e)
+	}
 	if q := owner.must(201, "POST", "/v1/payments", map[string]any{"staff_id": musaID, "amount_kobo": 500000, "purpose": "wages"})["payment"].(map[string]any); q["changed_account"] != true || q["account"] != "••4321" {
 		t.Fatalf("a changed account: %v", q)
 	}
@@ -110,4 +115,16 @@ func TestPayStaff(t *testing.T) {
 	if got := owner.must(200, "GET", "/v1/staff/"+musaID, nil); got["pay_account"] != nil {
 		t.Fatalf("still linked: %v", got["pay_account"])
 	}
+
+	// Linked to a saved account that is then deleted: not linked, so not
+	// paid; and a deleted one cannot be linked.
+	owner.must(200, "PUT", path, map[string]any{"saved_id": other["id"], "passkey": stepUp(t, owner, key, "staff.account", musaID)})
+	owner.must(204, "DELETE", "/v1/saved/"+other["id"].(string), nil)
+	if got := owner.must(200, "GET", "/v1/staff/"+musaID, nil); got["pay_account"] != nil {
+		t.Fatalf("linked to a deleted account: %v", got["pay_account"])
+	}
+	if e := owner.must(409, "POST", "/v1/payments", map[string]any{"staff_id": musaID, "amount_kobo": 500000, "purpose": "wages"}); e["code"] != "no_bank" {
+		t.Fatalf("paid to a deleted account: %v", e)
+	}
+	owner.must(404, "PUT", path, map[string]any{"saved_id": other["id"]})
 }

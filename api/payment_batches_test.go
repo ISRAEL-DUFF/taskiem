@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -174,5 +175,50 @@ func TestPaySeveral(t *testing.T) {
 	}
 	if list := owner.must(200, "GET", "/v1/payment-batches", nil)["batches"].([]any); len(list) < 5 {
 		t.Fatalf("batches: %d", len(list))
+	}
+
+	// A row whose saved account changed since the batch was prepared is
+	// refused and cancelled; the rest go.
+	dayo := owner.must(201, "POST", "/v1/saved", map[string]any{"name": "dayo", "title": "Dayo Oils", "kind": "bank_account", "bank_name": "Access Bank",
+		"account_number": fitting(t, "044", "111222333")})["saved"].(map[string]any)
+	ab := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"rows": []map[string]any{
+		{"payee": "bayo", "amount_kobo": 210000, "purpose": "stock"},
+		{"payee": "dayo", "amount_kobo": 220000, "purpose": "stock"},
+	}})["batch"].(map[string]any)
+	aid := ab["id"].(string)
+	ch := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.change", "target": dayo["id"]}))
+	owner.must(200, "PUT", "/v1/saved/"+dayo["id"].(string), map[string]any{"account_number": fitting(t, "044", "444555666"), "passkey": key.Assert(ch).JSON()})
+	as := owner.must(202, "POST", "/v1/payment-batches/"+aid+"/confirm", map[string]any{"payments": idsOf(ab, "prepared"),
+		"passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+aid)})["batch"].(map[string]any)
+	codes := map[string]any{}
+	for _, r := range as["results"].([]any) {
+		codes[r.(map[string]any)["payment"].(string)] = r.(map[string]any)["code"]
+	}
+	for _, x := range as["payments"].([]any) {
+		p := x.(map[string]any)
+		want, code := "sending", any(nil)
+		if p["payee"] == "Dayo Oils" {
+			want, code = "cancelled", "account_changed"
+		}
+		if p["status"] != want || codes[p["id"].(string)] != code {
+			t.Fatalf("a changed row: %v %v", p, codes)
+		}
+	}
+
+	// More accounts to check than the bank is asked about in a minute: the
+	// rows over are held, said as they are.
+	var many []map[string]any
+	for range 31 {
+		many = append(many, map[string]any{"account_number": "0123456789", "bank_name": "Access Bank", "amount_kobo": 100000, "purpose": "stock"})
+	}
+	mb := owner.must(201, "POST", "/v1/payment-batches", map[string]any{"rows": many})["batch"].(map[string]any)
+	limited := false
+	for _, h := range mb["held"].([]any) {
+		if h := h.(map[string]any); h["code"] == "name_not_checked" && strings.HasPrefix(h["problem"].(string), "Too many accounts to check at once") {
+			limited = true
+		}
+	}
+	if !limited {
+		t.Fatalf("no row held for checking too many: %v", mb["held"])
 	}
 }

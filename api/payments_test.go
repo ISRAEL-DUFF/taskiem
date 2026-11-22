@@ -94,8 +94,12 @@ func TestPayOnePerson(t *testing.T) {
 	}
 
 	// Confirmed with a passkey for this payment only.
-	if e := owner.must(403, "POST", "/v1/payments/"+id+"/confirm", map[string]any{}); e["step_up"] == nil {
+	if e := owner.must(403, "POST", "/v1/payments/"+id+"/confirm", map[string]any{}); e["step_up"] == nil || stringOf(e["methods"]) != stringOf([]any{"passkey"}) {
 		t.Fatalf("no passkey: %v", e)
+	}
+	// An authenticator code does not pay: a passkey for every payment.
+	if e := owner.must(403, "POST", "/v1/payments/"+id+"/confirm", map[string]any{"totp": "123456"}); e["code"] != "passkey" {
+		t.Fatalf("a code: %v", e)
 	}
 	got := owner.must(202, "POST", "/v1/payments/"+id+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+id)})["payment"].(map[string]any)
 	if got["status"] != "sending" || got["run_id"] == nil || got["confirmed_by"] == nil || got["needs_ok"] != "" {
@@ -202,10 +206,41 @@ func TestPayOnePerson(t *testing.T) {
 		t.Fatalf("staff paying an account number: %v", e)
 	}
 
+	// Staff cancel only what they prepared; an owner any.
+	ours := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 130000, "purpose": "stock"})["payment"].(map[string]any)["id"].(string)
+	if e := clerk.must(403, "POST", "/v1/payments/"+ours+"/cancel", nil); e["code"] != "not_yours" {
+		t.Fatalf("staff cancelling the owner's: %v", e)
+	}
+	clerk.must(404, "POST", "/v1/payments/"+uuid.NewString()+"/cancel", nil)
+	owner.must(200, "POST", "/v1/payments/"+ours+"/cancel", nil)
+	theirs := prep(140000)
+	clerk.must(200, "POST", "/v1/payments/"+theirs+"/cancel", nil)
+
+	// The payments account changed between prepare and confirm: refused,
+	// and cancelled, to be prepared again.
+	moved := owner.must(201, "POST", "/v1/payments", map[string]any{"payee": "bayo", "amount_kobo": 150000, "purpose": "stock"})["payment"].(map[string]any)["id"].(string)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE payments SET provider_channel = 'flutterwave/main' WHERE id = $1`, moved); err != nil {
+		t.Fatal(err)
+	}
+	if e := owner.must(409, "POST", "/v1/payments/"+moved+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+moved)}); e["code"] != "provider_changed" {
+		t.Fatalf("another payments account: %v", e)
+	}
+	if p := owner.must(200, "GET", "/v1/payments/"+moved, nil)["payment"].(map[string]any); p["status"] != "cancelled" {
+		t.Fatalf("not cancelled: %v", p)
+	}
+
 	// The account changed since it was last paid: the owner's OK, whoever
-	// pays within their limit.
+	// pays within their limit. One prepared before the change is not sent
+	// to the old account: refused, and cancelled.
+	old := prep(110000)
 	ch := challengeFrom(t, owner.must(200, "POST", "/v1/saved/step-up/options", map[string]any{"operation": "saved.change", "target": bayo["id"]}))
 	owner.must(200, "PUT", "/v1/saved/"+bayo["id"].(string), map[string]any{"account_number": "0987654321", "passkey": key.Assert(ch).JSON()})
+	if e := clerk.must(409, "POST", "/v1/payments/"+old+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay", "payment:"+old)}); e["code"] != "account_changed" {
+		t.Fatalf("prepared to the old account: %v", e)
+	}
+	if p := owner.must(200, "GET", "/v1/payments/"+old, nil)["payment"].(map[string]any); p["status"] != "cancelled" || p["run_id"] != nil {
+		t.Fatalf("the old account's payment: %v", p)
+	}
 	cid = prep(100000)
 	if got := clerk.must(202, "POST", "/v1/payments/"+cid+"/confirm", map[string]any{"passkey": stepUp(t, clerk, ckey, "money.pay", "payment:"+cid)})["payment"].(map[string]any); got["status"] != "waiting_ok" || got["needs_ok"] != "changed,first" || got["changed_account"] != true {
 		t.Fatalf("a changed account: %v", got)

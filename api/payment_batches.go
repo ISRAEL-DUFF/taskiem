@@ -266,7 +266,9 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 // sent as one payment is (within the payer's limit at once; over it, or to
 // a changed account or one staff never paid, waiting for the owner's OK).
 // A row refused now (the same payment again without again) stays prepared,
-// said in the results.
+// said in the results; one whose account (or the business's payments
+// account) changed since it was prepared is cancelled, said
+// account_changed (provider_changed), to be prepared again.
 func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.batchID(w, r)
 	if !ok {
@@ -308,12 +310,8 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusConflict, "changed", "The batch changed since it was shown: look at it again."))
 		return
 	}
-	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpBatch, "batch:"+id.String(), "Payments", "to pay")
+	method, ok := s.payPasskey(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpBatch, "batch:"+id.String(), "Payments", "paying")
 	if !ok {
-		return
-	}
-	if method != "passkey" {
-		s.payFail(w, r, refusePay(http.StatusForbidden, "passkey", "A batch is sent with a passkey."))
 		return
 	}
 	r = r.WithContext(context.WithoutCancel(ctx))
@@ -345,10 +343,12 @@ func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 			s.Logger.Warn("payments: sending a batch's row", "batch", id, "payment", pid, "err", err)
 			results = append(results, batchResult{Payment: pid, Code: "not_sent", Problem: "It could not be sent just now: send the batch again."})
 		case err != nil:
-			// The run started and was not approved: the owner approves it
-			// in Approvals.
+			// The run started and the payer's own OK (tried twice) did not
+			// reach it: nobody else can give it, so it is said as it is;
+			// the payer confirms the payment again on its own to give it.
 			s.Logger.Warn("payments: approving a batch's row", "batch", id, "payment", pid, "err", err)
-			results = append(results, batchResult{Payment: pid, Code: "in_approvals", Problem: "It waits in Approvals: approve it there."})
+			results = append(results, batchResult{Payment: pid, Code: "not_approved",
+				Problem: "Nothing was paid to them yet: your OK did not reach this payment. Confirm it again on its own in a moment."})
 		default:
 			results = append(results, batchResult{Payment: pid})
 		}
@@ -444,12 +444,8 @@ func (s *Server) approveBatch(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusConflict, "changed", "What waits changed since it was shown: look at it again."))
 		return
 	}
-	method, ok := s.personStepUp(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpApprove, "batch:"+id.String(), "Approvals", "to approve payments")
+	method, ok := s.payPasskey(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpApprove, "batch:"+id.String(), "Approvals", "approving payments")
 	if !ok {
-		return
-	}
-	if method != "passkey" {
-		s.payFail(w, r, refusePay(http.StatusForbidden, "passkey", "The owner's OK takes a passkey."))
 		return
 	}
 	r = r.WithContext(context.WithoutCancel(ctx))
@@ -500,6 +496,11 @@ func (s *Server) cancelBatch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var out batchView
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		// After any confirm claiming a row: a row claimed but not sent is
+		// then cancelled with the batch, not given back (sendPayment).
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "payments:"+principalFrom(ctx).TenantID.String()); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE batch_id = $1 AND status = 'prepared' AND (NOT personal OR $2)`,
 			id, isOwnerOf(principalFrom(ctx))); err != nil {
 			return err

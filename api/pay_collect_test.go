@@ -102,11 +102,21 @@ func TestCollectToPay(t *testing.T) {
 	for _, x := range b2["payments"].([]any) {
 		ids = append(ids, x.(map[string]any)["id"].(string))
 	}
-	owner.must(202, "POST", "/v1/payment-batches/"+b2["id"].(string)+"/confirm", map[string]any{"payments": ids,
-		"passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+b2["id"].(string))})
-	if got := owner.must(200, "GET", "/v1/pay-collection", nil); got["count"] != float64(0) || got["in_batch"] != nil {
-		t.Fatalf("gone once sent: %v", got)
+	// One row's payment does not go (the payments account changed since
+	// it was prepared, so it is cancelled): that row comes back.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE payments SET provider_channel = 'flutterwave/main' WHERE id = $1`, ids[1]); err != nil {
+		t.Fatal(err)
 	}
+	sent := owner.must(202, "POST", "/v1/payment-batches/"+b2["id"].(string)+"/confirm", map[string]any{"payments": ids,
+		"passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+b2["id"].(string))})["batch"].(map[string]any)
+	if sent["status"] != "sent" || !strings.Contains(stringOf(sent["results"]), "provider_changed") {
+		t.Fatalf("sent: %v", sent)
+	}
+	got := owner.must(200, "GET", "/v1/pay-collection", nil)
+	if got["count"] != float64(1) || got["in_batch"] != nil || got["rows"].([]any)[0].(map[string]any)["last4"] != gtb[6:] {
+		t.Fatalf("once sent, only the row not paid back: %v", got)
+	}
+	owner.must(200, "DELETE", "/v1/pay-collection", nil)
 
 	// One off, and clearing.
 	owner.must(201, "POST", "/v1/pay-collection", map[string]any{"payee": "bayo", "source": from("c1", "m9")})
