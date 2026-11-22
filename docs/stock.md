@@ -121,6 +121,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `add supplier Dangote Depot 0803 123 4567 for rice, indomie` | A supplier, with the items they supply |
 | `suppliers` | Each supplier, their open orders and what is owed to them |
 | `order from Dangote` | Their low items as an order, sent on **yes** (or left for a second person above the limit: `send P-7QX4KD`) |
+| `order 1 sewing machine from Singer Ltd` | From a linked supplier's price list (and `@`/`#` mentions). Each line Taskiem does not remember for that supplier is asked first, one at a time: **Just record it**, **Add to stock** (which stock item, or a new one) or **Keep track of it** (more than 50 asks first; more than 200 is just recorded), then its label (three, **Another**, **No label**). Typed works too: `keep track of it, machines`. The answer is remembered; then **yes** sends it |
 | `received 10 bags of rice` | Goods received on the open order from the item's supplier; with none, goods received as `add` |
 | `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
 | `confirmed P-7QX4KD` | The supplier said yes by phone |

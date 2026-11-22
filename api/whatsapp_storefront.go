@@ -216,6 +216,10 @@ func (s *Server) waShopReply(ctx context.Context, c *chat, text, cmd string) err
 	sh := c.data.Shop
 	switch c.state {
 	case stateCollecting:
+		if sh.Action == "stock_treat" && sh.StockChat != nil && sh.StockChat.Purchase != nil && sh.StockChat.Purchase.Treat != nil {
+			// The question on an order's lines (chat_purchase_treat.go).
+			return s.waTreatReply(ctx, c, text, cmd)
+		}
 		if sh.Action == "setup" {
 			return s.waShopSetup(ctx, c, text)
 		}

@@ -336,21 +336,13 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	case err != nil:
 		return true, err
 	}
-	if len(made) == 1 {
-		x := made[0]
-		return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-			c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-				"total", storefront.FormatNaira(x.TotalKobo)))
-	}
+	// Each line not remembered is asked how to treat it; then the orders
+	// are shown for one Yes.
 	ids := make([]uuid.UUID, len(made))
-	lines := make([]string, len(made))
 	for i, x := range made {
 		ids[i] = x.ID
-		lines[i] = c.t("wa.mention.draft", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier), "items", whatsapp.SafeText(x.Words()),
-			"total", storefront.FormatNaira(x.TotalKobo))
 	}
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_orders", StockChat: &stockChat{Purchase: &purchaseChat{Drafted: ids}}},
-		c.t("wa.mention.confirm", "count", strconv.Itoa(len(made)), "orders", strings.Join(lines, "\n")))
+	return true, s.orderAsk(ctx, c, ids)
 }
 
 // sendDrafted sends each of the orders one yes answered: those above the

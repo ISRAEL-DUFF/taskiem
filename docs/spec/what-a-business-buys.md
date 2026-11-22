@@ -571,6 +571,23 @@ No server change. `mobile/api.txt` gains `setPurchaseLine`, `listItemLinks`, `pu
 - **Tests:** `test/purchases_page_test.dart` (asked and confirmed with a label picked, a label made and a material made, an order by hand changed with track_ask, line_locked, Suppliers' items changed and forgotten), `test/order_sheet_test.dart` (asked on placing, a remembered item sends nothing, changed and remembered), `test/purchase_view_test.dart`, `test/labels_page_test.dart`; `test/treat_fixture.dart`; looks `labels`, `purchase-confirm`, `purchase-lines`, and `money` drawn again.
 - **Not done:** the question in chat's own order flows (`order … from …`, U2b); a suggested label not yet a label (from the server's `suggestions`) is offered in the picker but never pre-selected; uses other than 1 are kept, not asked.
 
+### As built: U2b
+
+No schema change. `api/chat_purchase_treat.go`; the words in `engine/lang` (`MatchTreat`, each language's `treat` list in `intents/*.json`); messages `wa.treat.*` and `button.treat_*` (English in the other four, marked not translated).
+
+- **When.** An order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) goes through `orderAsk` before its Yes: each line `unconfirmed`, not received, is asked in turn, across the orders of one message; then the usual confirm (`wa.order.confirm`, or the mentions' several). Remembered lines ask nothing. `paid …` is not this. Someone without `table.edit` gets the confirm at once, as suggested.
+- **Steps** (the session's `chatShop` `stock_treat`, `purchaseChat.Treat`, `waPendingTTL`; `cancel` drops it, the drafts staying drafted):
+  1. **How should we treat it?** "*item* (count) from *supplier*", three buttons (`pt:record`, `pt:stock`, `pt:track`).
+  2. Add to stock: **Which stock item?** The business's items, materials included, sized products left out: those matching the line's name first (the suggested one first), five in all, then **A new one** (`pt:item:N`, `pt:item:new`), or a name typed. A product goes in with its uses through `stock.LineOf` (one not counted starts being counted). A new one asks **Do you sell it?** (`sellButtons`): Yes a product, No a material, made by `stockAdd` with nothing in it.
+  3. Keep track of it over 50: "Put 60 Nylon bags on Things we have, one row each?" (**Yes, one row each** sends `track_many`; **Just record them**). Over 200: said ("too many to keep track of one by one"), and recorded.
+  4. **Label for *item*?** The line's suggested label, **Stock bought** for a stock line, then the most used (`spend.ListTx`), three in all, a new name from `spend.Suggest` when fewer; then **Another** (asks it typed) and **No label** (`pt:label:N`, `pt:label:another`, `pt:label:none`). A name typed is found or made (`spend.FindOrMakeTx`, its first letter a capital; `money.label.made` audited).
+- **Saving.** Each line as the order's page saves it: `stock.SetLineTx` without `remember`, which keeps the memory the first time (the line was unconfirmed); audited `purchase.line_set`. Said back with the next question: "*Generator*: Keep track of it · Machines." A line that moved on meanwhile is said and skipped.
+- **Channels.** Buttons in the Taskiem chat, on Telegram and Slack; on WhatsApp reply buttons for three, a list (`menu.choose`) beyond. A number answers too.
+- **Typed or spoken.** At the first step, a treatment's words start the message and what follows is the rest (`lang.MatchTreat`: without case, accents or tone marks, the person's language first, English always; the longest words win): `keep track of it, machines` (track, labelled Machines), `add to stock, lace` (its stock item; a second part its label), `just record it`, `track`. **Another** and **No label** have words too (`another`, `no label`, `none`). Pidgin, Yoruba, Igbo and Hausa words are drafts, like the other lists.
+- **The seller** sees the order as ever (tested).
+- **Tests:** `api/chat_purchase_treat_test.go`: WhatsApp (a new item asked, the label as a list, sent with the line as answered, the seller's order without it, remembered asking nothing, `keep track of it, machines`, Add to stock picking a material with Stock bought, Another typed, 60 asked and just recorded, 60 kept track of, 300 recorded), the Taskiem chat (buttons, A new one as a material, Another, Pidgin's words), Telegram, Slack; `TestMentionsOrderFromTwo` answers two orders' lines typed; `engine/lang` `TestMatchTreat`.
+- **Not done:** the model (`chat_understand`) is not given the question; a line's uses are not asked (a product's own, else 1).
+
 ## 12. Accept
 
 **The split**

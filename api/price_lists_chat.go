@@ -221,9 +221,8 @@ func (s *Server) waOrderItem(ctx context.Context, c *chat, m []string) error {
 	case err != nil:
 		return err
 	}
-	return s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-		c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-			"total", storefront.FormatNaira(x.TotalKobo)))
+	// Asked how to treat it, unless remembered; then shown for Yes.
+	return s.orderAsk(ctx, c, []uuid.UUID{x.ID})
 }
 
 // linkReason is a links error's words, without the package's prefix.

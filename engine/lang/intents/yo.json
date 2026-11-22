@@ -236,5 +236,27 @@
   ],
   "for_words": [
     "fún"
-  ]
+  ],
+  "treat": {
+    "record": [
+      "kàn kọ ọ́ sílẹ̀",
+      "kọ ọ́ sílẹ̀"
+    ],
+    "stock": [
+      "fi sí ọjà",
+      "fi kún ọjà"
+    ],
+    "track": [
+      "máa tọpinpin rẹ̀",
+      "tọpinpin rẹ̀"
+    ],
+    "another": [
+      "òmíràn",
+      "àmì míì"
+    ],
+    "no_label": [
+      "kò sí àmì",
+      "láìsí àmì"
+    ]
+  }
 }

@@ -112,6 +112,46 @@
       "text": "Kọ̀ ọ́",
       "reviewed": false
     },
+    "button.treat_label_another": {
+      "text": "Another",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+    },
+    "button.treat_label_none": {
+      "text": "No label",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+    },
+    "button.treat_many_record": {
+      "text": "Just record them",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+    },
+    "button.treat_many_yes": {
+      "text": "Yes, one row each",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+    },
+    "button.treat_new_item": {
+      "text": "A new one",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+    },
+    "button.treat_record": {
+      "text": "Just record it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+    },
+    "button.treat_stock": {
+      "text": "Add to stock",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+    },
+    "button.treat_track": {
+      "text": "Keep track of it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+    },
     "button.yes": {
       "text": "Bẹ́ẹ̀ni",
       "reviewed": false
@@ -2983,6 +3023,86 @@
     "wa.cancelled": {
       "text": "A ti fagilé e.",
       "reviewed": false
+    },
+    "wa.treat.ask": {
+      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+    },
+    "wa.treat.how": {
+      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+    },
+    "wa.treat.item_reminder": {
+      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+    },
+    "wa.treat.label": {
+      "text": "Label for *{item}*? Pick one, or type it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+    },
+    "wa.treat.label_reminder": {
+      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+    },
+    "wa.treat.label_type": {
+      "text": "Type the label for *{item}*, like _Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+    },
+    "wa.treat.many": {
+      "text": "Put {count} {item} on Things we have, one row each?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+    },
+    "wa.treat.new_item": {
+      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+    },
+    "wa.treat.no_item": {
+      "text": "None of your stock items is called *{name}*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+    },
+    "wa.treat.not_labelled": {
+      "text": "Not labelled",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+    },
+    "wa.treat.not_saved": {
+      "text": "*{item}* could not be changed: {reason}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+    },
+    "wa.treat.reminder": {
+      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+    },
+    "wa.treat.saved": {
+      "text": "*{item}*: {how}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label"
+    },
+    "wa.treat.to_stock": {
+      "text": "Add to stock ({item})",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+    },
+    "wa.treat.too_many": {
+      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.which_item": {
+      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "Mo rò pé ohun tí ẹ ń sọ ni: *{command}*\nṢé kí n ṣe é?",

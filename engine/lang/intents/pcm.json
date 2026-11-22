@@ -260,5 +260,32 @@
   ],
   "for_words": [
     "for"
-  ]
+  ],
+  "treat": {
+    "record": [
+      "just write am",
+      "just write am down",
+      "write am down",
+      "record am"
+    ],
+    "stock": [
+      "add am to stock",
+      "put am for stock",
+      "put am inside stock"
+    ],
+    "track": [
+      "dey track am",
+      "track am",
+      "keep eye on am",
+      "keep record of each one"
+    ],
+    "another": [
+      "another one",
+      "different label"
+    ],
+    "no_label": [
+      "no label",
+      "no put label"
+    ]
+  }
 }

@@ -356,3 +356,7 @@ Not done: two buttons to a row on Telegram for the topics (one to a row for now)
 ## What S1b added (22 November 2026)
 
 - **Add something to count** (`stock.new`, under Stock; [what a business buys](what-a-business-buys.md) §4.5): *add 20 yards of ankara fabric* asks **Do you sell it?** for something new, on every channel. It asks by itself, so the model's action and its form are read as typed, with no Yes before the question.
+
+## What U2b added (22 November 2026)
+
+- **The question on what is bought** ([what a business buys](what-a-business-buys.md) §6, In chat): an order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) asks, before its Yes and one line at a time, about each line the business's memory does not know: **How should we treat it?** (Just record it, Add to stock, Keep track of it), for Add to stock **Which stock item?** (five items, materials included, and **A new one**, which asks Do you sell it?), then **Label** (three, **Another** to type one, **No label**). Buttons on Telegram, Slack and in the Taskiem chat; on WhatsApp reply buttons for three, a list beyond. A number, or the words typed or spoken, answer too (`keep track of it, machines`, `add to stock, lace`, `just record it`, in the person's language and English). It is not an action of the catalogue: the order's own command asks it.
