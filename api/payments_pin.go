@@ -42,22 +42,22 @@ import (
 const (
 	pinPayOneKobo = 100_000_00 // ₦100,000
 	pinPayDayKobo = 200_000_00 // ₦200,000
-	pinPayAfter   = 24 * time.Hour
 	payStepUpPIN  = "pin"
 )
 
 // pinPayState is the person's PIN as paying sees it.
 type pinPayState struct {
-	hash   string
-	setAt  time.Time
-	locked *time.Time
+	hash     string
+	setAt    time.Time
+	locked   *time.Time
+	paysFrom time.Time
 }
 
 // pinForPay reads the person's PIN: no_pin, pin_locked or pin_new when it
 // cannot pay now.
 func (s *Server) pinForPay(ctx context.Context, user uuid.UUID) (pinPayState, error) {
 	var st pinPayState
-	err := s.Store.Pool.QueryRow(ctx, `SELECT pin_hash, set_at, locked_until FROM taskiem_wa_pin_state($1)`, user).Scan(&st.hash, &st.setAt, &st.locked)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT s.pin_hash, s.set_at, s.locked_until, taskiem_pin_pays_from($1) FROM taskiem_wa_pin_state($1) s`, user).Scan(&st.hash, &st.setAt, &st.locked, &st.paysFrom)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return st, refusePay(http.StatusForbidden, "no_pin", "You have no PIN set: confirm with your passkey.")
@@ -66,9 +66,11 @@ func (s *Server) pinForPay(ctx context.Context, user uuid.UUID) (pinPayState, er
 	case st.locked != nil:
 		return st, refusePay(http.StatusForbidden, "pin_locked", "Your PIN is locked after too many wrong tries, until "+st.locked.In(lagosTZ).Format("15:04")+
 			". Use your passkey instead.")
-	case time.Since(st.setAt) < pinPayAfter:
-		return st, refusePay(http.StatusForbidden, "pin_new", "Your PIN was set or changed in the last 24 hours, so it can pay from "+
-			st.setAt.Add(pinPayAfter).In(lagosTZ).Format("15:04 on 2 Jan")+". Use your passkey until then.")
+	case time.Now().Before(st.paysFrom):
+		// Set without a passkey (a first PIN, or reset by signing in
+		// again): it pays 24 hours on (pin_me.go).
+		return st, refusePay(http.StatusForbidden, "pin_new", "Your PIN was set without your passkey in the last 24 hours, so it can pay from "+
+			st.paysFrom.In(lagosTZ).Format("15:04 on 2 Jan")+". Use your passkey until then.")
 	}
 	return st, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -52,7 +53,7 @@ func payPinWorld(t *testing.T) (*waWorld, *client) {
 // pinAge sets when the owner's PIN was set, so long ago.
 func pinAge(t *testing.T, w *waWorld, c *client, ago string) {
 	t.Helper()
-	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE whatsapp_pins SET set_at = now() - $2::interval, locked_until = NULL, failures = 0, failed_since = NULL
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE whatsapp_pins SET set_at = now() - $2::interval, pays_from = now() - $2::interval + interval '24 hours', locked_until = NULL, failures = 0, failed_since = NULL
 		WHERE user_id = $1`, userID(t, c), ago); err != nil {
 		t.Fatal(err)
 	}
@@ -242,5 +243,62 @@ func TestPayByPinWhatsAppFlow(t *testing.T) {
 	}
 	if done := w.send(t, an, whatsapptest.FlowCompleted(got[1].FlowToken)); len(done) != 1 || !strings.Contains(done[0].Text, "Not sent") {
 		t.Errorf("refused completion: %+v", done)
+	}
+}
+
+// The PIN set at sign-up and reset without texting it (pin_me.go): a
+// first PIN needs no passkey but pays only a day on; changing it later
+// takes a passkey (and then pays at once) or a sign-in moments ago (and
+// pays a day on); nothing changes it otherwise.
+func TestMePin(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.WebAuthn = webauthn.Config{RPID: rpID, RPName: "Taskiem", Origins: []string{origin}}
+	w.srv.LoginBurst = 100
+	ada := w.tenant(t, "Ada Foods", "ada@mepin.test")
+	me := userID(t, ada)
+	paysFrom := func(got map[string]any) time.Duration {
+		t.Helper()
+		at, err := time.Parse(time.RFC3339Nano, got["pays_from"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return time.Until(at)
+	}
+
+	// None yet: set without a passkey, as at sign-up; it pays a day on.
+	if got := ada.must(200, "GET", "/v1/me/pin", nil); got["set"] != false || got["change_without"] != true {
+		t.Fatalf("before: %v", got)
+	}
+	ada.must(400, "PUT", "/v1/me/pin", map[string]any{"pin": "111111"})
+	got := ada.must(200, "PUT", "/v1/me/pin", map[string]any{"pin": "482913"})
+	if d := paysFrom(got); got["set"] != true || d < 23*time.Hour || d > 25*time.Hour {
+		t.Fatalf("a first PIN: %v", got)
+	}
+
+	// Signed in moments ago: changed without a passkey, a day on again.
+	if got := ada.must(200, "PUT", "/v1/me/pin", map[string]any{"pin": "590314"}); paysFrom(got) < 23*time.Hour {
+		t.Fatalf("reset after signing in: %v", got)
+	}
+
+	// Signed in long ago: not without a passkey.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE sessions SET created_at = now() - interval '1 hour' WHERE user_id = $1`, me); err != nil {
+		t.Fatal(err)
+	}
+	if got := ada.must(200, "GET", "/v1/me/pin", nil); got["change_without"] != false {
+		t.Fatalf("an old sign-in: %v", got)
+	}
+	if e := ada.must(403, "PUT", "/v1/me/pin", map[string]any{"pin": "720581"}); e["code"] != "proof_needed" {
+		t.Fatalf("no proof: %v", e)
+	}
+	// Behind a passkey: it pays at once.
+	key := addPasskey(t, ada, "Phone")
+	got = ada.must(200, "PUT", "/v1/me/pin", map[string]any{"pin": "720581", "passkey": stepUp(t, ada, key, "account.reauth", "pin.set")})
+	if d := paysFrom(got); d > time.Minute {
+		t.Fatalf("behind a passkey: %v", got)
+	}
+	var n int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'pin.set'`).Scan(&n); err != nil || n != 3 {
+		t.Fatalf("audited: %d %v", n, err)
 	}
 }

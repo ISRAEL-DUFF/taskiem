@@ -29685,6 +29685,58 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/pin:
+    get:
+      operationId: getMePin
+      tags:
+      - Account
+      summary: Your PIN
+      description: 'The person''s one PIN (it approves on WhatsApp and pays within its limit). `pays_from`: when it may pay; `change_without`: it may be set now without a passkey (none set yet, or signed in moments ago), and then pays 24 hours on.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MePin'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMePin
+      tags:
+      - Account
+      summary: Set or change your PIN
+      description: 'Six digits, not one repeated nor a run. With a passkey (asked for `account.reauth` / `pin.set`) or an authenticator code it pays at once; without, it may be set only as a first PIN (at sign-up) or moments after signing in again, and pays 24 hours on. Otherwise 403 `proof_needed` with `reauth` (the ways to prove). A session made by a code on a new device of someone with a passkey proves itself first (401 second_proof_required). Audited.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pin]
+              properties:
+                pin: {type: string}
+                passkey: {type: object}
+                totp: {type: string}
+      responses:
+        '200':
+          description: Set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MePin'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/whatsapp/pin:
     put:
       operationId: setWhatsAppPin
@@ -46233,6 +46285,17 @@ components:
                 - type: 'null'
                 - $ref: '#/components/schemas/PayCollectionSource'
               added_at: {type: string, format: date-time}
+    MePin:
+      type: object
+      additionalProperties: false
+      required: [set, change_without]
+      properties:
+        set: {type: boolean}
+        set_at: {type: string, format: date-time}
+        locked_until: {type: string, format: date-time}
+        pays_from: {type: string, format: date-time}
+        change_without: {type: boolean}
+        change_without_until: {type: string, format: date-time}
     StaffPayAccount:
       type: object
       description: The saved account payments to a staff member go to (outside payroll), masked

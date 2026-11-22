@@ -1675,6 +1675,18 @@ class TaskiemApi {
     return PutStaffPayAccountResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Your PIN (`GET /v1/me/pin`)
+  Future<MePin> getMePin() async {
+    final j = await _t.send('GET', '/v1/me/pin');
+    return MePin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Set or change your PIN (`PUT /v1/me/pin`)
+  Future<MePin> putMePin({required PutMePinRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/pin', body: body.toJson());
+    return MePin.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
   Future<PayCollection> getPayCollection() async {
     final j = await _t.send('GET', '/v1/pay-collection');
@@ -14457,6 +14469,55 @@ class PutStaffPayAccountResponse {
 
   Map<String, dynamic> toJson() => {
         'pay_account': ?payAccount,
+      };
+}
+
+class MePin {
+  const MePin({required this.changeWithout, this.changeWithoutUntil, this.lockedUntil, this.paysFrom, required this.set, this.setAt});
+
+  final bool changeWithout;
+  final DateTime? changeWithoutUntil;
+  final DateTime? lockedUntil;
+  final DateTime? paysFrom;
+  final bool set;
+  final DateTime? setAt;
+
+  factory MePin.fromJson(Map<String, dynamic> j) => MePin(
+        changeWithout: j['change_without'] as bool,
+        changeWithoutUntil: j['change_without_until'] == null ? null : DateTime.parse(j['change_without_until'] as String),
+        lockedUntil: j['locked_until'] == null ? null : DateTime.parse(j['locked_until'] as String),
+        paysFrom: j['pays_from'] == null ? null : DateTime.parse(j['pays_from'] as String),
+        set: j['set'] as bool,
+        setAt: j['set_at'] == null ? null : DateTime.parse(j['set_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change_without': changeWithout,
+        'change_without_until': ?changeWithoutUntil?.toUtc().toIso8601String(),
+        'locked_until': ?lockedUntil?.toUtc().toIso8601String(),
+        'pays_from': ?paysFrom?.toUtc().toIso8601String(),
+        'set': set,
+        'set_at': ?setAt?.toUtc().toIso8601String(),
+      };
+}
+
+class PutMePinRequest {
+  const PutMePinRequest({this.passkey, required this.pin, this.totp});
+
+  final Map<String, dynamic>? passkey;
+  final String pin;
+  final String? totp;
+
+  factory PutMePinRequest.fromJson(Map<String, dynamic> j) => PutMePinRequest(
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey,
+        'pin': pin,
+        'totp': ?totp,
       };
 }
 
