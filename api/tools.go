@@ -250,7 +250,7 @@ func toolValues(d *wd.Definition, input map[string]any) []toolValue {
 // startTool starts tool t for p with input from channel: at once when its
 // care answers, else a confirm it waits for. dedup makes a repeated call
 // start one run.
-func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel, dedup string) (toolStart, error) {
+func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel, dedup string, button uuid.UUID) (toolStart, error) {
 	var def []byte
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, t.Workflow, t.Version).Scan(&def)
@@ -270,7 +270,14 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 	}
 	out := toolStart{Care: t.Asks(), Values: toolValues(d, input)}
 	if out.Care == wdcheck.CareAnswers {
+		// A once button is spent by the run it starts.
+		if err := s.claimButton(ctx, p, button); err != nil {
+			return out, err
+		}
 		out.Run, out.Created, err = s.runTool(ctx, p, t, input, channel, dedup)
+		if err == nil {
+			s.recordButtonRun(ctx, p, button, out.Run)
+		}
 		return out, err
 	}
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
@@ -285,8 +292,8 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 		if _, err := tx.Exec(ctx, `DELETE FROM tool_confirms WHERE expires_at < now() - interval '1 day'`); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO tool_confirms (id, tenant_id, user_id, workflow_id, version, environment, command, care, input_digest, channel, expires_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, id, p.TenantID, p.UserID, t.Workflow, t.Version, t.Environment, t.Command, out.Care, digest, channel, until)
+		_, err := tx.Exec(ctx, `INSERT INTO tool_confirms (id, tenant_id, user_id, workflow_id, version, environment, command, care, input_digest, channel, expires_at, button)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULLIF($12, '00000000-0000-0000-0000-000000000000'::uuid))`, id, p.TenantID, p.UserID, t.Workflow, t.Version, t.Environment, t.Command, out.Care, digest, channel, until, button)
 		return err
 	}); err != nil {
 		return toolStart{}, err
@@ -311,10 +318,11 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 		expires  time.Time
 		run      *uuid.UUID
 		channel  string
+		button   *uuid.UUID
 	}
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT user_id, workflow_id, version, input_digest, expires_at, run_id, channel FROM tool_confirms WHERE id = $1 AND command = $2 AND environment = $3`,
-			confirm, t.Command, t.Environment).Scan(&c.user, &c.workflow, &c.version, &c.digest, &c.expires, &c.run, &c.channel)
+		return tx.QueryRow(ctx, `SELECT user_id, workflow_id, version, input_digest, expires_at, run_id, channel, button FROM tool_confirms WHERE id = $1 AND command = $2 AND environment = $3`,
+			confirm, t.Command, t.Environment).Scan(&c.user, &c.workflow, &c.version, &c.digest, &c.expires, &c.run, &c.channel, &c.button)
 	})
 	switch {
 	case errors.Is(err, pgx.ErrNoRows) || err == nil && c.user != p.UserID:
@@ -330,10 +338,18 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 	case !bytes.Equal(c.digest, digest):
 		return uuid.Nil, false, fmt.Errorf("%w: those are not the values you were shown; start the tool again", errConflict)
 	}
+	button := uuid.Nil
+	if c.button != nil {
+		button = *c.button
+	}
+	if err := s.claimButton(ctx, p, button); err != nil {
+		return uuid.Nil, false, err
+	}
 	run, created, err := s.runTool(ctx, p, t, input, c.channel, "tool-confirm:"+confirm.String())
 	if err != nil {
 		return run, created, err
 	}
+	s.recordButtonRun(ctx, p, button, run)
 	err = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `UPDATE tool_confirms SET run_id = $2 WHERE id = $1`, confirm, run)
 		return err
@@ -388,6 +404,9 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 		// Taskiem conversation when the run ends (the web's sheet asks;
 		// the app draws its own card).
 		AnswerInChat bool `json:"answer_in_chat,omitempty"`
+		// Button: the button pressed to open this form (a once button is
+		// spent by the run it starts).
+		Button uuid.UUID `json:"button,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -419,7 +438,18 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 	if key != "" {
 		key = p.Actor() + ":" + key
 	}
-	out, err := s.startTool(r.Context(), p, t, req.Input, channel, key)
+	if req.Button != uuid.Nil {
+		// The button must be this tool's, and still the presser's to use.
+		b, err := s.pressButton(r.Context(), p, req.Button)
+		if err == nil && b.tool.Workflow != t.Workflow {
+			err = fmt.Errorf("%w: that button opens another tool", errBadRequest)
+		}
+		if err != nil {
+			s.toolRefused(w, r, err, t.Command)
+			return
+		}
+	}
+	out, err := s.startTool(r.Context(), p, t, req.Input, channel, key, req.Button)
 	if err != nil {
 		s.toolRefused(w, r, err, t.Command)
 		return
@@ -496,6 +526,11 @@ func (s *Server) confirmToolRoute(w http.ResponseWriter, r *http.Request) {
 // limit (429), else as any error. A refusal by roles is audited.
 func (s *Server) toolRefused(w http.ResponseWriter, r *http.Request, err error, command string) {
 	var bad toolInputError
+	var taken errButtonTaken
+	if errors.As(err, &taken) {
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Already done: " + taken.Error() + ".", "taken_by": taken.By, "taken_at": taken.At})
+		return
+	}
 	if errors.Is(err, errNotFound) {
 		writeErr(w, http.StatusNotFound, strings.TrimPrefix(err.Error(), errNotFound.Error()+": "))
 		return

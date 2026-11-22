@@ -476,11 +476,14 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	body := tr(l, "wa.outcome.body")
 	// A tool's run answers with its answer (tools_answer.go): the person
 	// who started it is the one it goes to.
+	var buttons []whatsapp.Button
 	if status == "completed" {
 		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }); err == nil && a.Type != "outcome" {
 			if words := toolAnswerWords(l, a); words != "" {
 				title, body = words, ""
 			}
+			// A card's buttons as the chat's reply buttons (tools_buttons.go).
+			buttons = chatButtons(a.Buttons)
 		}
 	}
 	// Why, in plain words: the step that failed (N5).
@@ -491,6 +494,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	m := whatsapp.AlertMessage(name, kind, title, body, link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
+	m.Buttons = buttons
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
 	}

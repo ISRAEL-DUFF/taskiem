@@ -36858,6 +36858,68 @@ paths:
                       $ref: '#/components/schemas/MadeTool'
         default:
           $ref: '#/components/responses/Error'
+  /v1/tools/buttons/{button}:
+    post:
+      operationId: pressToolButton
+      tags:
+      - Tools
+      summary: Press a button
+      description: A button on a tool's answer or a Tell me message (decision 0070, made tools §10) gives the tool it opens and the values it fills in, for whoever pressed it, held to that tool's roles. It never runs anything; start the tool with them and the button. A once button already used answers 409 with who took it; a button past its seven days, or whose tool is gone, 404.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: button
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: The button's token
+      responses:
+        '200':
+          description: The tool and its values
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - button
+                - command
+                - name
+                - inputs
+                - once
+                properties:
+                  button:
+                    type: string
+                    format: uuid
+                  command:
+                    type: string
+                  name:
+                    type: string
+                  inputs:
+                    type: object
+                  once:
+                    type: boolean
+        '409':
+          description: A once button someone used
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  taken_by:
+                    type: string
+                  taken_at:
+                    type: string
+                    format: date-time
+        default:
+          $ref: '#/components/responses/Error'
   /v1/tools/{command}/start:
     post:
       operationId: startTool
@@ -36896,6 +36958,10 @@ paths:
                   type: object
                 environment:
                   type: string
+                button:
+                  type: string
+                  format: uuid
+                  description: The button pressed to open this form; a once button is spent by the run it starts (409 when someone was first)
                 answer_in_chat:
                   type: boolean
                   description: Also put the answer's words in the person's Taskiem conversation when the run ends (the web's sheet; the app draws its own)
@@ -41380,6 +41446,9 @@ components:
           type: string
         tool:
           type: string
+        token:
+          type: string
+          description: Presses it (POST /v1/tools/buttons/{token})
         inputs:
           type: object
         once:

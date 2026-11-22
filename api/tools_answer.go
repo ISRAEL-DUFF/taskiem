@@ -61,6 +61,9 @@ type answerBtn struct {
 	Tool   string         `json:"tool"`
 	Inputs map[string]any `json:"inputs,omitempty"`
 	Once   bool           `json:"once,omitempty"`
+	// Token presses it (POST /v1/tools/buttons/{token}); a button whose
+	// tool is not there is left out of the answer.
+	Token string `json:"token,omitempty"`
 }
 
 type answerRow struct {
@@ -152,6 +155,9 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 	}
 	maskDeclared(d, outputs)
 	drawAnswer(&a, d.Tool.Answer, outputs)
+	if err := s.mintAnswerButtons(ctx, tenant, env, id, &a); err != nil {
+		return a, err
+	}
 	return a, nil
 }
 

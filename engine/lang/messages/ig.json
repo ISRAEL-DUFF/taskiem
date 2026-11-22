@@ -3981,6 +3981,16 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. Heading over the business's own tools listed by tools"
     },
+    "wa.tool.taken": {
+      "text": "Already done: {who} took it at {when}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A once button on a tool's answer or a message, pressed after someone else's press started its run"
+    },
+    "wa.tool.button_gone": {
+      "text": "This button is not available any more.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A button whose tool is gone, or which is more than seven days old"
+    },
     "wa.tool.echo": {
       "text": "Starting {tool}.",
       "reviewed": false,

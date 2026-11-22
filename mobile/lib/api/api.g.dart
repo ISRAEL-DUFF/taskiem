@@ -1870,6 +1870,12 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/form-requests/${Uri.encodeComponent(id)}/answers', body: body.toJson());
     return AnswerFormRequestResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Press a button (`POST /v1/tools/buttons/{button}`)
+  Future<PressToolButtonResponse> pressToolButton({required String button}) async {
+    final j = await _t.send('POST', '/v1/tools/buttons/${Uri.encodeComponent(button)}');
+    return PressToolButtonResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -15772,22 +15778,27 @@ class MadeToolCare {
 }
 
 class StartToolRequest {
-  const StartToolRequest({this.answerInChat, this.environment, this.input});
+  const StartToolRequest({this.answerInChat, this.button, this.environment, this.input});
 
   /// Also put the answer's words in the person's Taskiem conversation when the
   /// run ends (the web's sheet; the app draws its own)
   final bool? answerInChat;
+  /// The button pressed to open this form; a once button is spent by the run it
+  /// starts (409 when someone was first)
+  final String? button;
   final String? environment;
   final Map<String, dynamic>? input;
 
   factory StartToolRequest.fromJson(Map<String, dynamic> j) => StartToolRequest(
         answerInChat: j['answer_in_chat'] == null ? null : j['answer_in_chat'] as bool,
+        button: j['button'] == null ? null : j['button'] as String,
         environment: j['environment'] == null ? null : j['environment'] as String,
         input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
       );
 
   Map<String, dynamic> toJson() => {
         'answer_in_chat': ?answerInChat,
+        'button': ?button,
         'environment': ?environment,
         'input': ?input,
       };
@@ -15936,17 +15947,20 @@ class ToolAnswer {
 }
 
 class ToolButton {
-  const ToolButton({this.inputs, required this.label, this.once, required this.tool});
+  const ToolButton({this.inputs, required this.label, this.once, this.token, required this.tool});
 
   final Map<String, dynamic>? inputs;
   final String label;
   final bool? once;
+  /// Presses it (POST /v1/tools/buttons/{token})
+  final String? token;
   final String tool;
 
   factory ToolButton.fromJson(Map<String, dynamic> j) => ToolButton(
         inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
         label: j['label'] as String,
         once: j['once'] == null ? null : j['once'] as bool,
+        token: j['token'] == null ? null : j['token'] as String,
         tool: j['tool'] as String,
       );
 
@@ -15954,6 +15968,7 @@ class ToolButton {
         'inputs': ?inputs,
         'label': label,
         'once': ?once,
+        'token': ?token,
         'tool': tool,
       };
 }
@@ -16238,5 +16253,31 @@ class FormSubmissionFilesItem {
         'name': ?name,
         'size': ?size,
         'type': ?type,
+      };
+}
+
+class PressToolButtonResponse {
+  const PressToolButtonResponse({required this.button, required this.command, required this.inputs, required this.name, required this.once});
+
+  final String button;
+  final String command;
+  final Map<String, dynamic> inputs;
+  final String name;
+  final bool once;
+
+  factory PressToolButtonResponse.fromJson(Map<String, dynamic> j) => PressToolButtonResponse(
+        button: j['button'] as String,
+        command: j['command'] as String,
+        inputs: j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        once: j['once'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'button': button,
+        'command': command,
+        'inputs': inputs,
+        'name': name,
+        'once': once,
       };
 }

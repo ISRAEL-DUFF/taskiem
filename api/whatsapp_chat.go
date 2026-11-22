@@ -250,6 +250,9 @@ type chatData struct {
 	// Tool is the command of the tool being called (tools_chat.go): the
 	// run is the tool's, at its care.
 	Tool string `json:"tool,omitempty"`
+	// Button is the button pressed to open the tool (tools_buttons.go): a
+	// once button is spent by the run it starts.
+	Button uuid.UUID `json:"button,omitempty"`
 	// Ask names what is waiting for an answer, new each time the session
 	// is saved: a Yes button carries it (yesButton), so a Yes shown under
 	// an earlier summary confirms nothing.
@@ -847,6 +850,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// link request are signed tokens, taken by waDecide before this.
 	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
 		return s.waLinkOffer(ctx, c, code)
+	}
+	// A button on a tool's answer or a Tell me message (tools_buttons.go).
+	if id, ok := strings.CutPrefix(text, buttonReplyPrefix); ok {
+		return s.waToolButton(ctx, c, id)
 	}
 	// Pay on a bill's reminder (link_credit.go).
 	if ref, ok := strings.CutPrefix(text, billPayPrefix); ok {
@@ -1846,6 +1853,13 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 	}
 	data.Inputs[f.Name] = v
 	data.Index++
+	// Fields a button filled in are not asked again.
+	for data.Index < len(fields) {
+		if _, filled := data.Inputs[fields[data.Index].Name]; !filled {
+			break
+		}
+		data.Index++
+	}
 	if data.Index < len(fields) {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err

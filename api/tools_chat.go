@@ -223,7 +223,17 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {
 		return c.say(ctx, s, c.t("wa.run.bad_inputs", "workflow", t.Name, "problems", whatsapp.SafeText(strings.Join(probs, "; "))))
 	}
-	_, _, err := s.runTool(ctx, c.p, t, input, c.ch.Name(), data.Nonce)
+	if err := s.claimButton(ctx, c.p, data.Button); err != nil {
+		var taken errButtonTaken
+		if errors.As(err, &taken) {
+			return c.say(ctx, s, c.t("wa.tool.taken", "who", taken.By, "when", taken.At.In(lagosTZ).Format("15:04")))
+		}
+		return err
+	}
+	run, _, err := s.runTool(ctx, c.p, t, input, c.ch.Name(), data.Nonce)
+	if err == nil {
+		s.recordButtonRun(ctx, c.p, data.Button, run)
+	}
 	if le, ok := runtime.IsLimit(err); ok {
 		return c.say(ctx, s, c.t("wa.run.limit", "reason", le.Message))
 	}
@@ -307,4 +317,80 @@ func (s *Server) madeToolLines(ctx context.Context, c *chat) ([]string, error) {
 		out = append(out, fmt.Sprintf("• %s: %s. %s", cmd, whatsapp.SafeText(t.Name), whatsapp.SafeText(t.About)))
 	}
 	return out, nil
+}
+
+// waToolButton is a press of a button in the chat: the tool it names,
+// opened with the values it carries (sealed where personal), the rest
+// asked as run asks them, then the tool's care, as whoever pressed it.
+func (s *Server) waToolButton(ctx context.Context, c *chat, token string) error {
+	id, err := uuid.Parse(token)
+	if err != nil {
+		return c.say(ctx, s, c.t("wa.tool.button_gone"))
+	}
+	if !c.p.Can(PermRunStart) {
+		return c.say(ctx, s, c.t("wa.run.denied", "org", c.tenant.Name))
+	}
+	b, err := s.pressButton(ctx, c.p, id)
+	var taken errButtonTaken
+	switch {
+	case errors.As(err, &taken):
+		return c.say(ctx, s, c.t("wa.tool.taken", "who", taken.By, "when", taken.At.In(lagosTZ).Format("15:04")))
+	case errors.Is(err, errNotFound):
+		return c.say(ctx, s, c.t("wa.tool.button_gone"))
+	case errors.Is(err, errForbidden):
+		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", b.tool.Name, "roles", startRolesWords(b.tool.Roles)))
+	case err != nil:
+		return err
+	}
+	t := b.tool
+	if t.Asks() == wdcheck.CareStepUp {
+		msg := c.t("wa.tool.step_up", "tool", t.Name)
+		if s.PublicURL != "" {
+			msg += "\n" + strings.TrimRight(s.PublicURL, "/") + "/tools/" + t.Command
+		}
+		return c.say(ctx, s, msg)
+	}
+	fields, err := s.waFieldsOf(ctx, c.tenant.ID, t.Workflow, t.Version)
+	if errors.Is(err, whatsapp.ErrInputsUnsupported) {
+		return c.say(ctx, s, c.t("wa.run.unsupported_inputs", "workflow", t.Name))
+	}
+	if err != nil {
+		return err
+	}
+	data := chatData{Workflow: t.Workflow, Name: t.Name, Version: t.Version, Environment: t.Environment, Inputs: map[string]any{}, Tool: t.Command, Button: id}
+	// The values it carries, for the fields the form has; personal ones
+	// wait sealed, as typed ones do.
+	piiOf := map[string]string{}
+	for _, f := range fields {
+		piiOf[f.Name] = f.PII
+	}
+	if err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
+		for k, v := range b.Inputs {
+			if cat := piiOf[k]; cat != "" {
+				env, err := s.Store.PII.SealTx(ctx, tx, c.tenant.ID, cat, v)
+				if err != nil {
+					return err
+				}
+				v = env
+			}
+			data.Inputs[k] = v
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	data.Index = 0
+	for data.Index < len(fields) {
+		if _, filled := data.Inputs[fields[data.Index].Name]; !filled {
+			break
+		}
+		data.Index++
+	}
+	if data.Index >= len(fields) {
+		return s.waAskConfirm(ctx, c, data)
+	}
+	if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
+		return err
+	}
+	return c.say(ctx, s, c.t("wa.run.needs_inputs", "workflow", t.Name, "count", fmt.Sprint(len(fields)-data.Index), "prompt", fields[data.Index].PromptIn(c.lang.Tag)))
 }

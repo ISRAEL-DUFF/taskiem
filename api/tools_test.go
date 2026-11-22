@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -187,5 +189,95 @@ func TestToolInChat(t *testing.T) {
 	w.bind(t, bo, "+2348010000042")
 	if r := w.say(t, "+2348010000042", "leave-left Musa"); !strings.Contains(r, "Only operator can start Leave left") {
 		t.Errorf("builder: %q", r)
+	}
+}
+
+// Buttons (made tools M2): "Open tickets" lists, each row's Assign to me
+// opens the assign tool filled in, as the presser; once, the first run
+// spends it and the next person is told who took it; a card's button is a
+// reply button in WhatsApp, which opens the tool there.
+func TestToolButtons(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@buttons.test")
+	publish := func(def string) {
+		t.Helper()
+		var head struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal([]byte(def), &head)
+		wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": head.Name, "definition": json.RawMessage(def)})["id"].(string)
+		owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	}
+	publish(`{"schema":"wd/v1","id":"wf_assign","version":1,"name":"Assign a ticket","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","required":["ref"],"properties":{"ref":{"type":"string","title":"Ticket"}}}},
+		"outputs":[{"name":"ref","type":"string","title":"Ticket","description":"The ticket","value":"=steps.take.output.ref"}],
+		"tool":{"name":"Assign a ticket","command":"assign-ticket","about":"Take a ticket","answer":{"type":"text","text":"='Yours: ' + outputs.ref"}},
+		"steps":[{"id":"take","type":"transform","config":{"output":{"ref":"=trigger.body.ref"}}}]}`)
+	publish(`{"schema":"wd/v1","id":"wf_open","version":1,"name":"Open tickets","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","properties":{}}},
+		"outputs":[{"name":"tickets","type":"list","title":"Tickets","description":"Open ones","value":"=steps.find.output.tickets"},
+		           {"name":"first","type":"string","title":"First","description":"The first","value":"=steps.find.output.first"}],
+		"tool":{"name":"Open tickets","command":"open-tickets","about":"The open tickets",
+		        "answer":{"type":"list","from":"tickets","title":"Open tickets","item":{"title":"=item.title","sub":"=item.ref"},
+		                  "actions":[{"label":"Assign to me","tool":"assign-ticket","inputs":{"ref":"=item.ref"},"once":true}]}},
+		"steps":[{"id":"find","type":"transform","config":{"output":{"first":"T-1","tickets":[{"ref":"T-1","title":"Printer jam"},{"ref":"T-2","title":"No Wi-Fi"}]}}}]}`)
+	publish(`{"schema":"wd/v1","id":"wf_first","version":1,"name":"First ticket","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","properties":{}}},
+		"outputs":[{"name":"ref","type":"string","title":"Ref","description":"The first","value":"=steps.find.output.ref"}],
+		"tool":{"name":"First ticket","command":"first-ticket","about":"The first open ticket",
+		        "answer":{"type":"card","title":"=outputs.ref","buttons":[{"label":"Assign to me","tool":"assign-ticket","inputs":{"ref":"=outputs.ref"}}]}},
+		"steps":[{"id":"find","type":"transform","config":{"output":{"ref":"T-9"}}}]}`)
+	ada := w.member(t, owner, "ada@buttons.test", "operator")
+	bo := w.member(t, owner, "bo@buttons.test", "operator")
+
+	// The list, each row with its button.
+	run := ada.must(201, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": map[string]any{}})["run_id"].(string)
+	w.env.Drain(t)
+	a := ada.must(200, "GET", "/v1/runs/"+run+"/answer", nil)
+	rows := a["rows"].([]any)
+	if a["type"] != "list" || len(rows) != 2 {
+		t.Fatalf("list: %v", a)
+	}
+	act := rows[1].(map[string]any)["actions"].([]any)[0].(map[string]any)
+	token := act["token"].(string)
+	// Drawn again, the same button.
+	if again := ada.must(200, "GET", "/v1/runs/"+run+"/answer", nil)["rows"].([]any)[1].(map[string]any)["actions"].([]any)[0].(map[string]any)["token"]; again != token {
+		t.Errorf("drawn twice: %v %v", token, again)
+	}
+
+	// Pressed: the assign tool, filled in.
+	p := ada.must(200, "POST", "/v1/tools/buttons/"+token, nil)
+	if p["command"] != "assign-ticket" || toJSON(p["inputs"]) != `{"ref":"T-2"}` || p["once"] != true {
+		t.Fatalf("pressed: %v", p)
+	}
+	started := ada.must(201, "POST", "/v1/tools/assign-ticket/start", map[string]any{"input": p["inputs"], "button": token})
+	w.env.Drain(t)
+	if got := ada.must(200, "GET", "/v1/runs/"+started["run_id"].(string)+"/answer", nil); got["text"] != "Yours: T-2" {
+		t.Errorf("assigned: %v", got)
+	}
+	// Once: the next person is told who took it.
+	if e := bo.must(409, "POST", "/v1/tools/buttons/"+token, nil); !strings.Contains(e["error"].(string), "Already done") {
+		t.Errorf("taken: %v", e)
+	}
+	bo.must(409, "POST", "/v1/tools/assign-ticket/start", map[string]any{"input": map[string]any{"ref": "T-2"}, "button": token})
+	// A button of another tool is refused.
+	other := rows[0].(map[string]any)["actions"].([]any)[0].(map[string]any)["token"].(string)
+	bo.must(400, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": map[string]any{}, "button": other})
+	bo.must(404, "POST", "/v1/tools/buttons/"+uuid.NewString(), nil)
+
+	// WhatsApp: a card's button is a reply button; pressed, the tool opens
+	// filled in and, as it only reads, starts at once.
+	const on = "+2348010000051"
+	w.bind(t, bo, on)
+	w.say(t, on, "first-ticket")
+	w.env.Drain(t)
+	w.tick(t)
+	last := w.graph.Last(t, on)
+	if !strings.Contains(last.Text, "T-9") || len(last.Buttons) != 1 || !strings.HasPrefix(last.Buttons[0].ID, "tb:") {
+		t.Fatalf("card in chat: %+v", last)
+	}
+	got := w.send(t, on, whatsapptest.ButtonReply(last.Buttons[0].ID, "Assign to me"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Starting Assign a ticket") || !strings.Contains(got[0].Text, "T-9") {
+		t.Fatalf("pressed in chat: %+v", got)
 	}
 }

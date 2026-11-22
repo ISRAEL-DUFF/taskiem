@@ -39,6 +39,18 @@ actions:
           type: object
           description: "With template: its variables (every one but the business's name, which Taskiem adds), each a line of text, such as day and summary for taskiem_daily_close"
           additionalProperties: { type: string }
+        buttons:
+          type: array
+          maxItems: 3
+          description: "Up to three buttons (decision 0070, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them"
+          items:
+            type: object
+            required: [label, tool]
+            properties:
+              label:  { type: string, minLength: 1, maxLength: 20, description: "What the button says" }
+              tool:   { type: string, description: "The tool's command, such as clean-disk" }
+              inputs: { type: object, description: "Values for the tool's form, each a value or an expression" }
+              once:   { type: boolean, description: "The first run started from it spends it; the next person is told who took it" }
     output:
       type: object
       properties:
