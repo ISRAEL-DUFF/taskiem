@@ -114,9 +114,21 @@
           },
           "value": {
             "$ref": "#/$defs/expr"
+          },
+          "public": {
+            "type": "boolean",
+            "description": "A tool may show this output to customers and linked businesses (decision 0070); others are never shown to them."
+          },
+          "x-pii": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]{0,31}$",
+            "description": "The output is personal data of this category: masked in a tool's answer whatever its name."
           }
         }
       }
+    },
+    "tool": {
+      "$ref": "#/$defs/tool"
     }
   },
   "$defs": {
@@ -2544,6 +2556,254 @@
       "allOf": [
         {
           "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "tool": {
+      "description": "The workflow as a tool in the chat (decision 0070, docs/spec/made-tools.md): its name, command, who it is for and what it answers with. Not part of what a run does. Who may use it is the workflow's roles.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "command",
+        "about"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "command": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,23}$"
+        },
+        "about": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "says": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          }
+        },
+        "icon": {
+          "enum": [
+            "receipt",
+            "box",
+            "cart",
+            "money",
+            "people",
+            "person",
+            "calendar",
+            "clock",
+            "truck",
+            "list",
+            "search",
+            "chat",
+            "bell",
+            "check",
+            "chart",
+            "wrench",
+            "server",
+            "tag",
+            "store",
+            "file"
+          ]
+        },
+        "for": {
+          "enum": [
+            "members",
+            "customers",
+            "linked"
+          ],
+          "default": "members"
+        },
+        "answer": {
+          "$ref": "#/$defs/answer"
+        }
+      }
+    },
+    "answerValue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500,
+      "description": "Words, or an expression (=...) over outputs (and item, in a list's rows)."
+    },
+    "answerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/answerValue"
+        },
+        "tone": {
+          "enum": [
+            "plain",
+            "good",
+            "warn",
+            "bad"
+          ]
+        }
+      }
+    },
+    "toolButton": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "tool"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,23}$"
+        },
+        "inputs": {
+          "type": "object"
+        },
+        "once": {
+          "type": "boolean"
+        }
+      }
+    },
+    "answer": {
+      "description": "What a tool's run says when it ends (made tools §7): a text, a card or a list, drawn by the API from the run's outputs.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "$ref": "#/$defs/answerValue"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "title"
+          ],
+          "properties": {
+            "type": {
+              "const": "card"
+            },
+            "title": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "ref": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "state": {
+              "$ref": "#/$defs/answerState"
+            },
+            "lines": {
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "value": {
+                    "$ref": "#/$defs/answerValue"
+                  }
+                }
+              }
+            },
+            "amount": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "buttons": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "$ref": "#/$defs/toolButton"
+              }
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "from",
+            "item"
+          ],
+          "properties": {
+            "type": {
+              "const": "list"
+            },
+            "from": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,39}$"
+            },
+            "title": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "item": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "title": {
+                  "$ref": "#/$defs/answerValue"
+                },
+                "sub": {
+                  "$ref": "#/$defs/answerValue"
+                },
+                "state": {
+                  "$ref": "#/$defs/answerState"
+                }
+              }
+            },
+            "empty": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "actions": {
+              "type": "array",
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/toolButton"
+              }
+            }
+          }
         }
       ]
     }

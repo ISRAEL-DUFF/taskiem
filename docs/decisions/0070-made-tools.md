@@ -1,6 +1,6 @@
 # 0070 — Made tools: a workflow declares itself a tool, and who may start a workflow is a rule
 
-Date: 2026-11-22 · Status: **Proposed** (D1, for the founder to accept; the plan's choices were settled 19 November 2026) · Plan: [Made tools](../spec/made-tools.md) · Build plan: [M0](../spec/build-plan-saved-tools-payments.md#4-the-phases)
+Date: 2026-11-22 · Status: **Proposed** (D1, for the founder to accept; the plan's choices were settled 19 November 2026; M0 built) · Plan: [Made tools](../spec/made-tools.md) · Build plan: [M0](../spec/build-plan-saved-tools-payments.md#4-the-phases)
 
 ## Context
 
@@ -29,7 +29,11 @@ The plan's nine questions were settled with the founder on 19 November 2026 ([ma
 - The rule at the API's start and at `run` in the chat apps, with the refusal audited and said in each language (`wa.run.not_yours`).
 - **Who can start it** in the editor's Settings, picking from the business's roles.
 
-The rest of M0 (`tool` and `answer` in the schema, the validator's rules of [made tools §12](../spec/made-tools.md#12-what-the-validator-refuses), care worked out and stored) follows in its own pull request.
+## What the rest of M0 builds
+
+- `tool` and `answer` in `wd/v1` and the definition model, with `public` and `x-pii` on outputs; the SDK, `wddiff` and `wdmerge`.
+- The validator's rules of [made tools §12](../spec/made-tools.md#12-what-the-validator-refuses) that need no later phase: in `engine/wd` (the trigger, the answer's outputs and limits, customers' public outputs and flat inputs; `linked` refused until T7), in `engine/wdcheck` (Taskiem's own words, in every language, and a step that moves money in a customers' tool) and at deploy (a command another workflow deployed in the environment has).
+- Care worked out from the steps (`wdcheck.ToolCare`) when a version is published, and kept with it (`workflow_versions.tool_care`, migration 00519). The business's policies are read when a tool is started (M1), since they change after publishing.
 
 ## Alternatives considered
 

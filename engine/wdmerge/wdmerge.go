@@ -39,7 +39,7 @@ const (
 )
 
 // fields are the merged top-level fields, besides steps.
-var fields = []string{"schema", "id", "version", "name", "description", "trigger", "inputs", "types", "settings", "outputs", "roles"}
+var fields = []string{"schema", "id", "version", "name", "description", "trigger", "inputs", "types", "settings", "outputs", "roles", "tool"}
 
 // Merge merges ours and theirs, both edited from base. Conflicts listed in
 // resolutions take the side given; the others are returned, and merged is

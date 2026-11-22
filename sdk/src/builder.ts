@@ -10,7 +10,7 @@
 // functions over the expression context, compiled to CEL by build().
 
 import { compileFunction, ExpressionError } from "./expr.js";
-import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
+import type { ActionClass, ContainerLimits, Duration, FormTriggerConfig, Output, Retry, Step, Tool, Trigger, UssdMenu, UssdOption, UssdScreen, UssdValidate, WorkflowDefinition } from "./wd.js";
 
 /** What an expression can read (wd/v1 rule 10). Values are untyped. */
 export interface Context {
@@ -370,6 +370,8 @@ export interface WorkflowOptions {
   outputs?: (Omit<Output, "value"> & { value: Expr })[];
   /** Who may start it by hand: members holding one of these roles (owners always may). Left out: everyone who may start runs. */
   roles?: string[];
+  /** The workflow as a tool in the chat: its name, command, who it is for and what it answers with (decision 0070). */
+  tool?: Tool;
 }
 
 export class Workflow extends Steps {
@@ -392,6 +394,7 @@ export class Workflow extends Steps {
     if (o.settings !== undefined) def.settings = lowerAt(o.settings, "settings");
     if (o.outputs !== undefined) def.outputs = lowerAt(o.outputs, "outputs");
     if (o.roles !== undefined) def.roles = o.roles;
+    if (o.tool !== undefined) def.tool = o.tool;
     return def as unknown as WorkflowDefinition;
   }
 

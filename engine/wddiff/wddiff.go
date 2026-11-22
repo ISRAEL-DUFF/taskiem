@@ -16,7 +16,7 @@ func Diff(oldDoc, newDoc json.RawMessage) []string {
 	_ = json.Unmarshal(oldDoc, &o)
 	_ = json.Unmarshal(newDoc, &n)
 	var out []string
-	for _, k := range []string{"name", "description", "trigger", "inputs", "types", "settings", "outputs", "roles"} {
+	for _, k := range []string{"name", "description", "trigger", "inputs", "types", "settings", "outputs", "roles", "tool"} {
 		if !jsonEqual(o[k], n[k]) {
 			out = append(out, "~ "+k)
 		}

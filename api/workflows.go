@@ -652,12 +652,12 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var info versionInfo
-	var def, layout []byte
+	var def, layout, care []byte
 	var probs []problem
 	err = s.tx(r, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout
+		if err := tx.QueryRow(r.Context(), `SELECT version, state, encode(digest, 'hex'), created_by, created_at, published_by, published_at, git_commit, git_pr, ai_build_id, definition, layout, tool_care
 			FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, wf, v).
-			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout); err != nil {
+			Scan(&info.Version, &info.State, &info.Digest, &info.CreatedBy, &info.CreatedAt, &info.PublishedBy, &info.PublishedAt, &info.GitCommit, &info.GitRequest, &info.AIBuild, &def, &layout, &care); err != nil {
 			return err
 		}
 		probs = s.checkVersion(r.Context(), tx, principalFrom(r.Context()).TenantID, wf, v, def)
@@ -670,6 +670,10 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"version": info, "definition": json.RawMessage(def), "problems": nonNil(probs)}
 	if layout != nil {
 		out["layout"] = json.RawMessage(layout)
+	}
+	if care != nil {
+		// A published tool's care (decision 0070), worked out from its steps.
+		out["tool_care"] = json.RawMessage(care)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -915,6 +919,9 @@ func (s *Server) publishToTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUI
 		return nil, "", false, err
 	}
 	if err := auditAIPersonalData(ctx, tx, tenant, wf, v, def, by); err != nil {
+		return nil, "", false, err
+	}
+	if err := s.storeToolCare(ctx, tx, tenant, wf, v, def, d); err != nil {
 		return nil, "", false, err
 	}
 	targets, err := deployTargets(ctx, tx, gitEnv)

@@ -1,6 +1,6 @@
 # Made tools: a workflow as a tool in the chat
 
-Status: **plan, settled; not built.** The founder took every recommendation in §14 on 19 November 2026. Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder decided. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
+Status: **plan, settled; T0 built** (22 November 2026, as the build plan's M0: [decision 0070](../decisions/0070-made-tools.md)). The founder took every recommendation in §14 on 19 November 2026. Reviewed against the code the day it was written (§22 says what that changed). Written 2026-11-13, after a conversation with the founder on 12 November about using Taskiem as a general automation tool and about workflows that people work with from the chat. §14 lists what the founder decided. Builds on [chat tools](chat-tools.md), [business chat tools](business-chat-tools.md), [WhatsApp](../whatsapp.md), [forms](../forms.md), [callable workflows](../contracts/wd-v1.md#callable-workflows) (decision 0048) and [no technical steps](no-technical-steps.md).
 
 ## 1. Summary
 

@@ -75,6 +75,10 @@ export interface Output {
   title: string;
   description: string;
   value: Expression;
+  /** A tool may show this output to customers and linked businesses. */
+  public?: boolean;
+  /** The output is personal data of this category: masked in a tool's answer. */
+  "x-pii"?: string;
 }
 
 export interface CodeStep extends StepBase {
@@ -322,4 +326,37 @@ export interface WorkflowDefinition {
   outputs?: Output[];
   /** Who may start it by hand (decision 0070): members holding one of these roles, beside run.start; owners always may. Left out: everyone with run.start. */
   roles?: string[];
+  /** The workflow as a tool in the chat (decision 0070): its name, command, who it is for and what it answers with. */
+  tool?: Tool;
+}
+
+/** A value an answer shows: words, or an expression over outputs (and item in a list's rows). */
+export type AnswerValue = string;
+
+export interface ToolButton {
+  label: string;
+  /** The command of the tool whose form it fills. */
+  tool: string;
+  inputs?: Record<string, unknown>;
+  once?: boolean;
+}
+
+export interface AnswerState {
+  text: AnswerValue;
+  tone?: "plain" | "good" | "warn" | "bad";
+}
+
+export type Answer =
+  | { type: "text"; text: AnswerValue }
+  | { type: "card"; title: AnswerValue; ref?: AnswerValue; state?: AnswerState; lines?: { label: string; value: AnswerValue }[]; amount?: AnswerValue; buttons?: ToolButton[] }
+  | { type: "list"; from: string; title?: AnswerValue; item: { title: AnswerValue; sub?: AnswerValue; state?: AnswerState }; empty?: string; actions?: ToolButton[] };
+
+export interface Tool {
+  name: string;
+  command: string;
+  about: string;
+  says?: string[];
+  icon?: string;
+  for?: "members" | "customers" | "linked";
+  answer?: Answer;
 }

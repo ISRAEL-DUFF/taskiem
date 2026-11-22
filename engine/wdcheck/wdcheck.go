@@ -90,6 +90,7 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 		}
 		out = append(out, aroundProduct(written, def, reg)...)
 	}
+	out = append(out, toolProblems(def, reg)...)
 	var walk func(steps []*wd.Step)
 	walk = func(steps []*wd.Step) {
 		for _, st := range steps {

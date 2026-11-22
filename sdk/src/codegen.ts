@@ -30,11 +30,11 @@ export function generate(def: WorkflowDefinition, opts: CodegenOptions = {}): st
   header.name = def.name;
   if (def.description !== undefined) header.description = def.description;
   header.trigger = new Raw(g.trigger(def.trigger, "  "));
-  for (const k of ["inputs", "types", "settings", "outputs", "roles"] as const) {
+  for (const k of ["inputs", "types", "settings", "outputs", "roles", "tool"] as const) {
     if (def[k] !== undefined) header[k] = def[k];
   }
   for (const k of Object.keys(def)) {
-    if (!["schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings", "outputs", "roles"].includes(k)) {
+    if (!["schema", "id", "version", "name", "description", "trigger", "inputs", "steps", "types", "settings", "outputs", "roles", "tool"].includes(k)) {
       throw new Error(`codegen: unknown top-level field "${k}"`);
     }
   }

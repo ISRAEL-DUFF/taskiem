@@ -40929,6 +40929,23 @@ components:
           type: object
         problems:
           $ref: '#/components/schemas/Problems'
+        tool_care:
+          type: object
+          description: For a published version that is a tool (decision 0070), how much it asks before it runs, worked out from its steps when it was published.
+          required:
+          - level
+          properties:
+            level:
+              type: string
+              enum:
+              - answers
+              - 'yes'
+              - step_up
+            because:
+              type: array
+              items:
+                type: string
+              description: The steps that set it, by id.
     PublishResult:
       type: object
       required:
