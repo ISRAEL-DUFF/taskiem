@@ -251,7 +251,7 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PayrollPage(auth: api.auth())));
     await settle(t);
     expect(find.text('Payroll runs in Payrolla'), findsOneWidget);
-    expect(find.textContaining('connect payrolla'), findsOneWidget);
+    expect(find.textContaining('open Connections and add Payrolla'), findsOneWidget);
     expect(find.text('Staff in Payrolla'), findsNothing);
     await snap(t, 'payroll-not-connected');
 

@@ -228,7 +228,7 @@ class _PayrollPageState extends State<PayrollPage> {
           TkCallout(
             leading: TkSquare('b-calendar', color: look.violet),
             title: 'Payroll runs in Payrolla',
-            sub: 'Connect Payrolla to see its runs here: say “connect payrolla” to Taskiem, or on the web, open Connections.',
+            sub: 'Connect Payrolla to see its runs here: on the web, open Connections and add Payrolla with the key from Payrolla’s Connected apps.',
             subLines: 4,
             color: look.violet,
           ),
