@@ -29,6 +29,7 @@ import 'groups.dart' show askSure, pickAction;
 import 'my_chat.dart' show sayFailure;
 import 'pay_chip.dart' show PayForms, askToSave, mayPayFromMessages;
 import 'pay_many.dart' show BatchSheet, PayManySheet, PayRow;
+import 'pay_sheet.dart' show pickPayBank;
 import 'words.dart' show naira;
 
 /// The message a row comes from: its chat's kind (taskiem, link,
@@ -129,6 +130,22 @@ Future<void> addReadingToList(BuildContext context, Auth auth, PayForms forms, R
     showTkToast(context, askToSave);
     return;
   }
+  // An account number read with no bank: which bank, asked first (the
+  // server keeps no account without one).
+  var bank = bySaved ? '' : (r.bankName ?? '').trim();
+  if (!bySaved && bank.isEmpty) {
+    final List<ListPayBanksResponseBanksItem> banks;
+    try {
+      banks = (await auth.api.listPayBanks(account: r.accountNumber)).banks;
+    } on Object catch (e) {
+      if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+      return;
+    }
+    if (!context.mounted) return;
+    final v = await pickPayBank(context, banks);
+    if (v == null || v.trim().isEmpty || !context.mounted) return;
+    bank = v.trim();
+  }
   final kobo = r.amountKobo ?? 0;
   final list = PayList.of(auth);
   if (from.from.isNotEmpty) PayList.senders[from.message] = from.from;
@@ -137,7 +154,7 @@ Future<void> addReadingToList(BuildContext context, Auth auth, PayForms forms, R
       body: AddPayCollectionRequest(
         payee: bySaved ? payee : null,
         accountNumber: bySaved ? null : r.accountNumber,
-        bankName: bySaved || (r.bankName ?? '').isEmpty ? null : r.bankName,
+        bankName: bySaved ? null : bank,
         name: (r.name ?? '').trim().isEmpty ? null : r.name!.trim(),
         amountKobo: kobo >= 100 ? kobo : null,
         source: PayCollectionSource(kind: from.kind, chat: from.chat, message: from.message, from: from.from.isEmpty ? null : from.from),

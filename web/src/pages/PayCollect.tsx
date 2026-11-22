@@ -117,8 +117,11 @@ export function CollectedListPage() {
         const t = typed[x.id];
         if (t === undefined) continue;
         if (amountProblem(t)) return;
-        now = await saveAmount(x);
-        if (!now) return;
+        const got = await saveAmount(x);
+        if (!got) return;
+        // An amount unchanged answers the list as it was first: keep the
+        // newest one an earlier row's save answered.
+        if (got !== list) now = got;
       }
       if (!now || listBlocked(now)) return;
       setError(undefined);

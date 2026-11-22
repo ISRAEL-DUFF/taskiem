@@ -143,7 +143,12 @@ Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) => _
 /// it, and the account put on the person's list of people to pay, from
 /// [from] (that message).
 Future<void> collectFromChatPhoto(BuildContext context, Auth auth, String path, MessageFrom from) =>
-    _fromChatPhoto(context, auth, path, (r, forms) => addReadingToList(context, auth, forms, r, from));
+    _fromChatPhoto(context, auth, path, (r, forms) => addReadingToList(context, auth, forms, r, photoFrom(from)));
+
+/// A chat photo's message as the list keeps it, as the web keeps it too:
+/// kind photo, its chat `<kind>:<id>`, so the same photo added on two
+/// devices is one row.
+MessageFrom photoFrom(MessageFrom m) => (kind: 'photo', chat: '${m.kind}:${m.chat}', message: m.message, from: m.from);
 
 /// A chat's photo read on the phone (with AI where the phone found nothing
 /// and the business allows it), its words read by Taskiem, and [use] given

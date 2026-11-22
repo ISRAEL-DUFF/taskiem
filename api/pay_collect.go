@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,11 +71,14 @@ type collection struct {
 // it; rows of a cancelled batch come back.
 func collectionTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (collection, error) {
 	out := collection{Rows: []collectedRow{}}
-	if _, err := tx.Exec(ctx, `DELETE FROM pay_collected c USING payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id AND b.status = 'sent'`,
+	// Sent: gone. Cancelled: gone too where the row's own payment went
+	// before the rest was cancelled, so nobody is paid twice from it.
+	if _, err := tx.Exec(ctx, `DELETE FROM pay_collected c USING payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id
+		AND (b.status = 'sent' OR b.status = 'cancelled' AND EXISTS (SELECT 1 FROM payments p WHERE p.id = c.payment_id AND p.status NOT IN ('prepared', 'cancelled', 'rejected')))`,
 		tenant, user); err != nil {
 		return out, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE pay_collected c SET batch_id = NULL FROM payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id AND b.status = 'cancelled'`,
+	if _, err := tx.Exec(ctx, `UPDATE pay_collected c SET batch_id = NULL, payment_id = NULL FROM payment_batches b WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id = b.id AND b.status = 'cancelled'`,
 		tenant, user); err != nil {
 		return out, err
 	}
@@ -177,6 +181,12 @@ func (s *Server) addCollected(w http.ResponseWriter, r *http.Request) {
 	}
 	var out collection
 	err = s.tx(r, func(tx pgx.Tx) error {
+		// Rows of a batch sent (or cancelled) since the list was last read
+		// are let go first, so they neither fill the list nor refuse their
+		// message again.
+		if _, err := collectionTx(ctx, tx, p.TenantID, p.UserID); err != nil {
+			return err
+		}
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM pay_collected WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, p.UserID).Scan(&n); err != nil {
 			return err
@@ -211,14 +221,19 @@ func (s *Server) addCollected(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, out)
 }
 
-// checkCollected checks a row's amount, purpose and note.
+// checkCollected checks a row's amount, purpose and note as a payment's
+// are checked (preparePayment), so a row the list takes is not held out
+// of its batch for them.
 func checkCollected(amount *int64, purpose, note string) error {
+	purpose = strings.TrimSpace(purpose)
 	switch {
-	case amount != nil && (*amount <= 0 || *amount > 1_000_000_000_00):
-		return refusePay(http.StatusBadRequest, "amount", "Say an amount above ₦0.")
-	case len([]rune(strings.TrimSpace(purpose))) > 40:
-		return refusePay(http.StatusBadRequest, "purpose", "Say what it is for in a few words.")
-	case len([]rune(strings.TrimSpace(note))) > 200:
+	case amount != nil && *amount < 100:
+		return refusePay(http.StatusBadRequest, "amount", "Pay at least ₦1.")
+	case amount != nil && *amount > 1_000_000_000_00:
+		return refusePay(http.StatusBadRequest, "amount", "That is more than one payment may be.")
+	case purpose != "" && !slices.Contains(paymentPurposes, purpose):
+		return refusePay(http.StatusBadRequest, "purpose", "Say what it is for: a bill, wages, a delivery, a refund, stock bought, or other.")
+	case len([]rune(strings.TrimSpace(note))) > 100:
 		return refusePay(http.StatusBadRequest, "note", "The note is too long.")
 	}
 	return nil
@@ -328,6 +343,10 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if err := checkCollected(nil, in.Purpose, ""); err != nil {
+		s.payFail(w, r, err)
+		return
+	}
 	var ids []uuid.UUID
 	var rows []batchRow
 	err := s.tx(r, func(tx pgx.Tx) error {
@@ -390,17 +409,50 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "From messages"
 	}
-	b, err := s.prepareBatchView(r, rows, title, "messages", nil, "message")
+	b, made, err := s.prepareBatchView(r, rows, title, "messages", nil, "message")
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if b.Status != "cancelled" {
+		// Only the rows that became payments wait with the batch: one held
+		// out stays on the list. Rows another Check took meanwhile (a
+		// second tap, another device) are not paid twice: this batch is
+		// let go instead.
+		var claim, pays []uuid.UUID
+		for i, pid := range made {
+			if pid != uuid.Nil {
+				claim, pays = append(claim, ids[i]), append(pays, pid)
+			}
+		}
+		taken := false
 		if err := s.tx(r, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE pay_collected SET batch_id = $3 WHERE tenant_id = $1 AND id = ANY ($2)`, p.TenantID, ids, b.ID)
+			free, err := tx.Query(ctx, `SELECT id FROM pay_collected WHERE tenant_id = $1 AND user_id = $2 AND id = ANY ($3) AND batch_id IS NULL FOR UPDATE`,
+				p.TenantID, p.UserID, claim)
+			if err != nil {
+				return err
+			}
+			got, err := pgx.CollectRows(free, pgx.RowTo[uuid.UUID])
+			if err != nil {
+				return err
+			}
+			if len(got) != len(claim) {
+				taken = true
+				if _, err := tx.Exec(ctx, `UPDATE payments SET status = 'cancelled', finished_at = now() WHERE batch_id = $1 AND status = 'prepared'`, b.ID); err != nil {
+					return err
+				}
+				_, err = tx.Exec(ctx, `UPDATE payment_batches SET status = 'cancelled' WHERE id = $1 AND status = 'prepared'`, b.ID)
+				return err
+			}
+			_, err = tx.Exec(ctx, `UPDATE pay_collected c SET batch_id = $3, payment_id = x.pid FROM unnest($2::uuid[], $4::uuid[]) AS x(id, pid)
+				WHERE c.tenant_id = $1 AND c.id = x.id`, p.TenantID, claim, b.ID, pays)
 			return err
 		}); err != nil {
 			s.fail(w, r, err)
+			return
+		}
+		if taken {
+			s.payFail(w, r, refusePay(http.StatusConflict, "in_batch", "Some of your list waits in a batch: send it or cancel it first."))
 			return
 		}
 	}

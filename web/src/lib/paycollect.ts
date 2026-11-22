@@ -20,7 +20,8 @@ export interface CollectedSource {
   kind: ChatKind | "photo";
   chat: string;
   message: string;
-  /** Who sent it (a group's name), kept by the server for every device. */
+  /** Who sent it, kept by the server for every device (as the app keeps
+   * it): never a group's own name. */
   from?: string;
 }
 
@@ -61,7 +62,8 @@ export interface ChatPlace {
 
 /** The source a message's row is added with. */
 export function sourceFor(chat: ChatPlace, message: string, photo = false): CollectedSource {
-  const from = chat.name?.trim() ? { from: chat.name.trim().slice(0, 80) } : {};
+  // A one-to-one chat's name is who sent it; a group's is not.
+  const from = chat.kind !== "group" && chat.name?.trim() ? { from: chat.name.trim().slice(0, 80) } : {};
   return photo ? { kind: "photo", chat: `${chat.kind}:${chat.id}`, message, ...from } : { kind: chat.kind, chat: chat.id, message, ...from };
 }
 
@@ -144,10 +146,17 @@ export const chatKey = (kind: ChatKind, id: string) => `${kind}:${id}`;
 export function sourceWords(s: CollectedSource | null, names: Record<string, string> = {}): string {
   const c = sourceChat(s);
   if (!c) return "added by hand";
-  const name = s?.from?.trim() || names[chatKey(c.kind, c.id)]?.trim();
+  const sender = s?.from?.trim();
   const what = c.photo ? "a photo" : "a message";
   if (c.kind === "taskiem") return `from ${what} in your chat with Taskiem`;
-  if (c.kind === "group") return name ? `from ${what} in ${name}` : `from ${what} in a group`;
+  if (c.kind === "group") {
+    // from is who sent it; the group's name is the one this browser saw.
+    const group = names[chatKey(c.kind, c.id)]?.trim();
+    const where = group ? `in ${group}` : "in a group";
+    if (!sender) return `from ${what} ${where}`;
+    return c.photo ? `from a photo ${sender} sent ${where}` : `from ${sender}'s message ${where}`;
+  }
+  const name = sender || names[chatKey(c.kind, c.id)]?.trim();
   if (name) return c.photo ? `from a photo ${name} sent` : `from ${name}'s message`;
   switch (c.kind) {
     case "link":

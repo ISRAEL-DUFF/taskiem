@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -70,6 +71,12 @@ func TestCollectToPay(t *testing.T) {
 	// Every row needs an amount first.
 	if e := owner.must(400, "POST", "/v1/pay-collection/batch", map[string]any{}); e["code"] != "amount" {
 		t.Fatalf("no amount: %v", e)
+	}
+	// Checked as a payment is, so no row is held out of its batch for them.
+	for _, bad := range []map[string]any{{"amount_kobo": 50}, {"purpose": "groceries"}, {"note": strings.Repeat("n", 101)}} {
+		if e := owner.must(400, "PATCH", "/v1/pay-collection/"+second["id"].(string), bad); e["code"] == nil {
+			t.Fatalf("%v: %v", bad, e)
+		}
 	}
 	owner.must(200, "PATCH", "/v1/pay-collection/"+second["id"].(string), map[string]any{"amount_kobo": 2000000, "purpose": "wages"})
 

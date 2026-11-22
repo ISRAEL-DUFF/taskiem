@@ -93,6 +93,10 @@ describe("where a row came from", () => {
     expect(sourceWords({ kind: "link", chat: "L1", message: "m" }, names)).toBe("from Chidi Okeke's message");
     expect(sourceWords({ kind: "link", chat: "L2", message: "m" }, names)).toBe("from a message from a linked business");
     expect(sourceWords({ kind: "group", chat: "G1", message: "m" }, names)).toBe("from a message in Market women");
+    expect(sourceWords({ kind: "group", chat: "G1", message: "m", from: "Funke" }, names)).toBe("from Funke's message in Market women");
+    expect(sourceWords({ kind: "photo", chat: "group:G1", message: "m", from: "Funke" }, names)).toBe("from a photo Funke sent in Market women");
+    // A group's name is not who sent it.
+    expect(sourceFor({ kind: "group", id: "G1", name: "Market women" }, "m").from).toBeUndefined();
     expect(sourceWords({ kind: "photo", chat: "customer:C1", message: "m" }, names)).toBe("from a photo Tolu Bello sent");
     expect(sourceWords({ kind: "customer", chat: "C2", message: "m" }, names)).toBe("from a message from a customer");
     expect(sourceWords(null)).toBe("added by hand");
