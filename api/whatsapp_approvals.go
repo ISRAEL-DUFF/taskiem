@@ -478,7 +478,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	// who started it is the one it goes to.
 	var buttons []whatsapp.Button
 	if status == "completed" {
-		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }); err == nil && a.Type != "outcome" {
+		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }, false); err == nil && a.Type != "outcome" {
 			if words := toolAnswerWords(l, a); words != "" {
 				title, body = words, ""
 			}

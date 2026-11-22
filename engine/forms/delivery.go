@@ -180,6 +180,26 @@ func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	}
 	role, _ := to["role"].(string)
 	member, _ := to["member"].(string)
+	if starter, _ := to["starter"].(bool); starter && member == "" {
+		// Nobody started the run by hand (a schedule, an event, a
+		// workflow): nobody to ask; the step waits for its timeout.
+		if !first {
+			return nil, nil
+		}
+		_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: nobody started this run by hand")
+		return nil, err
+	}
+	if member != "" {
+		if _, err := uuid.Parse(member); err != nil {
+			// Not a member's id: nobody can answer it (and one bad request
+			// must not hold up the business's others).
+			if !first {
+				return nil, nil
+			}
+			_, err = tx.Exec(ctx, `UPDATE form_requests SET sent_at = now(), note = $2 WHERE id = $1`, p.id, "No way to ask: the member named is not a member of this business")
+			return nil, err
+		}
+	}
 	if l, _ := to["link"].(string); l != "" || role != "" || member != "" {
 		if !first {
 			_, err = tx.Exec(ctx, `UPDATE form_requests SET reminders_sent = reminders_sent + 1 WHERE id = $1`, p.id)

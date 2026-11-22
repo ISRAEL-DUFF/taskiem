@@ -33,36 +33,94 @@ const buttonFor = 7 * 24 * time.Hour
 // buttonReplyPrefix is a chat reply button's payload: "tb:<id>".
 const buttonReplyPrefix = "tb:"
 
-// buttonNS makes a button's id from where it was drawn (a run and its
-// place in the answer), so drawing an answer again mints no new rows.
-var buttonNS = uuid.MustParse("5d3b8f0e-6a8c-4f7e-9c1d-2b4a6e8f0a1c")
-
 // mintButton records a button drawn from run (at place) naming command in
-// env, and gives its id; uuid.Nil when no tool has that command there (the
-// button is then left out: "This is not available").
+// env, and gives its id: the one minted before for that place, while it
+// lasts. uuid.Nil leaves the button out: no tool has that command there,
+// or the button's seven days are over. The id is random. Inputs are
+// masked as messages are, at any depth, so a button carries nothing its
+// presser could not read in the answer.
 func mintButton(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, run uuid.UUID, place string, b answerBtn) (uuid.UUID, error) {
+	var id uuid.UUID
+	var expires time.Time
+	err := tx.QueryRow(ctx, `SELECT id, expires_at FROM tool_buttons WHERE from_run = $1 AND place = $2`, run, place).Scan(&id, &expires)
+	switch {
+	case err == nil && time.Now().After(expires):
+		return uuid.Nil, nil
+	case err == nil:
+		return id, nil
+	case !errors.Is(err, pgx.ErrNoRows):
+		return uuid.Nil, err
+	}
 	var wf uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT workflow_id FROM workflow_tools WHERE environment = $1 AND command = $2`, env, b.Tool).Scan(&wf)
+	err = tx.QueryRow(ctx, `SELECT workflow_id FROM workflow_tools WHERE environment = $1 AND command = $2`, env, b.Tool).Scan(&wf)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, nil
 	}
 	if err != nil {
 		return uuid.Nil, err
 	}
-	id := uuid.NewSHA1(buttonNS, []byte(tenant.String()+"/"+run.String()+"/"+place))
-	inputs, _ := json.Marshal(b.Inputs)
-	if b.Inputs == nil {
+	in, _ := maskDeep(maskEnvelopes(any(b.Inputs))).(map[string]any)
+	inputs, _ := json.Marshal(in)
+	if in == nil {
 		inputs = []byte("{}")
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO tool_buttons (id, tenant_id, environment, workflow_id, label, inputs, once, from_run, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING`,
-		id, tenant, env, wf, b.Label, inputs, b.Once, run, time.Now().Add(buttonFor))
+	id = uuid.New()
+	err = tx.QueryRow(ctx, `INSERT INTO tool_buttons (id, tenant_id, environment, workflow_id, label, inputs, once, from_run, place, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (tenant_id, from_run, place) WHERE from_run IS NOT NULL DO UPDATE SET place = EXCLUDED.place
+		RETURNING id`, id, tenant, env, wf, b.Label, inputs, b.Once, run, place, time.Now().Add(buttonFor)).Scan(&id)
 	return id, err
 }
 
+// maskDeep masks every word of a value, at any depth, as messages are.
+func maskDeep(v any) any {
+	switch x := v.(type) {
+	case string:
+		return maskWords(x)
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[k] = maskDeep(e)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = maskDeep(e)
+		}
+		return out
+	}
+	return v
+}
+
+// masked reports whether a value holds a masked word (•), at any depth: a
+// button's value that was masked is asked, not filled in.
+func masked(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return strings.Contains(x, "•")
+	case map[string]any:
+		for _, e := range x {
+			if masked(e) {
+				return true
+			}
+		}
+	case []any:
+		for _, e := range x {
+			if masked(e) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// buttonRows is how many of a list's rows get their buttons minted.
+const buttonRows = 100
+
 // mintAnswerButtons gives each of an answer's buttons (a card's, each
 // row's) its id; a button whose tool is not there is left out.
-func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer) error {
+func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer, rows bool) error {
 	return db0(ctx, s, tenant, func(tx pgx.Tx) error {
 		mint := func(place string, bs []answerBtn) ([]answerBtn, error) {
 			var out []answerBtn
@@ -84,6 +142,10 @@ func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env st
 			return err
 		}
 		for i := range a.Rows {
+			if !rows || i >= buttonRows {
+				a.Rows[i].Actions = nil // pressed from a narrower list
+				continue
+			}
 			if a.Rows[i].Actions, err = mint("row/"+strconv.Itoa(i), a.Rows[i].Actions); err != nil {
 				return err
 			}
@@ -140,6 +202,10 @@ func (s *Server) pressButton(ctx context.Context, p *Principal, id uuid.UUID) (p
 			}
 			return errButtonTaken{By: by, At: *usedAt}
 		}
+		// A key kept to an environment presses only its environment's.
+		if p.Environment != "" && env != p.Environment {
+			return fmt.Errorf("%w: this button is not available any more", errNotFound)
+		}
 		t, err := scanTool(tx.QueryRow(ctx, `SELECT `+toolCols+` FROM workflow_tools WHERE environment = $1 AND workflow_id = $2`, env, wf))
 		if errors.Is(err, pgx.ErrNoRows) || err == nil && t.Audience != "members" {
 			return fmt.Errorf("%w: this button's tool is not available any more", errNotFound)
@@ -147,28 +213,46 @@ func (s *Server) pressButton(ctx context.Context, p *Principal, id uuid.UUID) (p
 		if err != nil {
 			return err
 		}
+		out.tool, out.Button, out.Command, out.Name = t, id, t.Command, t.Name
 		if !mayStart(p, t.Roles) {
 			return errNotYours(t.Name, t.Roles)
 		}
-		out.tool, out.Button, out.Command, out.Name = t, id, t.Command, t.Name
-		return json.Unmarshal(inputs, &out.Inputs)
+		if err := json.Unmarshal(inputs, &out.Inputs); err != nil {
+			return err
+		}
+		// A value shown masked is asked, not filled in with its mask.
+		for k, v := range out.Inputs {
+			if masked(v) {
+				delete(out.Inputs, k)
+			}
+		}
+		return nil
 	})
 	return out, err
 }
 
-// spendButton marks a once button used by p for run, if no one has; a
-// button that is not once is not spent. errButtonTaken when someone was
-// first.
+// spendButton marks a once button used by p for run, if no one else has,
+// while it lasts; a button that is not once is not spent. The same person
+// pressing again (a retry) passes: the run's own key starts it once.
+// errButtonTaken when someone else was first.
 func (s *Server) spendButton(ctx context.Context, tx pgx.Tx, p *Principal, id, run uuid.UUID) error {
-	tag, err := tx.Exec(ctx, `UPDATE tool_buttons SET used_by = $2, used_at = now(), used_run = $3 WHERE id = $1 AND once AND used_at IS NULL`, id, p.UserID, run)
+	tag, err := tx.Exec(ctx, `UPDATE tool_buttons SET used_by = $2, used_at = now(), used_run = NULLIF($3, '00000000-0000-0000-0000-000000000000'::uuid)
+		WHERE id = $1 AND once AND used_at IS NULL AND expires_at > now()`, id, p.UserID, run)
 	if err != nil || tag.RowsAffected() == 1 {
 		return err
 	}
 	var once bool
 	var usedBy *uuid.UUID
 	var usedAt *time.Time
-	if err := tx.QueryRow(ctx, `SELECT once, used_by, used_at FROM tool_buttons WHERE id = $1`, id).Scan(&once, &usedBy, &usedAt); err != nil || !once {
+	var expires time.Time
+	if err := tx.QueryRow(ctx, `SELECT once, used_by, used_at, expires_at FROM tool_buttons WHERE id = $1`, id).Scan(&once, &usedBy, &usedAt, &expires); err != nil || !once {
 		return err
+	}
+	if usedAt == nil && time.Now().After(expires) {
+		return fmt.Errorf("%w: this button is not available any more", errNotFound)
+	}
+	if usedBy != nil && *usedBy == p.UserID {
+		return nil
 	}
 	by := "someone"
 	if usedBy != nil {
@@ -178,12 +262,29 @@ func (s *Server) spendButton(ctx context.Context, tx pgx.Tx, p *Principal, id, r
 }
 
 // claimButton spends a once button before its run starts: the run's id
-// is recorded after (recordButtonRun). A button that is not once passes.
+// is recorded after (recordButtonRun), and the button is given back if the
+// run does not start (releaseButton). A button that is not once passes;
+// a key cannot press one.
 func (s *Server) claimButton(ctx context.Context, p *Principal, id uuid.UUID) error {
 	if id == uuid.Nil {
 		return nil
 	}
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
+		return fmt.Errorf("%w: a button is pressed by a person", errForbidden)
+	}
 	return db0(ctx, s, p.TenantID, func(tx pgx.Tx) error { return s.spendButton(ctx, tx, p, id, uuid.Nil) })
+}
+
+// releaseButton gives a once button back when the run it was claimed for
+// did not start (a plan limit, an error): nobody is told it was taken.
+func (s *Server) releaseButton(ctx context.Context, p *Principal, id uuid.UUID) {
+	if id == uuid.Nil {
+		return
+	}
+	_ = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tool_buttons SET used_by = NULL, used_at = NULL WHERE id = $1 AND used_by = $2 AND used_run IS NULL`, id, p.UserID)
+		return err
+	})
 }
 
 // recordButtonRun records the run a once button started.
@@ -192,7 +293,7 @@ func (s *Server) recordButtonRun(ctx context.Context, p *Principal, id, run uuid
 		return
 	}
 	_ = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE tool_buttons SET used_run = $2 WHERE id = $1 AND used_by = $3`, id, run, p.UserID)
+		_, err := tx.Exec(ctx, `UPDATE tool_buttons SET used_run = $2 WHERE id = $1 AND used_by = $3 AND used_run IS NULL`, id, run, p.UserID)
 		return err
 	})
 }
@@ -212,7 +313,7 @@ func (s *Server) pressButtonRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.toolRefused(w, r, err, "button")
+		s.toolRefused(w, r, err, out.Command)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

@@ -152,6 +152,11 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 		return false, nil
 	}
 	data.Nonce = uuid.NewString()
+	if data.Button != uuid.Nil {
+		// Two presses of one button by one person within ten seconds are
+		// one run.
+		data.Nonce = fmt.Sprintf("button:%s:%s:%d", data.Button, c.p.UserID, time.Now().Unix()/10)
+	}
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return true, err
 	}
@@ -245,6 +250,8 @@ func (s *Server) waToolRun(ctx context.Context, c *chat, t toolRow, data chatDat
 	run, _, err := s.runTool(ctx, c.p, t, input, c.ch.Name(), data.Nonce)
 	if err == nil {
 		s.recordButtonRun(ctx, c.p, data.Button, run)
+	} else {
+		s.releaseButton(ctx, c.p, data.Button)
 	}
 	if le, ok := runtime.IsLimit(err); ok {
 		return c.say(ctx, s, c.t("wa.run.limit", "reason", le.Message))
@@ -350,6 +357,11 @@ func (s *Server) waToolButton(ctx context.Context, c *chat, token string) error 
 	case errors.Is(err, errNotFound):
 		return c.say(ctx, s, c.t("wa.tool.button_gone"))
 	case errors.Is(err, errForbidden):
+		if aerr := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
+			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, "tool:"+b.tool.Command, b.tool.Roles)
+		}); aerr != nil {
+			return aerr
+		}
 		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", b.tool.Name, "roles", startRolesWords(b.tool.Roles)))
 	case err != nil:
 		return err

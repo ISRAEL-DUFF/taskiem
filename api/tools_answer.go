@@ -90,7 +90,7 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 			return false
 		}
 		return p.Can(PermRunRead) || startedBy == p.Actor()
-	})
+	}, true)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -100,7 +100,7 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 
 // answerOf draws run id's answer; may says whether the asker may see the
 // run (by who started it).
-func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(startedBy, env string) bool) (madeAnswer, error) {
+func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(startedBy, env string) bool, rows bool) (madeAnswer, error) {
 	var a madeAnswer
 	var wf uuid.UUID
 	var version int
@@ -155,7 +155,7 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 	}
 	maskDeclared(d, outputs)
 	drawAnswer(&a, d.Tool.Answer, outputs)
-	if err := s.mintAnswerButtons(ctx, tenant, env, id, &a); err != nil {
+	if err := s.mintAnswerButtons(ctx, tenant, env, id, &a, rows); err != nil {
 		return a, err
 	}
 	return a, nil

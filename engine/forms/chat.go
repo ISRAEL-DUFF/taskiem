@@ -41,6 +41,10 @@ type ChatQuestion struct {
 	// field (a location opened, a photo as {media: {channel, id, mime}}),
 	// and Waiting that it is whole but weaker than a field's
 	// require_source.
+	// Starter: put to the person who started its run (to: "starter"),
+	// asked in Channel, the chat they started it from.
+	Starter bool
+	Channel string
 	Held    map[string]any
 	Waiting bool
 	created time.Time
@@ -68,7 +72,7 @@ func (s *Service) ChatQuestions(ctx context.Context, who ChatAsker) ([]ChatQuest
 	var out []ChatQuestion
 	var doors []RequestDoor
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{who.Tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT r.id, r.title, r.schema, r.created_at, t.name FROM form_requests r JOIN tenants t ON t.id = r.tenant_id
+		rows, err := tx.Query(ctx, `SELECT r.id, r.title, r.schema, r.created_at, t.name, COALESCE((r.recipient->>'starter')::boolean, false), COALESCE(r.recipient->>'channel', '') FROM form_requests r JOIN tenants t ON t.id = r.tenant_id
 			WHERE r.status = 'pending' AND r.expires_at > now() AND r.sent_at IS NOT NULL
 			  AND ((r.recipient ? 'role' AND r.recipient->>'role' = ANY($1)) OR r.recipient->>'member' = $2)
 			ORDER BY r.created_at DESC LIMIT 20`, who.Roles, who.User.String())
@@ -77,7 +81,7 @@ func (s *Service) ChatQuestions(ctx context.Context, who ChatAsker) ([]ChatQuest
 		}
 		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (ChatQuestion, error) {
 			q := ChatQuestion{Tenant: who.Tenant}
-			return q, r.Scan(&q.Request, &q.Title, &q.Schema, &q.created, &q.From)
+			return q, r.Scan(&q.Request, &q.Title, &q.Schema, &q.created, &q.From, &q.Starter, &q.Channel)
 		})
 		if err != nil {
 			return err

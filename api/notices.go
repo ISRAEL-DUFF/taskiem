@@ -75,7 +75,13 @@ func (s *Server) sendNoticeItem(ctx context.Context, it whatsapp.OutboxItem) err
 	m.Tenant = it.Tenant
 	// Its buttons, each filling a tool's form (tools_buttons.go).
 	if bs, _ := in["buttons"].([]any); len(bs) > 0 {
-		buttons, err := s.noticeButtons(ctx, it, bs)
+		// The buttons from the step's input as it was sealed: what a
+		// button carries never comes from personal data opened.
+		sealed, err := s.sealedStepButtons(ctx, it)
+		if err != nil {
+			return err
+		}
+		buttons, err := s.noticeButtons(ctx, it, sealed)
 		if err != nil {
 			return err
 		}
@@ -127,11 +133,6 @@ func (s *Server) noticeButtons(ctx context.Context, it whatsapp.OutboxItem, bs [
 			tool, _ := b["tool"].(string)
 			once, _ := b["once"].(bool)
 			inputs, _ := b["inputs"].(map[string]any)
-			for k, v := range inputs {
-				if str, ok := v.(string); ok {
-					inputs[k] = maskWords(str)
-				}
-			}
 			ab := answerBtn{Label: label, Tool: tool, Inputs: inputs, Once: once}
 			id, err := mintButton(ctx, tx, it.Tenant, env, *it.Run, "notice/"+*it.Step+"/"+strconv.Itoa(i), ab)
 			if err != nil {
@@ -145,4 +146,25 @@ func (s *Server) noticeButtons(ctx context.Context, it whatsapp.OutboxItem, bs [
 		return nil
 	})
 	return chatButtons(drawn), err
+}
+
+// sealedStepButtons are a Tell me step's buttons from its input as the run
+// sealed it: personal values stay envelopes, masked when minted.
+func (s *Server) sealedStepButtons(ctx context.Context, it whatsapp.OutboxItem) ([]any, error) {
+	var bs []any
+	err := db0(ctx, s, it.Tenant, func(tx pgx.Tx) error {
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT payload FROM run_events WHERE run_id = $1 AND step_id = $2 AND type = 'StepScheduled' ORDER BY seq DESC LIMIT 1`, *it.Run, *it.Step).Scan(&raw); err != nil {
+			return err
+		}
+		var payload struct {
+			Input map[string]any `json:"input"`
+		}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+		bs, _ = payload.Input["buttons"].([]any)
+		return nil
+	})
+	return bs, err
 }

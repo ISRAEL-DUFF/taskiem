@@ -42,3 +42,7 @@ A tool is called by `/command`, by its plain command, by a phrase it says, or by
 | `GET /v1/runs/{id}/answer` | The run's answer as data, masked as messages are: text, card or list; how it ended while it runs or when it failed |
 
 An API key may start a tool that only reads; one that asks waits for a person. An `Idempotency-Key` is the caller's own. What the run sealed as personal data is never opened for an answer: it shows masked (•••), and in full only on the run, to whoever may reveal it. What a tool shows is read with the business's connections, not with the rights of whoever calls it: a tool that reads salaries shows them to everyone who may use it. Choose its **Who can start it** with that in mind.
+
+## Buttons
+
+A tool's card and list rows, and a Tell me message (`notify.tell` `buttons`, up to three), carry buttons that open another tool filled in. Each is a row the server mints the first time it is drawn: a random token, kept seven days, read only inside its business, held by the tool's workflow (renaming a command keeps it working). Pressing one (`POST /v1/tools/buttons/{token}`) gives the tool and its values to whoever pressed it, held to its roles; a value that was shown masked is asked rather than filled in, and a button never carries personal data opened. A `once` button is spent by the first run it starts; the same person pressing again gets that run, a run that fails to start gives the button back, and anyone else is told who took it and when. Two presses of one button by one person within ten seconds are one run.

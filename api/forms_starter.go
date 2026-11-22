@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/forms"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -116,12 +119,12 @@ func (s *Server) askStarter(ctx context.Context, a forms.ChatAsk) bool {
 	switch {
 	case isChoice && len(choice.Choices) <= 3:
 		body = "Choose one:"
-		for i, c := range choice.Choices {
+		for _, c := range choice.Choices {
 			label := c
 			if r := []rune(label); len(r) > 20 {
 				label = string(r[:20])
 			}
-			buttons = append(buttons, whatsapp.Button{ID: choiceReplyPrefix + a.Request.String() + ":" + strconv.Itoa(i), Title: label})
+			buttons = append(buttons, whatsapp.Button{ID: choiceReplyPrefix + a.Request.String() + ":" + choiceKey(c), Title: label})
 		}
 	case isChoice:
 		lines := []string{"Reply with one of:"}
@@ -148,26 +151,28 @@ func (s *Server) formChoiceAnswer(ctx context.Context, c *chat, text string) (bo
 		return false, nil
 	}
 	var pressed uuid.UUID
-	pick := -1
+	pick := ""
 	if rest, ok := strings.CutPrefix(c.in.Reply, choiceReplyPrefix); ok {
-		id, idx, _ := strings.Cut(rest, ":")
+		id, key, _ := strings.Cut(rest, ":")
 		var err error
-		if pressed, err = uuid.Parse(id); err != nil {
+		if pressed, err = uuid.Parse(id); err != nil || key == "" {
 			return true, c.say(ctx, s, "That question is not waiting any more.")
 		}
-		if pick, err = strconv.Atoi(idx); err != nil {
-			return true, c.say(ctx, s, "That question is not waiting any more.")
-		}
-	} else if c.state != stateIdle || c.in.Reply != "" || strings.TrimSpace(text) == "" || len(text) > 80 {
+		pick = key
+	} else if c.state != stateIdle || c.in.Reply != "" || !choiceWords(text) {
 		return false, nil
 	}
 	qs, err := s.Forms.ChatQuestions(ctx, forms.ChatAsker{Tenant: c.tenant.ID, User: c.p.UserID, Roles: c.p.Roles})
 	if err != nil {
 		return false, err
 	}
-	for i := len(qs) - 1; i >= 0; i-- {
-		q := qs[i]
+	// Newest first (ChatQuestions' order). A typed reply answers only a
+	// question put to this person as choices in this very chat.
+	for _, q := range qs {
 		if pressed != uuid.Nil && q.Request != pressed {
+			continue
+		}
+		if pressed == uuid.Nil && (!q.Starter || q.Channel != c.ch.Name()) {
 			continue
 		}
 		var choice chatChoice
@@ -183,9 +188,18 @@ func (s *Server) formChoiceAnswer(ctx context.Context, c *chat, text string) (bo
 			continue
 		}
 		answer := ""
-		if pick >= 0 && pick < len(choice.Choices) {
-			answer = choice.Choices[pick]
-		} else if pressed == uuid.Nil {
+		if pick != "" {
+			// The choice the button showed, by what it said: a list that
+			// changed meanwhile never answers another one.
+			for _, ch := range choice.Choices {
+				if choiceKey(ch) == pick {
+					answer = ch
+				}
+			}
+			if answer == "" {
+				return true, c.say(ctx, s, "That choice is no longer offered: "+whatsapp.SafeText(q.Title)+" is waiting for one of the others.")
+			}
+		} else {
 			for _, ch := range choice.Choices {
 				if strings.EqualFold(strings.TrimSpace(text), ch) {
 					answer = ch
@@ -220,4 +234,24 @@ func (s *Server) formChoiceAnswer(ctx context.Context, c *chat, text string) (bo
 		return true, c.say(ctx, s, "That question is not waiting any more.")
 	}
 	return false, nil
+}
+
+// choiceKey names a choice in a button's payload by what it says.
+func choiceKey(choice string) string {
+	h := sha256.Sum256([]byte(choice))
+	return hex.EncodeToString(h[:6])
+}
+
+// choiceWords reports whether a typed message could be a choice: short,
+// not a bare number (a menu's), and not one of Taskiem's own commands.
+func choiceWords(text string) bool {
+	t := strings.TrimSpace(text)
+	if t == "" || len(t) > 80 {
+		return false
+	}
+	if _, err := strconv.Atoi(t); err == nil {
+		return false
+	}
+	first, _, _ := strings.Cut(strings.ToLower(t), " ")
+	return !wdcheck.ReservedCommand(first)
 }

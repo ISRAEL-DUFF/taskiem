@@ -275,10 +275,12 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 			return out, err
 		}
 		out.Run, out.Created, err = s.runTool(ctx, p, t, input, channel, dedup)
-		if err == nil {
-			s.recordButtonRun(ctx, p, button, out.Run)
+		if err != nil {
+			s.releaseButton(ctx, p, button)
+			return out, err
 		}
-		return out, err
+		s.recordButtonRun(ctx, p, button, out.Run)
+		return out, nil
 	}
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
 		// A key cannot say yes: a tool that asks is started by a person.
@@ -290,6 +292,10 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		// Confirms gone a day are let go here, the business's own.
 		if _, err := tx.Exec(ctx, `DELETE FROM tool_confirms WHERE expires_at < now() - interval '1 day'`); err != nil {
+			return err
+		}
+		// And buttons a week past their end.
+		if _, err := tx.Exec(ctx, `DELETE FROM tool_buttons WHERE expires_at < now() - interval '7 days'`); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO tool_confirms (id, tenant_id, user_id, workflow_id, version, environment, command, care, input_digest, channel, expires_at, button)
@@ -347,6 +353,7 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 	}
 	run, created, err := s.runTool(ctx, p, t, input, c.channel, "tool-confirm:"+confirm.String())
 	if err != nil {
+		s.releaseButton(ctx, p, button)
 		return run, created, err
 	}
 	s.recordButtonRun(ctx, p, button, run)
@@ -441,7 +448,7 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 	if req.Button != uuid.Nil {
 		// The button must be this tool's, and still the presser's to use.
 		b, err := s.pressButton(r.Context(), p, req.Button)
-		if err == nil && b.tool.Workflow != t.Workflow {
+		if err == nil && (b.tool.Workflow != t.Workflow || b.tool.Environment != t.Environment) {
 			err = fmt.Errorf("%w: that button opens another tool", errBadRequest)
 		}
 		if err != nil {
