@@ -1447,6 +1447,68 @@ for (const scheme of ["light", "dark"] as const)
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
 
+// Where we pay a staff member (outside payroll): their page with the
+// account linked, Pay and the owner's Change and Unlink, choosing one of
+// the saved accounts, and Add staff in Pay several people with someone
+// not payable. The staff and saved APIs are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Where we pay a staff member passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Staff Pay ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@staffpay.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const musa = "0192e2e0-0000-7000-8000-00000000a201";
+      const acct = { saved_id: "0192e2e0-0000-7000-8000-00000000b201", name: "musa", title: "Musa Bello", bank_name: "Access Bank", last4: "6789", account_name: "MUSA BELLO", linked_at: new Date().toISOString() };
+      const person = (id: string, name: string, linked: typeof acct | null) => ({ user_id: id, name, phone: "•••4567", roles: ["cashier"], chat: true, profile: { title: "", note: "", rota: [] }, pay_account: linked });
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/staff"),
+        (q) => {
+          const path = new URL(q.request().url()).pathname;
+          if (path === "/v1/staff") return q.fulfill(fulfil({ people: [person(musa, "Musa Bello", acct), person("0192e2e0-0000-7000-8000-00000000a202", "Kemi Ade", null)], invites: [] }));
+          if (path.endsWith("/figures"))
+            return q.fulfill(
+              fulfil({ period: "week", from: "2026-11-16", to: "2026-11-22", minutes: 0, shifts: 0, late_days: [], missed_days: [], sales: { count: 0, total_kobo: 0, by_how: {} }, handovers: [], orders: 0, tasks: { done: 0, done_late: 0, cant: 0, open: 0, late: 0 } }),
+            );
+          if (path === `/v1/staff/${musa}`) return q.fulfill(fulfil(person(musa, "Musa Bello", acct)));
+          return q.fulfill(fulfil(person("0192e2e0-0000-7000-8000-00000000a202", "Kemi Ade", null)));
+        },
+      );
+      await page.route(
+        (u) => u.pathname === "/v1/saved" && u.searchParams.get("kind") === "bank_account",
+        (q) =>
+          q.fulfill(
+            fulfil({
+              limit: 100,
+              saved: [{ id: acct.saved_id, owner: "business", name: "musa", title: "Musa Bello", kind: "bank_account", hint: "Access Bank ••6789", details: {}, check: { state: "checked", account_name: "MUSA BELLO", via: null, at: null, problem: null }, to_change: false, created_at: "", updated_at: "" }],
+            }),
+          ),
+      );
+      await page.goto(`/staff/${musa}`);
+      await expect(page.getByTestId("person-pay-account")).toHaveText("@musa · Access Bank ••6789 · MUSA BELLO");
+      await expect(page.getByTestId("staff-pay")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a staff member's page with where we pay them", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.getByRole("button", { name: "Change where Musa Bello is paid" }).click();
+      await expect(page.getByRole("dialog", { name: "Where we pay Musa Bello" }).getByRole("radio", { name: /MUSA BELLO/ })).toBeChecked();
+      vs = await axe(page);
+      expect(vs, describe("choosing where we pay them", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.goto("/payments/several");
+      await page.getByTestId("add-staff").click();
+      const picker = page.getByRole("dialog", { name: "Add staff" });
+      await expect(picker).toContainText("No account linked: link one on their page");
+      vs = await axe(page);
+      expect(vs, describe("Add staff in Pay several people", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
 // Save as… beside a message's Pay this account (paying people, phase 2):
 // the chip line, the sheet with the likely banks, and the sheet once saved
 // with the bank's name, signed in as a new owner. The customer chat, the

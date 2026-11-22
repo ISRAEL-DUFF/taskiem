@@ -1,11 +1,12 @@
 // Paying several people (P3; docs/spec/chat-pay-people.md, "Pay several
 // people"): the list being filled (picked saved accounts, riders with what
-// is due, a pasted list read a line at a time), each row as the body of a
+// is due, staff with an account linked, a pasted list read a line at a time), each row as the body of a
 // payment (POST /v1/payment-batches takes what POST /v1/payments does),
 // and the words a batch shows before it goes and as each person is paid.
 
 import { naira } from "./invoices";
 import { amountTyped } from "./paymessage";
+import { payAccountWords, type StaffPayAccount } from "./team";
 import {
   accountDigits,
   payAmountKobo,
@@ -65,11 +66,11 @@ export interface BatchLine {
   problem?: string;
 }
 
-/** A row of the list being filled: a saved account, a rider, or an
- * account number (pasted). Amounts and "what for" are as typed. */
+/** A row of the list being filled: a saved account, a rider, a staff
+ * member, or an account number (pasted). Amounts and "what for" are as typed. */
 export interface DraftRow {
   key: string;
-  kind: "saved" | "rider" | "account";
+  kind: "saved" | "rider" | "staff" | "account";
   /** Who, as the row is titled. */
   who: string;
   /** The line under it: the bank and account as they may be shown. */
@@ -78,6 +79,8 @@ export interface DraftRow {
   /** A saved account by its name (a pasted line the business has saved). */
   payee?: string;
   rider_id?: string;
+  /** A staff member, paid to the saved account linked to them. */
+  staff_id?: string;
   number?: string;
   bank?: string;
   amount: string;
@@ -119,6 +122,20 @@ export function rowFromRider(l: { rider_id: string; rider: string; net_kobo: num
   };
 }
 
+/** A staff member with an account linked as a row: for wages, the amount
+ * to type. The account is masked as their page shows it. */
+export function rowFromStaff(p: { user_id: string; name: string; email?: string; pay_account: StaffPayAccount }): DraftRow {
+  return {
+    key: nextKey(),
+    kind: "staff",
+    who: p.name || p.email || "A staff member",
+    sub: payAccountWords(p.pay_account),
+    staff_id: p.user_id,
+    amount: "",
+    for: "wages",
+  };
+}
+
 /** A pasted line as a row: a saved account when the business has that
  * number saved, else the number and bank read; what could not be read
  * is said, to fix in the row. */
@@ -144,6 +161,7 @@ export function rowFromLine(l: BatchLine): DraftRow {
 export function sameRow(a: DraftRow, b: DraftRow): boolean {
   if (a.saved_id && a.saved_id === b.saved_id) return true;
   if (a.rider_id && a.rider_id === b.rider_id) return true;
+  if (a.staff_id && a.staff_id === b.staff_id) return true;
   if (a.payee && a.payee === b.payee) return true;
   return false;
 }
@@ -182,6 +200,7 @@ export function rowProblem(r: DraftRow): string | null {
 export function rowBody(r: DraftRow): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (r.kind === "rider") body.rider_id = r.rider_id;
+  else if (r.kind === "staff") body.staff_id = r.staff_id;
   else if (r.kind === "account") {
     body.account_number = accountDigits(r.number ?? "");
     body.bank_name = (r.bank ?? "").trim();

@@ -21,6 +21,7 @@ import {
   rowFromLine,
   rowFromRider,
   rowFromSaved,
+  rowFromStaff,
   rowProblem,
   waitingIds,
   type PaymentBatch,
@@ -58,6 +59,17 @@ describe("filling the list", () => {
     expect(bad).toMatchObject({ kind: "account", who: "Line 2", sub: "As pasted: Tunde 45k", problem: "No account number of 10 digits on this line." });
     const saved = rowFromLine({ line: 3, text: "Bayo 0123456789 GTB 10k", account_number: "0123456789", bank_name: "GTBank", amount_kobo: 1_000_000, name: "Bayo", payee: "bayo" });
     expect(saved).toMatchObject({ kind: "saved", payee: "bayo", sub: "@bayo · GTBank", amount: "10,000" });
+  });
+
+  it("makes a row of a staff member with an account linked, for wages", () => {
+    const acct = { saved_id: "s9", name: "musa", title: "Musa", bank_name: "Access Bank", last4: "6789", account_name: "MUSA BELLO" };
+    const r = rowFromStaff({ user_id: "u1", name: "Musa Bello", pay_account: acct });
+    expect(r).toMatchObject({ kind: "staff", who: "Musa Bello", sub: "@musa · Access Bank ••6789 · MUSA BELLO", staff_id: "u1", amount: "", for: "wages" });
+    expect(rowProblem(r)).toBe("How much?");
+    expect(rowBody({ ...r, amount: "20k" })).toEqual({ staff_id: "u1", amount_kobo: 2_000_000, purpose: "wages" });
+    // The same person twice is added once; the saved account itself is another row.
+    expect(addRows([r], [rowFromStaff({ user_id: "u1", name: "Musa Bello", pay_account: acct })]).rows).toHaveLength(1);
+    expect(addRows([r], [rowFromSaved({ id: "s9", name: "musa", title: "", hint: "" })]).rows).toHaveLength(2);
   });
 
   it("leaves out the same person twice and stops at the limit", () => {

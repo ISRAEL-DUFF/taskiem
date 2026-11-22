@@ -1,5 +1,5 @@
 // Pay several people (P3; docs/spec/chat-pay-people.md, "Pay several
-// people"): the list filled by picking saved accounts and riders or by
+// people"): the list filled by picking saved accounts, riders and staff or by
 // pasting a list (each line read, those that cannot be read shown to
 // fix); then checked (POST /v1/payment-batches): each row prepared as one
 // payment is, the rows failing a check held out in amber with why; then
@@ -16,6 +16,7 @@ import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Row, Skele
 import { naira } from "../lib/invoices";
 import type { PayLine } from "../lib/dispatch";
 import type { SavedList, SavedThing } from "../lib/saved";
+import { payAccountWords, staffUnpayable, type StaffPersonView, type StaffView } from "../lib/team";
 import { payeeName, paymentSub, payWarnings, type Payment } from "../lib/payments";
 import {
   FOR_CHOICES,
@@ -40,6 +41,7 @@ import {
   rowFromLine,
   rowFromRider,
   rowFromSaved,
+  rowFromStaff,
   rowProblem,
   rowStatus,
   waitingIds,
@@ -79,7 +81,7 @@ export function PayListPage() {
   const riders = params.get("riders") === "1";
   const [rows, setRows] = useState<DraftRow[]>(back.rows ?? []);
   const [title, setTitle] = useState(back.title ?? (riders ? "Riders' pay" : ""));
-  const [adding, setAdding] = useState<"saved" | "riders" | "paste">();
+  const [adding, setAdding] = useState<"saved" | "riders" | "staff" | "paste">();
   const [tried, setTried] = useState(false);
   const [news, setNews] = useState<string>();
   const batch = useMakeBatch();
@@ -120,7 +122,7 @@ export function PayListPage() {
       </p>
       <PageHeader
         title="Pay several people"
-        description="Pick saved accounts or riders, or paste a list. Each person is checked with the bank; you confirm them all with one passkey."
+        description="Pick saved accounts, riders or staff, or paste a list. Each person is checked with the bank; you confirm them all with one passkey."
       />
       <section className="card" aria-labelledby="list-who-h" data-testid="pay-list">
         <h2 id="list-who-h">Who to pay</h2>
@@ -131,6 +133,11 @@ export function PayListPage() {
           {can("money.pay") && (
             <button type="button" onClick={() => setAdding("riders")} data-testid="add-riders">
               Add riders
+            </button>
+          )}
+          {can("money.pay") && can("member.manage") && (
+            <button type="button" onClick={() => setAdding("staff")} data-testid="add-staff">
+              Add staff
             </button>
           )}
           <button type="button" onClick={() => setAdding("paste")} data-testid="add-paste">
@@ -148,7 +155,7 @@ export function PayListPage() {
           <input value={title} maxLength={80} autoComplete="off" onChange={(e) => setTitle(e.target.value)} data-testid="list-title" />
         </Field>
         {rows.length === 0 ? (
-          <EmptyState icon="members">Nobody on the list yet. Add saved accounts or riders, or paste a list, one person a line.</EmptyState>
+          <EmptyState icon="members">Nobody on the list yet. Add saved accounts, riders or staff, or paste a list, one person a line.</EmptyState>
         ) : (
           <Items label="People to pay">
             {rows.map((r, i) => (
@@ -181,6 +188,7 @@ export function PayListPage() {
       </section>
       {adding === "saved" && <PickSaved onClose={() => setAdding(undefined)} onAdd={add} />}
       {adding === "riders" && <PickRiders onClose={() => setAdding(undefined)} onAdd={add} />}
+      {adding === "staff" && <PickStaff onClose={() => setAdding(undefined)} onAdd={add} />}
       {adding === "paste" && <PasteList onClose={() => setAdding(undefined)} onAdd={add} />}
     </>
   );
@@ -355,6 +363,31 @@ function PickRiders({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Dra
       disabled={(l) => (l.bank ? null : "No bank account kept: add one under Riders > Pay")}
       onClose={onClose}
       onAdd={(picked) => onAdd(picked.map(rowFromRider))}
+    />
+  );
+}
+
+/** Staff, each read for the account linked to them (GET /v1/staff/{user}):
+ * those with one can be added, for wages; those without are shown with why. */
+function PickStaff({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: DraftRow[]) => void }) {
+  const { me } = useAuth();
+  const owner = !!me?.roles.includes("owner");
+  const people = useLoad(async () => {
+    const v = await get<StaffView>("/v1/staff");
+    return Promise.all(v.people.map((p) => get<StaffPersonView>(`/v1/staff/${encodeURIComponent(p.user_id)}`)));
+  }, []);
+  return (
+    <Picker<StaffPersonView>
+      title="Add staff"
+      items={people.data}
+      loading="Loading your staff…"
+      error={people.error}
+      empty="No staff yet. Add them under Staff."
+      label={(p) => p.name || p.email || "A staff member"}
+      sub={(p) => (p.pay_account ? payAccountWords(p.pay_account) : "")}
+      disabled={(p) => staffUnpayable(p, owner)}
+      onClose={onClose}
+      onAdd={(picked) => onAdd(picked.flatMap((p) => (p.pay_account ? [rowFromStaff({ ...p, pay_account: p.pay_account })] : [])))}
     />
   );
 }

@@ -118,6 +118,45 @@ export interface StaffProfile {
 
 export interface StaffPersonView extends StaffPerson {
   profile: StaffProfile;
+  /** Where payments to them go (outside payroll), masked; null when none is linked. */
+  pay_account?: StaffPayAccount | null;
+}
+
+// --- where they are paid (outside payroll: salaries are Payrolla's) ---
+
+/** One of the business's saved bank accounts, linked to a staff member by
+ * an owner: Pay on them goes there. Masked as the server sends it. */
+export interface StaffPayAccount {
+  saved_id: string;
+  /** The saved account's name, without the @. */
+  name: string;
+  title: string;
+  bank_name: string;
+  last4: string;
+  /** The bank's name for the account, when it was checked. */
+  account_name?: string;
+  linked_by?: string;
+  linked_at?: string;
+}
+
+/** "@musa · Access Bank ••6789 · MUSA BELLO": the linked account masked. */
+export function payAccountWords(a: StaffPayAccount): string {
+  const bank = [a.bank_name, a.last4 ? `••${a.last4}` : ""].filter(Boolean).join(" ");
+  return [`@${a.name}`, bank, a.account_name ?? ""].filter((x) => x.trim()).join(" · ");
+}
+
+/** The Pay sheet's starting values for a staff member: wages, to the
+ * account linked to them. */
+export const staffPayFill = (userId: string): Record<string, string> => ({ staff: userId, for: "wages" });
+
+/** The PUT /v1/staff/{user}/pay-account body: a saved account, or null to
+ * unlink; the passkey (or code) is added when the server asks for it. */
+export const payAccountRequest = (savedId: string | null) => ({ saved_id: savedId });
+
+/** Why a staff member cannot be paid from Pay several people, or null. */
+export function staffUnpayable(p: Pick<StaffPersonView, "pay_account">, owner: boolean): string | null {
+  if (p.pay_account) return null;
+  return owner ? "No account linked: link one on their page" : "No account linked: an owner links one on their page";
 }
 
 /** "Mon to Fri, 08:00 to 16:00; Sat, 10:00 to 18:00": days in a row with

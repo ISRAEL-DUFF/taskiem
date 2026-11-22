@@ -49,6 +49,8 @@ export interface Payment {
   created_at: string;
   confirmed_at: string | null;
   finished_at: string | null;
+  /** The staff member paid, when it was one (to the account linked to them). */
+  staff_id?: string | null;
   /** The same amount to the same payee in the last day. */
   again: boolean;
 }
@@ -175,8 +177,10 @@ export function payBody(
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { from };
   const number = accountDigits(values.number ?? "");
+  // A staff member: paid to the saved account linked to them.
+  if (values.staff) body.staff_id = values.staff;
   // A rider: paid to the bank account kept for their pay.
-  if (values.rider) body.rider_id = values.rider;
+  else if (values.rider) body.rider_id = values.rider;
   else if (number) {
     body.account_number = number;
     body.bank_name = (values.bank ?? "").trim();

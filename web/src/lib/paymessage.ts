@@ -165,6 +165,10 @@ export function answerWords(a: NameAnswer): string {
  * changed) and a note; the bank account is the one kept for their pay. */
 export const RIDER_PAY_FIELDS: PayField[] = PAY_FIELDS.person.filter((f) => f.key !== "who");
 
+/** The fields of paying a staff member: the same, wages unless changed;
+ * the account is the one an owner linked to them. */
+export const STAFF_PAY_FIELDS: PayField[] = RIDER_PAY_FIELDS;
+
 /** The sheet's starting values for a rider: a delivery, and what is due
  * to them when something is. */
 export function riderFill(riderId: string, dueKobo: number): Record<string, string> {
