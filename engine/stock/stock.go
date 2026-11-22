@@ -28,7 +28,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/productstock"
-	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Reasons a movement is made for.
@@ -77,9 +76,16 @@ type Move struct {
 	ItemID string
 	Item   string
 	Reason string
-	Delta  *int64
-	SetTo  *int64
-	Note   string
+	// Delta is the change asked for: for a sale or an order, how many of
+	// the product were sold (its stock item moves by that times the
+	// product's uses), else how many of the stock item, unless Uses says.
+	Delta *int64
+	SetTo *int64
+	// Uses is, on a change, how many of the stock item one of Delta is (a
+	// purchase line of a product's: the uses it was ordered with); 0 is
+	// one, or the product's uses for a sale or an order.
+	Uses int64
+	Note string
 	// Reference names what it came from: an order's reference, a sale, a
 	// purchase order, a count.
 	Reference string
@@ -131,6 +137,9 @@ func (m Move) check() error {
 	if m.Reason == Count && m.SetTo == nil || m.Reason != Count && m.SetTo != nil {
 		return fmt.Errorf("%w: only a count sets the stock", ErrInvalid)
 	}
+	if m.Uses < 0 || m.Uses > productstock.MaxUses || m.Uses > 1 && m.Delta == nil {
+		return fmt.Errorf("%w: uses is a whole number from 1, on a change", ErrInvalid)
+	}
 	if m.Delta != nil && (*m.Delta == 0 || *m.Delta > MaxDelta || *m.Delta < -MaxDelta) {
 		return fmt.Errorf("%w: a change is between -%d and %d, and not 0", ErrInvalid, MaxDelta, MaxDelta)
 	}
@@ -178,9 +187,12 @@ func scanMovement(r pgx.Row) (Movement, error) {
 
 // RecordTx records a movement in tx, the transaction of what caused it,
 // and sets its stock item's count with it; the same key again answers the
-// movement it made. A product sold or ordered that no stock item counts
-// is ErrNotCounted; a product received, adjusted, counted or moved that
-// none counts yet starts being counted, by a stock item of its name.
+// movement it made. A sale or an order of a product moves its stock item
+// by the quantity times the product's uses; a sale beyond the count is
+// recorded, never refused (its short). A product sold or ordered that no
+// stock item counts is ErrNotCounted; a product received, adjusted,
+// counted or moved that none counts yet starts being counted, by a stock
+// item of its name.
 func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Movement, error) {
 	mv.Item = strings.TrimSpace(mv.Item)
 	mv.Note = strings.TrimSpace(mv.Note)
@@ -205,6 +217,18 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Moveme
 			return Movement{}, err
 		}
 	}
+	// A sale or an order names how many of the product were sold: its
+	// stock item moves by that times the product's uses (1 for a stock
+	// item named directly, as an order put back names it). A purchase line
+	// says its own.
+	uses := mv.Uses
+	if uses == 0 && (mv.Reason == Sale || mv.Reason == Order) {
+		uses = c.Uses
+	}
+	if uses > 1 && mv.Delta != nil {
+		d := *mv.Delta * uses
+		mv.Delta = &d
+	}
 	// The stock item, locked: its movements are made one at a time.
 	var n int64
 	if err := tx.QueryRow(ctx, `SELECT count FROM stock_items WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, c.StockItemID).Scan(&n); err != nil {
@@ -219,10 +243,7 @@ func RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, mv Move) (Moveme
 			short, note, reference, actor, key, cost_kobo)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::bigint, $9::bigint, $9::bigint - $8::bigint, $10, NULLIF($11, ''), NULLIF($12, ''), $13, $14, $15) RETURNING `+movementCols,
 		uuid.Must(uuid.NewV7()), tenant, c.StockItemID, cut(mv.Item, 200), mv.Reason, mv.Delta, mv.SetTo, n, to, short, mv.Note, mv.Reference, mv.Actor, mv.Key, mv.CostKobo))
-	if err != nil {
-		return m, err
-	}
-	return m, copyCountTx(ctx, tx, tenant, c.StockItemID, to)
+	return m, err
 }
 
 func byKeyTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, key string) (Movement, error) {
@@ -246,7 +267,7 @@ func StartCountingTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product, 
 	if err != nil {
 		return uuid.Nil, err
 	}
-	return it.ID, productstock.LinkTx(ctx, tx, tenant, product, it.ID)
+	return it.ID, productstock.LinkTx(ctx, tx, tenant, product, it.ID, 1)
 }
 
 // GetTx reads one movement.
@@ -269,22 +290,6 @@ func target(n int64, m Move) (to, short int64) {
 		return n, -d
 	}
 	return 0, -(n + d)
-}
-
-// copyCountTx puts a stock item's new count into the storefront's
-// catalogue copy, for each product it counts, so the page and forms show
-// how many are left at once.
-func copyCountTx(ctx context.Context, tx pgx.Tx, tenant, item uuid.UUID, n int64) error {
-	products, err := productstock.ProductsOfTx(ctx, tx, tenant, item)
-	if err != nil {
-		return err
-	}
-	for p, uses := range products {
-		if err := storefront.CopyCount(ctx, tx, tenant, p, productstock.Counted{Count: n, Uses: uses}.Left()); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (s *Stock) inTx(ctx context.Context, tenant uuid.UUID, fn func(pgx.Tx) error) error {

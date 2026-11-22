@@ -687,6 +687,8 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/products/{id}/counted-by", s.putCountedBy)
+			r.With(s.need(PermTableEdit), s.tenantWide).Delete("/stock/products/{id}/counted-by", s.deleteCountedBy)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
 			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)

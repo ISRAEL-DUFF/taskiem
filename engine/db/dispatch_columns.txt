@@ -1712,3 +1712,8 @@ saved_files.object_id
 saved_files.path
 saved_files.created_at
 product_stock.tenant_id
+product_stock.product_id
+product_stock.stock_item_id
+product_stock.uses
+stock_items.id
+stock_items.count

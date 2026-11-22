@@ -79,7 +79,7 @@ func (p *Purchases) DraftPurchase(ctx context.Context, tenant uuid.UUID, a Draft
 			}
 			cost := l.CostKobo
 			if cost == 0 && it.CostKobo != nil {
-				cost = *it.CostKobo
+				cost = *it.SaleCostKobo()
 			}
 			lines = append(lines, PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: cost})
 		}

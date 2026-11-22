@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -545,6 +546,11 @@ type purchaseLine struct {
 	CostKobo  int64  `json:"cost_kobo"`
 	Received  int64  `json:"received"`
 	Delivered *int64 `json:"delivered,omitempty"`
+	// The stock item receiving the line moves, and how many of it one of
+	// the line is, named when the order was made (stock.PurchaseLine):
+	// kept as they are whatever the seller's side changes.
+	StockItemID *uuid.UUID `json:"stock_item_id,omitempty"`
+	Uses        int64      `json:"uses,omitempty"`
 }
 
 type purchase struct {
@@ -2059,6 +2065,18 @@ func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.U
 		}
 		seen[it.ID] = true
 		p.Lines[i].ItemID, p.Lines[i].Item, p.Lines[i].Unit = it.ID, it.Name, it.Unit
+		// The stock item what comes is received into, as it is counted
+		// now (stock.ResolveLinesTx); a product counted by none starts
+		// being counted when it comes.
+		p.Lines[i].StockItemID, p.Lines[i].Uses = nil, 0
+		c, ok, err := productstock.ItemOfTx(ctx, tx, buyer, it.ID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			id := c.StockItemID
+			p.Lines[i].StockItemID, p.Lines[i].Uses = &id, max(c.Uses, 1)
+		}
 	}
 	deliver, err := DeliverToTx(ctx, tx, v, buyer)
 	if err != nil {

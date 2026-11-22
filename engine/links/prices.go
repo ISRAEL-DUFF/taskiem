@@ -72,10 +72,10 @@ type PriceItem struct {
 	// (Flat), its product's item and its values.
 	VariantOf string            `json:"variant_of,omitempty"`
 	Variant   map[string]string `json:"variant,omitempty"`
-	// Photo and Left are, on a seller's storefront offered to a linked
-	// business (business-chat-tools.md §2), its photo (the storefront's
-	// urls by width) and how many are left where the storefront counts
-	// them.
+	// Photo is, on a seller's storefront offered to a linked business
+	// (business-chat-tools.md §2), its photo (the storefront's urls by
+	// width). Left is how many are left where the seller counts it, read
+	// when the buyer reads the list (taskiem_product_left), never copied.
 	Photo map[string]string `json:"photo,omitempty"`
 	Left  *int64            `json:"left,omitempty"`
 }
@@ -88,7 +88,7 @@ type PriceSize struct {
 	// PriceKobo is its own price on the list; 0 is the product's.
 	PriceKobo int64 `json:"price_kobo,omitempty"`
 	Available bool  `json:"available"`
-	// Left is how many of this size are left, on a storefront's offer.
+	// Left is how many of this size are left, where the seller counts it.
 	Left *int64 `json:"left,omitempty"`
 }
 
@@ -276,11 +276,11 @@ func scanPriceItem(r pgx.CollectableRow) (PriceItem, error) {
 }
 
 // scanSupplierPrice reads the buyer's copy of a seller's item, with the
-// storefront's photo and count where it came from one.
+// storefront's photo where it came from one.
 func scanSupplierPrice(r pgx.CollectableRow) (PriceItem, error) {
 	var it PriceItem
 	var raw, sizes, photo []byte
-	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes, &photo, &it.Left); err != nil {
+	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes, &photo); err != nil {
 		return it, err
 	}
 	if len(photo) > 0 {
@@ -520,7 +520,9 @@ func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]Pric
 	out := []PriceItem{}
 	for _, it := range cat {
 		// Hidden from the storefront (Show on your storefront off): not
-		// shown here either. Shown but none left: shown, sold out. A dish
+		// shown here either. How many are left is not part of the offer:
+		// the buyer reads it with the list (leftTx), so a sale writes no
+		// copy. A dish
 		// with options to pick, or an event with a date, is bought on the
 		// storefront itself: a trade order has no room for either.
 		if !it.Available || it.PriceKobo == nil || *it.PriceKobo <= 0 || it.DurationMinutes > 0 || it.VariantOf != "" ||
@@ -528,8 +530,7 @@ func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]Pric
 			continue
 		}
 		pi := PriceItem{ItemID: it.ID, Name: cutRunes(it.Name, 120), Unit: cutRunes(it.Unit, 40), Category: cutRunes(it.Category, 60),
-			Description: cutRunes(it.Description, 500), PriceKobo: *it.PriceKobo, MinQuantity: 1, Available: it.Stock == nil || *it.Stock > 0,
-			Left: it.Stock}
+			Description: cutRunes(it.Description, 500), PriceKobo: *it.PriceKobo, MinQuantity: 1, Available: true}
 		if len(it.Photo) > 0 {
 			pi.Photo = map[string]string(it.Photo)
 		}
@@ -537,7 +538,7 @@ func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]Pric
 			pi.Choices = it.Choices
 			for _, z := range it.Sizes {
 				ps := PriceSize{ItemID: z.ID, Name: variants.Name(it.Name, z.Variant, it.Choices), Variant: z.Variant,
-					Available: z.Stock == nil || *z.Stock > 0, Left: z.Stock}
+					Available: true}
 				if z.PriceKobo != nil && *z.PriceKobo != *it.PriceKobo {
 					ps.PriceKobo = *z.PriceKobo
 				}
@@ -742,9 +743,9 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 		if len(it.Photo) > 0 {
 			photo, _ = json.Marshal(it.Photo)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes, photo, left_count)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks),
-			cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it), photo, it.Left); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes, photo)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks),
+			cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it), photo); err != nil {
 			return err
 		}
 	}
@@ -761,7 +762,8 @@ type SupplierPrices struct {
 }
 
 // SupplierPricesTx is the prices linked suppliers share with the business
-// in scope, one per link (link uuid.Nil: all).
+// in scope, one per link (link uuid.Nil: all), each item with how many are
+// left where the supplier counts it (leftTx).
 func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([]SupplierPrices, error) {
 	rows, err := tx.Query(ctx, `SELECT link_id, name, updated_at FROM supplier_price_lists WHERE tenant_id = $1 AND ($2 = '00000000-0000-0000-0000-000000000000'::uuid OR link_id = $2)`,
 		tenant, link)
@@ -780,9 +782,10 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 		return nil, err
 	}
 	names := map[uuid.UUID]string{}
+	business := map[uuid.UUID]uuid.UUID{}
 	for _, l := range list {
 		if l.State == Active {
-			names[l.ID] = l.Name
+			names[l.ID], business[l.ID] = l.Name, l.Business
 		}
 	}
 	keep := out[:0]
@@ -792,12 +795,15 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 			continue // a link no longer active: its prices are not offered
 		}
 		p.Business = n
-		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes, photo, left_count
+		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes, photo
 			FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2 ORDER BY position, lower(name)`, tenant, p.LinkID)
 		if err != nil {
 			return nil, err
 		}
 		if p.Items, err = pgx.CollectRows(rows, scanSupplierPrice); err != nil {
+			return nil, err
+		}
+		if err := leftTx(ctx, tx, business[p.LinkID], p.Items); err != nil {
 			return nil, err
 		}
 		if p.Items == nil {
@@ -806,6 +812,69 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 		keep = append(keep, p)
 	}
 	return keep, nil
+}
+
+// leftTx puts on a linked supplier's items how many are left of each,
+// where the supplier counts it (taskiem_product_left, which answers a
+// business linked to the one in scope and nothing else about its stock):
+// sold out when its stock item cannot cover one sale. A product in sizes
+// has each size's, and theirs together when every size is counted.
+func leftTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, items []PriceItem) error {
+	var ids []string
+	for _, it := range items {
+		ids = append(ids, it.ItemID)
+		for _, z := range it.Sizes {
+			ids = append(ids, z.ItemID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT product_id, sales_left FROM taskiem_product_left($1, $2)`, seller, ids)
+	if err != nil {
+		return err
+	}
+	left := map[string]int64{}
+	for rows.Next() {
+		var id string
+		var n int64
+		if err := rows.Scan(&id, &n); err != nil {
+			rows.Close()
+			return err
+		}
+		left[id] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i := range items {
+		it := &items[i]
+		it.Left = nil
+		if len(it.Sizes) == 0 {
+			if n, ok := left[it.ItemID]; ok {
+				it.Left, it.Available = &n, it.Available && n > 0
+			}
+			continue
+		}
+		var sum int64
+		all := true
+		for j := range it.Sizes {
+			z := &it.Sizes[j]
+			z.Left = nil
+			n, ok := left[z.ItemID]
+			if !ok {
+				all = false
+				continue
+			}
+			z.Left, z.Available = &n, z.Available && n > 0
+			sum += n
+		}
+		if all {
+			it.Left, it.Available = &sum, it.Available && sum > 0
+		}
+	}
+	return nil
 }
 
 // ItemLink is which of the buyer's own items a linked seller's item is.

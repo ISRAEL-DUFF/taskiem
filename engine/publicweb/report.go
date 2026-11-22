@@ -91,7 +91,7 @@ func (s *Server) reportIPHash(r *http.Request) []byte {
 // storefrontSuspended answers for a suspended page (every path), and
 // reports whether it did.
 func (s *Server) storefrontSuspended(w http.ResponseWriter, r *http.Request, site Site) bool {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil || !ok || p.Status != "suspended" {
 		return false // a lookup failure is answered by the page itself
 	}
@@ -101,7 +101,7 @@ func (s *Server) storefrontSuspended(w http.ResponseWriter, r *http.Request, sit
 
 // serveReport shows and takes the "Report this page" form.
 func (s *Server) serveReport(w http.ResponseWriter, r *http.Request, site Site) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil || !ok {
 		s.page(w, r, http.StatusNotFound, "notfound", pageData{Title: "Page not found"})
 		return

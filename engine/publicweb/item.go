@@ -74,7 +74,7 @@ func duration(min int) string {
 // with Add to bag when the page takes orders. front is the front whose
 // list the item is on, "" for the home page.
 func (s *Server) serveItem(w http.ResponseWriter, r *http.Request, site Site, front, id string) {
-	p, ok, err := s.storefrontPage(r.Context(), site.ID)
+	p, ok, err := s.storefrontPage(r.Context(), site)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.Logger.Error("public host: item", "storefront", site.ID, "err", err)

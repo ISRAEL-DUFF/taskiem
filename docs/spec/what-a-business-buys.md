@@ -362,6 +362,42 @@ The split comes first, because Add to stock and every count after it point at st
 - `add …` counting in with **Do you sell it?** in chat;
 - the list of the owner's workflows that use the old columns.
 
+### As built: S1b (uses and how many are left)
+
+**Schema** (migration 00502):
+
+- `taskiem_product_left(tenant, product_ids[])`: for each product of the business counted by a stock item, `sales_left`, the stock item's count over the product's uses, rounded down, never below 0. A product counted by none is not in it. Nothing else: no cost, level, supplier or stock item. It answers for the business in scope, one actively linked to it, or one with a page online (published or closed).
+- Granted to `taskiem_public` (the public page) and `taskiem_app` (the business itself, and a linked buyer's price lists). The dispatch role may read `product_stock.product_id`, `stock_item_id`, `uses` and `stock_items.id`, `count` for it. `definers.tsv`, `dispatch_columns.txt` and the public role's list (`engine/publicweb`) follow.
+- `supplier_prices.left_count` goes: a linked buyer's copy of a supplier's prices holds no count.
+
+**Uses.**
+
+- A sale or an order of a product moves its stock item by the quantity times the product's uses (`stock.RecordTx`): the storefront's accepted orders, chat and link orders (`OrderLines`), and sales by chat, on the web and by `stock@1` (`RecordSale`). Once under the order's or sale's key, a sale beyond the count recorded short, never refused. An order put back (`ReturnOrderTx`) names the stock item and puts back what it took.
+- `stock.Item` has `uses`. The check before a sale in chat compares the quantity times the uses (`Item.Beyond`). A product using more than one is sold with no unit ("2 Malt, pack of 6"); its default cost on a purchase line is the stock item's times its uses.
+- `Move.Uses` says how many of the stock item one of a change is; a sale or an order takes the product's.
+
+**Receiving.**
+
+- A purchase line records `stock_item_id` and `uses` when the order is made (`stock.ResolveLinesTx` in `DraftTx`; a proposed order's lines when the buyer confirms them, `links.ConfirmProposedTx`). The seller's changes keep them.
+- `ReceiveTx` moves the stock item named then by the quantity times the uses, at the line's cost over the uses (whole kobo, rounded down), and sets the stock item's cost to that. `AdjustShortTx` takes off the same way. A line naming a stock item directly moves it by the quantity. A line of a product counted by none when the order was made is read when it comes: what the product is counted by then, else it starts counting it. The line records the stock item then.
+- A low item's line (`DraftLowTx`) is counted in its stock item (uses 1), and a stock item counting two products is ordered once.
+- `purchase_lines` is U1's: the lines stay the order's JSON.
+
+**Counted by.**
+
+- `productstock.LinkTx` takes uses (1 to 1,000,000). `PUT /v1/stock/products/{id}/counted-by` with `{stock_item_id, uses}` counts a catalogue row by a stock item; `DELETE` counts it by none, its stock item kept. `table.edit`, all environments. Not for a material, nor a product sold in sizes and colours. Audited as `stock.counted_by`.
+- `stock@1` has no action that sets an item's details: `list_items` and `get_item` give `uses`.
+- OpenAPI and `mobile/lib/api/api.g.dart` follow. No screens (S2).
+
+**How many are left.** No copy holds a count, so a sale writes no copy.
+
+- The catalogue copy (`storefront_catalogue`) is written with no `stock`, its sizes none either (`SyncCatalogue`). `CopyCount`, `CopySizeCount` and the copy written after every movement are gone.
+- It is read with how many are left: `storefront.Catalogue` through `productstock.LeftTx` (the owner's preview, Their shop in the app, chat, orders and the offer to linked businesses); the public page through `taskiem_product_left` (`publicweb.DBStorefronts`, as the public role); a product in sizes has each size's and theirs together, unknown when a size is not counted (`storefront.WithLeft`).
+- A linked buyer's supplier prices (`links.SupplierPricesTx`, behind price lists, Their shop and ordering from a link) read `left` and sold out through `taskiem_product_left`, for a shared list and a storefront's offer alike. The offer copied to the buyer is what is shown, not how many are left, so a sale writes no copy and changes no offer's hash.
+- The live price check and the refresh read counts as the business (`CatalogueItems`). The copy keeps the stock item's unit only where one sale uses one of it.
+
+**Left for later:** `add …` counting in with **Do you sell it?** in chat, and the list of the owner's workflows that use the old columns (the other S1b parts); Counted by on the screens (S2); `purchase_lines` (U1).
+
 ## 12. Accept
 
 **The split**

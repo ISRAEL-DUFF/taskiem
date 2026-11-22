@@ -204,8 +204,12 @@ type Item struct {
 	Material  bool   `json:"material,omitempty"`
 	Name      string `json:"name"`
 	Available bool   `json:"available"`
-	// Stock is nil when it is not counted.
-	Stock     *int64 `json:"stock"`
+	// Stock is nil when it is not counted: its stock item's count, in the
+	// stock item's unit.
+	Stock *int64 `json:"stock"`
+	// Uses is, on a product counted by a stock item, how many of it one
+	// sale takes (product_stock.uses): a "pack of 6" uses 6.
+	Uses      int64  `json:"uses,omitempty"`
 	Unit      string `json:"unit,omitempty"`
 	PriceKobo *int64 `json:"price_kobo,omitempty"`
 	// CostKobo is the last price paid for one unit.
@@ -239,6 +243,34 @@ type Item struct {
 // colours: it keeps no stock of its own, and is sold, counted and
 // received through them.
 func (it Item) HasSizes() bool { return len(it.Choices) > 0 }
+
+// SaleUnit is the unit a sale of the item is said in: its stock item's
+// when one sale uses one of it, else none (the product is sold whole: "2
+// Pack of 6").
+func (it Item) SaleUnit() string {
+	if it.Uses > 1 {
+		return ""
+	}
+	return it.Unit
+}
+
+// SaleCostKobo is what one of the item costs at its stock item's cost
+// price: the cost times its uses (a pack of 6 costs six bottles); nil when
+// the stock item has no cost.
+func (it Item) SaleCostKobo() *int64 {
+	if it.CostKobo == nil {
+		return nil
+	}
+	c := *it.CostKobo * max(it.Uses, 1)
+	return &c
+}
+
+// Beyond reports whether selling n of the item takes more than its stock
+// item has: n times its uses above the count. Such a sale is recorded all
+// the same, with what it was short.
+func (it Item) Beyond(n int64) bool {
+	return it.Stock != nil && *it.Stock < n*max(it.Uses, 1)
+}
 
 // Retired reports whether the item is a size or colour taken off sale: it
 // keeps its history, and is offered nowhere.
@@ -355,6 +387,7 @@ func Items(rows []map[string]any, m storefront.Columns, stock []StockItem, links
 		if c, ok := links[it.ID]; ok {
 			if x, ok := byID[c.StockItemID]; ok {
 				it.withStock(x)
+				it.Uses = c.Uses
 				counting[x.ID] = true
 			}
 		}

@@ -44,10 +44,11 @@ actions:
         stock_item_id: { type: string, description: The stock item that counts it; absent for a product not counted }
         material:      { type: boolean, description: A stock item no product is counted by }
         name:          { type: string }
-        stock:         { type: integer, description: Absent when it is not counted }
+        stock:         { type: integer, description: Its stock item's count, in the stock item's unit; absent when it is not counted }
+        uses:          { type: integer, description: On a product counted by a stock item, how many of it one sale takes (a pack of 6 uses 6) }
         unit:          { type: string }
         price_kobo:    { type: integer }
-        cost_kobo:     { type: integer, description: The last price paid for one }
+        cost_kobo:     { type: integer, description: The last price paid for one of its stock item }
         reorder_level: { type: integer }
         target_level:  { type: integer }
         supplier:      { type: string }
@@ -111,7 +112,7 @@ actions:
     output: { $ref: '#/actions/movements/output/properties/movements/items' }
   record_sale:
     title: Record a sale
-    description: A sale at the counter, as chat records one. Each line is an item by its row id and how many, at its price unless one is given; amount_kobo is the sale's total (the lines' prices added up when absent). paid_how is cash (its takings go into the money log), transfer or pos (the money the rail reports is matched to it; status waiting until then). The items' stock goes down, never below zero; short names the items sold beyond the stock there was.
+    description: A sale at the counter, as chat records one. Each line is an item by its row id and how many, at its price unless one is given; amount_kobo is the sale's total (the lines' prices added up when absent). paid_how is cash (its takings go into the money log), transfer or pos (the money the rail reports is matched to it; status waiting until then). Each product's stock item goes down by how many were sold times the product's uses, never below zero; short names the items sold beyond the stock there was.
     class: idempotent_write
     idempotency:
       field: idempotency_key

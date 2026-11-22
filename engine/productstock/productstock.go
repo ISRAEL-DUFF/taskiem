@@ -3,12 +3,22 @@
 // of the owner's table, linked in product_stock to the stock item whose
 // count selling it lowers, with how many of it one sale uses.
 //
-// It is the one path from a product to its count. In S1a every caller that
-// sells, orders, receives or shows a count goes through it: the storefront
-// copy and the live price check (CountsTx), and engine/stock's movements
-// (ItemOfTx), which lower a product's stock item by the quantity sold. S1b
-// replaces what it must here (uses above 1, taskiem_product_left), and the
-// callers stay as they are.
+// It is the one path from a product to its count:
+//
+//   - Selling and ordering (engine/stock's RecordTx, through ItemOfTx) lower
+//     a product's stock item by the quantity times its uses.
+//   - A purchase line names the stock item and the uses it was made with
+//     (ItemOfTx when the order is made): receiving moves the stock item by
+//     the quantity times the uses, at the line's cost over the uses.
+//   - How many are left of a product is how many whole sales its stock
+//     item covers (Counted.Left, LeftTx). The business's own reads (the
+//     storefront's catalogue read, the live price check, the Stock page)
+//     read it here; the public page and a linked buyer, who may read
+//     nothing else about stock items, read the same through
+//     taskiem_product_left (migration 00502). No copy of the catalogue
+//     holds a count.
+//   - LinkTx says what a product is counted by, with its uses (whole, at
+//     least 1); UnlinkTx that it is counted by none.
 package productstock
 
 import (
@@ -106,12 +116,40 @@ func ProductsOfTx(ctx context.Context, tx pgx.Tx, tenant, item uuid.UUID) (map[s
 	return out, rows.Err()
 }
 
-// LinkTx counts a product by a stock item, one of it a sale; a product
-// counted by another is counted by this one instead.
-func LinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product string, item uuid.UUID) error {
-	_, err := tx.Exec(ctx, `INSERT INTO product_stock (tenant_id, product_id, stock_item_id) VALUES ($1, $2, $3)
-		ON CONFLICT (tenant_id, product_id) DO UPDATE SET stock_item_id = EXCLUDED.stock_item_id, uses = 1`, tenant, product, item)
+// MaxUses is the most of a stock item one sale may use.
+const MaxUses = 1_000_000
+
+// ErrUses refuses uses that are not a whole number from 1 to MaxUses.
+var ErrUses = errors.New("productstock: uses is a whole number from 1 to 1,000,000")
+
+// LinkTx counts a product by a stock item, uses of it a sale (a whole
+// number, at least 1); a product counted by another is counted by this one
+// instead.
+func LinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product string, item uuid.UUID, uses int64) error {
+	if uses < 1 || uses > MaxUses {
+		return ErrUses
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO product_stock (tenant_id, product_id, stock_item_id, uses) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, product_id) DO UPDATE SET stock_item_id = EXCLUDED.stock_item_id, uses = EXCLUDED.uses`, tenant, product, item, uses)
 	return err
+}
+
+// LeftTx is how many whole sales are left of each counted product among
+// products, by id (Counted.Left); products not counted are not in it.
+// The business's own read of what taskiem_product_left answers others.
+func LeftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, products []string) (map[string]int64, error) {
+	if products == nil {
+		products = []string{}
+	}
+	counts, err := CountsTx(ctx, tx, tenant, products)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(counts))
+	for id, c := range counts {
+		out[id] = c.Left()
+	}
+	return out, nil
 }
 
 // UnlinkTx stops counting a product; its stock item stays.

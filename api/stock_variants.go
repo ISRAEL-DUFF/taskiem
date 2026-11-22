@@ -479,7 +479,7 @@ func sizeStockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product stock
 	if err != nil {
 		return err
 	}
-	return productstock.LinkTx(ctx, tx, tenant, row, x.ID)
+	return productstock.LinkTx(ctx, tx, tenant, row, x.ID, 1)
 }
 
 // maxVariantPriceKobo bounds a size's or colour's own price: ₦10m.
