@@ -1,6 +1,6 @@
 # What a business buys, and what it does with it
 
-Status: **Draft** 21 November 2026, for review and discussion; revised 22 November 2026 after review, then to separate stock from products, then for a system not yet in production · Decision: to come (0070) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
+Status: **Draft** 21 November 2026, for review and discussion; revised 22 November 2026 after review, then to separate stock from products, then for a system not yet in production, then after a second review · Decision: to come (0070) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
 
 ## 1. Summary
 
@@ -23,6 +23,9 @@ Two things are wrong with that, and this plan fixes both.
 The supplier sees nothing different.
 
 **Taskiem is not in production yet**, so this plan changes the model outright: no live data to carry over, no old and new paths kept side by side, and nothing kept only for compatibility. Demo and test data are made again from their seeds.
+
+- **To confirm with the founder before S1** (§10 Q11): that no business relies on stock it keeps, staging included. Whatever counts staging holds are made again from the seeds and are not carried over.
+- **It reverses a decision.** [Stock §4](stock.md#4-the-stock-record-k1) keeps the count in the owner's own catalogue ("the owner's table is theirs"), changeable by hand there. Moving counts out is recorded as decision 0070, with what replaces each use of the catalogue's stock columns (§4.3).
 
 ## 2. Words used here
 
@@ -72,9 +75,13 @@ The supplier sees nothing different.
   - **Variants.** Each variant row with a count is counted by its own stock item, as each has its own count today. The stock items of one product's variants are grouped by it on the Stock page.
 - **Counts leave the catalogue.** The catalogue no longer holds `stock`, `unit`, `cost_price`, `reorder_level`, `target_level` or `supplier`: they belong to the stock item.
   - The storefront, the public page, Their shop and price lists read **how many are left** from the stock item through `product_stock`: sold out when the stock item cannot cover one sale's uses.
+  - **The read path.** Public pages read published snapshots today, so how many are left comes from one narrow function, `taskiem_product_left(tenant, product_ids[])`, which returns for each product only how many whole sales its stock item covers (or none, when it is not counted). It never returns a cost, a level, a supplier or the stock item itself. The public role and a linked buyer's reads call it; nothing else about stock items is readable to them.
   - Counts change only through Taskiem: the Stock page, chat, `stock@1`, sales, orders and receiving. Every change is a movement with its reason. The outside-change check of today (a count changed by hand in the table) goes, because the table no longer holds one.
   - **The owner's project** gets a read-only kept copy, `stock_items`, beside `stock_movements` and `money_log`, for reading and building on.
 - **Size.** Stock items are not in the catalogue, so they do not count against its 500. A business may have up to **5,000** stock items (§10 Q9).
+- **Uses are whole numbers**, and a stock item's **unit** is chosen so they stay whole: rice sold by the half kilo is counted in grams (a sale of "500 g" uses 500), fabric sold by the half yard in half yards. The Stock page and chat show the count in the unit it is kept in. Fractions of a use are not allowed.
+- **Variants.** Adding a size or colour (the sizes forms, `make one product`) makes its stock item, counted at 0, with the product's unit, cost and levels; removing one retires its stock item (`retired_at`), keeping its movements. A product with 5 sizes and 4 colours has 20 stock items, grouped under it.
+- **A product deleted from the catalogue.** `product_id` is a row of the owner's catalogue, which can be deleted there. The catalogue refresh drops a `product_stock` link whose row is gone; its stock item stays, as a material, with its count and history.
 
 ### 4.2 What points where after the split
 
@@ -89,11 +96,22 @@ The supplier sees nothing different.
 - **Movements are made in Taskiem's database only.** Nothing is sent to a table first, so a movement and its count change in one transaction, and the send-and-retry of today's catalogue changes goes.
 - **The seller's side of a link order** finds its stock through its product, as today, then lowers the product's stock item.
 
-### 4.3 No move
+### 4.3 What replaces the catalogue's stock columns
+
+| Was | Now |
+| --- | --- |
+| The owner changes a count by hand in the table | **Adjust** on the Stock page or in chat, a movement with its reason. A hand edit is not possible: the table holds no count |
+| A workflow reads `stock` from the catalogue | It reads the kept copy `stock_items` (read-only), or calls `stock@1` |
+| A workflow sets `stock` in the catalogue | It calls `stock@1` (`adjust`, `count`, `receive`), which records a movement |
+| A connector or report built on the catalogue's `cost_price` | The kept copy's `cost_kobo` |
+
+The owner's workflows that use the old columns are listed for them when S1 ships (a check over their published workflows), with what to use instead.
+
+### 4.4 No move
 
 There is no live stock to move. The new tables replace the catalogue's stock columns and the code that wrote to them, in one change. The demo world's seeds and the test fixtures make stock items directly, and every test that kept stock on catalogue rows is rewritten to the new model.
 
-### 4.4 Screens and chat for stock
+### 4.5 Screens and chat for stock
 
 - **The Stock page** lists stock items, not products:
   - each shows its count, unit, cost, levels and supplier;
@@ -104,6 +122,7 @@ There is no live stock to move. The new tables replace the catalogue's stock col
   - **No** makes a material only.
 - **A product's page** shows **Counted by**: its stock item and how many one sale uses, with the count, and a way to choose another or none.
 - **Chat.** `add 20 yards of ankara fabric` names no product the business has, so it asks one question: **Do you sell it?** Yes adds a product counted by a new stock item; No adds a material. `stock`, `how many … do I have?`, `adjust` and counts work on stock items, materials included.
+  - **`add` is already a word** of other commands: `add product …`, `add rider …`, `add <item> <price>`, and stock in (`stock in …`, `received …`). The words decide which: `add product` and a price keep today's meaning; a quantity and a unit with no price (`add 20 yards of …`) is counting something in; anything else is read by the model against the catalogue of actions ([chat menus §8](chat-menus.md)), which gains **Add something to count** as its own action. A test holds the cases apart.
 - **The low list and the briefing** include materials, by their low levels.
 
 ## 5. A purchase line
@@ -116,7 +135,7 @@ There is no live stock to move. The new tables replace the catalogue's stock col
 
 ### 5.2 Add to stock
 
-- The line names a **stock item**, or one made there and then (asking **Do you sell it?** as in §4.4). When it arrives, the count rises and the cost is set, as today.
+- The line names a **stock item**, or one made there and then (asking **Do you sell it?** as in §4.5). When it arrives, the count rises and the cost is set, as today.
 - **Materials** are stock items with no product. They are counted in and out, are on the low list by their own levels, and never reach the catalogue or a customer.
 - The label defaults to **Stock bought**, and the business can change it.
 
@@ -243,7 +262,7 @@ Migration numbers start at 00501.
 
 The web and the app change together. App screens are built in the app's own look ([mobile-app-look.md](mobile-app-look.md)).
 
-- **Stock:** the Stock page of stock items, **Add something to count**, and **Counted by** on a product's page (§4.4).
+- **Stock:** the Stock page of stock items, **Add something to count**, and **Counted by** on a product's page (§4.5).
 - **The treatment question and label:** in the order sheets of a supplier's price list, their shop, a supplier-drafted order and a purchase order by hand.
 - **Order and bill cards:** each line shows its label and a small mark when it went to stock or Things we have. This is on the buyer's side only.
 - **Things we have:** a page under Money, with a row's detail page (status, serial, warranty, note) and **Add something we have**.
@@ -264,6 +283,7 @@ The web and the app change together. App screens are built in the app's own look
 | Q8 | Can one stock item be counted by several products, each using so many of it? For example, rice sold by the bag on two fronts, or a pack of 6 | Yes: `product_stock` holds how many one sale uses, so it is in the model from the start. A product using several different stock items (a recipe) is Q2's later plan |
 | Q9 | How many stock items may a business have? | 5,000, apart from the catalogue's 500, and raised by plan later if needed |
 | Q10 | Should counts stay in the owner's own catalogue table, editable by hand? | No: counts leave the catalogue and change only through Taskiem, each with its reason. The owner's project keeps a read-only copy of stock items |
+| Q11 | Is it safe to change the model outright, with nothing carried over? | Yes if no business, staging included, relies on stock it keeps today. To be confirmed before S1, and written in decision 0070 |
 
 ## 11. Milestones
 
@@ -271,7 +291,8 @@ The split comes first, because Add to stock and every count after it point at st
 
 | # | What | Size |
 | --- | --- | --- |
-| S1 | **Stock items on the server:** `stock_items`, `product_stock` and movements on stock items; the stock columns out of the catalogue mapping; counts, the low list, reorder suggestions, receiving, sales and orders lowering through `product_stock`, the storefront's how-many-left, the briefing, stock value, `stock@1`, WhatsApp and Telegram; the kept copy; seeds, fixtures and tests rewritten | L |
+| S1a | **Stock items and their reads:** `stock_items`, `product_stock` (with variants made and retired with their rows, and links dropped with deleted rows) and movements on stock items; the stock columns out of the catalogue mapping; counts, adjust, the low list, reorder suggestions, stock value, the briefing; `stock@1`; the kept copy; decision 0070; seeds, fixtures and their tests rewritten. Green on its own | M |
+| S1b | **Everything that sells or buys through them:** sales and orders lowering through `product_stock` with uses; receiving onto stock items; `taskiem_product_left` and the storefront, public page, Their shop and price lists reading it; chat (`add … ` counting in, and the action); WhatsApp and Telegram; the list of the owner's workflows using old columns. Green on its own | M |
 | S2 | **Stock items on the screens:** the Stock page, **Add something to count**, **Counted by** with uses, on the web and in the app | M |
 | U1 | **Purchases on the server:** `purchase_lines`; item links made again; `supplier_items`; `spend_labels` and `label_id` on new expenses; receiving by treatment; `kept_things`; the expense split by label, with bills that do not match; OpenAPI and tests | M |
 | U2a | **The question and its memory, in the order sheets:** price list, their shop, supplier-drafted, by hand, on the web and in the app, with suggestions; changed from Suppliers; labels renamed and merged | M |
@@ -281,6 +302,12 @@ The split comes first, because Add to stock and every count after it point at st
 ## 12. Accept
 
 **The split**
+
+- Rice counted in grams: a "1 kg" product uses 1000 and a "500 g" one 500, and selling one of each lowers the stock item by 1500.
+- Adding a size to a product makes its stock item at 0; removing it retires the stock item and keeps its movements.
+- A product row deleted in the owner's catalogue: after the refresh, its stock item is a material with its count unchanged.
+- The public page shows sold out from `taskiem_product_left`, and nothing else about the stock item is readable to the public role.
+- `add product Jollof rice 2500` adds a product as today; `add 20 yards of ankara fabric` asks Do you sell it?
 
 - A product counted by a stock item, sold on the storefront, lowers that stock item once, by the sale's quantity times its uses, in the sale's transaction.
 - A "pack of 6" and a single, both counted by the same stock item: selling one pack lowers it by 6, and the storefront shows the pack sold out when fewer than 6 are left.

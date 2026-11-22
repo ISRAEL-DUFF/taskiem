@@ -188,6 +188,14 @@ test("a reaction from the pill, and any emoji from the +: the other side sees it
   const picker = b.locator(".pop-picker");
   await expect(picker).toBeVisible();
   await expect(picker.locator(".pop-card, .pop-pill")).toHaveCount(0);
+  // Scrolling through the emoji is not the reader leaving the menu: it
+  // stays open (with a wheel, and a finger moving).
+  await picker.locator(".emoji-grid").hover();
+  await buyer.mouse.wheel(0, 400);
+  await picker
+    .locator(".emoji-grid")
+    .evaluate((el) => el.dispatchEvent(new Event("touchmove", { bubbles: true })));
+  await expect(picker).toBeVisible();
   await picker.getByRole("searchbox").fill("party");
   await picker
     .getByRole("button", { name: /party popper/i })
