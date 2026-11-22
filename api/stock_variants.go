@@ -387,7 +387,7 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 					return err
 				}
 			}
-			_, err := stock.SetItemTx(ctx, tx, p.TenantID, sid, stock.ItemSet{Name: &k.Name})
+			_, err := stock.SetItemTx(ctx, tx, p.TenantID, sid, stock.ItemSet{Name: &k.Name, GroupOf: &id})
 			return err
 		}); err != nil {
 			return stock.Item{}, nil, err

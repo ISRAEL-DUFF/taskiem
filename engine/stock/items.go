@@ -132,6 +132,8 @@ type ItemSet struct {
 	// Supplier is set by SupplierID; ClearSupplier removes it.
 	SupplierID    *uuid.UUID
 	ClearSupplier bool
+	// GroupOf is the product a size's or colour's stock item belongs to.
+	GroupOf *string
 }
 
 // SetItemTx changes a stock item's details.
@@ -163,11 +165,15 @@ func SetItemTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, set ItemSet
 	if set.SupplierID != nil {
 		x.SupplierID = set.SupplierID
 	}
+	if set.GroupOf != nil {
+		x.GroupOf = *set.GroupOf
+	}
 	if set.ClearSupplier {
 		x.SupplierID = nil
 	}
-	if _, err := tx.Exec(ctx, `UPDATE stock_items SET name = $3, unit = $4, category = $5, cost_kobo = $6, low_level = $7, target_level = $8, supplier_id = $9
-		WHERE tenant_id = $1 AND id = $2`, tenant, id, x.Name, x.Unit, x.Category, x.CostKobo, x.Low, x.Target, x.SupplierID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE stock_items SET name = $3, unit = $4, category = $5, cost_kobo = $6, low_level = $7, target_level = $8, supplier_id = $9,
+		group_of = NULLIF($10, '')
+		WHERE tenant_id = $1 AND id = $2`, tenant, id, x.Name, x.Unit, x.Category, x.CostKobo, x.Low, x.Target, x.SupplierID, x.GroupOf); err != nil {
 		return x, err
 	}
 	return StockItemTx(ctx, tx, tenant, id)

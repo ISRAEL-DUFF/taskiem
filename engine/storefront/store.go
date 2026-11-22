@@ -967,5 +967,3 @@ func FormatNaira(kobo int64) string {
 // storefront is kept by, as SyncCatalogue names it (” when the table is
 // not found): stock is kept on the catalogue's table only (fronts §5.2).
 const CatalogueTableSQL = `COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`
-
-const catalogueTableSQL = CatalogueTableSQL

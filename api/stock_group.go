@@ -107,6 +107,8 @@ func planGroup(name string, order []string, in []groupIn, items []stock.Item, re
 			return g, fmt.Errorf("%w: %s is already a size or colour of another product", errBadRequest, it.Name)
 		case it.HasSizes():
 			return g, fmt.Errorf("%w: %s is already sold in sizes and colours", errBadRequest, it.Name)
+		case it.Material:
+			return g, fmt.Errorf("%w: %s is not sold: only products are made one product", errBadRequest, it.Name)
 		case seen[it.ID]:
 			return g, fmt.Errorf("%w: %s is chosen twice", errBadRequest, it.Name)
 		}

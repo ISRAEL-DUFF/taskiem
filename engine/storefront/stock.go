@@ -82,7 +82,7 @@ func (o *Orders) lowerStock(ctx context.Context, tenant uuid.UUID, ord Order) ([
 // list from another table may share a row's id.
 func CopyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, row string, n int64) error {
 	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
-		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`, tenant, row, n)
+		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.table_name = `+CatalogueTableSQL, tenant, row, n)
 	if err != nil {
 		return err
 	}

@@ -301,6 +301,67 @@ The split comes first, because Add to stock and every count after it point at st
 | U2b | **The question in chat:** `order … from …` and the questions' steps (buttons, labels, the stock item), on every channel | S |
 | U3 | **Things we have:** the page, its detail, add by hand, statuses (with a sale as money in); spending by label in money reports; web and app | S |
 
+### As built: S1a
+
+**Schema** (migration 00501):
+
+- `stock_items` in the business's scope, with row-level security: the fields of §8, plus `updated_at` and `mirrored_at` for the kept copy. A trigger makes a new one start at 0, refuses more than 5,000 current ones per business (under a lock of the business's), and refuses any change to `count` but one made by a movement's own trigger.
+- `product_stock` (`tenant_id`, `product_id`, `stock_item_id`, `uses` ≥ 1), unique on `(tenant_id, product_id)`, its stock item in the same business (a foreign key on both).
+- `stock_movements` made again on `stock_item_id`. A movement has its count before, after and its change from the start; `pending`, `void`, the claims, attempts and errors are gone, and so is the `outside` reason. Inserting a movement sets its stock item's count in the same statement's transaction, and only from the count the movement starts from (`taskiem_stock_movement_moves`). After insert, only `mirrored_at` changes.
+- `storefronts.keeps_stock` is gone. `taskiem_stock_tenants()` is the businesses with stock items; `taskiem_storefronts_due` refreshes a catalogue whose products are counted (so its deleted rows' links are dropped); `taskiem_stock_due_tenants` is what is left to copy, and sales waiting for their money. `definers.tsv` and `dispatch_columns.txt` follow.
+
+**Engine.**
+
+- `engine/productstock` is the one path from a product to its count: `CountsTx`, `ItemOfTx`, `ProductsOfTx`, `LinkTx`, `UnlinkTx`, `DropGoneTx`.
+- `engine/stock` works on stock items:
+  - `StockItem`, with `CreateItemTx`, `SetItemTx`, `RetireItemTx`, `StockItemsTx`;
+  - `Item`, the list the Stock page, chat and `stock@1` read: a catalogue row with the stock item it is counted by, or a material. Its `id` is the product's row id, or a material's stock item id; `stock_item_id` and `material` say which;
+  - `Low`, `Suggest` and `ValueKobo` (stock value at cost, on `GET /v1/stock` as `value_kobo`);
+  - `RecordTx` makes the movement and its count in the caller's transaction: sales, orders, receiving, counts, adjustments and the evening total all write in one transaction. Selling or ordering a product that no stock item counts moves nothing (`ErrNotCounted`). Receiving, counting or adjusting one starts counting it, by a stock item of its name (`StartCountingTx`).
+- `Apply`, `ApplyPending`, `Outside`, `ReadMark`, `SeenRows`, `LedgerTx`, the sweep's sending and `XenibaseStock`'s `Read`, `Change` and `Tracks` are gone. `storefront.XenibaseCatalogue` reads products for workflows and the live price check.
+- `storefront.Columns` loses `stock`, `unit`, `cost_price`, `reorder_level`, `target_level` and `supplier`, and a mapping naming one is refused. The products table that chat and Keep my stock make has none of them. Keep my stock makes a draft page and a products table, and does nothing more to an existing catalogue.
+- A stock item's usual supplier is `supplier_id`. Setting one by name finds a current supplier of the business's, and refuses a name that is not one: add the supplier first. Renaming a supplier needs nothing more.
+
+**Variants.**
+
+- A new size or colour gets its stock item at 0, with the product's unit, cost, levels and supplier, `group_of` the product.
+- A size taken off sale has its stock item retired, movements kept. One brought back brings its stock item back.
+- `make one product` goes through the same path.
+
+**Deleted rows.** The catalogue refresh (`SyncStorefront`), having read the whole table, drops the `product_stock` links of rows that are gone. Their stock items stay, as materials.
+
+**Reads.**
+
+- The low list, the morning summary's low line, the chat's low cards, the watch and `stock@1` all read the same list, so materials are in them.
+- `stock@1` `list_items` and `get_item` give `stock_item_id` and `material`. `adjust`, `receive` and `count` take either kind of id.
+- `sold …` in chat, `record_sale` and price lists refuse materials.
+- The kept copy `stock_items` is made in the owner's project beside `stock_movements`, read-only (`datatables.KeptNames`). Each version of a stock item is written once, in place.
+
+**API.** The JSON field names the web and app read are kept.
+
+- `POST /v1/stock/items` takes `material: true` for a stock item with no product: the demo world's supplies are made this way.
+- `PATCH /v1/stock/items/{id}` writes a product's own fields to its row, and the rest to its stock item.
+- `GET /v1/stock` no longer has `stuck` nor an item's `waiting`.
+- A movement's `status` is always `done`.
+- OpenAPI and `mobile/lib/api/api.g.dart` follow. The web and app screens are unchanged (S2).
+
+**The cut line to S1b.** Everything that sells, orders, receives or shows a count goes through `productstock` with today's behaviour: a product's count is its stock item's, and selling lowers it by the quantity, whatever `uses` says. The callers on this interim path are:
+
+- the storefront's accepted orders (`stock.OrderLines`, through `storefront.Orders.Moves`) and an ended order put back (`ReturnOrderTx`);
+- chat orders and link orders (the seller's side, as storefront orders of kind `chat` and `trade`);
+- sales by chat, on the web and `stock@1` (`RecordSale`);
+- purchases received, by hand, by `stock@1` and by a link (`ReceiveTx`, `AdjustShortTx`), whose lines still name a product's row id (or a material's id) and set the stock item's cost;
+- the catalogue copy (`storefront.CatalogueItems`), so the storefront, the public page and Their shop show sold out, and price lists show stock;
+- the live price check (`XenibaseCatalogue.Items`).
+
+**Left for S1b:**
+
+- `uses` above 1 when selling and when saying how many are left (always 1 now);
+- `taskiem_product_left` and the public pages reading it, in place of the catalogue copy's count;
+- purchase lines on stock items (U1's `purchase_lines`), in place of a row id resolved through `productstock`;
+- `add …` counting in with **Do you sell it?** in chat;
+- the list of the owner's workflows that use the old columns.
+
 ## 12. Accept
 
 **The split**
