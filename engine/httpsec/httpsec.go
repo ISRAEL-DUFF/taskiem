@@ -8,7 +8,7 @@ import (
 )
 
 // CSP is the Content-Security-Policy sent with every response.
-const CSP = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+const CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 // AppCSP is CSP that may also frame frames, origins like
 // https://forms.example.com: the public host's previews of a look (N13).

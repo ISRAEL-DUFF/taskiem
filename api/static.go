@@ -29,7 +29,9 @@ func SPA(dir string) http.Handler {
 			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
 			return
 		}
-		if strings.HasPrefix(clean, "/assets/") {
+		// /ocr/v7/: the files that read a photo's text in the browser, named
+		// by their version (web/scripts/ocr-assets.mjs).
+		if strings.HasPrefix(clean, "/assets/") || strings.HasPrefix(clean, "/ocr/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 		if clean == "/sw.js" {
