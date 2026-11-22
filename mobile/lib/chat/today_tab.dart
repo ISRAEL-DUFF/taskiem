@@ -31,6 +31,7 @@ import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
+import 'form_request.dart' show FormRequestScreen, sendKeptFormAnswers;
 import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
 import '../theme/look.dart';
 
@@ -350,6 +351,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         }(),
       () async {
         try {
+          await sendKeptFormAnswers(_auth);
           final f = await _get('/v1/form-requests');
           if (mounted) setState(() => _forms = _maps(f?['requests']));
         } on Object {
@@ -639,10 +641,10 @@ class _TodayTabState extends State<TodayTab> with Polling {
             for (final f in _forms.take(3))
               TkListRow(
                 title: _str(f['title']),
-                sub: 'To fill in · ${shortWhen(_str(f['created_at']), now)}',
+                sub: '${_str(f['from']).isEmpty ? 'To fill in' : 'Asked by ${_str(f['from'])}'} · ${shortWhen(_str(f['created_at']), now)}',
                 icon: 'forms',
                 square: look.blue,
-                onTap: () => _web('/forms/requests/${Uri.encodeComponent(_str(f['id']))}'),
+                onTap: () => _go(FormRequestScreen(auth: _auth, id: _str(f['id']), now: widget.now)),
               ),
             for (final p in toMatch.take(3))
               TkListRow(

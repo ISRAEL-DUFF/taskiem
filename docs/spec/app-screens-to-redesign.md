@@ -160,3 +160,9 @@ Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkLi
 | A payroll run (P4a) | `chat/payroll_page.dart` `PayrollRunPage` | A row of Payroll | Net pay, pay day, status and the counts on a `TkTopCard`; Review and approve in Payrolla as a `TkCta` opening Payrolla's link outside while it waits; Not paid first (not paid, returned, with Payrolla's reason), then everyone else (waiting, paid); a line linked to a staff member opens their page | [done 22 Nov] |
 | Staff in Payrolla (P4a) | `chat/payroll_page.dart` `PayrollStaffPage` | Payroll › Staff in Payrolla; a staff member's page › In Payrolla | To confirm (Looks like X, same email or phone, with Confirm), Not linked (Choose: `pickOneOf` with a search over Payrolla's employees not linked to someone else), Linked (Unlink after `askSure`; tap to change); owners alone change them; employees in Payrolla not linked as a teal callout | [done 22 Nov] |
 | In Payrolla, on a staff member's page (P4a) | `chat/team_pages.dart` `StaffPersonPage` | Team › a person › Where we pay them | "In Payrolla: <name>" (or not linked yet) for those with payroll.read, opening Staff in Payrolla; Salaries for the rest | [done 22 Nov] |
+
+## 5e. A form step for you (device fields D1, `docs/spec/device-fields.md`)
+
+| Screen | File | How it is reached | What it holds | Tag |
+| --- | --- | --- | --- | --- |
+| A form step to answer | `chat/form_request.dart` `FormRequestScreen` | Today › Needs you › a To fill in row (asked by a role, by name, or by a linked business) | Who asked and until when (TkLines); each location and photo as a section with one row (Use my location, Take a photo) with its why and Can't; a signature or a scan as a row saying it comes later; typed questions in a form group; a problem as a callout; Send (TkCta); Sent or Kept on your phone as a callout | [done 22 Nov] built in the new look; pictures `form-request-asked`, `form-request` |

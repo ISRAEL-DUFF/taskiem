@@ -1852,6 +1852,24 @@ class TaskiemApi {
   Future<void> setToolSettings({required SetToolSettingsRequest body, required String command}) async {
     await _t.send('PUT', '/v1/tools/${Uri.encodeComponent(command)}/settings', body: body.toJson());
   }
+
+  /// Form steps waiting for you, or for members of your roles (`GET /v1/form-requests`)
+  Future<ListFormRequestsResponse> listFormRequests() async {
+    final j = await _t.send('GET', '/v1/form-requests');
+    return ListFormRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A form step addressed to you or one of your roles, with its prefill (`GET /v1/form-requests/{id}`)
+  Future<FormRequest> getFormRequest({required String id}) async {
+    final j = await _t.send('GET', '/v1/form-requests/${Uri.encodeComponent(id)}');
+    return FormRequest.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Answer a form step addressed to you or one of your roles (`POST /v1/form-requests/{id}/answers`)
+  Future<AnswerFormRequestResponse> answerFormRequest({required AnswerFormRequestRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/form-requests/${Uri.encodeComponent(id)}/answers', body: body.toJson());
+    return AnswerFormRequestResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -3886,7 +3904,7 @@ class GetChatAlertsResponse {
 
 /// An alert as a chat card, with what its next step needs.
 class ChatAlert {
-  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.reference, this.reorder, this.school, required this.title, this.who});
+  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.proof, this.reference, this.reorder, this.school, required this.title, this.who});
 
   final int? amountKobo;
   final Approval? approval;
@@ -3897,6 +3915,11 @@ class ChatAlert {
   final String key;
   final String kind;
   final String line;
+  /// confirm: the delivery's proof from a form step (docs/spec/device-fields.md
+  /// §6, riders@1 record_proof): the pin at its masked point (about 100 m,
+  /// never the exact place), the latest photo, and which was read by the phone
+  /// and which was sent.
+  final ChatAlertProof? proof;
   final String? reference;
   final ChatAlertReorder? reorder;
   /// school_approval: a school's request waiting for a second person (cash at
@@ -3916,6 +3939,7 @@ class ChatAlert {
         key: j['key'] as String,
         kind: j['kind'] as String,
         line: j['line'] as String,
+        proof: j['proof'] == null ? null : ChatAlertProof.fromJson(j['proof'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
         reorder: j['reorder'] == null ? null : ChatAlertReorder.fromJson(j['reorder'] as Map<String, dynamic>),
         school: j['school'] == null ? null : SchoolPosting.fromJson(j['school'] as Map<String, dynamic>),
@@ -3931,6 +3955,7 @@ class ChatAlert {
         'key': key,
         'kind': kind,
         'line': line,
+        'proof': ?proof?.toJson(),
         'reference': ?reference,
         'reorder': ?reorder?.toJson(),
         'school': ?school?.toJson(),
@@ -4018,6 +4043,61 @@ class Approval {
         'subject': ?subject,
         'timeout_at': ?timeoutAt,
         'workflow': workflow,
+      };
+}
+
+/// confirm: the delivery's proof from a form step (docs/spec/device-fields.md
+/// §6, riders@1 record_proof): the pin at its masked point (about 100 m, never
+/// the exact place), the latest photo, and which was read by the phone and
+/// which was sent.
+class ChatAlertProof {
+  const ChatAlertProof({this.mark, this.photoSource, this.photoUrl, this.where});
+
+  final String? mark;
+  final String? photoSource;
+  /// A link to the latest photo, valid for 10 minutes
+  final String? photoUrl;
+  final ChatAlertProofWhere? where;
+
+  factory ChatAlertProof.fromJson(Map<String, dynamic> j) => ChatAlertProof(
+        mark: j['mark'] == null ? null : j['mark'] as String,
+        photoSource: j['photo_source'] == null ? null : j['photo_source'] as String,
+        photoUrl: j['photo_url'] == null ? null : j['photo_url'] as String,
+        where: j['where'] == null ? null : ChatAlertProofWhere.fromJson(j['where'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'mark': ?mark,
+        'photo_source': ?photoSource,
+        'photo_url': ?photoUrl,
+        'where': ?where?.toJson(),
+      };
+}
+
+class ChatAlertProofWhere {
+  const ChatAlertProofWhere({this.accuracyM, this.coarse, required this.lat, required this.lng, required this.source});
+
+  final double? accuracyM;
+  final bool? coarse;
+  /// Masked to three decimal places
+  final double lat;
+  final double lng;
+  final String source;
+
+  factory ChatAlertProofWhere.fromJson(Map<String, dynamic> j) => ChatAlertProofWhere(
+        accuracyM: j['accuracy_m'] == null ? null : (j['accuracy_m'] as num).toDouble(),
+        coarse: j['coarse'] == null ? null : j['coarse'] as bool,
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+        source: j['source'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'accuracy_m': ?accuracyM,
+        'coarse': ?coarse,
+        'lat': lat,
+        'lng': lng,
+        'source': source,
       };
 }
 
@@ -15944,5 +16024,212 @@ class SetToolSettingsRequest {
   Map<String, dynamic> toJson() => {
         'always_ask': alwaysAsk,
         'environment': ?environment,
+      };
+}
+
+class ListFormRequestsResponse {
+  const ListFormRequestsResponse({required this.requests});
+
+  final List<FormRequest> requests;
+
+  factory ListFormRequestsResponse.fromJson(Map<String, dynamic> j) => ListFormRequestsResponse(
+        requests: (j['requests'] as List).map((e) => FormRequest.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class FormRequest {
+  const FormRequest({this.createdAt, this.description, required this.expiresAt, this.from, required this.id, this.member, this.prefill, this.role, required this.runId, required this.schema, required this.status, required this.title});
+
+  final DateTime? createdAt;
+  final Object? description;
+  final DateTime expiresAt;
+  /// The business that asked, when it asked you through a business link (to
+  /// {link}, device fields D1); the request is theirs, answered through the
+  /// link
+  final String? from;
+  final String id;
+  /// The member asked by name (a form step to one member); absent when asked by
+  /// role
+  final String? member;
+  final Map<String, dynamic>? prefill;
+  final String? role;
+  final String runId;
+  final Map<String, dynamic> schema;
+  final String status;
+  final String title;
+
+  factory FormRequest.fromJson(Map<String, dynamic> j) => FormRequest(
+        createdAt: j['created_at'] == null ? null : DateTime.parse(j['created_at'] as String),
+        description: j['description'],
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        from: j['from'] == null ? null : j['from'] as String,
+        id: j['id'] as String,
+        member: j['member'] == null ? null : j['member'] as String,
+        prefill: j['prefill'] == null ? null : j['prefill'] as Map<String, dynamic>,
+        role: j['role'] == null ? null : j['role'] as String,
+        runId: j['run_id'] as String,
+        schema: j['schema'] as Map<String, dynamic>,
+        status: j['status'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': ?createdAt?.toUtc().toIso8601String(),
+        'description': ?description,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'from': ?from,
+        'id': id,
+        'member': ?member,
+        'prefill': ?prefill,
+        'role': ?role,
+        'run_id': runId,
+        'schema': schema,
+        'status': status,
+        'title': title,
+      };
+}
+
+class AnswerFormRequestRequest {
+  const AnswerFormRequestRequest({this.answers, this.device});
+
+  /// The answers by field. A location field (device fields) takes {lat, lng,
+  /// accuracy_m, at, fix} read at the tap, {address} typed where the field
+  /// allows it, or {state refused or unavailable, reason}; its source, state
+  /// and coarse are set by the server.
+  final Map<String, dynamic>? answers;
+  final FormDevice? device;
+
+  factory AnswerFormRequestRequest.fromJson(Map<String, dynamic> j) => AnswerFormRequestRequest(
+        answers: j['answers'] == null ? null : j['answers'] as Map<String, dynamic>,
+        device: j['device'] == null ? null : FormDevice.fromJson(j['device'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answers': ?answers,
+        'device': ?device?.toJson(),
+      };
+}
+
+/// The app or the web that answered, and its clock (docs/spec/device-fields.md
+/// §3). The server keeps the time it received the answer beside it, and marks
+/// clock_differs when the two differ beyond what offline explains.
+class FormDevice {
+  const FormDevice({this.app, this.at, this.online, this.version});
+
+  /// app is the phone app; anything else is taken as web
+  final String? app;
+  /// When the answer was made, by the device's clock
+  final DateTime? at;
+  /// false for an answer made offline and sent later
+  final bool? online;
+  final String? version;
+
+  factory FormDevice.fromJson(Map<String, dynamic> j) => FormDevice(
+        app: j['app'] == null ? null : j['app'] as String,
+        at: j['at'] == null ? null : DateTime.parse(j['at'] as String),
+        online: j['online'] == null ? null : j['online'] as bool,
+        version: j['version'] == null ? null : j['version'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'app': ?app,
+        'at': ?at?.toUtc().toIso8601String(),
+        'online': ?online,
+        'version': ?version,
+      };
+}
+
+class AnswerFormRequestResponse {
+  const AnswerFormRequestResponse({required this.submission});
+
+  final FormSubmission submission;
+
+  factory AnswerFormRequestResponse.fromJson(Map<String, dynamic> j) => AnswerFormRequestResponse(
+        submission: FormSubmission.fromJson(j['submission'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'submission': submission.toJson(),
+      };
+}
+
+class FormSubmission {
+  const FormSubmission({required this.answers, required this.channel, required this.createdAt, this.files, this.formId, required this.id, this.message, this.note, required this.reference, this.requestId, required this.respondent, this.runId, required this.status});
+
+  /// Personal values masked as {masked, category} unless revealed
+  final Map<String, dynamic> answers;
+  final String channel;
+  final DateTime createdAt;
+  final List<FormSubmissionFilesItem>? files;
+  final Object? formId;
+  final String id;
+  final Object? message;
+  final Object? note;
+  final String reference;
+  final Object? requestId;
+  final Map<String, dynamic> respondent;
+  final Object? runId;
+  final String status;
+
+  factory FormSubmission.fromJson(Map<String, dynamic> j) => FormSubmission(
+        answers: j['answers'] as Map<String, dynamic>,
+        channel: j['channel'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        files: j['files'] == null ? null : (j['files'] as List).map((e) => FormSubmissionFilesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        formId: j['form_id'],
+        id: j['id'] as String,
+        message: j['message'],
+        note: j['note'],
+        reference: j['reference'] as String,
+        requestId: j['request_id'],
+        respondent: j['respondent'] as Map<String, dynamic>,
+        runId: j['run_id'],
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answers': answers,
+        'channel': channel,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'files': ?files?.map((e) => e.toJson()).toList(),
+        'form_id': ?formId,
+        'id': id,
+        'message': ?message,
+        'note': ?note,
+        'reference': reference,
+        'request_id': ?requestId,
+        'respondent': respondent,
+        'run_id': ?runId,
+        'status': status,
+      };
+}
+
+class FormSubmissionFilesItem {
+  const FormSubmissionFilesItem({this.field, this.id, this.name, this.size, this.type});
+
+  final String? field;
+  final String? id;
+  final String? name;
+  final int? size;
+  final String? type;
+
+  factory FormSubmissionFilesItem.fromJson(Map<String, dynamic> j) => FormSubmissionFilesItem(
+        field: j['field'] == null ? null : j['field'] as String,
+        id: j['id'] == null ? null : j['id'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        size: j['size'] == null ? null : (j['size'] as num).toInt(),
+        type: j['type'] == null ? null : j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'field': ?field,
+        'id': ?id,
+        'name': ?name,
+        'size': ?size,
+        'type': ?type,
       };
 }

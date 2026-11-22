@@ -392,3 +392,10 @@ startTool
 confirmTool
 getRunAnswer
 setToolSettings
+
+# Form steps for you (device fields D1, docs/spec/device-fields.md): the
+# app answers a form step, its location and photo read at the tap; a photo
+# goes as a multipart form through the transport upload.
+listFormRequests
+getFormRequest
+answerFormRequest
