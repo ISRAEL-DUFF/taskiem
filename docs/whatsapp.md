@@ -92,6 +92,8 @@ The decision is then recorded, and Taskiem confirms it in the chat.
 
 **Matching payments.** See [below](#matching-payments): a payment Taskiem could not match to an invoice on its own comes with **Yes, match** and **No**.
 
+**Form steps that ask where you are or for a photo** ([device fields](spec/device-fields.md#15-as-built-d1)). A form step to you by name or role, or to your business through a business link (a rider asked to prove a delivery), comes here too, with each thing it asks and why, and a link to answer in the app. Send your location (attach, then Location) and a photo, in any order: Taskiem says what it still needs, then sends them as your answer, marked as *sent* (a pin you placed, a photo that may be old), not read by the phone. A signature cannot be given here and goes as not available. When the question needs your phone's own reading, Taskiem says so, gives the app's link, and offers **Send as it is**, which sends it marked *unverified*.
+
 **Yesterday's money.** Owners get a summary every morning from 08:00 Lagos: money in, settled and pending, by channel, money out, invoices paid and leaks opened, with a link to the Money page; a quiet day sends nothing. Outside the 24-hour window it comes as the `taskiem_daily_summary` [template](#templates) with an **Open** button (as the alert template, cut to one line, until that one is approved). See [Money reports](money-reports.md#the-daily-summary-in-chat).
 
 ## Matching payments

@@ -55,7 +55,7 @@ The form is part of the workflow: its questions are the workflow's inputs schema
 } }
 ```
 
-- **To:** a person ([device fields §2](spec/device-fields.md#2-who-is-asked)): a phone or email from the run, `role` for members of a role, or `member` for one member (their id, or an expression giving one), who find it under To fill in in the app and on the web (and are alerted). `link` (the person working a business link) and `"starter"` are refused until device fields D1 and made tools M4.
+- **To:** a person ([device fields §2](spec/device-fields.md#2-who-is-asked)): a phone or email from the run, `role` for members of a role, or `member` for one member (their id, or an expression giving one), who find it under To fill in in the app and on the web (and are alerted), and are asked in WhatsApp or Telegram too where they are linked; or `link`, the person working a business link (its id, the linked business's, or an expression giving one): the linked business's owner finds it under To fill in on their side and answers it through the link ([device fields §15](spec/device-fields.md#15-as-built-d1)). `"starter"` is refused until made tools M4.
 - **The link** goes by the first channel that reaches the person, through the platform's message outbox, and again at each `remind`. It is a one-time link: answered, it is used up; the run cancelled, it is withdrawn.
 - **The step's output** is the answers, with `respondent` and `device` (below). Not answered by the `timeout` (default 7 days): `on_timeout` `fail` fails the step (its `on_error` can handle it); `continue` completes it with `timed_out: true`.
 
@@ -69,7 +69,7 @@ A form step may ask the person's device ([the app as a node](spec/device-fields.
 
 Each answer is `{state, source, ...}`: `state` is `answered`, `refused` or `unavailable` (with a `reason`), or `unverified` when its source is weaker than `require_source`; `source` is set by the server from where the answer came (a location read at the tap is `device`, typed `typed`, sent in a chat `sent`), never from the answer. A location is `{lat, lng, accuracy_m, at}` (with `coarse: true` past `max_accuracy_m`) or `{address}`. **A location is personal data**: sealed as `location`, masked to about 100 m wherever masked values are shown, exactly only with `pii.reveal`, and never given to an AI step (it is told only that one was answered, and how). Photos and signatures are files, below.
 
-Today the app and the web answer through `POST /v1/form-requests/{id}/answers`, which takes a location and a scan as values; the web's form and the form host's page do not ask a device yet and send such fields `unavailable`. D1 asks them in the app, the web, WhatsApp and Telegram.
+**Where they are asked** (D1): the app and the web answer through `POST /v1/form-requests/{id}/answers`, a location and a scan as values and a photo or a signature as a part of a multipart form. The phone app reads the location only at the tap and takes the photo with the camera, and keeps an answer made offline to send later (`online: false`); the web asks the browser's own location prompt, and takes a photo from the camera where the browser offers it or as a file (`sent`), and a signature on a pad. In WhatsApp and Telegram the person sends their location and a photo with the chat's own messages (`sent`); a signature is unavailable there. A field that requires the device's reading or the camera, answered in a chat, is held and the person offered the app's link or **Send as it is**, which sends it `unverified`. The form host's one-time page does not ask a device yet and sends such fields `unavailable`.
 
 **Every answer** (a form step's, and a form's in `trigger.form`) carries `device: {app, version, online, at, received_at}`: the app that answered (`app`, `web` or `link`), its version, whether it was online, the time by its clock, and the time the server received it, which is the one to rely on; `clock_differs: true` when the two differ by more than five minutes beyond what answering offline explains.
 
@@ -117,7 +117,7 @@ Claims are one table (`storefront_claims`), taken by the public host with the su
 | `GET /v1/form-submissions`, `GET /v1/form-submissions/{id}` | Submissions, masked; `?reveal=true` with `pii.reveal` |
 | `GET /v1/form-files/{id}` | A file's download link (`pii.reveal`, audited) |
 | `GET /v1/forms/{id}/view`, `POST /v1/forms/{id}/submissions` | A members form, and sending it |
-| `GET /v1/form-requests`, `GET /v1/form-requests/{id}`, `POST /v1/form-requests/{id}/answers` | Form steps for you or your roles; answers take `device` (`app`, `version`, `online`, `at`) |
+| `GET /v1/form-requests`, `GET /v1/form-requests/{id}`, `POST /v1/form-requests/{id}/answers` | Form steps for you, your roles, or put to you through a business link (`from`); answers take `device` (`app`, `version`, `online`, `at`), and photos and signatures as a multipart form |
 
 ## How it is kept safe
 

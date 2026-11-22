@@ -184,9 +184,9 @@ func DeviceFieldProblems(schema map[string]any, to FormTo, path string) []Proble
 	// WhatsApp or Telegram could never be met (§8). No `to` is answered
 	// only there today: a phone or an email gets a one-time link that
 	// opens in a browser, which can read a location; members answer in
-	// the app or the web. A link's person (`to: {link}`, refused until
-	// D1) may be reached only in a chat, which is known when the run
-	// asks, not when it is validated: the deploy warns then.
+	// the app or the web, and so does a link's person (`to: {link}`, D1):
+	// the linked business's owner, who answers in the app or the web as
+	// well as in their chat. So the row refuses nothing.
 	return out
 }
 
