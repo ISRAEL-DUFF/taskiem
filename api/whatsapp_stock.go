@@ -53,6 +53,9 @@ type stockChat struct {
 	// Received: goods that came in ("received 12 air max 90"), received
 	// against the item's supplier's open order once it is chosen.
 	Received bool `json:"received,omitempty"`
+	// Material: something new counted in was answered No to "Do you sell
+	// it?" (stock_new): a stock item with no product.
+	Material bool `json:"material,omitempty"`
 }
 
 // waStockCommand acts on a stock command; false when cmd is not one (or
@@ -69,7 +72,9 @@ func (s *Server) waStockCommand(ctx context.Context, c *chat, text, cmd string) 
 	if done, err := s.waPurchaseCommand(ctx, c, text, cmd); done || err != nil {
 		return done, err
 	}
-	if a, ok := stock.ParseAdd(text); ok {
+	// "add 20 yards of ankara fabric", "stock in 5 cartons of Indomie":
+	// counting in; something new asks Do you sell it? (stockAskAdd).
+	if a, ok := stock.ParseCountIn(text); ok {
 		return true, s.waStockAdd(ctx, c, a)
 	}
 	switch {
@@ -534,7 +539,9 @@ func (s *Server) waStockAddFrom(ctx context.Context, c *chat, a stock.Added, rec
 	return s.stockAskAdd(ctx, c, sh, nil)
 }
 
-// stockAskAdd shows an add: a new item (it nil) or goods received on it.
+// stockAskAdd shows an add: goods received on an item, or something new
+// (it nil), which asks one question, Do you sell it? (what-a-business-buys
+// §4.5): yes adds a product counted by a new stock item, no a material.
 func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *stock.Item) error {
 	in := sh.StockChat
 	cost := ""
@@ -543,12 +550,15 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 	}
 	if it == nil {
 		qty := whatsapp.SafeText((stock.Item{Unit: in.Unit}).Quantity(in.Quantity))
-		key := "wa.stock.confirm_new"
+		key := "wa.stock.ask_sell"
 		if in.Setup {
-			key = "wa.stock.confirm_first"
+			key = "wa.stock.ask_sell_first"
 		}
-		sh.Row = ""
-		return s.shopAsk(ctx, c, sh, c.t(key, "name", whatsapp.SafeText(sh.Name), "qty", qty, "cost", cost))
+		sh.Row, sh.Action, sh.Nonce = "", "stock_new", uuid.NewString()
+		if err := s.saveSession(ctx, c, stateConfirming, chatData{Shop: sh}, waPendingTTL); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t(key, "name", whatsapp.SafeText(sh.Name), "qty", qty, "cost", cost)+"\n\n"+c.t("wa.stock.sell_how"), sellButtons(c)...)
 	}
 	sh.Row, sh.Name = it.ID, it.Name
 	if in.Unit == "" || it.Unit != "" {
@@ -565,6 +575,26 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 	}
 	return s.shopAsk(ctx, c, sh, c.t("wa.stock.confirm_topup", "name", whatsapp.SafeText(it.Name), "qty", whatsapp.SafeText(unitItem.Quantity(in.Quantity)),
 		"from", whatsapp.SafeText(from), "to", whatsapp.SafeText(to), "cost", cost))
+}
+
+// sellButtons answer Do you sell it?
+func sellButtons(c *chat) []whatsapp.Button {
+	return []whatsapp.Button{{ID: "yes", Title: c.t("button.yes_sell")}, {ID: "no", Title: c.t("button.no_sell")}, {ID: "cancel", Title: c.t("button.cancel")}}
+}
+
+// waStockSellReply takes the answer to Do you sell it?: yes a product, no
+// a material, each counted in on the answer; anything else asks again.
+func (s *Server) waStockSellReply(ctx context.Context, c *chat, cmd string) error {
+	sh := c.data.Shop
+	switch cmd {
+	case "yes", "y":
+		sh.StockChat.Material = false
+	case "no", "n":
+		sh.StockChat.Material = true
+	default:
+		return c.say(ctx, s, c.t("wa.stock.sell_reminder", "name", whatsapp.SafeText(sh.Name)), sellButtons(c)...)
+	}
+	return s.waStockApply(ctx, c)
 }
 
 // waStockAdjust answers "adjust rice -2 spoilt".
@@ -659,25 +689,30 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 	}
 	var msg string
 	switch sh.Action {
-	case "stock_add":
-		if sh.Row == "" {
-			it, _, err := s.stockAdd(tctx, c.tenant.ID, c.p.Actor(), key, stockNew{Name: sh.Name, Quantity: in.Quantity, Unit: in.Unit, CostKobo: in.CostKobo}, audit)
-			if errors.Is(err, errItemExists) {
-				if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
-					return serr
-				}
-				return c.say(ctx, s, c.t("wa.stock.exists", "name", whatsapp.SafeText(it.Name)))
+	case "stock_new":
+		// Do you sell it? Yes: a product, as the Stock page adds one, counted
+		// by a new stock item; no: a material. Either holds the quantity as
+		// received, a movement with its reason.
+		it, _, err := s.stockAdd(tctx, c.tenant.ID, c.p.Actor(), key, stockNew{Name: sh.Name, Quantity: in.Quantity, Unit: in.Unit, CostKobo: in.CostKobo,
+			Material: in.Material}, audit)
+		if errors.Is(err, errItemExists) {
+			if serr := s.saveSession(ctx, c, stateIdle, chatData{}, 0); serr != nil {
+				return serr
 			}
-			if err != nil {
-				s.Logger.Warn("chat: adding an item", "tenant", c.tenant.ID, "err", err)
-				return c.say(ctx, s, c.t("wa.shop.add_failed", "reason", tablesChatReason(err)))
-			}
-			msg = c.t("wa.stock.added", "name", whatsapp.SafeText(it.Name), "count", whatsapp.SafeText(it.Quantity(stockOf(it))))
-			if it.PriceKobo == nil {
-				msg += " " + c.t("wa.stock.no_price", "name", whatsapp.SafeText(it.Name))
-			}
-			break
+			return c.say(ctx, s, c.t("wa.stock.exists", "name", whatsapp.SafeText(it.Name)))
 		}
+		if err != nil {
+			s.Logger.Warn("chat: adding an item", "tenant", c.tenant.ID, "err", err)
+			return c.say(ctx, s, c.t("wa.shop.add_failed", "reason", tablesChatReason(err)))
+		}
+		msg = c.t("wa.stock.added", "name", whatsapp.SafeText(it.Name), "count", whatsapp.SafeText(it.Quantity(stockOf(it))))
+		switch {
+		case in.Material:
+			msg += " " + c.t("wa.stock.added_material")
+		case it.PriceKobo == nil:
+			msg += " " + c.t("wa.stock.no_price", "name", whatsapp.SafeText(it.Name))
+		}
+	case "stock_add":
 		shop, err := s.stockShopOf(tctx, c.tenant.ID)
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)

@@ -359,8 +359,35 @@ The split comes first, because Add to stock and every count after it point at st
 - `uses` above 1 when selling and when saying how many are left (always 1 now);
 - `taskiem_product_left` and the public pages reading it, in place of the catalogue copy's count;
 - purchase lines on stock items (U1's `purchase_lines`), in place of a row id resolved through `productstock`;
-- `add …` counting in with **Do you sell it?** in chat;
+- `add …` counting in with **Do you sell it?** in chat (done: below);
 - the list of the owner's workflows that use the old columns.
+
+### As built: S1b (counting in by words)
+
+**The words.** Read by a parser, never the model (`stock.ParseCountIn`, `waStockCommand`):
+
+- a quantity first, after `add` or `stock in` (new): `add 20 yards of ankara fabric`, `stock in 5 cartons of Indomie at 8,500` (a cost, not a price). `received …` reads the same after its open-order check;
+- naming a stock item or product the business has: counted in, shown for a Yes, as before;
+- naming nothing it has: one question, **Do you sell it?**, with what it would add;
+- `add product …`, `add service …`, `add item|dish … <price>`, `add rider …`, `add supplier …`, `add front …`, `add to …`: no quantity first, so their own commands, unchanged;
+- anything else: the model, against the catalogue of actions.
+
+**The answer** (`stock_new`, kept in `chat_sessions` with `waPendingTTL`, as the other one-question flows):
+
+- **Yes**: a product in the catalogue counted by a new stock item, through `stockAdd`, the path the Stock page and the chat used before; not on the page until priced, as then;
+- **No**: a material (`stockNew.Material`), nothing in the catalogue;
+- either holds the quantity as a `received` movement, under the session's key; the first one also starts keeping stock, as before;
+- another answer asks again; *cancel* leaves it.
+
+**Every channel.** One reply with three buttons, Yes, I sell it / No, I don't / Cancel (`sellButtons`): buttons in the Taskiem chat (the Yes named for the question, as other Yeses), reply buttons on WhatsApp, buttons under the message on Telegram. Typed *yes* and *no*, in any language's words, do the same.
+
+**The catalogue.** `stock.new`, **Add something to count**, under Stock: `add 20 yards of ankara fabric`, `table.edit` in the Stock part, asked step by step (what, and how many), and so a form in the app and on the web (M4's). It asks by itself (`asks`), so the model's action, or its form, is read as typed and gets the question.
+
+**Reads.** Tested: a material made this way is in `how many`, `adjust`, `stock` (the low list) at its low level, and `low` on `GET /v1/stock`. Nothing needed changing.
+
+**Words.** `wa.stock.ask_sell`, `ask_sell_first`, `sell_how`, `sell_reminder`, `added_material`, `button.yes_sell`, `button.no_sell` and `menu.stock.new*`; `wa.stock.confirm_new` and `confirm_first` are gone. The other four languages hold the English, marked not translated yet.
+
+**Tests.** `TestParseCountIn` (the words); `TestCountingInWordsToldApart` (add product with a price, add item with a price, a quantity and a unit, `stock in`, `received`, something there, add rider); WhatsApp, the Taskiem chat, Telegram and the model, each to the end.
 
 ## 12. Accept
 

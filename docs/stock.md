@@ -113,7 +113,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 
 | Send | What happens |
 | --- | --- |
-| `add 50 cartons of Indomie at 8,500` | Adds the item with 50 received and the cost price, or tops up the one there (`add 20 bags rice`, `add 6 Indomie Chicken`; the price after `at`, `@` or `for` is the cost of one) |
+| `add 50 cartons of Indomie at 8,500` | Tops up the item there with 50 received and the cost price (`add 20 bags rice`, `add 6 Indomie Chicken`, `stock in 20 bags rice`; the price after `at`, `@` or `for` is the cost of one). Something new asks **Do you sell it?** first: **Yes** adds it to the products too, **No** only keeps count of it (fabric, thread, bags: something used, not sold) |
 | `stock indomie`, `how many bags of rice do I have?` | The count, in its unit, whether it is low, and the last movement |
 | `stock` | The items at or below their reorder level, with how many to order |
 | `adjust rice -2 spoilt` | An adjustment with its reason (`+3 found` adds) |

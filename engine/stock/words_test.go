@@ -124,3 +124,34 @@ func TestParseCount(t *testing.T) {
 		}
 	}
 }
+
+// Counting in by words (what-a-business-buys §4.5): a quantity first,
+// after "add" or "stock in", is counting something in; "add product",
+// "add item … <price>", "add rider" and the rest are other commands'.
+func TestParseCountIn(t *testing.T) {
+	for _, c := range []struct {
+		in         string
+		ok         bool
+		qty        int64
+		unit, name string
+	}{
+		{"add 20 yards of ankara fabric", true, 20, "yard", "ankara fabric"},
+		{"stock in 20 yards of ankara fabric", true, 20, "yard", "ankara fabric"},
+		{"Stock in 5 cartons of Indomie at 8,500", true, 5, "carton", "Indomie"},
+		{"add 3 rolls thread", true, 3, "roll", "thread"},
+		{"add product Jollof rice 2500", false, 0, "", ""},
+		{"add item Chin chin 500", false, 0, "", ""},
+		{"add dish Jollof rice 2500", false, 0, "", ""},
+		{"add rider Musa 0803 123 4567 Ikeja", false, 0, "", ""},
+		{"add supplier Dangote Depot 0803 123 4567", false, 0, "", ""},
+		{"add service Haircut 30 2000", false, 0, "", ""},
+		{"stock rice", false, 0, "", ""},
+		{"stock in", false, 0, "", ""},
+		{"received 20 yards of ankara fabric", false, 0, "", ""},
+	} {
+		a, ok := stock.ParseCountIn(c.in)
+		if ok != c.ok || ok && (a.Quantity != c.qty || a.Unit != c.unit || a.Name != c.name) {
+			t.Errorf("%q: %+v %v", c.in, a, ok)
+		}
+	}
+}
