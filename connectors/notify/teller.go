@@ -105,8 +105,8 @@ func (n *Notifier) deliver(ctx context.Context, tx pgx.Tx, business string, m Me
 			res.Chat++
 			continue
 		}
-		if n.Messages == nil || p.email == "" {
-			continue
+		if n.Messages == nil || p.email == "" || placeholderEmail(p.email) {
+			continue // an account made by phone or chat has no mailbox
 		}
 		subject := m.Title
 		if subject == "" {
@@ -174,7 +174,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 		// about hears it on their own chat with the business (or by email),
 		// not as someone outside it.
 		if m.PayrollaEmployee != "" {
-			people, err := payrollaStaff(ctx, tx, m.PayrollaEmployee)
+			people, err := payrollaStaff(ctx, tx, m.Tenant, m.PayrollaEmployee)
 			if err != nil {
 				return err
 			}
@@ -190,9 +190,11 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 					d.Via = "email"
 					return nil
 				}
+				// No chat and no real email reaches them as staff: they
+				// are reached as the employee, on the phone Payrolla has.
 			}
 		}
-		if phone == "" && m.Email == "" {
+		if phone == "" && (m.Email == "" || placeholderEmail(m.Email)) {
 			return nil
 		}
 		if phone != "" && n.Reach.Ready() {
@@ -239,7 +241,7 @@ func (n *Notifier) Message(ctx context.Context, m Outside) (Delivery, error) {
 				return nil
 			}
 		}
-		if m.Email != "" {
+		if m.Email != "" && !placeholderEmail(m.Email) {
 			subject := m.Title
 			if subject == "" {
 				subject = "A message from " + business
@@ -321,10 +323,10 @@ func recipients(ctx context.Context, tx pgx.Tx, m Message) ([]person, error) {
 
 // payrollaStaff is the active staff member linked to a Payrolla employee
 // (staff_profiles.payrolla_employee_id, set by an owner), if any.
-func payrollaStaff(ctx context.Context, tx pgx.Tx, employee string) ([]person, error) {
+func payrollaStaff(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, employee string) ([]person, error) {
 	rows, err := tx.Query(ctx, `SELECT u.id, u.email FROM staff_profiles sp JOIN users u ON u.id = sp.user_id
-		WHERE sp.payrolla_employee_id = $1 AND u.status = 'active'
-		  AND EXISTS (SELECT 1 FROM memberships ms WHERE ms.tenant_id = sp.tenant_id AND ms.user_id = sp.user_id) LIMIT 1`, employee)
+		WHERE sp.tenant_id = $1 AND sp.payrolla_employee_id = $2 AND u.status = 'active'
+		  AND EXISTS (SELECT 1 FROM memberships ms WHERE ms.tenant_id = sp.tenant_id AND ms.user_id = sp.user_id) LIMIT 1`, tenant, employee)
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +342,13 @@ func text(m Message) string {
 		return m.Text
 	}
 	return m.Title + "\n\n" + m.Text
+}
+
+// placeholderEmail reports whether e is the sign-in name of an account
+// made by phone or chat (users.email is required): .invalid receives no
+// mail. The api's emailPlaceholder is the same test.
+func placeholderEmail(e string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(e)), ".taskiem.invalid")
 }
 
 func maskEmail(e string) string {

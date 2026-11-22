@@ -114,4 +114,24 @@ func TestTellPayrollaStaff(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE channel = 'sms'`).Scan(&sms); err != nil || sms != 1 {
 		t.Fatalf("by SMS: %d %v", sms, err)
 	}
+
+	// Linked to someone who signed up by phone and has no chat with the
+	// business now: their sign-in email receives nothing, so by phone.
+	tunde := w.member(t, owner, "tunde@paidstaff.test", "cashier")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE users SET email = 'person+0011223344556677@phone.taskiem.invalid' WHERE id = $1`, idOf(t, tunde)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO staff_profiles (tenant_id, user_id, payrolla_employee_id, payrolla_name, updated_by)
+		VALUES ($1, $2, 'emp-tunde', 'Tunde Ade', 'user:test')`, tenantOf(t, owner), idOf(t, tunde)); err != nil {
+		t.Fatal(err)
+	}
+	owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"employee": "emp-tunde", "phone": "08031118888"}})
+	w.env.Drain(t)
+	var placeholder int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE channel = 'sms'`).Scan(&sms); err != nil || sms != 2 {
+		t.Fatalf("a lapsed chat, by SMS: %d %v", sms, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE channel = 'email'`).Scan(&placeholder); err != nil || placeholder != 0 {
+		t.Fatalf("emailed: %d %v", placeholder, err)
+	}
 }

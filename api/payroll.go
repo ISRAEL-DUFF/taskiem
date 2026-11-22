@@ -452,6 +452,23 @@ func (s *Server) getPayrollStaff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"staff": staff, "employees": emps, "connection": name})
 }
 
+// payrollaNameMax is the longest Payrolla name kept (staff_profiles'
+// check); a longer one is cut, not refused.
+const payrollaNameMax = 160
+
+// payrollaMemberTx is pgx.ErrNoRows unless user holds a role in the
+// business.
+func payrollaMemberTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) error {
+	var staff bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, tenant, user).Scan(&staff); err != nil {
+		return err
+	}
+	if !staff {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
 // putStaffPayrolla is PUT /v1/staff/{user}/payrolla {employee_id?,
 // connection?}: an owner confirms who a staff member is in Payrolla (left
 // out, the link is removed). Payroll messages about that employee then
@@ -477,14 +494,7 @@ func (s *Server) putStaffPayrolla(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var staff bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, p.TenantID, user).Scan(&staff); err != nil {
-			return err
-		}
-		if !staff {
-			return pgx.ErrNoRows
-		}
-		return nil
+		return payrollaMemberTx(ctx, tx, p.TenantID, user)
 	}); err != nil {
 		s.payFail(w, r, err)
 		return
@@ -518,12 +528,28 @@ func (s *Server) putStaffPayrolla(w http.ResponseWriter, r *http.Request) {
 			s.payFail(w, r, refusePay(http.StatusNotFound, "no_employee", "There is no such employee in the business's Payrolla."))
 			return
 		}
-		emp, empName = &id, &e.Name
+		n := clipRunes(e.Name, payrollaNameMax)
+		emp, empName = &id, &n
 	}
 	var out *staffPayrolla
 	err = s.tx(r, func(tx pgx.Tx) error {
+		// Payrolla was asked outside this transaction: they may have left
+		// the business since.
+		if err := payrollaMemberTx(ctx, tx, p.TenantID, user); err != nil {
+			return err
+		}
+		if emp != nil {
+			// Someone who left holds no employee: their link, left from
+			// before removals unlinked, does not make it taken.
+			if _, err := tx.Exec(ctx, `UPDATE staff_profiles sp SET payrolla_employee_id = NULL, payrolla_name = NULL, payrolla_linked_by = NULL, payrolla_linked_at = NULL
+				WHERE sp.tenant_id = $1 AND sp.payrolla_employee_id = $2 AND sp.user_id <> $3
+					AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.tenant_id = sp.tenant_id AND m.user_id = sp.user_id)`, p.TenantID, *emp, user); err != nil {
+				return err
+			}
+		}
+		// Unlinking (emp nil) leaves no one as having linked them.
 		if _, err := tx.Exec(ctx, `INSERT INTO staff_profiles (tenant_id, user_id, payrolla_employee_id, payrolla_name, payrolla_linked_by, payrolla_linked_at, updated_by)
-			VALUES ($1, $2, $3, $4, $5, now(), $5)
+			VALUES ($1, $2, $3, $4, CASE WHEN $3::text IS NULL THEN NULL ELSE $5 END, CASE WHEN $3::text IS NULL THEN NULL ELSE now() END, $5)
 			ON CONFLICT (tenant_id, user_id) DO UPDATE SET payrolla_employee_id = EXCLUDED.payrolla_employee_id, payrolla_name = EXCLUDED.payrolla_name,
 				payrolla_linked_by = EXCLUDED.payrolla_linked_by, payrolla_linked_at = EXCLUDED.payrolla_linked_at`,
 			p.TenantID, user, emp, empName, p.Actor()); err != nil {

@@ -344,6 +344,9 @@ func (s *Server) revokeRole(w http.ResponseWriter, r *http.Request) {
 		if err := endDelegations(r.Context(), tx, user, role); err != nil {
 			return err
 		}
+		if err := dropLeaverLinksTx(r.Context(), tx, p.TenantID, user); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
 			AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1)`, user); err != nil {
 			return err

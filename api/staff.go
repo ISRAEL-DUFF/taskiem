@@ -336,6 +336,20 @@ func (s *Server) cancelStaffInvite(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// dropLeaverLinksTx unlinks someone who no longer holds any role in the
+// business from the Payrolla employee and the saved pay account their
+// staff profile named, so neither stays taken by (nor reaches) someone who
+// left. Every path that takes memberships away calls it after; while any
+// role is left it does nothing.
+func dropLeaverLinksTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE staff_profiles SET payrolla_employee_id = NULL, payrolla_name = NULL, payrolla_linked_by = NULL, payrolla_linked_at = NULL,
+			saved_id = NULL, saved_linked_by = NULL, saved_linked_at = NULL
+		WHERE tenant_id = $1 AND user_id = $2
+			AND (payrolla_employee_id IS NOT NULL OR payrolla_linked_at IS NOT NULL OR saved_id IS NOT NULL OR saved_linked_at IS NOT NULL)
+			AND NOT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = $1 AND user_id = $2)`, tenant, user)
+	return err
+}
+
 // removeStaff is POST /v1/staff/{user}/remove: every role the person holds
 // in the business goes, so their chat and the web no longer reach it. Not
 // oneself, an owner only by an owner, never the last owner, and only by
@@ -378,6 +392,9 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 			name = "Someone"
 		}
 		if _, err := tx.Exec(r.Context(), `DELETE FROM memberships WHERE tenant_id = $1 AND user_id = $2`, p.TenantID, user); err != nil {
+			return err
+		}
+		if err := dropLeaverLinksTx(r.Context(), tx, p.TenantID, user); err != nil {
 			return err
 		}
 		// Their open tasks go back to whoever gave them (staff_tasks.go).
