@@ -143,7 +143,7 @@ Known tables are defined once in `templates/tables/` as JSON, so the definition 
 | Known table | Columns |
 | --- | --- |
 | `customers` | `name` text (required) · `phone` phone · `email` email · `area` text · `marketing_opt_in` boolean · `email_status` text. Personal: name, phone and email |
-| `staff` | `name`, `phone`, `email`, `net_pay`, `bank_code`, `account_number`, `account_name`, `active`: the shape `run-payroll` declares today, moved here unchanged |
+| `staff` (deleted 22 November 2026 with Run payroll) | `name`, `phone`, `email`, `net_pay`, `bank_code`, `account_number`, `account_name`, `active`: the shape `run-payroll` declares today, moved here unchanged |
 
 Rules for known tables:
 - **Existing tables are left alone.** A business that already has a table of that name keeps it as it is.

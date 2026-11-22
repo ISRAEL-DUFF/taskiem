@@ -74,7 +74,7 @@ func (t *Template) checkCallable() error {
 }
 
 // TriggerOnly reports whether a parameter is used only by the template's
-// trigger (run-payroll's pay day): used as a step, the template has no
+// trigger (a monthly template's day of the month): used as a step, the template has no
 // trigger of its own, so the caller leaves it out.
 func (t *Template) TriggerOnly(name string) bool {
 	var d map[string]json.RawMessage

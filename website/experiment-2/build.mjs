@@ -138,7 +138,7 @@ const overrides = {
 // The home page's six cards, in the design's order.
 const byID = {};
 for (const g of facts.Templates) for (const t of g.Items) byID[t.ID] = t;
-const homeCards = ["chase-overdue-invoices", "payment-thank-you-sms", "run-payroll", "failed-transfer-alert", "daily-sales-summary", "sales-ledger-sheet"]
+const homeCards = ["chase-overdue-invoices", "payment-thank-you-sms", "pay-a-list", "failed-transfer-alert", "daily-sales-summary", "sales-ledger-sheet"]
   .map((id) => {
     if (!byID[id]) throw new Error(`template ${id} is not in templates/library`);
     return card(byID[id]);

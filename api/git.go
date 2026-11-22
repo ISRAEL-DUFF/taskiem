@@ -1272,8 +1272,8 @@ func (s *Server) retryProposal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"git": g})
 }
 
-// fileSlug turns a definition id into a file name: wf_runPayroll ->
-// run-payroll.
+// fileSlug turns a definition id into a file name: wf_payAList ->
+// pay-a-list.
 func fileSlug(id string) string {
 	id = strings.TrimPrefix(id, "wf_")
 	var b strings.Builder

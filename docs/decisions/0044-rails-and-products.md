@@ -46,5 +46,5 @@ From a review on 2026-10-22: the founders confirmed Payrolla pays employees itse
 
 ## Note, 22 November 2026: payroll is Payrolla's
 
-Run payroll, kept by this decision "for businesses that do not use a payroll product", is retired: payroll in Taskiem is Payrolla, the same team's product, and Taskiem is its front, in Taskiem's own screens and chat over Payrolla's API (not its embedded screens). Workflows already made from the template keep running with a notice to move. What Taskiem needs from Payrolla's API is in [payrolla-api-requests](../integrations/payrolla-api-requests.md); the plan is the build plan's P4. Other payroll software a business already uses is left for a later decision.
+Run payroll, kept by this decision "for businesses that do not use a payroll product", is deleted, with `salary-payout-approval`, `payroll-reminder` and the known `staff` table (no one used them: Taskiem was not in production): payroll in Taskiem is Payrolla, the same team's product, and Taskiem is its front, in Taskiem's own screens and chat over Payrolla's API (not its embedded screens). What Taskiem needs from Payrolla's API is in [payrolla-api-requests](../integrations/payrolla-api-requests.md); the plan is the build plan's P4. Other payroll software a business already uses is left for a later decision.
 

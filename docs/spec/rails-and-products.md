@@ -310,6 +310,8 @@ Every template here is written once with capability steps, tested on every rail 
 
 ### 5.1 Run payroll
 
+**Deleted 22 November 2026:** payroll in Taskiem is Payrolla's ([decision 0044](../decisions/0044-rails-and-products.md), its note). Kept below as the record of what was built.
+
 The dogfood flow, rebuilt for any business and any rail. File: `templates/library/run-payroll.json` (flow code: `templates/library/run-payroll.flow.ts` if the library takes flow code by then).
 
 **For:** a business paying staff monthly, with or without a payroll product. A business that uses Payrolla does not use this template; it uses the Payrolla templates (§6.4).
@@ -549,6 +551,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 - In a composite, an earlier call (Paystack's recipient) handles its failure with a copy of the step's `on_error`, its steps renamed `<id>__<name>` and reading that call's error; a `foreach` then reports the failure under the call's id (`pay__recipient`).
 
 ### R3: Run payroll (M)
+
+**Deleted 22 November 2026** (see §5.1).
 
 **Problem.** Taskiem's best payroll code is wired to one partner's payload and one rail.
 

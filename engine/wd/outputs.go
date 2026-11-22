@@ -158,8 +158,8 @@ func CheckCallable(d *Definition, outputs []Output) []Problem {
 // triggerReadsOnlyBody refuses an expression that reads the trigger other
 // than its body (the run inputs a template step gives), unless it tests
 // the field with has(): used as a step, the workflow reads the calling
-// workflow's trigger, which may not have it (run-payroll's month comes
-// from a schedule's fire time when there is one).
+// workflow's trigger, which may not have it (a monthly template's month
+// comes from a schedule's fire time when there is one).
 func triggerReadsOnlyBody(d *Definition) *Problem {
 	var bad *Problem
 	d.Walk(func(st *Step) {

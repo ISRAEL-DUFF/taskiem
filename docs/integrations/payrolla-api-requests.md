@@ -4,7 +4,7 @@ Status: request to the Payrolla team, 22 November 2026. Tracked as partner item 
 
 ## Why
 
-Payroll in Taskiem is Payrolla. Taskiem does not calculate, approve or pay a payroll itself (Run payroll is retired; [decision 0044](../decisions/0044-rails-and-products.md) and its note of 22 November 2026). But a business should not feel it is using two products: it should run its payroll in Taskiem, in Taskiem's own screens and chat, while Payrolla does the work behind them.
+Payroll in Taskiem is Payrolla. Taskiem does not calculate, approve or pay a payroll itself (Run payroll is deleted; [decision 0044](../decisions/0044-rails-and-products.md) and its note of 22 November 2026). But a business should not feel it is using two products: it should run its payroll in Taskiem, in Taskiem's own screens and chat, while Payrolla does the work behind them.
 
 So Payrolla is the **engine** and Taskiem the **front**:
 

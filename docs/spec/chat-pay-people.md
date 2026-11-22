@@ -11,7 +11,7 @@ Today an owner copies "0123456789 GTBank" out of WhatsApp, opens a banking app, 
 
 - **Pay one person** from Tools, from a message's account details, or from a supplier, staff member or rider Taskiem already knows.
 - **Pay several people** in one go, picked or pasted, with one approval and a result per person.
-- **Run payroll** from the chat, with its approval as a card.
+- **Payroll**, through Payrolla, from the chat.
 
 Every payment says what it is for (a bill, wages, a delivery, a refund), so the books are right without work. That is what a bank app cannot do.
 
@@ -29,10 +29,10 @@ Money leaves only through a workflow run: name check, approval, one payment with
 | Money log (`engine/runtime/moneylog.go`) | Records a payout, tells the bill side, remembers accounts paid (`payout_accounts`) | Gains "what for" from the payment |
 | Bill pay (`api/bills.go`, `pay-linked-bill`) | Name check, approval, pay, settle, close the bill; started from a bill card or WhatsApp | The model for one payment; bills keep this path |
 | Approvals (`ApproveSheet`, `api/approvals.go`) | The "Approve it?" sheet; step-up by policy (passkey, TOTP, WhatsApp PIN); first-payment warning | Payroll and supplier-payment approvals carry no account number, so they never show the warning: fix it |
-| Payroll (`run-payroll.json`) | On pay day: staff table, every name checked, balance, approval, pay each, results to `payroll_lines` | **Retired** (22 November 2026): payroll is Payrolla's |
+| Payroll (`run-payroll.json`) | On pay day: staff table, every name checked, balance, approval, pay each, results to `payroll_lines` | **Deleted** (22 November 2026): payroll is Payrolla's |
 | Pay a list (`pay-a-list.json`) | Pays the rows of a table in one run | Has no name check; the bulk flow adds one |
 | Payrolla connector | Reads runs, staff and payslips; never pays | Payroll in Taskiem's own screens and chat; Payrolla pays (its API requests: [payrolla-api-requests](../integrations/payrolla-api-requests.md)) |
-| Saved bank details | Riders' bank (sealed, passkey to change); staff in the staff table; suppliers only per bill | No payee list: added |
+| Saved bank details | Riders' bank (sealed, passkey to change); staff linked to saved accounts (22 November 2026); suppliers only per bill | No payee list: added |
 | Single-action step-up (`checkStepUp`) | A passkey for one sensitive action, used for rider bank changes | Used for every payment |
 | Roles (`engine/access`) | No "pay" permission; bill pay rides on `invoice.manage` | A permission of its own, with limits |
 | Reading account details from text | Nothing; a NUBAN check-digit test exists (`engine/pii`) and bank names map to codes (`links.BankCode`) | Built |
@@ -112,7 +112,7 @@ The same sheet with a list: each row is a person, an amount and what it is for. 
 
 Rewritten 22 November 2026. **Payroll is Payrolla**, the same team's payroll product: Payrolla keeps employees, their pay and bank details, calculates each run, keeps the approvals, pays every employee once and issues payslips. Taskiem does none of that itself and never pays a salary. It is Payrolla's front: a business runs its payroll in Taskiem's own screens and chat, and Taskiem sends what people do to Payrolla through its API. Payrolla's screens are not embedded.
 
-Taskiem's own **Run payroll** template is retired (and `salary-payout-approval` with it): it is no longer offered, and a workflow already made from it keeps running with a notice to move to Payrolla, so no one's salaries stop mid-month.
+Taskiem's own **Run payroll** template, `salary-payout-approval`, `payroll-reminder` and the known `staff` table were deleted (no one used them: Taskiem was not in production).
 
 1. **Payroll** in Tools (owners, and whoever they allow to see salaries): this month's run from Payrolla, its state, each person's line and payout status, who was not paid and why.
 2. **Approving:** today, the approval card in the chat carries Payrolla's approval link; once Payrolla accepts Taskiem's signed approval, the approver approves in Taskiem with a passkey.

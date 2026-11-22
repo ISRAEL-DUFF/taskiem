@@ -2,7 +2,7 @@
 
 These are Phase 1 acceptance workflows required by gate G0. The group's products move money through **iswallet**; the Paystack-based first drafts were rewritten on 5 October 2026 once iswallet's answers arrived. Each owner confirms the payloads, endpoints, and roles against the real product before go-live. Assumptions to confirm are listed per workflow.
 
-The third, Payrolla's salary disbursement, was retired by [decision 0044](../../docs/decisions/0044-rails-and-products.md): Payrolla pays its customers' staff itself, so Taskiem connects to it as a product rather than paying for it. Payroll for any business is the [Run payroll](../../templates/library/run-payroll.json) template, on any rail; its workflow tests ([`templates/tests/run-payroll.test.json`](../../templates/tests/run-payroll.test.json)) carry the old flow's cases.
+The third, Payrolla's salary disbursement, was retired by [decision 0044](../../docs/decisions/0044-rails-and-products.md): Payrolla pays its customers' staff itself, so Taskiem connects to it as a product rather than paying for it. Payroll in Taskiem is Payrolla's (22 November 2026: Taskiem's own Run payroll template, which had carried the old flow's cases, was deleted; [payrolla-api-requests](../../docs/integrations/payrolla-api-requests.md)).
 
 Both validate against `schemas/wd-v1.schema.json` and the semantic rules in `docs/contracts/wd-v1.md` (`taskiem validate flows/dogfood/*.wd.json`). Their behaviour is pinned by workflow tests in `tests/` ([format](../../docs/contracts/wd-test-v1.md)): run `taskiem test flows`.
 
