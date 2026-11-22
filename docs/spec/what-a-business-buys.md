@@ -468,6 +468,18 @@ No server change. The app's screens are their own part of S2.
 - **Add something to count** with No and with Yes, and Change by the right id;
 - **Counted by** set to uses 6 from the chat and shown on the Stock page, and none for a product in sizes.
 
+### As built: S2 (app)
+
+In the app's own look (`mobile-app-look.md`, Stock and supplies). No server change: it reads `GET /v1/stock/stock-items` (`listStockItems`) and writes through the calls there were.
+
+- **The Stock page** (`chat/stock_page.dart`, the rows' words in `chat/stock_items.dart`). **What you count** lists the stock items, read once, all of them, and filtered on the phone by **All**, **Sold** and **Not sold** (so the tiles keep the whole stock): the count and unit, Low and a level bar, **Sold as** its products (`(6 a sale)` when one uses more than one) or **Not sold**, then cost, low level, order up to, supplier and what to order. A product's sizes and colours are one row (their count together, how many low) with each size's stock item under it. Running low, the Low tile and At cost read the same list (`low`, `value_kobo`).
+- **Row actions** keep their ids: a stock item sold as a product acts through its first product's row id, a material through its own id (Record stock, Change, History, as before). Change has no selling price for a material.
+- **Add something to count** is the head's +, in place of Add items: a form sheet asking **Do you sell it?** first; Yes sends the selling price, No `material: true`, both through `POST /v1/stock/items` with the quantity as goods received. The old add form is gone.
+- **Counted by** on a product's sheet (`ProductForm`, `CountedByRow`): its stock item, how many a sale uses, the count; Change opens `CountedBySheet` (a stock item from the list, not a size's nor a retired one, and the uses) for `PUT …/counted-by`, or Count by none for `DELETE`. A product in sizes and colours says each is counted by its own. Choosing another resets the In stock stepper to the new count, so Save records no count.
+- **S1a's leftovers gone** from the app: the `stuck` banner, a movement's `pending` and its error, the `outside` reason, an item's `waiting`, and Keep my stock's words about columns in the table.
+- **Tests:** `test/stock_page_test.dart` (the words, the filter, Sold as and Not sold, sizes grouped, a material's and a product's actions, Do you sell it? both ways, large text and targets), `test/product_form_test.dart` (Counted by shown, changed with uses, none, in sizes); `test/looks/stock-*.png` drawn again.
+- **Not done:** retired stock items (`retired=true`) are not shown; the products page's own list (Products tool) is unchanged.
+
 ## 12. Accept
 
 **The split**

@@ -8,12 +8,16 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/api/api.g.dart' show ListStockItemsResponse;
+import 'package:taskiem/chat/stock_items.dart';
 import 'package:taskiem/chat/stock_page.dart';
 import 'package:taskiem/kit/modal.dart' show TkModal;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'guidelines.dart';
 import 'looks.dart';
+import 'stock_items_fixture.dart';
 import 'support.dart';
 
 void main() {
@@ -43,9 +47,27 @@ void main() {
     expect(plural('battery'), 'batteries');
     expect(stockQuantity(1, 'carton'), '1 carton');
     expect(stockLine({'stock': null}), 'No count');
-    expect(itemSub({'reorder_level': 10, 'price_kobo': 950000, 'supplier': 'Dangote', 'low': true, 'suggest': 40, 'unit': 'carton'}), 'reorder at 10 · sells at ₦9,500 · Dangote · order 40 cartons');
     expect(movementTitle({'item': 'Indomie', 'reason': 'received', 'change': 50}), 'Indomie: received +50');
     expect(movementTitle({'item': 'Rice', 'reason': 'count', 'set_to': 12}), 'Rice: counted 12');
+  });
+
+  test('what a stock item is sold as, in words; a product’s sizes under it', () {
+    final rows = ListStockItemsResponse.fromJson(stockItems).items;
+    String sub(String id) => stockItemSub(rows.firstWhere((r) => r.id == id));
+    expect(sub('si-indomie'), 'Sold as Indomie · cost ₦8,500 · low at 10 · Dangote · order 46 cartons');
+    expect(sub('si-malt'), 'Sold as Malt, Malt, pack of 6 (6 a sale)', reason: 'uses said when more than one');
+    expect(sub('si-nylon'), 'Not sold · low at 50');
+    expect(soldAsLine(rows.firstWhere((r) => r.id == 'si-shirt-l')), 'Sold as Ankara shirt, L', reason: 'a size with its product');
+    final grouped = stockRows(rows);
+    expect([for (final x in grouped) x.item?.name ?? '${x.group!.name}: ${x.of.map((r) => r.name).join(', ')}'], [
+      'Ankara shirt: Ankara shirt (L), Ankara shirt (M)',
+      'Indomie',
+      'Malt',
+      'Nylon bags',
+      'Rice',
+    ]);
+    expect([for (final r in rows) if (shows(StockShow.notSold, r)) r.name], ['Nylon bags']);
+    expect(rows.where((r) => shows(StockShow.sold, r)).length, 5);
   });
 
   Future<List<String>> open(WidgetTester t, {Future<http.Response?> Function(http.Request req)? also}) async {
@@ -74,6 +96,10 @@ void main() {
                 {'id': 'rice', 'name': 'Rice', 'available': true, 'stock': 20, 'unit': 'bag'},
               ],
             });
+          }
+          if (p == '/v1/stock/stock-items') {
+            sent.add('GET $p ${req.url.query}');
+            return ok(stockItems);
           }
           if (p == '/v1/stock/sales') {
             return ok({
@@ -151,7 +177,7 @@ void main() {
     expect(find.text('Terminal sales with no items'), findsOneWidget);
     expect(find.text('2 cartons Indomie'), findsOneWidget);
     expect(find.text('Running low'), findsOneWidget);
-    expect(find.text('Order 1'), findsOneWidget, reason: 'the Low tile');
+    expect(find.text('Order 2'), findsOneWidget, reason: 'the Low tile: Indomie and a shirt’s L');
     expect(find.text('4 cartons'), findsNWidgets(2), reason: 'low, and among the items');
     expect(find.text('Rice: received +20'), findsOneWidget);
   });
@@ -277,6 +303,121 @@ void main() {
     expect(find.byType(TkModal), findsOneWidget, reason: 'kept open, to try again');
   });
 
+  testWidgets('what you count: each stock item sold as its products, or Not sold; All, Sold, Not sold', (t) async {
+    final sent = await open(t);
+    expect(sent.where((x) => x.startsWith('GET /v1/stock/stock-items')), ['GET /v1/stock/stock-items '], reason: 'every one, filtered here');
+    final items = find.byKey(const ValueKey('items'));
+    Finder inItems(String s) => find.descendant(of: items, matching: find.text(s));
+    expect(find.text('What you count'), findsOneWidget);
+    expect(inItems('Sold as Indomie · cost ₦8,500 · low at 10 · Dangote · order 46 cartons'), findsOneWidget);
+    expect(inItems('Sold as Malt, Malt, pack of 6 (6 a sale)'), findsOneWidget);
+    expect(inItems('Not sold · low at 50'), findsOneWidget);
+    expect(inItems('200 bags'), findsOneWidget);
+    // A product's sizes, grouped under it.
+    expect(inItems('Ankara shirt'), findsOneWidget);
+    expect(inItems('Sold in 2 sizes and colours · 1 low'), findsOneWidget);
+    expect(inItems('4 pieces'), findsOneWidget, reason: 'its sizes together');
+    expect(inItems('M'), findsOneWidget);
+    expect(inItems('L'), findsOneWidget);
+    expect(find.text('₦83,000'), findsOneWidget, reason: 'the stock at cost, as the server adds it up');
+
+    await t.tap(find.bySemanticsLabel('Not sold'));
+    await t.pumpAndSettle();
+    expect(inItems('Nylon bags'), findsOneWidget);
+    expect(inItems('Malt'), findsNothing);
+    expect(inItems('Ankara shirt'), findsNothing);
+
+    await t.tap(find.bySemanticsLabel('Sold'));
+    await t.pumpAndSettle();
+    expect(inItems('Nylon bags'), findsNothing);
+    expect(inItems('Malt'), findsOneWidget);
+    expect(inItems('Ankara shirt'), findsOneWidget);
+  });
+
+  testWidgets('a stock item’s actions go to the product it is sold as, or the material itself', (t) async {
+    final sent = await open(t);
+    sent.clear();
+    final items = find.byKey(const ValueKey('items'));
+    await t.tap(find.descendant(of: items, matching: find.text('Nylon bags')));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Change'));
+    await t.pumpAndSettle();
+    expect(find.text('Selling price (₦)'), findsNothing, reason: 'a material has no price');
+    // Name, unit, cost, low at, order up to, supplier.
+    await t.enterText(find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText)).at(3), '60');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save'));
+    await settle(t);
+    expect(sent.first, 'PATCH /v1/stock/items/si-nylon {"reorder_level":60}');
+    sent.clear();
+    await t.tap(find.descendant(of: items, matching: find.text('Malt')));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('History'));
+    await settle(t);
+    expect(sent.where((x) => x.contains('movements')).single, 'GET /v1/stock/movements limit=50&item=malt');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('Add something to count asks Do you sell it?: No makes a material, Yes a product with its price', (t) async {
+    final sent = await open(t);
+    sent.clear();
+    expect(find.bySemanticsLabel('Add items'), findsNothing, reason: 'the old way in is gone');
+    await t.tap(find.bySemanticsLabel('Add something to count'));
+    await t.pumpAndSettle();
+    expect(find.text('Do you sell it?'), findsOneWidget);
+    expect(find.text('Selling price'), findsNothing, reason: 'not before Yes');
+    final boxes = find.descendant(of: find.byType(AddToCountSheet), matching: find.byType(EditableText));
+    await t.enterText(boxes.at(0), 'Ankara fabric');
+    await t.enterText(boxes.at(1), '20');
+    await t.enterText(boxes.at(2), 'yard');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Add it'));
+    await t.pumpAndSettle();
+    expect(sent, isEmpty, reason: 'nothing goes until the question is answered');
+    await t.tap(find.text('No, I don’t'));
+    await t.pump();
+    expect(find.text('Selling price'), findsNothing);
+    await t.tap(find.bySemanticsLabel('Add it'));
+    await settle(t);
+    expect(sent.first, 'POST /v1/stock/items {"name":"Ankara fabric","quantity":20,"unit":"yard","material":true}');
+    expect(find.text('Ankara fabric added'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Add something to count'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Yes, I sell it'));
+    await t.pump();
+    expect(find.text('Selling price'), findsOneWidget);
+    await t.enterText(boxes.at(0), 'Zobo');
+    await t.enterText(boxes.at(1), '12');
+    await t.enterText(boxes.at(2), 'bottle');
+    await t.enterText(boxes.at(3), '1,500');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Add it'));
+    await settle(t);
+    expect(sent.first, 'POST /v1/stock/items {"name":"Zobo","quantity":12,"unit":"bottle","price_kobo":150000}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('what you count and Add something to count: large text cuts nothing off; each thing labelled and big enough', (t) async {
+    // No counts: the latest counts' older card (chats.dart LinkSection) is
+    // not this check's.
+    await open(t, also: (req) async => req.url.path == '/v1/stock/counts' ? http.Response('{"counts":[]}', 200, headers: {'content-type': 'application/json'}) : null);
+    t.view.physicalSize = const Size(360, 640);
+    await t.pumpAndSettle();
+    t.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(find.text('Not sold').first, 200, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    await expectPressable(t);
+    await t.tap(find.bySemanticsLabel('Add something to count'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('No, I don’t'));
+    await t.pumpAndSettle();
+    await expectPressable(t);
+  });
 }
 
 Future<void> settle(WidgetTester t) async {
