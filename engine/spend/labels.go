@@ -301,8 +301,14 @@ func MergeTx(ctx context.Context, tx pgx.Tx, tenant, id, into uuid.UUID) (Label,
 	if l.ID == uuid.Nil || k.ID == uuid.Nil {
 		return l, ErrNoLabel
 	}
-	if k.MergedInto != nil {
-		if k, err = KeptTx(ctx, tx, tenant, into); err != nil {
+	// Into a merged label: into the label it is kept as, locked too, and
+	// read again once locked, since a merge of it may have gone in between
+	// (a merge is one step: the label it went into is not merged).
+	for tries := 0; k.MergedInto != nil; tries++ {
+		if tries == 3 {
+			return l, fmt.Errorf("%w: the labels are being merged by someone else; try again", ErrLabel)
+		}
+		if k, err = scanLabel(tx.QueryRow(ctx, `SELECT `+labelCols+` FROM spend_labels WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, *k.MergedInto)); err != nil {
 			return l, err
 		}
 	}
