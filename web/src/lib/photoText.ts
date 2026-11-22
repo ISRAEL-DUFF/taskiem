@@ -1,11 +1,15 @@
 // Reading a photo's text on the person's own device (I2; the app does the
 // same with ML Kit, I1): Tesseract.js in a worker, its files served by
-// Taskiem itself from /ocr/v7 (web/scripts/ocr-assets.mjs), so the photo
+// Taskiem itself from /ocr/<versions> (web/scripts/ocr-assets.mjs; the
+// folder is named by the exact versions, scripts/ocr-version.mjs, as the
+// server keeps them a year without asking again), so the photo
 // is never sent anywhere to be read. Only the words go to the readers
 // (POST /v1/payments/read, /v1/payment-batches/read, /v1/me/saved/read)
 // with from: "photo". Loaded only when someone asks for it.
 
-const base = "/ocr/v7";
+/** e.g. "/ocr/7.0.0-core7.0.0-eng1.0.0", from the Vite config. */
+export const ocrBase: string = __OCR_BASE__;
+const base = ocrBase;
 
 /** Reads the text in an image file, line by line. Swappable in tests. */
 export type PhotoTextReader = (file: Blob) => Promise<string>;

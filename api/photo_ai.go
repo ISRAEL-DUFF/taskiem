@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/billing"
 )
 
 // Reading a photo with AI (I3): a phone or a browser reads a photo's text
@@ -22,9 +23,15 @@ import (
 // business's AI budget, and its words go back only to the person who
 // asked, to be read as the phone's are (from: "photo").
 
-// maxPhotoBytes is the largest photo read with AI; the apps send it
-// already made smaller.
-const maxPhotoBytes = 8 << 20
+// maxPhotoBytes is the largest photo read with AI: the Messages API
+// refuses an image over 5 MB, so a larger one would only fail there. The
+// apps make a photo smaller (its long edge at most 2576 pixels, a JPEG)
+// before they send it.
+const maxPhotoBytes = 5 << 20
+
+// photoAIMaxTokens bounds the model's answer: a long list of names,
+// numbers and amounts fits well within it.
+const photoAIMaxTokens = 8000
 
 // photoAIPerHour is how many photos one person may have read an hour.
 const photoAIPerHour = 30
@@ -53,7 +60,13 @@ func (s *Server) getAIPhotoReading(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ai_photo_reading": on, "available": s.photoModel() != nil})
+	writeJSON(w, http.StatusOK, map[string]any{"ai_photo_reading": on, "available": s.photoAIAvailable(r.Context(), principalFrom(r.Context()))})
+}
+
+// photoAIAvailable is whether photos can be read with AI for this
+// business: the deployment has a model that sees and the plan has AI.
+func (s *Server) photoAIAvailable(ctx context.Context, p *Principal) bool {
+	return s.photoModel() != nil && s.Billing.Require(ctx, p.TenantID, billing.FeatureAI) == nil
 }
 
 // putAIPhotoReading is PUT /v1/settings/ai-photo-reading {ai_photo_reading}:
@@ -80,7 +93,7 @@ func (s *Server) putAIPhotoReading(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ai_photo_reading": req.On, "available": s.photoModel() != nil})
+	writeJSON(w, http.StatusOK, map[string]any{"ai_photo_reading": req.On, "available": s.photoAIAvailable(r.Context(), p)})
 }
 
 // photoModel is the model photos are read with: the deployment's main
@@ -103,6 +116,15 @@ func (s *Server) readPhotoAI(w http.ResponseWriter, r *http.Request) {
 		s.payFail(w, r, refusePay(http.StatusServiceUnavailable, "unavailable", "Reading photos with AI is not available here."))
 		return
 	}
+	if err := s.Billing.Require(ctx, p.TenantID, billing.FeatureAI); err != nil {
+		var fe *billing.FeatureError
+		if errors.As(err, &fe) {
+			s.payFail(w, r, refusePay(http.StatusPaymentRequired, "plan", "Reading photos with AI is not on this business's plan: type the details in, or change the plan on the Billing page."))
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
 	var on bool
 	if err := s.tx(r, func(tx pgx.Tx) (err error) {
 		on, err = aiPhotoReadingOn(ctx, tx, p)
@@ -122,13 +144,13 @@ func (s *Server) readPhotoAI(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes+64<<10)
 	file, _, err := r.FormFile("photo")
 	if err != nil {
-		s.payFail(w, r, refusePay(http.StatusBadRequest, "no_photo", "Send the photo, up to 8 MB."))
+		s.payFail(w, r, refusePay(http.StatusBadRequest, "no_photo", "Send the photo, up to 5 MB."))
 		return
 	}
 	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, maxPhotoBytes+1))
 	if err != nil || len(data) == 0 || len(data) > maxPhotoBytes {
-		s.payFail(w, r, refusePay(http.StatusBadRequest, "no_photo", "Send the photo, up to 8 MB."))
+		s.payFail(w, r, refusePay(http.StatusBadRequest, "no_photo", "Send the photo, up to 5 MB."))
 		return
 	}
 	kind := http.DetectContentType(data)
@@ -141,7 +163,7 @@ func (s *Server) readPhotoAI(w http.ResponseWriter, r *http.Request) {
 	req := ai.Request{
 		System:    []ai.SystemBlock{{Text: photoAIPrompt}},
 		Messages:  []ai.Message{{Role: "user", Text: "Write out the text in this photo.", Images: []ai.Image{{MediaType: kind, Data: data}}}},
-		MaxTokens: 4000,
+		MaxTokens: photoAIMaxTokens,
 		Effort:    "low",
 	}
 	release, err := s.reserveAI(ctx, p.TenantID, "photo_text", req.Estimate(), chatAIReservation)
@@ -161,16 +183,25 @@ func (s *Server) readPhotoAI(w http.ResponseWriter, r *http.Request) {
 		outcome, errText = "error", err.Error()
 	case resp.StopReason == ai.StopRefusal:
 		outcome = "refused"
+	case resp.StopReason == ai.StopMaxTokens:
+		outcome = "truncated"
 	}
 	s.recordModelCallFor(ctx, p.TenantID, p.Actor(), "photo_text", "photo_text", model, resp, outcome, errText)
+	if err != nil && photoRefusedByProvider(err) {
+		s.payFail(w, r, refusePay(http.StatusBadRequest, "too_large", "That photo is too large to read: try a smaller one."))
+		return
+	}
 	if err != nil {
 		s.Logger.Warn("reading a photo with AI", "err", err)
 		s.payFail(w, r, refusePay(http.StatusBadGateway, "ai_down", "The photo could not be read just now: try again, or type the details in."))
 		return
 	}
-	text := ""
-	if outcome == "valid" {
+	text, truncated := "", outcome == "truncated"
+	switch outcome {
+	case "valid":
 		text = strings.TrimSpace(resp.Text)
+	case "truncated":
+		text = dropLastLine(resp.Text)
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		return auditTx(r, tx, "photo.read_ai", p.Actor(), map[string]any{"bytes": len(data), "lines": strings.Count(text, "\n") + boolInt(text != "")})
@@ -178,5 +209,22 @@ func (s *Server) readPhotoAI(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"text": text})
+	writeJSON(w, http.StatusOK, map[string]any{"text": text, "truncated": truncated})
+}
+
+// dropLastLine is a cut-off answer without its last line, which the
+// model may have stopped in the middle of (a number half written).
+func dropLastLine(text string) string {
+	text = strings.TrimSpace(text)
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		return strings.TrimSpace(text[:i])
+	}
+	return ""
+}
+
+// photoRefusedByProvider is whether the provider refused the photo itself
+// (a 400 about the image: too large, too many pixels, unreadable) rather
+// than failing.
+func photoRefusedByProvider(err error) bool {
+	return ai.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(err.Error()), "image")
 }

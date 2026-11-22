@@ -14,7 +14,7 @@ import { useState } from "react";
 import { getBlob } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { aiHinted, aiOffered, aiOfferLine, aiPhotoSetting, aiSettingsPath, offerSaid, readPhotoAI } from "../lib/photoAI";
+import { aiHinted, aiOffered, aiOfferLine, aiPhotoSetting, aiSettingsPath, listLong, offerSaid, readPhotoAI } from "../lib/photoAI";
 import { readOnDevice, readPhotoText } from "../lib/photoText";
 import { toast, untoast, type ToastKind } from "../toast";
 import { Modal } from "../ui";
@@ -124,7 +124,7 @@ export function AIReadOffer({ offer, onClose, testid = "photo-ai" }: { offer: AI
     setBusy(true);
     setError(undefined);
     try {
-      const text = await readPhotoAI(offer.photo);
+      const { text, truncated } = await readPhotoAI(offer.photo);
       if (!text) {
         setError("No words could be read in that photo. Type it in.");
         return;
@@ -132,6 +132,7 @@ export function AIReadOffer({ offer, onClose, testid = "photo-ai" }: { offer: AI
       const said = await offer.use(text, true);
       onClose();
       if (said !== null) toast(said, "info");
+      if (truncated) toast(listLong, "info");
     } catch (e) {
       setError(e instanceof Error ? e.message : "The photo could not be read just now. Try again.");
     } finally {

@@ -34949,7 +34949,7 @@ paths:
       tags:
       - Account
       summary: Whether photos may be read with AI
-      description: 'Reading photos with AI (I3): handwriting a phone or browser cannot read, sent to the AI model, only where an owner turned it on. `available` is whether this Taskiem can (a model that sees images).'
+      description: 'Reading photos with AI (I3): handwriting a phone or browser cannot read, sent to the AI model, only where an owner turned it on. `available` is whether it can be used here: this Taskiem has a model that sees images and the business''s plan has AI (`false` on a plan without it, when a read is refused with 402 `plan`).'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -35001,7 +35001,7 @@ paths:
       tags:
       - Account
       summary: The text in a photo, read with AI
-      description: 'Where the business turned it on (409 `off` otherwise; 503 `unavailable` without a model that sees images): the photo (a JPEG, PNG, WebP or GIF up to 8 MB; 400 `not_a_photo`) goes to the AI model once and is not kept; the text comes back to be read as a phone''s is (`from: "photo"`). Counted against the AI budget (409 `budget`); 30 an hour a person (429). 502 `ai_down`. Audited without the words.'
+      description: 'Where the business''s plan has AI (402 `plan` otherwise) and the business turned it on (409 `off` otherwise; 503 `unavailable` without a model that sees images): the photo (a JPEG, PNG, WebP or GIF up to 5 MB, the most the model takes; 400 `no_photo` over it, 400 `not_a_photo`) goes to the AI model once and is not kept; the apps make it smaller first (the long edge at most 2576 pixels, a JPEG). The text comes back to be read as a phone''s is (`from: "photo"`). Counted against the AI budget (409 `budget`); 30 an hour a person (429). 400 `too_large` when the model refuses the image itself; 502 `ai_down` when it fails otherwise. Audited without the words.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -35026,9 +35026,12 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [text]
+                required: [text, truncated]
                 properties:
                   text: {type: string}
+                  truncated:
+                    type: boolean
+                    description: 'The answer was cut off at its length limit: its last line, which may have been cut, is left out, and lines after it are missing, so the person checks the last lines against the photo.'
         default:
           $ref: '#/components/responses/Error'
   /v1/settings/schools/wallet:

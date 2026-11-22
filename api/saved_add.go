@@ -38,12 +38,13 @@ func (s *Server) readSavedWords(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if in.From == "photo" {
-		in.Text = saved.PhotoText(in.Text)
-	}
 	if strings.TrimSpace(in.Text) == "" || len([]rune(in.Text)) > saved.MaxText {
 		writeErr(w, http.StatusBadRequest, "Give the words to read.")
 		return
+	}
+	// After the length check: a text too long is refused unread.
+	if in.From == "photo" {
+		in.Text = saved.PhotoText(in.Text)
 	}
 	writeJSON(w, http.StatusOK, saved.Read(in.Text))
 }

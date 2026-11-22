@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aiHinted, aiOffered, aiPhotoSetting, forgetAIPhotoSetting, noLineRead, offerSaid, readPhotoAI, setAIPhotoSetting } from "./photoAI";
+import { aiHinted, aiOffered, aiPhotoSetting, forgetAIPhotoSetting, noLineRead, offerSaid, readPhotoAI, setAIPhotoSetting, shrinkPhoto } from "./photoAI";
 import { tidyLines } from "./photoText";
 
 const on = { ai_photo_reading: true, available: true };
@@ -66,8 +66,62 @@ describe("reading a photo with AI", () => {
       }),
     );
     const photo = new File(["x"], "list.png", { type: "image/png" });
-    expect(await readPhotoAI(photo)).toBe("Chidi\n0123456789");
+    expect(await readPhotoAI(photo)).toEqual({ text: "Chidi\n0123456789", truncated: false });
     expect((sent?.get("photo") as File).name).toBe("list.png");
+  });
+
+  it("says when the AI's answer was cut off", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ text: "Chidi 0123456789", truncated: true }), { status: 200 })));
+    expect(await readPhotoAI(new Blob(["x"]))).toEqual({ text: "Chidi 0123456789", truncated: true });
+  });
+
+  describe("made smaller before it is sent", () => {
+    const drawn: { w: number; h: number; type?: string; quality?: number }[] = [];
+    const stubImage = (width: number, height: number) => {
+      vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width, height, close: () => {} })));
+      const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({ fillRect: () => {}, drawImage: () => {}, fillStyle: "" }),
+        toBlob(cb: (b: Blob | null) => void, type?: string, quality?: number) {
+          drawn.push({ w: this.width, h: this.height, type, quality });
+          cb(new Blob(["jpeg"], { type: "image/jpeg" }));
+        },
+      };
+      vi.stubGlobal("document", { createElement: () => canvas });
+    };
+    afterEach(() => {
+      drawn.length = 0;
+    });
+
+    it("draws a large photo with its long edge at 2576, as a JPEG", async () => {
+      stubImage(4032, 3024);
+      const out = await shrinkPhoto(new File(["x"], "IMG_0042.jpeg", { type: "image/jpeg" }));
+      expect(drawn).toEqual([{ w: 2576, h: 1932, type: "image/jpeg", quality: 0.85 }]);
+      expect(out).toBeInstanceOf(File);
+      expect((out as File).name).toBe("IMG_0042.jpg");
+      expect(out.type).toBe("image/jpeg");
+    });
+
+    it("turns a HEIC the browser opens into a JPEG, at its own size", async () => {
+      stubImage(1200, 1600);
+      const out = await shrinkPhoto(new File(["x"], "IMG_0043.HEIC", { type: "image/heic" }));
+      expect(drawn).toEqual([{ w: 1200, h: 1600, type: "image/jpeg", quality: 0.85 }]);
+      expect(out.type).toBe("image/jpeg");
+    });
+
+    it("sends a small screenshot as it is", async () => {
+      stubImage(1170, 2532);
+      const photo = new File(["x"], "list.png", { type: "image/png" });
+      expect(await shrinkPhoto(photo)).toBe(photo);
+      expect(drawn).toEqual([]);
+    });
+
+    it("sends what the browser cannot open as it is, for the server to say", async () => {
+      vi.stubGlobal("createImageBitmap", vi.fn(async () => Promise.reject(new Error("no"))));
+      const photo = new File(["%PDF"], "list.pdf", { type: "application/pdf" });
+      expect(await shrinkPhoto(photo)).toBe(photo);
+    });
   });
 
   it("throws a refusal in the server's words", async () => {

@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page, type Request, type Route } from "@playwright/test";
 import { axe, describe } from "./a11y";
+import { ocrBase } from "../scripts/ocr-version.mjs";
 
 test.use({ bypassCSP: true });
 
@@ -13,7 +14,7 @@ test.use({ bypassCSP: true });
 // stood in for, as pay-from-message.spec.ts does.
 //
 // The reader is stood in for without any hook in the app: the worker file
-// the app loads (/ocr/v7/worker.min.js) is answered with a small worker
+// the app loads (/ocr/<versions>/worker.min.js) is answered with a small worker
 // that speaks Tesseract.js's messages and "reads" the words written after
 // WORDS: in the photo's bytes (a real PNG, so it shows). The page's code,
 // Tesseract.js's loader and the worker all run as they do for a person.
@@ -58,7 +59,7 @@ self.onmessage = ({ data }) => {
  * photo is never sent: only GETs fetch a photo, nothing carries one. */
 async function standIn(context: BrowserContext, page: Page) {
   const asked: string[] = [];
-  await context.route("**/ocr/v7/**", (r) => {
+  await context.route(`**${ocrBase()}/**`, (r) => {
     asked.push(new URL(r.request().url()).pathname);
     if (r.request().url().endsWith("/worker.min.js")) return r.fulfill({ status: 200, contentType: "text/javascript", body: FAKE_WORKER });
     return r.fulfill({ status: 404, body: "" });
@@ -176,7 +177,7 @@ for (const width of [390, 360])
     // browser's, and the photo was not sent anywhere.
     const read = calls.filter((c) => c.path === "/v1/payments/read");
     expect(read.map((c) => c.body)).toEqual([{ text: WORDS, from: "photo" }]);
-    expect(reader.asked).toContain("/ocr/v7/worker.min.js");
+    expect(reader.asked).toContain(`${ocrBase()}/worker.min.js`);
     reader.neverSent();
     await sheet.getByRole("group", { name: "What is it for?" }).getByRole("button", { name: "stock" }).click();
     await noAxe(page, "the Pay sheet filled from a photo", width === 390 ? "pay-sheet-from-photo" : undefined);
@@ -397,13 +398,16 @@ test("the real reader reads a photo in this browser, under the app's own policy"
   const calls = await payApi(page);
   const ocr: string[] = [];
   page.on("requestfinished", (q) => {
-    if (q.url().includes("/ocr/v7/")) ocr.push(new URL(q.url()).pathname);
+    if (q.url().includes(`${ocrBase()}/`)) ocr.push(new URL(q.url()).pathname);
   });
   const blocked: string[] = [];
   page.on("console", (m) => {
     if (/Content Security Policy|Refused to/i.test(m.text())) blocked.push(m.text());
   });
-  await page.goto("/payments");
+  // The page itself may not compile WebAssembly: only the reader's worker,
+  // under its own response's policy (/ocr/).
+  const pageRes = await page.goto("/payments");
+  expect(pageRes?.headers()["content-security-policy"]).not.toContain("wasm");
   // A photo of an account's details, drawn here.
   const png = await page.evaluate(async () => {
     const c = document.createElement("canvas");
@@ -428,7 +432,7 @@ test("the real reader reads a photo in this browser, under the app's own policy"
   expect(read?.body.from).toBe("photo");
   expect(String(read?.body.text)).toContain("0123456789");
   // Taskiem's own copy of the reader, and nothing refused by the policy.
-  expect(ocr).toEqual(expect.arrayContaining(["/ocr/v7/worker.min.js", "/ocr/v7/eng.traineddata.gz"]));
+  expect(ocr).toEqual(expect.arrayContaining([`${ocrBase()}/worker.min.js`, `${ocrBase()}/eng.traineddata.gz`]));
   expect(blocked).toEqual([]);
 });
 });

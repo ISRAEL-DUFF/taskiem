@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { readPhotoText, setPhotoTextReader } from "./photoText";
+import { createRequire } from "node:module";
+import { ocrBase, readPhotoText, setPhotoTextReader } from "./photoText";
 
 describe("a photo's text", () => {
   afterEach(() => setPhotoTextReader(null));
@@ -18,5 +19,11 @@ describe("a photo's text", () => {
   it("is empty for a photo with no words", async () => {
     setPhotoTextReader(async () => " \n \n");
     expect(await readPhotoText(new Blob([]))).toBe("");
+  });
+
+  it("loads its files from a folder named by the exact Tesseract.js version, so a year's cache never serves an old worker", () => {
+    const tesseract = (createRequire(import.meta.url)("tesseract.js/package.json") as { version: string }).version;
+    expect(ocrBase).toMatch(/^\/ocr\/[0-9][0-9A-Za-z.+-]*$/);
+    expect(ocrBase.startsWith(`/ocr/${tesseract}-core`)).toBe(true);
   });
 });

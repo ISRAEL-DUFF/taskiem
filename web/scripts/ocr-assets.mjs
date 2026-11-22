@@ -1,20 +1,24 @@
 // Copies what the browser needs to read a photo's text on the person's own
-// device (src/lib/photoText.ts) into public/ocr/v7: Tesseract.js's worker,
-// its three LSTM cores (the browser loads the one it can run) and the
-// English model. Served from Taskiem itself, so a photo is never sent
-// anywhere to be read and nothing loads from a third party. Run before
-// dev and build (package.json); public/ocr is not committed.
-import { cpSync, mkdirSync, existsSync, realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
+// device (src/lib/photoText.ts) into public/ocr/<versions>
+// (scripts/ocr-version.mjs): Tesseract.js's worker, its three LSTM cores
+// (the browser loads the one it can run) and the English model. Served
+// from Taskiem itself, so a photo is never sent anywhere to be read and
+// nothing loads from a third party. Run before dev and build
+// (package.json); public/ocr is not committed. Folders of other versions
+// are removed, so only the one the build names is served.
+import { cpSync, mkdirSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { ocrDir, ocrPackages } from "./ocr-version.mjs";
 
-const require = createRequire(import.meta.url);
-const out = new URL("../public/ocr/v7/", import.meta.url).pathname;
+const root = new URL("../public/ocr/", import.meta.url).pathname;
+const dir = ocrDir();
+const out = join(root, dir);
 mkdirSync(out, { recursive: true });
+for (const old of readdirSync(root)) {
+  if (old !== dir) rmSync(join(root, old), { recursive: true, force: true });
+}
 
-const tess = dirname(require.resolve("tesseract.js/package.json"));
-const core = dirname(createRequire(join(realpathSync(tess), "package.json")).resolve("tesseract.js-core/package.json"));
-const eng = dirname(require.resolve("@tesseract.js-data/eng/package.json"));
+const { tess, core, eng } = ocrPackages();
 
 const files = [
   [join(tess, "dist/worker.min.js"), "worker.min.js"],

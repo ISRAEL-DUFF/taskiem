@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type BrowserContext, type Page, type Request, type Route } from "@playwright/test";
 import { axe, describe } from "./a11y";
+import { ocrBase } from "../scripts/ocr-version.mjs";
 
 test.use({ bypassCSP: true });
 
@@ -15,7 +16,7 @@ test.use({ bypassCSP: true });
 // this account and Save the account.
 //
 // The browser's reader is stood in for as photo-read.spec.ts does: the
-// worker file (/ocr/v7/worker.min.js) is answered with a small worker that
+// worker file (/ocr/<versions>/worker.min.js) is answered with a small worker that
 // "reads" the words after WORDS: in the photo's bytes. The e2e server has
 // no AI model (so `available` is false) and no payments account: the
 // setting's GET is the server's own with `available` turned true, its PUT
@@ -55,7 +56,7 @@ self.onmessage = ({ data }) => {
 };`;
 
 async function standIn(context: BrowserContext) {
-  await context.route("**/ocr/v7/**", (r) =>
+  await context.route(`**${ocrBase()}/**`, (r) =>
     r.request().url().endsWith("/worker.min.js") ? r.fulfill({ status: 200, contentType: "text/javascript", body: FAKE_WORKER }) : r.fulfill({ status: 404, body: "" }),
   );
 }

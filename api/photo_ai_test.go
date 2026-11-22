@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"mime/multipart"
 	"strings"
 	"testing"
@@ -82,5 +83,97 @@ func TestReadPhotoWithAI(t *testing.T) {
 	w.srv.AI = nil
 	if code, e := member.rawPost(t, "/v1/photo-text", ctype, body); code != 503 || e["code"] != "unavailable" {
 		t.Fatalf("no model: %d %v", code, e)
+	}
+}
+
+// A photo read with AI needs the plan's AI feature, as every other model
+// call does: without it the setting says not available and a read is
+// refused in words before anything reaches the model.
+func TestReadPhotoWithAIPlan(t *testing.T) {
+	w := billingWorld(t)
+	var calls int
+	w.srv.AI = &api.AISettings{Provider: &ai.Fake{Models: "claude-opus-5-5", Respond: func(ai.Request) (*ai.Response, error) {
+		calls++
+		return &ai.Response{Text: "Chidi 0123456789 GTB 45k", StopReason: "end_turn"}, nil
+	}}}
+	owner := w.tenant(t, "Shop Ltd", "owner@photoplan.test")
+	owner.must(200, "PUT", "/v1/settings/ai-photo-reading", map[string]any{"ai_photo_reading": true})
+	ctype, body := photoForm(t, pngHeader)
+	// The trial's plan has AI.
+	if got := owner.must(200, "GET", "/v1/settings/ai-photo-reading", nil); got["available"] != true {
+		t.Fatalf("on growth: %v", got)
+	}
+	if code, out := owner.rawPost(t, "/v1/photo-text", ctype, body); code != 200 || calls != 1 {
+		t.Fatalf("on growth: %d %v", code, out)
+	}
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE subscriptions SET plan_id = 'shop' WHERE tenant_id = (SELECT id FROM tenants WHERE name = 'Shop Ltd')`); err != nil {
+		t.Fatal(err)
+	}
+	if got := owner.must(200, "GET", "/v1/settings/ai-photo-reading", nil); got["available"] != false || got["ai_photo_reading"] != true {
+		t.Fatalf("on shop: %v", got)
+	}
+	if got := owner.must(200, "PUT", "/v1/settings/ai-photo-reading", map[string]any{"ai_photo_reading": true}); got["available"] != false {
+		t.Fatalf("on shop, put: %v", got)
+	}
+	code, e := owner.rawPost(t, "/v1/photo-text", ctype, body)
+	if code != 402 || e["code"] != "plan" || !strings.Contains(e["error"].(string), "plan") || calls != 1 {
+		t.Fatalf("on shop: %d %v (calls %d)", code, e, calls)
+	}
+}
+
+// A photo over the Messages API's 5 MB is refused here; one the provider
+// still refuses as an image is said to be too large (not "try again"); an
+// answer cut off at the token limit loses its last line and says so.
+func TestReadPhotoWithAILimits(t *testing.T) {
+	w := newWAWorld(t)
+	var respond func(ai.Request) (*ai.Response, error)
+	var got []ai.Request
+	w.srv.AI = &api.AISettings{Provider: &ai.Fake{Models: "claude-opus-5-5", Respond: func(r ai.Request) (*ai.Response, error) {
+		got = append(got, r)
+		return respond(r)
+	}}}
+	owner := w.tenant(t, "Bola Foods", "bola@photolimits.test")
+	owner.must(200, "PUT", "/v1/settings/ai-photo-reading", map[string]any{"ai_photo_reading": true})
+	ctype, body := photoForm(t, pngHeader)
+
+	// Over 5 MB: refused before the model.
+	big := append(append([]byte{}, pngHeader...), make([]byte, 5<<20)...)
+	ctypeBig, bodyBig := photoForm(t, big)
+	if code, e := owner.rawPost(t, "/v1/photo-text", ctypeBig, bodyBig); code != 400 || e["code"] != "no_photo" || !strings.Contains(e["error"].(string), "5 MB") || len(got) != 0 {
+		t.Fatalf("over 5 MB: %d %v", code, e)
+	}
+
+	// The provider refuses the image: too large, in words.
+	respond = func(ai.Request) (*ai.Response, error) {
+		return nil, &ai.StatusError{Status: 400, Err: errors.New("anthropic: 400 invalid_request_error: messages.0.content.0.image.source.base64: image exceeds 5 MB maximum")}
+	}
+	if code, e := owner.rawPost(t, "/v1/photo-text", ctype, body); code != 400 || e["code"] != "too_large" || e["error"] != "That photo is too large to read: try a smaller one." {
+		t.Fatalf("provider refused the image: %d %v", code, e)
+	}
+	// Another failure is still "try again".
+	respond = func(ai.Request) (*ai.Response, error) {
+		return nil, &ai.StatusError{Status: 529, Err: errors.New("anthropic: 529 overloaded")}
+	}
+	if code, e := owner.rawPost(t, "/v1/photo-text", ctype, body); code != 502 || e["code"] != "ai_down" {
+		t.Fatalf("provider down: %d %v", code, e)
+	}
+
+	// Cut off at the token limit: the last (half-written) line dropped.
+	respond = func(ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: "Chidi 0123456789 GTB 45k\nBola 2034567891 UBA 5k\nEmeka 30456", StopReason: ai.StopMaxTokens}, nil
+	}
+	code, out := owner.rawPost(t, "/v1/photo-text", ctype, body)
+	if code != 200 || out["text"] != "Chidi 0123456789 GTB 45k\nBola 2034567891 UBA 5k" || out["truncated"] != true {
+		t.Fatalf("truncated: %d %v", code, out)
+	}
+	if got[len(got)-1].MaxTokens != 8000 {
+		t.Fatalf("max tokens: %d", got[len(got)-1].MaxTokens)
+	}
+	// A whole answer is not truncated.
+	respond = func(ai.Request) (*ai.Response, error) {
+		return &ai.Response{Text: "Chidi 0123456789 GTB 45k", StopReason: "end_turn"}, nil
+	}
+	if code, out := owner.rawPost(t, "/v1/photo-text", ctype, body); code != 200 || out["truncated"] != false || out["text"] != "Chidi 0123456789 GTB 45k" {
+		t.Fatalf("whole: %d %v", code, out)
 	}
 }

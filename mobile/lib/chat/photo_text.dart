@@ -92,10 +92,27 @@ class MlKitPhotoText implements PhotoTextReader {
 /// The reader the app uses (a test puts its own in).
 PhotoTextReader photoText = const MlKitPhotoText();
 
+/// The long edge a photo is made no larger than, as the composer does:
+/// the most the AI model reads at full detail, and well within its 5 MB.
+const photoSide = 2576.0;
+
+/// The most a photo sent to be read with AI may be (the model's limit).
+const maxAIPhotoBytes = 5 << 20;
+
+/// Said when a photo is too large to be read with AI.
+const photoTooLarge = 'That photo is too large to read: try a smaller one.';
+
+/// Said with the words when the AI's answer was cut off.
+const photoListLong = 'The list was long: check the last lines.';
+
 /// A photo taken now or chosen from the phone's photos, as a file on the
-/// phone; null when put away (a test puts its own in).
+/// phone (the picker's own copy, made smaller and a JPEG, as the composer
+/// does: an iPhone's HEIC photo becomes one too); null when put away (a
+/// test puts its own in).
 Future<String?> Function(ImageSource from) pickPhotoToRead = (from) async {
-  final x = await stepOut(() => ImagePicker().pickImage(source: from, requestFullMetadata: false));
+  final x = await stepOut(
+    () => ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false, maxWidth: photoSide, maxHeight: photoSide),
+  );
   return x?.path;
 };
 
@@ -119,8 +136,9 @@ class PhotoReading {
 
 /// Camera or the phone's photos (the phone asks for the camera or the
 /// photos only once one is chosen), then the photo read on the phone: what
-/// it read (its words may be ''), or null when put away or it could not be
-/// read (said in a toast).
+/// it read (its words may be ''; the photo kept in memory meanwhile, for
+/// "Read it with AI"), or null when put away or it could not be read (said
+/// in a toast). The picker's copy of the photo is deleted once read.
 Future<PhotoReading?> readPhotoFromPhone(BuildContext context, {String title = 'Read a photo'}) async {
   if (_reading) return null;
   final from = await pickAction(
@@ -131,16 +149,39 @@ Future<PhotoReading?> readPhotoFromPhone(BuildContext context, {String title = '
   );
   if (from == null || !context.mounted) return null;
   _reading = true;
+  String? path;
   try {
-    final path = await pickPhotoToRead(from == 'camera' ? ImageSource.camera : ImageSource.gallery);
+    path = await pickPhotoToRead(from == 'camera' ? ImageSource.camera : ImageSource.gallery);
     if (path == null || !context.mounted) return null;
     final words = await _readSaid(context, path);
-    return words == null ? null : PhotoReading(words, () => File(path).readAsBytes());
+    if (words == null) return null;
+    // Kept in memory for "Read it with AI", so the file can go now.
+    // (Read at once: a photo made smaller is a megabyte or two.)
+    List<int>? bytes;
+    try {
+      bytes = File(path).readAsBytesSync();
+    } on Object {
+      bytes = null;
+    }
+    final kept = bytes;
+    return PhotoReading(words, () async => kept ?? (throw const FileSystemException('the photo is gone')));
   } on Object {
     if (context.mounted) showTkToast(context, 'That photo could not be opened. Try another.', error: true);
     return null;
   } finally {
     _reading = false;
+    if (path != null) _deletePicked(path);
+  }
+}
+
+/// The picker's copy of a photo (in the app's own temporary folder, never
+/// the photo in the phone's photos) deleted once it has been read.
+void _deletePicked(String path) {
+  try {
+    final f = File(path);
+    if (f.existsSync()) f.deleteSync();
+  } on Object {
+    // Left in the app's temporary folder, which the phone clears.
   }
 }
 
@@ -237,14 +278,21 @@ class PhotoAI {
 /// The same photo sent to Taskiem's AI to be read (POST /v1/photo-text, a
 /// `photo` part; not kept there): its words, to be read as the phone's are
 /// (`from: "photo"`), or null (the server's refusal, or no words, said in
-/// a toast).
+/// a toast). A photo over the model's 5 MB (a chat's, sent as it is) is
+/// not sent; an answer cut off short is used, and said so.
 Future<String?> readPhotoWithAI(BuildContext context, Auth auth, PhotoReading photo) async {
   try {
     final bytes = await photo.photo();
+    if (bytes.length > maxAIPhotoBytes) {
+      if (context.mounted) showTkToast(context, photoTooLarge, error: true);
+      return null;
+    }
     final kind = _kind(bytes);
     final j = await auth.transport.upload('/v1/photo-text', bytes: bytes, filename: 'photo.$kind', type: 'image/$kind', field: 'photo');
     final words = '${(j is Map ? j['text'] : null) ?? ''}'.trim();
+    final cut = j is Map && j['truncated'] == true;
     if (words.isEmpty && context.mounted) showTkToast(context, 'Taskiem’s AI found no words in that photo. Type it in.');
+    if (words.isNotEmpty && cut && context.mounted) showTkToast(context, photoListLong);
     return words.isEmpty ? null : words;
   } on ApiError catch (e) {
     if (context.mounted) showTkToast(context, e.message, error: true);

@@ -50,9 +50,10 @@ type Image struct {
 // ErrNoImages means the provider cannot read images.
 var ErrNoImages = errors.New("ai: this model cannot read images")
 
-// imageTokens is about what one photo costs, for budgets: a picture of
-// about a megapixel, as the Messages API counts it.
-const imageTokens = 1600
+// imageTokens is about what one photo costs, for budgets: a photo with
+// its long edge at 2576 pixels (as the apps send one), as the Messages
+// API counts it (width x height / 750: about 4,784 for 2576 x 1932).
+const imageTokens = 4800
 
 // SystemBlock is part of the system prompt. Cache marks the end of a
 // prefix worth caching (the stable instructions, the connector catalogue).
@@ -252,6 +253,20 @@ type StatusError struct {
 func (e *StatusError) Error() string { return e.Err.Error() }
 func (e *StatusError) Unwrap() error { return e.Err }
 
+// StatusOf is the HTTP status of a provider's failed answer, or 0 when
+// err is not one (a broken connection, a timeout).
+func StatusOf(err error) int {
+	var se *StatusError
+	var ae *anthropic.Error
+	switch {
+	case errors.As(err, &se):
+		return se.Status
+	case errors.As(err, &ae):
+		return ae.StatusCode
+	}
+	return 0
+}
+
 // Transient reports whether a failed call may succeed if made again: a
 // rate limit, a server error, an overloaded provider, a timeout or a
 // broken connection. A refused request (400, 401, 403, 404) is not.
@@ -259,16 +274,7 @@ func Transient(err error) bool {
 	if err == nil {
 		return false
 	}
-	status := 0
-	var se *StatusError
-	var ae *anthropic.Error
-	switch {
-	case errors.As(err, &se):
-		status = se.Status
-	case errors.As(err, &ae):
-		status = ae.StatusCode
-	}
-	if status != 0 {
+	if status := StatusOf(err); status != 0 {
 		return status == 408 || status == 409 || status == 429 || status >= 500
 	}
 	if errors.Is(err, context.DeadlineExceeded) {

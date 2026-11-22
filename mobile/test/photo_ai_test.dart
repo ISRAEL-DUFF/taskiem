@@ -431,6 +431,48 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('the picked photo is deleted once read; a long list cut short is said; a photo over 5 MB is not sent', (t) async {
+    phone(t);
+    final api = _Api();
+    banks(api);
+    reader.words = '';
+    const aiWords = '0123456789\nGTBank';
+    api.routes['POST /v1/payments/read'] = (r) => (jsonDecode(r.body) as Map)['text'] == aiWords
+        ? {'found': true, 'account_number': '0123456789', 'bank_name': 'Guaranty Trust Bank', 'bank_code': '058'}
+        : {'found': false};
+    api.routes['POST /v1/photo-text'] = (_) => {'text': aiWords, 'truncated': true};
+    await t.pumpWidget(paySheet(api));
+    await settle(t);
+    await fromPhoto(t);
+    expect(reader.read_.single.path, picked);
+    // Read on the phone: the picker's copy is gone, the photo kept in memory.
+    expect(File(picked).existsSync(), isFalse);
+    await t.tap(find.text('Read it with AI'));
+    await settle(t);
+    _carriesPhoto(api.uploads().single, _png);
+    expect(find.text(photoListLong), findsOneWidget);
+    final boxes = find.descendant(of: find.byType(PaySheet), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(boxes.at(0)).controller.text, '0123456789');
+    await t.pumpWidget(const SizedBox());
+    await t.pump(const Duration(seconds: 5));
+
+    // Over the model's 5 MB: refused in words, nothing sent.
+    final api2 = _Api();
+    banks(api2);
+    api2.routes['POST /v1/payments/read'] = (_) => {'found': false};
+    api2.routes['POST /v1/photo-text'] = (_) => {'text': aiWords};
+    File(picked).writeAsBytesSync([..._png, ...List<int>.filled(maxAIPhotoBytes, 0)]);
+    await t.pumpWidget(paySheet(api2));
+    await settle(t);
+    await fromPhoto(t);
+    await t.tap(find.text('Read it with AI'));
+    await settle(t);
+    expect(api2.uploads(), isEmpty);
+    expect(find.text(photoTooLarge), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    await t.pump(const Duration(seconds: 5));
+  });
+
   // --- Pay several ---
 
   testWidgets('Pay several from a photo of a list: no line read, Read it with AI, its lines read with from photo', (t) async {
