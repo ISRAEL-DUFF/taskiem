@@ -34,7 +34,6 @@ func withLinkedOrders(w *world) {
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
 		Start:    w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, Cancel: w.env.Store.CancelRun}
 	if w.srv.Stock != nil {
-		w.srv.Orders.Stock, _ = w.srv.Stock.Table.(storefront.Stock)
 		w.srv.Orders.Moves = w.srv.Stock
 	}
 	w.srv.Orders.TradeNotify = w.srv.TradeNotify

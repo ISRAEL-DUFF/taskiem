@@ -28,7 +28,7 @@ func withPurchases(w *world) *stock.Purchases {
 		w.srv.Messages = &sender.Queue{Vault: w.env.Vault, HashKey: hash}
 	}
 	w.srv.Purchases = &stock.Purchases{Pool: w.env.DB.App, Vault: w.env.Vault, Book: w.srv.Reach, Chat: []string{"whatsapp"}, Messages: w.srv.Messages,
-		PageBase: "https://forms.test", Stock: w.srv.Stock, Cost: w.srv.StockCost}
+		PageBase: "https://forms.test", Stock: w.srv.Stock}
 	return w.srv.Purchases
 }
 

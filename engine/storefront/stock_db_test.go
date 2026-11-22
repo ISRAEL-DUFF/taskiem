@@ -2,52 +2,70 @@ package storefront_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
-// fakeStock is a catalogue table's stock column with Xenibase's
-// Idempotency-Key replay: a key sent again answers as it first did.
-type fakeStock struct {
-	mu      sync.Mutex
-	n       map[string]int64
-	keys    map[string]bool
-	changes int
-	// race moves the stock once, between the first read and change, as
-	// another order accepted at the same moment would.
-	race int64
+// shelf is the world's products counted by stock items of their own
+// (what-a-business-buys §4): accepting an order lowers them as movements.
+type shelf struct {
+	w     *world
+	items map[string]uuid.UUID
 }
 
-func (f *fakeStock) Read(_ context.Context, _ uuid.UUID, row string) (int64, bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	n, ok := f.n[row]
-	return n, ok, nil
+// newShelf counts each product of counts by a stock item, received at its
+// count, and lowers orders' stock through engine/stock.
+func newShelf(w *world, counts map[string]int64) *shelf {
+	w.t.Helper()
+	sh := &shelf{w: w, items: map[string]uuid.UUID{}}
+	ctx := context.Background()
+	w.in(func(tx pgx.Tx) error {
+		for row, n := range counts {
+			x, err := stock.CreateItemTx(ctx, tx, w.env.Tenant, stock.NewItem{Name: "Item " + row, Actor: "user:ada"})
+			if err != nil {
+				return err
+			}
+			sh.items[row] = x.ID
+			if err := productstock.LinkTx(ctx, tx, w.env.Tenant, row, x.ID); err != nil {
+				return err
+			}
+			if n > 0 {
+				if _, err := stock.RecordTx(ctx, tx, w.env.Tenant, stock.Move{ItemID: row, Item: x.Name, Reason: stock.Received, Delta: &n,
+					Actor: "user:ada", Key: "seed-" + row}); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	w.orders.Moves = &stock.Stock{Pool: w.env.DB.App}
+	return sh
 }
 
-func (f *fakeStock) Change(_ context.Context, _ uuid.UUID, row string, from, to int64, key string) (bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if applied, ok := f.keys[key]; ok {
-		return applied, nil
-	}
-	if f.race != 0 {
-		f.n[row] -= f.race
-		f.race = 0
-	}
-	applied := f.n[row] == from
-	if applied {
-		f.n[row] = to
-		f.changes++
-	}
-	f.keys[key] = applied
-	return applied, nil
+// count is a product's count: its stock item's.
+func (sh *shelf) count(row string) int64 {
+	sh.w.t.Helper()
+	var n int64
+	sh.w.in(func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `SELECT count FROM stock_items WHERE id = $1`, sh.items[row]).Scan(&n)
+	})
+	return n
+}
+
+// set counts a product's stock item at n, as a count movement.
+func (sh *shelf) set(row string, n int64) {
+	sh.w.t.Helper()
+	sh.w.in(func(tx pgx.Tx) error {
+		_, err := stock.RecordTx(context.Background(), tx, sh.w.env.Tenant, stock.Move{ItemID: row, Item: "Item " + row, Reason: stock.Count, SetTo: &n,
+			Actor: "user:ada", Key: uuid.NewString()})
+		return err
+	})
 }
 
 func (w *world) copiedStock(row string) int64 {
@@ -65,18 +83,17 @@ func (w *world) copiedStock(row string) int64 {
 	return n
 }
 
+// Accepting an order lowers its product's stock item once, as an order
+// movement, in the page's copy too; more than is left lowers it to zero
+// and says so; a declined order leaves it alone.
 func TestAcceptLowersStock(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
-	st := &fakeStock{n: map[string]int64{"1": 6}, keys: map[string]bool{}, race: 1}
-	w.orders.Stock = st
+	st := newShelf(w, map[string]int64{"1": 6})
 	six := int64(6)
 	w.in(func(tx pgx.Tx) error {
 		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{{ID: "1", Name: "Jollof rice", Available: true, Stock: &six}})
 	})
-
-	// Accepting two while another order takes one: the change is refused
-	// at 6, read again at 5, and lands at 3, in the table and the copy.
 	ref := w.submit("order", "after_accept", 300000)
 	if err := w.orders.Drain(ctx); err != nil {
 		t.Fatal(err)
@@ -86,27 +103,25 @@ func TestAcceptLowersStock(t *testing.T) {
 	if o := w.order(ref); o.Status != "awaiting_payment" {
 		t.Fatalf("after accepting: %+v", o)
 	}
-	if st.n["1"] != 3 || st.changes != 1 || w.copiedStock("1") != 3 {
-		t.Fatalf("stock %d after %d changes, copy %d; want 3 after 1", st.n["1"], st.changes, w.copiedStock("1"))
+	if st.count("1") != 4 || w.copiedStock("1") != 4 {
+		t.Fatalf("stock %d, copy %d; want 4", st.count("1"), w.copiedStock("1"))
 	}
-
-	// A retried accept changes nothing more.
-	out, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test")
-	if err != nil || st.n["1"] != 3 || st.changes != 1 || len(out["short"].([]string)) != 0 {
-		t.Fatalf("retry: %v %v, stock %d", out, err, st.n["1"])
+	// Retried: nothing moves twice.
+	if out, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test"); err != nil || st.count("1") != 4 || len(out["short"].([]string)) != 0 {
+		t.Fatalf("retry: %v %v, stock %d", out, err, st.count("1"))
 	}
-
-	// A change sent but not recorded as done (the step died in between) is
-	// sent again with the same key and replays: it still lands once.
-	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE storefront_orders SET stock = '{"1": {"from": 5, "to": 3, "done": false}}' WHERE reference = $1`, ref); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test"); err != nil || st.n["1"] != 3 || st.changes != 1 {
-		t.Fatalf("replay: %v, stock %d after %d changes", err, st.n["1"], st.changes)
+	var list []stock.Movement
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		list, err = stock.ListTx(ctx, tx, w.env.Tenant, stock.Filter{ItemID: "1", Reason: stock.Order})
+		return err
+	})
+	if len(list) != 1 || list[0].Reference != ref || *list[0].Change != -2 || list[0].ItemID != st.items["1"].String() {
+		t.Fatalf("movements: %+v", list)
 	}
 
 	// Accepting more than is left lowers it to zero and says so.
-	st.n["1"] = 1
+	st.set("1", 1)
 	ref2 := w.submit("order", "after_accept", 300000)
 	if err := w.orders.Drain(ctx); err != nil {
 		t.Fatal(err)
@@ -114,69 +129,61 @@ func TestAcceptLowersStock(t *testing.T) {
 	w.env.Drain(t)
 	w.decide(ref2, "decide", "approved")
 	o := w.order(ref2)
-	if st.n["1"] != 0 || o.Note != "Accepted with too little stock of Jollof rice" || w.copiedStock("1") != 0 {
-		t.Fatalf("short: stock %d, note %q, copy %d", st.n["1"], o.Note, w.copiedStock("1"))
+	if st.count("1") != 0 || o.Note != "Accepted with too little stock of Jollof rice" || w.copiedStock("1") != 0 {
+		t.Fatalf("short: stock %d, note %q, copy %d", st.count("1"), o.Note, w.copiedStock("1"))
 	}
 
 	// A declined order leaves the stock alone.
-	st.n["1"] = 9
+	st.set("1", 9)
 	ref3 := w.submit("order", "after_accept", 300000)
 	if err := w.orders.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
 	w.env.Drain(t)
 	w.decide(ref3, "decide", "rejected")
-	if st.n["1"] != 9 {
-		t.Fatalf("a declined order took stock: %d", st.n["1"])
+	if st.count("1") != 9 {
+		t.Fatalf("a declined order took stock: %d", st.count("1"))
 	}
 }
 
-// With stock movements (docs/spec/stock.md §4), accepting records an
-// order movement per row before the change is sent, and the count is the
-// sum of the movements: the first count seen in the table, then the order.
-func TestAcceptRecordsMovements(t *testing.T) {
+// The catalogue copy reads how many are left of each product from the
+// stock item it is counted by, and the page shows it sold out from there;
+// the catalogue table holds no count, and a front's own list none.
+func TestCatalogueCountsFromStockItems(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
-	st := &fakeStock{n: map[string]int64{"1": 6}, keys: map[string]bool{}}
-	w.orders.Stock = st
-	w.orders.Moves = &stock.Stock{Pool: w.env.DB.App, Table: st}
-	six := int64(6)
+	st := newShelf(w, map[string]int64{"1": 0, "2": 3})
+	rows := []map[string]any{{"id": "1", "name": "Jollof rice", "stock": 99}, {"id": "2", "name": "Chapman"}, {"id": "3", "name": "Delivery"}}
+	m := storefront.Columns{Name: "name"}
 	w.in(func(tx pgx.Tx) error {
-		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{{ID: "1", Name: "Jollof rice", Available: true, Stock: &six}})
+		items, err := storefront.CatalogueItems(ctx, tx, w.env.Tenant, rows, m)
+		if err != nil {
+			return err
+		}
+		if len(items) != 3 || items[0].Stock == nil || *items[0].Stock != 0 || !items[0].SoldOut() || *items[1].Stock != 3 || items[1].SoldOut() ||
+			items[2].Stock != nil || items[2].SoldOut() {
+			t.Errorf("the catalogue's items: %+v", items)
+		}
+		list, err := storefront.Items(ctx, tx, w.env.Tenant, rows, m)
+		if err != nil {
+			return err
+		}
+		if list[0].Stock != nil || list[1].Stock != nil {
+			t.Errorf("a front's own list counted: %+v", list)
+		}
+		return nil
 	})
-	ref := w.submit("order", "after_accept", 300000)
-	if err := w.orders.Drain(ctx); err != nil {
-		t.Fatal(err)
-	}
-	w.env.Drain(t)
-	w.decide(ref, "decide", "approved")
-	if st.n["1"] != 4 || st.changes != 1 || w.copiedStock("1") != 4 {
-		t.Fatalf("stock %d after %d changes, copy %d", st.n["1"], st.changes, w.copiedStock("1"))
-	}
-	// Retried: nothing moves twice.
-	if out, err := w.orders.Decide(ctx, w.env.Tenant, ref, "accept", "", "test"); err != nil || st.changes != 1 || len(out["short"].([]string)) != 0 {
-		t.Fatalf("retry: %v %v", out, err)
-	}
-	var list []stock.Movement
+	// A count changed by a movement reaches the copy at once.
 	w.in(func(tx pgx.Tx) error {
-		var err error
-		list, err = stock.ListTx(ctx, tx, w.env.Tenant, stock.Filter{ItemID: "1"})
-		return err
+		items, err := storefront.CatalogueItems(ctx, tx, w.env.Tenant, rows, m)
+		if err != nil {
+			return err
+		}
+		return storefront.SyncCatalogue(ctx, tx, w.env.Tenant, items)
 	})
-	if len(list) != 2 || list[0].Reason != stock.Order || list[0].Reference != ref || *list[0].Change != -2 || list[1].Reason != stock.Outside {
-		t.Fatalf("movements: %+v", list)
-	}
-
-	// More than is left: lowered to zero, short, as before.
-	st.n["1"] = 1
-	ref2 := w.submit("order", "after_accept", 300000)
-	if err := w.orders.Drain(ctx); err != nil {
-		t.Fatal(err)
-	}
-	w.env.Drain(t)
-	w.decide(ref2, "decide", "approved")
-	if o := w.order(ref2); st.n["1"] != 0 || o.Note != "Accepted with too little stock of Jollof rice" {
-		t.Fatalf("short: stock %d, note %q", st.n["1"], o.Note)
+	st.set("1", 5)
+	if w.copiedStock("1") != 5 {
+		t.Fatalf("copy %d after a count of 5", w.copiedStock("1"))
 	}
 }
 

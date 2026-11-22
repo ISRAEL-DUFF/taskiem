@@ -15,7 +15,7 @@ import (
 // withStock gives a world's server the shops' stock movements over its
 // fake Xenibase.
 func withStock(w *world) *stock.Stock {
-	w.srv.Stock = &stock.Stock{Pool: w.env.DB.App, Table: &storefront.XenibaseStock{Pool: w.env.DB.App, Registry: w.env.Registry, Vault: w.env.Vault,
+	w.srv.Stock = &stock.Stock{Pool: w.env.DB.App, Catalogue: &storefront.XenibaseCatalogue{Pool: w.env.DB.App, Registry: w.env.Registry, Vault: w.env.Vault,
 		Guard: w.env.Egress}}
 	return w.srv.Stock
 }
