@@ -59,6 +59,9 @@ dependencies:
   # Scanning a person's QR code in the app, the camera asked for only on tap
   # (lib/chat/people_scan.dart; people-chatting §5.2). BSD-3-Clause.
   mobile_scanner: 7.5.0
+  # Reading an account number or a list in a photo on the phone itself, the
+  # photo never sent for reading (lib/chat/photo_text.dart). MIT. Needs iOS 15.5.
+  google_mlkit_text_recognition: 0.17.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

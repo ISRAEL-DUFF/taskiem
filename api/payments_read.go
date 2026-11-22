@@ -53,10 +53,16 @@ func (s *Server) readPayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var in struct {
 		Text string `json:"text"`
+		// From is "photo" for text the phone read from a photo: letters
+		// read in place of digits are put right first.
+		From string `json:"from"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if in.From == "photo" {
+		in.Text = saved.PhotoText(in.Text)
 	}
 	if !s.limiter("pay-read:"+principalFrom(ctx).Actor(), time.Minute/30, 30).Allow() {
 		s.payFail(w, r, refusePay(http.StatusTooManyRequests, "too_many", "Too many messages read just now: wait a minute."))

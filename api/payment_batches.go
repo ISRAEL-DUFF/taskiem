@@ -681,10 +681,16 @@ type batchLine struct {
 func (s *Server) readBatchList(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Text string `json:"text"`
+		// From is "photo" for text the phone read from a photo: letters
+		// read in place of digits are put right first.
+		From string `json:"from"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if in.From == "photo" {
+		in.Text = saved.PhotoText(in.Text)
 	}
 	ctx := r.Context()
 	p := principalFrom(ctx)

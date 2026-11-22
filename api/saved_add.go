@@ -30,10 +30,16 @@ func (s *Server) readSavedWords(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Text string `json:"text"`
+		// From is "photo" for text the phone read from a photo: letters
+		// read in place of digits are put right first.
+		From string `json:"from"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if in.From == "photo" {
+		in.Text = saved.PhotoText(in.Text)
 	}
 	if strings.TrimSpace(in.Text) == "" || len([]rune(in.Text)) > saved.MaxText {
 		writeErr(w, http.StatusBadRequest, "Give the words to read.")

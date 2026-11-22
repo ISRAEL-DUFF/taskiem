@@ -13426,15 +13426,20 @@ class MySavedStepUpOptionsResponse {
 }
 
 class ReadSavedWordsRequest {
-  const ReadSavedWordsRequest({required this.text});
+  const ReadSavedWordsRequest({this.from, required this.text});
 
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
   final String text;
 
   factory ReadSavedWordsRequest.fromJson(Map<String, dynamic> j) => ReadSavedWordsRequest(
+        from: j['from'] == null ? null : j['from'] as String,
         text: j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'from': ?from,
         'text': text,
       };
 }
@@ -14009,15 +14014,20 @@ class ListPayBanksResponseBanksItem {
 }
 
 class ReadPaymentRequest {
-  const ReadPaymentRequest({required this.text});
+  const ReadPaymentRequest({this.from, required this.text});
 
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
   final String text;
 
   factory ReadPaymentRequest.fromJson(Map<String, dynamic> j) => ReadPaymentRequest(
+        from: j['from'] == null ? null : j['from'] as String,
         text: j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'from': ?from,
         'text': text,
       };
 }
@@ -14821,15 +14831,20 @@ class CreatePaymentBatchResponse {
 }
 
 class ReadPaymentListRequest {
-  const ReadPaymentListRequest({required this.text});
+  const ReadPaymentListRequest({this.from, required this.text});
 
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
   final String text;
 
   factory ReadPaymentListRequest.fromJson(Map<String, dynamic> j) => ReadPaymentListRequest(
+        from: j['from'] == null ? null : j['from'] as String,
         text: j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'from': ?from,
         'text': text,
       };
 }

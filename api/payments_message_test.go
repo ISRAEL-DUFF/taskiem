@@ -64,6 +64,11 @@ func TestPayFromAMessage(t *testing.T) {
 		got["amount_kobo"] != float64(4500000) || got["name"] != "Chidi Okeke" || got["paid"] != nil {
 		t.Fatalf("read: %v", got)
 	}
+	// Text a phone read from a photo: a 0 read as O is put right.
+	photo := "GTBank\nO" + gtb[1:] + "\nCHIDI OKEKE"
+	if got := owner.must(200, "POST", "/v1/payments/read", map[string]any{"text": photo, "from": "photo"}); got["account_number"] != gtb || got["bank_code"] != "058" {
+		t.Fatalf("from a photo: %v", got)
+	}
 	if got := owner.must(200, "POST", "/v1/payments/read", map[string]any{"text": "See you at 5, order TK-12345"}); got["found"] != false {
 		t.Fatalf("no account: %v", got)
 	}

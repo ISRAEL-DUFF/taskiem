@@ -6872,6 +6872,10 @@ paths:
               properties:
                 text:
                   type: string
+                from:
+                  type: string
+                  enum: [photo]
+                  description: 'photo: the text was read from a photo on the phone (letters read in place of digits are put right first)'
       responses:
         '200':
           description: What it says; found false when it holds no account
@@ -7009,6 +7013,10 @@ paths:
               required: [text]
               properties:
                 text: {type: string}
+                from:
+                  type: string
+                  enum: [photo]
+                  description: 'photo: the text was read from a photo on the phone (letters read in place of digits are put right first)'
       responses:
         '200':
           description: Each line
@@ -27528,6 +27536,10 @@ paths:
                 text:
                   type: string
                   maxLength: 4000
+                from:
+                  type: string
+                  enum: [photo]
+                  description: 'photo: the text was read from a photo on the phone (letters read in place of digits are put right first)'
       responses:
         '200':
           description: What the words hold
