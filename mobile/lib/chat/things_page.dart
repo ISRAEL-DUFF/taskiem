@@ -274,8 +274,33 @@ class _ThingPageState extends State<ThingPage> {
     }
   }
 
+  /// Whether this person may add the price of a thing marked sold without
+  /// one: it is money in, so table.edit and invoice.manage.
+  bool get _canPrice => widget.auth.can('table.edit') && widget.auth.can('invoice.manage') && _t.status == 'sold' && (_t.saleEntryId ?? '').isEmpty;
+
+  /// Sold before without a price: asks it now and records it as money in.
+  Future<void> _addPrice() async {
+    if (_busy || !_canPrice) return;
+    final sale = await showTkSheet<({int? kobo, String how})>(context, (_) => SoldSheet(auth: widget.auth, thing: _t, priceOnly: true));
+    if (sale == null || sale.kobo == null || !mounted) return;
+    await _patch(
+      PatchThingRequest(status: 'sold', salePriceKobo: sale.kobo, salePaidHow: sale.how),
+      '${naira(sale.kobo!)} in for ${_t.name}',
+      key: uuid4(),
+    );
+  }
+
   Future<void> _status(String s) async {
-    if (s == _t.status || _busy) return;
+    if (_busy) return;
+    if (s == _t.status) {
+      if (s == 'sold' && _canPrice) await _addPrice();
+      return;
+    }
+    if (s == 'sold' && (_t.saleEntryId ?? '').isNotEmpty) {
+      // Its sale is in money in already: the server takes no second price.
+      await _patch(const PatchThingRequest(status: 'sold'), 'Marked sold; its sale was recorded already');
+      return;
+    }
     if (s == 'sold') {
       final sale = await showTkSheet<({int? kobo, String how})>(context, (_) => SoldSheet(auth: widget.auth, thing: _t));
       if (sale == null || !mounted) return;
@@ -415,6 +440,14 @@ class _ThingPageState extends State<ThingPage> {
               _choice('broken', 'Out of use', edit),
               _choice('given', 'Given to someone', edit),
               _choice('gone', 'Lost, stolen or thrown away', edit),
+              if (_canPrice)
+                TkListRow(
+                  title: 'Add what it sold for',
+                  sub: 'Sold without a price; with one, it is money in',
+                  icon: 'b-cash',
+                  square: look.lime,
+                  onTap: _busy ? null : _addPrice,
+                ),
             ],
           ),
           TkSection(
@@ -533,9 +566,12 @@ class _TextSheetState extends State<_TextSheet> {
 /// without it, sold is marked with no price. Pops with the price (null:
 /// none) and how it was paid.
 class SoldSheet extends StatefulWidget {
-  const SoldSheet({super.key, required this.auth, required this.thing});
+  const SoldSheet({super.key, required this.auth, required this.thing, this.priceOnly = false});
   final Auth auth;
   final Thing thing;
+
+  /// Marked sold already, without a price: the price is asked, not optional.
+  final bool priceOnly;
 
   @override
   State<SoldSheet> createState() => _SoldSheetState();
@@ -570,23 +606,26 @@ class _SoldSheetState extends State<SoldSheet> {
     final typed = _price.text.trim();
     final kobo = typed.isEmpty ? null : nairaKobo(typed);
     final bad = typed.isNotEmpty && (kobo == null || kobo < 1);
+    final only = widget.priceOnly && money;
     return TkFormSheet(
-      title: 'Sold',
+      title: only ? 'What it sold for' : 'Sold',
       crumb: widget.thing.name,
-      action: kobo == null || !money ? 'Mark it sold' : 'Sold for ${naira(kobo)}',
-      onAction: bad ? null : () => Navigator.of(context).pop((kobo: money ? kobo : null, how: _how)),
+      action: kobo == null || !money ? (only ? 'Add the price' : 'Mark it sold') : 'Sold for ${naira(kobo)}',
+      onAction: bad || (only && kobo == null) ? null : () => Navigator.of(context).pop((kobo: money ? kobo : null, how: _how)),
       second: 'Cancel',
       onSecond: () => Navigator.of(context).pop(),
       children: [
         if (money) ...[
           TkFormGroup(
             children: [
-              TkMoneyField(label: 'Sold for (optional)', controller: _price, error: bad ? 'An amount, like 85,000.' : null),
+              TkMoneyField(label: only ? 'Sold for' : 'Sold for (optional)', controller: _price, error: bad ? 'An amount, like 85,000.' : null),
             ],
           ),
           if (kobo != null) TkFormGroup(title: 'Paid', children: [_paid('cash', 'In cash', 'Into the cash you hold'), _paid('transfer', 'By transfer', 'Into your bank')]),
           Text(
-            'With a price, it is money in, as Sale of things we had: not spending on its label. Without one, it only leaves the totals.',
+            only
+                ? 'It is money in, as Sale of things we had: not spending on its label.'
+                : 'With a price, it is money in, as Sale of things we had: not spending on its label. Without one, it only leaves the totals.',
             style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
           ),
         ] else

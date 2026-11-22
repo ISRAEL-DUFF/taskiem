@@ -465,8 +465,9 @@ class _BillPageState extends State<BillPage> with Polling {
         ],
       ),
       // Lines kept track of on the orders it bills: their rows on Things
-      // we have (what a business buys §9).
-      for (final o in {for (final l in lines) _str(l['purchase_id'])}.where((id) => _maps(_orders[id]?['lines']).any((x) => x['treatment'] == 'track' && _int(x['received']) > 0)))
+      // we have (what a business buys §9), for someone who may see them.
+      if (_auth.can('table.read'))
+        for (final o in {for (final l in lines) _str(l['purchase_id'])}.where((id) => _maps(_orders[id]?['lines']).any((x) => x['treatment'] == 'track' && _int(x['received']) > 0)))
         TkSection(
           inset: 56,
           children: [
