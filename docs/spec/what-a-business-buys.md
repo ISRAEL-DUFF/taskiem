@@ -1,6 +1,6 @@
 # What a business buys, and what it does with it
 
-Status: **Draft** 21 November 2026, for review and discussion; revised 22 November 2026 after review, and again the same day to separate stock from products · Decision: to come (0070) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
+Status: **Draft** 21 November 2026, for review and discussion; revised 22 November 2026 after review, then to separate stock from products, then for a system not yet in production · Decision: to come (0070) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
 
 ## 1. Summary
 
@@ -11,7 +11,7 @@ Two things are wrong with that, and this plan fixes both.
 1. **Stock and products are one thing today.** Stock is a count on a product, so anything a business wants to count must be a product, in the catalogue it sells from (at most 500 items). This plan separates them (§4):
    - a **stock item** is something the business counts: fabric, thread, bags of rice, finished dresses;
    - a **product** is something it sells, on its storefront, price lists and in chats;
-   - a product may be **counted by** a stock item, so selling it lowers the count, as today;
+   - a product may be **counted by** a stock item, so selling it lowers the count, as today, by however many of it one sale uses;
    - a stock item with no product is a **material**, or anything counted and never sold.
 2. **Every purchase must be stock.** No fixed list of kinds of purchase fits every business, so this plan does not make one (§5):
    - **a purchase is just something bought** by default. It records what it was, how many, from whom, what it cost, and a **label** in the business's own words. It is spending in the money log, and nothing else happens;
@@ -22,13 +22,15 @@ Two things are wrong with that, and this plan fixes both.
 
 The supplier sees nothing different.
 
+**Taskiem is not in production yet**, so this plan changes the model outright: no live data to carry over, no old and new paths kept side by side, and nothing kept only for compatibility. Demo and test data are made again from their seeds.
+
 ## 2. Words used here
 
 | Word | Meaning |
 | --- | --- |
 | Stock item | Something the business counts: a name, a unit, a count, a cost, low and target levels, a usual supplier. Kept by Taskiem |
 | Product | Something the business sells: a row of its catalogue, with a price, photos and options, as today |
-| Counted by | A product's link to the stock item whose count selling it lowers. A product without one is not counted (services, dishes, things on hire), as a product without a `stock` value is today |
+| Counted by | A product's link to the stock item whose count selling it lowers, with how many of it one sale uses (1 by default). A product without one is not counted (services, dishes, things on hire), as a product without a `stock` value is today |
 | Material | A stock item that no product is counted by: fabric, thread, flour, packaging the business counts |
 | Purchase line | One line of a purchase: what, how many, the unit, the cost, the supplier, a label, and how it is treated |
 | Label | The business's own word for what a purchase was for: "Machines", "Staff welfare", "Fuel", "Client job: Mrs Ade". Up to 60 characters (the money log's limit for a category). Taskiem has none built in |
@@ -65,47 +67,31 @@ The supplier sees nothing different.
   - It has: a name, a unit, a count, a cost price, a low level, a target level, a usual supplier, a category, and its photo (optional).
   - It has no price and no page of its own: it is never shown to customers.
 - **A product** stays a row of the catalogue, with everything a product has today. Nothing about selling changes.
-- **Counted by.** A catalogue row may be counted by one stock item (`stock_items.product_id`, unique per business).
-  - **One to one.** A stock item counts at most one row, and a row is counted by at most one stock item (§10 Q8).
+- **Counted by** (`product_stock`): a catalogue row may be counted by one stock item, with **uses**, how many of it one sale of the row takes (a whole number, 1 by default).
+  - A stock item may count several rows: rice sold by the bag on two fronts, or a "pack of 6" that uses 6 of a single item. Each sale lowers the stock item by its row's uses.
   - **Variants.** Each variant row with a count is counted by its own stock item, as each has its own count today. The stock items of one product's variants are grouped by it on the Stock page.
-- **The catalogue's `stock` column** becomes a copy of its stock item's count, written by Taskiem as it writes counts today: recorded first, sent after, under the movement's key.
-  - The storefront, the public page and Their shop read it unchanged.
-  - **An owner's change** to the column by hand is still seen on the refresh and recorded as an `outside` movement, now on the row's stock item. A business can therefore still change counts in its own table.
-  - A row with no stock item has no count. Its `stock` column is left empty, as for a product that is not counted today.
+- **Counts leave the catalogue.** The catalogue no longer holds `stock`, `unit`, `cost_price`, `reorder_level`, `target_level` or `supplier`: they belong to the stock item.
+  - The storefront, the public page, Their shop and price lists read **how many are left** from the stock item through `product_stock`: sold out when the stock item cannot cover one sale's uses.
+  - Counts change only through Taskiem: the Stock page, chat, `stock@1`, sales, orders and receiving. Every change is a movement with its reason. The outside-change check of today (a count changed by hand in the table) goes, because the table no longer holds one.
+  - **The owner's project** gets a read-only kept copy, `stock_items`, beside `stock_movements` and `money_log`, for reading and building on.
 - **Size.** Stock items are not in the catalogue, so they do not count against its 500. A business may have up to **5,000** stock items (§10 Q9).
 
 ### 4.2 What points where after the split
 
 | Points at a stock item | Points at a product (unchanged) |
 | --- | --- |
-| Movements, counts, the low list, reorder suggestions, stock value | The storefront, fronts, the public page and Their shop |
+| Movements, counts, the low list, reorder suggestions, stock value | The storefront, fronts, the public page and Their shop (reading how many are left through `product_stock`) |
 | Purchase lines, receiving, cost prices | Sales lines and orders (they lower the product's stock item) |
 | Item links and `supplier_items` (the buyer's memory, §6) | Price lists, deals and floor prices |
 | The morning briefing's low items | Mentions with `#` in a chat |
 
-- **Selling** a product counted by a stock item lowers that stock item. The rules are those of today: once, under the order's or sale's key, and a sale beyond the count is recorded with a leak, never refused.
+- **Selling** a product counted by a stock item lowers that stock item by the sale's quantity times the row's uses. The rules are those of today: once, under the order's or sale's key, and a sale beyond the count is recorded with a leak, never refused.
+- **Movements are made in Taskiem's database only.** Nothing is sent to a table first, so a movement and its count change in one transaction, and the send-and-retry of today's catalogue changes goes.
 - **The seller's side of a link order** finds its stock through its product, as today, then lowers the product's stock item.
 
-### 4.3 Moving what exists
+### 4.3 No move
 
-Every business keeping stock today has stock only on catalogue rows, so the move is mechanical:
-
-- **One stock item for each catalogue row with a count**, variant rows included. Each one is counted by its row, and takes the row's name, unit, cost price, levels and supplier.
-- **Every reference to a row moves to its stock item:**
-  - movements;
-  - counts;
-  - sales lines' stock;
-  - purchase lines;
-  - item links.
-
-  The row's id stays on each record (`product_id`), so nothing is lost.
-- **Done per business, in one transaction, while its stock sweep is held.** A business that has not moved yet keeps working the old way, so the move can be stopped, checked and resumed.
-- **Rolled out in three steps** (S1–S3, §11):
-  1. the records and the move, writing both ways;
-  2. every reader switched to stock items;
-  3. the old paths taken out.
-
-  Each step leaves every business's counts the same before and after, checked per business.
+There is no live stock to move. The new tables replace the catalogue's stock columns and the code that wrote to them, in one change. The demo world's seeds and the test fixtures make stock items directly, and every test that kept stock on catalogue rows is rewritten to the new model.
 
 ### 4.4 Screens and chat for stock
 
@@ -116,7 +102,7 @@ Every business keeping stock today has stock only on catalogue rows, so the move
 - **Add something to count** makes a stock item, asking **Do you sell it?**:
   - **Yes** also makes its product in the catalogue, as `add product` does;
   - **No** makes a material only.
-- **A product's page** shows **Counted by**: its stock item, with its count, and a way to choose another or none.
+- **A product's page** shows **Counted by**: its stock item and how many one sale uses, with the count, and a way to choose another or none.
 - **Chat.** `add 20 yards of ankara fabric` names no product the business has, so it asks one question: **Do you sell it?** Yes adds a product counted by a new stock item; No adds a material. `stock`, `how many … do I have?`, `adjust` and counts work on stock items, materials included.
 - **The low list and the briefing** include materials, by their low levels.
 
@@ -155,15 +141,15 @@ Every business keeping stock today has stock only on catalogue rows, so the move
 
 - **The business's own.** A label is made by typing it. Taskiem offers the business's past labels first, then a suggestion from the item's name and the supplier's category.
 - **Renamed or merged** from Money settings, by those who manage money. Past spending is never rewritten: money-log entries are never changed (the `money_entry_kept` trigger, migration 00200, refuses any update but `mirrored_at`).
-  - New entries carry the label's id (`label_id`), and its text as their category for anything reading categories today.
-  - Reports find each entry's label when they are read: by `label_id`, or for an older entry by its category matched to a label's name, and then follow `merged_into` to the label that is kept.
+  - Every expense carries its label's id (`label_id`), and the label's name at the time as its category.
+  - Reports find each entry's label by `label_id` when they are read, then follow `merged_into` to the label that is kept.
   - So a rename or a merge changes how reports group spending, at once and for all of it, without touching the log.
 - **No label** is allowed, and shows as **Not labelled**, so buying is never blocked by naming.
 - **Money reports** group spending by label. Lines added to stock are shown as **Bought to sell or make with**, and tracked lines as **Bought to keep**. Neither is a running cost.
   - In profit for a period, **Bought to keep** is left out: it is something the business has, not money spent running it.
   - **Bought to sell or make with** counts as today's stock bought.
   - Just-recorded lines are running costs under their labels.
-- **Expenses already entered by hand** keep their categories, which become labels.
+- **Expenses entered by hand** (`paid 15,000 diesel`) take a label like any other.
 
 ## 6. Saying it once
 
@@ -203,7 +189,7 @@ The question appears where the buyer is now asked which of its products a line i
 - **Receiving.** All came, Not all came and the day's end work for every line. Only what happens after recording differs.
 - **Bills and paying.** A bill from a linked supplier is paid as today. Its expense entry is split by label (§8), by the rules in §8 for a bill that does not match its order.
 - **Approval limits** apply to the whole order, as today.
-- **The owner's own table** can still be edited by hand. A count changed there is recorded against its stock item.
+- **The owner's own catalogue** still holds the products. Counts are no longer in it (§4.1); a read-only copy of stock items sits beside it.
 
 ## 8. Data
 
@@ -213,28 +199,26 @@ Migration numbers start at 00501.
   - `id`, `tenant_id`, `name`, `unit`, `category`;
   - `count`, the sum of its movements;
   - `cost_kobo`, `low_level`, `target_level`, `supplier_id`;
-  - `product_id`: the catalogue row it counts, unique per business, empty for a material;
   - `group_of`: the product a variant's stock item belongs to, for grouping on the Stock page;
   - `created_by`, `created_at`, `retired_at`.
 
-  At most 5,000 per business.
-- **`stock_movements`** gain `stock_item_id`, filled for every movement by the move (§4.3) and required after it. `item_id`, the catalogue row, stays for history.
-- **The catalogue mapping** keeps `stock` as the column Taskiem writes its stock item's count to. `unit`, `cost_price`, `reorder_level`, `target_level` and `supplier` move to the stock item and are written back to the table as a copy while S2 runs, then stop being read from it.
+  At most 5,000 per business. `count` is changed only by a movement, in the movement's transaction (a trigger refuses any other change).
+- **`product_stock`**, new: `tenant_id`, `product_id` (the catalogue row), `stock_item_id`, `uses` (a whole number, at least 1), unique on `(tenant_id, product_id)`.
+- **`stock_movements`** point at `stock_item_id` instead of a catalogue row, and lose the fields of sending a change to a table (`pending`, the key sent, the retries).
+- **The catalogue mapping** loses `stock`, `unit`, `cost_price`, `reorder_level`, `target_level` and `supplier`.
 - **The kept copy** in the owner's project gains a `stock_items` table, as `stock_movements` and `money_log` have one today, for reading.
-- **Purchase lines** gain:
-  - `treatment` (`record` | `stock` | `track`);
-  - `stock_item_id`, for stock lines;
-  - `label`.
-
-  Old lines become `stock`, pointing at the stock item their row moved to (§4.3), labelled **Stock bought**.
-- **Item links** (`item_links`) gain `treatment`, `stock_item_id` and `label`, and `item_id` becomes nullable.
-  - `item_id` is in the table's primary key today, `(tenant_id, link_id, item_id)` (migration 00296), so a null cannot be stored as it stands.
-  - The primary key moves to `(tenant_id, link_id, seller_item_id)`, already unique on the table.
-  - A CHECK holds the stock item and the treatment together: `(treatment = 'stock') = (stock_item_id IS NOT NULL)`.
-  - Existing links become `stock`, pointing at the stock item of their row, labelled **Stock bought**.
+- **`purchase_lines`**, a table of its own in place of the order's `lines` JSON, so a line can be treated, received, billed and labelled on its own:
+  - `id`, `tenant_id`, `purchase_order_id`, `position`;
+  - `name`, `unit`, `quantity`, `cost_kobo`, `received`;
+  - `treatment` (`record` | `stock` | `track`), `stock_item_id` (for stock lines), `label_id`;
+  - `seller_item_id`, for an order to a linked supplier.
+- **Item links** (`item_links`) are made again as the buyer's memory of a supplier's item:
+  - keyed by `(tenant_id, link_id, seller_item_id)`;
+  - `treatment`, `stock_item_id`, `label_id`, `updated_by`, `updated_at`;
+  - a CHECK holds the stock item and the treatment together: `(treatment = 'stock') = (stock_item_id IS NOT NULL)`.
 - **`supplier_items`**, new: the same memory for suppliers not on Taskiem (`tenant_id`, `supplier_id`, `name_key`, `treatment`, `stock_item_id`, `label_id`, `updated_by`, `updated_at`), unique on `(tenant_id, supplier_id, name_key)`, in the business's scope with row-level security.
-- **`spend_labels`**, new, the business's own labels: `id`, `tenant_id`, `name` (unique per business, case-insensitive, up to 60 characters), `created_at`, and `merged_into` for a merged label (never a label that is itself merged, so a merge is one step). Money-log expense categories already entered are copied in as labels.
-- **Money-log entries** gain a nullable `label_id`, set on new expenses only. Old entries are never changed (§5.4).
+- **`spend_labels`**, new, the business's own labels: `id`, `tenant_id`, `name` (unique per business, case-insensitive, up to 60 characters), `created_at`, and `merged_into` for a merged label (never a label that is itself merged, so a merge is one step). 
+- **Money-log entries** gain `label_id`: every expense carries one, or none for Not labelled. Its `category` is the label's name when the entry was made. Entries are still never changed (§5.4).
 - **Receiving** (`stock.ReceiveTx`):
   - for stock lines, it moves the line's stock item and sets its cost;
   - for tracked lines, it writes a `kept_things` row per unit;
@@ -277,20 +261,19 @@ The web and the app change together. App screens are built in the app's own look
 | Q5 | Should a label be required? | No. Unlabelled spending shows as Not labelled, and the business can label it later |
 | Q6 | When something on Things we have is sold, should the sale be recorded as money in? | Yes, when marked sold with a price typed then: money in, labelled **Sale of things we had**, not the thing's own label, so selling a machine does not read as negative spending on machines |
 | Q7 | Personal buying: should an owner buying on their own account (You) be able to move a purchase into the business? | Not in this plan. A business buys as the business |
-| Q8 | Can one stock item be counted by several products? For example, rice sold by the bag and on two fronts, or one fabric sold as a bundle | Not in this plan: one to one, as counts are today. Several products drawing on one stock item, each using so many of it, belongs with the recipes of Q2 |
+| Q8 | Can one stock item be counted by several products, each using so many of it? For example, rice sold by the bag on two fronts, or a pack of 6 | Yes: `product_stock` holds how many one sale uses, so it is in the model from the start. A product using several different stock items (a recipe) is Q2's later plan |
 | Q9 | How many stock items may a business have? | 5,000, apart from the catalogue's 500, and raised by plan later if needed |
-| Q10 | Should the owner's own table still let counts be changed by hand, now that the count is Taskiem's? | Yes, as today: a change there is recorded as an `outside` movement on its stock item |
+| Q10 | Should counts stay in the owner's own catalogue table, editable by hand? | No: counts leave the catalogue and change only through Taskiem, each with its reason. The owner's project keeps a read-only copy of stock items |
 
 ## 11. Milestones
 
-The split comes first, because Add to stock and every count after it point at stock items.
+The split comes first, because Add to stock and every count after it point at stock items. With nothing in production, each milestone changes the model outright, with no old path kept.
 
 | # | What | Size |
 | --- | --- | --- |
-| S1 | **Stock items and the move:** `stock_items`; `stock_item_id` on movements, purchase lines and item links; the move per business with counts checked before and after; both ways written; the kept copy; tests on a copy of real shapes (sizes, outside changes, open orders) | L |
-| S2 | **Every reader on stock items:** counts, the low list, reorder suggestions, receiving, sales and orders lowering a product's stock item, the briefing, stock value, `stock@1`, WhatsApp and Telegram; the Stock page, **Add something to count** and **Counted by**, on the web and in the app | L |
-| S3 | **The old paths out:** stop reading counts and levels from the catalogue; the catalogue's `stock` is only a copy; docs | S |
-| U1 | **Purchases on the server:** `treatment` and `label` on purchase lines and item links (the new primary key); `supplier_items`; `spend_labels` and `label_id` on new expenses; receiving by treatment; `kept_things`; the expense split by label, with bills that do not match; OpenAPI and tests | M |
+| S1 | **Stock items on the server:** `stock_items`, `product_stock` and movements on stock items; the stock columns out of the catalogue mapping; counts, the low list, reorder suggestions, receiving, sales and orders lowering through `product_stock`, the storefront's how-many-left, the briefing, stock value, `stock@1`, WhatsApp and Telegram; the kept copy; seeds, fixtures and tests rewritten | L |
+| S2 | **Stock items on the screens:** the Stock page, **Add something to count**, **Counted by** with uses, on the web and in the app | M |
+| U1 | **Purchases on the server:** `purchase_lines`; item links made again; `supplier_items`; `spend_labels` and `label_id` on new expenses; receiving by treatment; `kept_things`; the expense split by label, with bills that do not match; OpenAPI and tests | M |
 | U2a | **The question and its memory, in the order sheets:** price list, their shop, supplier-drafted, by hand, on the web and in the app, with suggestions; changed from Suppliers; labels renamed and merged | M |
 | U2b | **The question in chat:** `order … from …` and the questions' steps (buttons, labels, the stock item), on every channel | S |
 | U3 | **Things we have:** the page, its detail, add by hand, statuses (with a sale as money in); spending by label in money reports; web and app | S |
@@ -299,17 +282,15 @@ The split comes first, because Add to stock and every count after it point at st
 
 **The split**
 
-- A shop keeping stock today is moved:
-  - every count is the same before and after;
-  - its storefront, orders and sales work as before;
-  - every movement, purchase line and item link points at a stock item.
-- A product counted by a stock item, sold on the storefront, lowers that stock item once, and the catalogue's `stock` column shows the new count.
-- An owner changes a count in their own table: the next refresh records an `outside` movement on the row's stock item.
+- A product counted by a stock item, sold on the storefront, lowers that stock item once, by the sale's quantity times its uses, in the sale's transaction.
+- A "pack of 6" and a single, both counted by the same stock item: selling one pack lowers it by 6, and the storefront shows the pack sold out when fewer than 6 are left.
+- The storefront shows sold out from the stock item, and the catalogue table holds no count.
 - A fashion house adds "Ankara fabric" and answers **No** to Do you sell it?:
   - a stock item with no product;
   - nothing new in the catalogue, which still has its 500 places;
   - it is on the low list at its low level.
-- A product with sizes moved: one stock item per size, grouped under the product on the Stock page.
+- A product with sizes: one stock item per size, grouped under the product on the Stock page.
+- No count changes except through a movement with its reason.
 
 **Purchases**
 
