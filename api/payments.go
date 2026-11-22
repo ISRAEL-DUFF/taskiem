@@ -573,15 +573,19 @@ func payLimitOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, roles []string
 type confirmIn struct {
 	Passkey *credentialJSON `json:"passkey"`
 	TOTP    string          `json:"totp"`
+	// Pin: the person's PIN, the passkey's fallback within the PIN's own
+	// limits (payments_pin.go), typed in the app's own pad.
+	Pin string `json:"pin"`
 	// Again confirms the same payment as one made in the last day.
 	Again bool `json:"again"`
 }
 
 // payPasskey is the step-up for paying: a passkey for op on target, never
 // an authenticator code (docs/spec/chat-pay-people.md, Safety: a passkey
-// for every payment; the PIN, its fallback, is not built yet). Asked for
-// with no proof, it names the passkey as the only way; a code given is
-// refused (403 passkey) without being spent.
+// for every payment; the PIN, its fallback for one payment, is
+// payments_pin.go's, and never a batch's). Asked for with no proof, it
+// names the passkey as the only way; a code given is refused (403
+// passkey) without being spent.
 func (s *Server) payPasskey(w http.ResponseWriter, r *http.Request, proof stepUpProof, op, target, what, doing string) (string, bool) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.EndUser != nil {
@@ -635,6 +639,10 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if in.Pin != "" {
+		s.confirmPaymentPin(w, r, id, in)
+		return
+	}
 	p := principalFrom(r.Context())
 	ctx := r.Context()
 	owner := slices.Contains(p.Roles, "owner")
@@ -665,6 +673,9 @@ func (s *Server) confirmPayment(w http.ResponseWriter, r *http.Request) {
 			s.payFail(w, r, s.dropChanged(r, x.ID, err))
 			return
 		}
+	}
+	if in.Passkey == nil && in.TOTP == "" && s.payOfferPin(w, r, x, revote) {
+		return
 	}
 	method, ok := s.payPasskey(w, r, stepUpProof{TOTP: in.TOTP, Passkey: in.Passkey}, payOpConfirm, "payment:"+id.String(), "Payments", "paying")
 	if !ok {
@@ -752,7 +763,11 @@ func markAwaitingTx(ctx context.Context, tx pgx.Tx, list []payment, p *Principal
 // does not take (the run may not have reached its approval yet).
 func (s *Server) payerVote(r *http.Request, run uuid.UUID, p *Principal, method, via string) error {
 	ctx := r.Context()
-	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: "web", IP: clientIP(r), StepUp: method,
+	channel := "web"
+	if p.AuthMethod == "whatsapp" {
+		channel = "whatsapp" // the PIN in WhatsApp's form (payments_pin.go)
+	}
+	vote := runtime.Vote{UserID: p.UserID, Roles: []string{payerRole}, Decision: "approved", Channel: channel, IP: clientIP(r), StepUp: method,
 		Audit: func(tx pgx.Tx, res runtime.VoteResult) error {
 			return auditTx(r, tx, "approval.decide", run.String()+"/approve", map[string]any{"decision": "approved", "result": res.Status, "via": via})
 		}}
@@ -973,7 +988,7 @@ func (s *Server) sendPayment(r *http.Request, x payment, needs string, p *Princi
 			_, err := tx.Exec(bg, `UPDATE payments SET
 				status = CASE WHEN b.status = 'cancelled' THEN 'cancelled' ELSE 'prepared' END,
 				finished_at = CASE WHEN b.status = 'cancelled' THEN now() END,
-				needs_ok = '', confirmed_by = NULL, confirmed_at = NULL
+				needs_ok = '', confirmed_by = NULL, confirmed_at = NULL, confirmed_with = NULL
 				FROM (SELECT (SELECT status FROM payment_batches WHERE id = (SELECT batch_id FROM payments WHERE id = $1)) AS status) b
 				WHERE payments.id = $1 AND payments.run_id IS NULL AND payments.status IN ('sending', 'waiting_ok')`, x.ID)
 			return err

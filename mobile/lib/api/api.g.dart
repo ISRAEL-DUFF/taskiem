@@ -1645,7 +1645,7 @@ class TaskiemApi {
     return GetPaymentResponse.fromJson(j as Map<String, dynamic>);
   }
 
-  /// Send a prepared payment, with a passkey (`POST /v1/payments/{id}/confirm`)
+  /// Send a prepared payment, with a passkey or the person's PIN (`POST /v1/payments/{id}/confirm`)
   Future<ConfirmPaymentResponse> confirmPayment({required ConfirmPaymentRequest body, required String id}) async {
     final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/confirm', body: body.toJson());
     return ConfirmPaymentResponse.fromJson(j as Map<String, dynamic>);
@@ -14340,21 +14340,26 @@ class GetPaymentResponse {
 }
 
 class ConfirmPaymentRequest {
-  const ConfirmPaymentRequest({this.again, this.passkey, this.totp});
+  const ConfirmPaymentRequest({this.again, this.passkey, this.pin, this.totp});
 
   final bool? again;
   final Map<String, dynamic>? passkey;
+  /// The person's six-digit PIN, typed in the app's own pad (never sent in a
+  /// message)
+  final String? pin;
   final String? totp;
 
   factory ConfirmPaymentRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentRequest(
         again: j['again'] == null ? null : j['again'] as bool,
         passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] == null ? null : j['pin'] as String,
         totp: j['totp'] == null ? null : j['totp'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'again': ?again,
         'passkey': ?passkey,
+        'pin': ?pin,
         'totp': ?totp,
       };
 }

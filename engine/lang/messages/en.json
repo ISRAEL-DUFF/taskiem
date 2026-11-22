@@ -9499,6 +9499,11 @@
       "reviewed": true,
       "context": "A batch prepared from the chat has ended with its one person paid"
     },
+    "wa.pay.pin_form": {
+      "text": "Or pay it now with your PIN in this form, within 10 minutes: {amount} to {to}.",
+      "reviewed": true,
+      "context": "The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+    },
     "bill.transfer.send": {
       "text": "Send exactly {amount} to {to}, for {reference}.",
       "reviewed": true,

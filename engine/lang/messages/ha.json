@@ -7811,6 +7811,7 @@
       "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
       "reviewed": false
     },
+<<<<<<< HEAD
     "wa.pay.list.how": {
       "text": "Send the list under pay these, one person a line, like:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
       "reviewed": false,
@@ -7900,6 +7901,12 @@
       "text": "Paid 1 person, {amount}.",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat has ended with its one person paid"
+=======
+    "wa.pay.pin_form": {
+      "text": "Or pay it now with your PIN in this form, within 10 minutes: {amount} to {to}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+>>>>>>> 6a736c17 (Pay with the PIN as the passkey's fallback (app pad and WhatsApp form))
     },
     "bill.transfer.send": {
       "text": "Send exactly {amount} to {to}, for {reference}.",

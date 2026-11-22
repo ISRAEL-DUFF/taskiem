@@ -327,6 +327,11 @@ void main() {
     passkeys = _NoPasskeys();
     addTearDown(() => passkeys = was);
     final api = _Api();
+    // No PIN offered: the passkey only.
+    api.routes['POST /v1/payments/p3/confirm'] = (_) => _err(403, '', 'confirm with your passkey', {
+      'step_up': 'required',
+      'methods': ['passkey'],
+    });
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
@@ -339,7 +344,118 @@ void main() {
     await settle(t);
     expect(find.textContaining('Paying takes a passkey'), findsOneWidget);
     expect(find.text('A code from your authenticator app'), findsNothing);
-    expect(api.sent('POST', '/v1/payments/p3/confirm'), isEmpty);
+    expect(find.text('Your PIN'), findsNothing);
+    expect(find.text('Use my PIN instead'), findsNothing);
+    // Asked once, with no proof: nothing was sent to pay it.
+    expect(api.sent('POST', '/v1/payments/p3/confirm'), [<String, dynamic>{}]);
+  });
+
+  for (final mode in [TkMode.light, TkMode.dark]) {
+    testWidgets('no passkey on this phone, the PIN offered: the app’s own PIN pad pays (${mode.name})', (t) async {
+      phone(t);
+      final was = passkeys;
+      passkeys = _NoPasskeys();
+      addTearDown(() => passkeys = was);
+      final api = _Api();
+      var wrong = 0;
+      api.routes['POST /v1/payments/p4/confirm'] = (r) {
+        final b = jsonDecode(r.body) as Map<String, dynamic>;
+        if (b['pin'] == null) {
+          return _err(403, '', 'confirm with your passkey, or your PIN', {
+            'step_up': 'required',
+            'methods': ['passkey', 'pin'],
+            'pin_limit_kobo': 10000000,
+          });
+        }
+        if (b['pin'] != '482913') {
+          wrong++;
+          return _err(403, 'pin_wrong', 'That PIN is not right. 4 tries left.');
+        }
+        return http.Response(jsonEncode({'payment': payment('p4', status: 'sending')}), 202, headers: _json);
+      };
+      final closed = <Object?>[];
+      await t.pumpWidget(
+        TaskiemApp(
+          mode: mode,
+          home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: api.auth(), payment: Payment.fromJson(payment('p4')))), closed),
+        ),
+      );
+      await settle(t);
+      await t.tap(find.text('Pay ₦45,000'));
+      await settle(t);
+      // The pad, in a group, its limit said; no "Paying takes a passkey".
+      expect(find.text('Your PIN'), findsWidgets);
+      expect(find.textContaining('Pays up to ₦100,000 now'), findsOneWidget);
+      expect(find.textContaining('Paying takes a passkey'), findsNothing);
+      expect(find.text('Use my passkey instead'), findsNothing);
+      final pad = find.descendant(of: find.byKey(const ValueKey('pay-pin')), matching: find.byType(EditableText));
+      await t.enterText(pad, '111111');
+      await settle(t);
+      // Dots, never the digits.
+      expect(find.text('1'), findsNothing);
+      expect(find.text('•'), findsNWidgets(6));
+      await t.tap(find.text('Pay ₦45,000'));
+      await settle(t);
+      expect(wrong, 1);
+      expect(find.text('That PIN is not right. 4 tries left.'), findsOneWidget);
+      expect(find.text('•'), findsNothing);
+      await snap(t, 'pay-pin-${mode.name}');
+      await t.enterText(pad, '482913');
+      await settle(t);
+      await t.tap(find.text('Pay ₦45,000'));
+      await settle(t);
+      final sent = api.sent('POST', '/v1/payments/p4/confirm');
+      expect(sent.last, {'pin': '482913'});
+      expect(sent.any((b) => b.containsKey('passkey')), isFalse);
+      expect(find.text('Sent to the bank'), findsWidgets);
+      await t.pump(const Duration(seconds: 2));
+      await settle(t);
+      expect((closed.single! as Payment).status, 'sending');
+    });
+  }
+
+  testWidgets('the PIN over its limit: use your passkey for this one; or Use my PIN instead when the passkey is closed', (t) async {
+    phone(t);
+    final was = passkeys;
+    final fake = FakePasskeys()..cancel = true;
+    passkeys = fake;
+    addTearDown(() => passkeys = was);
+    final api = _Api();
+    api.routes['POST /v1/me/step-up/options'] = (_) => {
+      'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
+    };
+    api.routes['POST /v1/payments/p5/confirm'] = (r) {
+      final b = jsonDecode(r.body) as Map<String, dynamic>;
+      if (b['pin'] != null) return _err(403, 'pin_limit', 'Over your PIN’s limit of ₦200,000 a day (₦20,000 left today): use your passkey for this one.');
+      return _err(403, '', 'confirm with your passkey, or your PIN', {
+        'step_up': 'required',
+        'methods': ['passkey', 'pin'],
+        'pin_limit_kobo': 2000000,
+      });
+    };
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host((c) => showTkSheet<Payment>(c, (_) => PaymentSheet(auth: api.auth(), payment: Payment.fromJson(payment('p5')))), []),
+      ),
+    );
+    await settle(t);
+    expect(find.text('Use my PIN instead'), findsNothing);
+    await t.tap(find.text('Pay ₦45,000'));
+    await settle(t);
+    // The passkey's sheet closed: the PIN is offered.
+    expect(fake.asked, hasLength(1));
+    await t.tap(find.text('Use my PIN instead'));
+    await settle(t);
+    expect(find.text('Use my passkey instead'), findsOneWidget);
+    await t.enterText(find.descendant(of: find.byKey(const ValueKey('pay-pin')), matching: find.byType(EditableText)), '482913');
+    await settle(t);
+    await t.tap(find.text('Pay ₦45,000'));
+    await settle(t);
+    expect(find.text('Use your passkey for this one'), findsOneWidget);
+    expect(find.textContaining('₦20,000 left today'), findsOneWidget);
+    expect(find.text('Your PIN'), findsNothing);
+    expect(find.text('Use my PIN instead'), findsNothing);
   });
 
   testWidgets('Pay an account number: 10 digits, the bank from the list, its name checked as it is prepared', (t) async {

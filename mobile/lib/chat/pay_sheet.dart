@@ -7,7 +7,11 @@
 // first payment, an account changed, the same payment again). Pay asks
 // for the phone's passkey for this payment alone (money.pay on
 // payment:<id>, the single-action step-up approvals use) and confirms it
-// (POST /v1/payments/{id}/confirm). Nothing pays on words.
+// (POST /v1/payments/{id}/confirm). When the phone cannot use a passkey
+// and the server offers the person's PIN (`pin` among the step-up's
+// methods: within the PIN's own limits), or the person chooses "Use my PIN
+// instead", the app's own PIN pad confirms it with {pin}. Nothing pays on
+// words.
 
 import 'dart:async';
 
@@ -24,6 +28,7 @@ import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkToast;
 import '../kit/sheet.dart';
+import '../screens/sign_in.dart' show CodeBoxes;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -744,7 +749,15 @@ class _PaymentSheetState extends State<PaymentSheet> {
   // A code from the authenticator, when the phone has no passkey or the
   // server asks for one.
   bool _useCode = false;
+  // The person's PIN: offered by the server (within the PIN's limits, up
+  // to [_pinLimit] kobo now), typed in the app's own pad.
+  final _pin = TextEditingController();
+  bool _pinOffered = false;
+  bool _usePin = false;
+  int? _pinLimit;
+  bool _phonePasskey = true;
   String? _error;
+  String _errorTitle = 'Not paid';
 
   Auth get _auth => widget.auth;
 
@@ -752,11 +765,13 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void initState() {
     super.initState();
     _code.addListener(() => setState(() {}));
+    _pin.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _code.dispose();
+    _pin.dispose();
     // Prepared here and let go unpaid: nothing is left waiting.
     if (widget.fresh && !_tried && _p.status == 'prepared') {
       unawaited(_auth.api.cancelPayment(id: _p.id).then((_) {}, onError: (Object _) {}));
@@ -764,18 +779,59 @@ class _PaymentSheetState extends State<PaymentSheet> {
     super.dispose();
   }
 
+  Future<Payment> _confirm({Map<String, dynamic>? passkey, String? totp, String? pin}) async => (await _auth.api.confirmPayment(
+    id: _p.id,
+    body: ConfirmPaymentRequest(passkey: passkey, totp: totp, pin: pin, again: _again ? true : null),
+  )).payment;
+
+  /// Paying with the passkey: the server is asked first, with no proof, so
+  /// what stops the payment is said before the passkey is asked for, and
+  /// whether the PIN may pay it is known. A phone that cannot use a
+  /// passkey shows the PIN pad when the PIN is offered; null when nothing
+  /// was sent.
+  Future<Payment?> _withPasskey() async {
+    try {
+      return await _confirm();
+    } on ApiError catch (e) {
+      if (e.status != 403 || e.body['step_up'] == null) rethrow;
+      final methods = ((e.body['methods'] as List?) ?? const []).whereType<String>().toList();
+      final limit = e.body['pin_limit_kobo'];
+      final phone = await passkeys.available();
+      setState(() => (_pinOffered = methods.contains('pin'), _pinLimit = limit is num ? limit.toInt() : null, _phonePasskey = phone));
+      if (!methods.contains('passkey') || !phone) {
+        if (_pinOffered) {
+          setState(() => _usePin = true);
+        } else if (methods.contains('totp')) {
+          setState(() => (_useCode = true, _error = e.message));
+        } else {
+          // A payment takes a passkey: an authenticator code is not enough.
+          setState(
+            () => _error = phone ? e.message : 'Paying takes a passkey, and this phone cannot use one. Pay from a phone or computer that has your passkey.',
+          );
+        }
+        return null;
+      }
+    }
+    _tried = true;
+    return _confirm(passkey: await passkeyProof(_auth, 'money.pay', 'payment:${_p.id}'));
+  }
+
   Future<void> _pay() async {
-    setState(() => (_busy = true, _error = null));
+    setState(() => (_busy = true, _error = null, _errorTitle = 'Not paid'));
     try {
       final code = _useCode ? _code.text.replaceAll(RegExp(r'\D'), '') : '';
-      if (code.isEmpty && !await passkeys.available()) {
-        // A payment takes a passkey: an authenticator code is not enough.
-        setState(() => _error = 'Paying takes a passkey, and this phone cannot use one. Pay from a phone or computer that has your passkey.');
-        return;
+      final Payment? p;
+      if (_usePin) {
+        _tried = true;
+        p = await _confirm(pin: _pin.text.replaceAll(RegExp(r'\D'), ''));
+      } else if (code.isNotEmpty) {
+        _tried = true;
+        p = await _confirm(totp: code);
+      } else {
+        p = await _withPasskey();
       }
-      _tried = true;
-      final p = await confirmPaymentWithProof(_auth, _p, again: _again, code: code);
-      setState(() => (_p = p, _sent = true));
+      if (p == null) return;
+      setState(() => (_p = p!, _sent = true));
       // The tick draws, then the sheet goes.
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       if (mounted) Navigator.of(context).pop(p);
@@ -786,6 +842,18 @@ class _PaymentSheetState extends State<PaymentSheet> {
           // The same payment in the last day: shown, and Pay again.
           _again = true;
           _againWords = e.message;
+        } else if (code == 'pin_wrong') {
+          // The pad stays, emptied, with the tries left.
+          _pin.clear();
+          _error = e.message;
+        } else if (code is String && (code.startsWith('pin_') || code == 'no_pin')) {
+          // The PIN cannot pay this one: said in plain words, and back to
+          // the passkey.
+          _pin.clear();
+          _usePin = false;
+          _pinOffered = false;
+          _errorTitle = code == 'pin_locked' ? 'Your PIN is locked' : 'Use your passkey for this one';
+          _error = _phonePasskey ? e.message : '${e.message} This phone cannot use a passkey: pay from one that has it.';
         } else if (e.status == 403 && e.body['step_up'] != null) {
           final methods = ((e.body['methods'] as List?) ?? const []).whereType<String>().toList();
           if (methods.contains('totp') && (!methods.contains('passkey') || _useCode)) _useCode = true;
@@ -837,6 +905,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
     final status = paymentStatus(p.status);
     final amount = naira(p.amountKobo);
     final code = _code.text.replaceAll(RegExp(r'\D'), '');
+    final pin = _pin.text.replaceAll(RegExp(r'\D'), '');
     final fee = p.feeKobo is num ? (p.feeKobo as num).toInt() : null;
     final reason = p.reason is String ? p.reason as String : '';
     final lines = <(String, String)>[
@@ -906,26 +975,53 @@ class _PaymentSheetState extends State<PaymentSheet> {
             ),
           ],
         ),
+      if (prepared && _usePin)
+        TkFormGroup(
+          children: [
+            TkKitField(
+              label: 'Your PIN',
+              hint: _pinLimit == null
+                  ? 'Taskiem never asks for your PIN in a message.'
+                  : 'Pays up to ${naira(_pinLimit!)} now. Taskiem never asks for your PIN in a message.',
+              field: false,
+              child: CodeBoxes(key: const ValueKey('pay-pin'), controller: _pin, obscure: true, hint: 'Your PIN'),
+            ),
+          ],
+        ),
       if (_error != null)
         TkCallout(
           leading: TkSquare('b-x', color: look.red),
-          title: 'Not paid',
+          title: _errorTitle,
           sub: _error,
           subLines: 4,
           color: look.red,
+        ),
+      if (prepared && _pinOffered && !_usePin && !_busy)
+        Center(child: TkLink(label: 'Use my PIN instead', bold: true, onTap: () => setState(() => (_usePin = true, _useCode = false, _error = null)))),
+      if (prepared && _usePin && _phonePasskey && !_busy)
+        Center(
+          child: TkLink(
+            label: 'Use my passkey instead',
+            bold: true,
+            onTap: () => setState(() {
+              _usePin = false;
+              _pin.clear();
+              _error = null;
+            }),
+          ),
         ),
     ];
     final overlay = _sent ? TkSavedTick(words: paymentSentWords(p)) : null;
     if (!prepared) {
       return TkFormSheet(title: 'Payment', crumb: 'Pay', action: 'Done', onAction: () => Navigator.of(context).pop(), overlay: overlay, children: children);
     }
-    final ready = !_busy && (!_useCode || code.length == 6);
+    final ready = !_busy && (_usePin ? pin.length == 6 : (!_useCode || code.length == 6));
     return TkFormSheet(
       title: 'Check before you pay',
       crumb: 'Pay',
       overlay: overlay,
       action: _busy ? 'Paying…' : (_again ? 'Pay again $amount' : 'Pay $amount'),
-      actionIcon: _useCode ? null : 'fingerprint',
+      actionIcon: _useCode || _usePin ? null : 'fingerprint',
       onAction: ready ? _pay : null,
       second: widget.onBack == null ? 'Cancel it' : 'Back',
       secondDanger: widget.onBack == null,

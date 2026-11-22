@@ -157,7 +157,10 @@ func (s *Server) waPayCommand(ctx context.Context, c *chat, text string) (bool, 
 	}); err != nil {
 		return true, err
 	}
-	return true, c.say(ctx, s, s.payPreparedWords(c, x))
+	if err := c.say(ctx, s, s.payPreparedWords(c, x)); err != nil {
+		return true, err
+	}
+	return true, s.waOfferPayPin(ctx, c, x)
 }
 
 // payPreparedWords say a prepared payment, with what the person confirming
