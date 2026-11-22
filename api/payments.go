@@ -59,6 +59,7 @@ func (s *Server) paymentRoutes(r chi.Router) {
 	// The banks to pay to, for those who may pay but not manage saved
 	// things: the list the Saved page offers.
 	r.With(pay).Get("/payments/banks", s.listPayBanks)
+	r.With(pay).Get("/payments/staff", s.payStaff)
 	r.With(pay, s.tenantWide).Post("/payments/name-check", s.payNameCheck) // owners only, checked inside
 	r.With(pay).Post("/payments/read", s.readPayment)
 	r.With(pay, s.tenantWide).Post("/payments", s.createPayment)

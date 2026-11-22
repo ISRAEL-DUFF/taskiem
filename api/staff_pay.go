@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -27,14 +28,16 @@ const staffOpAccount = "staff.account"
 // staffPayAccount is a staff member's linked account, as their page shows
 // it: masked.
 type staffPayAccount struct {
-	SavedID  uuid.UUID  `json:"saved_id"`
-	Name     string     `json:"name"`
-	Title    string     `json:"title"`
-	BankName string     `json:"bank_name"`
-	Last4    string     `json:"last4"`
-	Checked  *string    `json:"account_name,omitempty"`
-	LinkedBy string     `json:"linked_by,omitempty"`
-	LinkedAt *time.Time `json:"linked_at,omitempty"`
+	SavedID  uuid.UUID `json:"saved_id"`
+	Name     string    `json:"name"`
+	Title    string    `json:"title"`
+	BankName string    `json:"bank_name"`
+	Last4    string    `json:"last4"`
+	Checked  *string   `json:"account_name,omitempty"`
+	LinkedBy string    `json:"linked_by,omitempty"`
+	// LinkedByName: who linked it, by name.
+	LinkedByName string     `json:"linked_by_name,omitempty"`
+	LinkedAt     *time.Time `json:"linked_at,omitempty"`
 }
 
 // staffPayAccountTx is the staff member's linked account, or nil.
@@ -61,6 +64,7 @@ func staffPayAccountTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (
 	out := &staffPayAccount{SavedID: x.ID, Name: x.Name, Title: x.Title, BankName: b.BankName, Last4: l4, Checked: x.CheckedName, LinkedAt: at}
 	if by != nil {
 		out.LinkedBy = *by
+		_ = tx.QueryRow(ctx, `SELECT COALESCE((SELECT name FROM users WHERE id::text = taskiem_actor_human($1)), '')`, strings.TrimPrefix(*by, "user:")).Scan(&out.LinkedByName)
 	}
 	return out, nil
 }
@@ -163,4 +167,49 @@ func (s *Server) staffPayee(ctx context.Context, tx pgx.Tx, tenant, user uuid.UU
 	}
 	id := acct.SavedID
 	return &id, nil
+}
+
+// payStaff is GET /v1/payments/staff (money.pay): the business's staff,
+// each with where payments to them go (masked), for those who may pay
+// but not manage people (Pay several people's Staff).
+func (s *Server) payStaff(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	type person struct {
+		UserID     uuid.UUID        `json:"user_id"`
+		Name       string           `json:"name"`
+		PayAccount *staffPayAccount `json:"pay_account"`
+	}
+	out := []person{}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT u.id, u.name, lower(u.name) FROM memberships m JOIN users u ON u.id = m.user_id
+			WHERE m.tenant_id = $1 ORDER BY lower(u.name)`, p.TenantID)
+		if err != nil {
+			return err
+		}
+		type row struct {
+			ID    uuid.UUID
+			Name  string
+			Lower string
+		}
+		list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[row])
+		if err != nil {
+			return err
+		}
+		for _, x := range list {
+			acct, err := staffPayAccountTx(ctx, tx, p.TenantID, x.ID)
+			if err != nil {
+				return err
+			}
+			if acct != nil {
+				acct.LinkedBy = ""
+			}
+			out = append(out, person{UserID: x.ID, Name: x.Name, PayAccount: acct})
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"staff": out})
 }

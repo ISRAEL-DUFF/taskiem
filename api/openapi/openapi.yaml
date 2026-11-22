@@ -6570,6 +6570,41 @@ paths:
                     description: The payments connection the list is from ("iswallet/taskiem"), to send back as `code_from`; empty for the list by name alone.
         default:
           $ref: '#/components/responses/Error'
+  /v1/payments/staff:
+    get:
+      operationId: listPayStaff
+      tags:
+      - Payments
+      summary: The staff, with where payments to them go
+      description: 'For those who may pay (money.pay), whether or not they manage people: each staff member with the saved account linked to them, masked, or null (payments outside payroll; payroll is Payrolla''s).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The staff
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [staff]
+                properties:
+                  staff:
+                    type: array
+                    items:
+                      type: object
+                      required: [user_id, name, pay_account]
+                      properties:
+                        user_id: {type: string, format: uuid}
+                        name: {type: string}
+                        pay_account:
+                          oneOf:
+                          - type: 'null'
+                          - $ref: '#/components/schemas/StaffPayAccount'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/payments/name-check:
     post:
       operationId: payNameCheck
@@ -45599,6 +45634,7 @@ components:
         last4: {type: string}
         account_name: {type: string}
         linked_by: {type: string}
+        linked_by_name: {type: string}
         linked_at: {type: string, format: date-time}
     PayLimit:
       type: object

@@ -67,8 +67,18 @@ func TestPayStaff(t *testing.T) {
 	if linked["name"] != "musa" || linked["last4"] != "6789" || linked["bank_name"] != "Access Bank" {
 		t.Fatalf("linked: %v", linked)
 	}
-	if got := owner.must(200, "GET", "/v1/staff/"+musaID, nil)["pay_account"].(map[string]any); got["saved_id"] != musaAcct["id"] {
+	if got := owner.must(200, "GET", "/v1/staff/"+musaID, nil)["pay_account"].(map[string]any); got["saved_id"] != musaAcct["id"] || got["linked_by_name"] == "" {
 		t.Fatalf("on their page: %v", got)
+	}
+	// Those who may pay see the staff with where they are paid.
+	found := false
+	for _, x := range owner.must(200, "GET", "/v1/payments/staff", nil)["staff"].([]any) {
+		if m := x.(map[string]any); m["user_id"] == musaID && m["pay_account"] != nil {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("not in the payers' staff list")
 	}
 
 	// Pay on them: to the linked account, recorded as theirs.
