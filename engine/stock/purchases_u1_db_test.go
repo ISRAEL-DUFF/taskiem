@@ -101,7 +101,7 @@ func TestBuyingByTreatment(t *testing.T) {
 	var list []stock.Thing
 	w.in(func(tx pgx.Tx) error {
 		var err error
-		list, err = stock.ThingsTx(ctx, tx, w.env.Tenant, false)
+		list, err = stock.ThingsTx(ctx, tx, w.env.Tenant, stock.ThingFilter{})
 		return err
 	})
 	if len(list) != 1 || list[0].Name != machine.Item || list[0].Label != "Machines" || list[0].Supplier != "Singer Ltd" || list[0].Order != first.Reference ||
@@ -273,17 +273,32 @@ func TestBuyingByTreatment(t *testing.T) {
 		t.Fatalf("added by hand: %+v", gen)
 	}
 	sold := stock.KeptSold
-	for range 2 {
-		w.in(func(tx pgx.Tx) error {
-			x, err := stock.ChangeThingTx(ctx, tx, w.env.Tenant, gen.ID, stock.ThingChange{Status: &sold, SalePriceKobo: n(15000000)}, "user:owner", "sell-gen", w.log())
-			if err != nil && !errors.Is(err, stock.ErrPurchase) {
-				return err
-			}
-			if err == nil && (x.Status != stock.KeptSold || x.SaleEntryID == nil) {
-				t.Errorf("sold: %+v", x)
-			}
-			return nil
+	sell := func(key string, price int64) (stock.Thing, error) {
+		var x stock.Thing
+		err := txErr(w, func(tx pgx.Tx) error {
+			var err error
+			x, err = stock.ChangeThingTx(ctx, tx, w.env.Tenant, gen.ID, stock.ThingChange{Status: &sold, SalePriceKobo: n(price)}, "user:owner", key, w.log())
+			return err
 		})
+		return x, err
+	}
+	x, err := sell("sell-gen", 15000000)
+	if err != nil || x.Status != stock.KeptSold || x.SaleEntryID == nil {
+		t.Fatalf("sold: %+v %v", x, err)
+	}
+	// The same sale with the same key again (a retry whose answer was
+	// lost) is the row as it is; another key, or another price, is
+	// refused: recorded already.
+	if again, err := sell("sell-gen", 15000000); err != nil || again.SaleEntryID == nil || *again.SaleEntryID != *x.SaleEntryID {
+		t.Fatalf("the same sale again: %+v %v", again, err)
+	}
+	for _, c := range []struct {
+		key   string
+		price int64
+	}{{"sell-gen-2", 15000000}, {"sell-gen", 16000000}} {
+		if _, err := sell(c.key, c.price); !errors.Is(err, stock.ErrPurchase) {
+			t.Fatalf("%+v: %v", c, err)
+		}
 	}
 	var entries int
 	var category, direction string
@@ -292,15 +307,18 @@ func TestBuyingByTreatment(t *testing.T) {
 		t.Fatalf("the sale's money: %d %q %q %v", entries, category, direction, err)
 	}
 	w.in(func(tx pgx.Tx) error {
-		all, err := stock.ThingsTx(ctx, tx, w.env.Tenant, true)
+		all, err := stock.ThingsTx(ctx, tx, w.env.Tenant, stock.ThingFilter{All: true})
 		if err != nil {
 			return err
 		}
-		had, err := stock.ThingsTx(ctx, tx, w.env.Tenant, false)
+		had, err := stock.ThingsTx(ctx, tx, w.env.Tenant, stock.ThingFilter{})
 		if err != nil {
 			return err
 		}
-		groups := stock.GroupThings(all)
+		groups, err := stock.ThingGroupsTx(ctx, tx, w.env.Tenant, stock.ThingFilter{All: true})
+		if err != nil {
+			return err
+		}
 		if len(all) != len(had)+1 || len(groups) != 1 || groups[0].Label != "Machines" || groups[0].Count != len(had) {
 			t.Errorf("the sold generator in the history, out of the totals: %d of %d, %+v", len(had), len(all), groups)
 		}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/stock"
@@ -143,37 +144,49 @@ func (s *Server) deleteSupplierItem(w http.ResponseWriter, r *http.Request) {
 
 // --- Things we have ---
 
-// listThings is GET /v1/things: Things we have, the newest first (all=true
-// with those sold, broken, given away or gone, which stay in the history),
-// the number and cost of those had, and group=label for them by label.
+// listThings is GET /v1/things: Things we have, the newest first, up to
+// stock.MaxThings (all=true with those sold, broken, given away or gone,
+// which stay in the history; order= and line= those that came on that
+// purchase order or line); count and total_kobo of all those had that the
+// filter keeps, and group=label them by label.
 func (s *Server) listThings(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
-	all := r.URL.Query().Get("all") == "true"
-	var list []stock.Thing
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		list, err = stock.ThingsTx(r.Context(), tx, p.TenantID, all)
-		return err
-	}); err != nil {
-		s.purchaseFail(w, r, err)
-		return
-	}
-	count, total := 0, int64(0)
-	for _, t := range list {
-		if t.Status == stock.KeptHave {
-			count++
-			if t.CostKobo != nil {
-				total += *t.CostKobo
+	q := r.URL.Query()
+	f := stock.ThingFilter{All: q.Get("all") == "true"}
+	for name, to := range map[string]**uuid.UUID{"order": &f.Order, "line": &f.Line} {
+		if v := q.Get(name); v != "" {
+			id, err := uuid.Parse(v)
+			if err != nil {
+				s.fail(w, r, fmt.Errorf("%w: %s is an id", errBadRequest, name))
+				return
 			}
+			*to = &id
 		}
 	}
-	out := map[string]any{"things": list, "count": count, "total_kobo": total}
-	switch g := r.URL.Query().Get("group"); g {
-	case "":
-	case "label":
-		out["groups"] = stock.GroupThings(list)
-	default:
+	group := q.Get("group")
+	if group != "" && group != "label" {
 		s.fail(w, r, fmt.Errorf("%w: group is label", errBadRequest))
+		return
+	}
+	out := map[string]any{}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		list, err := stock.ThingsTx(r.Context(), tx, p.TenantID, f)
+		if err != nil {
+			return err
+		}
+		count, total, err := stock.ThingTotalsTx(r.Context(), tx, p.TenantID, f)
+		if err != nil {
+			return err
+		}
+		out["things"], out["count"], out["total_kobo"] = list, count, total
+		if group == "label" {
+			if out["groups"], err = stock.ThingGroupsTx(r.Context(), tx, p.TenantID, f); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		s.purchaseFail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -226,7 +239,8 @@ func (s *Server) addThing(w http.ResponseWriter, r *http.Request) {
 // gone), serial, warranty_until, note, label_id (clear_label to take it
 // off). Sold with sale_price_kobo (sale_paid_how cash or transfer) is
 // money in, "Sale of things we had": it needs invoice.manage too, and is
-// recorded once.
+// recorded once; the same sale again with the same Idempotency-Key (a
+// retry) answers 200 with the row as it is.
 func (s *Server) patchThing(w http.ResponseWriter, r *http.Request) {
 	id, err := idParam(r)
 	if err != nil {
