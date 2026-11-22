@@ -36896,6 +36896,9 @@ paths:
                   type: object
                 environment:
                   type: string
+                answer_in_chat:
+                  type: boolean
+                  description: Also put the answer's words in the person's Taskiem conversation when the run ends (the web's sheet; the app draws its own)
       responses:
         '201':
           description: Started at once

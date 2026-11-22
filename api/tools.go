@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
@@ -30,6 +32,10 @@ import (
 // what was read; else yes; else yes and a passkey), then the run, as the
 // member, held to the workflow's roles, and its answer drawn from the
 // run's outputs when it ends.
+
+// toolChannelAPI is the channel of a start through the API (the app's and
+// the web's sheets), which reads its own answer.
+const toolChannelAPI = "api"
 
 // toolConfirmFor is how long a start waits for its yes.
 const toolConfirmFor = 10 * time.Minute
@@ -224,13 +230,19 @@ func toolValues(d *wd.Definition, input map[string]any) []toolValue {
 	slices.Sort(names)
 	out := []toolValue{}
 	for _, k := range names {
-		label := k
+		label, value := k, fmt.Sprint(input[k])
 		if p, ok := props[k].(map[string]any); ok {
 			if t, ok := p["title"].(string); ok && t != "" {
 				label = t
 			}
+			// An amount the form takes in naira reads as one.
+			if x, _ := p["x-form"].(map[string]any); x["unit"] == "naira" {
+				if n, ok := input[k].(float64); ok {
+					value = invoicing.Naira(int64(math.Round(n * 100)))
+				}
+			}
 		}
-		out = append(out, toolValue{Name: k, Label: label, Value: maskWords(fmt.Sprint(input[k]))})
+		out = append(out, toolValue{Name: k, Label: label, Value: maskWords(value)})
 	}
 	return out
 }
@@ -332,7 +344,9 @@ func (s *Server) runTool(ctx context.Context, p *Principal, t toolRow, input map
 		return uuid.Nil, false, err
 	}
 	err = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		if p.UserID != uuid.Nil {
+		// A start from a chat is told its answer there by the run watch;
+		// the app and the web read it themselves (GET /v1/runs/{id}/answer).
+		if p.UserID != uuid.Nil && channel != toolChannelAPI {
 			if _, err := tx.Exec(ctx, `INSERT INTO whatsapp_run_watches (tenant_id, run_id, user_id, channel) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
 				p.TenantID, ref.ID, p.UserID, channel); err != nil {
 				return err
@@ -361,6 +375,10 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Input       map[string]any `json:"input"`
 		Environment string         `json:"environment,omitempty"`
+		// AnswerInChat: the answer's words are also put in the person's
+		// Taskiem conversation when the run ends (the web's sheet asks;
+		// the app draws its own card).
+		AnswerInChat bool `json:"answer_in_chat,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -379,7 +397,11 @@ func (s *Server) startToolRoute(w http.ResponseWriter, r *http.Request) {
 		s.toolRefused(w, r, err, chi.URLParam(r, "command"))
 		return
 	}
-	out, err := s.startTool(r.Context(), p, t, req.Input, "web", r.Header.Get("Idempotency-Key"))
+	channel := toolChannelAPI
+	if req.AnswerInChat {
+		channel = "web"
+	}
+	out, err := s.startTool(r.Context(), p, t, req.Input, channel, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.toolRefused(w, r, err, t.Command)
 		return

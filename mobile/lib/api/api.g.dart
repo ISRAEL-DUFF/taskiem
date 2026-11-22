@@ -15772,17 +15772,22 @@ class MadeToolCare {
 }
 
 class StartToolRequest {
-  const StartToolRequest({this.environment, this.input});
+  const StartToolRequest({this.answerInChat, this.environment, this.input});
 
+  /// Also put the answer's words in the person's Taskiem conversation when the
+  /// run ends (the web's sheet; the app draws its own)
+  final bool? answerInChat;
   final String? environment;
   final Map<String, dynamic>? input;
 
   factory StartToolRequest.fromJson(Map<String, dynamic> j) => StartToolRequest(
+        answerInChat: j['answer_in_chat'] == null ? null : j['answer_in_chat'] as bool,
         environment: j['environment'] == null ? null : j['environment'] as String,
         input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
       );
 
   Map<String, dynamic> toJson() => {
+        'answer_in_chat': ?answerInChat,
         'environment': ?environment,
         'input': ?input,
       };

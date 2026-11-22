@@ -2529,6 +2529,13 @@ export interface RidersPreparePayoutsInput {
   /** A batch Riders > Pay made; empty for this run's */
   batch_id?: Val<string>;
 }
+export interface RidersRecordProofInput {
+  /** A form step's photo answer: {state, source, id} */
+  photo?: Value;
+  reference: Val<string>;
+  /** A form step's location answer: {state, source, lat, lng, accuracy_m, coarse} */
+  where?: Value;
+}
 export interface RidersReleaseInput {
   reference: Val<string>;
 }
@@ -2548,6 +2555,8 @@ export const riders = {
   offer: (input: RidersOfferInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "offer", input, extra),
   /** Add up what each rider is due (idempotent_write) */
   prepare_payouts: (input?: RidersPreparePayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "prepare_payouts", input, extra),
+  /** Record a delivery's proof (idempotent_write) */
+  record_proof: (input: RidersRecordProofInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "record_proof", input, extra),
   /** Take an order back from its rider (idempotent_write) */
   release: (input: RidersReleaseInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "release", input, extra),
   /** Retire a rider (idempotent_write) */
@@ -3974,7 +3983,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
-  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "release", "retire_rider"],
+  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "record_proof", "release", "retire_rider"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],

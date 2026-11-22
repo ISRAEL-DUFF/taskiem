@@ -313,6 +313,8 @@ export function ToolRunner({
     act(async () => {
       const r = await postOnce<ToolStart>(path(tool.command, "start"), key.current, {
         input: input ?? {},
+        // The web's Taskiem conversation also keeps the answer's words.
+        answer_in_chat: true,
       });
       if (r.run_id) started(r.run_id, r.values, true);
       else setPhase({ at: "confirm", start: r });
