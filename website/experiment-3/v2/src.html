@@ -451,10 +451,22 @@ button{font:inherit}
 @keyframes rise{from{transform:translateY(110%) rotate(6deg)}}
 .js .wait:not(.go) .odo .col{transform:translateY(0)!important}
 
-footer{border-top:1px solid var(--line);padding-block:26px calc(26px + env(safe-area-inset-bottom,0px))}
-footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;justify-content:space-between;font-size:15px;color:var(--muted)}
-footer nav{display:flex;flex-wrap:wrap;gap:4px 20px}
-footer nav a{font-weight:700;color:var(--ink);min-height:44px;display:inline-flex;align-items:center}
+/* footer: as on the experiment-2 site */
+.foot{background:var(--pine);color:var(--white);box-shadow:inset 0 1px 0 var(--panel-edge)}
+.foot .wrap{padding-block:56px calc(40px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:48px}
+.foot-top{display:flex;flex-wrap:wrap;gap:40px 64px;justify-content:space-between}
+.foot-brand{flex:1 1 280px;min-width:0;max-width:380px;display:flex;flex-direction:column;gap:20px}
+.foot-brand a{display:flex;align-items:center;gap:20px;min-height:44px;align-self:flex-start}
+.foot-brand .mk svg{width:40px;height:40px;display:block}
+.foot-brand .wm svg{width:102px;height:auto;display:block}
+.foot-brand p{font-size:16px;line-height:1.55;color:rgba(255,255,255,.82)}
+.foot-cols{flex:2 1 420px;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:32px}
+.foot-cols div{display:flex;flex-direction:column;gap:4px}
+.foot-cols .label{color:var(--lime);margin-bottom:8px}
+.foot-cols a{display:inline-flex;align-items:center;align-self:flex-start;min-height:44px;font-size:16px;font-weight:500;color:var(--white)}
+.foot-cols a:hover{text-decoration:underline;text-underline-offset:4px;text-decoration-color:var(--lime)}
+.foot a:focus-visible{outline-color:var(--lime)}
+.foot-bottom{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-top:24px;border-top:1px solid rgba(255,255,255,.16);font-size:15px;color:rgba(255,255,255,.78)}
 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -741,10 +753,23 @@ footer nav a{font-weight:700;color:var(--ink);min-height:44px;display:inline-fle
   </section>
 </main>
 
-<footer>
+<footer class="foot">
   <div class="wrap">
-    <span>© 2026 Taskiem</span>
-    <nav aria-label="Footer"><a href="#sale">One sale</a><a href="#jobs">What it does</a><a href="#money">Your money</a><a href="#start">Get started</a></nav>
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a href="#" aria-label="Taskiem home"><span class="mk"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Taskiem"><rect width="100" height="100" rx="26" fill="#c8f169"/><path d="M27 40H61" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#0d3b2e" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#0d3b2e"/></svg></span><span class="wm">{{WORDREV}}</span></a>
+        <p>Business workflow automation Nigerian businesses can trust with their money, from the corner shop to the regulated lender.</p>
+      </div>
+      <nav class="foot-cols" aria-label="Footer">
+        <div><p class="label">Product</p><a href="/how-it-works">How it works</a><a href="/templates">Templates</a><a href="/integrations">Works with</a><a href="/pricing">Pricing</a></div>
+        <div><p class="label">Features</p><a href="/security">Security</a><a href="/tables">Your records</a><a href="/storefront">Your page</a></div>
+        <div><p class="label">Company</p><a href="/partners">For fintechs</a><a href="/about">About</a><a href="/contact">Contact</a></div>
+      </nav>
+    </div>
+    <div class="foot-bottom">
+      <p>Built by the team behind Xenibase.</p>
+      <p>© 2026 Taskiem</p>
+    </div>
   </div>
 </footer>
 

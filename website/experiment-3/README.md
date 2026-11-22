@@ -7,7 +7,7 @@ One animated landing page for Taskiem. Its energy comes from [owo.app](https://o
 | Folder | Status |
 | --- | --- |
 | `v1/` | **Frozen.** The first version, kept unchanged as the reference while we iterate. Preview: <https://claude.ai/artifact/8tcV54JwwbvdXLoZK6uaWw> |
-| `v2/` | Brand colours only (pine, lime, mist, white, with a little mint and amber). The hero phone switches between Taskiem chat, WhatsApp and Telegram sales; an endless strip of the connectors' logos; a workflow canvas that builds and runs itself; one sale traced step by step; animated job cards; a PIN approval. Preview: <https://claude.ai/artifact/72teAue6hJYHpD9Bs6ksyH> |
+| `v2/` | Brand colours only (pine, lime, mist, white, with a little mint and amber). The hero phone switches between Taskiem chat, WhatsApp and Telegram sales; an endless strip of the connectors' logos; a workflow canvas that builds and runs itself; one sale traced step by step; animated job cards; a PIN approval; the experiment-2 site's footer. Preview: <https://claude.ai/artifact/72teAue6hJYHpD9Bs6ksyH> |
 
 Each later version goes in its own folder (`v3/`, …), and no earlier one is edited.
 
