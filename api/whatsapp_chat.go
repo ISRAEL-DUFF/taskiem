@@ -567,6 +567,11 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
 		return err
 	}
+	// A run's question of one choice answered by its button or its words
+	// (forms_starter.go).
+	if done, err := s.formChoiceAnswer(ctx, c, in.Text); done || err != nil {
+		return err
+	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)

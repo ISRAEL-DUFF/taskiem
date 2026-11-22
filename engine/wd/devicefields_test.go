@@ -57,7 +57,6 @@ func TestDeviceFieldsValidate(t *testing.T) {
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"rider"}`, "member is a member's id"},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"link":"rider"}`, "link is a business link's id"},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"link":"=trigger.body.rider"},"verify":true`, "verify is for a phone or email"},
-		{`"to":{"member":"=trigger.body.rider"}`, `"to":"starter"`, `"starter" (the person who started the run from a chat or a page) comes with made tools`},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"=trigger.body.rider","role":"riders"}`, "/to"},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"=trigger.body.rider"},"verify":true`, "verify is for a phone or email"},
 	} {

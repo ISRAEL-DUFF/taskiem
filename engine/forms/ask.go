@@ -38,6 +38,11 @@ type ChatAsk struct {
 	// Through is true for a link's person: the request is the other
 	// business's, answered through the door.
 	Through bool
+	// Starter is true for the person who started the run (to: "starter",
+	// made tools M4), asked in Channel, the chat they started it from
+	// (whatsapp, telegram, slack, web; else the app).
+	Starter bool
+	Channel string
 }
 
 // AlertFormLink is the alert the person working a business link gets for

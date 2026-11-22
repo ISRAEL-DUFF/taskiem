@@ -76,6 +76,11 @@ func (d *decider) formBegin(sc scope, s *wd.Step, inst string, act map[string]an
 		}
 		to["link"] = id.String()
 	}
+	if f.To.Starter {
+		// Whoever started the run (made tools M4): found by the runtime
+		// from the run when it records the request.
+		to["starter"] = true
+	}
 	if len(to) == 0 {
 		d.fail(inst, "form", fmt.Errorf("the form step's recipient is empty"))
 		return d.onError(sc, s, inst, true)

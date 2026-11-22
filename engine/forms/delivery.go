@@ -189,7 +189,13 @@ func (s *Service) sendRequest(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 			// The person working a business link: through the door.
 			return s.sendToLink(ctx, tx, tenant, p, l)
 		}
-		return s.sendToMembers(ctx, tx, tenant, p, role, member)
+		ask, err := s.sendToMembers(ctx, tx, tenant, p, role, member)
+		if ask != nil {
+			// The run's starter: asked in the chat they started it from.
+			ask.Starter, _ = to["starter"].(bool)
+			ask.Channel, _ = to["channel"].(string)
+		}
+		return ask, err
 	}
 	return nil, s.sendLink(ctx, tx, tenant, p, to, first)
 }

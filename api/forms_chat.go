@@ -32,6 +32,10 @@ const formButtonPrefix = "fq:"
 
 // FormAsk puts a form step to people in their chat apps (forms.Service.Ask).
 func (s *Server) FormAsk(ctx context.Context, a forms.ChatAsk) {
+	// A run's starter: in the chat they started it from (forms_starter.go).
+	if s.askStarter(ctx, a) {
+		return
+	}
 	users := a.Users
 	if a.Role != "" {
 		users = s.roleUsers(ctx, a.Tenant, a.Role, uuid.Nil)

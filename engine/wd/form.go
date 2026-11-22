@@ -328,9 +328,12 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	}
 	switch f.To.Kind() {
 	case "", "several":
-		add("/to", "to is exactly one of phone, email, role, member or link")
+		add("/to", `to is exactly one of phone, email, role, member or link, or "starter"`)
 	case "starter":
-		add("/to", `to: "starter" (the person who started the run from a chat or a page) comes with made tools; ask by phone, email, role or member for now`)
+		// The person who started the run (made tools M4): asked in the chat
+		// they started it from, else in the app. A run nobody started by
+		// hand (a schedule, an event) has nobody to ask: the request says
+		// so and the step waits for its timeout.
 	case "link":
 		if l := strings.TrimSpace(f.To.Link); !strings.HasPrefix(l, "=") && !uuidRe.MatchString(l) {
 			add("/to/link", "link is a business link's id, or the linked business's, or an expression giving one (=trigger.body.rider)")

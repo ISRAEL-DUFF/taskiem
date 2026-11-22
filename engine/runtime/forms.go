@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -26,6 +27,14 @@ func insertFormRequest(ctx context.Context, tx pgx.Tx, run runRow, step string, 
 	if m, ok := sealed.(map[string]any); ok {
 		if fm, ok := m["form"].(map[string]any); ok {
 			to, prefill = fm["to"], fm["prefill"]
+		}
+	}
+	if starter, _ := f.To["starter"].(bool); starter {
+		// The person who started the run, in the chat they started it
+		// from (made tools M4).
+		var err error
+		if to, err = starterOf(ctx, tx, run.ref.ID); err != nil {
+			return err
 		}
 	}
 	recipient, _ := json.Marshal(to)
@@ -55,4 +64,35 @@ func insertFormRequest(ctx context.Context, tx pgx.Tx, run runRow, step string, 
 		ON CONFLICT (id) DO NOTHING`,
 		id, run.ref.TenantID, run.ref.ID, step, run.env, recipient, f.Title, desc, schema, pre, f.Via, f.Verify, remind, expires)
 	return err
+}
+
+// starterOf is who started run, as a form step's recipient: the member
+// (an API key as its owner), the chat channel the run was started from,
+// and starter: true. Nobody (a schedule, an event): member "none", which
+// the request says it cannot ask.
+func starterOf(ctx context.Context, tx pgx.Tx, run uuid.UUID) (map[string]any, error) {
+	var by, channel *string
+	if err := tx.QueryRow(ctx, `SELECT r.started_by, (SELECT e.payload->'trigger'->>'channel' FROM run_events e WHERE e.run_id = r.id AND e.type = $2 ORDER BY e.seq LIMIT 1)
+		FROM runs r WHERE r.id = $1`, run, history.RunStarted).Scan(&by, &channel); err != nil {
+		return nil, err
+	}
+	out := map[string]any{"member": "none", "starter": true}
+	if channel != nil {
+		out["channel"] = *channel
+	}
+	if by == nil {
+		return out, nil
+	}
+	if u, err := uuid.Parse(*by); err == nil {
+		out["member"] = u.String()
+		return out, nil
+	}
+	if key, ok := strings.CutPrefix(*by, "key:"); ok {
+		var owner *uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT owner_id FROM api_keys WHERE id::text = $1`, key).Scan(&owner)
+		if err == nil && owner != nil {
+			out["member"] = owner.String()
+		}
+	}
+	return out, nil
 }
