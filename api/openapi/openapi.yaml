@@ -46191,6 +46191,7 @@ components:
         kind: {type: string, enum: [taskiem, link, customer, person, group, photo]}
         chat: {type: string}
         message: {type: string}
+        from: {type: string, description: 'Who sent it, as the chat names them'}
     PayCollection:
       type: object
       additionalProperties: false

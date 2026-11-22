@@ -14562,20 +14562,24 @@ class AddPayCollectionRequest {
 }
 
 class PayCollectionSource {
-  const PayCollectionSource({required this.chat, required this.kind, required this.message});
+  const PayCollectionSource({required this.chat, this.from, required this.kind, required this.message});
 
   final String chat;
+  /// Who sent it, as the chat names them
+  final String? from;
   final String kind;
   final String message;
 
   factory PayCollectionSource.fromJson(Map<String, dynamic> j) => PayCollectionSource(
         chat: j['chat'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
         kind: j['kind'] as String,
         message: j['message'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'chat': chat,
+        'from': ?from,
         'kind': kind,
         'message': message,
       };

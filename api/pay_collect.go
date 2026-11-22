@@ -48,6 +48,8 @@ type msgSource struct {
 	Kind    string `json:"kind"`
 	Chat    string `json:"chat"`
 	Message string `json:"message"`
+	// From is who sent it, as the chat names them.
+	From string `json:"from,omitempty"`
 }
 
 var sourceKinds = map[string]bool{"taskiem": true, "link": true, "customer": true, "person": true, "group": true, "photo": true}
@@ -81,7 +83,7 @@ func collectionTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (colle
 		return out, err
 	}
 	rows, err := tx.Query(ctx, `SELECT c.id, c.saved_id, COALESCE(o.name, ''), c.title, c.name, c.bank_name, c.last4, c.amount_kobo, c.purpose, c.note,
-		c.source_kind, c.source_chat, c.source_message, c.created_at
+		c.source_kind, c.source_chat, c.source_message, c.source_from, c.created_at
 		FROM pay_collected c LEFT JOIN saved_objects o ON o.id = c.saved_id
 		WHERE c.tenant_id = $1 AND c.user_id = $2 AND c.batch_id IS NULL ORDER BY c.created_at, c.id`, tenant, user)
 	if err != nil {
@@ -90,12 +92,12 @@ func collectionTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) (colle
 	defer rows.Close()
 	for rows.Next() {
 		var r collectedRow
-		var kind, chat, msg string
-		if err := rows.Scan(&r.ID, &r.SavedID, &r.Payee, &r.Title, &r.Name, &r.BankName, &r.Last4, &r.AmountKobo, &r.Purpose, &r.Note, &kind, &chat, &msg, &r.AddedAt); err != nil {
+		var kind, chat, msg, from string
+		if err := rows.Scan(&r.ID, &r.SavedID, &r.Payee, &r.Title, &r.Name, &r.BankName, &r.Last4, &r.AmountKobo, &r.Purpose, &r.Note, &kind, &chat, &msg, &from, &r.AddedAt); err != nil {
 			return out, err
 		}
 		if msg != "" {
-			r.Source = &msgSource{Kind: kind, Chat: chat, Message: msg}
+			r.Source = &msgSource{Kind: kind, Chat: chat, Message: msg, From: from}
 		}
 		if r.AmountKobo == nil {
 			out.NoAmount++
@@ -154,6 +156,10 @@ func (s *Server) addCollected(w http.ResponseWriter, r *http.Request) {
 	src := msgSource{}
 	if in.Source != nil {
 		src = *in.Source
+		src.From = strings.TrimSpace(src.From)
+		if r := []rune(src.From); len(r) > 80 {
+			src.From = string(r[:80])
+		}
 		if !sourceKinds[src.Kind] || len(src.Chat) > 80 || len(src.Message) > 80 || src.Message == "" {
 			s.payFail(w, r, refusePay(http.StatusBadRequest, "source", "Say which message it came from."))
 			return
@@ -185,9 +191,9 @@ func (s *Server) addCollected(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO pay_collected (id, tenant_id, user_id, saved_id, account_sealed, bank_name, last4, title, name, amount_kobo, purpose, note,
-			source_kind, source_chat, source_message) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+			source_kind, source_chat, source_message, source_from) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 			uuid.Must(uuid.NewV7()), p.TenantID, p.UserID, payee.saved, sealed, payee.bank.BankName, saved.Last4(payee.bank.AccountNumber), payee.title, name,
-			in.AmountKobo, strings.TrimSpace(in.Purpose), strings.TrimSpace(in.Note), src.Kind, src.Chat, src.Message)
+			in.AmountKobo, strings.TrimSpace(in.Purpose), strings.TrimSpace(in.Note), src.Kind, src.Chat, src.Message, src.From)
 		var pg *pgconn.PgError
 		if errors.As(err, &pg) && pg.Code == "23505" {
 			return refusePay(http.StatusConflict, "already", "That message is on your list already.")

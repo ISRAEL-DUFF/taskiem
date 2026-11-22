@@ -49,8 +49,9 @@ class PayList extends ChangeNotifier {
   /// The list as last read; null before.
   PayCollection? list;
 
-  /// Who sent each message added, by its id: the list says "from Chidi
-  /// Okeke's message" (the server keeps the message, not its sender).
+  /// Who sent each message added on this phone, by its id, for a list
+  /// read before the server's answer names them (the server keeps it too:
+  /// the source's `from`).
   static final Map<String, String> senders = {};
 
   Future<void>? _reading;
@@ -88,7 +89,8 @@ String toPayWords(int n) => '$n to pay';
 String sourceWords(PayCollectionRowsItem x) {
   final s = x.source;
   if (s is! Map) return '';
-  final from = PayList.senders['${s['message']}'] ?? '';
+  final kept = '${s['from'] ?? ''}'.trim();
+  final from = kept.isNotEmpty ? kept : PayList.senders['${s['message']}'] ?? '';
   if (from.isNotEmpty) return 'from $from’s message';
   return switch ('${s['kind']}') {
     'customer' => 'from a customer’s message',
@@ -138,7 +140,7 @@ Future<void> addReadingToList(BuildContext context, Auth auth, PayForms forms, R
         bankName: bySaved || (r.bankName ?? '').isEmpty ? null : r.bankName,
         name: (r.name ?? '').trim().isEmpty ? null : r.name!.trim(),
         amountKobo: kobo >= 100 ? kobo : null,
-        source: PayCollectionSource(kind: from.kind, chat: from.chat, message: from.message),
+        source: PayCollectionSource(kind: from.kind, chat: from.chat, message: from.message, from: from.from.isEmpty ? null : from.from),
       ),
     );
     list.took(c);

@@ -362,7 +362,7 @@ void main() {
       'amount_kobo': 4500000,
       'bank_name': 'Guaranty Trust Bank',
       'name': 'Chidi Okafor',
-      'source': {'chat': _link, 'kind': 'link', 'message': 'm-acct'},
+      'source': {'chat': _link, 'kind': 'link', 'message': 'm-acct', 'from': 'Funke'},
     });
     expect(find.text('Added: 1 to pay'), findsOneWidget);
     expect(find.text('1 to pay · ₦45,000'), findsOneWidget);
@@ -391,7 +391,7 @@ void main() {
       'account_number': '0001112223',
       'bank_name': 'Opay',
       'name': 'Chidi Okeke',
-      'source': {'chat': _chidi, 'kind': 'customer', 'message': 'cm-acct'},
+      'source': {'chat': _chidi, 'kind': 'customer', 'message': 'cm-acct', 'from': 'Chidi'},
     });
     expect(find.text('Added: 2 to pay'), findsOneWidget);
     expect(find.text('2 to pay · ₦45,000'), findsOneWidget);
@@ -585,7 +585,7 @@ void main() {
     await settle(t);
     expect(server.sent('POST', '/v1/pay-collection').single, {
       'payee': 'chidi',
-      'source': {'chat': _link, 'kind': 'link', 'message': 'm-acct'},
+      'source': {'chat': _link, 'kind': 'link', 'message': 'm-acct', 'from': 'Mama Tunde\'s Market'},
     });
     expect(find.text('Added: 1 to pay'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));

@@ -41,7 +41,7 @@ func TestCollectToPay(t *testing.T) {
 	key := addPasskey(t, owner, "Phone")
 	gtb := fitting(t, "058", "012345678")
 	from := func(chat, msg string) map[string]any {
-		return map[string]any{"kind": "link", "chat": chat, "message": msg}
+		return map[string]any{"kind": "link", "chat": chat, "message": msg, "from": "Funke"}
 	}
 
 	// Three messages from two chats; the same message twice is refused.
@@ -56,7 +56,7 @@ func TestCollectToPay(t *testing.T) {
 		t.Fatalf("the list: %v", list)
 	}
 	second := rows[1].(map[string]any)
-	if second["last4"] != gtb[6:] || second["bank_name"] != "GTBank" || second["name"] != "Chidi Okeke" || second["source"].(map[string]any)["message"] != "m7" {
+	if second["last4"] != gtb[6:] || second["bank_name"] != "GTBank" || second["name"] != "Chidi Okeke" || second["source"].(map[string]any)["message"] != "m7" || second["source"].(map[string]any)["from"] != "Funke" {
 		t.Fatalf("an account read from a message: %v", second)
 	}
 	if rows[0].(map[string]any)["payee"] != "bayo" {
