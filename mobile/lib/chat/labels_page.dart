@@ -9,7 +9,6 @@ import '../api/api.g.dart' show MergeSpendLabelRequest, SpendLabel, SpendLabelNa
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords;
-import '../kit/kit.dart' show TkErrorBox;
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/mobile.dart' show TkFormGroup, TkFormSheet, TkListRow, TkSection;
@@ -112,7 +111,7 @@ class _LabelsPageState extends State<LabelsPage> {
           sub: 'Past spending moves with its label at once; nothing recorded is rewritten.',
           color: look.teal,
         ),
-        if (_error != null) TkErrorBox(_error!),
+        if (_error != null) TkCallout(leading: TkSquare('b-alert', color: look.red), title: _error!, color: look.red, subLines: 3),
         if (list == null && _error == null) const TkLoading(rows: 3, label: 'Loading your labels…'),
         if (list != null && list.isEmpty) const TkEmpty(icon: 'tag', title: 'No labels yet', line: 'Label a purchase or an expense, and it is here.'),
         if (list != null && list.isNotEmpty)

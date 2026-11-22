@@ -363,6 +363,13 @@ func TestPurchaseQuestionInTheTaskiemChat(t *testing.T) {
 	}
 	taskiemSays(t, buyer, "no")
 
+	// The same item twice on one order is refused as it is drafted, so the
+	// question never has a second line of an item the first answer makes
+	// known (it would be skipped, keeping the suggestion).
+	if r := taskiemSays(t, buyer, "Buy 2 toolbox and 3 toolbox from @Dangote Stores"); !strings.Contains(r, "Toolbox is on the order twice") {
+		t.Fatalf("twice: %q", r)
+	}
+
 	// In Pidgin, the answer in its own words (and its label after them).
 	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.PCM}}
 	taskiemSays(t, buyer, "language pidgin")

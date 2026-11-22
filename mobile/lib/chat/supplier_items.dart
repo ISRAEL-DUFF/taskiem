@@ -11,8 +11,8 @@ import '../api/api.g.dart' show ItemMemory;
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords;
-import '../kit/kit.dart' show TkErrorBox;
 import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/mobile.dart' show TkFormSheet, TkListRow, TkSection;
 import '../kit/modal.dart' show showTkToast;
 import '../kit/page.dart' show TkPageScreen;
@@ -81,7 +81,7 @@ class _SupplierItemsPageState extends State<SupplierItemsPage> {
       description: 'How each of their items is treated when you order it: just recorded, added to stock, or kept track of on Things we have, and its label. A change applies to orders after it.',
       onRefresh: _load,
       children: [
-        if (_error != null) TkErrorBox(_error!),
+        if (_error != null) TkCallout(leading: TkSquare('b-alert', color: look.red), title: _error!, color: look.red, subLines: 3),
         if (list == null && _error == null) const TkLoading(rows: 3, label: 'Loading what you buy from them…'),
         if (list != null && list.isEmpty)
           TkEmpty(icon: 'tag', title: 'Nothing remembered yet', line: 'The first order of each item from ${widget.name} asks how to treat it, and it is remembered here.'),

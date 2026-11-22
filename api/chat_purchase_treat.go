@@ -135,7 +135,11 @@ func (s *Server) orderConfirm(ctx context.Context, c *chat, ids []uuid.UUID, bef
 }
 
 // treatNext asks about the next line not yet answered that the business's
-// memory does not know; false when there is none.
+// memory does not know; false when there is none. A line made known by an
+// earlier answer is skipped: no order drafted in chat has two lines of one
+// memory (a seller's item twice is refused as drafted, stock.checkTwice;
+// "order from …" has one line per stock item, each its own name), so that
+// is only ever an answer given elsewhere.
 func (s *Server) treatNext(ctx context.Context, c *chat, ta *treatAsk, before string) (bool, error) {
 	found := false
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
