@@ -29,9 +29,9 @@ Money leaves only through a workflow run: name check, approval, one payment with
 | Money log (`engine/runtime/moneylog.go`) | Records a payout, tells the bill side, remembers accounts paid (`payout_accounts`) | Gains "what for" from the payment |
 | Bill pay (`api/bills.go`, `pay-linked-bill`) | Name check, approval, pay, settle, close the bill; started from a bill card or WhatsApp | The model for one payment; bills keep this path |
 | Approvals (`ApproveSheet`, `api/approvals.go`) | The "Approve it?" sheet; step-up by policy (passkey, TOTP, WhatsApp PIN); first-payment warning | Payroll and supplier-payment approvals carry no account number, so they never show the warning: fix it |
-| Payroll (`run-payroll.json`) | On pay day: staff table, every name checked, balance, approval, pay each, results to `payroll_lines` | Reused; started and approved from the chat |
+| Payroll (`run-payroll.json`) | On pay day: staff table, every name checked, balance, approval, pay each, results to `payroll_lines` | **Retired** (22 November 2026): payroll is Payrolla's |
 | Pay a list (`pay-a-list.json`) | Pays the rows of a table in one run | Has no name check; the bulk flow adds one |
-| Payrolla connector | Reads runs, staff and payslips; never pays | Shown in the chat; pays nothing through Taskiem |
+| Payrolla connector | Reads runs, staff and payslips; never pays | Payroll in Taskiem's own screens and chat; Payrolla pays (its API requests: [payrolla-api-requests](../integrations/payrolla-api-requests.md)) |
 | Saved bank details | Riders' bank (sealed, passkey to change); staff in the staff table; suppliers only per bill | No payee list: added |
 | Single-action step-up (`checkStepUp`) | A passkey for one sensitive action, used for rider bank changes | Used for every payment |
 | Roles (`engine/access`) | No "pay" permission; bill pay rides on `invoice.manage` | A permission of its own, with limits |
@@ -108,17 +108,20 @@ The same sheet with a list: each row is a person, an amount and what it is for. 
 
 **After:** one diary line, "Paid 12 people ₦386,000 (riders, week 45)", opening to a row per person that fills in as each settles, fails or comes back. Failed rows can be paid again on their own.
 
-## Payroll in the chat
+## Payroll in Taskiem, on Payrolla
 
-Payroll is a batch whose rows come from the staff list and whose amounts come from each person's pay, so it reuses the batch above rather than being a third system. The payroll that already runs as a template (on its day, from a staff table, approved, paid per person) keeps running; the chat becomes its front door.
+Rewritten 22 November 2026. **Payroll is Payrolla**, the same team's payroll product: Payrolla keeps employees, their pay and bank details, calculates each run, keeps the approvals, pays every employee once and issues payslips. Taskiem does none of that itself and never pays a salary. It is Payrolla's front: a business runs its payroll in Taskiem's own screens and chat, and Taskiem sends what people do to Payrolla through its API. Payrolla's screens are not embedded.
 
-1. **A Payroll tile** in Tools (owners and whoever they allow): this month's run, prefilled from staff and their pay, with this month's changes shown ("Tunde: +₦5,000 overtime", "Ngozi: joined on the 12th, half month").
-2. **Adjust in place:** a bonus, a deduction or an advance repaid, each with a word, per row.
-3. **Check and approve:** every name checked with the bank; the approval card in the Taskiem chat shows the total, the balance, and anyone who won't be paid and why.
-4. **Paid:** a result per person, and a payslip each person gets on WhatsApp (amount, period, the adjustments), only to their own number.
-5. **The day it is due:** the scheduled payroll posts its card in the chat for approval instead of waiting in a page.
+Taskiem's own **Run payroll** template is retired (and `salary-payout-approval` with it): it is no longer offered, and a workflow already made from it keeps running with a notice to move to Payrolla, so no one's salaries stop mid-month.
 
-Businesses using Payrolla keep paying through Payrolla: Taskiem only reads it, so the chat shows Payrolla's runs and reminders through the templates that already connect it, and pays nothing itself.
+1. **Payroll** in Tools (owners, and whoever they allow to see salaries): this month's run from Payrolla, its state, each person's line and payout status, who was not paid and why.
+2. **Approving:** today, the approval card in the chat carries Payrolla's approval link; once Payrolla accepts Taskiem's signed approval, the approver approves in Taskiem with a passkey.
+3. **Adjusting:** a bonus, a deduction or an advance repaid, per person, with a word: sent to Payrolla, which recalculates.
+4. **Paid:** a result per person from Payrolla's payout events, and each employee's payslip on their own chat (Payrolla's link today; Taskiem's own payslip card once Payrolla gives its contents).
+5. **Before pay day:** the funding balance checked, and a reminder to lock an approved run.
+6. **Staff:** each Taskiem staff member is linked to their Payrolla employee (by phone or email, the owner confirming), and may be linked to one of the business's saved bank accounts for payments outside payroll (an advance, expenses back), paid with **Pay** on the staff page or as **Staff** in Pay several people.
+
+What Taskiem needs from Payrolla's API for 2, 3 and the rest is in [What Taskiem needs from Payrolla's API](../integrations/payrolla-api-requests.md). Until each piece exists, that step is a link into Payrolla. Other payroll software a business already uses is a later discussion.
 
 ## Safety
 
@@ -164,7 +167,7 @@ A payment is a record first and a workflow run second: the chat creates the reco
 - `POST /v1/payments` prepares; `POST /v1/payments/{id}/confirm` (passkey proof) sends; `GET /v1/payments`, `/v1/payments/{id}`.
 - `POST /v1/payments/read` returns what `ReadAccount` found in a message: the number, the bank if named, otherwise the candidate banks. GET /v1/banks lists the banks the connected account pays to (candidates first for a given number); POST /v1/name-check checks one bank, or up to three at once.
 - Payees are read and changed through saved objects' API (`/v1/saved`, kind bank account; change of account by step-up), not a `/v1/payees` of their own; `/v1/payment-batches` prepare, confirm, list; `/v1/pay-limits`.
-- Payroll: `POST /v1/payroll/preview` builds this month's batch from the staff table; confirm goes through the batch.
+- Payroll: Taskiem's own `/v1/payroll` reads (and, as Payrolla's API grows, acts on) Payrolla's runs through the connection; no payroll batch of Taskiem's own.
 
 ## WhatsApp, Telegram and Slack
 
@@ -200,8 +203,8 @@ Four phases, each a PR that ships on its own. Safety is in the first one, becaus
    - Done when: account details in a WhatsApp message that reached the web chat become a checked, filled-in payment in one tap.
 3. **Pay several people.** `payment_batches`; picking, collecting from messages, pasting and photographing a list, copying last time's; a check per row; held-out rows; one confirmation; results per person and paying the failed ones again.
    - Done when: 12 riders are paid in one batch, a bad account is held out before anything moves, and the others are paid.
-4. **Payroll and chat apps.** The Payroll tile over `run-payroll`; adjustments; its approval card in the chat; payslips to each person's WhatsApp; WhatsApp, Telegram and Slack words with confirmation by link or code.
-   - Done when: this month's payroll is reviewed, adjusted, approved and paid from the chat, and a payment prepared on WhatsApp is confirmed in the app.
+4. **Payroll in Taskiem, on Payrolla; and the chat apps.** Payroll in Taskiem's own screens and chat over Payrolla's API (its runs, approval, adjustments, payslips; each a link into Payrolla until its API has it); staff linked to Payrolla employees and to saved accounts; WhatsApp, Telegram and Slack words with confirmation by link or code.
+   - Done when: a business sees and approves this month's Payrolla run from Taskiem's chat, each employee gets their payslip on their own chat, and a payment prepared on WhatsApp is confirmed in the app.
 
 ## Tests and checks
 

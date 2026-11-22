@@ -604,6 +604,8 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 
 ### R6: App views (L; needs R0-3)
 
+**Not to be built for Payrolla (22 November 2026):** Taskiem runs payroll in its own screens over Payrolla's API rather than embedding Payrolla's ([the request](../integrations/payrolla-api-requests.md); build plan P4). What follows stays as written for other products.
+
 **Build:** the `views` manifest block and rule 17; the per-tenant `frame-src` (§6.3); the view panel on the connection page, "Open in …" on run pages and the approval inbox, the `view` step or action field; postMessage handling (declared origins and events only, able to complete a waiting step); the new-tab fallback; chat links; Payrolla's views.
 
 **Done when:** a business opens a payroll in Payrolla inside Taskiem; no origin outside a connected product's views can be framed (test); a forged postMessage from another origin or for an undeclared event is ignored (test); a product that forbids framing opens in a new tab.

@@ -53,7 +53,7 @@ Events never carry bank account numbers, salary breakdowns or ID numbers. They d
 
 ## What is not here yet
 
-- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Showing Payrolla's screens inside Taskiem (the launch token and the embed SDK, where approving and paying work) is [R6](../spec/rails-and-products.md).
+- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Taskiem will not embed Payrolla's screens (22 November 2026): it asks Payrolla for an approve API that accepts Taskiem's signed passkey approval, with the rest of running payroll from Taskiem ([the request](payrolla-api-requests.md)).
 - **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet; Payrolla retries a failed delivery for about two days, and the owner can resend one.
 - **Connecting by OAuth.** Payrolla issues keys by hand only.
 

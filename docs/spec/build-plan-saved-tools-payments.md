@@ -8,7 +8,7 @@ Status: **plan** (19 November 2026), written with the founder; reviewed against 
 | [Made tools](made-tools.md) | Any workflow started by hand becomes a tool in the chat: a tile, a `/command`, a form, an answer | T0 to T7 |
 | [Pages](pages.md) | A business's own screens, made of blocks fed by its tables, Taskiem's records and its read-only tools | G0 to G5 |
 | [The app as a node](device-fields.md) | A form step asks a person's device: a location, a photo, a scanned code, a signature, at their tap | D0 to D2 |
-| [Paying people from the chat](chat-pay-people.md) | Pay one person, from a message, several people, payroll; payees, limits and step-up | 1 to 4 |
+| [Paying people from the chat](chat-pay-people.md) | Pay one person, from a message, several people; payroll in Taskiem on Payrolla; payees, limits and step-up | 1 to 4 |
 | [The payments flow](chat-payments-flow.md) | Paying a bill by transfer, in the chat (part 1); later parts as agreed | Part 1 |
 
 Each phase below is one pull request (or a few, by server, web and app, merged together), ships on its own, and names which plan it builds. A phase is done when its **done when** holds on the web, in the phone app (Android and iPhone) and, where it says, on WhatsApp, Telegram and Slack.
@@ -136,9 +136,12 @@ Within a stage, phases that do not need each other may be built at once by separ
 - Done when: 12 riders are paid in one batch, a bad account is held out before anything moves, and the others are paid.
 - **Status (21 November 2026): built against fakes, not yet on a real wallet.** Done: `payment_batches` (migration 00506): a batch is a list of up to 100 payments, each prepared, checked and sent as one payment is (its own run, its own key, the run's check); rows that fail a check held out with why before anything moves, and kept with the batch; one passkey sends exactly the rows the person saw (`money.pay.batch`); **Pay again** said per row; the owner's one passkey gives the OK for every row waiting, except an account changed since it was last paid, approved alone; a row per person; **Pay the failed ones again**; **Same as last time** (the rows that went); a pasted list read a line at a time; **Pay all riders** from what is due; staff send saved accounts and riders only. On the web and in the app. **Save as…** beside a message's **Pay this account** chip (P2) is also built. Reviewed; its fixes made. Not yet: collecting rows from several messages ("3 to pay" at the foot of the chat), a photo of a handwritten list (Taskiem reads no text from photos yet), the balance after and fees at the foot (the provider's balance and fee are not asked yet), and the one diary line for a batch in the chat.
 
-**P4. Payroll and the chat apps** (paying people phase 4). Needs: P3.
-- The Payroll tile over `run-payroll`; adjustments; its approval card in the chat; payslips to each person's chat; payslips with the full breakdown; the WhatsApp, Telegram and Slack words with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
-- Done when: this month's payroll is reviewed, adjusted, approved and paid from the chat, and a payment prepared on WhatsApp is confirmed in the app.
+**P4. Payroll in Taskiem, on Payrolla; and paying from the chat apps** (paying people phase 4). Needs: P3. Rewritten 22 November 2026.
+- **Payroll is Payrolla.** Taskiem does not calculate, approve or pay a payroll: Payrolla (the same team's product) is the engine, and Taskiem is its front, in Taskiem's own screens and chat, through Payrolla's API; no embedded Payrolla screens. Taskiem's own **Run payroll** template (and `salary-payout-approval`) is retired: no longer offered, workflows already made from it left running with a notice to move to Payrolla. What Taskiem needs from Payrolla's API is asked in [What Taskiem needs from Payrolla's API](../integrations/payrolla-api-requests.md) (partner item P7). Other payroll software a business already uses is a later discussion; nothing here may assume Payrolla is the only one.
+- **P4a, on today's read API:** a **Payroll** page in Taskiem's own look (runs, their state, each line's status, who was not paid and why); the approval card in the chat with Payrolla's approval link (an action in Taskiem once Payrolla's approve API exists); payslip links sent to each employee's own chat; the payday, lock and returned-salary reminders the Payrolla templates send, shown in the chat; **staff linked** to Payrolla employees (by phone or email, the owner confirming each link); and **staff linked to saved accounts** (one of the business's saved bank accounts per staff member, for payments outside payroll: an advance, expenses back), with **Pay** on the staff page and **Staff** in Pay several people.
+- **P4b, as Payrolla ships each request:** connecting in one step; adding and changing staff and their pay from Taskiem; this month's run prepared, adjusted (bonus, deduction, advance repaid) and approved in Taskiem with a passkey (Payrolla accepting Taskiem's signed approval); locking and paying now; the funding account's balance before pay day; paying the failed ones again; payslips shown and sent as Taskiem's own cards; an employee's own payslips and bank change request.
+- **The chat apps:** the WhatsApp, Telegram and Slack words for paying one person and several, with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
+- Done when (P4a): a business connected to Payrolla sees this month's run in Taskiem's Payroll page and chat, its approver gets the approval card on WhatsApp, each employee gets their payslip link on their own chat when paid, and a payment prepared on WhatsApp is confirmed in the app. (P4b): this month's payroll is reviewed, adjusted and approved in Taskiem and paid by Payrolla, with nothing done in Payrolla's own screens.
 
 ### Stage 5: the first tools
 
@@ -214,7 +217,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 | 1 | S0 saved accounts; S1 objects and the picker | | | |
 | 2 | S2 objects in actions; S3 objects in workflows | | | |
 | 3 | | F1 pay a bill by transfer; P1 pay one person | | |
-| 4 | | P2 from a message; P3 several people; P4 payroll and chat apps | | |
+| 4 | | P2 from a message; P3 several people; P4 payroll in Taskiem on Payrolla, and the chat apps | | |
 | 5 | | | M0 the declaration; M1 your tools | D0 device fields declared |
 | 6 | | | M2 cards and buttons; M3 the reader; M4 asking back | G0, G1 pages from tables; D1 location and photo |
 | 7 | | | M5 customers | G2 with tools; G3 in the chat; D2 scan and signature |
