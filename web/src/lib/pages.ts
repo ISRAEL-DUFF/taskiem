@@ -189,6 +189,40 @@ export function filtersParam(values: Record<string, string>): string {
   return Object.keys(set).length ? `filters=${encodeURIComponent(JSON.stringify(set))}` : "";
 }
 
+/** A viewer's saved filter values kept for the filters the page has now:
+ * a value for a filter it no longer has, a choice it no longer offers, or
+ * an empty one is dropped. */
+export function keptFilters(values: Record<string, string>, filters: DrawnFilter[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [id, v] of Object.entries(values)) {
+    const f = filters.find((x) => x.id === id);
+    if (!f || v === "") continue;
+    if (f.type === "choice" && !f.options?.some((o) => o.value === v)) continue;
+    out[id] = v;
+  }
+  return out;
+}
+
+/** A page drawn with a viewer's saved filters. When the server refuses
+ * them (the page's filters changed since they were saved: a 400 about the
+ * page's filters), they are dropped (onStale) and the page is drawn once
+ * more without them. */
+export async function viewWithFilters(
+  load: (query: string) => Promise<DrawnPage>,
+  values: Record<string, string>,
+  onStale: () => void,
+): Promise<DrawnPage> {
+  const query = filtersParam(values);
+  try {
+    return await load(query);
+  } catch (e: unknown) {
+    const err = e as { status?: number; body?: Record<string, unknown> };
+    if (!query || err?.status !== 400 || err.body?.code !== "page_problems") throw e;
+    onStale();
+    return load("");
+  }
+}
+
 /** How many rows, in words: "3 rows", "1 row". */
 export function rowsWord(n: number): string {
   return `${n.toLocaleString("en-GB")} ${n === 1 ? "row" : "rows"}`;
@@ -230,15 +264,19 @@ export function columnWords(t: Table | undefined, name: string): string {
 const isNumber = (c: Column) => c.type === "integer" || c.type === "number";
 const isDate = (c: Column) => c.type === "date" || c.type === "datetime";
 
-/** The columns a part may group by, order by, add up or compare by. */
-export function columnsFor(t: Table | undefined, what: "any" | "number" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
+/** The columns a part may group by, order by, add up or compare by. A
+ * personal column is never added up, compared by, grouped by or chosen
+ * by (sum and date leave it out): the server refuses it (pages §18). */
+export function columnsFor(t: Table | undefined, what: "any" | "number" | "sum" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
   const cols = t?.columns ?? [];
   const pick = cols.filter((c) => {
     switch (what) {
       case "number":
         return isNumber(c);
+      case "sum":
+        return isNumber(c) && !c.personal;
       case "date":
-        return isDate(c);
+        return isDate(c) && !c.personal;
       case "group":
         return c.type === "text" && !c.personal;
       case "text":
@@ -279,7 +317,7 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
     case "heading":
       return { id: freeId(parts, "heading"), type: "heading", title: "A heading" };
     case "sum": {
-      const num = columnsFor(t, "number")[0];
+      const num = columnsFor(t, "sum")[0];
       return { id: freeId(parts, "total"), type: "figure", label: num ? `Total ${num.words.toLowerCase()}` : "Total", value: "sum", of: num?.name ?? "", source: { table } };
     }
     case "list": {
@@ -361,9 +399,9 @@ export function filterFits(f: PageFilterDef, t: Table | undefined): boolean {
     case "search":
       return (f.columns?.length ? t.columns.filter((c) => f.columns?.includes(c.name)) : t.columns.filter((c) => c.type === "text")).length > 0;
     case "choice":
-      return col?.type === "text";
+      return col?.type === "text" && !col.personal;
     case "dates":
-      return f.column === "created_at" || (!!col && isDate(col));
+      return f.column === "created_at" || (!!col && isDate(col) && !col.personal);
     case "mine":
       return col?.type === "email";
   }

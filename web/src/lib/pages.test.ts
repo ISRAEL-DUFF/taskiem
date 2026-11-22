@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnOf, filterFits, filtersParam, freeId, grouped, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, whoWords, withUses, type DrawnPart, type PageDoc } from "./pages";
+import { columnOf, filterFits, filtersParam, freeId, grouped, keptFilters, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, viewWithFilters, whoWords, withUses, type DrawnFilter, type DrawnPage, type DrawnPart, type PageDoc } from "./pages";
 import type { Table } from "./tables";
 
 const tickets: Table = {
@@ -22,6 +22,41 @@ const tickets: Table = {
 };
 
 describe("pages", () => {
+  it("drops saved filters the page no longer has, and a choice it no longer offers", () => {
+    const filters: DrawnFilter[] = [
+      { id: "q", type: "search", label: "Search", value: "" },
+      { id: "st", type: "choice", label: "Show", value: "", options: [{ value: "open", label: "Open" }] },
+    ];
+    expect(keptFilters({ q: "ink", st: "open", gone: "x", empty: "" }, filters)).toEqual({ q: "ink", st: "open" });
+    expect(keptFilters({ st: "closed" }, filters)).toEqual({});
+  });
+
+  it("draws a page again once without saved filters the server refuses", async () => {
+    const page = { filters: [], blocks: [] } as unknown as DrawnPage;
+    const asked: string[] = [];
+    let stale = 0;
+    const refused = Object.assign(new Error("This page has no filter gone."), { status: 400, body: { code: "page_problems" } });
+    const load = (q: string) => {
+      asked.push(q);
+      return q ? Promise.reject(refused) : Promise.resolve(page);
+    };
+    await expect(viewWithFilters(load, { gone: "x" }, () => stale++)).resolves.toBe(page);
+    expect(asked).toEqual([filtersParam({ gone: "x" }), ""]);
+    expect(stale).toBe(1);
+    // Any other refusal is said as it is, and nothing is retried.
+    const down = Object.assign(new Error("down"), { status: 500, body: {} });
+    asked.length = 0;
+    await expect(viewWithFilters(() => Promise.reject(down), { q: "a" }, () => stale++)).rejects.toBe(down);
+    expect(stale).toBe(1);
+  });
+
+  it("never offers a choice or dates filter on a personal column", () => {
+    const people = { ...tickets, columns: [...tickets.columns, { name: "born", title: "Born", type: "date", required: false, personal: true }, { name: "nick", title: "Nick", type: "text", required: false, personal: true }] } as typeof tickets;
+    expect(filterFits({ id: "d", type: "dates", column: "born" }, people)).toBe(false);
+    expect(filterFits({ id: "c", type: "choice", column: "nick" }, people)).toBe(false);
+    expect(filterFits({ id: "d", type: "dates", column: "opened" }, people)).toBe(true);
+  });
+
   it("draws figures side by side, the main one apart", () => {
     const parts = [
       { id: "a", type: "figure", lead: true },

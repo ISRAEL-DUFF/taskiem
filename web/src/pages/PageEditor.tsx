@@ -418,7 +418,7 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
         <Field label="Shows">
           <select value={part.value === "sum" ? `sum:${part.of ?? ""}` : "count"} onChange={(e) => (e.target.value === "count" ? set({ value: "count", of: undefined, naira: undefined }) : set({ value: "sum", of: e.target.value.slice(4) }))}>
             <option value="count">How many rows</option>
-            {columnsFor(t, "number").map((c) => (
+            {columnsFor(t, "sum").map((c) => (
               <option key={c.name} value={`sum:${c.name}`}>
                 {`${c.words} added up`}
               </option>

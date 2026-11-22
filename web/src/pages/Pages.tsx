@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, post } from "../api";
 import { Icon } from "../icons";
@@ -6,10 +6,12 @@ import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, 
 import {
   DATE_CHOICES,
   filtersParam,
+  keptFilters,
   grouped,
   layout,
   rowsWord,
   toneClass,
+  viewWithFilters,
   whoWords,
   type DrawnFilter,
   type DrawnPage,
@@ -170,10 +172,7 @@ export function PageScreen() {
   const draft = search.get("draft") === "1";
   // The page remembers a viewer's last filters on this device (pages §6).
   const [values, setValues] = useState<Record<string, string>>(() => lastFilters(name));
-  const q = [filtersParam(values), draft ? "draft=1" : ""].filter(Boolean).join("&");
-  const view = useLoad(() => get<DrawnPage>(`/v1/pages/${name}/view${q ? `?${q}` : ""}`), [name, q]);
-  const set = (id: string, v: string) => {
-    const next = { ...values, [id]: v };
+  const keep = (next: Record<string, string>) => {
     setValues(next);
     try {
       localStorage.setItem(`taskiem.page-filters.${name}`, JSON.stringify(next));
@@ -181,6 +180,28 @@ export function PageScreen() {
       // no storage: kept for this visit only
     }
   };
+  const q = filtersParam(values);
+  // Saved filters the page no longer has are dropped: refused, the page
+  // is drawn once more without them.
+  const view = useLoad(
+    () =>
+      viewWithFilters(
+        (query) => {
+          const all = [query, draft ? "draft=1" : ""].filter(Boolean).join("&");
+          return get<DrawnPage>(`/v1/pages/${name}/view${all ? `?${all}` : ""}`);
+        },
+        values,
+        () => keep({}),
+      ),
+    [name, q, draft],
+  );
+  // Drawn: keep only the values for the filters (and choices) it has now.
+  useEffect(() => {
+    if (!view.data) return;
+    const kept = keptFilters(values, view.data.filters);
+    if (JSON.stringify(kept) !== JSON.stringify(values)) keep(kept);
+  }, [view.data]);
+  const set = (id: string, v: string) => keep({ ...values, [id]: v });
   if (view.error) {
     return (
       <>
