@@ -21,6 +21,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/spend"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -1401,19 +1402,15 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 	if how == Transfer {
 		channel = "bank"
 	}
-	now := time.Now()
-	entry, fresh, err := log.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "out", Kind: "expense", Status: "settled", Channel: channel,
-		Reference: "purchase:" + key, AmountKobo: &amount, OccurredAt: &now, Source: "entered", Vendor: x.Supplier, Category: "stock",
-		Description: cut("Order "+x.Reference+": "+x.Words(), 300), EnteredBy: actor})
+	// One expense per label on the order, each with its payment row
+	// (engine/spend; what a business buys §8, The expense).
+	_, fresh, err := spend.RecordPurchaseTx(ctx, tx, log, tenant, spend.PurchasePay{Order: id, Reference: x.Reference, Supplier: x.Supplier,
+		AmountKobo: amount, How: how, Channel: channel, Key: key, Actor: actor, When: time.Now()})
 	if err != nil {
 		return x, err
 	}
 	if !fresh {
 		return x, nil
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO purchase_payments (id, tenant_id, purchase_id, entry_id, amount_kobo, paid_how, paid_by) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		uuid.Must(uuid.NewV7()), tenant, id, entry, amount, how, actor); err != nil {
-		return x, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET paid_kobo = paid_kobo + $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, id, amount); err != nil {
 		return x, err

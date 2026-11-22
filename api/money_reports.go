@@ -21,6 +21,7 @@ import (
 func (s *Server) moneyReportRoutes(r chi.Router) {
 	read := s.need(PermInvoiceRead)
 	r.With(read).Get("/money/summary", s.moneySummary)
+	r.With(read).Get("/money/spending", s.moneySpending)
 	r.With(read).Get("/money/exports/{kind}", s.moneyExport)
 }
 
@@ -144,4 +145,26 @@ func (s *Server) moneyExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(buf.Bytes())
+}
+
+// moneySpending serves GET /v1/money/spending: a period's spending by
+// label, what it bought (to sell or make with, to keep, running costs),
+// and profit, which leaves out what was bought to keep
+// (docs/spec/what-a-business-buys.md §5.4).
+func (s *Server) moneySpending(w http.ResponseWriter, r *http.Request) {
+	from, to, err := period(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var out moneyreport.Spending
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		out, err = moneyreport.SpendingOf(r.Context(), tx, principalFrom(r.Context()).TenantID, from, to)
+		return err
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }

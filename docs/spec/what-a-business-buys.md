@@ -492,6 +492,17 @@ Migration 00503; the rows are declared in `engine/stock/purchaselines.go`.
 - **`kept_things`**, with `purchase_line_id` and `unit_no` (unique together: receiving writes each unit once) and `sale_entry_id` (the money in of a sale).
 - Composite foreign keys keep every reference in the business. None of the new tables is copied to the owner's project.
 
+### As built: U1 (money)
+
+`engine/spend`; no schema change.
+
+- **Labels.** `spend.FindOrMakeTx` finds a name without case (a merged label's name finds the label kept) or makes it. `ListTx`: labels not merged, most used first (money-log entries and purchase lines, merged labels' included). `Suggest`: the business's labels sharing a word with the item's name or the category, then its others, then one new name (the category, else the item name's last word, with a capital) when no label has it. `RenameTx` refuses another label's name and a merged label; `MergeTx` follows a merged `into` to the label kept and moves the labels merged into the one merged first.
+- **API.** `GET /v1/money/labels` (`?item=`, `?category=`: `{labels, suggestions}`), `POST /v1/money/labels {name}` (201 made, 200 found), `PATCH /v1/money/labels/{id} {name}`, `POST /v1/money/labels/{id}/merge {into}`. Reading needs `invoice.read` or `table.read`, making `invoice.manage` or `table.edit`, renaming and merging `invoice.manage`. Made, renamed and merged are audited.
+- **Paying an order** (`stock.PayTx` through `spend.RecordPurchaseTx`): one expense per label kept, in the order labels first appear on the lines, Not labelled lines together with no label; category the label's name then. A stock line with no label is given **Stock bought** (found or made) when the order is paid, and keeps it. Shares by `spend.Split` (rounded down, the kobo left to the largest share, the first on a tie). References `purchase:<key>`, then `/2`, `/3`; one `purchase_payments` row per entry.
+- **A linked supplier's bill.** Its expense is the payout that pays it (one movement, paired with the supplier's credit), so it is split when read, not written: `spend.BillPartsTx`. The mirror writes `seller_item_id` and `purchase_id` on each bill line raised from a linked order's line (matched by item, unit and agreed price, in the seller's scope). A bill declared paid outside Taskiem has no entry, as before.
+- **Entered by hand.** `POST /v1/money/entries` takes `label` (found or made) or `label_id` (the label kept), for an expense only; the category is then the label's name, as written. `paid 15,000 diesel` (and `spent …`, `expense …`, and the other languages' words) labels the expense from its description with a capital (Diesel), shown in the business's own spelling of a label it has, found or made at Yes. The chat's word map to fixed categories (fuel, rent …) is gone.
+- **Report.** `GET /v1/money/spending` (`moneyreport.SpendingOf`): settled expenses and bill payouts by label kept, each split by treatment: a purchase's entry by its order's lines under the same label kept now (`spend.EntryPartsTx`; the whole order if no line has it any more), a payout by its bill's lines. Profit is own money in less fees and costs, leaving out Bought to keep.
+
 ## 12. Accept
 
 **The split**

@@ -299,11 +299,14 @@ func (s *Server) decideStatementLine(w http.ResponseWriter, r *http.Request) {
 }
 
 // enterMoney serves POST /v1/money/entries: cash or an expense, once per
-// Idempotency-Key.
+// Idempotency-Key. An expense takes a label by name (label: found or
+// made, without case) or by id (label_id); its category is then the
+// label's name.
 func (s *Server) enterMoney(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		moneylog.Entered
 		OccurredAt string `json:"occurred_at"`
+		Label      string `json:"label"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -321,7 +324,20 @@ func (s *Server) enterMoney(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	req.Key = r.Header.Get("Idempotency-Key")
-	id, fresh, err := s.moneyLog().Enter(r.Context(), p.TenantID, p.Actor(), req.Entered)
+	var id uuid.UUID
+	var fresh bool
+	err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := expenseLabel(r, tx, req.Kind, req.LabelID, req.Label)
+		if err != nil {
+			return err
+		}
+		req.LabelID = nil
+		if l != nil {
+			req.LabelID, req.Category = &l.ID, l.Name
+		}
+		id, fresh, err = s.moneyLog().EnterTx(r.Context(), tx, p.TenantID, p.Actor(), req.Entered)
+		return err
+	})
 	if err != nil {
 		s.fail(w, r, leakErr(err))
 		return

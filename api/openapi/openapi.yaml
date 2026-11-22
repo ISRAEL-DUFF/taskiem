@@ -3087,6 +3087,15 @@ paths:
                 category:
                   type: string
                   maxLength: 60
+                  description: Free words for an expense with no label; with a label, the label's name is the category.
+                label:
+                  type: string
+                  maxLength: 60
+                  description: An expense's label by name, found without case or made (POST /v1/money/labels).
+                label_id:
+                  type: string
+                  format: uuid
+                  description: An expense's label by id; a merged label's is the label kept. Cash takes no label.
                 channel:
                   type: string
                   description: cash (the default) or an account such as gtbank/current
@@ -3157,6 +3166,211 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MoneySummary'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/spending:
+    get:
+      operationId: getMoneySpending
+      tags:
+      - Invoices
+      summary: A period's spending by label
+      description: "Settled expenses, and payouts that paid a linked supplier's bill, grouped by label: each entry's label found by its id when read and followed to the label it was merged into (Not labelled when none). What a purchase bought is read from its order's lines: added to stock is Bought to sell or make with, kept track of is Bought to keep, just recorded and entered by hand are running costs. A bill's payout is shared by the bill's lines. Profit is the period's own money in less fees and costs, leaving out Bought to keep (docs/spec/what-a-business-buys.md §5.4)."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.read
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The first day (Lagos time); today when left out
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date
+        description: The last day, included
+      - name: month
+        in: query
+        schema:
+          type: string
+          pattern: '^[0-9]{4}-[0-9]{2}$'
+        description: A whole month (2026-10), in place of from and to
+      responses:
+        '200':
+          description: The spending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoneySpending'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/labels:
+    get:
+      operationId: listSpendLabels
+      tags:
+      - Invoices
+      summary: The business's spend labels, and suggestions
+      description: "The labels not merged, the most used first (by money-log entries and purchase lines, merged labels' included), then by name. suggestions are what to offer for an item bought: the business's labels sharing a word with the item's name or the category first, then its other labels, then one new name (the category, else the item name's last word) when no label has it, at most 4."
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'invoice.read|table.read'
+      parameters:
+      - name: item
+        in: query
+        required: false
+        description: The name of the item bought, for suggestions.
+        schema:
+          type: string
+          maxLength: 200
+      - name: category
+        in: query
+        required: false
+        description: The supplier's category for it, for suggestions.
+        schema:
+          type: string
+          maxLength: 120
+      responses:
+        '200':
+          description: The labels
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labels, suggestions]
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SpendLabel'
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      required: [name]
+                      properties:
+                        name:
+                          type: string
+                        label_id:
+                          type: string
+                          format: uuid
+                          description: The business's own label; none for a new name.
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: makeSpendLabel
+      tags:
+      - Invoices
+      summary: Find or make a label by its name
+      description: "The label of that name without case (a merged label's name answers the label it was merged into), made when the business has none. Making one is audited."
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'invoice.manage|table.edit'
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpendLabelName'
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendLabel'
+        '200':
+          description: The label the business has
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendLabel'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/labels/{id}:
+    patch:
+      operationId: renameSpendLabel
+      tags:
+      - Invoices
+      summary: Rename a label
+      description: "Reports show its spending under the new name at once; money-log entries keep the name they were made with and are never changed. 400 for a name another label has (merge them instead) or a label that is merged. Audited."
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpendLabelName'
+      responses:
+        '200':
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendLabel'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/money/labels/{id}/merge:
+    post:
+      operationId: mergeSpendLabel
+      tags:
+      - Invoices
+      summary: Merge a label into another
+      description: "The label into is kept (into a merged label: the one it is kept as); labels merged into this one move to it first, so a merge is one step. Reports show all of this label's spending under the kept one; no entry is changed. Audited."
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: invoice.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into]
+              properties:
+                into:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: The label merged, naming the one kept
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpendLabel'
         default:
           $ref: '#/components/responses/Error'
   /v1/money/exports/{kind}:
@@ -49108,6 +49322,92 @@ components:
           type: string
         balance:
           type: string
+    SpendLabel:
+      type: object
+      required: [id, name, created_by, created_at, uses]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 60
+        merged_into:
+          type: string
+          format: uuid
+          description: The label kept, for a merged label.
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        uses:
+          type: integer
+          description: Money-log entries and purchase lines carrying it, its merged labels' included (lists only; 0 elsewhere).
+    SpendLabelName:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+    MoneySpending:
+      type: object
+      required: [from, to, total_kobo, bought_to_sell_kobo, bought_to_keep_kobo, running_costs_kobo, labels, profit]
+      properties:
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        total_kobo:
+          type: integer
+        bought_to_sell_kobo:
+          type: integer
+          description: Bought to sell or make with (lines added to stock), counted as stock bought.
+        bought_to_keep_kobo:
+          type: integer
+          description: Bought to keep (lines kept track of), left out of profit.
+        running_costs_kobo:
+          type: integer
+        labels:
+          type: array
+          description: The most first.
+          items:
+            type: object
+            required: [label_id, name, kobo, bought_to_sell_kobo, bought_to_keep_kobo, running_costs_kobo, entries]
+            properties:
+              label_id:
+                type: [string, 'null']
+                format: uuid
+                description: The label kept; null for Not labelled.
+              name:
+                type: string
+              kobo:
+                type: integer
+              bought_to_sell_kobo:
+                type: integer
+              bought_to_keep_kobo:
+                type: integer
+              running_costs_kobo:
+                type: integer
+              entries:
+                type: integer
+        profit:
+          type: object
+          required: [in_kobo, fees_kobo, costs_kobo, profit_kobo]
+          properties:
+            in_kobo:
+              type: integer
+              description: The period's own money in, settled (less money collected for others).
+            fees_kobo:
+              type: integer
+            costs_kobo:
+              type: integer
+              description: Spending less Bought to keep.
+            profit_kobo:
+              type: integer
     MoneySummary:
       type: object
       required: [from, to, in_settled_kobo, in_pending_kobo, out_settled_kobo, out_pending_kobo, fees_kobo, channels, invoices_paid, invoices_paid_kobo, leaks_opened, leaks_opened_kobo, leaks_open, leaks_open_kobo, recovered_kobo]
