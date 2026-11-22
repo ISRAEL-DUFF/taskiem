@@ -686,6 +686,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
 			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
 			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/stock-items", s.getStockItems)
 			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
 			r.With(s.need(PermWorkflowRead)).Get("/stock/old-columns", s.getStockOldColumns)
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)

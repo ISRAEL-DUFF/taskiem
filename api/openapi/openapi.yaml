@@ -11929,6 +11929,51 @@ paths:
                     type: boolean
         default:
           $ref: '#/components/responses/Error'
+  /v1/stock/stock-items:
+    get:
+      operationId: listStockItems
+      tags:
+      - Stock
+      summary: The Stock page's stock items
+      description: The business's stock items (what it counts), each with the products of the catalogue it is sold as and how many of it one sale of each uses; one sold as none is a material (Not sold). show picks all, those sold, or those not sold; retired ones are left out unless retired is true. By group (the product a size's or colour's stock item belongs to) then name. value_kobo and low are of the items listed. keeps_stock is false until the business has a catalogue (Keep my stock).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: table.read
+      parameters:
+      - name: show
+        in: query
+        schema:
+          type: string
+          enum: [all, sold, not_sold]
+          default: all
+      - name: retired
+        in: query
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: The stock items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keeps_stock, items, value_kobo, low]
+                properties:
+                  keeps_stock:
+                    type: boolean
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StockItemRow'
+                  value_kobo:
+                    type: integer
+                  low:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
   /v1/stock/setup:
     post:
       operationId: setupStock
@@ -48016,6 +48061,68 @@ components:
           items:
             type: string
             maxLength: 30
+    StockItemRow:
+      type: object
+      description: A stock item as the Stock page lists it, with the products it is sold as (none for a material).
+      required: [id, name, unit, category, count, cost_kobo, low_level, target_level, supplier_id, supplier, group_of, group_name, low, suggest, value_kobo, retired, sold_as]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        unit:
+          type: string
+        category:
+          type: string
+        count:
+          type: integer
+        cost_kobo:
+          type: [integer, 'null']
+        low_level:
+          type: [integer, 'null']
+        target_level:
+          type: [integer, 'null']
+        supplier_id:
+          type: [string, 'null']
+          format: uuid
+        supplier:
+          type: string
+        group_of:
+          type: string
+          description: The product (catalogue row id) a size's or colour's stock item belongs to; "" for none
+        group_name:
+          type: string
+        low:
+          type: boolean
+        suggest:
+          type: [integer, 'null']
+          description: How many to reorder of a low one; null when it is not low
+        value_kobo:
+          type: integer
+          description: Its count at its cost; 0 without a cost or below zero
+        retired:
+          type: boolean
+        sold_as:
+          type: array
+          items:
+            type: object
+            required: [product_id, name, uses, price_kobo, variant, available]
+            properties:
+              product_id:
+                type: string
+              name:
+                type: string
+              uses:
+                type: integer
+              price_kobo:
+                type: [integer, 'null']
+              variant:
+                type: [object, 'null']
+                additionalProperties:
+                  type: string
+              available:
+                type: boolean
     StockItem:
       type: object
       required: [id, name, available, stock]

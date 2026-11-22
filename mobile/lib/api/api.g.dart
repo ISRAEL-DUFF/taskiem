@@ -576,6 +576,24 @@ class TaskiemApi {
     return GetStockResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The Stock page's stock items (`GET /v1/stock/stock-items`)
+  Future<ListStockItemsResponse> listStockItems({String? show, String? retired}) async {
+    final j = await _t.send('GET', '/v1/stock/stock-items', query: {'show': ?show, 'retired': ?retired});
+    return ListStockItemsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say what a product is counted by (`PUT /v1/stock/products/{id}/counted-by`)
+  Future<PutCountedByResponse> putCountedBy({required PutCountedByRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/stock/products/${Uri.encodeComponent(id)}/counted-by', body: body.toJson());
+    return PutCountedByResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Count a product by no stock item (`DELETE /v1/stock/products/{id}/counted-by`)
+  Future<DeleteCountedByResponse> deleteCountedBy({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/stock/products/${Uri.encodeComponent(id)}/counted-by');
+    return DeleteCountedByResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Businesses to browse (`GET /v1/explore`)
   Future<ExploreResult> explore({String? q, String? section, String? category, String? ids, String? offset}) async {
     final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'ids': ?ids, 'offset': ?offset});
@@ -7018,6 +7036,172 @@ class StockItem {
         'uses': ?uses,
         'variant': ?variant,
         'variant_of': ?variantOf,
+      };
+}
+
+class ListStockItemsResponse {
+  const ListStockItemsResponse({required this.items, required this.keepsStock, required this.low, required this.valueKobo});
+
+  final List<StockItemRow> items;
+  final bool keepsStock;
+  final int low;
+  final int valueKobo;
+
+  factory ListStockItemsResponse.fromJson(Map<String, dynamic> j) => ListStockItemsResponse(
+        items: (j['items'] as List).map((e) => StockItemRow.fromJson(e as Map<String, dynamic>)).toList(),
+        keepsStock: j['keeps_stock'] as bool,
+        low: (j['low'] as num).toInt(),
+        valueKobo: (j['value_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((e) => e.toJson()).toList(),
+        'keeps_stock': keepsStock,
+        'low': low,
+        'value_kobo': valueKobo,
+      };
+}
+
+/// A stock item as the Stock page lists it, with the products it is sold as
+/// (none for a material).
+class StockItemRow {
+  const StockItemRow({required this.category, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
+
+  final String category;
+  final Object? costKobo;
+  final int count;
+  final String groupName;
+  /// The product (catalogue row id) a size's or colour's stock item belongs to;
+  /// "" for none
+  final String groupOf;
+  final String id;
+  final bool low;
+  final Object? lowLevel;
+  final String name;
+  final bool retired;
+  final List<StockItemRowSoldAsItem> soldAs;
+  /// How many to reorder of a low one; null when it is not low
+  final Object? suggest;
+  final String supplier;
+  final Object? supplierId;
+  final Object? targetLevel;
+  final String unit;
+  /// Its count at its cost; 0 without a cost or below zero
+  final int valueKobo;
+
+  factory StockItemRow.fromJson(Map<String, dynamic> j) => StockItemRow(
+        category: j['category'] as String,
+        costKobo: j['cost_kobo'],
+        count: (j['count'] as num).toInt(),
+        groupName: j['group_name'] as String,
+        groupOf: j['group_of'] as String,
+        id: j['id'] as String,
+        low: j['low'] as bool,
+        lowLevel: j['low_level'],
+        name: j['name'] as String,
+        retired: j['retired'] as bool,
+        soldAs: (j['sold_as'] as List).map((e) => StockItemRowSoldAsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        suggest: j['suggest'],
+        supplier: j['supplier'] as String,
+        supplierId: j['supplier_id'],
+        targetLevel: j['target_level'],
+        unit: j['unit'] as String,
+        valueKobo: (j['value_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'category': category,
+        'cost_kobo': ?costKobo,
+        'count': count,
+        'group_name': groupName,
+        'group_of': groupOf,
+        'id': id,
+        'low': low,
+        'low_level': ?lowLevel,
+        'name': name,
+        'retired': retired,
+        'sold_as': soldAs.map((e) => e.toJson()).toList(),
+        'suggest': ?suggest,
+        'supplier': supplier,
+        'supplier_id': ?supplierId,
+        'target_level': ?targetLevel,
+        'unit': unit,
+        'value_kobo': valueKobo,
+      };
+}
+
+class StockItemRowSoldAsItem {
+  const StockItemRowSoldAsItem({required this.available, required this.name, this.priceKobo, required this.productId, required this.uses, this.variant});
+
+  final bool available;
+  final String name;
+  final Object? priceKobo;
+  final String productId;
+  final int uses;
+  final Object? variant;
+
+  factory StockItemRowSoldAsItem.fromJson(Map<String, dynamic> j) => StockItemRowSoldAsItem(
+        available: j['available'] as bool,
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'],
+        productId: j['product_id'] as String,
+        uses: (j['uses'] as num).toInt(),
+        variant: j['variant'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'name': name,
+        'price_kobo': ?priceKobo,
+        'product_id': productId,
+        'uses': uses,
+        'variant': ?variant,
+      };
+}
+
+class PutCountedByRequest {
+  const PutCountedByRequest({required this.stockItemId, this.uses});
+
+  final String stockItemId;
+  /// How many of the stock item one sale takes; 1 when not said
+  final int? uses;
+
+  factory PutCountedByRequest.fromJson(Map<String, dynamic> j) => PutCountedByRequest(
+        stockItemId: j['stock_item_id'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'stock_item_id': stockItemId,
+        'uses': ?uses,
+      };
+}
+
+class PutCountedByResponse {
+  const PutCountedByResponse({required this.item});
+
+  final StockItem item;
+
+  factory PutCountedByResponse.fromJson(Map<String, dynamic> j) => PutCountedByResponse(
+        item: StockItem.fromJson(j['item'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item': item.toJson(),
+      };
+}
+
+class DeleteCountedByResponse {
+  const DeleteCountedByResponse({required this.item});
+
+  final StockItem item;
+
+  factory DeleteCountedByResponse.fromJson(Map<String, dynamic> j) => DeleteCountedByResponse(
+        item: StockItem.fromJson(j['item'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item': item.toJson(),
       };
 }
 

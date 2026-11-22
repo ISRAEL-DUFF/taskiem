@@ -129,6 +129,10 @@ searchCustomerChats
 linkChatItems
 getStorefrontServices
 getStock
+# The Stock page's stock items, and what a product is counted by (S2)
+listStockItems
+putCountedBy
+deleteCountedBy
 
 # Find a business (M3)
 explore
