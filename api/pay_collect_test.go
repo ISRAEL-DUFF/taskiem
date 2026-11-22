@@ -40,7 +40,9 @@ func TestCollectToPay(t *testing.T) {
 	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "bayo", "title": "Bayo Rice Mills", "kind": "bank_account", "bank_name": "Access Bank", "account_number": "0123456789"})
 	key := addPasskey(t, owner, "Phone")
 	gtb := fitting(t, "058", "012345678")
-	from := func(chat, msg string) map[string]any { return map[string]any{"kind": "link", "chat": chat, "message": msg} }
+	from := func(chat, msg string) map[string]any {
+		return map[string]any{"kind": "link", "chat": chat, "message": msg}
+	}
 
 	// Three messages from two chats; the same message twice is refused.
 	owner.must(201, "POST", "/v1/pay-collection", map[string]any{"payee": "bayo", "amount_kobo": 4500000, "purpose": "stock", "source": from("c1", "m1")})
