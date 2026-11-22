@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
-import { PayFromMessages, PhotoAccountItems } from "./PayChip";
+import { PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
@@ -441,7 +441,7 @@ export function GroupChatPage() {
   const current = !!g && !g.left;
 
   return (
-    <PayFromMessages>
+    <PayFromMessages chat={{ kind: "group", id, name: g?.name }}>
       <section className="chat-pane person-pane group-pane" aria-label={`Group ${name}`} data-testid="group-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
         <h1 className="sr-only">{g ? `Group ${g.name}` : "Group"}</h1>
         <p className="sr-only" aria-live="polite" data-testid="group-typing-live">
@@ -576,6 +576,7 @@ export function GroupChatPage() {
             );
           }}
         />
+        <PayListBar />
         {noPost ? (
           <div className="customer-note stop group-closed" role="status" data-testid={g?.closed ? "group-closed" : g?.left ? "group-left" : "group-admins-only"}>
             <p>{noPost}</p>
@@ -731,7 +732,7 @@ function GroupBubble({
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
                   {!card && m.body && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
-                  {m.attachment?.kind === "photo" && <PhotoAccountItems url={fileURL} close={close} saveAccount={onSavePhoto} />}
+                  {m.attachment?.kind === "photo" && <PhotoAccountItems url={fileURL} message={m.id} close={close} saveAccount={onSavePhoto} />}
                   {card?.type !== "split" && card?.type !== "basket" && (
                     <PopItem icon="forward" onClick={() => (close(), onSheet("forward"))}>
                       Forward

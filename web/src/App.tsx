@@ -149,6 +149,7 @@ import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { SavedPage } from "./pages/Saved";
 import { PaymentPage, PaymentsPage } from "./pages/Payments";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
+import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
 import { brandFile } from "./brand";
 import { ChatLiveProvider, NotifyBanner, useChatLive } from "./pages/ChatLive";
@@ -915,6 +916,7 @@ function SignedIn() {
                   <Route path="/money/fees" element={<MoneyFees />} />
                   <Route path="/payments" element={<PaymentsPage />} />
                   <Route path="/payments/several" element={<PayListPage />} />
+                  <Route path="/payments/several/list" element={<CollectedListPage />} />
                   <Route path="/payments/batches/:id" element={<BatchPage />} />
                   <Route path="/payments/:id" element={<PaymentPage />} />
                   <Route path="/payroll" element={<PayrollPage />} />

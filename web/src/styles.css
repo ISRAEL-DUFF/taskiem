@@ -2580,3 +2580,16 @@ button.pay-chip.save:hover { background: var(--panel-2); }
 .pay-answer-none { display: block; padding: 8px 12px; border-radius: 12px; background: var(--panel-2); color: var(--muted); font-size: 14px; }
 .pay-likely .pay-warn { margin-top: 8px; }
 .pay-lead { margin: 0 0 4px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* "3 to pay" at the foot of a chat (collecting from several messages, P3). */
+.pay-list-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--border); }
+.pay-list-sum { flex: 1; min-width: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pay-list-needs { font-size: 13px; font-weight: 600; color: var(--tint-warn-text); }
+.pay-list-waiting { font-size: 13px; }
+.pay-list-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.pay-list-acts .button.small, .pay-list-acts button.small { min-height: 36px; display: inline-flex; align-items: center; padding: 6px 14px; font-size: 14px; }
+.pay-list-acts button.small { padding: 6px 8px; }
+.pay-list-acts button.small svg { width: 18px; height: 18px; }
+.pay-list-more { position: relative; }
+.pay-list-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; }
+.collect-from { display: block; font-size: 13px; }

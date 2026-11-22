@@ -62,6 +62,7 @@ const PAGES = [
   "/money/fees",
   "/payments",
   "/payments/several",
+  "/payments/several/list",
   "/payroll",
   "/schools",
   "/schools/families",
@@ -1445,6 +1446,49 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("batch-approve")).toBeVisible();
       vs = await axe(page);
       expect(vs, describe("a list sent", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+// Your list to pay, collected from messages (Pay several people, From
+// messages): a row from a link chat, one from a photo with no amount yet,
+// the check held up until it has one. The list's API is stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Your list to pay passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      // The theme the app shows is the one kept in this browser.
+      await page.addInitScript((t) => {
+        try {
+          localStorage.setItem("taskiem-theme", t);
+        } catch {
+          // the default theme, then
+        }
+      }, scheme);
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Collect ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@collect.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const now = new Date().toISOString();
+      const row = (id: string, name: string, amount: number | null, source: Record<string, string>) => ({
+        id, saved_id: null, payee: "", title: "Account ••6789", name, bank_name: "GTBank", last4: "6789", amount_kobo: amount, purpose: "", note: "", source, added_at: now,
+      });
+      const rows = [
+        row("0192e2e0-0000-7000-8000-00000000c001", "Chidi Okeke", 4_500_000, { kind: "link", chat: "L1", message: "m1" }),
+        row("0192e2e0-0000-7000-8000-00000000c002", "Tunde", null, { kind: "photo", chat: "customer:C1", message: "m2" }),
+      ];
+      await page.route(
+        (u) => u.pathname === "/v1/pay-collection",
+        (q) => q.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ rows, count: 2, total_kobo: 4_500_000, no_amount: 1, in_batch: null }) }),
+      );
+      await page.goto("/payments/several/list");
+      await expect(page.getByTestId("collect-row")).toHaveCount(2);
+      await page.getByTestId("collect-check").click();
+      await expect(page.getByTestId("collect-blocked")).toBeVisible();
+      const vs = await axe(page);
+      expect(vs, describe("your list to pay", vs)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
 

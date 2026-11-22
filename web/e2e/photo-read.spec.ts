@@ -297,6 +297,29 @@ test("a customer chat's photo: Pay this account and Save the account", async ({ 
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toBeHidden();
 
+  // Add to the list (collecting from several messages): the photo's
+  // account, read the same way, kept with the photo's message.
+  const added: unknown[] = [];
+  await page.route(
+    (u) => u.pathname === "/v1/pay-collection",
+    (r) => {
+      if (r.request().method() !== "POST") return r.fallback();
+      added.push(r.request().postDataJSON());
+      const row = { id: "0192e2e0-0000-7000-8000-00000000c001", saved_id: null, payee: "", title: "Account ••6789", name: "Chidi Okafor", bank_name: "Access Bank", last4: "6789", amount_kobo: 4_500_000, purpose: "", note: "", source: { kind: "photo", chat: `customer:${chat.id}`, message: "m2" }, added_at: now };
+      return json(r, 201, { rows: [row], count: 1, total_kobo: 4_500_000, no_amount: 0, in_batch: null });
+    },
+  );
+  await menu("Add to the list");
+  await expect(page.locator(".toast").filter({ hasText: "Added: 1 to pay" })).toBeVisible();
+  expect(added).toEqual([
+    { account_number: "0123456789", bank_name: "Access Bank", amount_kobo: 4_500_000, name: "Chidi Okafor", source: { kind: "photo", chat: `customer:${chat.id}`, message: "m2" } },
+  ]);
+  await expect(pane.getByTestId("pay-list-count")).toHaveText("1 to pay · ₦45,000");
+  // On the list already: said, and not sent again.
+  await menu("Add to the list");
+  await expect(page.locator(".toast").filter({ hasText: "That photo is on your list already." })).toBeVisible();
+  expect(added).toHaveLength(1);
+
   // Save the account: Save as…'s sheet for an account, filled in.
   await menu("Save the account");
   const form = page.getByTestId("saved-form");

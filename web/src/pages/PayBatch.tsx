@@ -33,6 +33,7 @@ import {
   useLoad,
 } from "../ui";
 import { naira } from "../lib/invoices";
+import { useCollectionCount } from "./PayCollect";
 import { AIReadOffer, PhotoReadButton, readingPhoto, usePhotoAI } from "./PhotoRead";
 import { aiOffered, aiPhotoSetting, noLineRead } from "../lib/photoAI";
 import type { PayLine } from "../lib/dispatch";
@@ -86,6 +87,8 @@ interface ListState {
   rows?: DraftRow[];
   title?: string;
   held?: BatchHeld[];
+  /** Made from the person's list from messages (PayCollect.tsx). */
+  collected?: boolean;
 }
 
 const listKind = (rows: DraftRow[]) =>
@@ -166,6 +169,7 @@ export function PayListPage() {
   };
   const batch = useMakeBatch();
   const { can } = useAuth();
+  const collected = useCollectionCount();
   // From Riders > Pay: each rider with a bank account and something due.
   const due = useLoad(
     () =>
@@ -263,6 +267,15 @@ export function PayListPage() {
           >
             Paste a list
           </button>
+          {collected && collected.count > 0 && (
+            <Link
+              className="button"
+              to="/payments/several/list"
+              data-testid="add-collected"
+            >
+              From your list ({collected.count})
+            </Link>
+          )}
         </div>
         <PhotoReadButton
           label="From a photo of a list"
@@ -899,6 +912,8 @@ export function BatchPage() {
   const changeList = () =>
     void act.run(async () => {
       await post(`/v1/payment-batches/${encodeURIComponent(b.id)}/cancel`);
+      // From the list from messages: cancelled, its rows are back on it.
+      if (passed.collected) return navigate("/payments/several/list");
       navigate("/payments/several", {
         state: {
           rows: heldOnto(passed.rows ?? [], passed.held),
@@ -969,7 +984,7 @@ export function BatchPage() {
                 ? "Confirming…"
                 : `${confirmWords(b)} with your passkey`}
           </button>
-          {passed.rows && (
+          {(passed.rows || passed.collected) && (
             <button
               type="button"
               disabled={pay.busy || act.busy}

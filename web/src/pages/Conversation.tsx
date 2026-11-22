@@ -6,7 +6,7 @@ import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
 import { BillTransferLive } from "./PayByTransfer";
-import { PayChip, PayFromMessages, PhotoAccountItems } from "./PayChip";
+import { PayChip, PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import {
   useCallback,
   useEffect,
@@ -789,6 +789,7 @@ function Bubble({
                   {photo && onSavePhoto && (
                     <PhotoAccountItems
                       url={fileURL(m)}
+                      message={m.id}
                       close={close}
                       saveAccount={onSavePhoto}
                       payable={!m.mine}
@@ -1006,7 +1007,7 @@ function Bubble({
               )}
             </span>
           )}
-          {!m.mine && !local && m.body && <PayChip text={m.body} />}
+          {!m.mine && !local && m.body && <PayChip text={m.body} message={m.id} />}
           {refs &&
             docMentions(m.mentions).map((x) => (
               <RefCard
@@ -1889,7 +1890,7 @@ export function ConversationPane({
     newest.add(m.id);
   }
   return (
-    <PayFromMessages>
+    <PayFromMessages chat={{ kind: "link", id: conv.link, name: conv.name }}>
     <section
       className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
@@ -2085,6 +2086,7 @@ export function ConversationPane({
           />
         </Sheet>
       )}
+      <PayListBar />
       {write ? (
         <ComposerView
           c={c}
