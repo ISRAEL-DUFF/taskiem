@@ -321,13 +321,12 @@ void main() {
     await t.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('no passkey on this phone: a code from the authenticator', (t) async {
+  testWidgets('no passkey on this phone: paying takes a passkey, so it is not paid here', (t) async {
     phone(t);
     final was = passkeys;
     passkeys = _NoPasskeys();
     addTearDown(() => passkeys = was);
     final api = _Api();
-    api.routes['POST /v1/payments/p3/confirm'] = (_) => http.Response(jsonEncode({'payment': payment('p3', status: 'sending')}), 202, headers: _json);
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
@@ -335,16 +334,12 @@ void main() {
       ),
     );
     await settle(t);
+    expect(find.text('Use a code from your authenticator instead'), findsNothing);
     await t.tap(find.text('Pay ₦45,000'));
     await settle(t);
-    expect(find.text('A code from your authenticator app'), findsOneWidget);
+    expect(find.textContaining('Paying takes a passkey'), findsOneWidget);
+    expect(find.text('A code from your authenticator app'), findsNothing);
     expect(api.sent('POST', '/v1/payments/p3/confirm'), isEmpty);
-    await t.enterText(find.descendant(of: find.byType(PaymentSheet), matching: find.byType(EditableText)), '123456');
-    await t.pump();
-    await t.tap(find.text('Pay ₦45,000'));
-    await settle(t);
-    expect(api.sent('POST', '/v1/payments/p3/confirm').single, {'totp': '123456'});
-    await t.pump(const Duration(seconds: 2));
   });
 
   testWidgets('Pay an account number: 10 digits, the bank from the list, its name checked as it is prepared', (t) async {

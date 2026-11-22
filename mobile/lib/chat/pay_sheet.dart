@@ -769,7 +769,8 @@ class _PaymentSheetState extends State<PaymentSheet> {
     try {
       final code = _useCode ? _code.text.replaceAll(RegExp(r'\D'), '') : '';
       if (code.isEmpty && !await passkeys.available()) {
-        setState(() => (_useCode = true, _error = 'This phone cannot use a passkey. Type a code from your authenticator app.'));
+        // A payment takes a passkey: an authenticator code is not enough.
+        setState(() => _error = 'Paying takes a passkey, and this phone cannot use one. Pay from a phone or computer that has your passkey.');
         return;
       }
       _tried = true;
@@ -904,10 +905,6 @@ class _PaymentSheetState extends State<PaymentSheet> {
               child: TkTextBox(controller: _code, digits: 6),
             ),
           ],
-        ),
-      if (prepared && !_useCode)
-        Center(
-          child: TkLink(label: 'Use a code from your authenticator instead', bold: true, onTap: () => setState(() => _useCode = true)),
         ),
       if (_error != null)
         TkCallout(
