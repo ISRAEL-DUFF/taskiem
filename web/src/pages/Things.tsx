@@ -12,10 +12,12 @@ import {
   cameOn,
   detailsRequest,
   emptyThing,
+  hadOf,
   priceProblem,
   rowsOf,
   statusRequest,
   statusSaid,
+  statusSavable,
   statusTone,
   statusWords,
   thingLine,
@@ -76,10 +78,13 @@ export function ThingsPage() {
   const [params, setParams] = useSearchParams();
   const all = params.get("all") === "true";
   const line = params.get("line");
-  const view = useLoad(() => get<ThingsView>(thingsPath(all || !!line)), [all, line]);
+  const view = useLoad(() => get<ThingsView>(thingsPath(all, line)), [all, line]);
   const [adding, setAdding] = useState(false);
   const v = view.data;
-  const groups = v ? byLabel(rowsOf(v.things, line), line ? undefined : v.groups) : [];
+  const rows = v ? rowsOf(v.things, line) : [];
+  // One order line's: its sections and hero of its own rows still had.
+  const groups = v ? byLabel(rows, line ? undefined : v.groups) : [];
+  const had = line ? hadOf(rows) : v;
   return (
     <>
       <PageHeader
@@ -100,15 +105,17 @@ export function ThingsPage() {
         <>
           <ErrorBox error={view.error} />
           {!v && !view.error && <Skeleton rows={3} label="Loading Things we have…" />}
-          {v && (
+          {v && had && (
             <>
               <section className="hero" aria-label="What you have" data-testid="things-hero">
                 <div className="hero-top">
-                  <span className="hero-label">What they cost</span>
-                  <span className="hero-tag">{thingsCount(v.count)}</span>
+                  <span className="hero-label">{line ? "What they cost, from this order line" : "What they cost"}</span>
+                  <span className="hero-tag">{thingsCount(had.count)}</span>
                 </div>
-                <div className="hero-amount">{naira(v.total_kobo)}</div>
-                <p className="hero-sub">Those you still have. Sold, broken, given away or gone leave the totals.</p>
+                <div className="hero-amount">{naira(had.total_kobo)}</div>
+                <p className="hero-sub">
+                  {line ? "Those from this order line you still have." : "Those you still have."} Sold, broken, given away or gone leave the totals.
+                </p>
               </section>
               {line ? (
                 <p className="notice" data-testid="things-of-line">
@@ -421,7 +428,7 @@ function StatusCard({ thing: t, onSaved }: { thing: Thing; onSaved: () => void }
         <button
           type="button"
           className="primary"
-          disabled={act.busy || !!problem || status === t.status}
+          disabled={act.busy || !!problem || !statusSavable(t, status, price, money)}
           onClick={() =>
             void act.run(async () => {
               await sendWith("PATCH", `${THINGS_PATH}/${t.id}`, statusRequest(status, pricing ? price : "", how), {

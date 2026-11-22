@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { get, patch, post, postOnce } from "../api";
+import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { thingsOfLine } from "../lib/things";
 import type { Purchase, PurchaseLine } from "../lib/purchases";
@@ -435,8 +436,10 @@ export function LineTreatMark({
 }) {
   const mark = lineMark(line.treatment);
   const name = labelName(labels, line.label_id) || "Not labelled";
-  // Kept track of and come: its rows on Things we have.
-  const to = thingsOfLine(line);
+  const { can } = useAuth();
+  // Kept track of and come: its rows on Things we have, for those who may
+  // see them (table.read); words only for the rest.
+  const to = can("table.read") ? thingsOfLine(line) : "";
   return (
     <span className="treat-mark" data-testid="line-mark">
       {name}

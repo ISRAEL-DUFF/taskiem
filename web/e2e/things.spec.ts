@@ -81,6 +81,7 @@ const base = { status: "have", status_at: now, created_by: "user:ada", created_a
 function thingsServer(page: Page, start: Thing[], money = true) {
   const things = start.map((t) => ({ ...t }));
   const sent: { method: string; path: string; body: unknown; key?: string }[] = [];
+  const asked: string[] = [];
   void page.route("**/v1/things**", async (route: Route) => {
     const r = route.request();
     const url = new URL(r.url());
@@ -88,12 +89,19 @@ function thingsServer(page: Page, start: Thing[], money = true) {
     const body = r.postData() ? r.postDataJSON() : undefined;
     if (r.method() !== "GET") sent.push({ method: r.method(), path: url.pathname, body, key: r.headers()["idempotency-key"] });
     if (r.method() === "GET" && !id) {
+      asked.push(url.search);
       const all = url.searchParams.get("all") === "true";
-      const list = things.filter((t) => all || t.status === "have");
-      const had = things.filter((t) => t.status === "have");
+      // ?line= filters on the server; the counts are the filtered rows'.
+      const line = url.searchParams.get("line");
+      const mine = things.filter((t) => !line || t.purchase_line_id === line);
+      const list = mine.filter((t) => all || t.status === "have");
+      const had = mine.filter((t) => t.status === "have");
+      // As GroupThings: by the label's name, any case (a merged label's is
+      // its kept label's), the first row's label_id.
+      const key = (t: { label_id?: string | null; label?: string }) => (t.label_id ? (t.label ?? "").toLowerCase() : "");
       const groups: { label_id: string | null; label: string; count: number; total_kobo: number }[] = [];
       for (const t of had) {
-        let g = groups.find((x) => x.label_id === (t.label_id ?? null));
+        let g = groups.find((x) => key(x) === key(t));
         if (!g) groups.push((g = { label_id: t.label_id ?? null, label: t.label ?? "", count: 0, total_kobo: 0 }));
         g.count++;
         g.total_kobo += t.cost_kobo ?? 0;
@@ -120,7 +128,7 @@ function thingsServer(page: Page, start: Thing[], money = true) {
     }
     return route.fulfill(json({ thing: t }));
   });
-  return { things, sent };
+  return { things, sent, asked };
 }
 
 function labels(page: Page) {
@@ -260,17 +268,79 @@ test("Add something we have, by hand, with a new label", async ({ page }) => {
   await expect(page.getByTestId("things-group").filter({ hasText: "Furniture" })).toContainText("Office desk");
 });
 
+test("a row sold without a price gets its price later from someone who manages money", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  const { sent } = thingsServer(page, [{ ...generator, status: "sold" }]);
+  await page.goto("/money/things/t1");
+  await expect(page.getByTestId("thing-status")).toHaveText("Sold");
+  const change = page.getByTestId("thing-change");
+  await expect(change.getByRole("radio", { name: "Sold" })).toBeChecked();
+  const save = change.getByRole("button", { name: "Save" });
+  await expect(save).toBeDisabled();
+  await change.getByLabel("What it sold for (optional)").fill("300,000");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0]?.body).toEqual({ status: "sold", sale_price_kobo: 30_000_000, sale_paid_how: "cash" });
+  await expect(page.getByText("What it sold for is recorded, as money in.")).toBeVisible();
+  await expect(change.getByRole("button", { name: "See money in" })).toBeVisible();
+});
+
+const purchaseWithLine = {
+  id: "p1", reference: "PO-0100", supplier_id: "s1", supplier: "Singer Ltd", total_kobo: 45_000_000, status: "received",
+  drafted_by: "user:ada", approved_by: "user:ada", sent_at: now, confirmed_at: now, confirmed_how: "owner", counter: null, counter_at: null,
+  received_at: now, cancelled_at: null, received_kobo: 45_000_000, paid_kobo: 0, owed_kobo: 45_000_000, created_at: now,
+  lines: [{ id: "c", position: 0, item_id: "c", item: "Generator", unit: "", quantity: 1, cost_kobo: 45_000_000, received: 1, uses: 1, treatment: "track", label_id: "lab-m" }],
+};
+
+test("an order line's rows: its own counts and its own sum, asked of the server by line", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  const soldToo: Thing = { ...generator, id: "t5", name: "Generator (second)", status: "sold" };
+  const { asked } = thingsServer(page, [generator, soldToo, overlock, fan]);
+  await page.goto("/money/things?line=c");
+  await expect.poll(() => asked.some((q) => new URLSearchParams(q).get("line") === "c")).toBe(true);
+  await expect(page.getByTestId("things-of-line")).toBeVisible();
+  const hero = page.getByTestId("things-hero");
+  await expect(hero).toContainText("from this order line");
+  await expect(hero).toContainText("1 thing");
+  await expect(hero).toContainText("₦450,000");
+  const groups = page.getByTestId("things-group");
+  await expect(groups).toHaveCount(1);
+  await expect(groups.first().getByRole("heading")).toContainText("Machines 1 thing, ₦450,000");
+  await expect(page.getByTestId("thing-row")).toHaveCount(2);
+  await axeAt(page, "an order line's rows");
+});
+
+test("a label merged into another shows once, its rows together", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  // Equipment merged into Machines: the overlock keeps its own label_id.
+  thingsServer(page, [generator, { ...overlock, label_id: "lab-e", label: "Machines" }]);
+  await page.goto("/money/things");
+  const groups = page.getByTestId("things-group");
+  await expect(groups).toHaveCount(1);
+  await expect(groups.first().getByRole("heading")).toContainText("Machines 2 things, ₦590,000");
+  await expect(groups.first().getByTestId("thing-row")).toHaveCount(2);
+});
+
+test("without table.read, On Things we have is words, not a link", async ({ page }) => {
+  await signUp(page);
+  await without(page, "table.read");
+  labels(page);
+  await page.route("**/v1/stock/purchases/p1", (route) => route.fulfill(json({ purchase: purchaseWithLine })));
+  await page.goto("/purchases/p1");
+  const mark = page.getByTestId("line-mark");
+  await expect(mark).toContainText("On Things we have");
+  await expect(mark.getByRole("link")).toHaveCount(0);
+});
+
 test("an order line kept track of leads to its rows", async ({ page }) => {
   await signUp(page);
   labels(page);
   thingsServer(page, [generator, overlock]);
-  const purchase = {
-    id: "p1", reference: "PO-0100", supplier_id: "s1", supplier: "Singer Ltd", total_kobo: 45_000_000, status: "received",
-    drafted_by: "user:ada", approved_by: "user:ada", sent_at: now, confirmed_at: now, confirmed_how: "owner", counter: null, counter_at: null,
-    received_at: now, cancelled_at: null, received_kobo: 45_000_000, paid_kobo: 0, owed_kobo: 45_000_000, created_at: now,
-    lines: [{ id: "c", position: 0, item_id: "c", item: "Generator", unit: "", quantity: 1, cost_kobo: 45_000_000, received: 1, uses: 1, treatment: "track", label_id: "lab-m" }],
-  };
-  await page.route("**/v1/stock/purchases/p1", (route) => route.fulfill(json({ purchase })));
+  await page.route("**/v1/stock/purchases/p1", (route) => route.fulfill(json({ purchase: purchaseWithLine })));
   await page.goto("/purchases/p1");
   await page.getByTestId("line-mark").getByRole("link", { name: "On Things we have" }).click();
   await expect(page).toHaveURL(/\/money\/things\?line=c$/);
