@@ -50,6 +50,7 @@ import 'thread.dart';
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
 import 'menu.dart' show showMessageMenu;
+import 'pay_collect.dart' show MessageFrom, PayListBar;
 
 // --- words (lib/customerchat.ts) ---
 
@@ -694,9 +695,15 @@ class _CustomerScreenState extends State<CustomerScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         bubble,
-        PayChip(key: ValueKey('pay-${m.id}'), auth: auth, id: m.id, text: m.m.body, mine: m.m.mine),
+        PayChip(key: ValueKey('pay-${m.id}'), auth: auth, id: m.id, text: m.m.body, mine: m.m.mine, from: _from(m.m)),
       ],
     );
+  }
+
+  /// The message as the list of people to pay keeps it.
+  MessageFrom _from(CustomerMessage m) {
+    final c = widget.data.chat;
+    return (kind: 'customer', chat: widget.data.id, message: m.id, from: m.mine || c == null ? '' : customerTitle(c));
   }
 
   Future<void> _hold(CustomerLine x, Rect at) async {
@@ -705,7 +712,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     final words = m.card == null && m.kind != 'media' && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
     final file = a != null && a.kind != 'voice';
     final auth = widget.data.chats.auth;
-    final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true);
+    final items = saveAsItems(context, auth, words: words, filePath: file ? '/v1/customer-chats/${widget.data.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '', business: true, from: _from(m));
     if (items.isEmpty) return;
     await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
@@ -939,6 +946,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       ),
                     ),
                   ),
+                  // The people to pay collected from messages (pay_collect.dart).
+                  PayListBar(auth: d.chats.auth, follow: d.follow),
                   if (canSend) _saved.plain(),
                   if (canSend)
                     _ReplyBox(

@@ -49,6 +49,7 @@ render and compare.
 | Pick one of a few | `pickOneOf` (`chat/groups.dart`); of many (banks), with `searchHint:` for a search box over them; `icon:` in place of ticks for things to take one of (a saved person), not a setting |
 | A form's Saved button | `SavedButton(semantics:, picking:, busy:, onPressed:)` (`chat/saved_fill.dart`) beside the field it fills (or in its section's head when the row is full), with a `_picking` flag so one picker opens at a time; it opens `pickSaved(kind:)` (a person, a place), `pickSavedPhone`, `pickSavedPlace` (fits 300 characters), `pickSavedAccount`/`fillSavedAccount` (number shown with a passkey) or `pickSavedDate` |
 | A form filled from a photo (read on the phone, never sent) | `PhotoReadButton` + `readPhotoFromPhone`; a chat's photo `readChatPhoto` (`chat/photo_text.dart`), each giving a `PhotoReading` (its words, maybe ''); when the phone found nothing, `PhotoAI` (once per screen) says whether "Read it with AI" is offered: `PhotoAICallout` under the button in a sheet, `PhotoAI.offer` from a menu, then `readPhotoWithAI`; a chat photo's menu items `photoAccountItems` (`chat/save_as.dart`); tests swap `photoText` and `pickPhotoToRead` |
+| People to pay collected from messages | `PayListBar(auth:)` (`chat/pay_collect.dart`) above a chat's box; `addReadingToList` for Add to the list; a chat photo's `photoAccountItems(from:)` and `PayChip(from:)` take the message as `MessageFrom` |
 | A menu of actions | `pickAction` |
 | "Are you sure?" | `askSure(danger: true)` |
 | Text that is several lines of facts | `TkLines` |

@@ -546,6 +546,12 @@ Built 21 November 2026 in the same look, from the plan (no drawing yet).
 - **From a message** (phase 2): "Pay this account" is a pill under the
   bubble on the wallpaper (the incoming bubble's colour, a teal round bank
   mark; lime with a tick once paid, "Paid ₦45,000 on 3 Nov · Pay again").
+  "Add to the list" is a second pill beside it (the accent's words, a
+  people mark), not shown once paid. While the list has rows, a slim card
+  sits on the wallpaper above the box: a teal round mark, "3 to pay ·
+  ₦95,000" (and "1 needs an amount" in orange under it), Pay these in the
+  main pill, and ⋯ for Clear; a batch made from it waiting: an orange
+  clock, "Waiting to be sent", Open.
 - **The bank for a number:** the bank list puts the likely banks first,
   marked "Likely for this number"; "Check the likely banks for me" is a
   bold link under the bank's box, its answers rows under "What the banks

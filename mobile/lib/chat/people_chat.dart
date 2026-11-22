@@ -59,6 +59,7 @@ import 'words.dart';
 import 'pick_problem.dart';
 import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
+import 'pay_collect.dart' show PayListBar;
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
@@ -1039,7 +1040,12 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
         if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
         // A photo (reading account details from photos): read on the phone.
         if (m.deleted != true && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
-          ...photoAccountItems(context, d.auth, '${d.base}/files/${Uri.encodeComponent(m.id)}'),
+          ...photoAccountItems(
+            context,
+            d.auth,
+            '${d.base}/files/${Uri.encodeComponent(m.id)}',
+            from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
+          ),
         if (m.deleted != true && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (m.deleted != true) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
@@ -1193,6 +1199,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                   if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),
                   if (c != null && !c.gone && c.suspended == true) const _Note(text: '$suspendedWords You can read the chat, but not write to it now.'),
                   if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: _unblock),
+                  // The people to pay collected from messages (pay_collect.dart).
+                  PayListBar(auth: d.auth),
                   if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(

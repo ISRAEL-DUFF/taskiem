@@ -62,6 +62,7 @@ import 'search.dart';
 import 'words.dart';
 import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
+import 'pay_collect.dart' show PayListBar;
 
 /// Conversation.tsx PAGE: a page of messages.
 const _page = 50;
@@ -1321,7 +1322,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
         // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
         if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
         // A photo (reading account details from photos): read on the phone.
-        if (photo) ...photoAccountItems(context, _d.chats.auth, ChatFiles.path(m), business: true),
+        if (photo)
+          ...photoAccountItems(
+            context,
+            _d.chats.auth,
+            ChatFiles.path(m),
+            business: true,
+            from: (kind: 'link', chat: _d.conv.link, message: m.id, from: m.mine ? '' : (m.senderName ?? other)),
+          ),
         if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
         MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
         if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),
@@ -1527,6 +1535,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Expanded(
                 child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
               ),
+              // The people to pay collected from messages (pay_collect.dart).
+              PayListBar(auth: d.chats.auth, follow: d.follow),
               ListenableBuilder(listenable: d, builder: (context, _) => _tags.plain()),
               // The tools' picker floats over the thread from the box, 8 px
               // above it, its shadow over the box too (`.composer > .tk-picker`).
@@ -1697,7 +1707,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             bubble,
-            PayChip(key: ValueKey('pay-${m.id}'), auth: d.chats.auth, id: m.id, text: m.m.body!, mine: m.m.mine),
+            PayChip(
+              key: ValueKey('pay-${m.id}'),
+              auth: d.chats.auth,
+              id: m.id,
+              text: m.m.body!,
+              mine: m.m.mine,
+              from: (kind: 'link', chat: d.conv.link, message: m.id, from: m.m.mine ? '' : (m.m.senderName ?? d.conv.name)),
+            ),
           ],
         );
       },

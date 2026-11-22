@@ -32,6 +32,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'deal.dart' show dealKobo;
 import 'groups.dart' show pickOneOf;
+import 'pay_collect.dart' show PayList, collectedRow, toPayWords;
 import 'pay_sheet.dart';
 import 'photo_text.dart' show PhotoAI, PhotoAICallout, PhotoReadButton, PhotoReading, noWordsInPhoto, readPhotoFromPhone, readPhotoWithAI, readingPhoto;
 import 'saved_fill.dart' show readSaved;
@@ -52,8 +53,19 @@ String _capital(String w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)
 /// paid: a saved account, a rider, or an account number and bank), how
 /// much and what for.
 class PayRow {
-  PayRow({required this.who, this.sub = '', required this.ask, int? kobo, this.purpose = '', this.bank = '', this.number = ''})
-    : amount = TextEditingController(text: kobo == null || kobo <= 0 ? '' : nairaText(kobo));
+  PayRow({required this.who, this.sub = '', required this.ask, int? kobo, this.purpose = '', this.bank = '', this.number = '', this.collected})
+    : amount = TextEditingController(text: kobo == null || kobo <= 0 ? '' : nairaText(kobo)),
+      keptKobo = kobo,
+      keptPurpose = purpose;
+
+  /// A row of the person's list collected from messages: its id there,
+  /// and its amount and purpose as the server last kept them.
+  final String? collected;
+  int? keptKobo;
+  String keptPurpose;
+
+  /// Its amount kept on the server a moment after it is typed.
+  Timer? keep;
 
   /// "@bayo", "Musa", "Account ••6789".
   final String who;
@@ -175,9 +187,14 @@ Future<PaymentBatch?> payAllRiders(BuildContext context, Auth auth) async {
 /// Pay several people: the rows, each who, how much and what for; Check
 /// prepares them as a batch.
 class PayManySheet extends StatefulWidget {
-  const PayManySheet({super.key, required this.auth, this.rows = const [], this.kind = 'list', this.title = '', this.note, this.follow = true});
+  const PayManySheet({super.key, required this.auth, this.rows = const [], this.kind = 'list', this.title = '', this.note, this.follow = true, this.collected});
   final Auth auth;
   final List<PayRow> rows;
+
+  /// The person's list collected from messages, as the server keeps it:
+  /// its rows shown, each change kept there, and Check makes it a batch
+  /// (POST /v1/pay-collection/batch).
+  final PayCollection? collected;
 
   /// list, riders or messages.
   final String kind;
@@ -194,7 +211,10 @@ class PayManySheet extends StatefulWidget {
 }
 
 class _PayManySheetState extends State<PayManySheet> {
-  late final List<PayRow> _rows = [...widget.rows];
+  late final List<PayRow> _rows = [...widget.rows, ...?widget.collected?.rows.map(collectedRow)];
+  // The rows are the person's list from messages (kept on the server).
+  late bool _collected = widget.collected != null;
+  late final PayList _list = PayList.of(widget.auth);
   final _paste = TextEditingController();
   bool _pasting = false;
   bool _reading = false;
@@ -218,18 +238,29 @@ class _PayManySheetState extends State<PayManySheet> {
   @override
   void initState() {
     super.initState();
-    _paste.addListener(() => setState(() {
-      if (_paste.text.trim().isEmpty) _fromPhoto = false;
-    }));
+    _paste.addListener(
+      () => setState(() {
+        if (_paste.text.trim().isEmpty) _fromPhoto = false;
+      }),
+    );
     for (final r in _rows) {
-      r.amount.addListener(_changed);
+      _listen(r);
     }
+    // "From your list (3)" among the starting choices.
+    _list.addListener(_changed);
+    if (!_collected && _auth.can('money.pay')) unawaited(_list.refresh());
   }
 
   @override
   void dispose() {
+    _list.removeListener(_changed);
     _paste.dispose();
     for (final r in _rows) {
+      // An amount typed and not kept yet: kept now.
+      if (r.keep?.isActive ?? false) {
+        r.keep!.cancel();
+        unawaited(_keep(r, quiet: true));
+      }
       r.amount.dispose();
     }
     super.dispose();
@@ -237,11 +268,79 @@ class _PayManySheetState extends State<PayManySheet> {
 
   void _changed() => setState(() {});
 
+  void _listen(PayRow r) {
+    r.amount.addListener(_changed);
+    if (r.collected != null) {
+      r.amount.addListener(() {
+        r.keep?.cancel();
+        r.keep = Timer(const Duration(milliseconds: 800), () => unawaited(_keep(r)));
+      });
+    }
+  }
+
+  /// A row of the list kept on the server as it now is (its amount and
+  /// what it is for): false when the server said no (said, unless
+  /// [quiet]).
+  Future<bool> _keep(PayRow r, {bool quiet = false}) async {
+    final id = r.collected;
+    if (id == null) return true;
+    r.keep?.cancel();
+    final kobo = r.kobo;
+    final amount = kobo != null && kobo >= 100 && kobo != r.keptKobo ? kobo : null;
+    final purpose = r.purpose != r.keptPurpose ? r.purpose : null;
+    if (amount == null && purpose == null) return true;
+    try {
+      final c = await _auth.api.patchPayCollection(
+        id: id,
+        body: PatchPayCollectionRequest(amountKobo: amount, purpose: purpose),
+      );
+      if (amount != null) r.keptKobo = amount;
+      if (purpose != null) r.keptPurpose = purpose;
+      _list.took(c);
+      return true;
+    } on Object catch (e) {
+      if (!quiet && mounted) showTkToast(context, errorWords(e), error: true);
+      return false;
+    }
+  }
+
+  /// From your list: the rows collected from messages, as the list.
+  Future<void> _fromList() async {
+    setState(() => _picking = true);
+    try {
+      final c = await _auth.api.getPayCollection();
+      _list.took(c);
+      if (!mounted) return;
+      if (_list.inBatch != null) {
+        showTkToast(context, 'Your list waits in a batch: send it or cancel it first.');
+        return;
+      }
+      if (c.rows.isEmpty) {
+        showTkToast(context, 'Your list is empty: add someone from a message.');
+        return;
+      }
+      final rows = c.rows.map(collectedRow).toList();
+      for (final r in rows) {
+        _listen(r);
+      }
+      setState(() {
+        _collected = true;
+        _rows.addAll(rows);
+        _pasting = false;
+        _error = null;
+      });
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   void _add(Iterable<PayRow> rows) {
     final room = payManyMost - _rows.length;
     final adding = rows.take(room < 0 ? 0 : room).toList();
     for (final r in adding) {
-      r.amount.addListener(_changed);
+      _listen(r);
     }
     setState(() {
       _rows.addAll(adding);
@@ -251,9 +350,27 @@ class _PayManySheetState extends State<PayManySheet> {
   }
 
   void _remove(PayRow r) {
+    if (r.collected != null) {
+      unawaited(_removeKept(r));
+      return;
+    }
     setState(() => _rows.remove(r));
     r.amount.removeListener(_changed);
     // Disposed once the row's box is gone.
+    WidgetsBinding.instance.addPostFrameCallback((_) => r.amount.dispose());
+  }
+
+  /// A row taken off the person's list (DELETE /v1/pay-collection/{id}).
+  Future<void> _removeKept(PayRow r) async {
+    r.keep?.cancel();
+    try {
+      _list.took(await _auth.api.removePayCollection(id: r.collected!));
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _rows.remove(r));
     WidgetsBinding.instance.addPostFrameCallback((_) => r.amount.dispose());
   }
 
@@ -372,7 +489,9 @@ class _PayManySheetState extends State<PayManySheet> {
   Future<int?> _read() async {
     setState(() => (_reading = true, _error = null));
     try {
-      final r = await _auth.api.readPaymentList(body: ReadPaymentListRequest(text: _paste.text, from: _fromPhoto ? 'photo' : null));
+      final r = await _auth.api.readPaymentList(
+        body: ReadPaymentListRequest(text: _paste.text, from: _fromPhoto ? 'photo' : null),
+      );
       if (!mounted) return null;
       final good = r.lines.where((l) => (l.problem ?? '').isEmpty).toList();
       final bad = r.lines.where((l) => (l.problem ?? '').isNotEmpty).toList();
@@ -457,15 +576,23 @@ class _PayManySheetState extends State<PayManySheet> {
 
   Future<void> _pickFor(PayRow r) async {
     final v = await pickOneOf(context, title: 'What is it for?', value: r.purpose, choices: [for (final (w, k) in payPurposes) (k, _capital(w), '')]);
-    if (v != null && mounted) setState(() => r.purpose = v);
+    if (v != null && mounted) {
+      setState(() => r.purpose = v);
+      unawaited(_keep(r));
+    }
   }
 
   /// Every row's purpose at once.
-  void _forAll(String key) => setState(() {
+  void _forAll(String key) {
+    setState(() {
+      for (final r in _rows) {
+        r.purpose = key;
+      }
+    });
     for (final r in _rows) {
-      r.purpose = key;
+      unawaited(_keep(r));
     }
-  });
+  }
 
   Future<void> _pickBank(PayRow r) async {
     try {
@@ -486,14 +613,23 @@ class _PayManySheetState extends State<PayManySheet> {
       r.held = null;
     }
     try {
-      final b = (await _auth.api.createPaymentBatch(
-        body: CreatePaymentBatchRequest(
-          rows: [for (final r in _rows) r.body()],
-          kind: widget.kind,
-          title: widget.title.isEmpty ? null : widget.title,
-          from: 'tools',
-        ),
-      )).batch;
+      final PaymentBatch b;
+      if (_collected) {
+        // The list kept as shown, then made a batch on the server.
+        for (final r in _rows) {
+          if (!await _keep(r)) return;
+        }
+        b = (await _auth.api.payPayCollection(body: const PayPayCollectionRequest())).batch;
+      } else {
+        b = (await _auth.api.createPaymentBatch(
+          body: CreatePaymentBatchRequest(
+            rows: [for (final r in _rows) r.body()],
+            kind: widget.kind,
+            title: widget.title.isEmpty ? null : widget.title,
+            from: 'tools',
+          ),
+        )).batch;
+      }
       if (!mounted) return;
       for (final h in b.held ?? const <PaymentBatchHeldItem>[]) {
         final i = h.row ?? -1;
@@ -511,6 +647,19 @@ class _PayManySheetState extends State<PayManySheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Back from the list's batch: let go first, so its rows are back on
+  /// the list before it is checked again.
+  Future<void> _backFromList(PaymentBatch b) async {
+    setState(() => _busy = true);
+    try {
+      await _auth.api.cancelPaymentBatch(id: b.id);
+    } on Object {
+      // Let go as the sheet closes, then.
+    }
+    if (mounted) setState(() => (_batch = null, _busy = false));
+    unawaited(_list.refresh());
   }
 
   Widget _rowCard(PayRow r) {
@@ -567,7 +716,7 @@ class _PayManySheetState extends State<PayManySheet> {
           field: false,
           child: TkPickBox(
             label: 'What ${r.who} is paid for',
-            shown: r.purpose.isEmpty ? 'Choose' : _capital(purposeSaid(r.purpose)),
+            shown: r.purpose.isEmpty ? 'Choose' : _capital(purposeSaid(r.purpose).isEmpty ? r.purpose : purposeSaid(r.purpose)),
             onTap: () => unawaited(_pickFor(r)),
           ),
         ),
@@ -593,7 +742,7 @@ class _PayManySheetState extends State<PayManySheet> {
           final r = _rows.where((r) => r.held != null && r.who == who).firstOrNull;
           if (r != null) _remove(r);
         },
-        onBack: () => setState(() => _batch = null),
+        onBack: _collected ? () => unawaited(_backFromList(b)) : () => setState(() => _batch = null),
       );
     }
     final look = TkLook.of(context);
@@ -601,14 +750,21 @@ class _PayManySheetState extends State<PayManySheet> {
     final purposes = {for (final r in _rows) r.purpose};
     return TkFormSheet(
       title: 'Pay several people',
-      crumb: 'Each checked with the bank before you pay',
+      crumb: _collected ? 'Your list from messages' : 'Each checked with the bank before you pay',
       foot: _rows.isEmpty ? null : '${peopleWords(_rows.length)} · ${naira(_total)}',
       action: _busy ? 'Checking…' : 'Check',
       onAction: _busy || problem != null ? null : _check,
       second: 'Cancel',
       onSecond: () => Navigator.of(context).pop(),
       children: [
-        if (_rows.isEmpty && !_pasting)
+        if (_rows.isEmpty && _collected)
+          TkCallout(
+            leading: TkSquare('b-chat', color: look.teal),
+            title: 'Your list is empty',
+            sub: 'Add someone with Add to the list under a message.',
+            color: look.teal,
+          )
+        else if (_rows.isEmpty && !_pasting)
           TkCallout(
             leading: TkSquare('b-people', color: look.teal),
             title: 'Add the people to pay',
@@ -621,37 +777,47 @@ class _PayManySheetState extends State<PayManySheet> {
             title: widget.note!,
             color: look.orange,
           ),
-        TkButtonRow([
-          TkSmallButton(label: 'Saved', icon: 'b-bank', semantics: 'Add saved accounts', onPressed: _picking || _busy ? null : () => unawaited(_pickSaved())),
+        if (!_collected && _rows.isEmpty && _list.count > 0 && _list.inBatch == null)
           TkSmallButton(
-            label: 'Riders',
-            icon: 'b-bike',
-            semantics: 'Add riders, with what each is due',
-            onPressed: _picking || _busy ? null : () => unawaited(_pickRiders()),
+            label: 'From your list (${_list.count})',
+            icon: 'b-chat',
+            primary: true,
+            semantics: 'From your list: ${toPayWords(_list.count)}, collected from messages',
+            onPressed: _picking || _busy ? null : () => unawaited(_fromList()),
           ),
-        ]),
-        // Four side by side do not fit a phone: two rows of two.
-        TkButtonRow([
-          TkSmallButton(
-            label: 'Staff',
-            icon: 'b-people',
-            semantics: 'Add staff, to the account linked to each',
-            onPressed: _picking || _busy ? null : () => unawaited(_pickStaff()),
+        if (!_collected) ...[
+          TkButtonRow([
+            TkSmallButton(label: 'Saved', icon: 'b-bank', semantics: 'Add saved accounts', onPressed: _picking || _busy ? null : () => unawaited(_pickSaved())),
+            TkSmallButton(
+              label: 'Riders',
+              icon: 'b-bike',
+              semantics: 'Add riders, with what each is due',
+              onPressed: _picking || _busy ? null : () => unawaited(_pickRiders()),
+            ),
+          ]),
+          // Four side by side do not fit a phone: two rows of two.
+          TkButtonRow([
+            TkSmallButton(
+              label: 'Staff',
+              icon: 'b-people',
+              semantics: 'Add staff, to the account linked to each',
+              onPressed: _picking || _busy ? null : () => unawaited(_pickStaff()),
+            ),
+            TkSmallButton(label: 'Paste', icon: 'b-note', semantics: 'Paste a list', onPressed: _busy ? null : () => setState(() => _pasting = !_pasting)),
+          ]),
+          PhotoReadButton(
+            label: 'From a photo of a list',
+            semantics: 'Add people from a photo of a list. Read on this phone, not sent',
+            onPressed: _busy || _reading || _aiBusy || readingPhoto ? null : () => unawaited(_photo()),
           ),
-          TkSmallButton(label: 'Paste', icon: 'b-note', semantics: 'Paste a list', onPressed: _busy ? null : () => setState(() => _pasting = !_pasting)),
-        ]),
-        PhotoReadButton(
-          label: 'From a photo of a list',
-          semantics: 'Add people from a photo of a list. Read on this phone, not sent',
-          onPressed: _busy || _reading || _aiBusy || readingPhoto ? null : () => unawaited(_photo()),
-        ),
-        if (_unreadPhoto case final photo?)
-          PhotoAICallout(
-            title: photo.words.isEmpty ? 'No words found' : 'No line of the list read',
-            busy: _aiBusy || _reading,
-            onPressed: () => unawaited(_readWithAI()),
-          ),
-        if (_pasting) ...[
+          if (_unreadPhoto case final photo?)
+            PhotoAICallout(
+              title: photo.words.isEmpty ? 'No words found' : 'No line of the list read',
+              busy: _aiBusy || _reading,
+              onPressed: () => unawaited(_readWithAI()),
+            ),
+        ],
+        if (_pasting && !_collected) ...[
           TkFormGroup(
             children: [
               TkKitField(
@@ -695,7 +861,7 @@ class _PayManySheetState extends State<PayManySheet> {
             ],
           ),
         for (final r in _rows) KeyedSubtree(key: ObjectKey(r), child: _rowCard(r)),
-        if (problem != null && problem.isNotEmpty && _rows.every((r) => r.amount.text.trim().isNotEmpty))
+        if (problem != null && problem.isNotEmpty && (_collected || _rows.every((r) => r.amount.text.trim().isNotEmpty)))
           TkCallout(
             leading: TkSquare('b-alert', color: look.orange),
             title: problem,

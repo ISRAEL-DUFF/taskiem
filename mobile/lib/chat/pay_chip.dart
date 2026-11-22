@@ -10,7 +10,8 @@
 // only). A chip already paid says so, and pays again. An account not
 // saved yet has "Save as…" beside it, for those who may manage the
 // business's saved things (pay_save.dart): once saved, the chip says
-// "Pay @name" and pays by it.
+// "Pay @name" and pays by it. "Add to the list" beside it keeps the
+// reading on the person's list of people to pay (pay_collect.dart).
 
 import 'dart:async';
 
@@ -28,6 +29,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'menu_card.dart' show catalogueOf;
 import 'my_chat.dart' show sayFailure;
+import 'pay_collect.dart' show MessageFrom, addReadingToList;
 import 'pay_save.dart' show PaySaveSheet, PaySaved, maySaveFromMessages;
 import 'pay_sheet.dart' show PaySheet, noAccountInPhoto;
 import 'photo_text.dart' show PhotoAI, noWordsInPhoto, readChatPhoto;
@@ -99,10 +101,7 @@ const askToSave = 'Ask an owner to save this account: then you can pay it.';
   final payee = (r.payee ?? '').trim();
   Map<String, String> byPayee(ChatAction action) => {
     for (final f in action.fields ?? const <ChatField>[])
-      if (f.kind == 'payee')
-        f.key: '@$payee'
-      else if (f.kind == 'money' && amount.isNotEmpty)
-        f.key: amount,
+      if (f.kind == 'payee') f.key: '@$payee' else if (f.kind == 'money' && amount.isNotEmpty) f.key: amount,
   };
   if (byName && forms.person != null && payee.isNotEmpty) return (action: forms.person!, initial: byPayee(forms.person!));
   if (forms.account case final a?) {
@@ -128,10 +127,31 @@ const askToSave = 'Ask an owner to save this account: then you can pay it.';
 /// "photo"`), and the Pay sheet opened filled in, as the chip under a
 /// message opens it. Nothing found: said, or, where the business allows
 /// it, "Read it with AI" offered, and its words read the same way.
-Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) async {
+Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) => _fromChatPhoto(context, auth, path, (r, forms) async {
+  final fill = payFromReading(forms, r);
+  if (fill == null) {
+    showTkToast(context, askToSave);
+    return;
+  }
+  await showTkSheet<Payment>(
+    context,
+    (_) => PaySheet(auth: auth, action: fill.action, initial: fill.initial, from: 'message', said: r.name ?? '', saidIn: 'photo'),
+  );
+});
+
+/// "Add to the list" on a photo in a chat: read as Pay this account reads
+/// it, and the account put on the person's list of people to pay, from
+/// [from] (that message).
+Future<void> collectFromChatPhoto(BuildContext context, Auth auth, String path, MessageFrom from) =>
+    _fromChatPhoto(context, auth, path, (r, forms) => addReadingToList(context, auth, forms, r, from));
+
+/// A chat's photo read on the phone (with AI where the phone found nothing
+/// and the business allows it), its words read by Taskiem, and [use] given
+/// the account found.
+Future<void> _fromChatPhoto(BuildContext context, Auth auth, String path, Future<void> Function(ReadPaymentResponse r, PayForms forms) use) async {
   final photo = await readChatPhoto(context, auth, path);
   if (photo == null || !context.mounted) return;
-  if (await _payFromPhotoWords(context, auth, photo.words) || !context.mounted) return;
+  if (await _payFromPhotoWords(context, auth, photo.words, use) || !context.mounted) return;
   final words = await PhotoAI(auth).offer(
     context,
     photo,
@@ -139,17 +159,19 @@ Future<void> payFromChatPhoto(BuildContext context, Auth auth, String path) asyn
     said: photo.words.isEmpty ? noWordsInPhoto : noAccountInPhoto,
   );
   if (words == null || !context.mounted) return;
-  if (!await _payFromPhotoWords(context, auth, words) && context.mounted) showTkToast(context, noAccountInPhoto);
+  if (!await _payFromPhotoWords(context, auth, words, use) && context.mounted) showTkToast(context, noAccountInPhoto);
 }
 
-/// A photo's words read by Taskiem and the Pay sheet opened with them:
-/// false when they hold no account (nothing said), true when done or said.
-Future<bool> _payFromPhotoWords(BuildContext context, Auth auth, String words) async {
+/// A photo's words read by Taskiem and [use] given what they hold: false
+/// when they hold no account (nothing said), true when done or said.
+Future<bool> _payFromPhotoWords(BuildContext context, Auth auth, String words, Future<void> Function(ReadPaymentResponse r, PayForms forms) use) async {
   if (words.isEmpty) return false;
   final ReadPaymentResponse r;
   final PayForms forms;
   try {
-    r = await auth.api.readPayment(body: ReadPaymentRequest(text: words, from: 'photo'));
+    r = await auth.api.readPayment(
+      body: ReadPaymentRequest(text: words, from: 'photo'),
+    );
     forms = await payFormsOf(auth);
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
@@ -161,23 +183,19 @@ Future<bool> _payFromPhotoWords(BuildContext context, Auth auth, String words) a
     showTkToast(context, 'Paying is not set up for this business yet.');
     return true;
   }
-  final fill = payFromReading(forms, r);
-  if (fill == null) {
-    showTkToast(context, askToSave);
-    return true;
-  }
-  await showTkSheet<Payment>(
-    context,
-    (_) => PaySheet(auth: auth, action: fill.action, initial: fill.initial, from: 'message', said: r.name ?? '', saidIn: 'photo'),
-  );
+  await use(r, forms);
   return true;
 }
 
 /// The chip under a message that holds an account number: nothing until
 /// Taskiem has read one in it.
 class PayChip extends StatefulWidget {
-  const PayChip({super.key, required this.auth, required this.id, required this.text, this.mine = false});
+  const PayChip({super.key, required this.auth, required this.id, required this.text, this.mine = false, this.from});
   final Auth auth;
+
+  /// The message as the list of people to pay keeps it: with it, "Add to
+  /// the list" beside Pay.
+  final MessageFrom? from;
 
   /// The message's id and words.
   final String id;
@@ -214,6 +232,20 @@ class _PayChipState extends State<PayChip> {
     setState(() => (_r = r, _account = account, _person = person));
   }
 
+  /// Add to the list: the reading kept on the person's list of people to
+  /// pay, paid by the same account Pay would use.
+  Future<void> _collect() async {
+    final r = _r;
+    final from = widget.from;
+    if (r == null || from == null || _opening) return;
+    _opening = true;
+    try {
+      await addReadingToList(context, widget.auth, (account: _account, person: _person), r, from, byName: _savedHere);
+    } finally {
+      _opening = false;
+    }
+  }
+
   Future<void> _open() async {
     final r = _r;
     if (r == null || _opening) return;
@@ -224,10 +256,7 @@ class _PayChipState extends State<PayChip> {
     }
     final (:action, :initial) = fill;
     _opening = true;
-    final paid = await showTkSheet<Payment>(
-      context,
-      (_) => PaySheet(auth: widget.auth, action: action, initial: initial, from: 'message', said: r.name ?? ''),
-    );
+    final paid = await showTkSheet<Payment>(context, (_) => PaySheet(auth: widget.auth, action: action, initial: initial, from: 'message', said: r.name ?? ''));
     _opening = false;
     if (paid == null || !mounted) return;
     // Read again: the chip says it was paid.
@@ -305,8 +334,14 @@ class _PayChipState extends State<PayChip> {
                     style: tkText(size: 14, weight: paid != null ? 500 : 650, lineHeight: 1.3, color: t.text),
                   ),
                   if (more != null) ...[
-                    TextSpan(text: ' · ', style: tkText(size: 14, lineHeight: 1.3, color: t.muted)),
-                    TextSpan(text: more, style: tkText(size: 14, weight: 650, lineHeight: 1.3, color: t.accent)),
+                    TextSpan(
+                      text: ' · ',
+                      style: tkText(size: 14, lineHeight: 1.3, color: t.muted),
+                    ),
+                    TextSpan(
+                      text: more,
+                      style: tkText(size: 14, weight: 650, lineHeight: 1.3, color: t.accent),
+                    ),
                   ],
                 ],
               ),
@@ -325,10 +360,53 @@ class _PayChipState extends State<PayChip> {
         onTap: () => unawaited(_open()),
         child: TkPress(
           onTap: () => unawaited(_open()),
-          child: ConstrainedBox(constraints: const BoxConstraints(minHeight: 48), child: Center(widthFactor: 1, child: chip)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Center(widthFactor: 1, child: chip),
+          ),
         ),
       ),
     );
+    // Add to the list, where Pay could pay it (not for staff with an
+    // account not saved yet), and not once paid.
+    final collect = widget.from != null && !staffAsk && paid == null
+        ? TapArea(
+            child: Semantics(
+              button: true,
+              label: 'Add $who to your list of people to pay',
+              excludeSemantics: true,
+              onTap: () => unawaited(_collect()),
+              child: TkPress(
+                onTap: () => unawaited(_collect()),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 5, 14, 5),
+                      decoration: BoxDecoration(
+                        color: t.chatIn,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [BoxShadow(color: const Color(0xFF000000).withValues(alpha: 0.08), blurRadius: 2, offset: const Offset(0, 1))],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 26,
+                            child: Center(child: TkIcon('b-people', size: 15, stroke: 2.3, color: t.accent)),
+                          ),
+                          const SizedBox(width: 6),
+                          Text('Add to the list', style: tkText(size: 14, weight: 650, lineHeight: 1.3, color: t.accent)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null;
     final save = maySaveFromMessages(widget.auth, r)
         ? TapArea(
             child: Semantics(
@@ -352,7 +430,10 @@ class _PayChipState extends State<PayChip> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(height: 26, child: Center(child: TkIcon('b-plus', size: 15, stroke: 2.3, color: t.accent))),
+                          SizedBox(
+                            height: 26,
+                            child: Center(child: TkIcon('b-plus', size: 15, stroke: 2.3, color: t.accent)),
+                          ),
                           const SizedBox(width: 6),
                           Text('Save as…', style: tkText(size: 14, weight: 650, lineHeight: 1.3, color: t.accent)),
                         ],
@@ -368,13 +449,9 @@ class _PayChipState extends State<PayChip> {
       alignment: widget.mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.only(top: 2, bottom: 4),
-        child: save == null
+        child: save == null && collect == null
             ? pay
-            : Wrap(
-                spacing: 6,
-                alignment: widget.mine ? WrapAlignment.end : WrapAlignment.start,
-                children: [pay, save],
-              ),
+            : Wrap(spacing: 6, alignment: widget.mine ? WrapAlignment.end : WrapAlignment.start, children: [pay, ?collect, ?save]),
       ),
     );
   }

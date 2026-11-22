@@ -17,7 +17,8 @@ import 'attachments.dart' show PickedFile;
 import 'groups.dart' show pickOneOf;
 import 'menu.dart' show MenuItem;
 import 'my_chat.dart' show sayFailure;
-import 'pay_chip.dart' show mayPayFromMessages, payFromChatPhoto;
+import 'pay_chip.dart' show collectFromChatPhoto, mayPayFromMessages, payFromChatPhoto;
+import 'pay_collect.dart' show MessageFrom;
 import 'photo_text.dart' show PhotoAI, noWordsInPhoto, readChatPhoto;
 import 'saved_files.dart' show SavedFileSheet, uploadSavedFile;
 import 'saved_accounts.dart';
@@ -68,10 +69,7 @@ Future<void> saveNamed(BuildContext context, Auth auth, String name, {bool busin
   final kind = await pickOneOf(
     context,
     title: 'Save @$name',
-    choices: [
-      for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', ''),
-      for (final e in savedKinds.entries) (e.key, e.value.one, ''),
-    ],
+    choices: [for (final m in made) ('k:${m.id}', 'A ${m.name.toLowerCase()}', ''), for (final e in savedKinds.entries) (e.key, e.value.one, '')],
   );
   if (kind == null || !context.mounted) return;
   if (kind.startsWith('k:')) {
@@ -148,7 +146,9 @@ Future<bool> _saveFromPhotoWords(BuildContext context, Auth auth, String words, 
   if (words.isEmpty) return false;
   final ReadSavedWordsResponse r;
   try {
-    r = await auth.api.readSavedWords(body: ReadSavedWordsRequest(text: words, from: 'photo'));
+    r = await auth.api.readSavedWords(
+      body: ReadSavedWordsRequest(text: words, from: 'photo'),
+    );
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
     return true;
@@ -161,9 +161,11 @@ Future<bool> _saveFromPhotoWords(BuildContext context, Auth auth, String words, 
 
 /// A photo's Pay this account (for those who may pay, as the chip under a
 /// message) and Save the account, each read from the photo on the phone
-/// first; [filePath] is where the chat fetches it.
-List<MenuItem> photoAccountItems(BuildContext context, Auth auth, String filePath, {bool business = false}) => [
+/// first; [filePath] is where the chat fetches it. With [from] (the
+/// message), "Add to the list" beside Pay this account.
+List<MenuItem> photoAccountItems(BuildContext context, Auth auth, String filePath, {bool business = false, MessageFrom? from}) => [
   if (mayPayFromMessages(auth)) MenuItem('money', 'Pay this account', () => payFromChatPhoto(context, auth, filePath)),
+  if (mayPayFromMessages(auth) && from != null) MenuItem('plus', 'Add to the list', () => collectFromChatPhoto(context, auth, filePath, from)),
   MenuItem('card', 'Save the account', () => saveAccountFromChatPhoto(context, auth, filePath, business: business)),
 ];
 
@@ -172,13 +174,23 @@ List<MenuItem> photoAccountItems(BuildContext context, Auth auth, String filePat
 /// "Save the file as…" when it has both). [filePath] is where its
 /// file is fetched; empty when it has none to save. A photo also has
 /// [photoAccountItems].
-List<MenuItem> saveAsItems(BuildContext context, Auth auth, {required String words, required String filePath, required String fileName, required String fileType, bool business = false}) {
+List<MenuItem> saveAsItems(
+  BuildContext context,
+  Auth auth, {
+  required String words,
+  required String filePath,
+  required String fileName,
+  required String fileType,
+  bool business = false,
+  MessageFrom? from,
+}) {
   final both = words.isNotEmpty && filePath.isNotEmpty;
   final photo = filePath.isNotEmpty && fileType.startsWith('image/');
   return [
     if (words.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: words)), done: 'Copied'),
     if (words.isNotEmpty) MenuItem('note', both ? 'Save the words as…' : 'Save as…', () => saveFromWords(context, auth, words, business: business)),
-    if (filePath.isNotEmpty) MenuItem('note', both ? 'Save the file as…' : 'Save as…', () => saveFromChatFile(context, auth, filePath, fileName, fileType, business: business)),
-    if (photo) ...photoAccountItems(context, auth, filePath, business: business),
+    if (filePath.isNotEmpty)
+      MenuItem('note', both ? 'Save the file as…' : 'Save as…', () => saveFromChatFile(context, auth, filePath, fileName, fileType, business: business)),
+    if (photo) ...photoAccountItems(context, auth, filePath, business: business, from: from),
   ];
 }

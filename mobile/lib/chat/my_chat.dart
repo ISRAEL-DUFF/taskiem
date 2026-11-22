@@ -57,6 +57,7 @@ import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
 import 'saved_files.dart' show attachSavedFile;
 import 'menu.dart' show showMessageMenu;
+import 'pay_collect.dart' show PayListBar;
 
 
 /// The words for a failure, as the chats say them.
@@ -937,7 +938,15 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     final a = m.attachment;
     final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
     final file = a != null && a.kind != 'voice';
-    final items = saveAsItems(context, d.auth, words: words, filePath: file ? '/v1/me/chats/${d.id}/files/${m.id}' : '', fileName: a?.name ?? 'File', fileType: a?.type ?? '');
+    final items = saveAsItems(
+      context,
+      d.auth,
+      words: words,
+      filePath: file ? '/v1/me/chats/${d.id}/files/${m.id}' : '',
+      fileName: a?.name ?? 'File',
+      fileType: a?.type ?? '',
+      from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
+    );
     if (items.isEmpty) return;
     await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
   }
@@ -1095,6 +1104,8 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                   if (c != null && c.blocked)
                     _Note(text: 'You blocked $name. They can’t write to you, and you can’t write to them.', action: 'Unblock', onAction: () => _say(d.block(false), 'Unblocked $name')),
                   if (c != null && !c.blocked && c.blockedYou) _Note(text: '$name is not taking messages from you.'),
+                  // The people to pay collected from messages (pay_collect.dart).
+                  PayListBar(auth: d.auth),
                   if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
