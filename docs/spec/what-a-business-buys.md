@@ -612,6 +612,18 @@ No server change. The words and requests in `web/src/lib/things.ts`; the screens
 - **Tests:** `lib/things.test.ts` (13); `e2e/things.spec.ts` (7): the list grouped by label with those no longer had, a row sold with a price, a cashier without `invoice.manage` selling without one, a viewer without `table.edit`, added by hand with a new label, an order line leading to its rows, the spending card; axe at 390 and 360 in both themes. `/money/things` and `?all=true` in `accessibility.spec.ts`; the pages in `plainwords.test.ts`.
 - **Not done:** the Money tab in the menu still needs `invoice.read`, so someone with `table.read` only reaches Things we have by its address; the add form offers the business's labels, not suggestions from the name; a label merged since shows on cards as Not labelled (as U2a).
 
+### As built: U3 (app)
+
+No server change. `mobile/api.txt` gains `listThings`, `getThing`, `addThing`, `patchThing`, `getMoneySpending`. Look: `mobile-app-look.md`, Stock and supplies.
+
+- **Things we have** (`chat/things_page.dart` `ThingsPage`), Money › Go to for `table.read`: `GET /v1/things?group=label` (with `all=true` for **Show those no longer had**); a top card of what is still had (total, count, a split by label), Newest first or By label (a section per label with its total), those no longer had in their own section with their status.
+- **One row** (`ThingPage`): status as five choices, Label (the line's label sheet, `LabelPickSheet`; No label sends `clear_label`), Serial number, Warranty ends (a date, or cleared with `""`), Note, From, and the order it came on (opens `PurchasePage`), or Added by hand. Changes are `PATCH /v1/things/{id}` for `table.edit`; without it, said and nothing pressable. **Sold** asks an optional price (`SoldSheet`) and cash or transfer, sent with an `Idempotency-Key`; without `invoice.manage` it says a price is money in and marks it sold without one. Leaving sold when its sale was recorded asks first (the money in stays).
+- **Add something we have** (`AddThingSheet`): name, cost, when it came, from whom (`GET /v1/stock/suppliers`), label, then serial, warranty end, note; `POST /v1/things`.
+- **Marks linked:** an order to a supplier with a tracked line received, and a bill whose order has one, show **On Things we have**, opening the list of that order's rows (filtered on the phone by `purchase_order_id`). The `LineMark` pills themselves are not pressable.
+- **Spending by label** (`chat/spending.dart`): `SpendingCard` on Money for `invoice.read`, for Money's period (`from`, `to`): the split of running costs, Bought to sell or make with and Bought to keep, and the three labels spent on most; See all opens `SpendingPage`, by month (`month`, this one and five before): profit leaving out Bought to keep, the three as tiles, every label with what of it was bought to sell or to keep, Not labelled apart.
+- **Tests:** `test/things_page_test.dart` (the list by label and with those no longer had, sold with a price, a cashier's sale without one, seen without `table.edit`, added by hand with a label and supplier, spending's page and card, 340 px, large text and targets), `test/things_fixture.dart`; `money_page_test` reads spending. Looks `things`, `thing`, `spending` new; `money` and `purchase-lines` drawn again.
+- **Not done:** no search on the list; a supplier cannot be changed on a row (the API has no field for it); Things we have is not on the Stock page.
+
 ## 12. Accept
 
 **The split**

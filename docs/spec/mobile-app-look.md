@@ -214,6 +214,42 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   that renaming or merging changes reports, not records; the labels by use
   as rows with their letters; a row opens Rename and Merge into another
   label (`pickAction`), Merge asking which label (`pickOneOf`), then sure.
+- **Things we have** (U3, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §5.3; `chat/things_page.dart`), from
+  Money's Go to (a violet # square). The head's + is **Add something we
+  have**; chips Newest first and By label under it. A top card: "What we
+  still have" in violet, the total at cost large, how many, and a split bar
+  by label (three and Other). The rows have their letters, the label (or
+  Not labelled), from whom and the day it came, the cost at the end, and a
+  status pill only when no longer had. By label: a section per label with
+  its total at the title's end. **Show those no longer had** is a small
+  button under the list; they come in a section of their own.
+- **One of Things we have**: its name as a 22 px title; a top card of what
+  it cost, its status in the eyebrow's end, when it came and from whom (and
+  when it was sold, broken… in the status's accent). **Status** as five
+  radio rows (Have, Sold, Broken, Given away, Gone); **Details** (Label,
+  Serial number, Warranty ends, Note) and **Where it came from** (From, the
+  order, which opens, or Added by hand) as square-icon rows. Sold opens a
+  form sheet: Sold for (optional), Paid in cash or by transfer once a price
+  is typed; without `invoice.manage` a blue callout says a price is money
+  in, and it is marked sold without one. Without `table.edit`, a lock
+  callout and nothing pressable. A failed change is a toast.
+- **Add something we have**: a form sheet (name, what it cost, when it
+  came, from whom over `pickOneOf`, the label through the line's label
+  sheet), then "If you have them" (serial, warranty ends, note).
+- **An order's tracked lines** link to their rows: under What you ordered
+  (an order to a supplier) and on a bill, one row "On Things we have"
+  opening the list of that order's rows.
+- **Spending by label** (§5.4; `chat/spending.dart`). On Money, a section
+  for the period after In this period: the split bar (Running costs, Bought
+  to sell or make with, Bought to keep, with their amounts), then the
+  three labels spent on most, See all opening the page. The page: month
+  chips (This month and five before); a top card of profit (lime, red when
+  under) with "Bought to keep left out", what made it, and the split bar
+  in shares; tiles Running costs (orange), To sell or make with (teal) and
+  a wide Bought to keep (violet, "left out of profit"); then By label, each
+  with its amount and what of it was bought to sell or keep, Not labelled
+  with a # tile.
 
 ### Cards in a conversation
 

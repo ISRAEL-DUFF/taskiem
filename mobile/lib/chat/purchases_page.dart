@@ -41,6 +41,7 @@ import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkPanel, Tk
 import '../theme/look.dart';
 import 'invoices_page.dart' show shortDay;
 import 'orders_tab.dart' show purchaseWaiting;
+import 'things_page.dart' show ThingsPage;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -452,6 +453,24 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
           ),
         ],
       ),
+      // The lines kept track of, once something came: their rows on
+      // Things we have (what a business buys §9).
+      if (_auth.can('table.read') && lines.any((l) => l['treatment'] == 'track' && _int(l['received']) > 0))
+        TkPanel(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'On Things we have',
+              sub: () {
+                final n = lines.where((l) => l['treatment'] == 'track').fold(0, (n, l) => n + _int(l['received']));
+                return n == 1 ? '1 thing from this order' : '$n things from this order';
+              }(),
+              icon: 'b-hash',
+              square: TkLook.of(context).violet,
+              onTap: () => _push(context, ThingsPage(auth: _auth, order: _str(p['id']), orderReference: _str(p['reference']).isEmpty ? null : _str(p['reference']), backLabel: 'Back to the order')),
+            ),
+          ],
+        ),
       if (change.isNotEmpty && p['seller_status'] == 'changed')
         TkPageCard(
           title: '$supplier can supply it like this',

@@ -25,6 +25,7 @@ import 'approve.dart' show TkTextBox;
 import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show fmtTime, shortDay;
 import 'money_sheets.dart' show billHero, billStatus, canPay, sentLine;
+import 'things_page.dart' show ThingsPage;
 import 'treat_line.dart' show LineMark;
 import 'words.dart' show naira;
 import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection, TkSkeleton, tkInitials;
@@ -463,6 +464,26 @@ class _BillPageState extends State<BillPage> with Polling {
           ),
         ],
       ),
+      // Lines kept track of on the orders it bills: their rows on Things
+      // we have (what a business buys §9).
+      for (final o in {for (final l in lines) _str(l['purchase_id'])}.where((id) => _maps(_orders[id]?['lines']).any((x) => x['treatment'] == 'track' && _int(x['received']) > 0)))
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'On Things we have',
+              sub: 'From ${_str(_orders[o]?['reference']).isEmpty ? 'its order' : _str(_orders[o]?['reference'])}',
+              icon: 'b-hash',
+              square: TkLook.of(context).violet,
+              onTap: () => Navigator.of(context).push(
+                TkRoute<void>(
+                  pageBuilder: (_, _, _) =>
+                      ThingsPage(auth: _auth, order: o, orderReference: _str(_orders[o]?['reference']).isEmpty ? null : _str(_orders[o]?['reference']), backLabel: 'Back to the bill'),
+                ),
+              ),
+            ),
+          ],
+        ),
       if (manage && b['status'] != 'void' && b['status'] != 'paid')
         TkSection(
           inset: 56,

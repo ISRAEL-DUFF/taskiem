@@ -1677,6 +1677,36 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/money/labels/${Uri.encodeComponent(id)}/merge', body: body.toJson());
     return SpendLabel.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Things we have (`GET /v1/things`)
+  Future<ListThingsResponse> listThings({String? all, String? group}) async {
+    final j = await _t.send('GET', '/v1/things', query: {'all': ?all, 'group': ?group});
+    return ListThingsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of Things we have (`GET /v1/things/{id}`)
+  Future<GetThingResponse> getThing({required String id}) async {
+    final j = await _t.send('GET', '/v1/things/${Uri.encodeComponent(id)}');
+    return GetThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add something we have (`POST /v1/things`)
+  Future<AddThingResponse> addThing({required AddThingRequest body}) async {
+    final j = await _t.send('POST', '/v1/things', body: body.toJson());
+    return AddThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change one of Things we have (`PATCH /v1/things/{id}`)
+  Future<PatchThingResponse> patchThing({required PatchThingRequest body, required String id, String? idempotencyKey}) async {
+    final j = await _t.send('PATCH', '/v1/things/${Uri.encodeComponent(id)}', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
+    return PatchThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A period's spending by label (`GET /v1/money/spending`)
+  Future<MoneySpending> getMoneySpending({String? from, String? to, String? month}) async {
+    final j = await _t.send('GET', '/v1/money/spending', query: {'from': ?from, 'to': ?to, 'month': ?month});
+    return MoneySpending.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -14354,5 +14384,335 @@ class MergeSpendLabelRequest {
 
   Map<String, dynamic> toJson() => {
         'into': into,
+      };
+}
+
+class ListThingsResponse {
+  const ListThingsResponse({required this.count, this.groups, required this.things, required this.totalKobo});
+
+  final int count;
+  final List<ListThingsResponseGroupsItem>? groups;
+  final List<Thing> things;
+  final int totalKobo;
+
+  factory ListThingsResponse.fromJson(Map<String, dynamic> j) => ListThingsResponse(
+        count: (j['count'] as num).toInt(),
+        groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => ListThingsResponseGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        things: (j['things'] as List).map((e) => Thing.fromJson(e as Map<String, dynamic>)).toList(),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'groups': ?groups?.map((e) => e.toJson()).toList(),
+        'things': things.map((e) => e.toJson()).toList(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class ListThingsResponseGroupsItem {
+  const ListThingsResponseGroupsItem({required this.count, required this.label, this.labelId, required this.totalKobo});
+
+  final int count;
+  final String label;
+  final Object? labelId;
+  final int totalKobo;
+
+  factory ListThingsResponseGroupsItem.fromJson(Map<String, dynamic> j) => ListThingsResponseGroupsItem(
+        count: (j['count'] as num).toInt(),
+        label: j['label'] as String,
+        labelId: j['label_id'],
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'label': label,
+        'label_id': ?labelId,
+        'total_kobo': totalKobo,
+      };
+}
+
+/// A row of Things we have (what a business buys §5.3)
+class Thing {
+  const Thing({this.costKobo, required this.createdAt, required this.createdBy, required this.id, this.label, this.labelId, required this.name, this.note, this.orderReference, this.purchaseLineId, this.purchaseOrderId, this.receivedAt, this.saleEntryId, this.serial, required this.status, required this.statusAt, this.supplier, this.supplierId, this.unitNo, this.warrantyUntil});
+
+  final int? costKobo;
+  final DateTime createdAt;
+  final String createdBy;
+  final String id;
+  final String? label;
+  final String? labelId;
+  final String name;
+  final String? note;
+  final String? orderReference;
+  final String? purchaseLineId;
+  final String? purchaseOrderId;
+  final DateTime? receivedAt;
+  /// The money in of its sale, Sale of things we had
+  final String? saleEntryId;
+  final String? serial;
+  final String status;
+  final DateTime statusAt;
+  final String? supplier;
+  final String? supplierId;
+  /// Which of its line's units it is, from 1
+  final int? unitNo;
+  final String? warrantyUntil;
+
+  factory Thing.fromJson(Map<String, dynamic> j) => Thing(
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        id: j['id'] as String,
+        label: j['label'] == null ? null : j['label'] as String,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        orderReference: j['order_reference'] == null ? null : j['order_reference'] as String,
+        purchaseLineId: j['purchase_line_id'] == null ? null : j['purchase_line_id'] as String,
+        purchaseOrderId: j['purchase_order_id'] == null ? null : j['purchase_order_id'] as String,
+        receivedAt: j['received_at'] == null ? null : DateTime.parse(j['received_at'] as String),
+        saleEntryId: j['sale_entry_id'] == null ? null : j['sale_entry_id'] as String,
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        status: j['status'] as String,
+        statusAt: DateTime.parse(j['status_at'] as String),
+        supplier: j['supplier'] == null ? null : j['supplier'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
+        unitNo: j['unit_no'] == null ? null : (j['unit_no'] as num).toInt(),
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': ?costKobo,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'id': id,
+        'label': ?label,
+        'label_id': ?labelId,
+        'name': name,
+        'note': ?note,
+        'order_reference': ?orderReference,
+        'purchase_line_id': ?purchaseLineId,
+        'purchase_order_id': ?purchaseOrderId,
+        'received_at': ?receivedAt?.toUtc().toIso8601String(),
+        'sale_entry_id': ?saleEntryId,
+        'serial': ?serial,
+        'status': status,
+        'status_at': statusAt.toUtc().toIso8601String(),
+        'supplier': ?supplier,
+        'supplier_id': ?supplierId,
+        'unit_no': ?unitNo,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class GetThingResponse {
+  const GetThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory GetThingResponse.fromJson(Map<String, dynamic> j) => GetThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class AddThingRequest {
+  const AddThingRequest({this.costKobo, this.labelId, required this.name, this.note, this.receivedAt, this.serial, this.supplierId, this.warrantyUntil});
+
+  final int? costKobo;
+  final String? labelId;
+  final String name;
+  final String? note;
+  final DateTime? receivedAt;
+  final String? serial;
+  final String? supplierId;
+  final String? warrantyUntil;
+
+  factory AddThingRequest.fromJson(Map<String, dynamic> j) => AddThingRequest(
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        receivedAt: j['received_at'] == null ? null : DateTime.parse(j['received_at'] as String),
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': ?costKobo,
+        'label_id': ?labelId,
+        'name': name,
+        'note': ?note,
+        'received_at': ?receivedAt?.toUtc().toIso8601String(),
+        'serial': ?serial,
+        'supplier_id': ?supplierId,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class AddThingResponse {
+  const AddThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory AddThingResponse.fromJson(Map<String, dynamic> j) => AddThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class PatchThingRequest {
+  const PatchThingRequest({this.clearLabel, this.labelId, this.note, this.salePaidHow, this.salePriceKobo, this.serial, this.status, this.warrantyUntil});
+
+  final bool? clearLabel;
+  final String? labelId;
+  final String? note;
+  final String? salePaidHow;
+  final int? salePriceKobo;
+  final String? serial;
+  final String? status;
+  /// A date (YYYY-MM-DD); empty clears it
+  final String? warrantyUntil;
+
+  factory PatchThingRequest.fromJson(Map<String, dynamic> j) => PatchThingRequest(
+        clearLabel: j['clear_label'] == null ? null : j['clear_label'] as bool,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        salePaidHow: j['sale_paid_how'] == null ? null : j['sale_paid_how'] as String,
+        salePriceKobo: j['sale_price_kobo'] == null ? null : (j['sale_price_kobo'] as num).toInt(),
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'clear_label': ?clearLabel,
+        'label_id': ?labelId,
+        'note': ?note,
+        'sale_paid_how': ?salePaidHow,
+        'sale_price_kobo': ?salePriceKobo,
+        'serial': ?serial,
+        'status': ?status,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class PatchThingResponse {
+  const PatchThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory PatchThingResponse.fromJson(Map<String, dynamic> j) => PatchThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class MoneySpending {
+  const MoneySpending({required this.boughtToKeepKobo, required this.boughtToSellKobo, required this.from, required this.labels, required this.profit, required this.runningCostsKobo, required this.to, required this.totalKobo});
+
+  /// Bought to keep (lines kept track of), left out of profit.
+  final int boughtToKeepKobo;
+  /// Bought to sell or make with (lines added to stock), counted as stock
+  /// bought.
+  final int boughtToSellKobo;
+  final DateTime from;
+  /// The most first.
+  final List<MoneySpendingLabelsItem> labels;
+  final MoneySpendingProfit profit;
+  final int runningCostsKobo;
+  final DateTime to;
+  final int totalKobo;
+
+  factory MoneySpending.fromJson(Map<String, dynamic> j) => MoneySpending(
+        boughtToKeepKobo: (j['bought_to_keep_kobo'] as num).toInt(),
+        boughtToSellKobo: (j['bought_to_sell_kobo'] as num).toInt(),
+        from: DateTime.parse(j['from'] as String),
+        labels: (j['labels'] as List).map((e) => MoneySpendingLabelsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        profit: MoneySpendingProfit.fromJson(j['profit'] as Map<String, dynamic>),
+        runningCostsKobo: (j['running_costs_kobo'] as num).toInt(),
+        to: DateTime.parse(j['to'] as String),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bought_to_keep_kobo': boughtToKeepKobo,
+        'bought_to_sell_kobo': boughtToSellKobo,
+        'from': from.toUtc().toIso8601String(),
+        'labels': labels.map((e) => e.toJson()).toList(),
+        'profit': profit.toJson(),
+        'running_costs_kobo': runningCostsKobo,
+        'to': to.toUtc().toIso8601String(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class MoneySpendingLabelsItem {
+  const MoneySpendingLabelsItem({required this.boughtToKeepKobo, required this.boughtToSellKobo, required this.entries, required this.kobo, this.labelId, required this.name, required this.runningCostsKobo});
+
+  final int boughtToKeepKobo;
+  final int boughtToSellKobo;
+  final int entries;
+  final int kobo;
+  /// The label kept; null for Not labelled.
+  final Object? labelId;
+  final String name;
+  final int runningCostsKobo;
+
+  factory MoneySpendingLabelsItem.fromJson(Map<String, dynamic> j) => MoneySpendingLabelsItem(
+        boughtToKeepKobo: (j['bought_to_keep_kobo'] as num).toInt(),
+        boughtToSellKobo: (j['bought_to_sell_kobo'] as num).toInt(),
+        entries: (j['entries'] as num).toInt(),
+        kobo: (j['kobo'] as num).toInt(),
+        labelId: j['label_id'],
+        name: j['name'] as String,
+        runningCostsKobo: (j['running_costs_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bought_to_keep_kobo': boughtToKeepKobo,
+        'bought_to_sell_kobo': boughtToSellKobo,
+        'entries': entries,
+        'kobo': kobo,
+        'label_id': ?labelId,
+        'name': name,
+        'running_costs_kobo': runningCostsKobo,
+      };
+}
+
+class MoneySpendingProfit {
+  const MoneySpendingProfit({required this.costsKobo, required this.feesKobo, required this.inKobo, required this.profitKobo});
+
+  /// Spending less Bought to keep.
+  final int costsKobo;
+  final int feesKobo;
+  /// The period's own money in, settled (less money collected for others).
+  final int inKobo;
+  final int profitKobo;
+
+  factory MoneySpendingProfit.fromJson(Map<String, dynamic> j) => MoneySpendingProfit(
+        costsKobo: (j['costs_kobo'] as num).toInt(),
+        feesKobo: (j['fees_kobo'] as num).toInt(),
+        inKobo: (j['in_kobo'] as num).toInt(),
+        profitKobo: (j['profit_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'costs_kobo': costsKobo,
+        'fees_kobo': feesKobo,
+        'in_kobo': inKobo,
+        'profit_kobo': profitKobo,
       };
 }

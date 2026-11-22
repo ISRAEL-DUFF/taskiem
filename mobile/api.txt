@@ -359,3 +359,11 @@ listSpendLabels
 makeSpendLabel
 renameSpendLabel
 mergeSpendLabel
+
+# What a business buys U3: Things we have, spending by label
+# (docs/spec/what-a-business-buys.md §5.3, §5.4)
+listThings
+getThing
+addThing
+patchThing
+getMoneySpending
