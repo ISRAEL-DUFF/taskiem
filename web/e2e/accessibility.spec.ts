@@ -91,6 +91,7 @@ const PAGES = [
   "/schools/gate",
   "/settings/schools",
   "/start-something",
+  "/pages",
 ];
 
 async function signIn(page: Page) {

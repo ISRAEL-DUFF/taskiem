@@ -69,6 +69,8 @@ import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
+import { PageScreen, Pages, pageIcon } from "./pages/Pages";
+import { PageEditor } from "./pages/PageEditor";
 import { Storefront } from "./pages/Storefront";
 import { Look } from "./pages/Look";
 import { StorefrontOrder, StorefrontOrders } from "./pages/StorefrontOrders";
@@ -460,6 +462,18 @@ function SignedIn() {
       live = false;
     };
   }, [pathname]);
+  // The business's own pages pinned to the menu, under Your pages (pages §9).
+  const [pinned, setPinned] = useState<{ name: string; title: string; icon: string }[]>([]);
+  useEffect(() => {
+    let live = true;
+    get<{ pages: { name: string; title: string; icon: string; pinned: boolean }[] }>("/v1/pages").then(
+      (r) => live && setPinned(r.pages.filter((p) => p.pinned)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [pathname]);
   // The bell: a person's notifications and approvals waiting (N12).
   const bell = useBellCount(!!me?.user, pathname);
   const install = useInstall();
@@ -520,6 +534,8 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
+    // The business's own screens (pages/Pages.tsx).
+    ["/pages", "Pages", "dashboard", true],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
     ["/chat", "Chat", "chat", true],
     // The people of the business (pages/Staff.tsx).
@@ -585,7 +601,7 @@ function SignedIn() {
     <NavLink
       key={to}
       to={to}
-      end={to === "/settings" || to === "/forms" || to === "/storefront"}
+      end={to === "/settings" || to === "/forms" || to === "/storefront" || to === "/pages"}
     >
       <Icon name={icon} />
       {label}
@@ -712,6 +728,14 @@ function SignedIn() {
             </button>
           </div>
           {daily.filter(([, , , ok]) => ok).map(link)}
+          {pinned.length > 0 && (
+            <>
+              <div className="section" id="nav-your-pages">
+                Your pages
+              </div>
+              {pinned.map((p) => link([`/pages/${p.name}`, p.title, pageIcon(p.icon), true]))}
+            </>
+          )}
           {more.length > 0 && (
             <>
               <button
@@ -826,6 +850,9 @@ function SignedIn() {
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/tables" element={<Tables />} />
                   <Route path="/tables/:id" element={<TablePage />} />
+                  <Route path="/pages" element={<Pages />} />
+                  <Route path="/pages/:name" element={<PageScreen />} />
+                  <Route path="/pages/:name/edit" element={<PageEditor />} />
                   <Route path="/storefront" element={<Storefront />} />
                   <Route path="/storefront/look" element={<Look />} />
                   <Route

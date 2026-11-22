@@ -1,0 +1,402 @@
+// Pages (decision 0072, docs/pages.md): a business's own screens, a
+// page/v1 document drawn by the server (GET /v1/pages/{name}/view). This
+// file has the page's types, and the editor's work on its document in
+// plain words: no "block", "source" or "query" ever reaches the owner.
+
+import type { Column, Table } from "./tables";
+
+export type Tone = "plain" | "good" | "warn" | "bad";
+
+export interface Condition {
+  column: string;
+  op: string;
+  value?: string | number | boolean;
+}
+
+export interface Source {
+  table: string;
+  filters?: Condition[];
+  order?: { column: string; desc?: boolean }[];
+  uses?: string[];
+}
+
+export interface Part {
+  id: string;
+  type: "heading" | "figure" | "list" | "table";
+  title?: string;
+  text?: string;
+  label?: string;
+  value?: "count" | "sum";
+  of?: string;
+  naira?: boolean;
+  tone?: Tone;
+  lead?: boolean;
+  change?: { column: string; period: "day" | "week" | "month" };
+  size?: "full" | "half";
+  source?: Source;
+  item?: { title: string; sub?: string; state?: { text: string; tone?: Tone; tones?: Record<string, Tone> } };
+  group?: { column: string; order?: string[] };
+  columns?: { column: string; label?: string; naira?: boolean }[];
+  detail?: { title: string; lines?: { label: string; value: string; naira?: boolean }[] };
+  empty?: string;
+}
+
+export interface PageFilterDef {
+  id: string;
+  type: "search" | "choice" | "dates" | "mine";
+  label?: string;
+  column?: string;
+  columns?: string[];
+  options?: { value: string; label?: string }[];
+}
+
+export interface PageDoc {
+  page: "page/v1";
+  name: string;
+  title: string;
+  about?: string;
+  icon?: string;
+  roles?: string[];
+  filters?: PageFilterDef[];
+  blocks: Part[];
+}
+
+export interface PageSummary {
+  name: string;
+  title: string;
+  icon: string;
+  about: string;
+  roles: string[];
+  pinned: boolean;
+  published: boolean;
+  has_draft: boolean;
+  version: number | null;
+  published_at?: string;
+  updated_at: string;
+}
+
+export interface PageProblem {
+  path: string;
+  message: string;
+}
+
+export interface PageDetail extends PageSummary {
+  document: PageDoc | null;
+  draft?: PageDoc | null;
+  draft_at?: string;
+  problems?: PageProblem[];
+  shows?: string[];
+}
+
+export interface PageList {
+  pages: PageSummary[];
+  can_edit: boolean;
+  can_publish: boolean;
+  max_pinned: number;
+  max_pages: number;
+}
+
+export interface DrawnRow {
+  id: string;
+  title?: string;
+  sub?: string;
+  state?: { text: string; tone: Tone };
+  group?: string;
+  cells?: string[];
+  detail?: { title: string; lines: { label: string; value: string }[] };
+}
+
+export interface DrawnPart {
+  id: string;
+  type: Part["type"];
+  title?: string;
+  text?: string;
+  label?: string;
+  value?: number;
+  shown?: string;
+  tone?: Tone;
+  lead?: boolean;
+  naira?: boolean;
+  over?: string;
+  change?: { before: number; words: string; up: boolean; down: boolean };
+  size?: "full" | "half";
+  empty?: string;
+  count?: number;
+  has_detail?: boolean;
+  rows?: DrawnRow[];
+  more?: string | null;
+  groups?: { key: string; label: string }[];
+  columns?: { column: string; label: string; naira: boolean }[];
+  order?: { column: string; desc: boolean };
+  broken?: string;
+  error?: string;
+}
+
+export interface DrawnFilter {
+  id: string;
+  type: PageFilterDef["type"];
+  label: string;
+  value: string;
+  options?: { value: string; label: string }[];
+}
+
+export interface DrawnPage {
+  page: PageSummary;
+  draft: boolean;
+  filters: DrawnFilter[];
+  blocks: DrawnPart[];
+  can_edit: boolean;
+  drawn_at: string;
+}
+
+/** A tone as the app's badges and icons name it. */
+export function toneClass(t: Tone | undefined): "ok" | "warn" | "danger" | "muted" {
+  switch (t) {
+    case "good":
+      return "ok";
+    case "warn":
+      return "warn";
+    case "bad":
+      return "danger";
+  }
+  return "muted";
+}
+
+/** Figures that sit side by side, and the other parts, in order: a page
+ * is drawn as runs of figures (a row of tiles) between the rest. */
+export function layout(parts: DrawnPart[]): (DrawnPart | DrawnPart[])[] {
+  const out: (DrawnPart | DrawnPart[])[] = [];
+  for (const p of parts) {
+    const last = out[out.length - 1];
+    if (p.type === "figure" && !p.lead && !p.broken) {
+      if (Array.isArray(last)) last.push(p);
+      else out.push([p]);
+    } else out.push(p);
+  }
+  return out;
+}
+
+/** A list's rows under their group headings, in the server's order. */
+export function grouped(part: DrawnPart): { key: string; label: string; rows: DrawnRow[] }[] {
+  const rows = part.rows ?? [];
+  if (!part.groups?.length) return [{ key: "", label: "", rows }];
+  return part.groups.map((g) => ({ ...g, rows: rows.filter((r) => (r.group ?? "") === g.key) })).filter((g) => g.rows.length > 0);
+}
+
+/** The filters param a page is drawn with: only those set. */
+export function filtersParam(values: Record<string, string>): string {
+  const set = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== ""));
+  return Object.keys(set).length ? `filters=${encodeURIComponent(JSON.stringify(set))}` : "";
+}
+
+/** How many rows, in words: "3 rows", "1 row". */
+export function rowsWord(n: number): string {
+  return `${n.toLocaleString("en-GB")} ${n === 1 ? "row" : "rows"}`;
+}
+
+/** Who may open a page, in words. */
+export function whoWords(roles: string[]): string {
+  if (roles.length === 0) return "Everyone in the business";
+  const words = roles.map((r) => r.replace(/_/g, " "));
+  const list = words.length === 1 ? words[0] : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+  return `Owners and ${list}`;
+}
+
+/** What publishing says (pages §8): who will be able to open it and what it shows. */
+export function publishWords(title: string, roles: string[], shows: string[]): string[] {
+  const who = roles.length === 0 ? "Everyone in the business" : whoWords(roles);
+  return [`${who} will be able to open ${title}.`, ...shows.map((s) => `It shows ${s}.`)];
+}
+
+// --- the editor ---
+
+/** A column a row value shows: "=row.status" is status; anything else is not one column. */
+export function columnOf(v: string | undefined): string {
+  const m = /^=row\.([a-z][a-z0-9_]*)$/.exec(v ?? "");
+  return m?.[1] ?? "";
+}
+
+/** The value that shows one column. */
+export const showColumn = (c: string) => (c ? `=row.${c}` : "");
+
+/** A column's words: its title, else its name. */
+export function columnWords(t: Table | undefined, name: string): string {
+  if (name === "created_at") return "When added";
+  if (name === "updated_at") return "When changed";
+  const c = t?.columns.find((x) => x.name === name);
+  return c?.title || c?.name || name.replace(/_/g, " ");
+}
+
+const isNumber = (c: Column) => c.type === "integer" || c.type === "number";
+const isDate = (c: Column) => c.type === "date" || c.type === "datetime";
+
+/** The columns a part may group by, order by, add up or compare by. */
+export function columnsFor(t: Table | undefined, what: "any" | "number" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
+  const cols = t?.columns ?? [];
+  const pick = cols.filter((c) => {
+    switch (what) {
+      case "number":
+        return isNumber(c);
+      case "date":
+        return isDate(c);
+      case "group":
+        return c.type === "text" && !c.personal;
+      case "text":
+        return c.type === "text";
+      case "email":
+        return c.type === "email";
+    }
+    return c.type !== "json";
+  });
+  const out = pick.map((c) => ({ name: c.name, words: c.title || c.name }));
+  if (what === "date" || what === "any") out.push({ name: "created_at", words: "When added" });
+  return out;
+}
+
+/** A short id not yet used on the page. */
+export function freeId(parts: { id: string }[], base: string): string {
+  const clean = base.replace(/[^a-z0-9_]/g, "_").replace(/^[^a-z]+/, "") || "part";
+  let id = clean.slice(0, 28);
+  for (let i = 2; parts.some((p) => p.id === id); i++) id = `${clean.slice(0, 26)}_${i}`;
+  return id;
+}
+
+/** The kinds of part the editor adds, in an owner's words. */
+export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
+  { kind: "count", words: "A count", hint: "How many rows, like Open tickets" },
+  { kind: "sum", words: "A total", hint: "A column added up, like money owed" },
+  { kind: "list", words: "A list", hint: "Rows one under another, in groups if you like" },
+  { kind: "table", words: "A table", hint: "Rows in columns you pick" },
+  { kind: "heading", words: "A heading", hint: "A title and a line of words" },
+];
+
+/** A new part of a kind over a table, filled in with sensible choices. */
+export function newPart(kind: string, t: Table | undefined, parts: { id: string }[]): Part {
+  const table = t?.name ?? "";
+  const text = columnsFor(t, "text");
+  const any = columnsFor(t, "any").filter((c) => c.name !== "created_at");
+  switch (kind) {
+    case "heading":
+      return { id: freeId(parts, "heading"), type: "heading", title: "A heading" };
+    case "sum": {
+      const num = columnsFor(t, "number")[0];
+      return { id: freeId(parts, "total"), type: "figure", label: num ? `Total ${num.words.toLowerCase()}` : "Total", value: "sum", of: num?.name ?? "", source: { table } };
+    }
+    case "list": {
+      const title = text[0]?.name ?? any[0]?.name ?? "";
+      const sub = any.find((c) => c.name !== title)?.name ?? "";
+      return {
+        id: freeId(parts, "list"),
+        type: "list",
+        title: t?.title || t?.name || "List",
+        source: { table, order: [{ column: "created_at", desc: true }] },
+        item: { title: showColumn(title) || "='#' + row.id", ...(sub ? { sub: showColumn(sub) } : {}) },
+        detail: { title: showColumn(title) || "='#' + row.id", lines: any.slice(0, 11).map((c) => ({ label: c.words, value: showColumn(c.name) })) },
+      };
+    }
+    case "table":
+      return { id: freeId(parts, "table"), type: "table", title: t?.title || t?.name || "Table", source: { table }, columns: any.slice(0, 3).map((c) => ({ column: c.name })) };
+  }
+  return { id: freeId(parts, "count"), type: "figure", label: t?.title || t?.name || "How many", value: "count", source: { table } };
+}
+
+/** What a part is, in a line for the editor's list of parts. */
+export function partWords(p: Part, tables: Table[]): string {
+  const t = tables.find((x) => x.name === p.source?.table);
+  const from = t ? t.title || t.name : p.source?.table ?? "";
+  const where = (p.source?.filters ?? []).length ? `, only some rows` : "";
+  switch (p.type) {
+    case "heading":
+      return `Heading: ${p.title ?? ""}`;
+    case "figure":
+      return p.value === "sum"
+        ? `Total of ${columnWords(t, p.of ?? "")} from ${from}${where}`
+        : `How many in ${from}${where}${p.change ? `, this ${p.change.period}` : ""}`;
+    case "list":
+      return `List of ${from}${p.group ? `, in groups by ${columnWords(t, p.group.column)}` : ""}${where}`;
+    case "table":
+      return `Table of ${from}: ${(p.columns ?? []).map((c) => c.label || columnWords(t, c.column)).join(", ")}${where}`;
+  }
+  return p.type;
+}
+
+/** A part's heading in the editor: its label or title. */
+export const partName = (p: Part) => p.label || p.title || "Part";
+
+/** Moves part i up (-1) or down (+1). */
+export function move<T>(list: T[], i: number, by: -1 | 1): T[] {
+  const j = i + by;
+  if (j < 0 || j >= list.length) return list;
+  const out = [...list];
+  const a = out[i] as T;
+  out[i] = out[j] as T;
+  out[j] = a;
+  return out;
+}
+
+/** The conditions an owner picks from, by a column's type. */
+export function opsFor(c: Column | undefined): { op: string; words: string }[] {
+  const base = [
+    { op: "eq", words: "is" },
+    { op: "neq", words: "is not" },
+  ];
+  const empty = [
+    { op: "is_null", words: "is empty" },
+    { op: "not_null", words: "is not empty" },
+  ];
+  if (!c) return [...base, ...empty];
+  if (c.type === "text") return [...base, { op: "contains", words: "has the words" }, ...empty];
+  if (c.type === "boolean") return [{ op: "eq", words: "is" }, ...empty];
+  if (isNumber(c) || isDate(c))
+    return [...base, { op: "gt", words: "is more than" }, { op: "gte", words: "is at least" }, { op: "lt", words: "is less than" }, { op: "lte", words: "is at most" }, ...empty];
+  return [...base, ...empty];
+}
+
+/** Whether a filter fits a table (the server's own check, so the editor
+ * sets a part to use only the filters it can). */
+export function filterFits(f: PageFilterDef, t: Table | undefined): boolean {
+  if (!t) return false;
+  const col = t.columns.find((c) => c.name === f.column);
+  switch (f.type) {
+    case "search":
+      return (f.columns?.length ? t.columns.filter((c) => f.columns?.includes(c.name)) : t.columns.filter((c) => c.type === "text")).length > 0;
+    case "choice":
+      return col?.type === "text";
+    case "dates":
+      return f.column === "created_at" || (!!col && isDate(col));
+    case "mine":
+      return col?.type === "email";
+  }
+  return false;
+}
+
+/** The document as it is saved: each list and table uses every filter
+ * that fits its table (figures stay whole). */
+export function withUses(doc: PageDoc, tables: Table[]): PageDoc {
+  const filters = doc.filters ?? [];
+  return {
+    ...doc,
+    blocks: doc.blocks.map((b) => {
+      if (!b.source || (b.type !== "list" && b.type !== "table")) return b;
+      const t = tables.find((x) => x.name === b.source?.table);
+      const uses = filters.filter((f) => filterFits(f, t)).map((f) => f.id);
+      const source = { ...b.source };
+      if (uses.length) source.uses = uses;
+      else delete source.uses;
+      return { ...b, source };
+    }),
+  };
+}
+
+/** The problems that are about one part (by its place), and the rest. */
+export function problemsOf(problems: PageProblem[], i: number): PageProblem[] {
+  return problems.filter((p) => p.path === `/blocks/${i}` || p.path.startsWith(`/blocks/${i}/`));
+}
+
+/** The dates a dates filter offers. */
+export const DATE_CHOICES = [
+  { value: "", words: "Any time" },
+  { value: "today", words: "Today" },
+  { value: "week", words: "This week" },
+  { value: "month", words: "This month" },
+];
