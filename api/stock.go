@@ -418,6 +418,10 @@ type stockNew struct {
 	Material bool `json:"material"`
 	// GroupOf is, for a size's or colour's stock item, its product.
 	GroupOf string `json:"-"`
+	// NoStock: a product made to be sold in sizes and colours (make one
+	// product) keeps no stock of its own: no stock item is made for it,
+	// and it takes no quantity.
+	NoStock bool `json:"-"`
 }
 
 func (in *stockNew) check() error {
@@ -615,6 +619,9 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 			if err := audit(tx, "storefront.item_add", sh.table.Name, map[string]any{"table_id": sh.table.ID, "row_id": id, "for": "stock", "key": key}); err != nil {
 				return err
 			}
+			if in.NoStock {
+				return nil
+			}
 			d := stockDetails{Unit: &in.Unit, CostKobo: in.CostKobo, Reorder: in.Reorder, Target: in.Target, Supplier: &in.Supplier}
 			sid, err := stockSetDetailsTx(ctx, tx, tenant, stock.Item{ID: id, Name: in.Name}, d, actor)
 			if err != nil {
@@ -626,7 +633,7 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 				}
 			}
 		}
-		if in.Quantity <= 0 {
+		if in.Quantity <= 0 || in.NoStock {
 			return nil
 		}
 		q := in.Quantity
@@ -1028,6 +1035,11 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	pd := d
 	if before.HasSizes() {
 		pd = stockDetails{Name: d.Name}
+		if before.StockItemID == "" {
+			// One made in sizes (make one product) has none to rename,
+			// and renaming it makes none.
+			pd = stockDetails{}
+		}
 	}
 	// Everything that can be refused is checked before anything is
 	// written: the cells as the table takes them, the supplier.

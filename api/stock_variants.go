@@ -223,6 +223,18 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 		return stock.Item{}, nil, err
 	}
 	before := variantsOf(items, id)
+	// What a new size's stock item starts with: the product's unit, cost,
+	// levels and supplier; for a product with no stock item of its own (one
+	// made of grouped items), a size's.
+	tmpl := *product
+	if tmpl.StockItemID == "" {
+		for _, v := range before {
+			if v.StockItemID != "" {
+				tmpl.Unit, tmpl.CostKobo, tmpl.Reorder, tmpl.Target, tmpl.SupplierID = v.Unit, v.CostKobo, v.Reorder, v.Target, v.SupplierID
+				break
+			}
+		}
+	}
 	have := make([]variants.Existing, len(before))
 	onSale := 0
 	for i, v := range before {
@@ -306,7 +318,7 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 				}
 				mr, _ := made[i].(map[string]any)
 				if rid := cell(mr["id"]); rid != "" {
-					if err := sizeStockTx(ctx, tx, p.TenantID, *product, rid, variants.Name(product.Name, c.Variant, choices), p.Actor()); err != nil {
+					if err := sizeStockTx(ctx, tx, p.TenantID, tmpl, rid, variants.Name(product.Name, c.Variant, choices), p.Actor()); err != nil {
 						return err
 					}
 				}
@@ -357,6 +369,9 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 			return stock.Item{}, nil, err
 		}
 	}
+	if err := s.productOwnStock(ctx, p.TenantID, *product, len(choices) > 0); err != nil {
+		return stock.Item{}, nil, err
+	}
 	// Rows kept: their names, values and prices as the grid has them; a
 	// count where it is given and differs.
 	was := map[string]stock.Item{}
@@ -379,7 +394,7 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 		// for a size kept from before it had one.
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 			if old.StockItemID == "" {
-				return sizeStockTx(ctx, tx, p.TenantID, *product, k.ID, k.Name, p.Actor())
+				return sizeStockTx(ctx, tx, p.TenantID, tmpl, k.ID, k.Name, p.Actor())
 			}
 			sid := uuid.MustParse(old.StockItemID)
 			if k.Revive {
@@ -451,6 +466,30 @@ func (s *Server) applySizesWith(ctx context.Context, p *Principal, audit stockAu
 		s.diaryChange(ctx, p, fmt.Sprintf("%s now comes in %d %s", product.Name, n, sizesWord(n)))
 	}
 	return prod, vs, nil
+}
+
+// productOwnStock settles the stock item a product was counted by before
+// it had sizes and colours (what-a-business-buys §4.1: a product in sizes
+// keeps no stock of its own). Given sizes, with its count already moved
+// into them or counted off, it is retired, keeping its movements and its
+// link, so the Stock page and the low list no longer show it at 0; one
+// that counts other products too is theirs still and is left as it is.
+// Its sizes cleared, it is brought back and counts the product again.
+func (s *Server) productOwnStock(ctx context.Context, tenant uuid.UUID, product stock.Item, sized bool) error {
+	if product.StockItemID == "" || (!sized && !product.HasSizes()) {
+		return nil
+	}
+	sid := uuid.MustParse(product.StockItemID)
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if !sized {
+			return stock.RetireItemTx(ctx, tx, tenant, sid, true)
+		}
+		products, err := productstock.ProductsOfTx(ctx, tx, tenant, sid)
+		if err != nil || len(products) > 1 {
+			return err
+		}
+		return stock.RetireItemTx(ctx, tx, tenant, sid, false)
+	})
 }
 
 type quietSizesKey struct{}

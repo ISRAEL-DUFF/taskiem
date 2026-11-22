@@ -204,8 +204,9 @@ func planGroup(name string, order []string, in []groupIn, items []stock.Item, re
 }
 
 // groupSizes makes the chosen items one product's sizes and colours: the
-// product is added (named, with the first item's unit, category and
-// supplier, and the price most of them have); each item is given its
+// product is added (named, with the first item's category and the price
+// most of them have, and no stock item: it keeps no stock of its own);
+// each item, keeping its stock item, count and movements, is given its
 // product and its values; then the product's grid is saved as any is
 // (applySizes keeps each row, names it in full, and records the prices
 // that differ as their own). Price lists that held the items one by one
@@ -234,7 +235,6 @@ func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit,
 	if err != nil {
 		return stock.Item{}, nil, err
 	}
-	first := g.items[0]
 	var prod stock.Item
 	for _, it := range items {
 		if it.ID == resume {
@@ -242,8 +242,12 @@ func (s *Server) groupSizes(ctx context.Context, p *Principal, audit stockAudit,
 		}
 	}
 	if prod.ID == "" {
-		if prod, _, err = s.stockAdd(ctx, p.TenantID, p.Actor(), key+"-product", stockNew{Name: g.name, Unit: first.Unit, PriceKobo: g.price,
-			Category: first.Category, Supplier: first.Supplier, CostKobo: first.CostKobo}, audit); err != nil {
+		// The product keeps no stock of its own (what-a-business-buys
+		// §4.1): no stock item is made for it. Each item keeps its own,
+		// with its count and movements, grouped under the product
+		// (applySizes sets its group_of).
+		if prod, _, err = s.stockAdd(ctx, p.TenantID, p.Actor(), key+"-product", stockNew{Name: g.name, PriceKobo: g.price,
+			Category: g.items[0].Category, NoStock: true}, audit); err != nil {
 			return stock.Item{}, nil, err
 		}
 	}
