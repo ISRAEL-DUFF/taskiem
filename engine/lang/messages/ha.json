@@ -3976,6 +3976,11 @@
       "text": "Ba za ka iya fara ayyuka a {org} ba kuma.",
       "reviewed": false
     },
+    "wa.run.not_yours": {
+      "text": "Only {roles} can start {workflow}. Ask an owner if you need it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. run <workflow> by a member whose roles the workflow does not allow (decision 0070); {roles} are role names"
+    },
     "wa.run.does_not_fit": {
       "text": "Wannan bai dace ba: {reason}.\n\n{prompt}",
       "reviewed": false

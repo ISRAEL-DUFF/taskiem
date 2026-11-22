@@ -57,7 +57,7 @@ Outbound messages go to `graph.facebook.com` through the egress guard. Sends are
 | --- | --- |
 | `help` | What you can do here, given your roles |
 | `status`, `what failed today?` | Runs in the last 24 hours by status, the latest failures, and approvals waiting for you (needs `run.read`) |
-| `run <workflow>` | Matches the name of a workflow deployed in `prod` (or its id); sends a form for its required inputs (or, where forms are not set up or the inputs do not fit one, asks each in turn), checked against the workflow's input schema; then shows exactly what will run and waits for **yes**. Needs `run.start`; plan limits apply. You hear how the run ended |
+| `run <workflow>` | Matches the name of a workflow deployed in `prod` (or its id); sends a form for its required inputs (or, where forms are not set up or the inputs do not fit one, asks each in turn), checked against the workflow's input schema; then shows exactly what will run and waits for **yes**. Needs `run.start`, and one of the workflow's `roles` where it names any ([decision 0070](decisions/0070-made-tools.md): owners always may; anyone else is told who may); plan limits apply. You hear how the run ended |
 | `approvals` | Requests waiting for you, sent again with fresh buttons (three at most) |
 | `build <what to automate>`, or just the goal ("every Friday text my customers who owe me") | Drafts a workflow with AI, shows it as plain steps, asks for any missing details, and saves it as a draft after your **yes** ([below](#build)). Needs `workflow.edit` |
 | `tables` | Your organisation's [data tables](data-tables.md), numbered, with how many rows each has (an estimate, when the project answers in time). Needs `table.read` |

@@ -1689,10 +1689,33 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 			partial = append(partial, x)
 		}
 	}
+	// Only workflows the person may start (decision 0070); one they may
+	// not, when nothing else matches, is said with who may.
+	var refused *runnable
+	mine := func(list []runnable) []runnable {
+		var out []runnable
+		for _, x := range list {
+			if roles, _ := startRolesOf(x.def); mayStart(c.p, roles) {
+				out = append(out, x)
+			} else if refused == nil {
+				refused = &x
+			}
+		}
+		return out
+	}
+	exact, partial = mine(exact), mine(partial)
 	if len(exact) == 0 {
 		exact = partial
 	}
 	switch {
+	case len(exact) == 0 && refused != nil:
+		roles, _ := startRolesOf(refused.def)
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, refused.id.String(), roles)
+		}); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", refused.name, "roles", startRolesWords(roles)))
 	case len(exact) == 0:
 		return c.say(ctx, s, c.t("wa.run.no_match", "env", env, "name", fmt.Sprintf("%q", name)))
 	case len(exact) > 1:
@@ -1880,6 +1903,15 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	}
 	if input == nil {
 		input = map[string]any{}
+	}
+	if roles, _ := startRolesOf(def); !mayStart(c.p, roles) {
+		// The person's roles changed while they were asked.
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, data.Workflow.String(), roles)
+		}); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", data.Name, "roles", startRolesWords(roles)))
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(data.Workflow, data.Version, def, raw); len(probs) > 0 {

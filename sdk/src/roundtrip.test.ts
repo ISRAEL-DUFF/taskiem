@@ -146,6 +146,13 @@ describe("round trip edge cases", () => {
     expect(evaluate(code)).toEqual(def);
   });
 
+  it("writes who may start it, and back", () => {
+    const def = { ...base([{ id: "total", type: "transform", config: { output: { kobo: 1 } } }]), roles: ["staff", "shift_manager"] } as WorkflowDefinition;
+    const code = sdk.generate(def, opts);
+    expect(code).toContain(`roles: ["staff", "shift_manager"]`);
+    expect(evaluate(code)).toEqual(def);
+  });
+
   it("writes ai steps, and back", () => {
     const def = base([
       { id: "sort", type: "ai", input: { text: "=trigger.body.text", phone: "=trigger.body.phone" },

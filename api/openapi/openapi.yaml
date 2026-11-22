@@ -16530,7 +16530,16 @@ paths:
       tags:
       - Governance
       summary: Roles an approval can name
-      description: The roles an approval or form step can name, for pickers, so nobody types one; and how many active members the business has. Owners count for every role.
+      description: The roles an approval or form step can name, for pickers, so nobody types one; and how many active members the business has. Owners count for every role. With for=start, the roles that can start runs (built-in and the business's own), for who can start a workflow (decision 0070); owners always may and are not listed.
+      parameters:
+      - name: for
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - start
+        description: start lists the roles that can start runs
       security:
       - sessionCookie: []
       - sessionToken: []

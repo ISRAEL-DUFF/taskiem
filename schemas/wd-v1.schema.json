@@ -61,6 +61,17 @@
     "settings": {
       "$ref": "#/$defs/settings"
     },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "description": "Who may start the workflow by hand (decision 0070): members holding one of these roles, beside run.start; owners always may. Held on every way a person starts it: the web and app's Run, the API, and run in the chat apps. Left out: everyone with run.start.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,47}$"
+      }
+    },
     "outputs": {
       "type": "array",
       "minItems": 1,

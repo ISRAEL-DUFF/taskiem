@@ -82,3 +82,33 @@ export function RolePicker({ value, onChange, allowNone = false, label = "Role" 
     </select>
   );
 }
+
+/**
+ * Who may start a workflow by hand (decision 0070): ticks over the
+ * business's roles; none ticked is everyone who may start runs. Owners
+ * always may, so they are not offered.
+ */
+export function StartRolesPicker({ value, onChange }: { value: string[]; onChange: (roles: string[]) => void }) {
+  const roles = useLoad(() => get<{ roles: ApproverRole[]; members: number }>("/v1/approver-roles?for=start"), []);
+  const known = (roles.data?.roles ?? []).filter((r) => r.name !== "owner");
+  // A role named in the definition that the business no longer lists is
+  // kept, and shown, so saving does not drop it unseen.
+  const shown = [...known, ...value.filter((v) => !known.some((r) => r.name === v)).map((name) => ({ name, builtin: false, holders: 0 }))];
+  const toggle = (name: string, on: boolean) => onChange(on ? [...value, name] : value.filter((v) => v !== name));
+  return (
+    <fieldset className="sf-choices" data-testid="start-roles">
+      <legend>Who can start it</legend>
+      <p className="hint">
+        {value.length === 0
+          ? "Everyone who can start runs, on the web, in the app, by the API and with run in WhatsApp, Telegram and Slack."
+          : `Only owners and ${value.map(roleWords).join(", ")}, however they start it.`}
+      </p>
+      {shown.map((r) => (
+        <label key={r.name} className="row">
+          <input type="checkbox" checked={value.includes(r.name)} onChange={(e) => toggle(r.name, e.target.checked)} />
+          <span>{roleLabel(r)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
@@ -629,6 +630,8 @@ type approverRole struct {
 
 // listApproverRoles answers GET /v1/approver-roles: the roles a step can
 // name, so nobody types one, and how many active members the business has.
+// With ?for=start, the roles that can start runs, for who can start a
+// workflow (decision 0070).
 func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 	var out []approverRole
 	var members int
@@ -658,6 +661,30 @@ func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 		counts := map[string]int{}
 		for _, h := range all {
 			counts[h.name] += h.n
+		}
+		if r.URL.Query().Get("for") == "start" {
+			// Who can start it (decision 0070): the roles that can start
+			// runs at all, built-in and the business's own; owners always
+			// may, so they are not listed.
+			for _, n := range access.Holding(PermRunStart) {
+				if n != "owner" {
+					out = append(out, approverRole{Name: n, Builtin: true, Holders: counts[n]})
+				}
+			}
+			rows, err := tx.Query(ctx, `SELECT name FROM roles WHERE $1 = ANY (permissions) ORDER BY name`, PermRunStart)
+			if err != nil {
+				return err
+			}
+			own, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return err
+			}
+			for _, n := range own {
+				if _, builtin := rolePermissions[n]; !builtin {
+					out = append(out, approverRole{Name: n, Holders: counts[n]})
+				}
+			}
+			return nil
 		}
 		out = append(out, approverRole{Name: "owner", Builtin: true, Holders: counts["owner"]}, approverRole{Name: "approver", Builtin: true, Holders: counts["approver"]})
 		var names []string

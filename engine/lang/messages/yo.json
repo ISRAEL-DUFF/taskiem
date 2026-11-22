@@ -3976,6 +3976,11 @@
       "text": "Ẹ kò lè bẹ̀rẹ̀ iṣẹ́ nínú {org} mọ́.",
       "reviewed": false
     },
+    "wa.run.not_yours": {
+      "text": "Only {roles} can start {workflow}. Ask an owner if you need it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. run <workflow> by a member whose roles the workflow does not allow (decision 0070); {roles} are role names"
+    },
     "wa.run.does_not_fit": {
       "text": "Ìyẹn kò bá a mu: {reason}.\n\n{prompt}",
       "reviewed": false

@@ -91,6 +91,10 @@ type Principal struct {
 	// KeyOwner is the person an API key belongs to: it acts within their
 	// current permissions, and counts as them for four-eyes.
 	KeyOwner uuid.UUID
+	// KeyOwnerRoles are the key owner's roles now: only who may start a
+	// workflow (decision 0070, mayStart) reads them; a key gains nothing
+	// else from them.
+	KeyOwnerRoles []string
 	// AuthMethod is how the session signed in: password, passkey, sso or
 	// chat (a code or link sent to a bound chat, chat_signin.go).
 	AuthMethod string
@@ -373,6 +377,7 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		if len(held.Roles) == 0 || !s.userActive(ctx, p.TenantID, p.KeyOwner) {
 			return nil, errors.New("api key owner is no longer a member")
 		}
+		p.KeyOwnerRoles = held.Roles
 		p.Permissions = map[string]bool{}
 		for _, x := range perms {
 			if held.Permissions[x] {

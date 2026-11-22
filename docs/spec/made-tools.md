@@ -83,7 +83,7 @@ An addition to `wd/v1`: an optional top-level `tool`. It needs a decision-log en
 | `says` | Up to eight phrases that find the tool when a message starts with one. Optional |
 | `icon` | One of a fixed set drawn by Taskiem. Optional |
 | `for` | `members` (the business's own people), `customers` (anyone writing to the business's own number) or `linked` (businesses it is linked to). Phase by phase: §15 |
-| `roles` | With `members`: who may use it, beside needing `run.start`. Left out: everyone with `run.start`. **It has to hold on every way a person can start the workflow** (the tool, `run <workflow>`, the web's Run, the API as a member), or it only hides a tile: §14, 8 |
+| `roles` | **Moved to the workflow** by [decision 0070](../decisions/0070-made-tools.md): a top-level `roles` says who may start the workflow on every path, built 22 November 2026, and a tool's users are its workflow's `roles`; `tool` has no `roles` of its own. (Was: with `members`, who may use it, beside needing `run.start`; it has to hold on every way a person can start the workflow, or it only hides a tile: §14, 8) |
 | `answer` | What comes back (§7). Left out: today's "completed" message |
 
 Rules:

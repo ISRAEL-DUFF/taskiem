@@ -31,6 +31,10 @@ type Definition struct {
 	// step using it gets back, each an expression over its top-level
 	// steps.
 	Outputs []Output `json:"outputs,omitempty"`
+	// Roles are who may start the workflow by hand (decision 0070):
+	// members holding one of them, beside run.start; owners always may.
+	// Empty: everyone with run.start.
+	Roles []string `json:"roles,omitempty"`
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step

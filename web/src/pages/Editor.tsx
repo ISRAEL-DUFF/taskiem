@@ -6,6 +6,7 @@ import { useAdvanced, useAuth } from "../auth";
 import { Icon } from "../icons";
 import { SchedulePicker } from "../canvas/PlainPickers";
 import { FormTriggerEditor } from "../canvas/FormEditor";
+import { StartRolesPicker } from "../forms/RolePicker";
 import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
 import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
@@ -826,6 +827,10 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
       <Field label="Description">
         <textarea rows={2} value={def.description ?? ""} onChange={(e) => onChange({ ...def, description: e.target.value || undefined } as WorkflowDefinition)} />
       </Field>
+      <StartRolesPicker
+        value={def.roles ?? []}
+        onChange={(roles) => onChange({ ...def, roles: roles.length ? roles : undefined } as WorkflowDefinition)}
+      />
       <h2>{advanced ? "Trigger" : "When it runs"}</h2>
       <Field label={advanced ? "Type" : "It runs"}>
         <select
