@@ -1251,11 +1251,13 @@ function BatchRow({
       title={payeeName(x)}
       side={naira(x.amount_kobo)}
       sub={
-        problem
-          ? `${paymentSub(x)} · ${problem}`
-          : x.reason
-            ? `${paymentSub(x)} · ${x.reason}`
-            : paymentSub(x)
+        x.awaits_your_ok
+          ? `${paymentSub(x)} · Your OK did not reach it: open it to confirm again`
+          : problem
+            ? `${paymentSub(x)} · ${problem}`
+            : x.reason
+              ? `${paymentSub(x)} · ${x.reason}`
+              : paymentSub(x)
       }
       sideSub={pill}
       testid="batch-row"

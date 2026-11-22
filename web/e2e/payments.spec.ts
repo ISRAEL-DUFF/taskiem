@@ -274,3 +274,24 @@ test("the chat's Pay topic opens the Pay sheet, filled, and sends no words", asy
   // Only the one message was sent: the form's words never were.
   expect(said).toBe(1);
 });
+
+test("a batch row whose OK did not reach it: confirmed again from its page", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await signUp(page);
+  await payApi(page);
+  let confirmed = 0;
+  await page.route(`**/v1/payments/${ID}**`, (r) => {
+    if (r.request().method() === "POST" && r.request().url().endsWith("/confirm")) {
+      confirmed++;
+      return json(r, 202, { payment: payment({ status: "sending", awaits_your_ok: false, run_id: "0192e2e0-0000-7000-8000-00000000f001" }) });
+    }
+    return json(r, 200, { payment: payment({ status: "sending", awaits_your_ok: confirmed === 0, run_id: "0192e2e0-0000-7000-8000-00000000f001" }) });
+  });
+  await page.goto(`/payments/${ID}`);
+  await expect(page.getByTestId("payment-awaits")).toContainText("your OK did not reach this payment");
+  await noAxe(page, "a payment waiting for your OK");
+  await page.getByTestId("payment-confirm-again").click();
+  await expect(page.getByTestId("payment-confirm-again")).toBeHidden();
+  expect(confirmed).toBe(1);
+});

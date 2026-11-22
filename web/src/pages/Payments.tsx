@@ -319,6 +319,19 @@ export function PaymentPage() {
               </div>
             )}
             <ErrorBox error={cancel.error} />
+            {x.status === "sending" && x.awaits_your_ok && (
+              <>
+                <p className="pay-warn warn" data-testid="payment-awaits">
+                  Nothing was paid yet: your OK did not reach this payment. Confirm it again.
+                </p>
+                {pay.view}
+                <div className="toolbar">
+                  <button type="button" className="primary" disabled={pay.busy} onClick={() => void pay.confirm()} data-testid="payment-confirm-again">
+                    {pay.busy ? "Confirming…" : "Confirm again with your passkey"}
+                  </button>
+                </div>
+              </>
+            )}
             {x.status === "waiting_ok" && (
               <p>
                 <Link to="/approvals">Open Approvals</Link>

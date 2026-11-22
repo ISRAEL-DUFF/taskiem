@@ -457,6 +457,41 @@ void main() {
     await t.pump(const Duration(seconds: 4));
   });
 
+  testWidgets('a batch row whose own OK did not reach it: Confirm again with a passkey', (t) async {
+    phone(t, 1000);
+    final keys = fakeKeys();
+    final api = _Api();
+    final stuck = {...bayo, 'status': 'sending', 'confirmed_by': 'u1', 'run_id': 'r1', 'awaits_your_ok': true};
+    api.routes['POST /v1/me/step-up/options'] = (_) => {
+      'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'},
+    };
+    api.routes['POST /v1/payments/p1/confirm'] = (r) => (jsonDecode(r.body) as Map).containsKey('passkey')
+        ? http.Response(jsonEncode({'payment': {...stuck, 'awaits_your_ok': false}}), 202, headers: _json)
+        : _stepUp();
+    api.routes['GET /v1/payment-batches/B7'] = (_) => {'batch': batch('B7', [{...stuck, 'awaits_your_ok': false}], status: 'prepared')};
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: _Host(
+          (c) => showTkSheet<PaymentBatch>(
+            c,
+            (_) => BatchSheet(auth: api.auth(), batch: PaymentBatch.fromJson(batch('B7', [stuck], status: 'prepared')), follow: false),
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.text('Not paid yet'), findsOneWidget);
+    await snap(t, 'pay-batch-confirm-again');
+    await t.tap(find.text('Confirm again'));
+    await settle(t);
+    expect(api.sent('POST', '/v1/me/step-up/options').single, {'operation': 'money.pay', 'target': 'payment:p1'});
+    expect(keys.asked, hasLength(1));
+    expect(api.sent('POST', '/v1/payments/p1/confirm'), isNotEmpty);
+    expect(find.text('Not paid yet'), findsNothing);
+    await t.pump(const Duration(seconds: 4));
+  });
+
   testWidgets('Payments: Pay several people, the batches paid together, the same as last time', (t) async {
     phone(t);
     final api = _Api();

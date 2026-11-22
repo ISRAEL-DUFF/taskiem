@@ -1163,6 +1163,20 @@ class _BatchSheetState extends State<BatchSheet> {
     }
   }
 
+  /// A row whose own OK did not reach it, confirmed again with a passkey.
+  Future<void> _confirmAgain(Payment p) async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      await confirmPaymentWithProof(_auth, p);
+      if (mounted) showTkToast(context, 'Confirmed: ${paymentName(p)} is being paid.');
+      await _reload();
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = errorWords(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Widget _row(Payment p) {
     final look = TkLook.of(context);
     final res = _results[p.id];
@@ -1186,6 +1200,28 @@ class _BatchSheetState extends State<BatchSheet> {
       semanticsLabel: '${paymentName(p)}, ${naira(p.amountKobo)}, ${s.words}. $sub.',
       onTap: p.status == 'prepared' ? null : () => unawaited(showTkSheet<Payment>(context, (_) => PaymentSheet(auth: _auth, payment: p))),
     );
+    // Its run waits for this person's own OK, which did not reach it:
+    // confirming it again (a passkey) gives it.
+    if (p.awaitsYourOk == true) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: TkCallout(
+              leading: TkSquare('b-alert', color: look.orange),
+              title: 'Not paid yet',
+              sub: 'Your OK did not reach it.',
+              color: look.orange,
+              button: 'Confirm again',
+              semantics: 'Confirm paying ${paymentName(p)} again',
+              onPressed: _busy ? null : () => unawaited(_confirmAgain(p)),
+            ),
+          ),
+        ],
+      );
+    }
     if (!again) return row;
     final on = _again.contains(p.id);
     return Column(

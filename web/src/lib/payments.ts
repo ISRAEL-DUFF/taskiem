@@ -53,6 +53,9 @@ export interface Payment {
   staff_id?: string | null;
   /** The same amount to the same payee in the last day. */
   again: boolean;
+  /** Confirmed by you, and its run still waits for your own OK, which did
+   * not reach it: confirming it again gives it. */
+  awaits_your_ok?: boolean;
 }
 
 /** A role's limit: one payment, and a day's total. */
