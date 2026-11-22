@@ -11,7 +11,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show Approval, ChatAlert;
+import '../api/api.g.dart' show Approval, ChatAlert, PageSummary;
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -29,6 +29,7 @@ import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'bookings_page.dart' show addDays;
 import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
+import 'pages_page.dart' show pinnedPageRows;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
 import 'form_request.dart' show FormRequestScreen, sendKeptFormAnswers;
@@ -274,6 +275,8 @@ class _TodayTabState extends State<TodayTab> with Polling {
   Map<String, dynamic>? _setup;
   Map<String, dynamic>? _clock;
   List<Map<String, dynamic>>? _tasks;
+  // The business's own pages (pages_page.dart): pinned ones, and All pages.
+  List<PageSummary> _pages = const [];
   String? _runsError;
 
   Auth get _auth => widget.auth;
@@ -365,6 +368,15 @@ class _TodayTabState extends State<TodayTab> with Polling {
             if (mounted) setState(() => _workflows = _maps(w?['workflows']));
           } on Object {
             // Not shown.
+          }
+        }(),
+      if (_auth.me?.personal != true)
+        () async {
+          try {
+            final r = await _auth.api.listPages();
+            if (mounted) setState(() => _pages = r.pages);
+          } on Object {
+            // No Your pages.
           }
         }(),
       if (_auth.can('member.manage'))
@@ -689,6 +701,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 ),
             ],
           ),
+        if (_pages.isNotEmpty) TkSection(title: 'Your pages', inset: 56, children: pinnedPageRows(context, _auth, _pages, backLabel: 'Back to Today')),
         if (_clock != null || (_tasks != null && _tasks!.any((x) => x['state'] == 'open')))
           TkSection(
             title: 'Your team',

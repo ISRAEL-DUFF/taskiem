@@ -50,6 +50,7 @@ import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
 import 'payroll_page.dart' show PayrollPage;
+import 'pages_page.dart' show PagesPage;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -611,6 +612,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       '/schools/clearance' => ClearancePage(auth: auth),
       '/payments' => SentPaymentsPage(auth: auth, backLabel: 'Back to Taskiem'),
       '/payroll' => PayrollPage(auth: auth, backLabel: 'Back to Taskiem'),
+      '/pages' => PagesPage(auth: auth, backLabel: 'Back to Taskiem'),
       '/settings/saved' => SavedAccountsPage(auth: auth, mine: false),
       _ => null,
     };

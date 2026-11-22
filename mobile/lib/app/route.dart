@@ -3,7 +3,7 @@
 // belongs to, and the screen over it, if any.
 
 /// What opens over the tab.
-enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments, paymentBatch, payroll }
+enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments, paymentBatch, payroll, pages }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
 enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request, standing, group, groupInvites }
@@ -147,6 +147,10 @@ AppRoute routeOf(String path) {
       return (tab: tabMoney, screen: RouteScreen.payroll, id: '');
     }
   }
+  // Pages (decision 0072): the list, and one page by its short name, over
+  // Today; id '' for the list. A page's editor is the web's.
+  final pages = RegExp(r'^/pages(?:/([a-z][a-z0-9-]{1,23}))?$').firstMatch(p);
+  if (pages != null) return (tab: tabToday, screen: RouteScreen.pages, id: pages[1] ?? '');
   final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
   if (one != null) {
     final kind = one[1]!;
