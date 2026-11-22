@@ -6911,6 +6911,194 @@ paths:
                       at: {type: string, format: date-time}
         default:
           $ref: '#/components/responses/Error'
+  /v1/pay-collection:
+    get:
+      operationId: getPayCollection
+      tags:
+      - Payments
+      summary: Your list of people to pay, collected from messages
+      description: 'Each person''s own list, across every chat ("3 to pay" at the foot of a chat): rows added with Add to the list, the account masked, until the list is paid as a batch or cleared. `in_batch`: a batch made from it waiting to be sent (its rows are set aside; sent, they leave the list; cancelled, they come back).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      responses:
+        '200':
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayCollection'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addPayCollection
+      tags:
+      - Payments
+      summary: Add someone to your list
+      description: 'A saved account (`saved_id` or `payee`) or, for an owner, an account number with its bank (403 `saved_only` for staff), checked as a payment''s payee is; the amount and what it is for when the message says; the message it came from (409 `already` for the same message twice). Up to 100 (409 `full`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                saved_id: {type: string, format: uuid}
+                payee: {type: string}
+                account_number: {type: string}
+                bank_name: {type: string}
+                name: {type: string}
+                amount_kobo: {type: [integer, 'null']}
+                purpose: {type: string}
+                note: {type: string}
+                source:
+                  $ref: '#/components/schemas/PayCollectionSource'
+      responses:
+        '201':
+          description: The list with it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayCollection'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: clearPayCollection
+      tags:
+      - Payments
+      summary: Clear your list
+      description: Rows waiting in a batch stay with the batch.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayCollection'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-collection/batch:
+    post:
+      operationId: payPayCollection
+      tags:
+      - Payments
+      summary: Pay your list as a batch
+      description: 'The list becomes a batch (kind `messages`), each row prepared and checked as one payment is, those failing held out with why; nothing is sent. Every row needs an amount (400 `amount`); `purpose` fills rows without one. 409 `in_batch` while a batch from it waits.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title: {type: string}
+                purpose: {type: string}
+      responses:
+        '201':
+          description: The batch
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batch]
+                properties:
+                  batch:
+                    $ref: '#/components/schemas/PaymentBatch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pay-collection/{id}:
+    patch:
+      operationId: patchPayCollection
+      tags:
+      - Payments
+      summary: Change a row's amount or what it is for
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                amount_kobo: {type: integer}
+                purpose: {type: string}
+                note: {type: string}
+      responses:
+        '200':
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayCollection'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removePayCollection
+      tags:
+      - Payments
+      summary: Take a row off your list
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: money.pay
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayCollection'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/payment-batches:
     get:
       operationId: listPaymentBatches
@@ -45995,6 +46183,45 @@ components:
       properties:
         ai_photo_reading: {type: boolean}
         available: {type: boolean}
+    PayCollectionSource:
+      type: object
+      additionalProperties: false
+      required: [kind, chat, message]
+      properties:
+        kind: {type: string, enum: [taskiem, link, customer, person, group, photo]}
+        chat: {type: string}
+        message: {type: string}
+    PayCollection:
+      type: object
+      additionalProperties: false
+      required: [rows, count, total_kobo, no_amount, in_batch]
+      properties:
+        count: {type: integer}
+        total_kobo: {type: integer}
+        no_amount: {type: integer}
+        in_batch: {type: [string, 'null'], format: uuid}
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, saved_id, payee, title, name, bank_name, last4, amount_kobo, purpose, note, source, added_at]
+            properties:
+              id: {type: string, format: uuid}
+              saved_id: {type: [string, 'null'], format: uuid}
+              payee: {type: string}
+              title: {type: string}
+              name: {type: string}
+              bank_name: {type: string}
+              last4: {type: string}
+              amount_kobo: {type: [integer, 'null']}
+              purpose: {type: string}
+              note: {type: string}
+              source:
+                oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PayCollectionSource'
+              added_at: {type: string, format: date-time}
     StaffPayAccount:
       type: object
       description: The saved account payments to a staff member go to (outside payroll), masked

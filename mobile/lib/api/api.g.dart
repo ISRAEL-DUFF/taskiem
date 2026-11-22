@@ -1675,6 +1675,42 @@ class TaskiemApi {
     return PutStaffPayAccountResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
+  Future<PayCollection> getPayCollection() async {
+    final j = await _t.send('GET', '/v1/pay-collection');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add someone to your list (`POST /v1/pay-collection`)
+  Future<PayCollection> addPayCollection({required AddPayCollectionRequest body}) async {
+    final j = await _t.send('POST', '/v1/pay-collection', body: body.toJson());
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Clear your list (`DELETE /v1/pay-collection`)
+  Future<PayCollection> clearPayCollection() async {
+    final j = await _t.send('DELETE', '/v1/pay-collection');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay your list as a batch (`POST /v1/pay-collection/batch`)
+  Future<PayPayCollectionResponse> payPayCollection({required PayPayCollectionRequest body}) async {
+    final j = await _t.send('POST', '/v1/pay-collection/batch', body: body.toJson());
+    return PayPayCollectionResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a row's amount or what it is for (`PATCH /v1/pay-collection/{id}`)
+  Future<PayCollection> patchPayCollection({required PatchPayCollectionRequest body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/pay-collection/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a row off your list (`DELETE /v1/pay-collection/{id}`)
+  Future<PayCollection> removePayCollection({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/pay-collection/${Uri.encodeComponent(id)}');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The payroll, from Payrolla (`GET /v1/payroll`)
   Future<GetPayrollResponse> getPayroll({String? cursor, String? connection}) async {
     final j = await _t.send('GET', '/v1/payroll', query: {'cursor': ?cursor, 'connection': ?connection});
@@ -14414,6 +14450,289 @@ class PutStaffPayAccountResponse {
       };
 }
 
+class PayCollection {
+  const PayCollection({required this.count, this.inBatch, required this.noAmount, required this.rows, required this.totalKobo});
+
+  final int count;
+  final Object? inBatch;
+  final int noAmount;
+  final List<PayCollectionRowsItem> rows;
+  final int totalKobo;
+
+  factory PayCollection.fromJson(Map<String, dynamic> j) => PayCollection(
+        count: (j['count'] as num).toInt(),
+        inBatch: j['in_batch'],
+        noAmount: (j['no_amount'] as num).toInt(),
+        rows: (j['rows'] as List).map((e) => PayCollectionRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'in_batch': ?inBatch,
+        'no_amount': noAmount,
+        'rows': rows.map((e) => e.toJson()).toList(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class PayCollectionRowsItem {
+  const PayCollectionRowsItem({required this.addedAt, this.amountKobo, required this.bankName, required this.id, required this.last4, required this.name, required this.note, required this.payee, required this.purpose, this.savedId, this.source, required this.title});
+
+  final DateTime addedAt;
+  final Object? amountKobo;
+  final String bankName;
+  final String id;
+  final String last4;
+  final String name;
+  final String note;
+  final String payee;
+  final String purpose;
+  final Object? savedId;
+  final Object? source;
+  final String title;
+
+  factory PayCollectionRowsItem.fromJson(Map<String, dynamic> j) => PayCollectionRowsItem(
+        addedAt: DateTime.parse(j['added_at'] as String),
+        amountKobo: j['amount_kobo'],
+        bankName: j['bank_name'] as String,
+        id: j['id'] as String,
+        last4: j['last4'] as String,
+        name: j['name'] as String,
+        note: j['note'] as String,
+        payee: j['payee'] as String,
+        purpose: j['purpose'] as String,
+        savedId: j['saved_id'],
+        source: j['source'],
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_at': addedAt.toUtc().toIso8601String(),
+        'amount_kobo': ?amountKobo,
+        'bank_name': bankName,
+        'id': id,
+        'last4': last4,
+        'name': name,
+        'note': note,
+        'payee': payee,
+        'purpose': purpose,
+        'saved_id': ?savedId,
+        'source': ?source,
+        'title': title,
+      };
+}
+
+class AddPayCollectionRequest {
+  const AddPayCollectionRequest({this.accountNumber, this.amountKobo, this.bankName, this.name, this.note, this.payee, this.purpose, this.savedId, this.source});
+
+  final String? accountNumber;
+  final Object? amountKobo;
+  final String? bankName;
+  final String? name;
+  final String? note;
+  final String? payee;
+  final String? purpose;
+  final String? savedId;
+  final PayCollectionSource? source;
+
+  factory AddPayCollectionRequest.fromJson(Map<String, dynamic> j) => AddPayCollectionRequest(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'],
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+        savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
+        source: j['source'] == null ? null : PayCollectionSource.fromJson(j['source'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'name': ?name,
+        'note': ?note,
+        'payee': ?payee,
+        'purpose': ?purpose,
+        'saved_id': ?savedId,
+        'source': ?source?.toJson(),
+      };
+}
+
+class PayCollectionSource {
+  const PayCollectionSource({required this.chat, required this.kind, required this.message});
+
+  final String chat;
+  final String kind;
+  final String message;
+
+  factory PayCollectionSource.fromJson(Map<String, dynamic> j) => PayCollectionSource(
+        chat: j['chat'] as String,
+        kind: j['kind'] as String,
+        message: j['message'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat': chat,
+        'kind': kind,
+        'message': message,
+      };
+}
+
+class PayPayCollectionRequest {
+  const PayPayCollectionRequest({this.purpose, this.title});
+
+  final String? purpose;
+  final String? title;
+
+  factory PayPayCollectionRequest.fromJson(Map<String, dynamic> j) => PayPayCollectionRequest(
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'purpose': ?purpose,
+        'title': ?title,
+      };
+}
+
+class PayPayCollectionResponse {
+  const PayPayCollectionResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory PayPayCollectionResponse.fromJson(Map<String, dynamic> j) => PayPayCollectionResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class PaymentBatch {
+  const PaymentBatch({this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, required this.status, required this.title, required this.totalKobo, required this.waiting});
+
+  final Object? confirmedAt;
+  final int count;
+  final DateTime createdAt;
+  final String createdBy;
+  final int failed;
+  /// Rows held out when it was prepared, with why
+  final List<PaymentBatchHeldItem>? held;
+  final String id;
+  final String kind;
+  final int paidKobo;
+  final List<Payment> payments;
+  /// What became of each row when it was sent or approved
+  final List<PaymentBatchResultsItem>? results;
+  final String status;
+  final String title;
+  final int totalKobo;
+  final int waiting;
+
+  factory PaymentBatch.fromJson(Map<String, dynamic> j) => PaymentBatch(
+        confirmedAt: j['confirmed_at'],
+        count: (j['count'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        failed: (j['failed'] as num).toInt(),
+        held: j['held'] == null ? null : (j['held'] as List).map((e) => PaymentBatchHeldItem.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
+        results: j['results'] == null ? null : (j['results'] as List).map((e) => PaymentBatchResultsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        status: j['status'] as String,
+        title: j['title'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirmed_at': ?confirmedAt,
+        'count': count,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'failed': failed,
+        'held': ?held?.map((e) => e.toJson()).toList(),
+        'id': id,
+        'kind': kind,
+        'paid_kobo': paidKobo,
+        'payments': payments.map((e) => e.toJson()).toList(),
+        'results': ?results?.map((e) => e.toJson()).toList(),
+        'status': status,
+        'title': title,
+        'total_kobo': totalKobo,
+        'waiting': waiting,
+      };
+}
+
+class PaymentBatchHeldItem {
+  const PaymentBatchHeldItem({this.code, this.payee, this.problem, this.row});
+
+  final String? code;
+  final String? payee;
+  final String? problem;
+  final int? row;
+
+  factory PaymentBatchHeldItem.fromJson(Map<String, dynamic> j) => PaymentBatchHeldItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        row: j['row'] == null ? null : (j['row'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payee': ?payee,
+        'problem': ?problem,
+        'row': ?row,
+      };
+}
+
+class PaymentBatchResultsItem {
+  const PaymentBatchResultsItem({this.code, this.payment, this.problem});
+
+  final String? code;
+  final String? payment;
+  final String? problem;
+
+  factory PaymentBatchResultsItem.fromJson(Map<String, dynamic> j) => PaymentBatchResultsItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payment: j['payment'] == null ? null : j['payment'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payment': ?payment,
+        'problem': ?problem,
+      };
+}
+
+class PatchPayCollectionRequest {
+  const PatchPayCollectionRequest({this.amountKobo, this.note, this.purpose});
+
+  final int? amountKobo;
+  final String? note;
+  final String? purpose;
+
+  factory PatchPayCollectionRequest.fromJson(Map<String, dynamic> j) => PatchPayCollectionRequest(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        note: j['note'] == null ? null : j['note'] as String,
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'note': ?note,
+        'purpose': ?purpose,
+      };
+}
+
 class GetPayrollResponse {
   const GetPayrollResponse({this.company, required this.connected, this.connection, this.nextCursor, required this.runs, this.test});
 
@@ -14728,107 +15047,6 @@ class ListPaymentBatchesResponse {
 
   Map<String, dynamic> toJson() => {
         'batches': batches.map((e) => e.toJson()).toList(),
-      };
-}
-
-class PaymentBatch {
-  const PaymentBatch({this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, required this.status, required this.title, required this.totalKobo, required this.waiting});
-
-  final Object? confirmedAt;
-  final int count;
-  final DateTime createdAt;
-  final String createdBy;
-  final int failed;
-  /// Rows held out when it was prepared, with why
-  final List<PaymentBatchHeldItem>? held;
-  final String id;
-  final String kind;
-  final int paidKobo;
-  final List<Payment> payments;
-  /// What became of each row when it was sent or approved
-  final List<PaymentBatchResultsItem>? results;
-  final String status;
-  final String title;
-  final int totalKobo;
-  final int waiting;
-
-  factory PaymentBatch.fromJson(Map<String, dynamic> j) => PaymentBatch(
-        confirmedAt: j['confirmed_at'],
-        count: (j['count'] as num).toInt(),
-        createdAt: DateTime.parse(j['created_at'] as String),
-        createdBy: j['created_by'] as String,
-        failed: (j['failed'] as num).toInt(),
-        held: j['held'] == null ? null : (j['held'] as List).map((e) => PaymentBatchHeldItem.fromJson(e as Map<String, dynamic>)).toList(),
-        id: j['id'] as String,
-        kind: j['kind'] as String,
-        paidKobo: (j['paid_kobo'] as num).toInt(),
-        payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
-        results: j['results'] == null ? null : (j['results'] as List).map((e) => PaymentBatchResultsItem.fromJson(e as Map<String, dynamic>)).toList(),
-        status: j['status'] as String,
-        title: j['title'] as String,
-        totalKobo: (j['total_kobo'] as num).toInt(),
-        waiting: (j['waiting'] as num).toInt(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'confirmed_at': ?confirmedAt,
-        'count': count,
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'created_by': createdBy,
-        'failed': failed,
-        'held': ?held?.map((e) => e.toJson()).toList(),
-        'id': id,
-        'kind': kind,
-        'paid_kobo': paidKobo,
-        'payments': payments.map((e) => e.toJson()).toList(),
-        'results': ?results?.map((e) => e.toJson()).toList(),
-        'status': status,
-        'title': title,
-        'total_kobo': totalKobo,
-        'waiting': waiting,
-      };
-}
-
-class PaymentBatchHeldItem {
-  const PaymentBatchHeldItem({this.code, this.payee, this.problem, this.row});
-
-  final String? code;
-  final String? payee;
-  final String? problem;
-  final int? row;
-
-  factory PaymentBatchHeldItem.fromJson(Map<String, dynamic> j) => PaymentBatchHeldItem(
-        code: j['code'] == null ? null : j['code'] as String,
-        payee: j['payee'] == null ? null : j['payee'] as String,
-        problem: j['problem'] == null ? null : j['problem'] as String,
-        row: j['row'] == null ? null : (j['row'] as num).toInt(),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'code': ?code,
-        'payee': ?payee,
-        'problem': ?problem,
-        'row': ?row,
-      };
-}
-
-class PaymentBatchResultsItem {
-  const PaymentBatchResultsItem({this.code, this.payment, this.problem});
-
-  final String? code;
-  final String? payment;
-  final String? problem;
-
-  factory PaymentBatchResultsItem.fromJson(Map<String, dynamic> j) => PaymentBatchResultsItem(
-        code: j['code'] == null ? null : j['code'] as String,
-        payment: j['payment'] == null ? null : j['payment'] as String,
-        problem: j['problem'] == null ? null : j['problem'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'code': ?code,
-        'payment': ?payment,
-        'problem': ?problem,
       };
 }
 

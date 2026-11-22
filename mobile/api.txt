@@ -357,6 +357,12 @@ getPayLimits
 putPayLimit
 # Where a staff member is paid, outside payroll (Pay on their page)
 putStaffPayAccount
+getPayCollection
+addPayCollection
+clearPayCollection
+payPayCollection
+patchPayCollection
+removePayCollection
 getPayroll
 getPayrollRun
 getPayrollStaff

@@ -68,6 +68,13 @@ func (s *Server) paymentRoutes(r chi.Router) {
 	r.With(pay, s.tenantWide).Post("/payments/{id}/cancel", s.cancelPayment)
 	r.With(pay).Get("/pay-limits", s.getPayLimits)
 	r.With(pay, s.tenantWide).Put("/pay-limits/{role}", s.putPayLimit)
+	// Collecting from several messages: the person's own list (pay_collect.go).
+	r.With(pay).Get("/pay-collection", s.getCollection)
+	r.With(pay, s.tenantWide).Post("/pay-collection", s.addCollected)
+	r.With(pay, s.tenantWide).Delete("/pay-collection", s.removeCollected)
+	r.With(pay, s.tenantWide).Post("/pay-collection/batch", s.payCollection)
+	r.With(pay, s.tenantWide).Patch("/pay-collection/{id}", s.patchCollected)
+	r.With(pay, s.tenantWide).Delete("/pay-collection/{id}", s.removeCollected)
 }
 
 // payment is a payment as the API shows it: the account masked.

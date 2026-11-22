@@ -551,6 +551,17 @@ func (s *Server) batchAgain(w http.ResponseWriter, r *http.Request) {
 // batch is "preparing" until every row is in, so it cannot be confirmed
 // half made; it goes on if the person goes away meanwhile.
 func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []batchRow, title, kind string, copyOf *uuid.UUID, from string) {
+	out, err := s.prepareBatchView(r, rows, title, kind, copyOf, from)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"batch": out})
+}
+
+// prepareBatchView prepares a batch's rows (each as one payment is, those
+// failing a check held out) and answers the batch.
+func (s *Server) prepareBatchView(r *http.Request, rows []batchRow, title, kind string, copyOf *uuid.UUID, from string) (batchView, error) {
 	r = r.WithContext(context.WithoutCancel(r.Context()))
 	ctx := r.Context()
 	p := principalFrom(ctx)
@@ -564,8 +575,7 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 			id, p.TenantID, title, kind, copyOf, p.Actor())
 		return err
 	}); err != nil {
-		s.fail(w, r, err)
-		return
+		return batchView{}, err
 	}
 	var held []batchHeld
 	for i, row := range rows {
@@ -585,8 +595,7 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 			_, err := tx.Exec(ctx, `UPDATE payments SET batch_id = $2 WHERE id = $1`, x.ID, id)
 			return err
 		}); err != nil {
-			s.fail(w, r, err)
-			return
+			return batchView{}, err
 		}
 	}
 	var out batchView
@@ -605,10 +614,9 @@ func (s *Server) prepareBatch(w http.ResponseWriter, r *http.Request, rows []bat
 		}
 		return auditTx(r, tx, "payment.batch_prepare", id.String(), map[string]any{"rows": len(rows), "held": len(held), "total_kobo": out.TotalKobo})
 	}); err != nil {
-		s.fail(w, r, err)
-		return
+		return batchView{}, err
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"batch": out})
+	return out, nil
 }
 
 // listBatches is GET /v1/payment-batches: the newest first.
