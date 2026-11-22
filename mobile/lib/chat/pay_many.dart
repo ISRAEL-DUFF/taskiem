@@ -1,7 +1,7 @@
 // Pay several people (P3; docs/spec/chat-pay-people.md "Pay several
 // people"): the Pay sheet with a list. Rows come from saved accounts,
 // riders (what each is due, GET /v1/riders/pay), staff with an account
-// linked (GET /v1/staff, then each one's page) or a pasted list (read by
+// linked (GET /v1/payments/staff) or a pasted list (read by
 // POST /v1/payment-batches/read, a line that cannot be read kept to fix);
 // each row is who, how much and what for. Check prepares the batch (POST
 // /v1/payment-batches): each row as one payment is, those failing a check
@@ -116,11 +116,9 @@ Future<({List<PayRow> rows, int noBank})> ridersDue(Auth auth) async {
 Future<({List<PayRow> rows, List<(String, String)> off})> staffPayable(Auth auth) async {
   Map<String, dynamic> map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
   String str(Object? v) => v as String? ?? '';
-  final people = [for (final x in (map(await auth.transport.send('GET', '/v1/staff'))['people'] as List? ?? const [])) map(x)];
-  final pages = await Future.wait([
-    for (final x in people)
-      auth.transport.send('GET', '/v1/staff/${Uri.encodeComponent(str(x['user_id']))}').then(map, onError: (Object _) => {...x, 'unread': true}),
-  ]);
+  // The payers' staff list (GET /v1/payments/staff): each with where they
+  // are paid, for anyone who may pay.
+  final pages = [for (final x in (map(await auth.transport.send('GET', '/v1/payments/staff'))['staff'] as List? ?? const [])) map(x)];
   final rows = <PayRow>[];
   final off = <(String, String)>[];
   for (final x in pages) {
@@ -265,14 +263,22 @@ class _PayManySheetState extends State<PayManySheet> {
     try {
       final got = await readSaved(context, _auth, kind: 'bank_account', fits: (x) => x.kind == 'bank_account' && (x.owner != 'mine' || _owner));
       if (got == null || !mounted) return;
-      final have = {for (final r in _rows) if (r.ask['saved_id'] != null) '${r.ask['saved_id']}'};
+      final have = {
+        for (final r in _rows)
+          if (r.ask['saved_id'] != null) '${r.ask['saved_id']}',
+      };
       final keys = await pickSeveral(
         context,
         title: 'Saved accounts',
         icon: 'b-bank',
         choices: [
           for (final x in got.all)
-            if (!have.contains(x.id)) (x.id, x.title.isEmpty ? '@${x.name}' : x.title, ['@${x.name}', x.hint, if (got.both) x.owner == 'mine' ? 'Yours' : 'The business’s'].where((w) => w.isNotEmpty).join(' · ')),
+            if (!have.contains(x.id))
+              (
+                x.id,
+                x.title.isEmpty ? '@${x.name}' : x.title,
+                ['@${x.name}', x.hint, if (got.both) x.owner == 'mine' ? 'Yours' : 'The business’s'].where((w) => w.isNotEmpty).join(' · '),
+              ),
         ],
       );
       if (keys == null || !mounted) return;
@@ -296,7 +302,10 @@ class _PayManySheetState extends State<PayManySheet> {
     try {
       final due = await ridersDue(_auth);
       if (!mounted) return;
-      final have = {for (final r in _rows) if (r.ask['rider_id'] != null) '${r.ask['rider_id']}'};
+      final have = {
+        for (final r in _rows)
+          if (r.ask['rider_id'] != null) '${r.ask['rider_id']}',
+      };
       final rows = due.rows.where((r) => !have.contains('${r.ask['rider_id']}')).toList();
       if (rows.isEmpty) {
         showTkToast(context, due.noBank > 0 ? 'No other rider due pay has a bank account.' : 'No other rider is due anything.');
@@ -317,7 +326,10 @@ class _PayManySheetState extends State<PayManySheet> {
     try {
       final got = await staffPayable(_auth);
       if (!mounted) return;
-      final have = {for (final r in _rows) if (r.ask['staff_id'] != null) '${r.ask['staff_id']}'};
+      final have = {
+        for (final r in _rows)
+          if (r.ask['staff_id'] != null) '${r.ask['staff_id']}',
+      };
       final rows = got.rows.where((r) => !have.contains('${r.ask['staff_id']}')).toList();
       if (rows.isEmpty && got.off.isEmpty) {
         showTkToast(context, got.rows.isEmpty ? 'No staff to pay yet.' : 'All the staff with an account are in the list already.');
@@ -332,7 +344,10 @@ class _PayManySheetState extends State<PayManySheet> {
         empty: got.rows.isEmpty ? 'No one has an account linked yet.' : null,
       );
       if (keys == null || !mounted) return;
-      _add([for (final r in rows) if (keys.contains('${r.ask['staff_id']}')) r]);
+      _add([
+        for (final r in rows)
+          if (keys.contains('${r.ask['staff_id']}')) r,
+      ]);
     } on Object catch (e) {
       if (mounted) showTkToast(context, errorWords(e), error: true);
     } finally {
@@ -352,7 +367,12 @@ class _PayManySheetState extends State<PayManySheet> {
       _add([
         for (final l in good)
           if ((l.payee ?? '').isNotEmpty)
-            PayRow(who: '@${l.payee}', sub: [if ((l.name ?? '').isNotEmpty) l.name!, l.bankName ?? ''].where((w) => w.isNotEmpty).join(' · '), ask: {'payee': l.payee}, kobo: l.amountKobo)
+            PayRow(
+              who: '@${l.payee}',
+              sub: [if ((l.name ?? '').isNotEmpty) l.name!, l.bankName ?? ''].where((w) => w.isNotEmpty).join(' · '),
+              ask: {'payee': l.payee},
+              kobo: l.amountKobo,
+            )
           else
             PayRow(
               who: (l.name ?? '').isNotEmpty ? l.name! : 'Account ••${l.accountNumber!.substring(6)}',
@@ -407,7 +427,12 @@ class _PayManySheetState extends State<PayManySheet> {
     }
     try {
       final b = (await _auth.api.createPaymentBatch(
-        body: CreatePaymentBatchRequest(rows: [for (final r in _rows) r.body()], kind: widget.kind, title: widget.title.isEmpty ? null : widget.title, from: 'tools'),
+        body: CreatePaymentBatchRequest(
+          rows: [for (final r in _rows) r.body()],
+          kind: widget.kind,
+          title: widget.title.isEmpty ? null : widget.title,
+          from: 'tools',
+        ),
       )).batch;
       if (!mounted) return;
       for (final h in b.held ?? const <PaymentBatchHeldItem>[]) {
@@ -439,8 +464,19 @@ class _PayManySheetState extends State<PayManySheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(r.who, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
-                  if (r.sub.isNotEmpty) Text(r.sub, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                  Text(
+                    r.who,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text),
+                  ),
+                  if (r.sub.isNotEmpty)
+                    Text(
+                      r.sub,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+                    ),
                 ],
               ),
             ),
@@ -448,14 +484,32 @@ class _PayManySheetState extends State<PayManySheet> {
             TkSmallButton(label: 'Remove', semantics: 'Remove ${r.who}', onPressed: _busy ? null : () => _remove(r)),
           ],
         ),
-        if (r.held != null) TkCallout(leading: TkSquare('b-alert', color: look.orange), title: 'Held out', sub: r.held, subLines: 4, color: look.orange),
+        if (r.held != null)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: 'Held out',
+            sub: r.held,
+            subLines: 4,
+            color: look.orange,
+          ),
         if (r.number.isNotEmpty)
-          TkKitField(label: 'Bank', field: false, child: TkPickBox(label: 'Bank for ${r.who}', shown: r.bank.isEmpty ? 'Choose the bank' : r.bank, onTap: () => unawaited(_pickBank(r)))),
-        TkKitField(label: 'How much?', child: TkTextBox(controller: r.amount, money: true, prefix: '₦', size: 15, height: 46)),
+          TkKitField(
+            label: 'Bank',
+            field: false,
+            child: TkPickBox(label: 'Bank for ${r.who}', shown: r.bank.isEmpty ? 'Choose the bank' : r.bank, onTap: () => unawaited(_pickBank(r))),
+          ),
+        TkKitField(
+          label: 'How much?',
+          child: TkTextBox(controller: r.amount, money: true, prefix: '₦', size: 15, height: 46),
+        ),
         TkKitField(
           label: 'What for?',
           field: false,
-          child: TkPickBox(label: 'What ${r.who} is paid for', shown: r.purpose.isEmpty ? 'Choose' : _capital(purposeSaid(r.purpose)), onTap: () => unawaited(_pickFor(r))),
+          child: TkPickBox(
+            label: 'What ${r.who} is paid for',
+            shown: r.purpose.isEmpty ? 'Choose' : _capital(purposeSaid(r.purpose)),
+            onTap: () => unawaited(_pickFor(r)),
+          ),
         ),
       ],
     );
@@ -471,7 +525,10 @@ class _PayManySheetState extends State<PayManySheet> {
         batch: b,
         fresh: true,
         follow: widget.follow,
-        held: [for (final r in _rows) if (r.held != null) (who: r.who, problem: r.held!)],
+        held: [
+          for (final r in _rows)
+            if (r.held != null) (who: r.who, problem: r.held!),
+        ],
         onRemoveHeld: (who) {
           final r = _rows.where((r) => r.held != null && r.who == who).firstOrNull;
           if (r != null) _remove(r);
@@ -498,14 +555,29 @@ class _PayManySheetState extends State<PayManySheet> {
             sub: 'Pick saved accounts, riders or staff, or paste a list: one person a line.',
             color: look.teal,
           ),
-        if (widget.note != null) TkCallout(leading: TkSquare('b-alert', color: look.orange), title: widget.note!, color: look.orange),
+        if (widget.note != null)
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: widget.note!,
+            color: look.orange,
+          ),
         TkButtonRow([
           TkSmallButton(label: 'Saved', icon: 'b-bank', semantics: 'Add saved accounts', onPressed: _picking || _busy ? null : () => unawaited(_pickSaved())),
-          TkSmallButton(label: 'Riders', icon: 'b-bike', semantics: 'Add riders, with what each is due', onPressed: _picking || _busy ? null : () => unawaited(_pickRiders())),
+          TkSmallButton(
+            label: 'Riders',
+            icon: 'b-bike',
+            semantics: 'Add riders, with what each is due',
+            onPressed: _picking || _busy ? null : () => unawaited(_pickRiders()),
+          ),
         ]),
         // Four side by side do not fit a phone: two rows of two.
         TkButtonRow([
-          TkSmallButton(label: 'Staff', icon: 'b-people', semantics: 'Add staff, to the account linked to each', onPressed: _picking || _busy ? null : () => unawaited(_pickStaff())),
+          TkSmallButton(
+            label: 'Staff',
+            icon: 'b-people',
+            semantics: 'Add staff, to the account linked to each',
+            onPressed: _picking || _busy ? null : () => unawaited(_pickStaff()),
+          ),
           TkSmallButton(label: 'Paste', icon: 'b-note', semantics: 'Paste a list', onPressed: _busy ? null : () => setState(() => _pasting = !_pasting)),
         ]),
         if (_pasting) ...[
@@ -518,7 +590,11 @@ class _PayManySheetState extends State<PayManySheet> {
               ),
               Align(
                 alignment: Alignment.centerLeft,
-                child: TkSmallButton(label: _reading ? 'Reading…' : 'Read the list', primary: true, onPressed: _reading || _paste.text.trim().isEmpty ? null : () => unawaited(_read())),
+                child: TkSmallButton(
+                  label: _reading ? 'Reading…' : 'Read the list',
+                  primary: true,
+                  onPressed: _reading || _paste.text.trim().isEmpty ? null : () => unawaited(_read()),
+                ),
               ),
             ],
           ),
@@ -549,8 +625,19 @@ class _PayManySheetState extends State<PayManySheet> {
           ),
         for (final r in _rows) KeyedSubtree(key: ObjectKey(r), child: _rowCard(r)),
         if (problem != null && problem.isNotEmpty && _rows.every((r) => r.amount.text.trim().isNotEmpty))
-          TkCallout(leading: TkSquare('b-alert', color: look.orange), title: problem, color: look.orange),
-        if (_error != null) TkCallout(leading: TkSquare('b-x', color: look.red), title: 'Not ready to pay', sub: _error, subLines: 4, color: look.red),
+          TkCallout(
+            leading: TkSquare('b-alert', color: look.orange),
+            title: problem,
+            color: look.orange,
+          ),
+        if (_error != null)
+          TkCallout(
+            leading: TkSquare('b-x', color: look.red),
+            title: 'Not ready to pay',
+            sub: _error,
+            subLines: 4,
+            color: look.red,
+          ),
       ],
     );
   }
@@ -616,7 +703,16 @@ const payOpBatch = 'money.pay.batch';
 /// yet: Pay with one passkey, and Back or Cancel it. Sent: the failed ones
 /// paid again, the owner's OK for those waiting, or the same again.
 class BatchSheet extends StatefulWidget {
-  const BatchSheet({super.key, required this.auth, required this.batch, this.fresh = false, this.held = const [], this.onRemoveHeld, this.onBack, this.follow = true});
+  const BatchSheet({
+    super.key,
+    required this.auth,
+    required this.batch,
+    this.fresh = false,
+    this.held = const [],
+    this.onRemoveHeld,
+    this.onBack,
+    this.follow = true,
+  });
   final Auth auth;
   final PaymentBatch batch;
 
@@ -708,7 +804,15 @@ class _BatchSheetState extends State<BatchSheet> {
       }
       _tried = true;
       final ids = [for (final p in _prepared) p.id];
-      final b = await confirmBatchWithProof(_auth, _b.id, payments: ids, again: [for (final id in ids) if (_again.contains(id)) id]);
+      final b = await confirmBatchWithProof(
+        _auth,
+        _b.id,
+        payments: ids,
+        again: [
+          for (final id in ids)
+            if (_again.contains(id)) id,
+        ],
+      );
       if (!mounted) return;
       setState(() {
         for (final id in ids) {
@@ -743,7 +847,8 @@ class _BatchSheetState extends State<BatchSheet> {
   }
 
   /// The rows waiting for an OK that this owner may give.
-  List<Payment> get _toApprove => _b.payments.where((p) => p.status == 'waiting_ok' && _results[p.id]?.code != 'own' && _results[p.id]?.code != 'changed').toList();
+  List<Payment> get _toApprove =>
+      _b.payments.where((p) => p.status == 'waiting_ok' && _results[p.id]?.code != 'own' && _results[p.id]?.code != 'changed').toList();
 
   Future<void> _approve() async {
     setState(() {
@@ -764,7 +869,9 @@ class _BatchSheetState extends State<BatchSheet> {
       setState(() {
         _took(b);
         if (own > 0) _notes.add('$own you confirmed yourself: another owner gives ${own == 1 ? 'its' : 'their'} OK.');
-        if (changed > 0) _notes.add('$changed to an account changed since it was last paid: give ${changed == 1 ? 'it' : 'each'} the OK on its own in Approvals.');
+        if (changed > 0) {
+          _notes.add('$changed to an account changed since it was last paid: give ${changed == 1 ? 'it' : 'each'} the OK on its own in Approvals.');
+        }
       });
       showTkToast(context, 'Given the OK: on their way');
       _follow();
@@ -885,11 +992,20 @@ class _BatchSheetState extends State<BatchSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TkEyebrow(open || preparing ? 'Paying' : status.words, color: look.limeInk, icon: 'b-people', trailing: b.title.isEmpty || !(open || preparing) ? null : b.title),
+          TkEyebrow(
+            open || preparing ? 'Paying' : status.words,
+            color: look.limeInk,
+            icon: 'b-people',
+            trailing: b.title.isEmpty || !(open || preparing) ? null : b.title,
+          ),
           const SizedBox(height: 8),
           Text(peopleWords(b.count), style: tkDisplay(size: 28, lineHeight: 1.15, letterSpacing: -0.8, color: t.text)),
           const SizedBox(height: 10),
-          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(naira(b.totalKobo), style: tkFigure(context, size: 34))),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(naira(b.totalKobo), style: tkFigure(context, size: 34)),
+          ),
           if (facts.isNotEmpty) ...[const SizedBox(height: 4), Text(facts.join(' · '), style: tkText(size: 14, lineHeight: 1.35, color: t.muted))],
         ],
       ),
@@ -910,10 +1026,28 @@ class _BatchSheetState extends State<BatchSheet> {
             widget.onRemoveHeld?.call(h.who);
           },
         ),
-      for (final n in _notes) TkCallout(leading: TkSquare('b-alert', color: look.teal), title: n, subLines: 3, color: look.teal),
-      if (preparing) TkCallout(leading: TkSquare('b-clock', color: look.teal), title: 'Checking each one with the bank…', color: look.teal),
+      for (final n in _notes)
+        TkCallout(
+          leading: TkSquare('b-alert', color: look.teal),
+          title: n,
+          subLines: 3,
+          color: look.teal,
+        ),
+      if (preparing)
+        TkCallout(
+          leading: TkSquare('b-clock', color: look.teal),
+          title: 'Checking each one with the bank…',
+          color: look.teal,
+        ),
       TkSection(title: 'Each person', count: open && prepared.isNotEmpty ? prepared.length : null, children: [for (final p in rows) _row(p)]),
-      if (_error != null) TkCallout(leading: TkSquare('b-x', color: look.red), title: open ? 'Not paid' : 'Not done', sub: _error, subLines: 4, color: look.red),
+      if (_error != null)
+        TkCallout(
+          leading: TkSquare('b-x', color: look.red),
+          title: open ? 'Not paid' : 'Not done',
+          sub: _error,
+          subLines: 4,
+          color: look.red,
+        ),
     ];
     final overlay = _sent ? const TkSavedTick(words: 'Sent') : null;
     if (open || preparing) {
@@ -942,8 +1076,22 @@ class _BatchSheetState extends State<BatchSheet> {
     final (String action, VoidCallback? onAction) = ok
         ? (_busy ? 'Giving the OK…' : 'Give the OK for all', _busy ? null : _approve)
         : failed
-        ? (_busy ? 'Preparing…' : 'Pay the failed ones again', _busy ? null : () => unawaited(_anew(() async => (await _auth.api.payBatchAgain(id: _b.id)).batch)))
-        : (_busy ? 'Preparing…' : 'Same as last time', _busy || b.status == 'cancelled' ? null : () => unawaited(_anew(() async => (await _auth.api.createPaymentBatch(body: CreatePaymentBatchRequest(copyOf: _b.id, from: 'tools'))).batch)));
+        ? (
+            _busy ? 'Preparing…' : 'Pay the failed ones again',
+            _busy ? null : () => unawaited(_anew(() async => (await _auth.api.payBatchAgain(id: _b.id)).batch)),
+          )
+        : (
+            _busy ? 'Preparing…' : 'Same as last time',
+            _busy || b.status == 'cancelled'
+                ? null
+                : () => unawaited(
+                    _anew(
+                      () async => (await _auth.api.createPaymentBatch(
+                        body: CreatePaymentBatchRequest(copyOf: _b.id, from: 'tools'),
+                      )).batch,
+                    ),
+                  ),
+          );
     return TkFormSheet(
       title: b.title.isEmpty ? 'Paid together' : b.title,
       crumb: 'Pay several people',
@@ -969,7 +1117,12 @@ Future<Set<String>?> pickSeveral(
   String icon = 'b-person',
   List<(String, String)> off = const [],
   String? empty,
-}) => showTkSheet<Set<String>>(context, (_) => TkAppLook(child: _PickSeveral(title: title, choices: choices, icon: icon, off: off, empty: empty)));
+}) => showTkSheet<Set<String>>(
+  context,
+  (_) => TkAppLook(
+    child: _PickSeveral(title: title, choices: choices, icon: icon, off: off, empty: empty),
+  ),
+);
 
 class _PickSeveral extends StatefulWidget {
   const _PickSeveral({required this.title, required this.choices, required this.icon, this.off = const [], this.empty});
@@ -1019,7 +1172,8 @@ class _PickSeveralState extends State<_PickSeveral> {
           TkSection(
             title: 'Not payable yet',
             children: [
-              for (final (title, why) in widget.off) TkListRow(title: title, sub: why, subLines: 2, icon: 'b-lock', square: TkLook.of(context).orange, chevron: false),
+              for (final (title, why) in widget.off)
+                TkListRow(title: title, sub: why, subLines: 2, icon: 'b-lock', square: TkLook.of(context).orange, chevron: false),
             ],
           ),
       ],

@@ -74,7 +74,15 @@ class _Api {
 
 /// A batch with every field the API marks required; the counts from its
 /// payments, as the server's are.
-Map<String, dynamic> batch(String id, List<Map<String, dynamic>> payments, {String status = 'prepared', String title = '', String kind = 'list', List<Object> held = const [], List<Object>? results}) {
+Map<String, dynamic> batch(
+  String id,
+  List<Map<String, dynamic>> payments, {
+  String status = 'prepared',
+  String title = '',
+  String kind = 'list',
+  List<Object> held = const [],
+  List<Object>? results,
+}) {
   final live = payments.where((p) => p['status'] != 'cancelled' && p['status'] != 'rejected');
   int sum(Iterable<Map<String, dynamic>> ps) => ps.fold(0, (n, p) => n + (p['amount_kobo'] as int));
   return {
@@ -96,7 +104,15 @@ Map<String, dynamic> batch(String id, List<Map<String, dynamic>> payments, {Stri
   };
 }
 
-http.Response _stepUp() => http.Response(jsonEncode({'error': 'confirm with your passkey', 'step_up': 'required', 'methods': ['passkey']}), 403, headers: _json);
+http.Response _stepUp() => http.Response(
+  jsonEncode({
+    'error': 'confirm with your passkey',
+    'step_up': 'required',
+    'methods': ['passkey'],
+  }),
+  403,
+  headers: _json,
+);
 
 class _Host extends StatefulWidget {
   const _Host(this.open);
@@ -154,18 +170,32 @@ void main() {
       final text = (jsonDecode(r.body) as Map)['text'] as String;
       return {
         'lines': [
-          if (text.contains('Bayo')) {'line': 1, 'text': 'Bayo 0123456789 45k', 'account_number': '0123456789', 'amount_kobo': 4500000, 'name': 'Bayo', 'payee': 'bayo'},
-          if (text.contains('Chidi')) {'line': 2, 'text': 'Chidi 0001112223 GTBank 20k', 'account_number': '0001112223', 'bank_name': 'Guaranty Trust Bank', 'amount_kobo': 2000000, 'name': 'Chidi Okeke'},
+          if (text.contains('Bayo'))
+            {'line': 1, 'text': 'Bayo 0123456789 45k', 'account_number': '0123456789', 'amount_kobo': 4500000, 'name': 'Bayo', 'payee': 'bayo'},
+          if (text.contains('Chidi'))
+            {
+              'line': 2,
+              'text': 'Chidi 0001112223 GTBank 20k',
+              'account_number': '0001112223',
+              'bank_name': 'Guaranty Trust Bank',
+              'amount_kobo': 2000000,
+              'name': 'Chidi Okeke',
+            },
           if (text.contains('Ngozi')) {'line': 3, 'text': 'Ngozi 12k', 'problem': 'No account number of 10 digits on this line.'},
-          if (text.contains('Tolu')) {'line': 1, 'text': 'Tolu 9998887776 Opay 5k', 'account_number': '9998887776', 'bank_name': 'Opay', 'amount_kobo': 500000, 'name': 'Tolu'},
+          if (text.contains('Tolu'))
+            {'line': 1, 'text': 'Tolu 9998887776 Opay 5k', 'account_number': '9998887776', 'bank_name': 'Opay', 'amount_kobo': 500000, 'name': 'Tolu'},
         ],
       };
     };
     api.routes['POST /v1/payment-batches'] = (_) => http.Response(
       jsonEncode({
-        'batch': batch('B1', [bayo, chidi], held: [
-          {'row': 2, 'payee': 'Opay ••7776', 'code': 'name_check', 'problem': 'The bank has no account 9998887776 at Opay.'},
-        ]),
+        'batch': batch(
+          'B1',
+          [bayo, chidi],
+          held: [
+            {'row': 2, 'payee': 'Opay ••7776', 'code': 'name_check', 'problem': 'The bank has no account 9998887776 at Opay.'},
+          ],
+        ),
       }),
       201,
       headers: _json,
@@ -176,7 +206,10 @@ void main() {
     api.routes['POST /v1/payment-batches/B1/confirm'] = (r) => (jsonDecode(r.body) as Map).containsKey('passkey')
         ? http.Response(
             jsonEncode({
-              'batch': batch('B1', [payment('p1', payee: 'Bayo, rider', name: 'Adebayo Musa', kobo: 4500000, purpose: 'wages', status: 'sending'), {...chidi, 'status': 'paid'}], status: 'sent'),
+              'batch': batch('B1', [
+                payment('p1', payee: 'Bayo, rider', name: 'Adebayo Musa', kobo: 4500000, purpose: 'wages', status: 'sending'),
+                {...chidi, 'status': 'paid'},
+              ], status: 'sent'),
             }),
             202,
             headers: _json,
@@ -243,7 +276,9 @@ void main() {
     expect(keys.asked, hasLength(1));
     final confirms = api.sent('POST', '/v1/payment-batches/B1/confirm');
     expect(confirms, hasLength(2));
-    expect(confirms.first, {'payments': ['p1', 'p2']});
+    expect(confirms.first, {
+      'payments': ['p1', 'p2'],
+    });
     expect(confirms.last['payments'], ['p1', 'p2']);
     expect(confirms.last['passkey'], isA<Map<String, dynamic>>());
     await t.pump(const Duration(seconds: 2));
@@ -274,21 +309,39 @@ void main() {
       if (sent == 1) {
         return http.Response(
           jsonEncode({
-            'batch': batch('B2', [{...bayo, 'status': 'sending'}, chidi], results: [
-              {'payment': 'p1'},
-              {'payment': 'p2', 'code': 'pay_again', 'problem': 'You paid them ₦20,000 in the last day.'},
-            ]),
+            'batch': batch(
+              'B2',
+              [
+                {...bayo, 'status': 'sending'},
+                chidi,
+              ],
+              results: [
+                {'payment': 'p1'},
+                {'payment': 'p2', 'code': 'pay_again', 'problem': 'You paid them ₦20,000 in the last day.'},
+              ],
+            ),
           }),
           202,
           headers: _json,
         );
       }
-      return http.Response(jsonEncode({'batch': batch('B2', [{...bayo, 'status': 'sending'}, {...chidi, 'status': 'sending'}], status: 'sent')}), 202, headers: _json);
+      return http.Response(
+        jsonEncode({
+          'batch': batch('B2', [
+            {...bayo, 'status': 'sending'},
+            {...chidi, 'status': 'sending'},
+          ], status: 'sent'),
+        }),
+        202,
+        headers: _json,
+      );
     };
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
-        home: _Host((c) => showTkSheet<PaymentBatch>(c, (_) => BatchSheet(auth: api.auth(), batch: PaymentBatch.fromJson(batch('B2', [bayo, chidi])), follow: false))),
+        home: _Host(
+          (c) => showTkSheet<PaymentBatch>(c, (_) => BatchSheet(auth: api.auth(), batch: PaymentBatch.fromJson(batch('B2', [bayo, chidi])), follow: false)),
+        ),
       ),
     );
     await settle(t);
@@ -315,8 +368,20 @@ void main() {
     phone(t, 1000);
     final keys = fakeKeys();
     final api = _Api();
-    final waiting = payment('w1', status: 'waiting_ok', payee: 'Ngozi, supplier', name: 'Ngozi Eze Ventures', bank: 'Access Bank', account: '••1234', kobo: 18000000, purpose: 'stock');
-    final mine = {...payment('w2', status: 'waiting_ok', payee: 'Musa', name: 'Musa Bello', bank: 'Opay', account: '••4321', kobo: 1250000, purpose: 'wages'), 'confirmed_by': 'u1'};
+    final waiting = payment(
+      'w1',
+      status: 'waiting_ok',
+      payee: 'Ngozi, supplier',
+      name: 'Ngozi Eze Ventures',
+      bank: 'Access Bank',
+      account: '••1234',
+      kobo: 18000000,
+      purpose: 'stock',
+    );
+    final mine = {
+      ...payment('w2', status: 'waiting_ok', payee: 'Musa', name: 'Musa Bello', bank: 'Opay', account: '••4321', kobo: 1250000, purpose: 'wages'),
+      'confirmed_by': 'u1',
+    };
     final failed = payment('f1', status: 'failed', payee: 'Tunde', name: 'Tunde Ade', bank: 'Kuda', account: '••0001', kobo: 500000, purpose: 'wages');
     final paid = {...bayo, 'status': 'paid'};
     api.routes['POST /v1/me/step-up/options'] = (_) => {
@@ -324,20 +389,40 @@ void main() {
     };
     api.routes['POST /v1/payment-batches/B3/approve'] = (r) => (jsonDecode(r.body) as Map).containsKey('passkey')
         ? {
-            'batch': batch('B3', [paid, {...waiting, 'status': 'sending'}, mine, failed], status: 'sent', results: [
-              {'payment': 'w1'},
-              {'payment': 'w2', 'code': 'own', 'problem': 'You confirmed this one: another owner gives its OK.'},
-            ]),
+            'batch': batch(
+              'B3',
+              [
+                paid,
+                {...waiting, 'status': 'sending'},
+                mine,
+                failed,
+              ],
+              status: 'sent',
+              results: [
+                {'payment': 'w1'},
+                {'payment': 'w2', 'code': 'own', 'problem': 'You confirmed this one: another owner gives its OK.'},
+              ],
+            ),
           }
         : _stepUp();
-    api.routes['POST /v1/payment-batches/B3/again'] = (_) => http.Response(jsonEncode({'batch': batch('B4', [payment('f9', payee: 'Tunde', name: 'Tunde Ade', bank: 'Kuda', kobo: 500000, purpose: 'wages')], title: 'Week 46 (again)')}), 201, headers: _json);
+    api.routes['POST /v1/payment-batches/B3/again'] = (_) => http.Response(
+      jsonEncode({
+        'batch': batch('B4', [payment('f9', payee: 'Tunde', name: 'Tunde Ade', bank: 'Kuda', kobo: 500000, purpose: 'wages')], title: 'Week 46 (again)'),
+      }),
+      201,
+      headers: _json,
+    );
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
         home: _Host(
           (c) => showTkSheet<PaymentBatch>(
             c,
-            (_) => BatchSheet(auth: api.auth(), batch: PaymentBatch.fromJson(batch('B3', [paid, waiting, mine, failed], status: 'sent', title: 'Week 46')), follow: false),
+            (_) => BatchSheet(
+              auth: api.auth(),
+              batch: PaymentBatch.fromJson(batch('B3', [paid, waiting, mine, failed], status: 'sent', title: 'Week 46')),
+              follow: false,
+            ),
           ),
         ),
       ),
@@ -376,18 +461,43 @@ void main() {
     phone(t);
     final api = _Api();
     api.routes['GET /v1/payments'] = (_) => {
-      'payments': [{...bayo, 'status': 'paid'}],
+      'payments': [
+        {...bayo, 'status': 'paid'},
+      ],
     };
     api.routes['GET /v1/pay-limits'] = (_) => {'limits': <Object>[]};
     api.routes['GET /v1/roles'] = (_) => {'roles': <Object>[]};
     // The list carries the counts alone.
-    final sent = {...batch('B5', [{...bayo, 'status': 'paid'}, {...chidi, 'status': 'paid'}], status: 'sent', title: 'Riders’ pay', kind: 'riders'), 'payments': <Object>[]};
+    final sent = {
+      ...batch(
+        'B5',
+        [
+          {...bayo, 'status': 'paid'},
+          {...chidi, 'status': 'paid'},
+        ],
+        status: 'sent',
+        title: 'Riders’ pay',
+        kind: 'riders',
+      ),
+      'payments': <Object>[],
+    };
     api.routes['GET /v1/payment-batches'] = (_) => {
       'batches': [sent],
     };
-    api.routes['POST /v1/payment-batches'] = (_) => http.Response(jsonEncode({'batch': batch('B6', [bayo, chidi], title: 'Riders’ pay', kind: 'riders')}), 201, headers: _json);
+    api.routes['POST /v1/payment-batches'] = (_) => http.Response(
+      jsonEncode({
+        'batch': batch('B6', [bayo, chidi], title: 'Riders’ pay', kind: 'riders'),
+      }),
+      201,
+      headers: _json,
+    );
     api.routes['POST /v1/payment-batches/B6/cancel'] = (_) => {'batch': batch('B6', const [], status: 'cancelled')};
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: SentPaymentsPage(auth: api.auth(), follow: false)));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: SentPaymentsPage(auth: api.auth(), follow: false),
+      ),
+    );
     await settle(t);
     expect(find.text('Pay several people'), findsOneWidget);
     expect(find.text('Paid together'), findsOneWidget);
@@ -442,19 +552,39 @@ void main() {
           'icon': 'money',
           'color': 'lime',
           'actions': [
-            {'id': 'pay.person', 'title': 'Pay someone', 'line': '', 'icon': 'money', 'does': 'asks', 'opens': 'form', 'tool': 'pay', 'confirm': 'passkey', 'fields': <Object>[]},
+            {
+              'id': 'pay.person',
+              'title': 'Pay someone',
+              'line': '',
+              'icon': 'money',
+              'does': 'asks',
+              'opens': 'form',
+              'tool': 'pay',
+              'confirm': 'passkey',
+              'fields': <Object>[],
+            },
           ],
         },
       ],
     };
     api.routes['POST /v1/payment-batches'] = (_) => http.Response(
       jsonEncode({
-        'batch': batch('B7', [payment('r1', payee: 'Musa', name: 'MUSA BELLO', kobo: 300000), payment('r2', payee: 'Tolu', name: 'TOLU ADE', bank: 'Opay', kobo: 200000)], title: 'Riders’ pay', kind: 'riders'),
+        'batch': batch(
+          'B7',
+          [payment('r1', payee: 'Musa', name: 'MUSA BELLO', kobo: 300000), payment('r2', payee: 'Tolu', name: 'TOLU ADE', bank: 'Opay', kobo: 200000)],
+          title: 'Riders’ pay',
+          kind: 'riders',
+        ),
       }),
       201,
       headers: _json,
     );
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: RidersPage(auth: api.auth())));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: RidersPage(auth: api.auth()),
+      ),
+    );
     await settle(t);
     expect(find.text('Pay all riders'), findsOneWidget);
     await t.tap(find.text('Pay all riders'));
@@ -490,9 +620,25 @@ void main() {
     final api = _Api();
     api.routes['GET /v1/staff'] = (_) => {
       'people': [
-        {'user_id': 'U1', 'name': 'Ada Obi', 'roles': ['owner'], 'chat': true, 'you': true},
-        {'user_id': 'U2', 'name': 'Tunde Bakare', 'roles': ['cashier'], 'chat': true},
-        {'user_id': 'U3', 'name': 'Kemi Ade', 'roles': ['packer'], 'chat': true},
+        {
+          'user_id': 'U1',
+          'name': 'Ada Obi',
+          'roles': ['owner'],
+          'chat': true,
+          'you': true,
+        },
+        {
+          'user_id': 'U2',
+          'name': 'Tunde Bakare',
+          'roles': ['cashier'],
+          'chat': true,
+        },
+        {
+          'user_id': 'U3',
+          'name': 'Kemi Ade',
+          'roles': ['packer'],
+          'chat': true,
+        },
       ],
       'invites': <Object>[],
     };
@@ -504,11 +650,17 @@ void main() {
       'profile': {'title': '', 'note': '', 'rota': <Object>[]},
       'pay_account': account,
     };
-    api.routes['GET /v1/staff/U1'] = (_) => person('U1', 'Ada Obi', null);
-    api.routes['GET /v1/staff/U2'] = (_) => person('U2', 'Tunde Bakare', {'saved_id': 'A1', 'name': 'tunde_bank', 'title': 'Tunde (Moniepoint)', 'bank_name': 'Moniepoint', 'last4': '4821'});
-    api.routes['GET /v1/staff/U3'] = (_) => person('U3', 'Kemi Ade', {'saved_id': 'A2', 'name': 'kemi', 'title': 'Kemi', 'bank_name': 'Opay', 'last4': '7790'});
+    api.routes['GET /v1/payments/staff'] = (_) => {
+      'staff': [
+        person('U1', 'Ada Obi', null),
+        person('U2', 'Tunde Bakare', {'saved_id': 'A1', 'name': 'tunde_bank', 'title': 'Tunde (Moniepoint)', 'bank_name': 'Moniepoint', 'last4': '4821'}),
+        person('U3', 'Kemi Ade', {'saved_id': 'A2', 'name': 'kemi', 'title': 'Kemi', 'bank_name': 'Opay', 'last4': '7790'}),
+      ],
+    };
     api.routes['POST /v1/payment-batches'] = (_) => http.Response(
-      jsonEncode({'batch': batch('B8', [payment('s1', payee: 'Tunde Bakare', name: 'TUNDE BAKARE', bank: 'Moniepoint', kobo: 2500000, purpose: 'wages')])}),
+      jsonEncode({
+        'batch': batch('B8', [payment('s1', payee: 'Tunde Bakare', name: 'TUNDE BAKARE', bank: 'Moniepoint', kobo: 2500000, purpose: 'wages')]),
+      }),
       201,
       headers: _json,
     );
@@ -599,7 +751,18 @@ void main() {
             c,
             (_) => BatchSheet(
               auth: auth,
-              batch: PaymentBatch.fromJson(batch('B9', [{...bayo, 'status': 'paid'}, payment('w1', status: 'waiting_ok'), payment('f1', status: 'failed')], status: 'sent', title: 'Week 46')),
+              batch: PaymentBatch.fromJson(
+                batch(
+                  'B9',
+                  [
+                    {...bayo, 'status': 'paid'},
+                    payment('w1', status: 'waiting_ok'),
+                    payment('f1', status: 'failed'),
+                  ],
+                  status: 'sent',
+                  title: 'Week 46',
+                ),
+              ),
               follow: false,
             ),
           ),
