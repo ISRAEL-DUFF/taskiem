@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/matching"
@@ -68,6 +69,22 @@ type chatAlert struct {
 	// the desk, a discount), as the school's Payments page has it, the
 	// student's name masked.
 	School *schools.Posting `json:"school,omitempty"`
+	// Proof is a Confirm card's proof of delivery (device fields §6): the
+	// pin at its masked point, the photo, and how each was got.
+	Proof *alertProof `json:"proof,omitempty"`
+}
+
+// alertProof is what a delivery's Confirm card shows of its proof: never
+// the exact place, which only someone who may open the run sees.
+type alertProof struct {
+	Where *dispatch.ProofWhere `json:"where,omitempty"`
+	// Mark is confirmed_at_door, far_from_address, said_by_rider,
+	// read_by_phone or no_location.
+	Mark string `json:"mark,omitempty"`
+	// PhotoURL is a short-lived link to the latest photo; PhotoSource is
+	// camera (taken in the app at the tap) or sent.
+	PhotoURL    string `json:"photo_url,omitempty"`
+	PhotoSource string `json:"photo_source,omitempty"`
 }
 
 type alertReorder struct {

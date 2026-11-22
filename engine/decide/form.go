@@ -61,6 +61,21 @@ func (d *decider) formBegin(sc scope, s *wd.Step, inst string, act map[string]an
 		}
 		to["member"] = id.String()
 	}
+	if f.To.Link != "" {
+		// The person working a business link (device fields D1): a link's
+		// id, or the linked business's; the api role finds the link.
+		r, err := engine.Resolve(f.To.Link, act, false)
+		if err != nil {
+			d.fail(inst, "expression", err)
+			return d.onError(sc, s, inst, true)
+		}
+		id, err := uuid.Parse(stringify(r))
+		if err != nil {
+			d.fail(inst, "form", fmt.Errorf("the form step's link is not a link's or a business's id: %q", stringify(r)))
+			return d.onError(sc, s, inst, true)
+		}
+		to["link"] = id.String()
+	}
 	if len(to) == 0 {
 		d.fail(inst, "form", fmt.Errorf("the form step's recipient is empty"))
 		return d.onError(sc, s, inst, true)

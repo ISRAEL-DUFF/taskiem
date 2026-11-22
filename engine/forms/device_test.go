@@ -63,9 +63,37 @@ func TestDeviceAnswers(t *testing.T) {
 	if c := answers["code"].(map[string]any); c["source"] != "camera" || c["state"] != "answered" {
 		t.Fatalf("code: %v", c)
 	}
+	// Photos and signatures the app can send (D1): left out, they are not
+	// made up as unavailable.
 	for _, f := range []string{"proof", "sign"} {
-		if s := answers[f].(map[string]any)["state"]; s != "unavailable" {
-			t.Fatalf("%s: %v", f, answers[f])
+		if v, ok := answers[f]; ok {
+			t.Fatalf("%s: %v", f, v)
+		}
+	}
+
+	// WhatsApp and Telegram (D1): a pin and a photo sent are `sent`, a
+	// signature and a scan unavailable there, in plain words.
+	for _, ch := range []string{AppWhatsApp, AppTelegram} {
+		chat := Submission{Channel: ch}
+		answers = map[string]any{"where": map[string]any{"lat": 6.452131, "lng": 3.395812}, "proof": FileRef{ID: "f2", Name: "photo", Type: "image/jpeg"}}
+		if why := deviceAnswers(schema, answers, chat, at); why != "" {
+			t.Fatal(why)
+		}
+		where := answers["where"].(map[string]any)
+		if where["source"] != "sent" || where["state"] != "unverified" { // the field requires the device's own reading
+			t.Fatalf("%s where: %v", ch, where)
+		}
+		if p := answers["proof"].(map[string]any); p["source"] != "sent" || p["state"] != "answered" {
+			t.Fatalf("%s proof: %v", ch, p)
+		}
+		if s := answers["sign"].(map[string]any); s["state"] != "unavailable" || !strings.Contains(s["reason"].(string), "cannot be given in") {
+			t.Fatalf("%s sign: %v", ch, s)
+		}
+		if c := answers["code"].(map[string]any); c["state"] != "unavailable" {
+			t.Fatalf("%s code: %v", ch, c)
+		}
+		if d := deviceMeta(chat, at); d["app"] != ch {
+			t.Fatalf("%s device: %v", ch, d)
 		}
 	}
 

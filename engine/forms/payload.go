@@ -29,11 +29,14 @@ type Submission struct {
 // Respondent is who filled it in (forms 8.2).
 type Respondent struct {
 	// Kind is anonymous, verified (a code), link (a one-time link, perhaps
-	// also verified), request (a form step's link) or member.
+	// also verified), request (a form step's link), member, or linked
+	// (the person working a business link, device fields D1: MemberID is
+	// their user, Business the linked business).
 	Kind     string `json:"kind"`
 	Phone    string `json:"phone,omitempty"`
 	Email    string `json:"email,omitempty"`
 	MemberID string `json:"member_id,omitempty"`
+	Business string `json:"business,omitempty"`
 }
 
 // Consent is a consent field agreed to: its text's hash and when.

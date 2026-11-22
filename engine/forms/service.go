@@ -59,8 +59,11 @@ type Service struct {
 	// the web app's, where members' forms open.
 	FormHost string
 	AppURL   string
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Ask puts a form step to people in their chat apps once its request
+	// is recorded as sent (device fields §2); nil asks in the app alone.
+	Ask    func(ctx context.Context, a ChatAsk)
+	Logger *slog.Logger
+	Now    func() time.Time
 }
 
 // Errors a submission is refused with; the respondent was told before it
@@ -620,6 +623,9 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	if r.MemberID != "" {
 		out["member_id"] = r.MemberID
 	}
+	if r.Business != "" {
+		out["business"] = r.Business
+	}
 	for k, v := range map[string]string{"phone": r.Phone, "email": r.Email} {
 		if v == "" {
 			continue
@@ -745,6 +751,9 @@ func respondentMap(r Respondent) map[string]any {
 	}
 	if r.MemberID != "" {
 		m["member_id"] = r.MemberID
+	}
+	if r.Business != "" {
+		m["business"] = r.Business
 	}
 	return m
 }

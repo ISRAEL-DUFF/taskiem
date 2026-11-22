@@ -328,11 +328,13 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 	}
 	switch f.To.Kind() {
 	case "", "several":
-		add("/to", "to is exactly one of phone, email, role or member")
+		add("/to", "to is exactly one of phone, email, role, member or link")
 	case "starter":
 		add("/to", `to: "starter" (the person who started the run from a chat or a page) comes with made tools; ask by phone, email, role or member for now`)
 	case "link":
-		add("/to/link", "asking the person working a business link comes with the next part of device fields (D1); ask by phone, email, role or member for now")
+		if l := strings.TrimSpace(f.To.Link); !strings.HasPrefix(l, "=") && !uuidRe.MatchString(l) {
+			add("/to/link", "link is a business link's id, or the linked business's, or an expression giving one (=trigger.body.rider)")
+		}
 	case "member":
 		if m := strings.TrimSpace(f.To.Member); !strings.HasPrefix(m, "=") && !uuidRe.MatchString(m) {
 			add("/to/member", "member is a member's id, or an expression giving one (=trigger.form.respondent.member_id)")
@@ -343,8 +345,8 @@ func checkFormStep(f *FormConfig, path string) []Problem {
 			add("/via", "via is sms and email")
 		}
 	}
-	if f.Verify && (f.To.Role != "" || f.To.Member != "") {
-		add("/verify", "members are signed in: verify is for a phone or email")
+	if f.Verify && (f.To.Role != "" || f.To.Member != "" || f.To.Link != "") {
+		add("/verify", "members and linked businesses are signed in: verify is for a phone or email")
 	}
 	if f.OnTimeout != "" && f.OnTimeout != "fail" && f.OnTimeout != "continue" {
 		add("/on_timeout", "on_timeout is fail or continue")

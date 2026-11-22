@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicnames"
@@ -621,6 +623,13 @@ func (s *Server) submitMemberForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) processMember(w http.ResponseWriter, r *http.Request, in forms.Incoming) {
+	s.processMemberThen(w, r, in, nil)
+}
+
+// processMemberThen processes a member's answer; after runs once it is
+// recorded (not refused). The submission is read in in.Tenant's scope,
+// which for a request put through a link is the other business's.
+func (s *Server) processMemberThen(w http.ResponseWriter, r *http.Request, in forms.Incoming, after func(ctx context.Context) error) {
 	in.Reference = forms.NewReference()
 	key := make([]byte, 18)
 	_, _ = rand.Read(key)
@@ -631,7 +640,7 @@ func (s *Server) processMember(w http.ResponseWriter, r *http.Request, in forms.
 		return
 	}
 	var x submissionOut
-	if err := s.tx(r, func(tx pgx.Tx) error {
+	if err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{in.Tenant}, func(tx pgx.Tx) error {
 		var err error
 		x, err = scanFormSubmission(tx.QueryRow(r.Context(), `SELECT `+formSubmissionCols+` FROM form_submissions WHERE reference = $1`, in.Reference))
 		return err
@@ -643,6 +652,12 @@ func (s *Server) processMember(w http.ResponseWriter, r *http.Request, in forms.
 	if x.Status == "refused" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": deref(x.Note), "submission": x})
 		return
+	}
+	if after != nil {
+		if err := after(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"submission": x})
 }
@@ -662,7 +677,10 @@ type requestOut struct {
 	Schema      map[string]any `json:"schema"`
 	Role        string         `json:"role"`
 	// Member is set when the step asks one member (to: {member}).
-	Member    string         `json:"member,omitempty"`
+	Member string `json:"member,omitempty"`
+	// From is the business that asked, when it asked through a link
+	// (to: {link}, device fields D1): the request is theirs.
+	From      string         `json:"from,omitempty"`
 	Status    string         `json:"status"`
 	ExpiresAt time.Time      `json:"expires_at"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -670,10 +688,12 @@ type requestOut struct {
 }
 
 // listFormRequests are the form steps waiting for members of the
-// caller's roles, and for the caller by name (to: {member}).
+// caller's roles, for the caller by name (to: {member}), and those another
+// business put to the caller through a link (to: {link}).
 func (s *Server) listFormRequests(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var list []requestOut
+	var doors []forms.RequestDoor
 	err := s.tx(r, func(tx pgx.Tx) error {
 		// The caller's roles in the query, so a page of requests for
 		// other roles does not hide theirs.
@@ -685,15 +705,41 @@ func (s *Server) listFormRequests(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		all, err := pgx.CollectRows(rows, pgx.RowToStructByPos[requestOutRow])
+		if err != nil {
+			return err
+		}
 		for _, x := range all {
 			list = append(list, x.out())
 		}
+		rows, err = tx.Query(r.Context(), `SELECT id, from_tenant, user_id, business, title, status, expires_at, created_at FROM form_request_doors
+			WHERE user_id = $1 AND status = 'pending' AND expires_at > now() ORDER BY created_at DESC LIMIT 50`, p.UserID)
+		if err != nil {
+			return err
+		}
+		doors, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (forms.RequestDoor, error) {
+			var d forms.RequestDoor
+			return d, r.Scan(&d.ID, &d.From, &d.User, &d.Business, &d.Title, &d.Status, &d.ExpiresAt, &d.CreatedAt)
+		})
 		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	for _, d := range doors {
+		x, err := s.doorRequest(r.Context(), d, false)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if x.Status == "pending" {
+			list = append(list, x)
+		}
+	}
+	slices.SortStableFunc(list, func(a, b requestOut) int { return b.CreatedAt.Compare(a.CreatedAt) })
 	if list == nil {
 		list = []requestOut{}
 	}
@@ -725,42 +771,82 @@ func (x requestOutRow) out() requestOut {
 		ExpiresAt: x.ExpiresAt, CreatedAt: x.CreatedAt}
 }
 
-func (s *Server) memberRequest(ctx context.Context, tx pgx.Tx, id string) (requestOut, error) {
+// doorRequest reads a request another business put to the caller through
+// a link, in that business's scope: the note its door left in the
+// caller's scope is what allows it. withPrefill opens its prefill.
+func (s *Server) doorRequest(ctx context.Context, d forms.RequestDoor, withPrefill bool) (requestOut, error) {
+	var out requestOut
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{d.From}, func(tx pgx.Tx) error {
+		var x requestOutRow
+		var prefill any
+		if err := tx.QueryRow(ctx, `SELECT id, run_id, title, description, schema, NULL::text, NULL::text, status, expires_at, created_at, prefill FROM form_requests WHERE id = $1`, d.ID).
+			Scan(&x.ID, &x.RunID, &x.Title, &x.Description, &x.Schema, &x.Role, &x.Member, &x.Status, &x.ExpiresAt, &x.CreatedAt, &prefill); err != nil {
+			return err
+		}
+		out = x.out()
+		out.From = d.Business
+		if withPrefill && prefill != nil {
+			v, err := pii.Open(ctx, s.Vault, tx, d.From, prefill, pii.Taint{})
+			if err != nil {
+				return err
+			}
+			out.Prefill, _ = v.(map[string]any)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// memberRequest is a form step for the caller: their business's own, by
+// role or by name, or one put to them through a link (door set then).
+func (s *Server) memberRequest(ctx context.Context, tx pgx.Tx, id string) (requestOut, *forms.RequestDoor, error) {
 	rid, err := uuid.Parse(id)
 	if err != nil {
-		return requestOut{}, pgx.ErrNoRows
-	}
-	var x requestOutRow
-	var prefill any
-	if err := tx.QueryRow(ctx, `SELECT id, run_id, title, description, schema, recipient->>'role', recipient->>'member', status, expires_at, created_at FROM form_requests WHERE id = $1`, rid).
-		Scan(&x.ID, &x.RunID, &x.Title, &x.Description, &x.Schema, &x.Role, &x.Member, &x.Status, &x.ExpiresAt, &x.CreatedAt); err != nil {
-		return requestOut{}, err
+		return requestOut{}, nil, pgx.ErrNoRows
 	}
 	p := principalFrom(ctx)
+	var x requestOutRow
+	var prefill any
+	err = tx.QueryRow(ctx, `SELECT id, run_id, title, description, schema, recipient->>'role', recipient->>'member', status, expires_at, created_at FROM form_requests WHERE id = $1`, rid).
+		Scan(&x.ID, &x.RunID, &x.Title, &x.Description, &x.Schema, &x.Role, &x.Member, &x.Status, &x.ExpiresAt, &x.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		d, err := forms.DoorTx(ctx, tx, rid)
+		if err != nil {
+			return requestOut{}, nil, err
+		}
+		if d.User != p.UserID {
+			return requestOut{}, nil, pgx.ErrNoRows
+		}
+		out, err := s.doorRequest(ctx, d, true)
+		return out, &d, err
+	}
+	if err != nil {
+		return requestOut{}, nil, err
+	}
 	byRole := x.Role != nil && p.HasRole(*x.Role)
 	byName := x.Member != nil && p.UserID != uuid.Nil && *x.Member == p.UserID.String()
 	if !byRole && !byName {
-		return requestOut{}, pgx.ErrNoRows
+		return requestOut{}, nil, pgx.ErrNoRows
 	}
 	out := x.out()
 	if err := tx.QueryRow(ctx, `SELECT prefill FROM form_requests WHERE id = $1`, rid).Scan(&prefill); err != nil {
-		return out, err
+		return out, nil, err
 	}
 	if prefill != nil {
 		v, err := pii.Open(ctx, s.Vault, tx, principalFrom(ctx).TenantID, prefill, pii.Taint{})
 		if err != nil {
-			return out, err
+			return out, nil, err
 		}
 		out.Prefill, _ = v.(map[string]any)
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 func (s *Server) getFormRequest(w http.ResponseWriter, r *http.Request) {
 	var out requestOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		out, err = s.memberRequest(r.Context(), tx, chi.URLParam(r, "id"))
+		out, _, err = s.memberRequest(r.Context(), tx, chi.URLParam(r, "id"))
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -769,7 +855,15 @@ func (s *Server) getFormRequest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// answerFormRequest answers a form step addressed to the member's role.
+// maxAnswerBody bounds a form step's answer sent with its files: the
+// forms' rules take at most 10 files of 25 MB, but a phone's photos are
+// cleaned to 2,000 px, so an answer is far smaller in practice.
+const maxAnswerBody = 60 << 20
+
+// answerFormRequest answers a form step addressed to the member's role,
+// to them, or to them through a link. JSON, or a multipart form with
+// answers and device as JSON fields and each photo, signature or file as
+// a file part named by its question (device fields D1).
 func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 	if s.Forms == nil {
 		s.fail(w, r, pgx.ErrNoRows)
@@ -780,15 +874,23 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 		// Device is the app or the web that answered, and its clock (device fields §3).
 		Device *forms.Device `json:"device"`
 	}
-	if err := decodeBody(r, &req); err != nil {
+	var uploads []forms.Upload
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		var err error
+		if uploads, err = readAnswerForm(w, r, &req.Answers, &req.Device); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	} else if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
 	var x requestOut
+	var door *forms.RequestDoor
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		x, err = s.memberRequest(r.Context(), tx, chi.URLParam(r, "id"))
+		x, door, err = s.memberRequest(r.Context(), tx, chi.URLParam(r, "id"))
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -801,8 +903,62 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 	if req.Answers == nil {
 		req.Answers = map[string]any{}
 	}
-	s.processMember(w, r, forms.Incoming{Tenant: p.TenantID, Request: &x.ID,
-		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now(), Device: req.Device}})
+	in := forms.Incoming{Tenant: p.TenantID, Request: &x.ID, Uploads: uploads,
+		Submission: forms.Submission{Answers: req.Answers, Respondent: forms.Respondent{Kind: "member", MemberID: p.UserID.String()}, Channel: "app", Submitted: time.Now(), Device: req.Device}}
+	var after func(ctx context.Context) error
+	if door != nil {
+		// Answered through the link: the request is the other business's,
+		// and the person is theirs to name as linked, not as a member.
+		in.Tenant = door.From
+		in.Submission.Respondent = forms.Respondent{Kind: "linked", MemberID: p.UserID.String(), Business: p.TenantID.String()}
+		after = func(ctx context.Context) error {
+			return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error { return forms.AnsweredDoorTx(ctx, tx, door.ID) })
+		}
+	}
+	s.processMemberThen(w, r, in, after)
+}
+
+// readAnswerForm reads a multipart answer: answers and device as JSON
+// fields, and each file part named by its question.
+func readAnswerForm(w http.ResponseWriter, r *http.Request, answers *map[string]any, device **forms.Device) ([]forms.Upload, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnswerBody)
+	if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // the body is bounded by MaxBytesReader above
+		return nil, fmt.Errorf("%w: send the answer as a multipart form, answers as JSON and each file by its question", errBadRequest)
+	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+	if v := r.FormValue("answers"); v != "" {
+		if err := json.Unmarshal([]byte(v), answers); err != nil {
+			return nil, fmt.Errorf("%w: answers is a JSON object", errBadRequest)
+		}
+	}
+	if v := r.FormValue("device"); v != "" {
+		if err := json.Unmarshal([]byte(v), device); err != nil {
+			return nil, fmt.Errorf("%w: device is a JSON object", errBadRequest)
+		}
+	}
+	var out []forms.Upload
+	for field, hs := range r.MultipartForm.File {
+		for _, h := range hs {
+			if len(out) >= 10 {
+				return nil, fmt.Errorf("%w: at most 10 files", errBadRequest)
+			}
+			f, err := h.Open()
+			if err != nil {
+				return nil, fmt.Errorf("%w: a file could not be read", errBadRequest)
+			}
+			data, err := io.ReadAll(io.LimitReader(f, 25<<20+1))
+			_ = f.Close()
+			if err != nil || len(data) == 0 {
+				return nil, fmt.Errorf("%w: a file could not be read", errBadRequest)
+			}
+			if len(data) > 25<<20 {
+				return nil, fmt.Errorf("%w: %q is larger than 25 MB", errBadRequest, h.Filename)
+			}
+			out = append(out, forms.Upload{Meta: forms.FileMeta{Field: field, Name: h.Filename, Type: http.DetectContentType(data), Size: int64(len(data))}, Data: data})
+		}
+	}
+	slices.SortStableFunc(out, func(a, b forms.Upload) int { return strings.Compare(a.Meta.Field, b.Meta.Field) })
+	return out, nil
 }
 
 // RunForms takes form submissions from the inbox every second, and every
@@ -813,6 +969,9 @@ func (s *Server) RunForms(ctx context.Context) error {
 	if s.Forms == nil {
 		<-ctx.Done()
 		return nil
+	}
+	if s.Forms.Ask == nil {
+		s.Forms.Ask = s.FormAsk
 	}
 	drain, tick := time.NewTicker(time.Second), time.NewTicker(10*time.Second)
 	defer drain.Stop()

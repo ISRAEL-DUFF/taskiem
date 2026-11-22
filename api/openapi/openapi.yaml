@@ -15931,7 +15931,7 @@ paths:
       tags:
       - Forms
       summary: Answer a form step addressed to you or one of your roles
-      description: The waiting run goes on with the answers. 409 when it is no longer waiting.
+      description: The waiting run goes on with the answers. 409 when it is no longer waiting. A form step another business put to you through a link (to {link}) is answered here too, as the person working the link (respondent kind linked). Photos, signatures and files go as a multipart form (answers and device as JSON fields, each file as a part named by its question), through the forms' file rules (private storage, malware scan, metadata removed, photos at most 2,000 px).
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -15958,6 +15958,20 @@ paths:
                   description: The answers by field. A location field (device fields) takes {lat, lng, accuracy_m, at, fix} read at the tap, {address} typed where the field allows it, or {state refused or unavailable, reason}; its source, state and coarse are set by the server.
                 device:
                   $ref: '#/components/schemas/FormDevice'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: string
+                  description: The answers as a JSON object, as in the JSON body
+                device:
+                  type: string
+                  description: FormDevice as a JSON object
+              additionalProperties:
+                type: string
+                format: binary
+                description: A photo, a signature or a file, named by its question
       responses:
         '201':
           description: The submission
@@ -40260,6 +40274,35 @@ components:
         school:
           $ref: '#/components/schemas/SchoolPosting'
           description: "school_approval: a school's request waiting for a second person (cash at the desk, a discount), the student's name masked; for those with school.approve, never their own. Decided with POST /v1/schools/approvals/{id}."
+        proof:
+          type: object
+          description: "confirm: the delivery's proof from a form step (docs/spec/device-fields.md §6, riders@1 record_proof): the pin at its masked point (about 100 m, never the exact place), the latest photo, and which was read by the phone and which was sent."
+          properties:
+            where:
+              type: object
+              required: [lat, lng, source]
+              properties:
+                lat:
+                  type: number
+                  description: Masked to three decimal places
+                lng:
+                  type: number
+                source:
+                  type: string
+                  enum: [device, sent, typed]
+                coarse:
+                  type: boolean
+                accuracy_m:
+                  type: number
+            mark:
+              type: string
+              enum: [confirmed_at_door, far_from_address, said_by_rider, read_by_phone, no_location]
+            photo_url:
+              type: string
+              description: A link to the latest photo, valid for 10 minutes
+            photo_source:
+              type: string
+              enum: [camera, sent]
     Agent:
       type: object
       required: [id, code, name, status, region, workspace_id]
@@ -52283,6 +52326,9 @@ components:
         member:
           type: string
           description: The member asked by name (a form step to one member); absent when asked by role
+        from:
+          type: string
+          description: The business that asked, when it asked you through a business link (to {link}, device fields D1); the request is theirs, answered through the link
         status:
           type: string
         expires_at:

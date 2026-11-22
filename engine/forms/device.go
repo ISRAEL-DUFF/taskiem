@@ -88,11 +88,25 @@ func clip(s string, n int) string {
 }
 
 // answerable reports whether a channel can answer a kind of device field
-// today. The member API (the app and the web) takes a location and a scan
-// as values; photos and signatures need an upload it does not take yet,
-// and the form host's page does not ask a device before D1.
+// (D1). The member API (the app and the web) takes a location and a scan
+// as values and a photo and a signature as uploads; WhatsApp and Telegram
+// a location and a photo sent in the chat, with no pad and no scanner
+// (§3); the form host's page asks no device yet.
 func answerable(kind, channel string) bool {
-	return channel == "app" && (kind == wd.DeviceLocation || kind == wd.DeviceScan)
+	switch channel {
+	case "app":
+		return true
+	case AppWhatsApp, AppTelegram:
+		return kind == wd.DeviceLocation || kind == wd.DevicePhoto
+	}
+	return false
+}
+
+func chatName(channel string) string {
+	if channel == AppTelegram {
+		return "Telegram"
+	}
+	return "WhatsApp"
 }
 
 // deviceSource is how a channel got a device answer: never what the
@@ -137,7 +151,11 @@ func deviceAnswers(schema map[string]any, answers map[string]any, sub Submission
 		if !present || v == nil {
 			delete(answers, name)
 			if !answerable(kind, sub.Channel) {
-				answers[name] = map[string]any{"state": "unavailable", "reason": "this question cannot be answered here yet"}
+				why := "this question cannot be answered here yet"
+				if sub.Channel == AppWhatsApp || sub.Channel == AppTelegram {
+					why = "a " + kind + " cannot be given in " + chatName(sub.Channel)
+				}
+				answers[name] = map[string]any{"state": "unavailable", "reason": why}
 			}
 			continue
 		}

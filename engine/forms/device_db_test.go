@@ -109,8 +109,8 @@ func TestLocationSealedInHistoryAndMasked(t *testing.T) {
 	out := stepPayload(t, sealed, "handover")["output"].(map[string]any)
 	where := out["where"].(map[string]any)
 	// Source from the channel, not the body; coarse past max_accuracy_m;
-	// a photo the app cannot send yet is unavailable.
-	if where["source"] != "device" || where["state"] != "answered" || where["coarse"] != true || out["proof"].(map[string]any)["state"] != "unavailable" {
+	// a photo the app can send (D1) is not made up when left out.
+	if where["source"] != "device" || where["state"] != "answered" || where["coarse"] != true || out["proof"] != nil {
 		t.Fatalf("answer: %v", out)
 	}
 	dev := out["device"].(map[string]any)

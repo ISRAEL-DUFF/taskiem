@@ -16,8 +16,11 @@ import {
 import {
   ago,
   ALERT_LOOK,
+  pinLink,
+  proofWords,
   reorderWords,
   shownAlerts,
+  type AlertProof,
   type ChatAlert,
 } from "../lib/alerts";
 import { subjectWords } from "../lib/approvals";
@@ -49,7 +52,13 @@ const store = {
 };
 const tell = () => store.listeners.forEach((f) => f());
 // News worth a sound: a new order, money that came in, an approval.
-const NEWS = new Set(["new_order", "unmatched", "approval", "school_approval", "deal"]);
+const NEWS = new Set([
+  "new_order",
+  "unmatched",
+  "approval",
+  "school_approval",
+  "deal",
+]);
 
 function loadAlerts() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden")
@@ -377,6 +386,7 @@ function AlertCard({
           <span className="tk-alert-line">{a.line}</span>
         </span>
       </span>
+      {a.proof && <ProofOf proof={a.proof} reference={a.reference ?? ""} />}
       <span className="tk-alert-acts">
         {step && (
           <button
@@ -390,7 +400,14 @@ function AlertCard({
           </button>
         )}
         {a.kind === "low_stock" && a.id && (
-          <GiveThis className="tk-alert-soft" link={{ kind: "stock", id: a.id, name: a.title.replace(/ is running low$/, "") }} />
+          <GiveThis
+            className="tk-alert-soft"
+            link={{
+              kind: "stock",
+              id: a.id,
+              name: a.title.replace(/ is running low$/, ""),
+            }}
+          />
         )}
         <button
           type="button"
@@ -403,6 +420,38 @@ function AlertCard({
       </span>
       <ErrorBox error={act.error} />
     </article>
+  );
+}
+
+/** A delivery's proof on its Confirm card: the pin at its masked point,
+ * the photo, and which was read by the phone and which was sent. */
+function ProofOf({
+  proof,
+  reference,
+}: {
+  proof: AlertProof;
+  reference: string;
+}) {
+  const w = proofWords(proof);
+  return (
+    <span className="tk-alert-proof" data-testid="delivery-proof">
+      {proof.photo_url && (
+        <img
+          src={proof.photo_url}
+          alt={`The photo of delivery ${reference}`}
+          className="tk-alert-proof-photo"
+        />
+      )}
+      <span className="tk-alert-proof-words">
+        {proof.where && (
+          <a href={pinLink(proof.where)} target="_blank" rel="noreferrer">
+            <Icon name="place" /> {w.where ?? "Location"}
+            {proof.where.coarse ? " (rough)" : ""}
+          </a>
+        )}
+        {w.photo && <span>{w.photo}</span>}
+      </span>
+    </span>
   );
 }
 

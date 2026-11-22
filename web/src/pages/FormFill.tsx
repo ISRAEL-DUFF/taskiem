@@ -2,10 +2,15 @@
 // steps waiting for someone with their role (/forms/requests).
 import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ApiError, get, post } from "../api";
+import { ApiError, get, post, postForm } from "../api";
 import { useAuth } from "../auth";
 import { FormView } from "../forms/FormView";
-import type { FormAfter, FormPage, FormSchema } from "../lib/forms";
+import {
+  answerParts,
+  type FormAfter,
+  type FormPage,
+  type FormSchema,
+} from "../lib/forms";
 import {
   EmptyState,
   ErrorBox,
@@ -36,6 +41,8 @@ export interface FormRequest {
   description: string | null;
   schema: FormSchema;
   role: string;
+  /** Set when another business asked through a link (to: {link}). */
+  from?: string;
   status: string;
   expires_at: string;
   created_at: string;
@@ -301,21 +308,31 @@ export function FormRequestPage() {
           initial={data.prefill}
           filesNote={FILES_NOTE}
           level={1}
+          devices
           busy={act.busy}
           onSubmit={(answers) =>
             void act.run(async () => {
               try {
-                const r = await post<{ submission: FormSubmission }>(
-                  `/v1/form-requests/${id}/answers`,
-                  {
-                    answers,
-                    device: {
-                      app: "web",
-                      online: navigator.onLine,
-                      at: new Date().toISOString(),
-                    },
-                  },
-                );
+                const device = {
+                  app: "web",
+                  online: navigator.onLine,
+                  at: new Date().toISOString(),
+                };
+                // A photo or a signature goes as a part of a multipart form.
+                const { json, files } = answerParts(answers);
+                let r: { submission: FormSubmission };
+                if (files.length > 0) {
+                  const form = new FormData();
+                  form.append("answers", JSON.stringify(json));
+                  form.append("device", JSON.stringify(device));
+                  for (const [k, f] of files) form.append(k, f, f.name);
+                  r = await postForm(`/v1/form-requests/${id}/answers`, form);
+                } else {
+                  r = await post(`/v1/form-requests/${id}/answers`, {
+                    answers: json,
+                    device,
+                  });
+                }
                 setSent(r.submission);
               } catch (e) {
                 if (e instanceof ApiError && e.status === 409) {
@@ -330,8 +347,12 @@ export function FormRequestPage() {
         />
       </div>
       <p className="hint">
-        Asked {fmtTime(data.created_at)} of the {data.role} role; open until{" "}
-        {fmtTime(data.expires_at)}.
+        {data.from
+          ? `Asked by ${data.from} ${fmtTime(data.created_at)}`
+          : data.role
+            ? `Asked ${fmtTime(data.created_at)} of the ${data.role} role`
+            : `Asked of you ${fmtTime(data.created_at)}`}
+        ; open until {fmtTime(data.expires_at)}.
       </p>
     </div>
   );

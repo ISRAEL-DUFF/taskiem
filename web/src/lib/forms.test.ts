@@ -22,6 +22,11 @@ import {
   shownPages,
   stepProblems,
   unavailableDeviceAnswers,
+  locationAnswer,
+  locationRefusal,
+  deviceSummary,
+  deviceAnswered,
+  answerParts,
   suggestPii,
   widgetOf,
   type FieldType,
@@ -373,7 +378,7 @@ describe("client-side checks", () => {
         schema: { type: "object", properties: { bank: { type: "string" } } },
       }),
     ).toEqual([]);
-    // A member is a person to ask; a link waits for device fields D1.
+    // A member is a person to ask; so is the person working a link (D1).
     const q = {
       type: "object",
       properties: { where: { type: "location", why: "w" } },
@@ -390,8 +395,43 @@ describe("client-side checks", () => {
         title: "Delivered",
         to: { link: "=trigger.body.rider" },
         schema: q,
+      }),
+    ).toEqual([]);
+    expect(
+      stepProblems({
+        title: "Delivered",
+        to: { link: "rider" },
+        schema: q,
       }).map((p) => p.path),
     ).toEqual(["/to/link"]);
+    // The web's device answers (D1).
+    expect(
+      locationAnswer({
+        coords: { latitude: 6.45, longitude: 3.39, accuracy: 12.4 },
+        timestamp: Date.UTC(2026, 10, 22, 10, 0, 0),
+      }),
+    ).toEqual({
+      lat: 6.45,
+      lng: 3.39,
+      accuracy_m: 12,
+      at: "2026-11-22T10:00:00Z",
+    });
+    expect(locationRefusal(1)).toMatchObject({ state: "refused" });
+    expect(locationRefusal(2)).toMatchObject({ state: "unavailable" });
+    const photo = new File([new Uint8Array([0xff, 0xd8, 0xff])], "door.jpg", {
+      type: "image/jpeg",
+    });
+    expect(deviceSummary("photo", photo)).toContain("marked as sent");
+    expect(deviceAnswered(photo)).toBe(true);
+    expect(deviceAnswered({ state: "refused", reason: "x" })).toBe(true);
+    expect(deviceAnswered({ address: " " })).toBe(false);
+    const parts = answerParts({
+      where: { lat: 1, lng: 2, at: "x" },
+      proof: photo,
+      note: "ok",
+    });
+    expect(parts.files.map(([k]) => k)).toEqual(["proof"]);
+    expect(Object.keys(parts.json)).toEqual(["where", "note"]);
     expect(unavailableDeviceAnswers(q)).toEqual({
       where: {
         state: "unavailable",

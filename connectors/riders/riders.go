@@ -39,6 +39,7 @@ type Dispatcher interface {
 	Release(ctx context.Context, tenant uuid.UUID, reference, actor string) (dispatch.Delivery, error)
 	PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUID) (dispatch.Batch, error)
 	FinishBatch(ctx context.Context, tenant, batch uuid.UUID, results []dispatch.Result, cancel bool) (int, int, error)
+	RecordProof(ctx context.Context, tenant uuid.UUID, reference string, p dispatch.Proof) (string, error)
 }
 
 // New returns the connector; ops nil makes every action fail plainly. ops
@@ -53,6 +54,7 @@ func New(ops Ops) *connector.Connector {
 		"retire_rider":    connector.ActionFunc(a.retire),
 		"offer":           connector.ActionFunc(a.offer),
 		"release":         connector.ActionFunc(a.release),
+		"record_proof":    connector.ActionFunc(a.recordProof),
 		"prepare_payouts": connector.ActionFunc(a.prepare),
 		"finish_payouts":  connector.ActionFunc(a.finish),
 	}}
@@ -175,6 +177,51 @@ func (a *actions) release(ctx context.Context, req connector.Request) (connector
 		return connector.Response{}, classify(err)
 	}
 	return connector.Response{Output: map[string]any{"reference": ref, "status": x.Status, "rider": x.Rider}}, nil
+}
+
+// recordProof records a form step's location and photo answers on an
+// order's delivery (device fields §6). Only what was answered counts: a
+// refused, unavailable or unverified field is recorded as none.
+func (a *actions) recordProof(ctx context.Context, req connector.Request) (connector.Response, error) {
+	c, d, err := a.dispatcher(ctx)
+	if err != nil {
+		return connector.Response{}, err
+	}
+	ref, _ := req.Input["reference"].(string)
+	var p dispatch.Proof
+	if w, ok := req.Input["where"].(map[string]any); ok && w["state"] == "answered" {
+		lat, okLat := float(w["lat"])
+		lng, okLng := float(w["lng"])
+		if okLat && okLng {
+			p.Lat, p.Lng = &lat, &lng
+			p.WhereSource, _ = w["source"].(string)
+			p.Coarse = w["coarse"] == true
+			if acc, ok := float(w["accuracy_m"]); ok {
+				p.AccuracyM = &acc
+			}
+		}
+	}
+	if ph, ok := req.Input["photo"].(map[string]any); ok && ph["state"] == "answered" {
+		p.Photo, _ = ph["id"].(string)
+		p.PhotoSource, _ = ph["source"].(string)
+	}
+	mark, err := d.RecordProof(ctx, c.Tenant, ref, p)
+	if err != nil {
+		return connector.Response{}, classify(err)
+	}
+	return connector.Response{Output: map[string]any{"reference": ref, "mark": mark}}, nil
+}
+
+func float(v any) (float64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case int64:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	}
+	return 0, false
 }
 
 func (a *actions) caller(ctx context.Context) (connector.Caller, error) {
@@ -369,6 +416,16 @@ func (l *Late) Release(ctx context.Context, tenant uuid.UUID, reference, actor s
 		return dispatch.Delivery{}, fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
 	}
 	return d.Release(ctx, tenant, reference, actor)
+}
+
+func (l *Late) RecordProof(ctx context.Context, tenant uuid.UUID, reference string, p dispatch.Proof) (string, error) {
+	l.mu.RLock()
+	d := l.dis
+	l.mu.RUnlock()
+	if d == nil {
+		return "", fmt.Errorf("deliveries with riders are not available on this deployment: %w", effects.ErrFatal)
+	}
+	return d.RecordProof(ctx, tenant, reference, p)
 }
 
 func (l *Late) get() (Ops, error) {

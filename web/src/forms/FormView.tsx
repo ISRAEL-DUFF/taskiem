@@ -8,6 +8,7 @@ import {
   answersToSend,
   coerceAnswer,
   coerceAnswers,
+  deviceAnswered,
   deviceKindOf,
   formatNaira,
   labelOf,
@@ -20,6 +21,7 @@ import {
   type FormPage,
   type FormSchema,
 } from "../lib/forms";
+import { DeviceField } from "./DeviceField";
 
 type Raw = Record<string, unknown>;
 
@@ -43,6 +45,11 @@ export interface FormViewProps {
   footer?: ReactNode;
   /** The title's heading level: 1 on a page of its own. */
   level?: 1 | 2;
+  /**
+   * Device fields are asked here (a form step answered on the web, D1):
+   * photos and signatures come back as File values to send as parts.
+   */
+  devices?: boolean;
 }
 
 /** Starting raw values: what inputs hold for each answer. */
@@ -85,6 +92,7 @@ export function FormView({
   onSubmit,
   footer,
   level = 2,
+  devices = false,
 }: FormViewProps) {
   const all = useMemo(() => pagesOf(pages, schema), [pages, schema]);
   const [raw, setRaw] = useState<Raw>(() => rawOf(schema, initial));
@@ -115,6 +123,13 @@ export function FormView({
     const e: Record<string, string> = {};
     for (const n of names) {
       const p = props[n];
+      if (devices && p && deviceKindOf(p)) {
+        // A required device field holds the form until it is answered or
+        // the person says they cannot (§4).
+        if (required.has(n) && !deviceAnswered(raw[n]))
+          e[n] = "Answer this, or press I can't answer this.";
+        continue;
+      }
       if (!p || !asked(n) || locked.includes(n)) continue;
       const m = answerProblem(p, coerceAnswer(p, raw[n]), required.has(n));
       if (m) e[n] = m;
@@ -138,8 +153,18 @@ export function FormView({
         ([k]) => !(filesNote && props[k] && widgetOf(props[k]) === "file"),
       ),
     );
-    // The web does not ask a device yet: those questions are sent as unavailable.
-    onSubmit?.({ ...out, ...unavailableDeviceAnswers(schema) });
+    if (!devices) {
+      // A page that asks no device: those questions are sent as unavailable.
+      onSubmit?.({ ...out, ...unavailableDeviceAnswers(schema) });
+      return;
+    }
+    const answered: Raw = {};
+    for (const [k, p] of Object.entries(props))
+      if (deviceKindOf(p) && deviceAnswered(raw[k])) answered[k] = raw[k];
+    const typed = Object.fromEntries(
+      Object.entries(out).filter(([k]) => !deviceKindOf(props[k])),
+    );
+    onSubmit?.({ ...typed, ...answered });
   };
 
   return (
@@ -169,7 +194,24 @@ export function FormView({
       {(current?.fields ?? []).map((name) => {
         const p = props[name];
         if (!p || widgetOf(p) === "hidden") return null;
-        if (deviceKindOf(p))
+        const kind = deviceKindOf(p);
+        if (kind && devices)
+          return (
+            <DeviceField
+              key={name}
+              name={name}
+              kind={kind}
+              schema={p}
+              required={required.has(name)}
+              value={raw[name]}
+              error={errors[name]}
+              onChange={(v) => {
+                setRaw((r) => ({ ...r, [name]: v }));
+                if (errors[name]) setErrors((e) => ({ ...e, [name]: "" }));
+              }}
+            />
+          );
+        if (kind)
           return (
             <p key={name} className="hint">
               <strong>{labelOf(name, p)}</strong>: this question needs your

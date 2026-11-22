@@ -435,6 +435,11 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-alert-words { display: grid; gap: 2px; min-width: 0; }
 .tk-alert-title { font-weight: 700; font-size: 16px; color: var(--text); }
 .tk-alert-line { font-size: 14px; color: var(--muted); }
+.tk-alert-proof { display: flex; gap: 12px; align-items: center; }
+.tk-alert-proof-photo { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); flex: none; }
+.tk-alert-proof-words { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.tk-alert-proof-words a { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; color: var(--text); }
+.tk-alert-proof-words svg { width: 16px; height: 16px; }
 .tk-alert-acts, .tk-approve-acts { display: flex; flex-wrap: wrap; gap: 10px; }
 .tk-alert-go { min-width: min(100%, 180px); }
 .tk-alert-go, .tk-alert-soft, .tk-approve-go { min-height: 52px; padding: 0 18px; border: 0; box-shadow: none; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }

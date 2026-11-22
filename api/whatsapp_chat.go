@@ -559,6 +559,11 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 			}
 		}
 	}
+	// A location or a photo answering a form step, or "send" for one
+	// waiting on its require_source (forms_chat.go).
+	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
+		return err
+	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
 		return s.waFlowCompleted(ctx, c)

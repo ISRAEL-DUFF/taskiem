@@ -9,7 +9,7 @@ import (
 )
 
 // handover is the delivery fixture of docs/spec/device-fields.md §6, asked
-// of a member (to: {link} waits for D1).
+// of a member; to: {link}, the fixture's own (D1), is checked below.
 const handover = `{"schema":"wd/v1","id":"wf_deliver","version":1,"name":"Deliver",
  "trigger":{"type":"manual"},
  "steps":[{"id":"handover","type":"form","config":{"title":"Delivered",
@@ -55,10 +55,11 @@ func TestDeviceFieldsValidate(t *testing.T) {
 		{`"required":["where","proof"]`, `"required":["where","proof","signed"]`, ""},
 		// to as a person.
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"rider"}`, "member is a member's id"},
-		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"link":"=trigger.body.rider"}`, "comes with the next part of device fields (D1)"},
+		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"link":"rider"}`, "link is a business link's id"},
+		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"link":"=trigger.body.rider"},"verify":true`, "verify is for a phone or email"},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":"starter"`, `"starter" (the person who started the run from a chat or a page) comes with made tools`},
 		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"=trigger.body.rider","role":"riders"}`, "/to"},
-		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"=trigger.body.rider"},"verify":true`, "members are signed in"},
+		{`"to":{"member":"=trigger.body.rider"}`, `"to":{"member":"=trigger.body.rider"},"verify":true`, "verify is for a phone or email"},
 	} {
 		if c.want == "" {
 			continue
@@ -92,6 +93,10 @@ func TestDeviceFieldsValidate(t *testing.T) {
 	// browser, which reads a location, so it can be met.
 	if p := wd.Validate([]byte(strings.Replace(handover, `{"member":"=trigger.body.rider"}`, `{"phone":"=trigger.body.phone"}`, 1))); len(p) != 0 {
 		t.Errorf("require_source by phone: %v", p)
+	}
+	// The person working a business link (D1): the fixture as §6 has it.
+	if p := wd.Validate([]byte(strings.Replace(handover, `{"member":"=trigger.body.rider"}`, `{"link":"=trigger.body.rider"}`, 1))); len(p) != 0 {
+		t.Errorf("to: {link}: %v", p)
 	}
 	// Five device fields.
 	five := strings.Replace(handover, `"note":{"type":"string"}`, `"note":{"type":"photo","why":"another"}`, 1)

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   ago,
+  pinLink,
+  proofWords,
   reorderTotal,
   reorderWords,
   shownAlerts,
@@ -34,5 +36,21 @@ describe("alerts", () => {
       shownAlerts([a("x"), a("y")], new Set(["x"])).map((x) => x.key),
     ).toEqual(["y"]);
     expect(shownAlerts(undefined, new Set())).toEqual([]);
+  });
+
+  it("says which proof was read by the phone and which was sent", () => {
+    expect(
+      proofWords({ mark: "said_by_rider", photo_source: "camera" }),
+    ).toEqual({
+      where: "Location sent by the rider (a pin they placed)",
+      photo: "Photo taken in the app",
+    });
+    expect(
+      proofWords({ mark: "confirmed_at_door", photo_source: "sent" }).where,
+    ).toContain("read by the rider's phone, at the door");
+    expect(proofWords({}).where).toBeUndefined();
+    expect(pinLink({ lat: 6.4281, lng: 3.4219, source: "device" })).toBe(
+      "https://www.google.com/maps?q=6.428,3.422",
+    );
   });
 });

@@ -591,9 +591,98 @@ export function deviceKindOf(
   return DEVICE_KINDS.find((k) => k === p?.type);
 }
 
+/** A device field's answer as the web holds it before sending (D1). */
+export type DeviceValue =
+  | { lat: number; lng: number; accuracy_m?: number; at: string }
+  | { address: string }
+  | { text: string }
+  | { state: "refused" | "unavailable"; reason: string }
+  | File;
+
+/** A browser's reading of where it is, as a location field takes it. */
+export function locationAnswer(p: {
+  coords: { latitude: number; longitude: number; accuracy?: number | null };
+  timestamp: number;
+}): DeviceValue {
+  const out: { lat: number; lng: number; accuracy_m?: number; at: string } = {
+    lat: p.coords.latitude,
+    lng: p.coords.longitude,
+    at: new Date(p.timestamp || Date.now())
+      .toISOString()
+      .replace(/\.\d+Z$/, "Z"),
+  };
+  if (typeof p.coords.accuracy === "number" && p.coords.accuracy >= 0)
+    out.accuracy_m = Math.round(p.coords.accuracy);
+  return out;
+}
+
 /**
- * What the web sends for device fields it cannot ask yet (device fields
- * D1 brings them): each is unavailable, which the workflow handles.
+ * A browser's refusal of its location (GeolocationPositionError's code):
+ * 1 is the person (or the browser) saying no, which is the answer
+ * "refused"; anything else is the device unable to answer.
+ */
+export function locationRefusal(code: number): DeviceValue {
+  return code === 1
+    ? {
+        state: "refused",
+        reason: "the browser was not allowed to read where I am",
+      }
+    : { state: "unavailable", reason: "the browser could not read where I am" };
+}
+
+/** Plain words for a device field's answer once given. */
+export function deviceSummary(kind: DeviceKind, v: unknown): string {
+  if (!v) return "";
+  if (typeof File !== "undefined" && v instanceof File)
+    return kind === "signature"
+      ? "Signed."
+      : `${v.name || "A photo"} chosen: it is marked as sent, not taken at the tap.`;
+  const m = v as Record<string, unknown>;
+  if (m.state === "refused") return "You said you cannot answer this.";
+  if (m.state === "unavailable") return "Not available here.";
+  if (typeof m.lat === "number")
+    return typeof m.accuracy_m === "number"
+      ? `Location read, to within ${m.accuracy_m} m.`
+      : "Location read.";
+  if (typeof m.address === "string") return `Address typed: ${m.address}`;
+  if (typeof m.text === "string") return `Code: ${m.text}`;
+  return "";
+}
+
+/** Whether a device field holds an answer, a refusal included. */
+export function deviceAnswered(v: unknown): boolean {
+  if (!v) return false;
+  if (typeof File !== "undefined" && v instanceof File) return v.size > 0;
+  const m = v as Record<string, unknown>;
+  return (
+    m.state === "refused" ||
+    m.state === "unavailable" ||
+    typeof m.lat === "number" ||
+    (typeof m.address === "string" && m.address.trim() !== "") ||
+    (typeof m.text === "string" && m.text.trim() !== "")
+  );
+}
+
+/**
+ * The answers split for sending: files (a photo, a signature) as parts
+ * named by their question, the rest as JSON. No files: send JSON alone.
+ */
+export function answerParts(answers: Record<string, unknown>): {
+  json: Record<string, unknown>;
+  files: [string, File][];
+} {
+  const json: Record<string, unknown> = {};
+  const files: [string, File][] = [];
+  for (const [k, v] of Object.entries(answers)) {
+    if (typeof File !== "undefined" && v instanceof File) files.push([k, v]);
+    else json[k] = v;
+  }
+  return { json, files };
+}
+
+/**
+ * What the web sends for device fields it cannot ask (a page that does not
+ * ask a device: the editor's preview, a members form): each unavailable.
  */
 export function unavailableDeviceAnswers(
   schema: FormSchema | undefined,
@@ -1169,16 +1258,25 @@ export function stepProblems(cfg: FormStepConfig, path = ""): Problem[] {
     (v) => v !== undefined && v !== "",
   );
   if (set.length !== 1)
-    add("/to", "to is exactly one of phone, email, role or member");
-  else if (to.link)
+    add("/to", "to is exactly one of phone, email, role, member or link");
+  else if (
+    to.link &&
+    !to.link.trim().startsWith("=") &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      to.link.trim(),
+    )
+  )
     add(
       "/to/link",
-      "asking the person working a business link comes with the next part of device fields (D1); ask by phone, email, role or member for now",
+      "link is a business link's id, or the linked business's, or an expression giving one (=trigger.body.rider)",
     );
   for (const v of cfg.via ?? [])
     if (v !== "sms" && v !== "email") add("/via", "via is sms and email");
-  if (cfg.verify && (to.role || to.member))
-    add("/verify", "members are signed in: verify is for a phone or email");
+  if (cfg.verify && (to.role || to.member || to.link))
+    add(
+      "/verify",
+      "members and linked businesses are signed in: verify is for a phone or email",
+    );
   let timeout = 7 * 86_400_000;
   if (cfg.timeout) {
     const d = parseDuration(cfg.timeout);
