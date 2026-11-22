@@ -8,16 +8,44 @@
 // paying the failed ones again and, for owners, one OK for all that wait.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { passkeysSupported, stepUpAssert } from "../passkeys";
-import { EmptyState, ErrorBox, Field, Item, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import {
+  EmptyState,
+  ErrorBox,
+  Field,
+  Item,
+  Items,
+  Modal,
+  PageHeader,
+  Row,
+  Skeleton,
+  fmtTime,
+  useAction,
+  useLoad,
+} from "../ui";
 import { naira } from "../lib/invoices";
 import type { PayLine } from "../lib/dispatch";
 import type { SavedList, SavedThing } from "../lib/saved";
-import { payAccountWords, staffUnpayable, type StaffPersonView, type StaffView } from "../lib/team";
-import { payeeName, paymentSub, payWarnings, type Payment } from "../lib/payments";
+import {
+  payAccountWords,
+  staffUnpayable,
+  type StaffPayAccount,
+} from "../lib/team";
+import {
+  payeeName,
+  paymentSub,
+  payWarnings,
+  type Payment,
+} from "../lib/payments";
 import {
   FOR_CHOICES,
   MAX_ROWS,
@@ -58,7 +86,8 @@ interface ListState {
   held?: BatchHeld[];
 }
 
-const listKind = (rows: DraftRow[]) => (rows.length > 0 && rows.every((r) => r.kind === "rider") ? "riders" : "list");
+const listKind = (rows: DraftRow[]) =>
+  rows.length > 0 && rows.every((r) => r.kind === "rider") ? "riders" : "list";
 
 /** Makes a batch (from rows or as a copy of one) and opens it. */
 function useMakeBatch() {
@@ -66,8 +95,13 @@ function useMakeBatch() {
   const act = useAction();
   const make = (body: Record<string, unknown>, keep: ListState = {}) =>
     act.run(async () => {
-      const r = await post<{ batch: PaymentBatch }>("/v1/payment-batches", { from: "tools", ...body });
-      navigate(`/payments/batches/${encodeURIComponent(r.batch.id)}`, { state: { ...keep, held: r.batch.held ?? [] } satisfies ListState });
+      const r = await post<{ batch: PaymentBatch }>("/v1/payment-batches", {
+        from: "tools",
+        ...body,
+      });
+      navigate(`/payments/batches/${encodeURIComponent(r.batch.id)}`, {
+        state: { ...keep, held: r.batch.held ?? [] } satisfies ListState,
+      });
     }, false);
   return { make, busy: act.busy, error: act.error };
 }
@@ -80,18 +114,34 @@ export function PayListPage() {
   const [params] = useSearchParams();
   const riders = params.get("riders") === "1";
   const [rows, setRows] = useState<DraftRow[]>(back.rows ?? []);
-  const [title, setTitle] = useState(back.title ?? (riders ? "Riders' pay" : ""));
-  const [adding, setAdding] = useState<"saved" | "riders" | "staff" | "paste">();
+  const [title, setTitle] = useState(
+    back.title ?? (riders ? "Riders' pay" : ""),
+  );
+  const [adding, setAdding] = useState<
+    "saved" | "riders" | "staff" | "paste"
+  >();
   const [tried, setTried] = useState(false);
   const [news, setNews] = useState<string>();
   const batch = useMakeBatch();
   const { can } = useAuth();
   // From Riders > Pay: each rider with a bank account and something due.
-  const due = useLoad(() => (riders && !back.rows ? get<{ lines: PayLine[] }>("/v1/riders/pay") : Promise.resolve(undefined)), [riders]);
+  const due = useLoad(
+    () =>
+      riders && !back.rows
+        ? get<{ lines: PayLine[] }>("/v1/riders/pay")
+        : Promise.resolve(undefined),
+    [riders],
+  );
   useEffect(() => {
     const lines = due.data?.lines;
     if (!lines) return;
-    setRows((cur) => addRows(cur, lines.filter((l) => l.bank && l.net_kobo > 0).map(rowFromRider)).rows);
+    setRows(
+      (cur) =>
+        addRows(
+          cur,
+          lines.filter((l) => l.bank && l.net_kobo > 0).map(rowFromRider),
+        ).rows,
+    );
   }, [due.data]);
 
   const add = (more: DraftRow[]) => {
@@ -105,13 +155,21 @@ export function PayListPage() {
     );
     setAdding(undefined);
   };
-  const change = (key: string, patch: Partial<DraftRow>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch, problem: undefined } : r)));
+  const change = (key: string, patch: Partial<DraftRow>) =>
+    setRows((cur) =>
+      cur.map((r) =>
+        r.key === key ? { ...r, ...patch, problem: undefined } : r,
+      ),
+    );
   const problems = rows.map(rowProblem);
   const ready = rows.length > 0 && problems.every((p) => p === null);
   const check = () => {
     setTried(true);
     if (!ready || batch.busy) return;
-    void batch.make({ title: title.trim(), kind: listKind(rows), rows: rows.map(rowBody) }, { rows, title });
+    void batch.make(
+      { title: title.trim(), kind: listKind(rows), rows: rows.map(rowBody) },
+      { rows, title },
+    );
   };
   return (
     <>
@@ -124,23 +182,43 @@ export function PayListPage() {
         title="Pay several people"
         description="Pick saved accounts, riders or staff, or paste a list. Each person is checked with the bank; you confirm them all with one passkey."
       />
-      <section className="card" aria-labelledby="list-who-h" data-testid="pay-list">
+      <section
+        className="card"
+        aria-labelledby="list-who-h"
+        data-testid="pay-list"
+      >
         <h2 id="list-who-h">Who to pay</h2>
         <div className="toolbar">
-          <button type="button" onClick={() => setAdding("saved")} data-testid="add-saved">
+          <button
+            type="button"
+            onClick={() => setAdding("saved")}
+            data-testid="add-saved"
+          >
             Add saved accounts
           </button>
           {can("money.pay") && (
-            <button type="button" onClick={() => setAdding("riders")} data-testid="add-riders">
+            <button
+              type="button"
+              onClick={() => setAdding("riders")}
+              data-testid="add-riders"
+            >
               Add riders
             </button>
           )}
-          {can("money.pay") && can("member.manage") && (
-            <button type="button" onClick={() => setAdding("staff")} data-testid="add-staff">
+          {can("money.pay") && (
+            <button
+              type="button"
+              onClick={() => setAdding("staff")}
+              data-testid="add-staff"
+            >
               Add staff
             </button>
           )}
-          <button type="button" onClick={() => setAdding("paste")} data-testid="add-paste">
+          <button
+            type="button"
+            onClick={() => setAdding("paste")}
+            data-testid="add-paste"
+          >
             Paste a list
           </button>
         </div>
@@ -150,12 +228,26 @@ export function PayListPage() {
           </div>
         )}
         <ErrorBox error={due.error} />
-        {riders && !due.data && !due.error && !back.rows && <Skeleton rows={3} label="Loading what is due to riders…" />}
-        <Field label="Name this list (optional)" hint="Such as Riders, week 45. It helps you find it next time.">
-          <input value={title} maxLength={80} autoComplete="off" onChange={(e) => setTitle(e.target.value)} data-testid="list-title" />
+        {riders && !due.data && !due.error && !back.rows && (
+          <Skeleton rows={3} label="Loading what is due to riders…" />
+        )}
+        <Field
+          label="Name this list (optional)"
+          hint="Such as Riders, week 45. It helps you find it next time."
+        >
+          <input
+            value={title}
+            maxLength={80}
+            autoComplete="off"
+            onChange={(e) => setTitle(e.target.value)}
+            data-testid="list-title"
+          />
         </Field>
         {rows.length === 0 ? (
-          <EmptyState icon="members">Nobody on the list yet. Add saved accounts, riders or staff, or paste a list, one person a line.</EmptyState>
+          <EmptyState icon="members">
+            Nobody on the list yet. Add saved accounts, riders or staff, or
+            paste a list, one person a line.
+          </EmptyState>
         ) : (
           <Items label="People to pay">
             {rows.map((r, i) => (
@@ -165,15 +257,23 @@ export function PayListPage() {
                 n={i + 1}
                 problem={r.problem ?? (tried ? problems[i] : null) ?? undefined}
                 set={(patch) => change(r.key, patch)}
-                remove={() => setRows((cur) => cur.filter((x) => x.key !== r.key))}
+                remove={() =>
+                  setRows((cur) => cur.filter((x) => x.key !== r.key))
+                }
               />
             ))}
           </Items>
         )}
       </section>
-      <section className="card batch-foot" aria-label="The list's total" data-testid="list-foot">
+      <section
+        className="card batch-foot"
+        aria-label="The list's total"
+        data-testid="list-foot"
+      >
         <p className="batch-foot-sum">
-          <strong data-testid="list-total">{footWords(rows.length, draftTotal(rows))}</strong>
+          <strong data-testid="list-total">
+            {footWords(rows.length, draftTotal(rows))}
+          </strong>
           <span className="hint">Nothing is paid until you confirm.</span>
         </p>
         {tried && !ready && rows.length > 0 && (
@@ -182,21 +282,47 @@ export function PayListPage() {
           </p>
         )}
         <ErrorBox error={batch.error} />
-        <button type="button" className="primary" onClick={check} disabled={batch.busy || rows.length === 0} data-testid="list-check">
+        <button
+          type="button"
+          className="primary"
+          onClick={check}
+          disabled={batch.busy || rows.length === 0}
+          data-testid="list-check"
+        >
           {batch.busy ? "Checking with the bank…" : "Check the list"}
         </button>
       </section>
-      {adding === "saved" && <PickSaved onClose={() => setAdding(undefined)} onAdd={add} />}
-      {adding === "riders" && <PickRiders onClose={() => setAdding(undefined)} onAdd={add} />}
-      {adding === "staff" && <PickStaff onClose={() => setAdding(undefined)} onAdd={add} />}
-      {adding === "paste" && <PasteList onClose={() => setAdding(undefined)} onAdd={add} />}
+      {adding === "saved" && (
+        <PickSaved onClose={() => setAdding(undefined)} onAdd={add} />
+      )}
+      {adding === "riders" && (
+        <PickRiders onClose={() => setAdding(undefined)} onAdd={add} />
+      )}
+      {adding === "staff" && (
+        <PickStaff onClose={() => setAdding(undefined)} onAdd={add} />
+      )}
+      {adding === "paste" && (
+        <PasteList onClose={() => setAdding(undefined)} onAdd={add} />
+      )}
     </>
   );
 }
 
 /** One row of the list: who, how much and what for; an account number
  * and its bank for a pasted line. */
-function DraftLine({ r, n, problem, set, remove }: { r: DraftRow; n: number; problem?: string; set: (p: Partial<DraftRow>) => void; remove: () => void }) {
+function DraftLine({
+  r,
+  n,
+  problem,
+  set,
+  remove,
+}: {
+  r: DraftRow;
+  n: number;
+  problem?: string;
+  set: (p: Partial<DraftRow>) => void;
+  remove: () => void;
+}) {
   const who = r.who || `Row ${n}`;
   return (
     <Row
@@ -209,7 +335,10 @@ function DraftLine({ r, n, problem, set, remove }: { r: DraftRow; n: number; pro
         <span className="sub">
           {r.sub && <span className="block">{r.sub}</span>}
           {problem && (
-            <span className="block pay-warn warn batch-problem" data-testid="list-row-problem">
+            <span
+              className="block pay-warn warn batch-problem"
+              data-testid="list-row-problem"
+            >
               {problem}
             </span>
           )}
@@ -217,18 +346,40 @@ function DraftLine({ r, n, problem, set, remove }: { r: DraftRow; n: number; pro
             {r.kind === "account" && (
               <>
                 <Field label="Account number">
-                  <input inputMode="numeric" maxLength={13} autoComplete="off" value={r.number ?? ""} onChange={(e) => set({ number: e.target.value })} data-testid="list-number" />
+                  <input
+                    inputMode="numeric"
+                    maxLength={13}
+                    autoComplete="off"
+                    value={r.number ?? ""}
+                    onChange={(e) => set({ number: e.target.value })}
+                    data-testid="list-number"
+                  />
                 </Field>
                 <Field label="Bank">
-                  <input autoComplete="off" value={r.bank ?? ""} onChange={(e) => set({ bank: e.target.value })} data-testid="list-bank" />
+                  <input
+                    autoComplete="off"
+                    value={r.bank ?? ""}
+                    onChange={(e) => set({ bank: e.target.value })}
+                    data-testid="list-bank"
+                  />
                 </Field>
               </>
             )}
             <Field label="How much (₦)">
-              <input inputMode="decimal" autoComplete="off" value={r.amount} onChange={(e) => set({ amount: e.target.value })} data-testid="list-amount" />
+              <input
+                inputMode="decimal"
+                autoComplete="off"
+                value={r.amount}
+                onChange={(e) => set({ amount: e.target.value })}
+                data-testid="list-amount"
+              />
             </Field>
             <Field label="What for">
-              <select value={r.for} onChange={(e) => set({ for: e.target.value })} data-testid="list-for">
+              <select
+                value={r.for}
+                onChange={(e) => set({ for: e.target.value })}
+                data-testid="list-for"
+              >
                 <option value="">Choose</option>
                 {FOR_CHOICES.map((c) => (
                   <option key={c} value={c}>
@@ -273,18 +424,29 @@ function Picker<T>({
   onAdd: (picked: T[]) => void;
 }) {
   const [picked, setPicked] = useState<Set<number>>(new Set());
-  const open = (items ?? []).map((x, i) => [x, i] as const).filter(([x]) => !disabled?.(x));
+  const open = (items ?? [])
+    .map((x, i) => [x, i] as const)
+    .filter(([x]) => !disabled?.(x));
   const all = open.length > 0 && open.every(([, i]) => picked.has(i));
   return (
     <Modal title={title} onClose={onClose}>
       <ErrorBox error={error} />
       {!items && !error && <Skeleton rows={3} label={loading} />}
-      {items && items.length === 0 && <EmptyState icon="members">{empty}</EmptyState>}
+      {items && items.length === 0 && (
+        <EmptyState icon="members">{empty}</EmptyState>
+      )}
       {items && items.length > 0 && (
         <>
           {open.length > 1 && (
             <label className="switch-line">
-              <input type="checkbox" checked={all} onChange={() => setPicked(all ? new Set() : new Set(open.map(([, i]) => i)))} data-testid="pick-all" />{" "}
+              <input
+                type="checkbox"
+                checked={all}
+                onChange={() =>
+                  setPicked(all ? new Set() : new Set(open.map(([, i]) => i)))
+                }
+                data-testid="pick-all"
+              />{" "}
               <span>All of them</span>
             </label>
           )}
@@ -320,7 +482,13 @@ function Picker<T>({
         </>
       )}
       <div className="row-actions">
-        <button type="button" className="primary" disabled={picked.size === 0} onClick={() => onAdd((items ?? []).filter((_, i) => picked.has(i)))} data-testid="pick-add">
+        <button
+          type="button"
+          className="primary"
+          disabled={picked.size === 0}
+          onClick={() => onAdd((items ?? []).filter((_, i) => picked.has(i)))}
+          data-testid="pick-add"
+        >
           {picked.size ? `Add ${peopleWords(picked.size)}` : "Add"}
         </button>
         <button type="button" onClick={onClose}>
@@ -331,7 +499,13 @@ function Picker<T>({
   );
 }
 
-function PickSaved({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: DraftRow[]) => void }) {
+function PickSaved({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (rows: DraftRow[]) => void;
+}) {
   const list = useLoad(() => get<SavedList>("/v1/saved?kind=bank_account"), []);
   const items = list.data?.saved.filter((x) => x.kind === "bank_account");
   return (
@@ -349,7 +523,13 @@ function PickSaved({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Draf
   );
 }
 
-function PickRiders({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: DraftRow[]) => void }) {
+function PickRiders({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (rows: DraftRow[]) => void;
+}) {
   const pay = useLoad(() => get<{ lines: PayLine[] }>("/v1/riders/pay"), []);
   return (
     <Picker<PayLine>
@@ -360,34 +540,58 @@ function PickRiders({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Dra
       empty="Nothing is due to riders: their fees show here once they deliver."
       label={(l) => l.rider}
       sub={(l) => `${naira(Math.max(l.net_kobo, 0))} due · ${l.bank}`}
-      disabled={(l) => (l.bank ? null : "No bank account kept: add one under Riders > Pay")}
+      disabled={(l) =>
+        l.bank ? null : "No bank account kept: add one under Riders > Pay"
+      }
       onClose={onClose}
       onAdd={(picked) => onAdd(picked.map(rowFromRider))}
     />
   );
 }
 
-/** Staff, each read for the account linked to them (GET /v1/staff/{user}):
- * those with one can be added, for wages; those without are shown with why. */
-function PickStaff({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: DraftRow[]) => void }) {
+/** Staff, each with the account linked to them (GET /v1/payments/staff,
+ * for anyone who may pay): those with one can be added, for wages; those
+ * without are shown with why. */
+/** A staff member as the payers' list gives them. */
+type PayStaff = {
+  user_id: string;
+  name: string;
+  pay_account: StaffPayAccount | null;
+};
+
+function PickStaff({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (rows: DraftRow[]) => void;
+}) {
   const { me } = useAuth();
   const owner = !!me?.roles.includes("owner");
-  const people = useLoad(async () => {
-    const v = await get<StaffView>("/v1/staff");
-    return Promise.all(v.people.map((p) => get<StaffPersonView>(`/v1/staff/${encodeURIComponent(p.user_id)}`)));
-  }, []);
+  const people = useLoad(
+    async () => (await get<{ staff: PayStaff[] }>("/v1/payments/staff")).staff,
+    [],
+  );
   return (
-    <Picker<StaffPersonView>
+    <Picker<PayStaff>
       title="Add staff"
       items={people.data}
       loading="Loading your staff…"
       error={people.error}
       empty="No staff yet. Add them under Staff."
-      label={(p) => p.name || p.email || "A staff member"}
+      label={(p) => p.name || "A staff member"}
       sub={(p) => (p.pay_account ? payAccountWords(p.pay_account) : "")}
       disabled={(p) => staffUnpayable(p, owner)}
       onClose={onClose}
-      onAdd={(picked) => onAdd(picked.flatMap((p) => (p.pay_account ? [rowFromStaff({ ...p, pay_account: p.pay_account })] : [])))}
+      onAdd={(picked) =>
+        onAdd(
+          picked.flatMap((p) =>
+            p.pay_account
+              ? [rowFromStaff({ ...p, pay_account: p.pay_account })]
+              : [],
+          ),
+        )
+      }
     />
   );
 }
@@ -395,13 +599,21 @@ function PickStaff({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Draf
 /** A pasted list, one person a line ("Chidi 0123456789 GTBank 45k"), read
  * by the server; each line becomes a row, those that cannot be read with
  * why, to fix in the list. */
-function PasteList({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: DraftRow[]) => void }) {
+function PasteList({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (rows: DraftRow[]) => void;
+}) {
   const [text, setText] = useState("");
   const act = useAction();
   const lines = text.split("\n").filter((l) => l.trim()).length;
   const read = () =>
     act.run(async () => {
-      const r = await post<{ lines: BatchLine[] }>("/v1/payment-batches/read", { text });
+      const r = await post<{ lines: BatchLine[] }>("/v1/payment-batches/read", {
+        text,
+      });
       onAdd(r.lines.map(rowFromLine));
     }, false);
   return (
@@ -412,8 +624,16 @@ function PasteList({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Draf
           void read();
         }}
       >
-        <Field label="One person a line" hint="Their name, account number, bank and how much, such as Chidi 0123456789 GTBank 45k.">
-          <textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} data-testid="paste-text" />
+        <Field
+          label="One person a line"
+          hint="Their name, account number, bank and how much, such as Chidi 0123456789 GTBank 45k."
+        >
+          <textarea
+            rows={6}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            data-testid="paste-text"
+          />
         </Field>
         {lines > MAX_ROWS && (
           <p className="error" role="alert">
@@ -422,7 +642,12 @@ function PasteList({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Draf
         )}
         <ErrorBox error={act.error} />
         <div className="row-actions">
-          <button type="submit" className="primary" disabled={act.busy || lines === 0 || lines > MAX_ROWS} data-testid="paste-read">
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || lines === 0 || lines > MAX_ROWS}
+            data-testid="paste-read"
+          >
             {act.busy ? "Reading…" : "Read the list"}
           </button>
           <button type="button" onClick={onClose}>
@@ -440,11 +665,18 @@ function PasteList({ onClose, onAdd }: { onClose: () => void; onAdd: (rows: Draf
  * server says it wants one (403 step_up), then with it. body is read when
  * pressed: the rows the person sees, by id, so nothing else is sent.
  */
-function useBatchProof(path: string, op: string, target: string, onDone: (b: PaymentBatch) => void, onChanged: () => void) {
+function useBatchProof(
+  path: string,
+  op: string,
+  target: string,
+  onDone: (b: PaymentBatch) => void,
+  onChanged: () => void,
+) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [noPasskey, setNoPasskey] = useState<"none" | "browser">();
-  const send = async (body: Record<string, unknown>) => onDone((await post<{ batch: PaymentBatch }>(path, body)).batch);
+  const send = async (body: Record<string, unknown>) =>
+    onDone((await post<{ batch: PaymentBatch }>(path, body)).batch);
   const go = async (body: Record<string, unknown>) => {
     setBusy(true);
     setError(undefined);
@@ -453,8 +685,11 @@ function useBatchProof(path: string, op: string, target: string, onDone: (b: Pay
       try {
         await send(body);
       } catch (e) {
-        if (!(e instanceof ApiError) || e.status !== 403 || !e.body.step_up) throw e;
-        const methods = Array.isArray(e.body.methods) ? (e.body.methods as string[]) : [];
+        if (!(e instanceof ApiError) || e.status !== 403 || !e.body.step_up)
+          throw e;
+        const methods = Array.isArray(e.body.methods)
+          ? (e.body.methods as string[])
+          : [];
         if (!methods.includes("passkey")) return setNoPasskey("none");
         if (!passkeysSupported()) return setNoPasskey("browser");
         const o = typeof e.body.operation === "string" ? e.body.operation : op;
@@ -472,8 +707,14 @@ function useBatchProof(path: string, op: string, target: string, onDone: (b: Pay
   const view = (
     <>
       {noPasskey && (
-        <div className="pay-warn warn" role="alert" data-testid="batch-needs-passkey">
-          {noPasskey === "none" ? "Paying a list takes a passkey: add one under Account first." : "This browser cannot use your passkey here."}{" "}
+        <div
+          className="pay-warn warn"
+          role="alert"
+          data-testid="batch-needs-passkey"
+        >
+          {noPasskey === "none"
+            ? "Paying a list takes a passkey: add one under Account first."
+            : "This browser cannot use your passkey here."}{" "}
           <Link to="/account">Go to Account</Link>
         </div>
       )}
@@ -491,7 +732,13 @@ export function BatchPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const passed = (location.state ?? {}) as ListState;
-  const { data, error, reload } = useLoad(() => get<{ batch: PaymentBatch }>(`/v1/payment-batches/${encodeURIComponent(id)}`), [id]);
+  const { data, error, reload } = useLoad(
+    () =>
+      get<{ batch: PaymentBatch }>(
+        `/v1/payment-batches/${encodeURIComponent(id)}`,
+      ),
+    [id],
+  );
   const [now, setNow] = useState<PaymentBatch>();
   const [results, setResults] = useState<PaymentBatch["results"]>();
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
@@ -514,8 +761,20 @@ export function BatchPage() {
     setResults(x.results);
     reload();
   };
-  const pay = useBatchProof(`/v1/payment-batches/${encodeURIComponent(id)}/confirm`, "money.pay.batch", `batch:${id}`, done, reload);
-  const ok = useBatchProof(`/v1/payment-batches/${encodeURIComponent(id)}/approve`, "money.pay.approve", `batch:${id}`, done, reload);
+  const pay = useBatchProof(
+    `/v1/payment-batches/${encodeURIComponent(id)}/confirm`,
+    "money.pay.batch",
+    `batch:${id}`,
+    done,
+    reload,
+  );
+  const ok = useBatchProof(
+    `/v1/payment-batches/${encodeURIComponent(id)}/approve`,
+    "money.pay.approve",
+    `batch:${id}`,
+    done,
+    reload,
+  );
   const act = useAction();
   const againAct = useAction();
   const make = useMakeBatch();
@@ -546,12 +805,20 @@ export function BatchPage() {
   const c = batchCounts(b);
   const preparing = b.status === "preparing";
   const prepared = (b.status === "prepared" && c.prepared > 0) || preparing;
-  const shown = b.payments.filter((x) => x.status !== "cancelled" || b.status === "cancelled");
-  const pct = b.total_kobo > 0 ? Math.round((b.paid_kobo / b.total_kobo) * 100) : 0;
+  const shown = b.payments.filter(
+    (x) => x.status !== "cancelled" || b.status === "cancelled",
+  );
+  const pct =
+    b.total_kobo > 0 ? Math.round((b.paid_kobo / b.total_kobo) * 100) : 0;
   const changeList = () =>
     void act.run(async () => {
       await post(`/v1/payment-batches/${encodeURIComponent(b.id)}/cancel`);
-      navigate("/payments/several", { state: { rows: heldOnto(passed.rows ?? [], passed.held), title: passed.title } satisfies ListState });
+      navigate("/payments/several", {
+        state: {
+          rows: heldOnto(passed.rows ?? [], passed.held),
+          title: passed.title,
+        } satisfies ListState,
+      });
     }, false);
   return (
     <>
@@ -565,10 +832,18 @@ export function BatchPage() {
           </span>
         </div>
         <div className="hero-amount" data-testid="batch-amount">
-          {naira(prepared ? b.payments.filter((x) => x.status === "prepared").reduce((t, x) => t + x.amount_kobo, 0) : b.paid_kobo)}
+          {naira(
+            prepared
+              ? b.payments
+                  .filter((x) => x.status === "prepared")
+                  .reduce((t, x) => t + x.amount_kobo, 0)
+              : b.paid_kobo,
+          )}
         </div>
         <p className="hero-sub" data-testid="batch-sub">
-          {prepared ? `${peopleWords(c.prepared)}, each checked with the bank` : `of ${naira(b.total_kobo)} to ${peopleWords(b.count)}`}
+          {prepared
+            ? `${peopleWords(c.prepared)}, each checked with the bank`
+            : `of ${naira(b.total_kobo)} to ${peopleWords(b.count)}`}
         </p>
         {!prepared && b.status !== "cancelled" && (
           <div className="hero-bar" role="img" aria-label={`${pct}% paid`}>
@@ -578,7 +853,9 @@ export function BatchPage() {
         <dl className="hero-foot">
           <div>
             <dt>{b.confirmed_at ? "Confirmed" : "Made"}</dt>
-            <dd className="hero-foot-words">{fmtTime(b.confirmed_at ?? b.created_at)}</dd>
+            <dd className="hero-foot-words">
+              {fmtTime(b.confirmed_at ?? b.created_at)}
+            </dd>
           </div>
           <div>
             <dt>How it stands</dt>
@@ -591,11 +868,28 @@ export function BatchPage() {
 
       {prepared && (
         <div className="toolbar">
-          <button type="button" className="primary" disabled={preparing || pay.busy || act.busy} onClick={() => void pay.go({ payments: preparedIds(b), again: [...yes] })} data-testid="batch-confirm">
-            {preparing ? "Checking each person with the bank…" : pay.busy ? "Confirming…" : `${confirmWords(b)} with your passkey`}
+          <button
+            type="button"
+            className="primary"
+            disabled={preparing || pay.busy || act.busy}
+            onClick={() =>
+              void pay.go({ payments: preparedIds(b), again: [...yes] })
+            }
+            data-testid="batch-confirm"
+          >
+            {preparing
+              ? "Checking each person with the bank…"
+              : pay.busy
+                ? "Confirming…"
+                : `${confirmWords(b)} with your passkey`}
           </button>
           {passed.rows && (
-            <button type="button" disabled={pay.busy || act.busy} onClick={changeList} data-testid="batch-change">
+            <button
+              type="button"
+              disabled={pay.busy || act.busy}
+              onClick={changeList}
+              data-testid="batch-change"
+            >
               Change the list
             </button>
           )}
@@ -605,7 +899,17 @@ export function BatchPage() {
             disabled={pay.busy || act.busy}
             onClick={() =>
               confirm("Cancel this list? Nobody on it is paid.") &&
-              void act.run(async () => setNow((await post<{ batch: PaymentBatch }>(`/v1/payment-batches/${encodeURIComponent(b.id)}/cancel`)).batch), "List cancelled")
+              void act.run(
+                async () =>
+                  setNow(
+                    (
+                      await post<{ batch: PaymentBatch }>(
+                        `/v1/payment-batches/${encodeURIComponent(b.id)}/cancel`,
+                      )
+                    ).batch,
+                  ),
+                "List cancelled",
+              )
             }
             data-testid="batch-cancel"
           >
@@ -616,29 +920,54 @@ export function BatchPage() {
       {prepared && pay.view}
       {asked.length > 0 && prepared && (
         <div className="pay-warn warn" role="alert" data-testid="batch-again">
-          {asked.length === 1 ? "1 person was paid the same amount in the last day" : `${asked.length} people were paid the same amount in the last day`}: they are not paid yet. Tick "Pay again" on each you mean to pay again, then confirm.
+          {asked.length === 1
+            ? "1 person was paid the same amount in the last day"
+            : `${asked.length} people were paid the same amount in the last day`}
+          : they are not paid yet. Tick "Pay again" on each you mean to pay
+          again, then confirm.
         </div>
       )}
       {!prepared && b.status !== "cancelled" && (
         <div className="toolbar">
           {owner && c.waiting > 0 && (
-            <button type="button" className="primary" disabled={ok.busy} onClick={() => void ok.go({ payments: waitingIds(b) })} data-testid="batch-approve">
+            <button
+              type="button"
+              className="primary"
+              disabled={ok.busy}
+              onClick={() => void ok.go({ payments: waitingIds(b) })}
+              data-testid="batch-approve"
+            >
               {ok.busy ? "Giving the OK…" : "Give the OK for all"}
             </button>
           )}
           {c.failed > 0 && (
-            <button type="button" disabled={make.busy} onClick={() => void againList(b.id)} data-testid="batch-again-failed">
+            <button
+              type="button"
+              disabled={make.busy}
+              onClick={() => void againList(b.id)}
+              data-testid="batch-again-failed"
+            >
               Pay the failed ones again
             </button>
           )}
-          <button type="button" disabled={make.busy} onClick={() => void make.make({ copy_of: b.id })} data-testid="batch-copy">
+          <button
+            type="button"
+            disabled={make.busy}
+            onClick={() => void make.make({ copy_of: b.id })}
+            data-testid="batch-copy"
+          >
             Same as last time
           </button>
         </div>
       )}
       {b.status === "cancelled" && (
         <div className="toolbar">
-          <button type="button" disabled={make.busy} onClick={() => void make.make({ copy_of: b.id })} data-testid="batch-copy">
+          <button
+            type="button"
+            disabled={make.busy}
+            onClick={() => void make.make({ copy_of: b.id })}
+            data-testid="batch-copy"
+          >
             Same as last time
           </button>
         </div>
@@ -646,24 +975,44 @@ export function BatchPage() {
       {!prepared && ok.view}
       {results?.some((x) => x.code === "changed") && (
         <p className="hint" data-testid="batch-one-by-one">
-          A payment to a changed account is approved on its own: <Link to="/approvals">open Approvals</Link>.
+          A payment to a changed account is approved on its own:{" "}
+          <Link to="/approvals">open Approvals</Link>.
         </p>
       )}
       <ErrorBox error={act.error ?? make.error ?? againAct.error} />
       {!prepared && c.waiting > 0 && !owner && (
         <p className="hint" data-testid="batch-waiting">
-          {c.waiting === 1 ? "1 payment waits" : `${c.waiting} payments wait`} for the owner's OK in Approvals.
+          {c.waiting === 1 ? "1 payment waits" : `${c.waiting} payments wait`}{" "}
+          for the owner's OK in Approvals.
         </p>
       )}
 
       {held.length > 0 && (
-        <section className="card" aria-labelledby="batch-held-h" data-testid="batch-held">
+        <section
+          className="card"
+          aria-labelledby="batch-held-h"
+          data-testid="batch-held"
+        >
           <h2 id="batch-held-h">Held out: {peopleWords(held.length)}</h2>
-          <p className="hint">These are not paid with the list. Change the list to fix them, or remove them.</p>
+          <p className="hint">
+            These are not paid with the list. Change the list to fix them, or
+            remove them.
+          </p>
           <Items label="Held out">
             {held.map((h) => (
-              <Row key={h.row} icon="money" tone="warn" title={h.payee} testid="batch-held-row" sub={<span className="sub batch-held-why">{h.problem}</span>}>
-                <button type="button" className="small" onClick={() => setDismissed((cur) => new Set(cur).add(h.row))}>
+              <Row
+                key={h.row}
+                icon="money"
+                tone="warn"
+                title={h.payee}
+                testid="batch-held-row"
+                sub={<span className="sub batch-held-why">{h.problem}</span>}
+              >
+                <button
+                  type="button"
+                  className="small"
+                  onClick={() => setDismissed((cur) => new Set(cur).add(h.row))}
+                >
                   Remove<span className="sr-only"> {h.payee}</span>
                 </button>
               </Row>
@@ -673,9 +1022,13 @@ export function BatchPage() {
       )}
 
       <section className="card" aria-labelledby="batch-rows-h">
-        <h2 id="batch-rows-h">{prepared ? "Each person, as the bank named them" : "Each person"}</h2>
+        <h2 id="batch-rows-h">
+          {prepared ? "Each person, as the bank named them" : "Each person"}
+        </h2>
         {shown.length === 0 ? (
-          <EmptyState icon="money">Nobody on this list could be paid. Change the list to fix them.</EmptyState>
+          <EmptyState icon="money">
+            Nobody on this list could be paid. Change the list to fix them.
+          </EmptyState>
         ) : (
           <Items label="Each person">
             {shown.map((x) => (
@@ -684,7 +1037,11 @@ export function BatchPage() {
                 x={x}
                 prepared={prepared}
                 problem={problems.get(x.id)?.problem}
-                again={prepared && asked.includes(x.id) ? { yes: yes.has(x.id), set: tick(x.id) } : undefined}
+                again={
+                  prepared && asked.includes(x.id)
+                    ? { yes: yes.has(x.id), set: tick(x.id) }
+                    : undefined
+                }
               />
             ))}
           </Items>
@@ -695,8 +1052,12 @@ export function BatchPage() {
 
   async function againList(from: string) {
     await againAct.run(async () => {
-      const r = await post<{ batch: PaymentBatch }>(`/v1/payment-batches/${encodeURIComponent(from)}/again`);
-      navigate(`/payments/batches/${encodeURIComponent(r.batch.id)}`, { state: { held: r.batch.held ?? [] } satisfies ListState });
+      const r = await post<{ batch: PaymentBatch }>(
+        `/v1/payment-batches/${encodeURIComponent(from)}/again`,
+      );
+      navigate(`/payments/batches/${encodeURIComponent(r.batch.id)}`, {
+        state: { held: r.batch.held ?? [] } satisfies ListState,
+      });
     }, false);
   }
 }
@@ -713,7 +1074,17 @@ function BatchCrumbs() {
 
 /** One person of a batch: prepared, with what to know before it goes;
  * sent, opening the payment's page. */
-function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boolean; problem?: string; again?: { yes: boolean; set: (v: boolean) => void } }) {
+function BatchRow({
+  x,
+  prepared,
+  problem,
+  again,
+}: {
+  x: Payment;
+  prepared: boolean;
+  problem?: string;
+  again?: { yes: boolean; set: (v: boolean) => void };
+}) {
   const st = rowStatus(x);
   const pill = <span className={`badge sf-status ${st.tone}`}>{st.label}</span>;
   if (prepared) {
@@ -721,7 +1092,13 @@ function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boole
     return (
       <Row
         icon="money"
-        tone={warns.some((w) => w.tone === "danger") ? "danger" : problem ? "warn" : undefined}
+        tone={
+          warns.some((w) => w.tone === "danger")
+            ? "danger"
+            : problem
+              ? "warn"
+              : undefined
+        }
         title={payeeName(x)}
         side={<span className="item-figure">{naira(x.amount_kobo)}</span>}
         testid="batch-row"
@@ -730,12 +1107,19 @@ function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boole
           <span className="sub">
             <span className="block">{paymentSub(x)}</span>
             {warns.map((w) => (
-              <span key={w.key} className={`block pay-warn ${w.tone} batch-problem`} data-testid={`batch-warn-${w.key}`}>
+              <span
+                key={w.key}
+                className={`block pay-warn ${w.tone} batch-problem`}
+                data-testid={`batch-warn-${w.key}`}
+              >
                 {w.words}
               </span>
             ))}
             {problem && (
-              <span className="block pay-warn warn batch-problem" data-testid="batch-row-problem">
+              <span
+                className="block pay-warn warn batch-problem"
+                data-testid="batch-row-problem"
+              >
                 {problem}
               </span>
             )}
@@ -744,7 +1128,12 @@ function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boole
       >
         {again && (
           <label className="switch-line">
-            <input type="checkbox" checked={again.yes} onChange={(e) => again.set(e.target.checked)} data-testid="batch-pay-again" />{" "}
+            <input
+              type="checkbox"
+              checked={again.yes}
+              onChange={(e) => again.set(e.target.checked)}
+              data-testid="batch-pay-again"
+            />{" "}
             <span>
               Pay again<span className="sr-only"> to {payeeName(x)}</span>
             </span>
@@ -760,7 +1149,13 @@ function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boole
       tone={st.tone}
       title={payeeName(x)}
       side={naira(x.amount_kobo)}
-      sub={problem ? `${paymentSub(x)} · ${problem}` : x.reason ? `${paymentSub(x)} · ${x.reason}` : paymentSub(x)}
+      sub={
+        problem
+          ? `${paymentSub(x)} · ${problem}`
+          : x.reason
+            ? `${paymentSub(x)} · ${x.reason}`
+            : paymentSub(x)
+      }
       sideSub={pill}
       testid="batch-row"
     />
@@ -770,7 +1165,13 @@ function BatchRow({ x, prepared, problem, again }: { x: Payment; prepared: boole
 /** On the Pay people page: the lists paid before, newest first, each
  * with Same as last time. */
 export function BatchesCard() {
-  const list = useLoad(() => get<{ batches: PaymentBatch[] }>("/v1/payment-batches").catch(() => ({ batches: [] as PaymentBatch[] })), []);
+  const list = useLoad(
+    () =>
+      get<{ batches: PaymentBatch[] }>("/v1/payment-batches").catch(() => ({
+        batches: [] as PaymentBatch[],
+      })),
+    [],
+  );
   const make = useMakeBatch();
   const batches = list.data?.batches.filter((b) => b.count > 0) ?? [];
   if (batches.length === 0) return null;
@@ -791,17 +1192,30 @@ export function BatchesCard() {
               testid="batch"
               sub={
                 <span className="sub">
-                  {peopleWords(b.count)} · {fmtTime(b.confirmed_at ?? b.created_at)}
+                  {peopleWords(b.count)} ·{" "}
+                  {fmtTime(b.confirmed_at ?? b.created_at)}
                   <span className="block">
-                    <span className={`badge sf-status ${tag.tone}`}>{tag.label}</span> {listWords(b)}
+                    <span className={`badge sf-status ${tag.tone}`}>
+                      {tag.label}
+                    </span>{" "}
+                    {listWords(b)}
                   </span>
                 </span>
               }
             >
-              <Link className="button small" to={`/payments/batches/${encodeURIComponent(b.id)}`}>
+              <Link
+                className="button small"
+                to={`/payments/batches/${encodeURIComponent(b.id)}`}
+              >
                 Open<span className="sr-only"> {name}</span>
               </Link>
-              <button type="button" className="small" disabled={make.busy} onClick={() => void make.make({ copy_of: b.id })} data-testid="batch-copy">
+              <button
+                type="button"
+                className="small"
+                disabled={make.busy}
+                onClick={() => void make.make({ copy_of: b.id })}
+                data-testid="batch-copy"
+              >
                 Same as last time<span className="sr-only"> for {name}</span>
               </button>
             </Row>
