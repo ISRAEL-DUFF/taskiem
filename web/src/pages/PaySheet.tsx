@@ -59,7 +59,7 @@ export function PayCheck({ x }: { x: Payment }) {
         {x.account_name || x.payee}
       </strong>
       <span className="pay-check-sub">
-        {x.account_name && x.payee !== x.account_name ? `${x.payee} · ` : ""}
+        {x.account_name && x.payee !== x.account_name && !x.payee.includes(x.account) ? `${x.payee} · ` : ""}
         {x.bank_name} · {x.account}
       </span>
       <dl className="pay-check-facts">

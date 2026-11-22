@@ -388,7 +388,7 @@ void main() {
       'from': 'chat',
     });
     expect(find.text('Chidi Okeke'), findsOneWidget);
-    expect(find.text('Account ••6789 · Guaranty Trust Bank · ••6789'), findsOneWidget);
+    expect(find.text('Guaranty Trust Bank · ••6789'), findsOneWidget);
 
     // Back to the form: the prepared one let go.
     await t.tap(find.text('Back'));

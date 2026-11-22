@@ -77,7 +77,7 @@ String paymentName(Payment p) {
 /// otherwise, the bank, the account masked.
 String paymentWhere(Payment p) {
   final name = paymentName(p);
-  return [if (p.payee.isNotEmpty && p.payee.toLowerCase() != name.toLowerCase()) p.payee, p.bankName, p.account].where((x) => x.isNotEmpty).join(' · ');
+  return [if (p.payee.isNotEmpty && p.payee.toLowerCase() != name.toLowerCase() && (p.account.isEmpty || !p.payee.contains(p.account))) p.payee, p.bankName, p.account].where((x) => x.isNotEmpty).join(' · ');
 }
 
 /// Why a payment waits for the owner's OK, in words.
