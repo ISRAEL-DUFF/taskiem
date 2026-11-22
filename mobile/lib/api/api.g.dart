@@ -699,6 +699,18 @@ class TaskiemApi {
     return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Whether photos may be read with AI (`GET /v1/settings/ai-photo-reading`)
+  Future<AIPhotoReading> getAIPhotoReading() async {
+    final j = await _t.send('GET', '/v1/settings/ai-photo-reading');
+    return AIPhotoReading.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn reading photos with AI on or off (`PUT /v1/settings/ai-photo-reading`)
+  Future<AIPhotoReading> putAIPhotoReading({required PutAIPhotoReadingRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/ai-photo-reading', body: body.toJson());
+    return AIPhotoReading.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
   Future<PushDevices> listPush({String? side}) async {
     final j = await _t.send('GET', '/v1/me/push', query: {'side': ?side});
@@ -8291,6 +8303,37 @@ class PutChatToolsRequest {
 
   Map<String, dynamic> toJson() => {
         'chat_tools': chatTools,
+      };
+}
+
+class AIPhotoReading {
+  const AIPhotoReading({required this.aiPhotoReading, required this.available});
+
+  final bool aiPhotoReading;
+  final bool available;
+
+  factory AIPhotoReading.fromJson(Map<String, dynamic> j) => AIPhotoReading(
+        aiPhotoReading: j['ai_photo_reading'] as bool,
+        available: j['available'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ai_photo_reading': aiPhotoReading,
+        'available': available,
+      };
+}
+
+class PutAIPhotoReadingRequest {
+  const PutAIPhotoReadingRequest({required this.aiPhotoReading});
+
+  final bool aiPhotoReading;
+
+  factory PutAIPhotoReadingRequest.fromJson(Map<String, dynamic> j) => PutAIPhotoReadingRequest(
+        aiPhotoReading: j['ai_photo_reading'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ai_photo_reading': aiPhotoReading,
       };
 }
 

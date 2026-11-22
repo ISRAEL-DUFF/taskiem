@@ -32,7 +32,26 @@ import (
 type Message struct {
 	Role string `json:"role"` // "user" | "assistant"
 	Text string `json:"text"`
+	// Images go before the text in a user turn (a photo to read). They
+	// cannot be redacted, so only a caller the business allowed to send
+	// photos to a model sets them (reading handwriting, I3); providers
+	// that cannot see images refuse (ErrNoImages).
+	Images []Image `json:"-"`
 }
+
+// Image is a picture in a message: its bytes and their media type
+// (image/jpeg, image/png, image/webp or image/gif).
+type Image struct {
+	MediaType string
+	Data      []byte
+}
+
+// ErrNoImages means the provider cannot read images.
+var ErrNoImages = errors.New("ai: this model cannot read images")
+
+// imageTokens is about what one photo costs, for budgets: a picture of
+// about a megapixel, as the Messages API counts it.
+const imageTokens = 1600
 
 // SystemBlock is part of the system prompt. Cache marks the end of a
 // prefix worth caching (the stable instructions, the connector catalogue).
@@ -64,14 +83,16 @@ func (r Request) Estimate() int64 {
 	for _, b := range r.System {
 		n += len(b.Text)
 	}
+	images := 0
 	for _, m := range r.Messages {
 		n += len(m.Text)
+		images += len(m.Images)
 	}
 	answer := r.MaxTokens
 	if answer <= 0 {
 		answer = DefaultMaxTokens
 	}
-	return int64(n/4 + answer)
+	return int64(n/4 + answer + images*imageTokens)
 }
 
 // Usage is what one completion consumed.
@@ -153,7 +174,9 @@ func RedactRequest(req Request) Request {
 	}
 	out.Messages = make([]Message, len(req.Messages))
 	for i, m := range req.Messages {
-		out.Messages[i] = Message{Role: m.Role, Text: pii.Redact(m.Text)}
+		// Images pass as they are: a picture cannot be redacted (see
+		// Message.Images).
+		out.Messages[i] = Message{Role: m.Role, Text: pii.Redact(m.Text), Images: m.Images}
 	}
 	return out
 }

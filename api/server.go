@@ -815,6 +815,10 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/advanced", s.putAdvanced)
 			r.Get("/settings/chat-tools", s.getChatTools) // chat tools (chat_tools.go)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/settings/chat-tools", s.putChatTools)
+			// Reading photos with AI, where an owner turned it on (photo_ai.go).
+			r.Get("/settings/ai-photo-reading", s.getAIPhotoReading)
+			r.With(s.tenantWide).Put("/settings/ai-photo-reading", s.putAIPhotoReading)
+			r.Post("/photo-text", s.readPhotoAI)
 			r.Post("/chat-diary", s.postChatDiary)
 			r.Get("/chat-alerts", s.getChatAlerts)
 			r.Post("/chat-alerts/later", s.postChatAlertLater)

@@ -160,6 +160,8 @@ getSlack
 startSlackLink
 unlinkSlack
 putChatTools
+getAIPhotoReading
+putAIPhotoReading
 
 # Notifications on this phone (docs/spec/mobile-app-m4.md N4)
 listPush
