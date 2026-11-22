@@ -338,14 +338,8 @@ func (s *Server) removeCollected(w http.ResponseWriter, r *http.Request) {
 }
 
 // payCollection is POST /v1/pay-collection/batch {title?, purpose?}: the
-// list becomes a batch (kind messages), each row prepared and checked as
-// one payment is, those failing held out with why; nothing is sent. Every
-// row needs an amount; one purpose fills the rows without one. The rows
-// wait with the batch: sent, they leave the list; cancelled, they come
-// back.
+// list becomes a batch (collectionBatch).
 func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	p := principalFrom(ctx)
 	var in struct {
 		Title   string `json:"title"`
 		Purpose string `json:"purpose"`
@@ -354,9 +348,25 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := checkCollected(nil, in.Purpose, ""); err != nil {
+	b, err := s.collectionBatch(r, in.Title, in.Purpose, "message")
+	if err != nil {
 		s.payFail(w, r, err)
 		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"batch": b})
+}
+
+// collectionBatch makes the person's list a batch (kind messages), each
+// row prepared and checked as one payment is, those failing held out with
+// why; nothing is sent. Every row needs an amount; one purpose fills the
+// rows without one. The rows wait with the batch: sent, they leave the
+// list; cancelled, they come back. A refusal is a payRefused; from is
+// where its payments start (the app's "message", or "chat").
+func (s *Server) collectionBatch(r *http.Request, title, purpose, from string) (batchView, error) {
+	ctx := r.Context()
+	p := principalFrom(ctx)
+	if err := checkCollected(nil, purpose, ""); err != nil {
+		return batchView{}, err
 	}
 	var ids []uuid.UUID
 	var rows []batchRow
@@ -398,7 +408,7 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 		for _, x := range got {
 			in2 := payIn{SavedID: x.saved, AmountKobo: x.amount, Purpose: x.purpose, Note: x.note}
 			if in2.Purpose == "" {
-				in2.Purpose = strings.TrimSpace(in.Purpose)
+				in2.Purpose = strings.TrimSpace(purpose)
 			}
 			if x.saved == nil {
 				v, err := s.Store.PII.OpenTx(ctx, tx, p.TenantID, x.sealed)
@@ -413,17 +423,15 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.payFail(w, r, err)
-		return
+		return batchView{}, err
 	}
-	title := strings.TrimSpace(in.Title)
+	title = strings.TrimSpace(title)
 	if title == "" {
 		title = "From messages"
 	}
-	b, made, err := s.prepareBatchView(r, rows, title, "messages", nil, "message")
+	b, made, err := s.prepareBatchView(r, rows, title, "messages", nil, from)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return batchView{}, err
 	}
 	if b.Status != "cancelled" {
 		// Only the rows that became payments wait with the batch: one held
@@ -459,13 +467,11 @@ func (s *Server) payCollection(w http.ResponseWriter, r *http.Request) {
 				WHERE c.tenant_id = $1 AND c.id = x.id`, p.TenantID, claim, b.ID, pays)
 			return err
 		}); err != nil {
-			s.fail(w, r, err)
-			return
+			return batchView{}, err
 		}
 		if taken {
-			s.payFail(w, r, refusePay(http.StatusConflict, "in_batch", "Some of your list waits in a batch: send it or cancel it first."))
-			return
+			return batchView{}, refusePay(http.StatusConflict, "in_batch", "Some of your list waits in a batch: send it or cancel it first.")
 		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"batch": b})
+	return b, nil
 }

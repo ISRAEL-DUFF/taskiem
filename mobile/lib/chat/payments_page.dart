@@ -60,11 +60,15 @@ Future<Payment?> openPayment(BuildContext context, Auth auth, String id) async {
 }
 
 class SentPaymentsPage extends StatefulWidget {
-  const SentPaymentsPage({super.key, required this.auth, this.open, this.backLabel = 'Back', this.follow = true});
+  const SentPaymentsPage({super.key, required this.auth, this.open, this.openBatch, this.backLabel = 'Back', this.follow = true});
   final Auth auth;
 
   /// A payment to open over the list once it shows (a link's).
   final String? open;
+
+  /// A batch to open over the list once it shows (the link the chat sends
+  /// for a list pasted there, /payments/batches/{id}).
+  final String? openBatch;
   final String backLabel;
   final bool follow;
 
@@ -99,6 +103,13 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
         await _load();
       });
     }
+    final batch = widget.openBatch;
+    if (batch != null && batch.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _openBatchId(batch);
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -122,9 +133,12 @@ class _SentPaymentsPageState extends State<SentPaymentsPage> with Polling {
   }
 
   /// A batch opened: read whole (the list carries its counts alone).
-  Future<void> _openBatch(PaymentBatch b) async {
+  Future<void> _openBatch(PaymentBatch b) => _openBatchId(b.id);
+
+  /// The batch [id], read whole and opened over the list.
+  Future<void> _openBatchId(String id) async {
     try {
-      final whole = (await _auth.api.getPaymentBatch(id: b.id)).batch;
+      final whole = (await _auth.api.getPaymentBatch(id: id)).batch;
       if (!mounted) return;
       await showTkSheet<PaymentBatch>(context, (_) => BatchSheet(auth: _auth, batch: whole, follow: widget.follow));
     } on Object catch (e) {

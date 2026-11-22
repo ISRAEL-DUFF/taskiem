@@ -823,6 +823,10 @@ void main() {
     expect((one.tab, one.screen, one.id), (tabMoney, RouteScreen.payments, '0193-abc'));
     final all = routeOf('/payments');
     expect((all.screen, all.id), (RouteScreen.payments, ''));
+    // A batch prepared from the chat: the batch over Payments.
+    expect(appPageOf(Uri.parse('$taskiemUrl/payments/batches/0193-b')), '/payments/batches/0193-b');
+    final batch = routeOf('/payments/batches/0193-b');
+    expect((batch.tab, batch.screen, batch.id), (tabMoney, RouteScreen.paymentBatch, '0193-b'));
     expect(purposeOf('stock bought'), 'stock');
     expect(purposeOf('a delivery'), 'delivery');
     expect(purposeOf('for the generator'), 'other');

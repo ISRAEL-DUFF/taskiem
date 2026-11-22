@@ -57950,6 +57950,8 @@ components:
                 - sales_evening
                 - supplier
                 - balance
+                - payment
+                - payment_batch
               status:
                 type: string
                 enum:

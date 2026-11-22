@@ -3,7 +3,7 @@
 // belongs to, and the screen over it, if any.
 
 /// What opens over the tab.
-enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments, payroll }
+enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage, payments, paymentBatch, payroll }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
 enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request, standing, group, groupInvites }
@@ -117,6 +117,16 @@ AppRoute routeOf(String path) {
     return (tab: tabChats, screen: RouteScreen.conversation, id: with_);
   }
   if (p == '/approvals' || p.startsWith('/approvals/')) return (tab: tabChats, screen: RouteScreen.taskiem, id: '');
+  // A batch to check and pay (the link Taskiem sends in the chat for a
+  // list pasted there): Payments over Money, the batch over it.
+  final batch = RegExp(r'^/payments/batches/([^/]+)$').firstMatch(p);
+  if (batch != null) {
+    try {
+      return (tab: tabMoney, screen: RouteScreen.paymentBatch, id: Uri.decodeComponent(batch[1]!));
+    } on FormatException {
+      return (tab: tabMoney, screen: RouteScreen.payments, id: '');
+    }
+  }
   // Payments, and one payment to confirm (the link Taskiem sends in the
   // chat): the list over Money, the payment over it; id '' for the list.
   final pay = RegExp(r'^/payments(?:/([^/]+))?$').firstMatch(p);

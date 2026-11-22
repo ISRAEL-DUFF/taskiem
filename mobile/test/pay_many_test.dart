@@ -13,7 +13,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/app/applinks.dart' show appPageOf;
 import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/config.dart' show taskiemUrl;
+import 'package:taskiem/app/route.dart' show RouteScreen, routeOf;
 import 'package:taskiem/app/passkey.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/pay_many.dart';
@@ -547,6 +550,31 @@ void main() {
     await t.tap(find.text('Cancel it'));
     await settle(t);
     expect(api.sent('POST', '/v1/payment-batches/B6/cancel'), hasLength(1));
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('a batch link from the chat (/payments/batches/{id}) opens the batch over Payments, to check and pay', (t) async {
+    phone(t);
+    final api = _Api();
+    api.routes['GET /v1/payments'] = (_) => {'payments': <Object>[]};
+    api.routes['GET /v1/pay-limits'] = (_) => {'limits': <Object>[]};
+    api.routes['GET /v1/roles'] = (_) => {'roles': <Object>[]};
+    api.routes['GET /v1/payment-batches'] = (_) => {'batches': <Object>[]};
+    api.routes['GET /v1/payment-batches/B8'] = (_) => {
+      'batch': batch('B8', [bayo, chidi], title: 'From the chat'),
+    };
+    final route = routeOf(appPageOf(Uri.parse('$taskiemUrl/payments/batches/B8'))!);
+    expect((route.screen, route.id), (RouteScreen.paymentBatch, 'B8'));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: SentPaymentsPage(auth: api.auth(), openBatch: route.id, follow: false),
+      ),
+    );
+    await settle(t);
+    expect(api.sent('GET', '/v1/payment-batches/B8'), hasLength(1));
+    expect(find.text('Check before you pay'), findsOneWidget);
+    expect(find.text('Pay 2 people'), findsOneWidget);
     await t.pump(const Duration(seconds: 4));
   });
 

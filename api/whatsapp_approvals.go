@@ -387,6 +387,8 @@ func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []wha
 			sendErr = s.sendSalesEveningItem(ctx, it)
 		case stock.OutboxSupplier:
 			sendErr = s.sendSupplierItem(ctx, it)
+		case outboxPayment, outboxPaymentBatch:
+			sendErr = s.sendPayResultItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}

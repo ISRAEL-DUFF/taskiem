@@ -599,6 +599,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openStorefrontOrder(context, auth, id);
       case RouteScreen.payments:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, open: id.isEmpty ? null : id)));
+      case RouteScreen.paymentBatch:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, openBatch: id)));
       case RouteScreen.payroll:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PayrollPage(auth: auth) : PayrollRunPage(auth: auth, run: id)));
       case RouteScreen.you:

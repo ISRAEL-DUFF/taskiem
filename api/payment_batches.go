@@ -709,21 +709,30 @@ func (s *Server) readBatchList(w http.ResponseWriter, r *http.Request) {
 	if in.From == "photo" {
 		in.Text = saved.PhotoText(in.Text)
 	}
-	ctx := r.Context()
-	p := principalFrom(ctx)
-	if !s.limiter("pay-read:"+p.Actor(), time.Minute/30, 30).Allow() {
-		s.payFail(w, r, refusePay(http.StatusTooManyRequests, "too_many", "Too many lists read just now: wait a minute."))
+	out, err := s.readBatchLines(r.Context(), principalFrom(r.Context()), in.Text)
+	if err != nil {
+		s.payFail(w, r, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"lines": out})
+}
+
+// readBatchLines reads a pasted list, one person a line, for the person
+// p: each line's account, bank, amount and name, the business's saved
+// account with that number by its name, or why the line cannot be read
+// (POST /v1/payment-batches/read, and a list pasted in the chat).
+func (s *Server) readBatchLines(ctx context.Context, p *Principal, text string) ([]batchLine, error) {
+	if !s.limiter("pay-read:"+p.Actor(), time.Minute/30, 30).Allow() {
+		return nil, refusePay(http.StatusTooManyRequests, "too_many", "Too many lists read just now: wait a minute.")
+	}
 	var lines []string
-	for _, l := range strings.Split(strings.ReplaceAll(in.Text, "\r\n", "\n"), "\n") {
+	for _, l := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		if strings.TrimSpace(l) != "" {
 			lines = append(lines, strings.TrimSpace(l))
 		}
 	}
 	if len(lines) > maxBatchLen {
-		s.payFail(w, r, refusePay(http.StatusBadRequest, "rows", fmt.Sprintf("Up to %d people a batch.", maxBatchLen)))
-		return
+		return nil, refusePay(http.StatusBadRequest, "rows", fmt.Sprintf("Up to %d people a batch.", maxBatchLen))
 	}
 	out := make([]batchLine, 0, len(lines))
 	for i, l := range lines {
@@ -795,10 +804,9 @@ func (s *Server) readBatchList(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}); err != nil {
-		s.fail(w, r, err)
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"lines": out})
+	return out, nil
 }
 
 // lineName is the words of a list's line that are not its number, bank or

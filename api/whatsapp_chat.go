@@ -1050,6 +1050,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waSavedReminders(ctx, c, text); done || err != nil {
 			return err
 		}
+		// "pay my list", and a list pasted under "pay these": a batch
+		// prepared, to check and pay with a passkey (payments_chat_list.go).
+		if done, err := s.waPayList(ctx, c, text); done || err != nil {
+			return err
+		}
 		// "send 45k to @bayo for a delivery": a payment prepared, to
 		// confirm with a passkey (payments_chat.go).
 		if done, err := s.waPayCommand(ctx, c, text); done || err != nil {

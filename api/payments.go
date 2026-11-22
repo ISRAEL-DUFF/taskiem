@@ -1448,7 +1448,8 @@ func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, 
 			return err
 		}
 		out = map[string]any{"payment_id": id.String(), "status": now}
-		return nil
+		// Told in the chat it was prepared from, with its end (once).
+		return chatPayResultTx(ctx, tx, tenant, id)
 	})
 	return out, err
 }

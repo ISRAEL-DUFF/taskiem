@@ -9409,6 +9409,86 @@
       "reviewed": true,
       "context": "Where to confirm a prepared payment when there is no link"
     },
+    "wa.pay.list.how": {
+      "text": "Send the list under pay these, one person a line, like:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
+      "reviewed": true,
+      "context": "Paying several people from the chat: \"pay these\" came with no list under it"
+    },
+    "wa.pay.list.person": {
+      "text": "1 person",
+      "reviewed": true,
+      "context": "How many people a batch from the chat pays: one"
+    },
+    "wa.pay.list.people": {
+      "text": "{count} people",
+      "reviewed": true,
+      "context": "How many people a batch from the chat pays: more than one"
+    },
+    "wa.pay.list.ready_link": {
+      "text": "{people}, {amount}. Nothing is sent yet: open to check and pay with your passkey: {link}",
+      "reviewed": true,
+      "context": "A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
+    },
+    "wa.pay.list.ready_app": {
+      "text": "{people}, {amount}. Nothing is sent yet: open Pay several in the Taskiem app to check and pay with your passkey.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat, not sent, when there is no link"
+    },
+    "wa.pay.list.held": {
+      "text": "Held out, {who}: {problem}",
+      "reviewed": true,
+      "context": "A row of a batch from the chat held out before anything moves, with why"
+    },
+    "wa.pay.list.unread": {
+      "text": "Line {line} not read ({text}): {problem}",
+      "reviewed": true,
+      "context": "A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
+    },
+    "wa.pay.list.none": {
+      "text": "Nothing was prepared to pay.",
+      "reviewed": true,
+      "context": "A list pasted in the chat where no line could be prepared; why follows"
+    },
+    "wa.pay.result.paid": {
+      "text": "Paid {to} {amount}. Received by the bank.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was paid: who and how much"
+    },
+    "wa.pay.result.failed": {
+      "text": "Not paid: {to} {amount}. {reason}",
+      "reviewed": true,
+      "context": "A payment prepared from the chat failed: who, how much, and why"
+    },
+    "wa.pay.result.rejected": {
+      "text": "Not paid: the payment of {amount} to {to} was declined.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was declined at its approval"
+    },
+    "wa.pay.result.no_reason": {
+      "text": "The bank did not say why.",
+      "reviewed": true,
+      "context": "Why a payment failed, when the bank gave no reason"
+    },
+    "wa.pay.result.declined": {
+      "text": "declined",
+      "reviewed": true,
+      "context": "Why a row of a batch was not paid: it was declined at its approval"
+    },
+    "wa.pay.result.batch": {
+      "text": "Paid {paid} of {count} people, {amount}.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
+    },
+    "wa.pay.result.batch_all": {
+      "text": "Paid all {count} people, {amount}.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat has ended with everyone paid"
+    },
+    "wa.pay.result.batch_not": {
+      "text": "{count} not paid: {who}",
+      "reviewed": true,
+      "context": "Who in a batch from the chat was not paid, each with why"
+    },
     "bill.transfer.send": {
       "text": "Send exactly {amount} to {to}, for {reference}.",
       "reviewed": true,

@@ -63,6 +63,9 @@
                 <data android:pathPrefix="/storefront/orders/"/>
                 <data android:pathPrefix="/bills/"/>
                 <data android:pathPrefix="/purchases/"/>
+                <!-- Payments, a payment and a batch to confirm (the chat's links). -->
+                <data android:path="/payments"/>
+                <data android:pathPrefix="/payments/"/>
                 <!-- A person's link and its QR code (people-chatting §5.2). -->
                 <data android:pathPrefix="/p/"/>
                 <!-- A group's invite link and its QR code (people-chatting §9). -->
