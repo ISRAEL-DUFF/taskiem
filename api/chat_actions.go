@@ -374,6 +374,8 @@ var chatActions = []chatAction{
 		Make: fill("send {amount} to {number} {bank} for {for}"), may: both(payMay, func(_ *Server, c *chat, _ areas.State) bool { return isOwner(c.p) })},
 	{ID: "pay.list", Topic: "pay", Title: "Your payments", Line: "Sent, waiting for an OK, and paid", Icon: "money", Does: doesShow, Opens: opensPage,
 		Page: "/payments", may: payMay},
+	{ID: "pay.payroll", Topic: "pay", Title: "Payroll", Line: "Payrolla's runs: who was paid, and who was not and why", Icon: "money", Does: doesShow, Opens: opensPage,
+		Page: "/payroll", may: perm(PermPayrollRead)},
 	{ID: "pay.payees", Topic: "pay", Title: "Your payees", Line: "The accounts you pay, by name", Icon: "saved", Does: doesShow, Opens: opensPage,
 		Page: "/settings/saved", may: payMay},
 	// Who owes you

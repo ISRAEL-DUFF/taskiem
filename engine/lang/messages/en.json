@@ -9319,6 +9319,16 @@
       "reviewed": true,
       "context": "A menu row's line under its title (api/chat_actions.go)"
     },
+    "menu.pay.payroll": {
+      "text": "Payroll",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll.line": {
+      "text": "Payrolla's runs: who was paid, and who was not and why",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
     "menu.pay.person": {
       "text": "Pay someone",
       "reviewed": true,
