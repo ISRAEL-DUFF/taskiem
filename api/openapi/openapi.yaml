@@ -30283,7 +30283,6 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [saved_id]
               properties:
                 saved_id:
                   type: [string, 'null']

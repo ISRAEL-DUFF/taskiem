@@ -104,4 +104,10 @@ func TestPayStaff(t *testing.T) {
 	// Unlinked: they are not paid.
 	owner.must(200, "PUT", path, map[string]any{"saved_id": nil, "passkey": stepUp(t, owner, key, "staff.account", musaID)})
 	owner.must(409, "POST", "/v1/payments", map[string]any{"staff_id": musaID, "amount_kobo": 500000, "purpose": "wages"})
+	// Leaving saved_id out unlinks too (the app's client sends no null).
+	owner.must(200, "PUT", path, map[string]any{"saved_id": musaAcct["id"], "passkey": stepUp(t, owner, key, "staff.account", musaID)})
+	owner.must(200, "PUT", path, map[string]any{"passkey": stepUp(t, owner, key, "staff.account", musaID)})
+	if got := owner.must(200, "GET", "/v1/staff/"+musaID, nil); got["pay_account"] != nil {
+		t.Fatalf("still linked: %v", got["pay_account"])
+	}
 }
