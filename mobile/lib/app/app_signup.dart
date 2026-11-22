@@ -132,6 +132,7 @@ class AppSignup extends ChangeNotifier {
       if (session != null) {
         // Signed in: the app's home takes over, Taskiem's conversation first.
         auth.welcome = true;
+        auth.offerPin = true;
         await auth.signedInWith(session);
       } else {
         error = 'Your business is ready. Sign in with WhatsApp to open it.';

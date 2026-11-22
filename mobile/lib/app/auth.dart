@@ -292,7 +292,14 @@ class Auth extends ChangeNotifier {
     final r = await api.phoneCreate(
       body: PhoneCreateRequest(ticket: ticket, name: name, adult: true, terms: true, bearer: true, device: await store.device()),
     );
-    await _signedIn(r.token, personal: r.personal ?? true);
+    // A new account: Set your PIN is offered before the app opens.
+    offerPin = true;
+    try {
+      await _signedIn(r.token, personal: r.personal ?? true);
+    } on Object {
+      offerPin = false;
+      rethrow;
+    }
   }
 
   /// Back to the person's own side, **You** (POST /v1/me/switch).
@@ -322,6 +329,10 @@ class Auth extends ChangeNotifier {
 
   /// Just signed up in the app: the home opens Taskiem's conversation first.
   bool welcome = false;
+
+  /// Just made an account (signing up in the app, or a new number): the
+  /// PIN is offered once, before the app opens (screens/you_pin.dart).
+  bool offerPin = false;
 
   /// Who is signed in, read again (a way in added: me.factors).
   Future<void> refreshMe() async {
@@ -387,6 +398,7 @@ class Auth extends ChangeNotifier {
   }
 
   Future<void> _forget() async {
+    offerPin = false;
     transport.token = null;
     me = null;
     _keptPersonal = false;

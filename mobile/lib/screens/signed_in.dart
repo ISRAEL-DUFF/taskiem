@@ -25,6 +25,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'settings_more.dart';
 import 'switcher.dart' show lockWords, showSwitcher;
+import 'you_pin.dart' show PinScreen;
 
 class SignedInScreen extends StatefulWidget {
   const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
@@ -221,6 +222,14 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   trailing: keys.isEmpty ? null : quiet('${keys.length}'),
                   onTap: () => _open(SettingsPage(title: 'Passkeys', children: [PasskeysCard(auth: widget.auth)])),
                 ),
+              // The person's one PIN: approves on WhatsApp, pays small amounts.
+              TkListRow(
+                title: 'PIN',
+                sub: 'Approves on WhatsApp and pays small amounts',
+                icon: 'b-lock',
+                square: look.violet,
+                onTap: () => _open(PinScreen(auth: widget.auth)),
+              ),
               if (phones != null)
                 TkListRow(
                   title: 'Your phones',

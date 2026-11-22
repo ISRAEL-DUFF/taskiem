@@ -350,7 +350,7 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
   - App lock as a switch: on locks every time Taskiem opens; the row opens
     the choice of when (at once, after a minute, after half an hour).
 - Appearance as a switch of three.
-- Signing in: Passkeys and Your phones, each with its count.
+- Signing in: Passkeys and Your phones, each with its count, and PIN.
 - The chats you work from: WhatsApp, Telegram and Slack, each with
   whether it is linked.
 - Saved: Saved things, the business's (saved objects S0, S1).
@@ -433,6 +433,26 @@ A forgotten password is done in the app (`lib/screens/forgot_password.dart`):
 
 A link that comes while someone is signed in opens Choose a new password
 over the app.
+
+### The PIN (`lib/screens/you_pin.dart`)
+
+The person's one PIN (GET and PUT /v1/me/pin) approves on WhatsApp and
+pays up to ₦100,000 (₦200,000 a day). It is never shown and never asked
+for in a message.
+
+- **Set your PIN**, once a new account is made (a new number, or signing
+  up in the app), when it has none: the PIN typed twice in two rows of
+  `CodeBoxes(obscure: true)` in one `TkFormGroup`, what it is for under
+  them, Set your PIN as the `TkCta` and **Not now** as a bold link. A
+  mismatch or a weak PIN (one digit repeated, a run like 123456) is said
+  before anything is sent, in a red callout.
+- **Settings › PIN** (You's Your account, and a business's Signing in):
+  `TkLines` with the PIN as dots, when it was set and from when it pays;
+  a red callout when it is locked and an orange one while a new PIN waits
+  its 24 hours; Change PIN opens the same form. Its button asks for the
+  passkey first ("Confirm with your passkey and save"), or none moments
+  after signing in. With neither, a callout says to sign out, sign in
+  again and change it within 10 minutes.
 
 ## Sheets and the chats, as drawn
 

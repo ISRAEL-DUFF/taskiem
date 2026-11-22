@@ -52,6 +52,7 @@ import 'school/school_clearance.dart' show GateScreen;
 import 'school/school_tab.dart' show SchoolTab;
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
+import 'screens/you_pin.dart' show PinStepScreen;
 import 'screens/forgot_password.dart';
 import 'screens/sign_in.dart';
 import 'screens/switcher.dart' show showSwitcher;
@@ -244,6 +245,8 @@ class _RootState extends State<_Root> {
       AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       // A personal session: the person's own side (taskiem-for-everyone §7).
+      // Just made an account: Set your PIN, or Not now (when it has none).
+      AuthState.signedIn when auth.offerPin => PinStepScreen(key: ValueKey('pin ${auth.session}'), auth: auth, onDone: () => setState(() => auth.offerPin = false)),
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };

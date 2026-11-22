@@ -58,6 +58,7 @@ import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'you_links.dart';
+import 'you_pin.dart' show PinScreen;
 import 'you_account.dart';
 import '../chat/composer.dart' show Pickers;
 import '../app/route.dart' show youRouteOf;
@@ -811,6 +812,13 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-phone',
                   square: look.teal,
                   onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: auth)),
+                ),
+                TkListRow(
+                  title: 'PIN',
+                  sub: 'Approves on WhatsApp and pays small amounts',
+                  icon: 'b-lock',
+                  square: look.violet,
+                  onTap: () => tkPush<void>(context, PinScreen(auth: auth, now: now)),
                 ),
               ],
             ),

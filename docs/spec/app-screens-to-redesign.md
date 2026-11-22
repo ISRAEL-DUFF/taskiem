@@ -22,6 +22,7 @@ Kit notes that explain most tags:
 | Second proof (step-up into a business) | `screens/second_proof.dart` `SecondProof` | Opening a business that needs passkey, email link, password or PIN | The ways to prove it's you | [done 18 Nov] ways in as rows, password and PIN in form groups with TkCta, a sent link as a callout; sheet in TkAppLook |
 | Switcher: You and your businesses | `screens/switcher.dart` `SwitcherSheet` | Head of You, a business's menu | Rows for You and each business; passkey step | [done 18 Nov] sheets in TkAppLook; Use your passkey a TkCta; an organisation's sign-in a callout |
 | Start something | `screens/start_something.dart` `StartSomethingScreen` | You › Start something | A business or workflows; what the business does | [done 18 Nov] large-title page; choices as ticked rows; the kind as sign-up's KindTile; name in a form group; TkCta |
+| Set your PIN (after sign-up) and Settings › PIN | `screens/you_pin.dart` `PinStepScreen`, `PinScreen` | A new account, once; You › Settings and a business's Settings › Signing in | The PIN twice as dots, when it was set, from when it pays, locked, Change PIN | [done 22 Nov] built in the new look: CodeBoxes in a form group, TkLines, callouts, TkCta, Not now a bold link |
 | Change number | `screens/you.dart` `ChangeNumberScreen` | You › Settings | New number, code, confirm | [done 18 Nov] large-title page; number in a form group; the old-number question as rows; codes as CodeBoxes on a card |
 
 ## 2. You: home, Chats tab and settings (stages 1 to 3)
