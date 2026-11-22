@@ -1717,3 +1717,4 @@ product_stock.stock_item_id
 product_stock.uses
 stock_items.id
 stock_items.count
+money_entries.label_id

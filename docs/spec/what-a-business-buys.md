@@ -480,6 +480,18 @@ In the app's own look (`mobile-app-look.md`, Stock and supplies). No server chan
 - **Tests:** `test/stock_page_test.dart` (the words, the filter, Sold as and Not sold, sizes grouped, a material's and a product's actions, Do you sell it? both ways, large text and targets), `test/product_form_test.dart` (Counted by shown, changed with uses, none, in sizes); `test/looks/stock-*.png` drawn again.
 - **Not done:** retired stock items (`retired=true`) are not shown; the products page's own list (Products tool) is unchanged.
 
+### As built: U1 (schema)
+
+Migration 00503; the rows are declared in `engine/stock/purchaselines.go`.
+
+- **`purchase_lines`** in place of `purchase_orders.lines`, which goes: `position` (0 to 49, unique on the order: at most 50), `name`, `unit`, `quantity`, `cost_kobo`, `received`, `delivered` (a linked supplier's, mirrored), `treatment`, `stock_item_id` (exactly for a stock line), `uses` (1 unless stock), `label_id`, `seller_item_id`. A tracked line is at most 200. Once anything on a line is received, its treatment, stock item and uses are locked and it is not deleted (a trigger). The JSON line's `item_id` (the buyer's catalogue row) goes. `purchase_orders.change` and `.short` stay, by position.
+- **`item_links`** made again, keyed `(tenant_id, link_id, seller_item_id)`, with `seller_item` (the supplier's name for it), `treatment`, `stock_item_id`, `uses`, `label_id`, `updated_by`, `updated_at`; the buyer's own `item_id` goes.
+- **`supplier_items`**: the same, keyed `(tenant_id, supplier_id, name_key)`, with `name` as last typed; the table holds only keys made as `stock.NameKey` makes them.
+- **`spend_labels`**: names unique per business without case, merged ones included; `merged_into` (a trigger keeps a merge one step); `created_by`. Never deleted.
+- **`money_entries.label_id`**; `taskiem_money_entry_kept` now refuses any change but marking an entry copied. The kept `money_log` gains `label_id`.
+- **`kept_things`**, with `purchase_line_id` and `unit_no` (unique together: receiving writes each unit once) and `sale_entry_id` (the money in of a sale).
+- Composite foreign keys keep every reference in the business. None of the new tables is copied to the owner's project.
+
 ## 12. Accept
 
 **The split**
