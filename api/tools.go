@@ -347,7 +347,9 @@ func (s *Server) runTool(ctx context.Context, p *Principal, t toolRow, input map
 // toolInputError is a start whose values do not fit the tool's form.
 type toolInputError []string
 
-func (e toolInputError) Error() string { return "the values do not fit the tool's form: " + strings.Join(e, "; ") }
+func (e toolInputError) Error() string {
+	return "the values do not fit the tool's form: " + strings.Join(e, "; ")
+}
 
 // --- routes ---
 
