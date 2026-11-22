@@ -41,10 +41,10 @@ func TestChatMoneyWordsInOtherLanguages(t *testing.T) {
 		t.Errorf("invoice %v", x)
 	}
 	// An expense, typed without accents, recorded on "beeni".
-	if r := w.say(t, yn, "mo na 12,000 fun diesel"); !strings.Contains(r, yo("wa.money.confirm_expense", "amount", "₦12,000", "what", "diesel", "category", "fuel")) {
+	if r := w.say(t, yn, "mo na 12,000 fun diesel"); !strings.Contains(r, yo("wa.money.confirm_expense", "amount", "₦12,000", "what", "diesel", "category", "Diesel")) {
 		t.Fatalf("yo expense: %q", r)
 	}
-	if r := w.say(t, yn, "beeni"); !strings.Contains(r, yo("wa.money.recorded_out", "amount", "₦12,000", "category", "fuel")) {
+	if r := w.say(t, yn, "beeni"); !strings.Contains(r, yo("wa.money.recorded_out", "amount", "₦12,000", "category", "Diesel")) {
 		t.Fatalf("yo recorded: %q", r)
 	}
 	// English words still work in Yoruba.

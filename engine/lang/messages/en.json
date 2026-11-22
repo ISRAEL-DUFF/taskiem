@@ -4072,12 +4072,12 @@
     "wa.money.confirm_expense": {
       "text": "Record {amount} spent on {what} ({category})?",
       "reviewed": true,
-      "context": "an expense shown before it is recorded; {category} is an English word such as fuel"
+      "context": "an expense shown before it is recorded; {category} is its label, in the business's own words, such as Diesel"
     },
     "wa.money.confirm_expense_at": {
       "text": "Record {amount} spent on {what} at {vendor} ({category})?",
       "reviewed": true,
-      "context": "an expense with where it was spent, shown before it is recorded; {category} is an English word such as fuel"
+      "context": "an expense with where it was spent, shown before it is recorded; {category} is its label, in the business's own words, such as Diesel"
     },
     "wa.money.confirm_reminder": {
       "text": "Reply *yes* to record it or *no* to leave it.",
@@ -4107,7 +4107,7 @@
     "wa.money.recorded_out": {
       "text": "Recorded. {amount} out, {category}.",
       "reviewed": true,
-      "context": "cash out or an expense was recorded; {category} is an English word such as fuel or cash"
+      "context": "cash out or an expense was recorded; {category} is cash, or the expense's label in the business's own words, such as Diesel"
     },
     "wa.money.refused": {
       "text": "I could not record that: {reason}",

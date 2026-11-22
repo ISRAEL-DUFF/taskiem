@@ -48,6 +48,7 @@ func (s *Server) invoiceRoutes(r chi.Router) {
 	s.matchingRoutes(r)
 	s.moneyRoutes(r)
 	s.moneyReportRoutes(r)
+	s.moneyLabelRoutes(r)
 }
 
 func invoiceErr(err error) error {
