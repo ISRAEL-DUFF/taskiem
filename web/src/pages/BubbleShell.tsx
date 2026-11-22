@@ -254,14 +254,21 @@ export function BubbleShell({
       if (!r || r.bottom < 0 || r.top > window.innerHeight) shut();
       else place.current?.();
     };
+    // Scrolling inside the menu itself (the emoji panel's grid) is not the
+    // reader leaving it.
+    const readerScrolls = (e: Event) => {
+      const t = e.target as Node | null;
+      if (t && (pill.current?.contains(t) || card.current?.contains(t))) return;
+      shut();
+    };
     const reader = ["wheel", "touchmove"] as const;
     window.addEventListener("resize", shut);
     document.addEventListener("scroll", follow, true);
-    for (const e of reader) document.addEventListener(e, shut, { capture: true, passive: true });
+    for (const e of reader) document.addEventListener(e, readerScrolls, { capture: true, passive: true });
     return () => {
       window.removeEventListener("resize", shut);
       document.removeEventListener("scroll", follow, true);
-      for (const e of reader) document.removeEventListener(e, shut, true);
+      for (const e of reader) document.removeEventListener(e, readerScrolls, true);
     };
   }, [more]);
   const parts =
