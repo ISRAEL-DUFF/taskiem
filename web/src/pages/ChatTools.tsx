@@ -40,7 +40,9 @@ import {
   BUSINESS_TOOLS,
   filterRows,
   categoryChips,
+  madeIcon,
   toolsFor,
+  type MadeTool,
   type Tool,
   type ToolKey,
   type ToolRow,
@@ -231,6 +233,9 @@ export function ToolsPanel({
   supplier,
   business,
   extras,
+  builtIns = true,
+  made = [],
+  onOpenMade,
 }: {
   /** What follows "/" in the box, when it was typed. */
   query: string;
@@ -244,14 +249,22 @@ export function ToolsPanel({
   /** The business the conversation is with, for the heading. */
   business?: string;
   extras?: ExtraTile[];
+  /** The built-in tools: off when the business has chat tools off, and
+   * the panel holds Your tools alone. */
+  builtIns?: boolean;
+  /** Your tools (made tools M1) that what follows "/" names. */
+  made?: MadeTool[];
+  onOpenMade?: (command: string, from: DOMRect) => void;
 }) {
   const more = extrasFor(extras, query);
   const { can, me } = useAuth();
   // In a business's conversation, the tools about that business only
   // (docs/spec/business-chat-tools.md §3); the rest are in Taskiem's.
-  const listed = toolsFor(can, query, me?.roles, me?.delivers).filter(
-    (t) => !scope || BUSINESS_TOOLS.includes(t.key),
-  );
+  const listed = builtIns
+    ? toolsFor(can, query, me?.roles, me?.delivers).filter(
+        (t) => !scope || BUSINESS_TOOLS.includes(t.key),
+      )
+    : [];
   const { rows: loaded } = useToolRows(listed);
   const ids = useScopeIds(scope);
   const rows: typeof loaded = Object.fromEntries(
@@ -361,7 +374,7 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
-      {tools.length + more.length === 0 ? (
+      {tools.length + more.length + made.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -422,6 +435,30 @@ export function ToolsPanel({
               <span>
                 <span className="tk-tile-name">{x.title}</span>
                 <span className="tk-tile-line">{x.line}</span>
+              </span>
+            </button>
+          ))}
+          {made.length > 0 && (
+            <p className="tk-tools-sub" data-testid="your-tools">
+              Your tools
+            </p>
+          )}
+          {made.map((t) => (
+            <button
+              key={`made:${t.command}`}
+              type="button"
+              className="tk-tile"
+              data-testid="made-tool-tile"
+              onClick={(e) =>
+                onOpenMade?.(t.command, e.currentTarget.getBoundingClientRect())
+              }
+            >
+              <span className="tk-tile-icon">
+                <Icon name={madeIcon(t.icon)} />
+              </span>
+              <span>
+                <span className="tk-tile-name">{t.name}</span>
+                <span className="tk-tile-line">{t.about || `/${t.command}`}</span>
               </span>
             </button>
           ))}

@@ -653,3 +653,70 @@ export function filterRows(
   );
   return [...named, ...rest];
 }
+
+// ---------------------------------------------------------------------
+// Your tools (made tools M1, decision 0070): a workflow the business made
+// into a tool, called by its command. GET /v1/tools lists those the person
+// may use; they show as tiles after the built-in ones, and "/" with their
+// command or the start of their name finds them.
+
+/** How much a tool asks before it runs: answers at once, yes, or yes and
+ * a passkey. */
+export type Care = "answers" | "yes" | "step_up";
+
+/** One of the business's tools (MadeTool). */
+export interface MadeTool {
+  workflow_id: string;
+  environment: string;
+  version: number;
+  command: string;
+  name: string;
+  about: string;
+  says: string[];
+  icon?: string;
+  care: { level: Care; because?: string[] };
+  /** text, card or list; none when it answers with how its run ended. */
+  answer?: string;
+  always_ask: boolean;
+  /** Its form's fields. */
+  inputs?: Record<string, unknown>;
+}
+
+/** The care a person meets: an owner's "always ask" makes one that would
+ * answer at once ask yes first. */
+export const madeCare = (t: Pick<MadeTool, "care" | "always_ask">): Care =>
+  t.always_ask && t.care.level === "answers" ? "yes" : t.care.level;
+
+// A tool's icon is one of a fixed set (wd-v1's tool.icon); each is drawn
+// with the app's own icon closest to it.
+const MADE_ICONS: Record<string, string> = {
+  receipt: "invoices",
+  cart: "orders",
+  people: "members",
+  person: "members",
+  truck: "package",
+  list: "tables",
+  chart: "reports",
+  wrench: "settings",
+  server: "connections",
+};
+
+/** The app's icon for a tool's. */
+export const madeIcon = (icon?: string): string =>
+  !icon ? "bolt" : (MADE_ICONS[icon] ?? icon);
+
+/** The tools what follows "/" names: by the start of their command, or of
+ * their name or a word of it ("/exp", "/log", "/expense"). */
+export function madeToolsFor(tools: MadeTool[], query = ""): MadeTool[] {
+  const q = query.trim().toLowerCase().replace(/^\//, "");
+  if (q === "") return tools;
+  return tools.filter(
+    (t) =>
+      t.command.startsWith(q) ||
+      t.name.toLowerCase().startsWith(q) ||
+      t.name
+        .toLowerCase()
+        .split(/\s+/)
+        .some((w) => w.startsWith(q)),
+  );
+}

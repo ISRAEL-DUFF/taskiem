@@ -91,10 +91,10 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     // Someone to pay: their bank and account number, the name confirmed.
     input = <RecipientField label={title} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />;
   } else if (kind === "boolean") {
-    input = <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+    input = <input type="checkbox" aria-label={String(title)} checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
   } else if (kind === "enum") {
     input = (
-      <select value={value === undefined ? "" : JSON.stringify(value)} onChange={(e) => onChange(e.target.value === "" ? undefined : JSON.parse(e.target.value))}>
+      <select aria-label={String(title)} value={value === undefined ? "" : JSON.stringify(value)} onChange={(e) => onChange(e.target.value === "" ? undefined : JSON.parse(e.target.value))}>
         <option value="">—</option>
         {schema.enum?.map((o) => (
           <option key={JSON.stringify(o)} value={JSON.stringify(o)}>
@@ -115,6 +115,7 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     input = (
       <input
         type={kind === "string" ? "text" : "number"}
+        aria-label={String(title)}
         value={value === undefined ? "" : String(value)}
         onChange={(e) => onChange(coerce(kind, e.target.value))}
       />

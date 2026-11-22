@@ -225,6 +225,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
+    // Your tools (made tools M1): whether or not the built-in tools are on.
+    madeTools: true,
     // With chat tools, "@" tags things and businesses in groups, and finds
     // businesses not yet linked (their card, with Connect); Taskiem is
     // who is being talked to, so it is not offered.

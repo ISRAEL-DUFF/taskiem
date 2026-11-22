@@ -148,6 +148,7 @@ import { NotificationSettings } from "./pages/NotificationSettings";
 import { PaymentsSettings } from "./pages/ReceiveMoney";
 import { SavedPage } from "./pages/Saved";
 import { PaymentPage, PaymentsPage } from "./pages/Payments";
+import { ToolPage } from "./pages/MadeToolSheet";
 import { BatchPage, PayListPage } from "./pages/PayBatch";
 import { CollectedListPage } from "./pages/PayCollect";
 import { PayrollPage, PayrollRunPage, PayrollStaffPage } from "./pages/Payroll";
@@ -996,6 +997,7 @@ function SignedIn() {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/runs" element={<Runs />} />
                   <Route path="/runs/:id" element={<RunPage />} />
+                  <Route path="/tools/:command" element={<ToolPage />} />
                   <Route path="/approvals" element={<Approvals />} />
                   <Route path="/connections" element={<Connections />} />
                   <Route path="/catalogue" element={<Catalogue />} />

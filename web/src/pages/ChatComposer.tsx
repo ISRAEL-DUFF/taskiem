@@ -33,7 +33,9 @@ import { OrderSheet, type OrderStart } from "./ChatBuyer";
 import { BookSheet } from "./ChatBook";
 import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
-import { toolsFor, type ToolKey } from "../lib/tools";
+import { madeToolsFor, toolsFor, type ToolKey } from "../lib/tools";
+import { useMadeTools } from "../lib/useMadeTools";
+import { MadeToolSheet } from "./MadeToolSheet";
 import type { Prefill, Request } from "../lib/intents";
 import { RequestChip } from "./RequestChip";
 
@@ -143,6 +145,12 @@ export type ComposerOptions<R> = {
   scope?: { link: string; name: string; supplies: boolean };
   /** Tiles of the tools menu that are not tools (Briefing): a tap runs it. */
   extras?: ExtraTile[];
+  /** Your tools (made tools M1): the business's own, after the built-in
+   * ones, with "/" and their command. Shown whether or not chat tools are
+   * on: when they are off, the panel holds Your tools alone. */
+  madeTools?: boolean;
+  /** One of Your tools started a run (its answer comes to the chat). */
+  onToolRun?: (run: string) => void;
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -193,15 +201,27 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     start?: ToolStart;
   }>();
   const { can, me } = useAuth();
+  // Your tools: read for whoever may start runs, where they are offered.
+  const made = useMadeTools(!!o.madeTools && can("run.start"));
+  const [madeTool, setMadeTool] = useState<{
+    command: string;
+    from?: DOMRect;
+  }>();
+  // The panel: the built-in tools when chat tools are on, Your tools when
+  // the person has any.
+  const panelOn = !!o.tools || made.length > 0;
   // "/invoice/" and the like pick a thing to tag, not a tool; "/" and a
   // saved thing's name pick that thing, when one has it (else "/" searches tools).
   const tagging = mentions.q?.mark === "/" && (!!mentions.q.kind || mentions.shown.length > 0);
-  const slash = o.tools && !tagging ? /^\/(\S*)$/.exec(text) : null;
-  const toolsShown = !!o.tools && (toolsOpen || !!slash);
+  const slash = panelOn && !tagging ? /^\/(\S*)$/.exec(text) : null;
+  const toolsShown = panelOn && (toolsOpen || !!slash);
   // How many tools what follows "/" names: none, and Enter sends it.
+  const madeShown = madeToolsFor(made, slash?.[1] ?? "");
   const toolMatches = toolsShown
-    ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length +
-      extrasFor(o.extras, slash?.[1] ?? "").length
+    ? (o.tools
+        ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length +
+          extrasFor(o.extras, slash?.[1] ?? "").length
+        : 0) + madeShown.length
     : 0;
   const closeTools = () => {
     setToolsOpen(false);
@@ -210,6 +230,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const openTool = (k: ToolKey, from?: DOMRect, start?: ToolStart) => {
     closeTools();
     setTool({ key: k, from, start });
+  };
+  const openMade = (command: string, from?: DOMRect) => {
+    closeTools();
+    setMadeTool({ command, from });
   };
   // A supplier's category opens their list, to order from; ours, our
   // products.
@@ -247,6 +271,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       !!reply,
       voice.secs !== undefined,
       !!tool,
+      !!madeTool,
       ...(o.closes ?? []),
     ],
     [!!reply, !!file],
@@ -418,6 +443,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     tool,
     setTool,
     openTool,
+    panelOn,
+    madeShown,
+    madeTool,
+    setMadeTool,
+    openMade,
   };
 }
 
@@ -582,6 +612,18 @@ export function ComposerView<R>({
             }}
           />
         )}
+      {c.madeTool && (
+        <MadeToolSheet
+          command={c.madeTool.command}
+          from={c.madeTool.from}
+          onClose={() => c.setMadeTool(undefined)}
+          onStarted={c.o.onToolRun}
+          onTools={() => {
+            c.setMadeTool(undefined);
+            c.setToolsOpen(true);
+          }}
+        />
+      )}
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
       ) : (
@@ -606,9 +648,12 @@ export function ComposerView<R>({
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
               business={c.o.scope?.name}
               extras={c.o.extras}
+              builtIns={!!c.o.tools}
+              made={c.madeShown}
+              onOpenMade={c.openMade}
             />
           )}
-          {c.o.tools && (
+          {c.panelOn && (
             <button
               type="button"
               className={`composer-tools${c.toolsShown ? " open" : ""}`}

@@ -37,6 +37,12 @@ export const GLOSSARY: RegExp[] = [
 /** The owner's path: the pages of the gate's five tasks. */
 const OWNER_FILES = [
   "pages/Start.tsx",
+  // Your tools (made tools M1): the sheet, its answer, the tool's page,
+  // and Use it from chat in the builder.
+  "pages/MadeToolSheet.tsx",
+  "lib/toolanswer.ts",
+  "pages/UseFromChat.tsx",
+  "lib/toolbuild.ts",
   "pages/Saved.tsx",
   "lib/saved.ts",
   "pages/Payments.tsx",

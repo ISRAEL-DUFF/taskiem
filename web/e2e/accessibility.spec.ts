@@ -1702,3 +1702,75 @@ for (const scheme of ["light", "dark"] as const)
       expect(vs, describe("the Save as sheet, saved", vs)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
+
+
+/** A tool of the business (made tools M1), published once whichever test runs first. */
+async function aTool(page: Page): Promise<string> {
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  const tools = (await (await page.request.get("/v1/tools")).json()) as { tools: { command: string }[] };
+  if (tools.tools.some((t) => t.command === "a11y-note")) return "a11y-note";
+  const definition = {
+    schema: "wd/v1",
+    id: "wf_a11ynote",
+    version: 1,
+    name: "Accessible note",
+    trigger: { type: "manual" },
+    inputs: { schema: { type: "object", properties: { what: { type: "string", title: "What for" }, amount: { type: "integer", title: "Amount" } } } },
+    steps: [{ id: "note", type: "transform", config: { output: { said: "=trigger.body.what", amount: "=trigger.body.amount" } } }],
+    outputs: [
+      { name: "what", type: "string", title: "What for", description: "What it was for", value: "=steps.note.output.said" },
+      { name: "amount_kobo", type: "integer", title: "Amount", description: "How much", value: "=steps.note.output.amount" },
+    ],
+    tool: {
+      name: "Accessible note",
+      command: "a11y-note",
+      about: "Note what money went on",
+      answer: { type: "card", title: "Noted", ref: "=outputs.what", state: { text: "Kept", tone: "good" }, lines: [{ label: "What for", value: "=outputs.what" }], amount: "=outputs.amount_kobo" },
+    },
+  };
+  const made = (await (await page.request.post("/v1/workflows", { ...h, data: { name: "Accessible note", definition } })).json()) as { id: string };
+  const pub = await page.request.post(`/v1/workflows/${made.id}/versions/1/publish`, h);
+  // Another test may have published it a moment before.
+  const now = (await (await page.request.get("/v1/tools")).json()) as { tools: { command: string }[] };
+  expect(pub.ok() || now.tools.some((t) => t.command === "a11y-note"), await pub.text()).toBeTruthy();
+  return "a11y-note";
+}
+
+// Your tools (made tools M1): a tool's page with its sheet, the tools
+// panel with Your tools, and a card answer, at a phone's widths.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Your tools pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await signIn(page);
+      const command = await aTool(page);
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      await page.goto(`/tools/${command}`);
+      const sheet = page.getByTestId("made-tool-sheet");
+      await expect(sheet.getByLabel("What for")).toBeVisible();
+      await check("/tools/:command (its sheet)");
+      await sheet.getByRole("button", { name: "Close" }).click();
+      await expect(page.getByTestId("tool-page")).toBeVisible();
+      await check("/tools/:command");
+      // The chat: "/" and Your tools, then its card answer.
+      await page.goto("/chat?with=taskiem");
+      await page.getByLabel("Message to Taskiem").fill("/a11y");
+      await expect(page.getByTestId("your-tools")).toBeVisible();
+      await check("/chat (Your tools)");
+      await page.getByTestId("tools-panel").getByRole("button", { name: /Accessible note/ }).click();
+      await sheet.getByLabel("What for").fill("Diesel");
+      await sheet.getByLabel("Amount").fill("450000");
+      await sheet.getByRole("button", { name: "Go" }).click();
+      const answer = sheet.getByTestId("tool-answer");
+      await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 30_000 });
+      await expect(answer).toContainText("₦4,500");
+      await check("/chat (a tool's card answer)");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
