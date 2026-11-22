@@ -188,6 +188,32 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   confirmed, delivered, received), All came or Not all came; the supplier on
   one card with what they last said; the lines with their amounts and the
   total; Cancel as a row.
+- **The question on a purchase line** (U2a, 22 November 2026; [what a
+  business buys](what-a-business-buys.md) §6; `chat/treat_line.dart`). A
+  card per line: "**Sewing machine** from **Singer Ltd**", then "How should
+  we treat it?" muted; Just record it, Add to stock and Keep track of it as
+  radio rows (`TkListRow` with `TkRadio`), each with a short line; for Add
+  to stock a pick box of the stock item (`pickOneOf`, Make a new one first,
+  which opens a form sheet asking **Do you sell it?**); Label as a pick box.
+  The label's sheet: a search box to type or pick, Make this label for a
+  new name typed, Your labels by use, Suggested, and No label. A line
+  remembered is one card in a few words ("Add to stock: Rice · Packaging")
+  with Change, which opens it with **Remember for next time** as a switch;
+  a line that came says "it came, so it stays". The cards stand on the
+  ground under a heading (`TreatSection`), not on a panel. Tracking more
+  than 50 asks in a sheet: "Put 500 nylon bags on Things we have, one row
+  each?", Just record them or Put them on.
+- **A line's mark** on an order to a supplier and on a bill (`LineMark`):
+  under its name, To stock (teal, a box) or Things we have (violet, #) as a
+  small pill, then its label, or Not labelled muted.
+- **What you buy from them** (Suppliers, a supplier's row): their
+  remembered items as rows, each with its treatment's square (recorded
+  blue, stock teal, tracked violet) and "Keep track of it · Machines";
+  a row opens a form sheet with the question, Save, and Forget in red.
+- **Labels** (Money, under Settings, for those who manage money): a callout
+  that renaming or merging changes reports, not records; the labels by use
+  as rows with their letters; a row opens Rename and Merge into another
+  label (`pickAction`), Merge asking which label (`pickOneOf`), then sure.
 
 ### Cards in a conversation
 

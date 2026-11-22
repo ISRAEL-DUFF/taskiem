@@ -1,7 +1,7 @@
 // An order sent to a linked business (M5 part O; web ChatBuyer.tsx
 // PurchaseView), opened from Your orders: what it asks for, where it is,
-// and what can be done now: confirm their quote (saying which of our items
-// each line is), accept their change, say all came or how many did,
+// and what can be done now: confirm their quote (saying how each line is
+// treated, what a business buys §6), accept their change, say all came or how many did,
 // cancel, reorder; each as the person's leave allows.
 
 import 'package:flutter/widgets.dart';
@@ -16,6 +16,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardProgress;
 import 'tools.dart' show purchaseState;
+import 'treat_line.dart';
 import 'words.dart' show naira, orderSteps;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -64,9 +65,8 @@ class _PurchaseViewState extends State<PurchaseView> {
   bool _busy = false;
   String? _error;
   _Mode _mode = _Mode.none;
-  List<Map<String, dynamic>>? _own;
-  bool _ownFailed = false;
-  final Map<int, String> _chosen = {};
+  final Map<int, Treat> _chosen = {};
+  late final TreatChoices _choices = TreatChoices(widget.auth);
   late final List<TextEditingController> _counts = [
     for (final l in _maps(_p['lines'])) TextEditingController(text: '${_int(l['delivered'] ?? l['quantity'])}'),
   ];
@@ -77,10 +77,16 @@ class _PurchaseViewState extends State<PurchaseView> {
     for (final c in _counts) {
       c.addListener(() => setState(() {}));
     }
+    _choices.addListener(_changed);
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _choices.removeListener(_changed);
     for (final c in _counts) {
       c.dispose();
     }
@@ -109,48 +115,35 @@ class _PurchaseViewState extends State<PurchaseView> {
     setState(() {
       _mode = _Mode.confirm;
       _error = null;
-      _ownFailed = false;
     });
-    if (_own != null) return;
-    try {
-      final r = await _t.send('GET', '/v1/stock') as Map<String, dynamic>;
-      if (mounted) setState(() => _own = _maps(r['items']));
-    } on Object {
-      if (mounted) setState(() => _ownFailed = true);
-    }
+    if (!_choices.ready) await _choices.load();
   }
 
-  String _pick(int i) => _chosen[i] ?? sameName(_own ?? const [], _maps(_p['lines'])[i]['item'] as String? ?? '');
-
-  Future<void> _choose(int i, String line) async {
-    final t = TkTheme.tokens(context);
-    final v = await showTkModal<String>(
-      context,
-      title: 'Their $line',
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final it in _own ?? const <Map<String, dynamic>>[])
-            Semantics(
-              button: true,
-              selected: it['id'] == _pick(i),
-              label: it['name'] as String? ?? '',
-              onTap: () => Navigator.of(context).pop(it['id'] as String),
-              excludeSemantics: true,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).pop(it['id'] as String),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(it['name'] as String? ?? '', style: tkText(size: 16, weight: it['id'] == _pick(i) ? 700 : 500, color: t.text)),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (v != null) setState(() => _chosen[i] = v);
+  /// Confirms their quote with each line as asked; tracking many asks first.
+  Future<void> _confirm(List<Map<String, dynamic>> lines, {Set<int> many = const {}}) async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      final body = await confirmLines(_choices, lines, _chosen);
+      for (final i in many) {
+        body[i] = {...body[i] ?? Treat.ofLine(lines[i], _choices).fields(), 'track_many': true};
+      }
+      await _t.send('POST', '/v1/stock/purchases/${Uri.encodeComponent(_p['id'] as String)}/confirm-proposed', body: {'lines': body});
+      widget.onSaved('Confirmed $_ref');
+    } on ApiError catch (e) {
+      final at = _int(e.body['line']);
+      final code = treatCode(e);
+      if (code == 'track_ask' && at < lines.length && mounted) {
+        setState(() => _busy = false);
+        final yes = await askTrackMany(context, e);
+        if (yes == null || !mounted) return;
+        if (!yes) setState(() => _chosen[at] = (_chosen[at] ?? Treat.ofLine(lines[at], _choices)).copyWith(how: 'record'));
+        return _confirm(lines, many: {...many, if (yes) at});
+      }
+      if (code == 'track_too_many' && at < lines.length) _chosen[at] = (_chosen[at] ?? Treat.ofLine(lines[at], _choices)).copyWith(how: 'record');
+      if (mounted) setState(() => (_error = code == null ? e.message : treatRefusal(e), _busy = false));
+    } on Offline {
+      if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
+    }
   }
 
   @override
@@ -176,9 +169,9 @@ class _PurchaseViewState extends State<PurchaseView> {
     final buttons = <Widget>[
       if (_mode == _Mode.confirm) ...[
         back,
-        cta('Confirm the order', _busy || _own == null || [for (var i = 0; i < ordered.length; i++) _pick(i)].any((x) => x.isEmpty)
+        cta('Confirm the order', _busy || !_choices.ready || [for (var i = 0; i < ordered.length; i++) _chosen[i] ?? Treat.ofLine(ordered[i], _choices)].any((x) => !x.ready)
             ? null
-            : () => _act('confirm-proposed', 'Confirmed $_ref', {'items': [for (var i = 0; i < ordered.length; i++) _pick(i)]})),
+            : () => _confirm(ordered)),
       ] else if (_mode == _Mode.short) ...[
         back,
         cta('Tell $_supplier', _busy || _counts.any((c) => c.text.isEmpty)
@@ -234,23 +227,20 @@ class _PurchaseViewState extends State<PurchaseView> {
                   ('Total', naira(total)),
                 ]),
               if (_mode == _Mode.confirm)
-                if (_own == null)
-                  _ownFailed
-                      ? note('Keep your stock on Taskiem to confirm it, so what comes is received into your items.')
-                      : const TkLoading(rows: 2, label: 'Loading your items…')
-                else ...[
-                  note('Which of your items is each? What comes is received into it.'),
+                if (!_choices.ready)
+                  const TkLoading(rows: 2, label: 'Loading your stock items and labels…')
+                else
                   for (var i = 0; i < ordered.length; i++)
-                    TkKitField(
-                      field: false,
-                      label: 'Their ${ordered[i]['item'] ?? ''}',
-                      child: _PickBox(
-                        label: 'Their ${ordered[i]['item'] ?? ''}',
-                        value: _own!.where((x) => x['id'] == _pick(i)).map((x) => x['name'] as String? ?? '').firstOrNull ?? 'Choose your item',
-                        onTap: () => _choose(i, ordered[i]['item'] as String? ?? ''),
-                      ),
+                    TreatQuestion(
+                      key: ValueKey('confirm:$i'),
+                      item: ordered[i]['item'] as String? ?? '',
+                      supplier: _supplier,
+                      quantity: _int(ordered[i]['quantity']),
+                      value: _chosen[i] ?? Treat.ofLine(ordered[i], _choices),
+                      choices: _choices,
+                      asked: ordered[i]['unconfirmed'] == true,
+                      onChanged: _busy ? null : (v) => setState(() => _chosen[i] = v),
                     ),
-                ],
               if (_mode == _Mode.short) ...[
                 note('How many of each came? $_supplier is told, and agrees the count or talks to you.'),
                 for (var i = 0; i < ordered.length; i++)
@@ -290,33 +280,3 @@ class _PurchaseViewState extends State<PurchaseView> {
     );
   }
 }
-
-/// The box of a `<select>`: the choice now, pressed to choose.
-class _PickBox extends StatelessWidget {
-  const _PickBox({required this.label, required this.value, required this.onTap});
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: '$label: $value',
-      onTap: onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.centerLeft,
-          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(14)),
-          child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 500, color: t.text)),
-        ),
-      ),
-    );
-  }
-}
-

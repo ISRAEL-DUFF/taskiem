@@ -7,6 +7,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show SpendLabel;
 import '../app/auth.dart';
 import '../app/openers.dart';
 import '../app/links.dart';
@@ -24,6 +25,7 @@ import 'approve.dart' show TkTextBox;
 import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show fmtTime, shortDay;
 import 'money_sheets.dart' show billHero, billStatus, canPay, sentLine;
+import 'treat_line.dart' show LineMark;
 import 'words.dart' show naira;
 import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection, TkSkeleton, tkInitials;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -274,6 +276,12 @@ class _BillPageState extends State<BillPage> with Polling {
   bool _busy = false;
   String? _actError;
 
+  // Each line's treatment and label (what a business buys §8, §9): by the
+  // order line of the same seller item, on the order it was raised from;
+  // read once, for the buyer's eyes only.
+  final Map<String, Map<String, dynamic>> _orders = {};
+  List<SpendLabel>? _labels;
+
   Auth get _auth => widget.auth;
 
   @override
@@ -283,10 +291,38 @@ class _BillPageState extends State<BillPage> with Polling {
     if (widget.follow) startPolling(const Duration(seconds: 30), _load);
   }
 
+  Future<void> _loadMarks(Map<String, dynamic> b) async {
+    if (!_auth.can('table.read')) return;
+    final ids = {for (final l in _maps(b['lines'])) _str(l['purchase_id'])}.where((x) => x.isNotEmpty && !_orders.containsKey(x)).toList();
+    if (ids.isEmpty && _labels != null) return;
+    try {
+      _labels ??= (await _auth.api.listSpendLabels()).labels;
+      for (final id in ids) {
+        final r = (await _auth.transport.send('GET', '/v1/stock/purchases/${Uri.encodeComponent(id)}') as Map).cast<String, dynamic>();
+        _orders[id] = (r['purchase'] as Map).cast<String, dynamic>();
+      }
+      if (mounted) setState(() {});
+    } on Object {
+      // The marks are a help; the bill is there without them.
+    }
+  }
+
+  /// A bill line's order line: same order, same seller item.
+  Map<String, dynamic>? _lineOf(Map<String, dynamic> l) =>
+      _maps(_orders[_str(l['purchase_id'])]?['lines']).where((x) => _str(x['seller_item_id']).isNotEmpty && x['seller_item_id'] == l['seller_item_id']).firstOrNull;
+
+  Widget? _mark(Map<String, dynamic> l) {
+    if (_labels == null) return null;
+    final o = _lineOf(l);
+    final label = o == null ? '' : (_labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '');
+    return LineMark(how: _str(o?['treatment']), label: label);
+  }
+
   Future<void> _load() async {
     try {
       final b = (await _auth.transport.send('GET', billPath(widget.id)) as Map).cast<String, dynamic>();
       if (mounted) setState(() => (_bill = b, _error = null));
+      await _loadMarks(b);
       if (_pay == null && _auth.can('invoice.manage') && canPay(b)) await _loadPay();
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
@@ -415,7 +451,7 @@ class _BillPageState extends State<BillPage> with Polling {
                 (
                   name: '${_str(l['description'])}${(l['quantity'] as num? ?? 1) != 1 ? ' × ${(l['quantity'] as num).toInt() == l['quantity'] ? (l['quantity'] as num).toInt() : l['quantity']}' : ''}',
                   sub: '',
-                  under: null,
+                  under: _mark(l),
                   amount: naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()),
                 ),
             ],

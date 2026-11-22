@@ -556,6 +556,21 @@ No server change. The words and requests in `web/src/lib/treat.ts`; the screens'
 - **Tests:** `lib/treat.test.ts` (15); `e2e/buying.spec.ts`: the sewing machine kept track of as Machines and the next order asking nothing, 60 nylon bags asked first and just recorded, an order's lines asked, changed with Remember and locked, the Suppliers page's change and forget, a label renamed and merged, at 390 and 360 in both themes. `price-lists`, `chat-buyer` and `link-orders` follow the question.
 - **Not done:** Things we have's page and U2b's chat question; a line's label merged since shows Not labelled on cards (the list reads labels kept).
 
+### As built: U2a (app)
+
+No server change. `mobile/api.txt` gains `setPurchaseLine`, `listItemLinks`, `putItemLink`, `deleteItemLink`, `listSupplierItems`, `putSupplierItem`, `deleteSupplierItem`, `listSpendLabels`, `makeSpendLabel`, `renameSpendLabel`, `mergeSpendLabel`. Look: `mobile-app-look.md`, Stock and supplies.
+
+- **The question** (`chat/treat_line.dart`: `Treat`, `TreatChoices`, `TreatQuestion`, `LabelPickSheet`, `NewStockItemSheet`). Stock items from `listStockItems`, labels from `listSpendLabels`; a label typed is made (`POST /v1/money/labels`) when chosen or saved; a new stock item through `POST /v1/stock/items` (`material` for No).
+- **Their price list and their shop** (`OrderSheet`'s review): each bag line is asked unless remembered (`item_links` by `seller_item_id`); unremembered lines are pre-selected on the phone (a stock item of the same name: Add to stock; a label sharing a word with the name) and sent with `treatment`, `stock_item_id`, `uses`, `label_id` (the first time is the confirmation); a remembered line sends nothing, or its fields when changed for this order, and with Remember for next time a `PUT /v1/item-links/{link}` first. The old "which of your items" choice, and making an item per line, are gone; keeping stock on Taskiem is asked only when a line goes to stock. Reorder finds their item by the last order's `seller_item_id`.
+- **Supplier-drafted** (`PurchasePage`'s Confirm it, `PurchaseView`'s Confirm their quote): `unconfirmed` lines asked, others compact; `confirm-proposed` with `lines` (a line changed or unconfirmed with its fields, else null).
+- **By hand** (and every open order, `PurchasePage`'s How each is treated): each line not yet received with the question; Confirm (unconfirmed) or Save sends `PATCH …/lines/{position}`, with `remember` from the switch; a line with anything received is shown locked.
+- **Answers:** 409 `track_ask` asks "Put N item on Things we have, one row each?" and sends again with `track_many`, or as Just record them; 422 `track_too_many` sets the line to Just record it and says why; 409 `line_locked` says so and reads the order again.
+- **Cards:** `LineMark` (label; To stock or Things we have) under each line of an order to a supplier and of a bill (a bill line matched to its order line by `purchase_id` and `seller_item_id`; unmatched, Not labelled).
+- **Suppliers:** What you buy from them (`chat/supplier_items.dart`): item links for a linked supplier, `supplier_items` otherwise; changed (`PUT`, `track_ask` asked) and forgotten (`DELETE`), for `storefront.manage`.
+- **Labels** (`chat/labels_page.dart`), Money › Settings for `invoice.manage`: by use, Rename (`PATCH`), Merge into another (`POST …/merge`).
+- **Tests:** `test/purchases_page_test.dart` (asked and confirmed with a label picked, a label made and a material made, an order by hand changed with track_ask, line_locked, Suppliers' items changed and forgotten), `test/order_sheet_test.dart` (asked on placing, a remembered item sends nothing, changed and remembered), `test/purchase_view_test.dart`, `test/labels_page_test.dart`; `test/treat_fixture.dart`; looks `labels`, `purchase-confirm`, `purchase-lines`, and `money` drawn again.
+- **Not done:** the question in chat's own order flows (`order … from …`, U2b); a suggested label not yet a label (from the server's `suggestions`) is offered in the picker but never pre-selected; uses other than 1 are kept, not asked.
+
 ## 12. Accept
 
 **The split**

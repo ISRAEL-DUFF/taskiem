@@ -15,6 +15,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
+import 'treat_fixture.dart';
 
 final _list = {
   'link': 'L1',
@@ -108,6 +109,8 @@ void main() {
     });
   });
 
+  final bodies = <String>[];
+
   Future<void> settle(WidgetTester t) async {
     for (var i = 0; i < 8; i++) {
       await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
@@ -131,14 +134,19 @@ void main() {
     final f = Fixture('chats');
     final sent = <String>[];
     var failing = failSend;
+    bodies.clear();
     http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
     final chats = ChatsData(
       f.auth(also: (req) async {
         final p = req.url.path;
+        final treat = treatAnswers(req);
+        if (treat != null) return treat;
         if (req.method == 'GET') {
           return switch (p) {
             '/v1/supplier-prices' => ok({'suppliers': [_list]}),
-            '/v1/item-links/L1' => ok({'item_links': <Object>[]}),
+            '/v1/item-links/L1' => ok({
+              'item_links': [memory('Oloyin beans', 'stock', sellerItem: 'beans', stockItemId: 'si-rice', stockItem: 'Rice', labelId: 'lb-pack', label: 'Packaging')],
+            }),
             '/v1/stock/suppliers' => ok({'suppliers': <Object>[]}),
             '/v1/stock/purchases' => ok({'purchases': purchases}),
             '/v1/stock' => ok({'keeps_stock': true, 'items': <Object>[]}),
@@ -147,12 +155,14 @@ void main() {
         }
         final key = req.headers['Idempotency-Key'] ?? req.headers['idempotency-key'];
         sent.add('${req.method} $p${key != null ? ' (once)' : ''}');
+        if (p == '/v1/supplier-prices/L1/order') bodies.add(req.body);
         if (p == '/v1/stock/suppliers') {
           // Made from the link alone: no number.
           expect(jsonDecode(req.body), {'name': 'Bayo Rice Mills', 'link_id': 'L1'});
           return ok({'supplier': {'id': 'S1'}});
         }
         if (p == '/v1/stock/items') return ok({'item': {'id': 'I1'}});
+        if (p == '/v1/item-links/L1') return ok({'item_links': <Object>[]});
         if (p == '/v1/supplier-prices/L1/order') return ok({'purchase': {'id': 'P1', 'reference': 'PO-1'}});
         if (p == '/v1/stock/purchases/P1/send') await Future<void>.delayed(sendTakes);
         if (p == '/v1/stock/purchases/P1/send' && failing) {
@@ -193,6 +203,15 @@ void main() {
     expect(find.text('Review your order'), findsOneWidget);
     expect(find.text('Bayo Rice Mills becomes one of your suppliers with this order. Orders and bills from them are kept with your other suppliers.'), findsOneWidget);
     expect(find.textContaining('phone number'), findsNothing, reason: 'a linked business needs no number');
+    // The question (§6): never ordered before, asked; Ofada rice is a
+    // stock item's name? No: just recorded, labelled by hand.
+    expect(find.text('How should we treat it?'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel(RegExp('^Keep track of it: Ofada rice')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel(RegExp('^Label for Ofada rice')));
+    await settle(t);
+    await t.tap(find.text('Packaging').first);
+    await settle(t);
     await t.tap(find.bySemanticsLabel('Place order'));
     await settle(t);
     // The send failed: tried again, the supplier, item and order are not made twice.
@@ -201,11 +220,11 @@ void main() {
     await settle(t);
     expect(sent, [
       'POST /v1/stock/suppliers (once)',
-      'POST /v1/stock/items (once)',
       'POST /v1/supplier-prices/L1/order (once)',
       'POST /v1/stock/purchases/P1/send',
       'POST /v1/stock/purchases/P1/send',
     ]);
+    expect(bodies.single, '{"lines":[{"seller_item_id":"rice","quantity":2,"treatment":"track","label_id":"lb-pack"}],"note":""}');
     expect(find.text('Order sent to Bayo Rice Mills: ₦90,000'), findsOneWidget);
     await t.pump(const Duration(seconds: 2));
     await t.pumpAndSettle();
@@ -289,6 +308,37 @@ void main() {
     await t.pump();
     expect(find.text('4'), findsWidgets);
     expect(find.text('4 sacks in 1 size or colour'), findsOneWidget);
+  });
+
+  testWidgets('a remembered item asks nothing', (t) async {
+    await open(t, start: const OrderStart(itemId: 'beans'));
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await settle(t);
+    expect(find.text('How should we treat it?'), findsNothing);
+    expect(find.text('Add to stock: Rice · Packaging'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Place order'));
+    await settle(t);
+    expect(bodies.single, '{"lines":[{"seller_item_id":"beans","quantity":1}],"note":""}', reason: 'as remembered: nothing said');
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+  });
+
+  testWidgets('a remembered item changed for this order, and remembered for next time', (t) async {
+    final sent = await open(t, start: const OrderStart(itemId: 'beans'));
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Change how Oloyin beans is treated'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel(RegExp('^Just record it: Oloyin beans')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Remember for next time').last);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Place order'));
+    await settle(t);
+    expect(bodies.single, '{"lines":[{"seller_item_id":"beans","quantity":1,"treatment":"record","label_id":"lb-pack"}],"note":""}');
+    expect(sent, contains('PUT /v1/item-links/L1'));
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
   });
 
   testWidgets('closed while the order is sending: it is still said it was sent', (t) async {
