@@ -196,6 +196,8 @@ func rowLabel(in payIn) string {
 		return strings.TrimSpace(in.BankName + " " + saved.Masked(in.AccountNumber))
 	case in.RiderID != nil:
 		return "a rider"
+	case in.StaffID != nil:
+		return "a staff member"
 	case in.Mine:
 		return "your own account"
 	}
@@ -212,23 +214,23 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 		if err := tx.QueryRow(ctx, `SELECT title, kind FROM payment_batches WHERE id = $1`, id).Scan(&title, &kind); err != nil {
 			return err
 		}
-		list, err := tx.Query(ctx, `SELECT saved_id, rider_id, personal, bank_name, account_sealed, amount_kobo, purpose, purpose_note, note, status
+		list, err := tx.Query(ctx, `SELECT saved_id, rider_id, staff_id, personal, bank_name, account_sealed, amount_kobo, purpose, purpose_note, note, status
 			FROM payments WHERE batch_id = $1 AND (NOT personal OR $2) ORDER BY created_at, id`, id, owner)
 		if err != nil {
 			return err
 		}
 		type raw struct {
-			saved, rider      *uuid.UUID
-			personal          bool
-			bank              string
-			sealed            map[string]any
-			amount            int64
-			purpose, pn, note string
-			status            string
+			saved, rider, staff *uuid.UUID
+			personal            bool
+			bank                string
+			sealed              map[string]any
+			amount              int64
+			purpose, pn, note   string
+			status              string
 		}
 		got, err := pgx.CollectRows(list, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
-			return x, r.Scan(&x.saved, &x.rider, &x.personal, &x.bank, &x.sealed, &x.amount, &x.purpose, &x.pn, &x.note, &x.status)
+			return x, r.Scan(&x.saved, &x.rider, &x.staff, &x.personal, &x.bank, &x.sealed, &x.amount, &x.purpose, &x.pn, &x.note, &x.status)
 		})
 		if err != nil {
 			return err
@@ -237,8 +239,12 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 			if keep != nil && !slices.Contains(keep, x.status) {
 				continue
 			}
-			in := payIn{SavedID: x.saved, RiderID: x.rider, Mine: x.personal, AmountKobo: x.amount, Purpose: x.purpose, PurposeNote: x.pn, Note: x.note}
-			if x.saved == nil && x.rider == nil && !x.personal {
+			in := payIn{SavedID: x.saved, RiderID: x.rider, StaffID: x.staff, Mine: x.personal, AmountKobo: x.amount, Purpose: x.purpose, PurposeNote: x.pn, Note: x.note}
+			if x.staff != nil {
+				// Paid again to whichever account they are linked to now.
+				in.SavedID = nil
+			}
+			if x.saved == nil && x.rider == nil && x.staff == nil && !x.personal {
 				v, err := s.Store.PII.OpenTx(ctx, tx, tenant, x.sealed)
 				if err != nil {
 					return err

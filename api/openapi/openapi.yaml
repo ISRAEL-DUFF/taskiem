@@ -6307,6 +6307,10 @@ paths:
                   format: uuid
                 payee:
                   type: string
+                staff_id:
+                  type: string
+                  format: uuid
+                  description: A staff member, paid to the saved account linked to them (payments outside payroll). 409 `no_bank` when none is linked.
                 rider_id:
                   type: string
                   format: uuid
@@ -30210,6 +30214,62 @@ paths:
                     type: boolean
                   profile:
                     $ref: '#/components/schemas/StaffProfile'
+                  pay_account:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/StaffPayAccount'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/pay-account:
+    put:
+      operationId: putStaffPayAccount
+      tags:
+      - Account
+      summary: Where a staff member is paid, outside payroll
+      description: 'An owner links one of the business''s saved bank accounts to a staff member (`saved_id`; null unlinks it), with a passkey or authenticator code asked for `staff.account` on the staff member: **Pay** on them goes there (an advance, expenses back; payroll is Payrolla''s). No account number is kept on the staff member. 403 `owner_only` for anyone else; 400 for a saved thing that is not a bank account; 404 for one not the business''s.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [saved_id]
+              properties:
+                saved_id:
+                  type: [string, 'null']
+                  format: uuid
+                passkey:
+                  type: object
+                totp:
+                  type: string
+      responses:
+        '200':
+          description: Linked (or unlinked)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pay_account]
+                properties:
+                  pay_account:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/StaffPayAccount'
         default:
           $ref: '#/components/responses/Error'
   /v1/staff/{user}/profile:
@@ -43404,6 +43464,7 @@ components:
           - money.pay
           - money.pay.approve
           - money.pay.batch
+          - staff.account
         target:
           type: string
           maxLength: 200
@@ -45411,6 +45472,10 @@ components:
         saved_id:
           type: [string, 'null']
           format: uuid
+        staff_id:
+          type: [string, 'null']
+          format: uuid
+          description: The staff member paid, when it was one
         rider_id:
           type: [string, 'null']
           format: uuid
@@ -45522,6 +45587,19 @@ components:
               payment: {type: string, format: uuid}
               code: {type: string}
               problem: {type: string}
+    StaffPayAccount:
+      type: object
+      description: The saved account payments to a staff member go to (outside payroll), masked
+      required: [saved_id, name, title, bank_name, last4]
+      properties:
+        saved_id: {type: string, format: uuid}
+        name: {type: string}
+        title: {type: string}
+        bank_name: {type: string}
+        last4: {type: string}
+        account_name: {type: string}
+        linked_by: {type: string}
+        linked_at: {type: string, format: date-time}
     PayLimit:
       type: object
       additionalProperties: false

@@ -880,6 +880,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/staff/{user}/figures", s.getStaffFigures)
 			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
 			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/pay-account", s.putStaffAccount)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

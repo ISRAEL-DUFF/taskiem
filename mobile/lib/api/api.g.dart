@@ -13834,7 +13834,7 @@ class ListPaymentsResponse {
 }
 
 class Payment {
-  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, required this.startedFrom, required this.status});
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, this.staffId, required this.startedFrom, required this.status});
 
   /// The account number masked (••6789).
   final String account;
@@ -13870,6 +13870,8 @@ class Payment {
   final Object? riderId;
   final Object? runId;
   final Object? savedId;
+  /// The staff member paid, when it was one
+  final Object? staffId;
   final String startedFrom;
   final String status;
 
@@ -13899,6 +13901,7 @@ class Payment {
         riderId: j['rider_id'],
         runId: j['run_id'],
         savedId: j['saved_id'],
+        staffId: j['staff_id'],
         startedFrom: j['started_from'] as String,
         status: j['status'] as String,
       );
@@ -13929,6 +13932,7 @@ class Payment {
         'rider_id': ?riderId,
         'run_id': ?runId,
         'saved_id': ?savedId,
+        'staff_id': ?staffId,
         'started_from': startedFrom,
         'status': status,
       };
@@ -14130,7 +14134,7 @@ class PayNameCheckResponseBanksItem {
 }
 
 class CreatePaymentRequest {
-  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId});
+  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.staffId});
 
   /// An account not saved (pay.account), with bank_name; its name is checked
   /// with the bank as it is prepared. 409 `name_not_checked` when the bank did
@@ -14148,6 +14152,9 @@ class CreatePaymentRequest {
   /// 409 `no_bank` when none is kept.
   final String? riderId;
   final String? savedId;
+  /// A staff member, paid to the saved account linked to them (payments outside
+  /// payroll). 409 `no_bank` when none is linked.
+  final String? staffId;
 
   factory CreatePaymentRequest.fromJson(Map<String, dynamic> j) => CreatePaymentRequest(
         accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
@@ -14161,6 +14168,7 @@ class CreatePaymentRequest {
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
         riderId: j['rider_id'] == null ? null : j['rider_id'] as String,
         savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
+        staffId: j['staff_id'] == null ? null : j['staff_id'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -14175,6 +14183,7 @@ class CreatePaymentRequest {
         'purpose_note': ?purposeNote,
         'rider_id': ?riderId,
         'saved_id': ?savedId,
+        'staff_id': ?staffId,
       };
 }
 

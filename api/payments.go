@@ -105,17 +105,19 @@ type payment struct {
 	// paid in, when it was.
 	RiderID *uuid.UUID `json:"rider_id"`
 	BatchID *uuid.UUID `json:"batch_id"`
+	// StaffID: the staff member paid, when it was one.
+	StaffID *uuid.UUID `json:"staff_id"`
 }
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
-	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id`
+	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
 	var last4 string
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
-		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID)
+		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID)
 	x.Account = "••" + last4
 	return x, err
 }
@@ -130,6 +132,8 @@ type payIn struct {
 	// RiderID: one of the business's riders, to the bank account kept for
 	// their payouts.
 	RiderID *uuid.UUID `json:"rider_id"`
+	// StaffID: a staff member, to the saved account linked to them.
+	StaffID *uuid.UUID `json:"staff_id"`
 	// AccountNumber and BankName: an account not saved (pay.account),
 	// its name checked with the bank as it is prepared.
 	AccountNumber string `json:"account_number"`
@@ -191,6 +195,7 @@ func (s *Server) payRail(ctx context.Context, tenant uuid.UUID) (*invoicing.Rail
 type payeeAccount struct {
 	saved    *uuid.UUID
 	rider    *uuid.UUID
+	staff    *uuid.UUID
 	personal bool
 	title    string
 	bank     saved.BankAccount
@@ -200,6 +205,24 @@ type payeeAccount struct {
 // payeeOf reads the saved account a payment is made to: the business's,
 // by id or name; or, for an owner, their own.
 func (s *Server) payeeOf(ctx context.Context, tenant, person uuid.UUID, owner bool, in payIn) (payeeAccount, error) {
+	if in.StaffID != nil {
+		if in.SavedID != nil || in.Payee != "" || in.Mine || in.AccountNumber != "" || in.RiderID != nil {
+			return payeeAccount{}, refusePay(http.StatusBadRequest, "payee", "Pay a staff member, a rider, a saved account or an account number: one of them.")
+		}
+		var id *uuid.UUID
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			id, err = s.staffPayee(ctx, tx, tenant, *in.StaffID)
+			return err
+		}); err != nil {
+			return payeeAccount{}, err
+		}
+		staff := *in.StaffID
+		in.SavedID, in.StaffID = id, nil
+		out, err := s.payeeOf(ctx, tenant, person, owner, in)
+		out.staff = &staff
+		return out, err
+	}
 	if in.RiderID != nil {
 		if in.SavedID != nil || in.Payee != "" || in.Mine || in.AccountNumber != "" {
 			return payeeAccount{}, refusePay(http.StatusBadRequest, "payee", "Pay a rider, a saved account or an account number: one of them.")
@@ -416,11 +439,15 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		// The account changed since this payee was last paid: the owner's
 		// OK, whoever pays.
 		changed := false
-		if payee.saved != nil || payee.rider != nil {
+		if payee.saved != nil || payee.rider != nil || payee.staff != nil {
+			// The payee's last payment: to the staff member (whichever
+			// account they were linked to), else the rider, else the saved
+			// account.
 			var last map[string]any
 			var lastCode string
-			err := tx.QueryRow(ctx, `SELECT account_sealed, bank_code FROM payments WHERE tenant_id = $1 AND (saved_id = $2 OR rider_id = $3)
-				AND status IN ('paid', 'sending', 'unknown') ORDER BY created_at DESC LIMIT 1`, tenant, payee.saved, payee.rider).Scan(&last, &lastCode)
+			err := tx.QueryRow(ctx, `SELECT account_sealed, bank_code FROM payments WHERE tenant_id = $1
+				AND CASE WHEN $4::uuid IS NOT NULL THEN staff_id = $4 WHEN $3::uuid IS NOT NULL THEN rider_id = $3 ELSE saved_id = $2 END
+				AND status IN ('paid', 'sending', 'unknown') ORDER BY created_at DESC LIMIT 1`, tenant, payee.saved, payee.rider, payee.staff).Scan(&last, &lastCode)
 			switch {
 			case errors.Is(err, pgx.ErrNoRows):
 			case err != nil:
@@ -439,10 +466,10 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		}
 		id := uuid.Must(uuid.NewV7())
 		row := tx.QueryRow(ctx, `INSERT INTO payments (id, tenant_id, saved_id, personal, payee_title, bank_name, bank_code, account_sealed, last4, account_name,
-			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING `+paymentCols,
+			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING `+paymentCols,
 			id, tenant, payee.saved, payee.personal, payee.title, payee.bank.BankName, code, sealed, saved.Last4(payee.bank.AccountNumber), payee.checked,
-			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider)
+			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff)
 		if x, err = scanPayment(row); err != nil {
 			return err
 		}
