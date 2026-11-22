@@ -30,7 +30,7 @@ import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
 import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
-import { PayChip, PayFromMessages } from "./PayChip";
+import { PayChip, PayFromMessages, PhotoAccountItems } from "./PayChip";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
@@ -711,6 +711,13 @@ export function CustomerPane({
                       >
                         {words ? "Save the file as…" : "Save as…"}
                       </PopItem>
+                    )}
+                    {file?.kind === "photo" && (
+                      <PhotoAccountItems
+                        url={`/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`}
+                        close={close}
+                        saveAccount={saveAs.fromPhoto}
+                      />
                     )}
                   </>
                 ),

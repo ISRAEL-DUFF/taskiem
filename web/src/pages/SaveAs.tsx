@@ -7,6 +7,7 @@ import { KIND_WORDS, SAVED_KINDS, kindChoice, savedKindsBase, type FileMeta, typ
 import { PopItem } from "./BubbleShell";
 import { AccountSheet, ThingSheet } from "./Saved";
 import { CustomSheet, FileSheet, uploadSaved } from "./SavedKinds";
+import { readChatPhoto } from "./PhotoRead";
 
 // Saving from a message, and from the picker (saved objects S1, part 4;
 // saved-objects §9): Save as… on a message reads its words (POST
@@ -67,6 +68,28 @@ export function useSaveAs({ business = false, onSaved }: { business?: boolean; o
       (r) => setStart(readingCard(r)),
       () => setStart(readingCard({ kind: "text", title: "", details: { body: text } })),
     );
+
+  /** Save the account on a photo in a chat (reading account details from
+   * photos, I2): the photo fetched as the chat shows it and read on this
+   * device, its words read by Taskiem (from: "photo"), and the sheet for
+   * an account opened with them. No account in it: said. */
+  const fromPhoto = (url: string) =>
+    void (async () => {
+      const words = await readChatPhoto(url);
+      if (!words) return;
+      let r: SavedReading;
+      try {
+        r = await post<SavedReading>("/v1/me/saved/read", { text: words, from: "photo" });
+      } catch (e) {
+        toast(e instanceof Error ? e.message : "That photo could not be read just now. Try again.", "error");
+        return;
+      }
+      if (r.kind !== "bank_account" || !String(r.details?.account_number ?? "")) {
+        toast("No account number in that photo.", "info");
+        return;
+      }
+      setStart(readingCard(r));
+    })();
 
   /** Save "mum"… in the picker: what kind, then its sheet. */
   const named = (name: string) => {
@@ -170,7 +193,7 @@ export function useSaveAs({ business = false, onSaved }: { business?: boolean; o
       )}
     </>
   );
-  return { fromWords, fromFile, fileBusy, named, node };
+  return { fromWords, fromFile, fromPhoto, fileBusy, named, node };
 }
 
 /** The message menu's Save as…: its words to save. */

@@ -18,9 +18,41 @@ import {
   saveAsProblem,
   saveAsShown,
   saveAsStart,
+  photoFill,
+  photoOffered,
   type PayReading,
 } from "./paymessage";
-import { payAmountKobo } from "./payments";
+import { PAY_FIELDS, payAmountKobo } from "./payments";
+
+describe("from a photo", () => {
+  const read: PayReading = { found: true, account_number: "0123456789", bank_name: "GTBank", amount_kobo: 4_500_000, name: "Chidi Okeke" };
+
+  it("says where the name was read when the bank's differs", () => {
+    expect(nameWarning("Chidi Okafor", "CHIDI OKEKE", "photo")).toBe("The photo says Chidi Okafor; the bank says CHIDI OKEKE.");
+    expect(nameWarning("Chidi Okeke", "OKEKE CHIDI", "photo")).toBeNull();
+  });
+
+  it("is offered on a sheet opened empty that pays an account or a saved one", () => {
+    expect(photoOffered(PAY_FIELDS.account, {})).toBe(true);
+    expect(photoOffered(PAY_FIELDS.person, {})).toBe(true);
+    expect(photoOffered(PAY_FIELDS.account, { number: "0123456789" })).toBe(false);
+    expect(photoOffered(PAY_FIELDS.person.filter((f) => f.key !== "who"), {})).toBe(false);
+  });
+
+  it("fills an account number's sheet as a message does: number, bank, amount", () => {
+    expect(photoFill(PAY_FIELDS.account, read)).toEqual({ number: "0123456789", bank: "GTBank", amount: "45,000" });
+    // A saved account is still paid by its number on this sheet.
+    expect(photoFill(PAY_FIELDS.account, { ...read, payee: "chidi" })).toEqual({ number: "0123456789", bank: "GTBank", amount: "45,000" });
+    // No bank read: the likely banks are offered by the sheet.
+    expect(photoFill(PAY_FIELDS.account, { found: true, account_number: "0123456789" })).toEqual({ number: "0123456789" });
+  });
+
+  it("fills a saved account's sheet by its @name, and nothing for an account not saved", () => {
+    expect(photoFill(PAY_FIELDS.person, { ...read, payee: "chidi" })).toEqual({ who: "@chidi", amount: "45,000" });
+    expect(photoFill(PAY_FIELDS.person, read)).toBeNull();
+    expect(photoFill(PAY_FIELDS.account, { found: false })).toBeNull();
+  });
+});
 
 describe("a message that may hold an account number", () => {
   it("finds a run of 10 digits, alone or in groups", () => {

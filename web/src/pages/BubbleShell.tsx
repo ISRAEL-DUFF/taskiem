@@ -353,7 +353,7 @@ export function PopItem({
 }: {
   icon: string;
   danger?: boolean;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   children: ReactNode;
   /** Not now (something is already under way). */
   disabled?: boolean;

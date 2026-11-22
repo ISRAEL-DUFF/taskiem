@@ -19,10 +19,17 @@ import { naira } from "../lib/invoices";
 import { BANK_SEARCH_FROM, filterBanks, type BankList } from "../lib/saved";
 import {
   answerWords,
+  askToSave,
   nameWarning,
+  noAccountInPhoto,
+  photoFill,
+  photoOffered,
   type NameAnswer,
-
+  type PayReading,
+  type SaidIn,
 } from "../lib/paymessage";
+import { toast } from "../toast";
+import { PhotoReadButton, readingPhoto, readPhotoWords } from "./PhotoRead";
 import {
   accountDigits,
   outcomeWords,
@@ -257,6 +264,7 @@ export function BankPicker({
   onChange,
   account = "",
   expectName,
+  saidIn,
   onList,
 }: {
   label: string;
@@ -266,6 +274,8 @@ export function BankPicker({
   account?: string;
   /** The name the message gave, to compare with the bank's. */
   expectName?: string;
+  /** Where that name was read: a message, or a photo. */
+  saidIn?: SaidIn;
   /** The banks, once read (null when they cannot be: the bank typed), for
    * what saves a bank's code with the name (Save as…). */
   onList?: (l: BankList | null) => void;
@@ -338,7 +348,7 @@ export function BankPicker({
   };
   const picked = answers?.find((a) => a.bank_name === value);
   const differs = picked?.account_name
-    ? nameWarning(expectName, picked.account_name)
+    ? nameWarning(expectName, picked.account_name, saidIn)
     : null;
   const full = all || likely.length === 0 || (!!value && !likely.some((b) => b.name === value));
   const shown = filterBanks(list?.banks ?? [], search);
@@ -488,6 +498,7 @@ export function PayFieldInput({
   shown,
   account,
   expectName,
+  saidIn,
 }: {
   f: PayField;
   value: string;
@@ -499,6 +510,8 @@ export function PayFieldInput({
   account?: string;
   /** For the bank: the name a message gave, to compare with the bank's. */
   expectName?: string;
+  /** Where that name was read: a message, or a photo. */
+  saidIn?: SaidIn;
 }) {
   const label = f.optional ? `${f.label} (optional)` : f.label;
   const problem = shown
@@ -564,6 +577,7 @@ export function PayFieldInput({
           onChange={set}
           account={account}
           expectName={expectName}
+          saidIn={saidIn}
         />
       );
     case "money":
@@ -654,7 +668,8 @@ export function PaySheet({
   onClose,
   onPaid,
   lead,
-  expectName,
+  expectName: said,
+  saidIn: saidWhere = "message",
 }: {
   title: string;
   actionId: string;
@@ -670,8 +685,19 @@ export function PaySheet({
   lead?: ReactNode;
   /** The name the message gave: said in amber when the bank's differs. */
   expectName?: string;
+  /** Where that name was read: a message, or a photo. */
+  saidIn?: SaidIn;
 }) {
+  const [start, setStart] = useState<Record<string, string>>(initial);
   const [values, setValues] = useState<Record<string, string>>(initial);
+  // The name read for the account, and where: a photo read here replaces
+  // the message's.
+  const [expectName, setExpectName] = useState(said);
+  const [saidIn, setSaidIn] = useState<SaidIn>(saidWhere);
+  // Filled from a photo: the fields start again from what it says.
+  const [filled, setFilled] = useState(0);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [offerPhoto] = useState(() => photoOffered(fields, initial));
   const [choices, setChoices] = useState<Record<string, string[]>>({});
   const [tried, setTried] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -738,6 +764,39 @@ export function PaySheet({
   };
   const amount = payAmountKobo(values.amount ?? "");
 
+  // From a photo (reading account details from photos, I2): read on this
+  // device, the words read by Taskiem (from: "photo"), and the form
+  // filled in as the chip under a message fills it.
+  const fromPhoto = async (photo: File) => {
+    setPhotoBusy(true);
+    setError(undefined);
+    try {
+      const words = await readPhotoWords(photo);
+      if (!words) return;
+      const r = await post<PayReading>("/v1/payments/read", {
+        text: words,
+        from: "photo",
+      });
+      if (!r.found) return toast(noAccountInPhoto, "info");
+      const fill = photoFill(fields, r);
+      if (!fill) return toast(askToSave, "info");
+      const next = { ...values, ...fill };
+      // A new number: the bank it is with is chosen again.
+      for (const f of fields)
+        if (f.kind === "bank" && !fill[f.key]) next[f.key] = "";
+      setStart(next);
+      setValues(next);
+      setExpectName(r.name?.trim() || undefined);
+      setSaidIn("photo");
+      setFilled((n) => n + 1);
+      toast("Filled in from the photo. Check it before you pay.", "success");
+    } catch (e) {
+      setError(e);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   if (sent)
     return (
       <Sheet title={title} from={rect} onClose={onClose} testid="pay-sheet">
@@ -764,13 +823,13 @@ export function PaySheet({
       >
         <div className="tk-form-body">
           <PayCheck x={prepared} />
-          {nameWarning(expectName, prepared.account_name) && (
+          {nameWarning(expectName, prepared.account_name, saidIn) && (
             <div
               className="pay-warn warn"
               role="note"
               data-testid="pay-name-differs"
             >
-              {nameWarning(expectName, prepared.account_name)}
+              {nameWarning(expectName, prepared.account_name, saidIn)}
             </div>
           )}
           {pay.view}
@@ -813,16 +872,29 @@ export function PaySheet({
       >
         <fieldset className="tk-sheet-list tk-form-body">
           {lead}
+          {offerPhoto && (
+            <PhotoReadButton
+              label="From a photo"
+              describe="Fill this in from a photo of the account details. Read on this device, not sent."
+              busy={photoBusy}
+              disabled={preparing}
+              onPhoto={(p) => {
+                if (!readingPhoto()) void fromPhoto(p);
+              }}
+              testid="pay-photo"
+            />
+          )}
           {fields.map((f) => (
             <PayFieldInput
-              key={f.key}
+              key={`${f.key}/${filled}`}
               f={f}
               value={values[f.key] ?? ""}
               offered={f.choices ?? choices[f.key] ?? []}
               set={(v) => set(f.key, v)}
-              shown={tried || (values[f.key] ?? "") !== (initial[f.key] ?? "")}
+              shown={tried || (values[f.key] ?? "") !== (start[f.key] ?? "")}
               account={values.number}
               expectName={expectName}
+              saidIn={saidIn}
             />
           ))}
           {other && (

@@ -7,7 +7,7 @@
 // target batch:<id>), and a row per person filling in as each goes, with
 // paying the failed ones again and, for owners, one OK for all that wait.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Link,
   useLocation,
@@ -33,6 +33,7 @@ import {
   useLoad,
 } from "../ui";
 import { naira } from "../lib/invoices";
+import { PhotoReadButton, readingPhoto, readPhotoWords } from "./PhotoRead";
 import type { PayLine } from "../lib/dispatch";
 import type { SavedList, SavedThing } from "../lib/saved";
 import {
@@ -122,6 +123,22 @@ export function PayListPage() {
   >();
   const [tried, setTried] = useState(false);
   const [news, setNews] = useState<string>();
+  // From a photo of a list: its words, read on this device, put in the
+  // paste box and read as a pasted list is (from: "photo").
+  const [photoWords, setPhotoWords] = useState<string>();
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fromPhoto = async (photo: File) => {
+    if (readingPhoto()) return;
+    setPhotoBusy(true);
+    try {
+      const words = await readPhotoWords(photo);
+      if (!words) return;
+      setPhotoWords(words);
+      setAdding("paste");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
   const batch = useMakeBatch();
   const { can } = useAuth();
   // From Riders > Pay: each rider with a bank account and something due.
@@ -222,6 +239,13 @@ export function PayListPage() {
             Paste a list
           </button>
         </div>
+        <PhotoReadButton
+          label="From a photo of a list"
+          describe="Add people from a photo of a list. Read on this device, not sent."
+          busy={photoBusy}
+          onPhoto={(p) => void fromPhoto(p)}
+          testid="add-photo"
+        />
         {news && (
           <div className="notice" role="status">
             {news}
@@ -302,7 +326,18 @@ export function PayListPage() {
         <PickStaff onClose={() => setAdding(undefined)} onAdd={add} />
       )}
       {adding === "paste" && (
-        <PasteList onClose={() => setAdding(undefined)} onAdd={add} />
+        <PasteList
+          key={photoWords ?? ""}
+          photoWords={photoWords}
+          onClose={() => {
+            setAdding(undefined);
+            setPhotoWords(undefined);
+          }}
+          onAdd={(r) => {
+            setPhotoWords(undefined);
+            add(r);
+          }}
+        />
       )}
     </>
   );
@@ -602,22 +637,37 @@ function PickStaff({
 function PasteList({
   onClose,
   onAdd,
+  photoWords,
 }: {
   onClose: () => void;
   onAdd: (rows: DraftRow[]) => void;
+  /** The words of a photo of a list, read on this device: put in the box
+   * and read at once, with from: "photo" while the box holds them. */
+  photoWords?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(photoWords ?? "");
   const act = useAction();
   const lines = text.split("\n").filter((l) => l.trim()).length;
-  const read = () =>
+  const fromPhoto = !!photoWords && !!text.trim();
+  const read = (words = text) =>
     act.run(async () => {
       const r = await post<{ lines: BatchLine[] }>("/v1/payment-batches/read", {
-        text,
+        text: words,
+        ...(fromPhoto ? { from: "photo" } : {}),
       });
       onAdd(r.lines.map(rowFromLine));
     }, false);
+  // A photo's words: read as soon as they are in the box; what cannot be
+  // read is shown in the list to fix, as a pasted line's is.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!photoWords || started.current) return;
+    started.current = true;
+    if (photoWords.split("\n").filter((l) => l.trim()).length <= MAX_ROWS)
+      void read(photoWords);
+  }, [photoWords]);
   return (
-    <Modal title="Paste a list" onClose={onClose}>
+    <Modal title={photoWords ? "A photo of a list" : "Paste a list"} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { PayFromMessages, PhotoAccountItems } from "./PayChip";
 import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
@@ -634,6 +635,9 @@ export function PersonChatPage() {
   const openTool = (key: PersonTool, from?: DOMRect, extra?: { item?: string; service?: string }) => setTool({ key, from, ...extra });
 
   return (
+    // A photo's Pay this account, for a business's people who may pay (the
+    // app's my_chat.dart): the chip's sheet, though no chip shows here.
+    <PayFromMessages>
     <section className="chat-pane person-pane" aria-label={`Conversation with ${name}`} data-testid="person-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
       <h1 className="sr-only">{c ? `Chat with ${c.name}` : "Chat"}</h1>
       <ChatHead
@@ -747,6 +751,7 @@ export function PersonChatPage() {
                           {words ? "Save the file as…" : "Save as…"}
                         </PopItem>
                       )}
+                      {file?.kind === "photo" && <PhotoAccountItems url={personFileURL(id, m.id)} close={close} saveAccount={saveAs.fromPhoto} />}
                     </>
                   ),
                 });
@@ -936,6 +941,7 @@ export function PersonChatPage() {
       {sure.node}
       {saveAs.node}
     </section>
+    </PayFromMessages>
   );
 }
 

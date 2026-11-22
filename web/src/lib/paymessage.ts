@@ -146,10 +146,51 @@ export function namesDiffer(said: string | undefined, bank: string | undefined |
   return !within(a, b) && !within(b, a);
 }
 
+/** Where the name to compare was read: a chat message, or a photo read
+ * on this device (reading account details from photos, I2). */
+export type SaidIn = "message" | "photo";
+
 /** The amber words when they differ, or null. */
-export function nameWarning(said: string | undefined, bank: string | undefined | null): string | null {
+export function nameWarning(said: string | undefined, bank: string | undefined | null, saidIn: SaidIn = "message"): string | null {
   if (!said || !bank || !namesDiffer(said, bank)) return null;
-  return `The message says ${said.trim()}; the bank says ${bank.trim()}.`;
+  return `The ${saidIn} says ${said.trim()}; the bank says ${bank.trim()}.`;
+}
+
+// --- From a photo (reading account details from photos, I2; the app's
+// pay_sheet.dart and pay_chip.dart): the words a photo holds, read on
+// this device, are read by POST /v1/payments/read with from: "photo",
+// and fill the sheet as a message's words do.
+
+/** Said when a photo holds no account number. */
+export const noAccountInPhoto = "No account number in that photo. Type it in.";
+
+/** Said when staff are shown an account not saved yet. */
+export const askToSave = "Ask an owner to save this account: then you can pay it.";
+
+/** Whether a Pay sheet offers "From a photo": opened empty, for an account
+ * number or a saved account. */
+export function photoOffered(fields: PayField[], initial: Record<string, string>): boolean {
+  return Object.values(initial).every((v) => !v) && fields.some((f) => f.kind === "account" || f.kind === "payee");
+}
+
+/** A photo's reading as this sheet's values, filled as messageFill fills
+ * the sheet from a message: the number, bank and amount on a sheet that
+ * pays an account number; the saved account by its @name and the amount
+ * on one that pays saved accounts. Null when this sheet cannot pay it
+ * (it pays saved accounts, and the account is not saved). */
+export function photoFill(fields: PayField[], r: PayReading): Record<string, string> | null {
+  if (!r.found || !r.account_number) return null;
+  const byNumber = fields.some((f) => f.kind === "account");
+  const saved = !!(r.payee ?? "").trim();
+  if (!byNumber && !(saved && fields.some((f) => f.kind === "payee"))) return null;
+  const m = messageFill(byNumber ? { ...r, payee: undefined } : r);
+  const kindOf: Record<string, PayField["kind"]> = { number: "account", bank: "bank", amount: "money", who: "payee" };
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(m.initial)) {
+    const f = fields.find((x) => x.kind === kindOf[k]);
+    if (f && v) out[f.key] = v;
+  }
+  return out;
 }
 
 /** One bank's answer in a few words: "GTBank: Chidi Okeke", "Access Bank:

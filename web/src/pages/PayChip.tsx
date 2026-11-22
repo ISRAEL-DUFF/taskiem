@@ -12,6 +12,9 @@
 // as…" keeps an account not saved yet by a name to call them by
 // (SaveAsSheet); saved, the chip says that @name and Pay goes by it.
 // Staff who may save see it in place of "Ask an owner to save".
+// A photo in the chat has "Pay this account" in its menu (reading account
+// details from photos, I2; usePayFromPhoto): the photo read on this
+// device, its words read with from: "photo", and the same sheet opened.
 
 import {
   createContext,
@@ -26,13 +29,19 @@ import { post } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import {
+  askToSave,
   chipFor,
   chipWords,
   mayHoldAccount,
   messageFill,
+  noAccountInPhoto,
   saveAsShown,
   type PayReading,
+  type SaidIn,
 } from "../lib/paymessage";
+import { toast } from "../toast";
+import { readChatPhoto } from "./PhotoRead";
+import { PopItem } from "./BubbleShell";
 import { PaySheet } from "./PaySheet";
 import { SaveAsSheet } from "./SaveAsSheet";
 
@@ -54,7 +63,7 @@ interface PayFrom {
   mayKeep: boolean;
   /** Changes when a payment is made, so chips read again. */
   paidAt: number;
-  open: (r: PayReading, text: string, from: DOMRect) => void;
+  open: (r: PayReading, text: string, from: DOMRect, saidIn?: SaidIn) => void;
   keep: (r: PayReading, text: string, from: DOMRect) => void;
 }
 
@@ -69,6 +78,7 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
     r: PayReading;
     text: string;
     from: DOMRect;
+    saidIn?: SaidIn;
   }>();
   const [keeping, setKeeping] = useState<{
     r: PayReading;
@@ -77,8 +87,8 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
   }>();
   const [paidAt, setPaidAt] = useState(0);
   const open = useCallback(
-    (r: PayReading, text: string, from: DOMRect) =>
-      setPaying({ r, text, from }),
+    (r: PayReading, text: string, from: DOMRect, saidIn?: SaidIn) =>
+      setPaying({ r, text, from, saidIn }),
     [],
   );
   const keep = useCallback(
@@ -115,6 +125,7 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
           fields={fill.fields}
           initial={fill.initial}
           expectName={fill.expectName}
+          saidIn={paying.saidIn}
           from="chat"
           rect={paying.from}
           onClose={() => setPaying(undefined)}
@@ -125,6 +136,72 @@ export function PayFromMessages({ children }: { children: ReactNode }) {
         />
       )}
     </Ctx.Provider>
+  );
+}
+
+/** "Pay this account" on a photo in a chat, for those the chip shows to
+ * (inside PayFromMessages, with money.pay); null for anyone else. Given
+ * where the chat fetches the photo: fetched as the chat shows it, read on
+ * this device (never sent to be read), its words read by Taskiem (from:
+ * "photo"), and the Pay sheet opened filled in as the chip opens it. */
+export function usePayFromPhoto(): ((url: string, from: DOMRect) => void) | null {
+  const ctx = useContext(Ctx);
+  if (!ctx) return null;
+  return (url, from) =>
+    void (async () => {
+      const words = await readChatPhoto(url);
+      if (!words) return;
+      let r: PayReading;
+      try {
+        r = await post<PayReading>("/v1/payments/read", {
+          text: words,
+          from: "photo",
+        });
+      } catch (e) {
+        toast(
+          e instanceof Error ? e.message : "That photo could not be read just now. Try again.",
+          "error",
+        );
+        return;
+      }
+      const kind = chipFor(r, ctx.owner);
+      if (!kind) return toast(noAccountInPhoto, "info");
+      if (kind === "ask") return toast(askToSave, "info");
+      ctx.open(r, words, from, "photo");
+    })();
+}
+
+/** A photo's menu in a chat (the app's saveAsItems): Pay this account,
+ * for those the chip shows to, and Save the account (saveAccount, Save
+ * as…'s sheet for an account). url is where the chat fetches the photo. */
+export function PhotoAccountItems({
+  url,
+  close,
+  saveAccount,
+}: {
+  url: string;
+  close: () => void;
+  saveAccount: (url: string) => void;
+}) {
+  const pay = usePayFromPhoto();
+  return (
+    <>
+      {pay && (
+        <PopItem
+          icon="money"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            close();
+            pay(url, rect);
+          }}
+        >
+          Pay this account
+        </PopItem>
+      )}
+      <PopItem icon="card" onClick={() => (close(), saveAccount(url))}>
+        Save the account
+      </PopItem>
+    </>
   );
 }
 
