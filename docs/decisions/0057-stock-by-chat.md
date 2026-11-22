@@ -1,6 +1,6 @@
 # 0057 — Stock by chat: the catalogue table is the stock, every change is a kept movement, sales and purchases move it, suppliers are people outside the business
 
-Date: 2026-10-28 · Status: **Accepted** (built 29 October 2026) · Plan: [stock by chat](../spec/stock.md)
+Date: 2026-10-28 · Status: **Accepted** (built 29 October 2026); point 1 amended by [0070](0070-stock-apart-from-products.md) (counts leave the catalogue for stock items) · Plan: [stock by chat](../spec/stock.md)
 
 ## Context
 

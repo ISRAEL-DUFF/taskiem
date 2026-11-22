@@ -1,6 +1,6 @@
 # What a business buys, and what it does with it
 
-Status: **Draft** 21 November 2026, for review and discussion; revised 22 November 2026 after review, then to separate stock from products, then for a system not yet in production, then after a second review · Decision: to come (0070) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
+Status: **Settled** 22 November 2026: the founder took every suggested answer (§10). Drafted 21 November 2026; revised 22 November 2026 after review, then to separate stock from products, then for a system not yet in production, then after a second review · Decision: [0070](../decisions/0070-stock-apart-from-products.md) · Builds on: [stock](stock.md) (the stock record, suppliers, purchase orders, receiving), [business links](business-links.md) (orders between businesses, item links, bills), [invoices and the money log](invoices-and-money-log.md) (expenses with a vendor and a category), [money reports](../money-reports.md)
 
 ## 1. Summary
 
@@ -24,8 +24,8 @@ The supplier sees nothing different.
 
 **Taskiem is not in production yet**, so this plan changes the model outright: no live data to carry over, no old and new paths kept side by side, and nothing kept only for compatibility. Demo and test data are made again from their seeds.
 
-- **To confirm with the founder before S1** (§10 Q11): that no business relies on stock it keeps, staging included. Whatever counts staging holds are made again from the seeds and are not carried over.
-- **It reverses a decision.** [Stock §4](stock.md#4-the-stock-record-k1) keeps the count in the owner's own catalogue ("the owner's table is theirs"), changeable by hand there. Moving counts out is recorded as decision 0070, with what replaces each use of the catalogue's stock columns (§4.3).
+- **Confirmed by the founder** (§10 Q11, 22 November 2026): no business relies on stock it keeps, staging included. Whatever counts staging holds are made again from the seeds and are not carried over.
+- **It reverses a decision.** [Stock §4](stock.md#4-the-stock-record-k1) keeps the count in the owner's own catalogue ("the owner's table is theirs"), changeable by hand there. Moving counts out is recorded as decision [0070](../decisions/0070-stock-apart-from-products.md), with what replaces each use of the catalogue's stock columns (§4.3).
 
 ## 2. Words used here
 
@@ -269,9 +269,11 @@ The web and the app change together. App screens are built in the app's own look
 - **Labels:** in Money settings, to rename and merge, for those who manage money.
 - **Suppliers:** the item links list shows each item's treatment, stock item and label, all of which can be changed there; for a supplier not on Taskiem, its remembered items (`supplier_items`) the same way.
 
-## 10. Questions for the founder
+## 10. Settled by the founder
 
-| # | Question | Suggested answer |
+The founder took every suggested answer on 22 November 2026. Each answer below is now the plan.
+
+| # | Question | Answer |
 | --- | --- | --- |
 | Q1 | Things we have: only a list, or also value going down over time (depreciation) for accounts? | The list only, for now. Depreciation later, with an accountant's view |
 | Q2 | Should making something use up its materials (a dress uses 3 yards), or are materials counted in and out by hand? | By hand for now. Recipes that use up stock items when something is made are a later plan, which this split makes possible |
@@ -283,7 +285,7 @@ The web and the app change together. App screens are built in the app's own look
 | Q8 | Can one stock item be counted by several products, each using so many of it? For example, rice sold by the bag on two fronts, or a pack of 6 | Yes: `product_stock` holds how many one sale uses, so it is in the model from the start. A product using several different stock items (a recipe) is Q2's later plan |
 | Q9 | How many stock items may a business have? | 5,000, apart from the catalogue's 500, and raised by plan later if needed |
 | Q10 | Should counts stay in the owner's own catalogue table, editable by hand? | No: counts leave the catalogue and change only through Taskiem, each with its reason. The owner's project keeps a read-only copy of stock items |
-| Q11 | Is it safe to change the model outright, with nothing carried over? | Yes if no business, staging included, relies on stock it keeps today. To be confirmed before S1, and written in decision 0070 |
+| Q11 | Is it safe to change the model outright, with nothing carried over? | Yes: no business, staging included, relies on stock it keeps today (confirmed). Recorded in decision 0070 |
 
 ## 11. Milestones
 
