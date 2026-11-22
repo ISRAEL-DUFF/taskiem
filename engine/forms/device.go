@@ -160,15 +160,18 @@ func deviceAnswers(schema map[string]any, answers map[string]any, sub Submission
 			continue
 		}
 		var m map[string]any
+		uploaded := false
 		switch t := v.(type) {
 		case map[string]any:
 			m = t
 		case FileRef:
+			// Stored from this submission's own uploads (Service.files).
 			m = map[string]any{"id": t.ID, "name": t.Name, "type": t.Type, "size": t.Size, "sha256": t.SHA256}
+			uploaded = true
 		default:
 			return fmt.Sprintf("%q: the answer is not one %s field takes", name, kind)
 		}
-		out, why := deviceAnswer(name, kind, p, m, sub, deviceAt)
+		out, why := deviceAnswer(name, kind, p, m, sub, deviceAt, uploaded)
 		if why != "" {
 			return why
 		}
@@ -177,7 +180,11 @@ func deviceAnswers(schema map[string]any, answers map[string]any, sub Submission
 	return ""
 }
 
-func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, deviceAt time.Time) (map[string]any, string) {
+// deviceAnswer reads one device field's answer. uploaded is true when m
+// is a file this submission uploaded: a photo or a signature is never
+// taken from the answers' body, where the reference of an earlier file
+// (returned with an earlier answer) could be put.
+func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, deviceAt time.Time, uploaded bool) (map[string]any, string) {
 	if st, _ := m["state"].(string); st == "refused" || st == "unavailable" {
 		// A refusal is an answer (§4).
 		out := map[string]any{"state": st}
@@ -251,6 +258,9 @@ func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, device
 			out["format"] = format
 		}
 	case wd.DevicePhoto, wd.DeviceSignature:
+		if !uploaded {
+			return nil, fmt.Sprintf("%q: %s is sent as a file with the answer", name, kind)
+		}
 		for _, k := range []string{"id", "name", "type", "sha256", "size"} {
 			if v, ok := m[k]; ok {
 				out[k] = v

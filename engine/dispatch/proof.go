@@ -29,6 +29,10 @@ type Proof struct {
 	// Photo is the form file answered (its id), and PhotoSource camera or sent.
 	Photo       string
 	PhotoSource string
+	// Run is the run recording the proof: the photo must be a file
+	// answered to it (a form step of the run, or the form that started
+	// it), never another run's file named by its id.
+	Run uuid.UUID
 }
 
 // Proof marks: what the location says of where the parcel was handed over.
@@ -132,9 +136,13 @@ func (d *Dispatch) RecordProof(ctx context.Context, tenant uuid.UUID, reference 
 			return fmt.Errorf("%w: the photo is a form file's id", ErrInvalid)
 		}
 		var path string
-		if err := tx.QueryRow(ctx, `SELECT storage_key FROM form_files WHERE id = $1`, fid).Scan(&path); err != nil {
+		// Answered to this run: a file of a submission to one of its form
+		// steps' requests, or of the form that started it.
+		if err := tx.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id
+			LEFT JOIN form_requests q ON q.id = s.request_id
+			WHERE f.id = $1 AND s.status <> 'refused' AND (q.run_id = $2 OR s.run_id = $2)`, fid, p.Run).Scan(&path); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return fmt.Errorf("%w: no such photo", ErrInvalid)
+				return fmt.Errorf("%w: no such photo answered to this run", ErrInvalid)
 			}
 			return err
 		}

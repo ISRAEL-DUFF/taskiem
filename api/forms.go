@@ -720,7 +720,16 @@ func (s *Server) listFormRequests(w http.ResponseWriter, r *http.Request) {
 			var d forms.RequestDoor
 			return d, r.Scan(&d.ID, &d.From, &d.User, &d.Business, &d.Title, &d.Status, &d.ExpiresAt, &d.CreatedAt)
 		})
-		return err
+		if err != nil || len(doors) == 0 {
+			return err
+		}
+		// Through a link still active only.
+		linked, err := forms.LinkedTx(r.Context(), tx)
+		if err != nil {
+			return err
+		}
+		doors = slices.DeleteFunc(doors, func(d forms.RequestDoor) bool { return !linked[d.From] })
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -785,6 +794,9 @@ func (s *Server) doorRequest(ctx context.Context, d forms.RequestDoor, withPrefi
 		}
 		out = x.out()
 		out.From = d.Business
+		// The run is the asking business's: its id is not the linked
+		// side's to know.
+		out.RunID = uuid.Nil
 		if withPrefill && prefill != nil {
 			v, err := pii.Open(ctx, s.Vault, tx, d.From, prefill, pii.Taint{})
 			if err != nil {
@@ -815,6 +827,14 @@ func (s *Server) memberRequest(ctx context.Context, tx pgx.Tx, id string) (reque
 			return requestOut{}, nil, err
 		}
 		if d.User != p.UserID {
+			return requestOut{}, nil, pgx.ErrNoRows
+		}
+		// Read and answered only while the link it came through is active.
+		linked, err := forms.LinkedTx(ctx, tx)
+		if err != nil {
+			return requestOut{}, nil, err
+		}
+		if !linked[d.From] {
 			return requestOut{}, nil, pgx.ErrNoRows
 		}
 		out, err := s.doorRequest(ctx, d, true)
@@ -874,17 +894,8 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 		// Device is the app or the web that answered, and its clock (device fields §3).
 		Device *forms.Device `json:"device"`
 	}
-	var uploads []forms.Upload
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
-		var err error
-		if uploads, err = readAnswerForm(w, r, &req.Answers, &req.Device); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	} else if err := decodeBody(r, &req); err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	// Whether the caller may answer it, before the body (up to 60 MB of
+	// files) is read.
 	p := principalFrom(r.Context())
 	var x requestOut
 	var door *forms.RequestDoor
@@ -898,6 +909,17 @@ func (s *Server) answerFormRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	if x.Status != "pending" || time.Now().After(x.ExpiresAt) {
 		writeErr(w, http.StatusConflict, "this request is no longer waiting for an answer")
+		return
+	}
+	var uploads []forms.Upload
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		var err error
+		if uploads, err = readAnswerForm(w, r, &req.Answers, &req.Device); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	} else if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if req.Answers == nil {

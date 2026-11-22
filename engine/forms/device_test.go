@@ -127,6 +127,18 @@ func TestDeviceAnswers(t *testing.T) {
 	if why := deviceAnswers(schema, map[string]any{"code": map[string]any{"text": "x", "format": "ean_13"}}, app, at); !strings.Contains(why, "this question does not take ean_13 codes") {
 		t.Errorf("format: %q", why)
 	}
+	// A photo or a signature is a file uploaded with this answer: an
+	// earlier file's reference put in the body is refused, a refusal taken.
+	for _, f := range []string{"proof", "sign"} {
+		forged := map[string]any{f: map[string]any{"id": "0193a000-0000-7000-8000-000000000001", "name": "door.jpg", "type": "image/jpeg", "sha256": "ab", "size": float64(10)}}
+		if why := deviceAnswers(schema, forged, app, at); !strings.Contains(why, "is sent as a file with the answer") {
+			t.Errorf("%s forged: %q", f, why)
+		}
+		refused := map[string]any{f: map[string]any{"state": "refused", "id": "x"}}
+		if why := deviceAnswers(schema, refused, app, at); why != "" || refused[f].(map[string]any)["state"] != "refused" || refused[f].(map[string]any)["id"] != nil {
+			t.Errorf("%s refused: %q %v", f, why, refused[f])
+		}
+	}
 
 	// The form host's page asks no device yet: all unavailable, even when
 	// something was sent for them.

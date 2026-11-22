@@ -278,7 +278,7 @@ export function FormRequestPage() {
       >
         <p>
           <Link to="/forms/requests">Back to To fill in</Link>
-          {can("run.read") && (
+          {can("run.read") && !data.from && (
             <>
               {" "}
               · <Link to={`/runs/${data.run_id}`}>See the run</Link>

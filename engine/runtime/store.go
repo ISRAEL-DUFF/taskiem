@@ -852,6 +852,8 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
+			// What a chat held towards it (a sealed location) goes with it.
+			`DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1 AND r.step_id = $2`,
 		} {
 			if _, err := tx.Exec(ctx, q, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
@@ -1056,6 +1058,10 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 	}
 	// A form step's link is withdrawn with its run (forms 6.7).
 	if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND status = 'pending'`, run); err != nil {
+		return err
+	}
+	// And what a chat held towards one of them (device fields D1).
+	if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers c USING form_requests r WHERE r.id = c.request_id AND r.run_id = $1`, run); err != nil {
 		return err
 	}
 	// Subflows (subflows.go): the step that started this run hears how it

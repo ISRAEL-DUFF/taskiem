@@ -232,6 +232,24 @@ func DoorTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (RequestDoor, error) {
 	return d, err
 }
 
+// LinkedTx are the businesses the business in scope is actively linked
+// with: a door's note is listed, read and answered only while the link
+// it came through is active, as the door itself (links.EnterTx) is
+// crossed only then.
+func LinkedTx(ctx context.Context, tx pgx.Tx) (map[uuid.UUID]bool, error) {
+	list, _, err := links.ListTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	out := map[uuid.UUID]bool{}
+	for _, l := range list {
+		if l.State == links.Active {
+			out[l.Business] = true
+		}
+	}
+	return out, nil
+}
+
 // AnsweredDoorTx marks a door's note answered, in the asked side's scope.
 func AnsweredDoorTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	_, err := tx.Exec(ctx, `UPDATE form_request_doors SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, id)

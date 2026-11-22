@@ -205,6 +205,7 @@ func (a *actions) recordProof(ctx context.Context, req connector.Request) (conne
 		p.Photo, _ = ph["id"].(string)
 		p.PhotoSource, _ = ph["source"].(string)
 	}
+	p.Run = c.Run
 	mark, err := d.RecordProof(ctx, c.Tenant, ref, p)
 	if err != nil {
 		return connector.Response{}, classify(err)

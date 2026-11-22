@@ -73,6 +73,11 @@ var (
 	ErrNoRequest = errors.New("forms: no such form request")
 )
 
+// NoLongerTaking is the note of a submission refused because its form,
+// or its form step, takes no more answers: answered by another meanwhile,
+// withdrawn or expired.
+const NoLongerTaking = "the form is no longer taking answers"
+
 func (s *Service) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
@@ -264,7 +269,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	})
 	if err != nil || done {
 		if errors.Is(err, ErrNoRequest) {
-			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, "the form is no longer taking answers")
+			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, NoLongerTaking)
 		}
 		return err
 	}
@@ -315,6 +320,31 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		if ch == "" {
 			ch = "direct"
 		}
+		if tg.request != nil {
+			// Answered now, in this transaction: the step's run may end as
+			// soon as the signal arrives, which withdraws pending requests.
+			// Taken once: of two answers arriving together, the second
+			// waits on the row and finds it answered; only this same
+			// submission, whose signal did not get through, goes on.
+			tag, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				var mine bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM form_submissions WHERE reference = $1 AND request_id = $2 AND status <> 'refused')`,
+					in.Reference, *tg.request).Scan(&mine); err != nil {
+					return err
+				}
+				if !mine {
+					return ErrNoRequest
+				}
+			}
+			// What a chat held towards it, anyone's, goes with the answer.
+			if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers WHERE request_id = $1`, *tg.request); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (reference) DO NOTHING`,
 			id, in.Tenant, tg.endpoint, tg.request, in.Reference, in.StatusHash, a, rr, ch); err != nil {
@@ -332,11 +362,6 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 			}
 		}
 		if tg.request != nil {
-			// Answered now, in this transaction: the step's run may end as
-			// soon as the signal arrives, which withdraws pending requests.
-			if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request); err != nil {
-				return err
-			}
 			payload := map[string]any{}
 			for k, v := range sealedAnswers.(map[string]any) {
 				payload[k] = v
@@ -347,6 +372,11 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		}
 		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
 	})
+	if errors.Is(err, ErrNoRequest) {
+		// Answered by another submission meanwhile: refused, its files
+		// discarded.
+		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, tg.def, files, NoLongerTaking)
+	}
 	if err != nil {
 		// Not recorded: the retry stores its files again.
 		return errors.Join(err, s.discard(ctx, in.Tenant, files))

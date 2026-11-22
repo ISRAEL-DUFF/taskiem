@@ -327,6 +327,54 @@ func TestDeliveryProvedOnWhatsAppAndInTheApp(t *testing.T) {
 	}
 	// Answered once: a second answer is refused.
 	musaBiz.must(409, "POST", "/v1/form-requests/"+rid+"/answers", map[string]any{"answers": map[string]any{}})
+
+	// 3. A photo is a file sent with the answer: the earlier photo's id,
+	// named in the answer's body, is refused, not taken as "taken in the app".
+	var oldPhoto string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text FROM form_files ORDER BY created_at DESC LIMIT 1`).Scan(&oldPhoto); err != nil {
+		t.Fatal(err)
+	}
+	ref = deliver()
+	ask(ref)
+	reqs = musaBiz.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)
+	if len(reqs) != 1 || reqs[0].(map[string]any)["run_id"] != uuid.Nil.String() {
+		t.Fatalf("the asker's run is not the linked side's to know: %v", reqs)
+	}
+	rid = reqs[0].(map[string]any)["id"].(string)
+	code, res := musaBiz.do("POST", "/v1/form-requests/"+rid+"/answers", map[string]any{"device": map[string]any{"app": "app"},
+		"answers": map[string]any{"where": map[string]any{"lat": 6.4281, "lng": 3.4219, "accuracy_m": 8},
+			"proof": map[string]any{"id": oldPhoto, "name": "door.jpg", "type": "image/jpeg", "sha256": strings.Repeat("ab", 32), "size": len(doorJPEG)}}})
+	if code != 422 || !strings.Contains(fmt.Sprint(res["error"]), "is sent as a file with the answer") {
+		t.Fatalf("a reused photo: %d %v", code, res)
+	}
+	// Nor can a workflow record another run's photo as this delivery's.
+	forge := publishFlow(t, ada, `{"schema":"wd/v1","id":"wf_forge","version":1,"name":"Forge","trigger":{"type":"manual"},
+	 "inputs":{"schema":{"type":"object","properties":{"reference":{"type":"string"},"photo":{"type":"string"}}}},
+	 "steps":[{"id":"record","type":"connector","connector":"riders@1","action":"record_proof",
+	   "input":{"reference":"=trigger.body.reference","photo":{"state":"answered","id":"=trigger.body.photo","source":"camera"}}}]}`)
+	frun := ada.must(201, "POST", "/v1/workflows/"+forge+"/runs", map[string]any{"input": map[string]any{"reference": ref, "photo": oldPhoto}})["run_id"].(string)
+	w.env.Drain(t)
+	if got := ada.must(200, "GET", "/v1/runs/"+frun, nil); got["run"].(map[string]any)["status"] != "failed" || !strings.Contains(toJSON(got["events"]), "no such photo answered to this run") {
+		t.Fatalf("recording another run's photo: %s", toJSON(got))
+	}
+
+	// 4. The link ends: the request is no longer Musa's to list, read or
+	// answer, in the app or in his chat.
+	musaBiz.must(200, "POST", "/v1/links/"+link+"/end", nil)
+	w.srv.WaitBackground()
+	if n := len(musaBiz.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)); n != 0 {
+		t.Fatalf("listed after the link ended: %d", n)
+	}
+	musaBiz.must(404, "GET", "/v1/form-requests/"+rid, nil)
+	musaBiz.must(404, "POST", "/v1/form-requests/"+rid+"/answers", map[string]any{"answers": map[string]any{"where": map[string]any{"lat": 6.4281, "lng": 3.4219}}})
+	if got := lastText(w.waSend(t, musa, whatsapptest.Location(6.4281, 3.4219))); strings.Contains(got, "Delivered") {
+		t.Fatalf("answered in chat after the link ended: %q", got)
+	}
+	var drafts int
+	_ = w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM form_chat_answers WHERE request_id = $1`, rid).Scan(&drafts)
+	if drafts != 0 {
+		t.Fatalf("%d drafts kept after the link ended", drafts)
+	}
 }
 
 func fmtPtr(s *string) string {

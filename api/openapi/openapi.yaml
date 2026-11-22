@@ -52316,6 +52316,7 @@ components:
         run_id:
           type: string
           format: uuid
+          description: The run waiting for the answer; the nil UUID for a request another business put to you through a link (its run is theirs)
         title:
           type: string
         description:

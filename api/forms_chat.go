@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -160,7 +160,7 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 	case !send:
 		return false, nil
 	}
-	qs, err := s.Forms.ChatQuestions(ctx, forms.ChatAsker{Tenant: c.tenant.ID, User: c.p.UserID, Roles: c.p.Roles, Owner: c.p.HasRole("owner")})
+	qs, err := s.Forms.ChatQuestions(ctx, forms.ChatAsker{Tenant: c.tenant.ID, User: c.p.UserID, Roles: c.p.Roles})
 	if err != nil {
 		return false, err
 	}
@@ -200,26 +200,30 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 	} else {
 		value = map[string]any{"media": map[string]any{"channel": channel, "id": c.in.Image.ID, "mime": c.in.Image.MimeType, "sha": c.in.Image.SHA256}}
 	}
-	have := map[string]bool{field: true}
-	for k := range q.Held {
-		have[k] = true
+	// Kept under the request's lock, what the person already sent read
+	// again under it: two messages arriving together are decided one after
+	// the other, and the question is sent once, whole.
+	added, err := s.Forms.ChatAdd(ctx, *q, c.p.UserID, field, value)
+	if errors.Is(err, forms.ErrNotWaiting) {
+		return true, c.say(ctx, s, q.Title+" has been answered already.")
 	}
-	weak := slices.ContainsFunc(forms.WeakerInChat(q.Schema), func(f string) bool { return have[f] })
-	whole := forms.ChatWhole(q.Schema, have)
-	held, err := s.Forms.ChatHold(ctx, *q, c.p.UserID, field, value, whole && weak)
 	if err != nil {
 		return true, err
 	}
-	if !whole {
+	if !added.Whole {
+		have := map[string]bool{}
+		for k := range added.Question.Held {
+			have[k] = true
+		}
 		return true, c.say(ctx, s, "Got it, for "+q.Title+". "+formStillWanted(q.Schema, have))
 	}
-	if weak {
+	if added.Weak {
 		app := strings.TrimRight(s.formsAppURL(), "/") + "/forms/requests/" + q.Request.String()
 		return true, c.say(ctx, s, q.From+" wants your phone's own reading for "+q.Title+": what was sent in a chat may be from anywhere. "+
 			"Answer it in the app instead: "+app+"\nOr send it as it is, marked unverified.",
 			whatsapp.Button{ID: formButtonPrefix + "send:" + q.Request.String(), Title: "Send as it is"})
 	}
-	return true, s.formChatSubmit(ctx, c, held)
+	return true, s.formChatSubmit(ctx, c, added.Question)
 }
 
 // formStillWanted says which location or photo a question still waits for.
@@ -255,11 +259,11 @@ func (s *Server) formChatSubmit(ctx context.Context, c *chat, q forms.ChatQuesti
 		id, _ := ref["id"].(string)
 		mime, _ := ref["mime"].(string)
 		sha, _ := ref["sha"].(string)
-		data, _, _, err := s.fetchMedia(ctx, c, &whatsapp.Media{ID: id, MimeType: mime, SHA256: sha}, media.MaxImageBytes)
+		channel, _ := ref["channel"].(string)
+		data, err := s.fetchHeldMedia(ctx, c, channel, &whatsapp.Media{ID: id, MimeType: mime, SHA256: sha})
 		if err != nil {
 			s.Logger.Warn("forms: fetching a photo sent in chat", "err", err)
-			q.Held = nil
-			if _, err := s.Forms.ChatHold(ctx, q, c.p.UserID, "", nil, false); err != nil {
+			if err := s.Forms.ChatClear(ctx, q, c.p.UserID); err != nil {
 				return err
 			}
 			return c.say(ctx, s, "The photo did not come through. Send it again.")
@@ -278,11 +282,41 @@ func (s *Server) formChatSubmit(ctx context.Context, c *chat, q forms.ChatQuesti
 		return err
 	}
 	if status == "refused" {
-		q.Held = nil
-		if _, err := s.Forms.ChatHold(ctx, q, c.p.UserID, "", nil, false); err != nil {
+		if err := s.Forms.ChatClear(ctx, q, c.p.UserID); err != nil {
 			return err
+		}
+		if note == forms.NoLongerTaking {
+			// Answered by another message, or in the app, meanwhile.
+			return c.say(ctx, s, q.Title+" has been answered already.")
 		}
 		return c.say(ctx, s, "That could not be sent: "+note+". Send it again.")
 	}
 	return c.say(ctx, s, "Sent to "+q.From+": "+q.Title+". Thank you.")
+}
+
+// fetchHeldMedia fetches a photo held for a question from the chat app it
+// was sent in, which may not be the one the message completing the
+// question came in on (a photo on Telegram, the location on WhatsApp).
+func (s *Server) fetchHeldMedia(ctx context.Context, c *chat, channel string, m *whatsapp.Media) ([]byte, error) {
+	from := c
+	if channel != "" && channel != c.ch.Name() {
+		from = &chat{tenant: c.tenant}
+		switch channel {
+		case forms.AppWhatsApp:
+			if s.WhatsApp == nil {
+				return nil, errors.New("whatsapp is off")
+			}
+			wa, err := s.WhatsApp.ForTenant(ctx, c.tenant.ID)
+			if err != nil {
+				return nil, err
+			}
+			from.wa = wa
+		case forms.AppTelegram:
+			// fetchMedia fetches from Telegram when there is no WhatsApp.
+		default:
+			return nil, errors.New("a photo from an unknown chat")
+		}
+	}
+	data, _, _, err := s.fetchMedia(ctx, from, m, media.MaxImageBytes)
+	return data, err
 }
