@@ -1182,6 +1182,12 @@ func (s *Server) cancelPayment(w http.ResponseWriter, r *http.Request) {
 		if x, err = scanPayment(tx.QueryRow(r.Context(), `SELECT `+paymentCols+` FROM payments WHERE id = $1`, id)); err != nil {
 			return err
 		}
+		// A batch's last open row let go: its result is told now.
+		if x.BatchID != nil {
+			if err := chatBatchClosedTx(r.Context(), tx, p.TenantID, *x.BatchID); err != nil {
+				return err
+			}
+		}
 		return auditTx(r, tx, "payment.cancel", id.String(), nil)
 	})
 	if err != nil {

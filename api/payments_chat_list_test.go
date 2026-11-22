@@ -194,8 +194,50 @@ func TestPayListFromWhatsApp(t *testing.T) {
 	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 1 || !strings.Contains(got[0].Text, "Paid BAYO RICE MILLS ₦2,500. Received by the bank.") {
 		t.Fatalf("one's result: %+v", got)
 	}
+	// A batch whose last open row is let go, not ended by the bank: the
+	// rows that went are told when the rest is let go. @bayo 2,500 again
+	// is held at confirm (paid the same in the last day) and stays prepared.
+	if said := w.say(t, on, "pay these for a delivery\n@bayo 2.5k\nChidi 0987654321 GTBank 3k"); !strings.Contains(said, "2 people") {
+		t.Fatalf("the second list: %q", said)
+	}
+	var b2 string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM payment_batches WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1`, biz).Scan(&b2); err != nil {
+		t.Fatal(err)
+	}
+	var rows2 []string
+	list2, err := w.env.DB.Admin.Query(ctx, `SELECT id FROM payments WHERE batch_id = $1 ORDER BY created_at, id`, b2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for list2.Next() {
+		var x string
+		if err := list2.Scan(&x); err != nil {
+			t.Fatal(err)
+		}
+		rows2 = append(rows2, x)
+	}
+	list2.Close()
+	owner.must(202, "POST", "/v1/payment-batches/"+b2+"/confirm", map[string]any{"payments": rows2, "passkey": stepUp(t, owner, key, "money.pay.batch", "batch:"+b2)})
+	var went, held string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT id FROM payments WHERE batch_id = $1 AND status = 'sending'), (SELECT id FROM payments WHERE batch_id = $1 AND status = 'prepared')`, b2).Scan(&went, &held); err != nil {
+		t.Fatalf("one sent and one held: %v", err)
+	}
+	sentBefore = len(w.graph.Sent(on))
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, runOf(went), uuid.MustParse(went), "paid", "CHIDI OKEKE", "po3", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	w.tick(t)
+	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 0 {
+		t.Fatalf("told while a row waits: %+v", got)
+	}
+	owner.must(200, "POST", "/v1/payment-batches/"+b2+"/cancel", nil)
+	w.tick(t)
+	if got := w.graph.Sent(on)[sentBefore:]; len(got) != 1 || !strings.Contains(got[0].Text, "Paid 1 of 2 people, ₦3,000.") || !strings.Contains(got[0].Text, "let go, not sent") {
+		t.Fatalf("told once the rest was let go: %+v", got)
+	}
+
 	// A payment from the app is not told in the chat.
-	if n := count(`SELECT count(*) FROM whatsapp_outbox WHERE tenant_id = $1 AND kind IN ('payment', 'payment_batch')`, biz); n != 2 {
+	if n := count(`SELECT count(*) FROM whatsapp_outbox WHERE tenant_id = $1 AND kind IN ('payment', 'payment_batch')`, biz); n != 3 {
 		t.Fatalf("queued results: %d", n)
 	}
 }

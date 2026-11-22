@@ -76,6 +76,21 @@ func chatPayResultTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) error
 	return err
 }
 
+// chatBatchClosedTx tells a chat batch's result when its last open rows
+// were let go (cancelled) rather than ended by the bank: the rows that
+// went are told, as when the last of them ends. Nothing when no row went.
+func chatBatchClosedTx(ctx context.Context, tx pgx.Tx, tenant, batch uuid.UUID) error {
+	var row uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM payments WHERE batch_id = $1 AND status = ANY ($2) ORDER BY finished_at DESC NULLS LAST LIMIT 1`, batch, payEnded).Scan(&row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return chatPayResultTx(ctx, tx, tenant, row)
+}
+
 // firstChatTx is the first chat app user linked, in the order Tell me
 // messages pick (connectors/notify: WhatsApp, then Telegram), then Slack;
 // "" when none.
@@ -146,10 +161,17 @@ func batchEndWords(l lang.Tag, b batchView) (string, string) {
 				why = strings.TrimSpace(*x.Reason)
 			}
 			not = append(not, payeeWords(x)+", "+why)
+		case "cancelled":
+			// Let go before it was sent (the rest of the list let go).
+			count++
+			not = append(not, payeeWords(x)+", "+tr(l, "wa.pay.result.let_go"))
 		}
 	}
 	head := tr(l, "wa.pay.result.batch", "paid", strconv.Itoa(paid), "count", strconv.Itoa(count), "amount", invoicing.Naira(paidKobo))
-	if paid == count {
+	switch {
+	case paid == count && count == 1:
+		head = tr(l, "wa.pay.result.batch_one", "amount", invoicing.Naira(paidKobo))
+	case paid == count:
 		head = tr(l, "wa.pay.result.batch_all", "count", strconv.Itoa(count), "amount", invoicing.Naira(paidKobo))
 	}
 	if len(not) == 0 {

@@ -7861,6 +7861,11 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A payment prepared from the chat failed: who, how much, and why"
     },
+    "wa.pay.result.let_go": {
+      "text": "let go, not sent",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Why a row of a batch was not paid: it was let go before it was sent"
+    },
     "wa.pay.result.rejected": {
       "text": "Not paid: the payment of {amount} to {to} was declined.",
       "reviewed": false,
@@ -7890,6 +7895,11 @@
       "text": "{count} not paid: {who}",
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. Who in a batch from the chat was not paid, each with why"
+    },
+    "wa.pay.result.batch_one": {
+      "text": "Paid 1 person, {amount}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat has ended with its one person paid"
     },
     "bill.transfer.send": {
       "text": "Send exactly {amount} to {to}, for {reference}.",

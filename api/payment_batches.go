@@ -522,6 +522,10 @@ func (s *Server) cancelBatch(w http.ResponseWriter, r *http.Request) {
 		if out, err = batchTx(ctx, tx, id, isOwnerOf(principalFrom(ctx))); err != nil {
 			return err
 		}
+		// The rest let go: the rows that went are told in the chat now.
+		if err := chatBatchClosedTx(ctx, tx, principalFrom(ctx).TenantID, id); err != nil {
+			return err
+		}
 		return auditTx(r, tx, "payment.batch_cancel", id.String(), nil)
 	}); err != nil {
 		s.payFail(w, r, err)
