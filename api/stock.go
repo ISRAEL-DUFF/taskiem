@@ -121,11 +121,14 @@ func (sh stockShop) cols() storefront.Columns { return sh.sf.CatalogueColumns }
 // tailor): what needs products (adding one, its cells, sizes, categories,
 // what counts it) is off; its stock items are counted all the same.
 func (sh stockShop) products() error {
-	if sh.table.ID == uuid.Nil {
+	if sh.noCatalogue() {
 		return errStockOff
 	}
 	return nil
 }
+
+// noCatalogue: the business keeps stock items with no catalogue table.
+func (sh stockShop) noCatalogue() bool { return sh.table.ID == uuid.Nil }
 
 // stockShopOf is the business's catalogue, or errStockOff. A business
 // with stock items and no catalogue table keeps stock of them alone: a
@@ -164,7 +167,7 @@ func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, 
 // stockCatalogueRows reads the catalogue's rows whole; none for a shop with no
 // products.
 func (s *Server) stockCatalogueRows(ctx context.Context, tenant uuid.UUID, sh stockShop) ([]map[string]any, error) {
-	if sh.products() != nil {
+	if sh.noCatalogue() {
 		return nil, nil
 	}
 	return s.readAllRows(ctx, tenant, sh.table, storefront.MaxItems+1)
@@ -214,12 +217,12 @@ func (s *Server) stockItem(ctx context.Context, tenant uuid.UUID, sh stockShop, 
 		}
 		// With no catalogue, a stock item is listed on its own, as
 		// stock.Items lists it.
-		if product == "" || sh.products() != nil {
+		if product == "" || sh.noCatalogue() {
 			return stock.FromStockItem(x), nil
 		}
 		row = product
 	}
-	if sh.products() != nil {
+	if sh.noCatalogue() {
 		return stock.Item{}, errNoItem
 	}
 	tr, err := s.tableRowsFor(ctx, tenant, sh.table, storefrontPurpose)

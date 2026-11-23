@@ -1132,6 +1132,7 @@ storefront_blocks.kind
 storefront_blocks.position
 storefront_catalogue.item
 storefront_catalogue.position
+storefront_catalogue.row_id
 storefront_catalogue.storefront_id
 storefront_catalogue.table_name
 storefront_changes.action
