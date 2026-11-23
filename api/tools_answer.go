@@ -44,6 +44,25 @@ type madeAnswer struct {
 	Empty   string       `json:"empty,omitempty"`
 	// Why a failed run failed, in plain words.
 	Error string `json:"error,omitempty"`
+	// WaitingFor is who a run on its way waits for (made tools §7, "Waiting
+	// for Ada to approve"): an open approval's approvers, an open form's
+	// recipient, in names or roles only.
+	WaitingFor []answerWait `json:"waiting_for,omitempty"`
+}
+
+// answerWait is one step a run waits on, and who it waits for.
+type answerWait struct {
+	// Kind is approval or form.
+	Kind string `json:"kind"`
+	// Who in words: "Ada", "you", "an owner", "someone with the role
+	// manager", "the cashiers", "Bayo Stores".
+	Who string `json:"who"`
+	// You: it waits for the person asking (a form put to them, or an
+	// approval only they can give).
+	You bool `json:"you,omitempty"`
+	// Request is a form put to the person asking: its id, to open under To
+	// fill in.
+	Request string `json:"request,omitempty"`
 }
 
 type answerState struct {
@@ -94,6 +113,16 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if stillGoing(a.Status) {
+		viewer := uuid.Nil
+		if p.EndUser == nil {
+			viewer = p.UserID
+		}
+		if a.WaitingFor, err = s.waitingFor(r.Context(), p.TenantID, id, viewer); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, a)
 }

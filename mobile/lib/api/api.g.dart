@@ -15958,7 +15958,7 @@ class ToolRun {
 }
 
 class ToolAnswer {
-  const ToolAnswer({this.amountKobo, this.buttons, this.empty, this.error, this.lines, this.ref, this.rows, this.state, required this.status, this.text, this.title, this.tool, required this.type});
+  const ToolAnswer({this.amountKobo, this.buttons, this.empty, this.error, this.lines, this.ref, this.rows, this.state, required this.status, this.text, this.title, this.tool, required this.type, this.waitingFor});
 
   final int? amountKobo;
   final List<ToolButton>? buttons;
@@ -15973,6 +15973,10 @@ class ToolAnswer {
   final String? title;
   final String? tool;
   final String type;
+  /// Who a run on its way waits for (made tools §7, "Waiting for Ada to
+  /// approve"): an open approval step's approvers, an open form step's
+  /// recipient, in names and roles only. Left out when it waits for nobody.
+  final List<ToolAnswerWait>? waitingFor;
 
   factory ToolAnswer.fromJson(Map<String, dynamic> j) => ToolAnswer(
         amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
@@ -15988,6 +15992,7 @@ class ToolAnswer {
         title: j['title'] == null ? null : j['title'] as String,
         tool: j['tool'] == null ? null : j['tool'] as String,
         type: j['type'] as String,
+        waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -16004,6 +16009,7 @@ class ToolAnswer {
         'title': ?title,
         'tool': ?tool,
         'type': type,
+        'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
       };
 }
 
@@ -16088,6 +16094,33 @@ class ToolAnswerState {
   Map<String, dynamic> toJson() => {
         'text': text,
         'tone': ?tone,
+      };
+}
+
+class ToolAnswerWait {
+  const ToolAnswerWait({required this.kind, this.request, required this.who, this.you});
+
+  final String kind;
+  /// A form put to the person asking, to open under To fill in
+  final String? request;
+  /// In words: "Ada", "you", "an owner", "someone with the role manager", "the
+  /// cashiers", a linked business's name, "someone outside the business"
+  final String who;
+  /// It waits for the person asking
+  final bool? you;
+
+  factory ToolAnswerWait.fromJson(Map<String, dynamic> j) => ToolAnswerWait(
+        kind: j['kind'] as String,
+        request: j['request'] == null ? null : j['request'] as String,
+        who: j['who'] as String,
+        you: j['you'] == null ? null : j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'request': ?request,
+        'who': who,
+        'you': ?you,
       };
 }
 

@@ -42102,6 +42102,32 @@ components:
           type: string
         error:
           type: string
+        waiting_for:
+          type: array
+          description: 'Who a run on its way waits for (made tools §7, "Waiting for Ada to approve"): an open approval step''s approvers, an open form step''s recipient, in names and roles only. Left out when it waits for nobody.'
+          items:
+            $ref: '#/components/schemas/ToolAnswerWait'
+    ToolAnswerWait:
+      type: object
+      required:
+      - kind
+      - who
+      properties:
+        kind:
+          type: string
+          enum:
+          - approval
+          - form
+        who:
+          type: string
+          description: 'In words: "Ada", "you", "an owner", "someone with the role manager", "the cashiers", a linked business''s name, "someone outside the business"'
+        you:
+          type: boolean
+          description: It waits for the person asking
+        request:
+          type: string
+          format: uuid
+          description: A form put to the person asking, to open under To fill in
     ToolAnswerState:
       type: object
       required:
