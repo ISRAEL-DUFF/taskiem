@@ -24,6 +24,7 @@ package productstock
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -129,7 +130,13 @@ func LinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product string, it
 	if uses < 1 || uses > MaxUses {
 		return ErrUses
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO product_stock (tenant_id, product_id, stock_item_id, uses) VALUES ($1, $2, $3, $4)
+	// Shared with every other link being made; a catalogue refresh waits
+	// for them to end before it reads (RefreshStartTx), and a link made
+	// after is dated after its start, so the refresh never drops it.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock_shared(hashtextextended('taskiem product links ' || $1::text, 0))`, tenant); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO product_stock (tenant_id, product_id, stock_item_id, uses, created_at) VALUES ($1, $2, $3, $4, clock_timestamp())
 		ON CONFLICT (tenant_id, product_id) DO UPDATE SET stock_item_id = EXCLUDED.stock_item_id, uses = EXCLUDED.uses`, tenant, product, item, uses)
 	return err
 }
@@ -158,13 +165,29 @@ func UnlinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, product string) 
 	return err
 }
 
+// RefreshStartTx is when a catalogue refresh starts, taken in a short
+// transaction of its own before the catalogue is read: it waits for the
+// links being made to end (LinkTx holds the same lock, shared), so every
+// link dated before it was committed before the read began, and every
+// link made after it is dated after it.
+func RefreshStartTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (time.Time, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem product links ' || $1::text, 0))`, tenant); err != nil {
+		return time.Time{}, err
+	}
+	var at time.Time
+	err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&at)
+	return at, err
+}
+
 // DropGoneTx drops the links of products no longer in the catalogue, read
-// whole as present: their stock items stay, as materials, with their
-// counts and history. It answers how many it dropped.
-func DropGoneTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, present []string) (int64, error) {
+// whole as present after start (RefreshStartTx): their stock items stay,
+// as materials, with their counts and history. A link made after start
+// stays: its product may be newer than the read. It answers how many it
+// dropped.
+func DropGoneTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, present []string, start time.Time) (int64, error) {
 	if present == nil {
 		present = []string{}
 	}
-	tag, err := tx.Exec(ctx, `DELETE FROM product_stock WHERE tenant_id = $1 AND NOT (product_id = ANY ($2))`, tenant, present)
+	tag, err := tx.Exec(ctx, `DELETE FROM product_stock WHERE tenant_id = $1 AND NOT (product_id = ANY ($2)) AND created_at < $3`, tenant, present, start)
 	return tag.RowsAffected(), err
 }

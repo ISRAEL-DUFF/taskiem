@@ -340,7 +340,7 @@ func TestDeletedProductLeavesAMaterial(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"1": 7, "2": 2})
 	w.in(func(tx pgx.Tx) error {
-		n, err := productstock.DropGoneTx(ctx, tx, w.env.Tenant, []string{"2"})
+		n, err := productstock.DropGoneTx(ctx, tx, w.env.Tenant, []string{"2"}, time.Now().Add(time.Hour))
 		if err != nil || n != 1 {
 			t.Fatalf("dropped %d, %v", n, err)
 		}

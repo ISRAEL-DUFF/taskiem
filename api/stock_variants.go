@@ -51,6 +51,9 @@ var errNoVariantColumns = errors.New("stock: no room for sizes and colours")
 // stockVariantColumns makes the catalogue hold sizes and colours, once:
 // columns of those names are mapped if the table has them, else added.
 func (s *Server) stockVariantColumns(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop) (stockShop, error) {
+	if err := sh.products(); err != nil {
+		return sh, err
+	}
 	m := sh.cols()
 	if m.VariantOf != "" && m.Variant != "" && m.Choices != "" && m.Available != "" {
 		return sh, nil

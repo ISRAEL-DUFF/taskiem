@@ -371,6 +371,14 @@ The split comes first, because Add to stock and every count after it point at st
 - `add …` counting in with **Do you sell it?** in chat (done: below);
 - the list of the owner's workflows that use the old columns (done: below).
 
+**PR review fixes.**
+
+- PR review fix: a catalogue refresh dropped the link of a product (or a size from `sizeStockTx`) linked while the catalogue was read. `product_stock.created_at` is now the moment a link is made (`clock_timestamp()`, under a lock shared by every link being made), the refresh takes its start under the same lock held alone (`productstock.RefreshStartTx`), and `DropGoneTx` drops only links made before it. Test: `TestRefreshKeepsLinksMadeDuringTheRead`.
+- PR review fix: `POST /v1/stock/sales` sold a material; it refuses one (400), as chat's sold and `stock@1` do. Test: `TestSaleRefusesAMaterial`.
+- PR review fix: the shop front's products table (`templates/tables/products.json`) still made `stock`, `unit`, `cost_price`, `reorder_level`, `target_level` and `supplier`; it makes none of them, and its description no longer says it keeps stock. Test: `TestShopTableHasNoOldColumns`.
+- PR review fix: bringing back a retired stock item (`RetireItemTx`, back) skipped the 5,000 limit; it is counted under the lock making one takes, and refused with `ErrTooMany`. Test: `TestBringingBackHeldToTheLimit`.
+- PR review fix: a business with stock items and no catalogue table (the tailor, counting only materials) lost stock altogether (`stockShopOf` said stock was off). Its stock items are listed, counted, moved and low as before; adding a product, its cells, sizes, categories and Counted by stay off (`stockShop.products`). Test: `TestMaterialsWithoutACatalogue`.
+
 ### As built: S1b (workflows on the old columns)
 
 A check, not a data migration; no migration.
@@ -452,6 +460,13 @@ A check, not a data migration; no migration.
 
 **Left for later:** `add …` counting in with **Do you sell it?** in chat, and the list of the owner's workflows that use the old columns (the other S1b parts); Counted by on the screens (S2); `purchase_lines` (U1).
 
+**PR review fixes.**
+
+- PR review fix: counting in by a product's name (`add …`, and `received …` with no open order) moved its stock item by the quantity alone and wrote the price of one as the stock item's cost. It now moves as `ReceiveTx` does: the quantity times the product's uses, at the price over the uses (whole kobo, rounded down), and the stock item keeps its unit. The question says so ("Add 10 × 1000 … to *Rice 1kg*", the count in the stock item's unit). Test: `TestCountingInAProductByItsUses`.
+- PR review fix: a front listing the catalogue's own table never showed sold out, and an order from it was not checked against the counts. The public page puts how many are left on that list too (`publicweb.DBStorefronts`, the home catalogue's table), and the live price check reads such a list as the catalogue (`storefront.countedFrom`). Test: `TestFrontListingTheCatalogueShowsSoldOut`.
+- PR review fix: the warning before a chat sale checked each line alone; it takes each stock item's lines together (`beyondTogether`): 4 bottles and a pack of 6 are 10. Test: `TestSaleWarningSumsAStockItem`.
+- PR review fix: `taskiem_product_left` answered the public role for any product of a business with a page online, one taken off sale too. Migration 00508: the public role reads it only of what the page's copy holds on sale (`storefront_catalogue`, available), and their sizes; the business and a linked buyer read it as before. Tests: `TestProductLeft`, `TestProductLeftOnSaleMigrationUpDownUp`.
+
 ### As built: S2 (web)
 
 No server change. The app's screens are their own part of S2.
@@ -478,6 +493,8 @@ No server change. The app's screens are their own part of S2.
 - the page with a material **Not sold** and the filter, at 390 and 360 px in both themes;
 - **Add something to count** with No and with Yes, and Change by the right id;
 - **Counted by** set to uses 6 from the chat and shown on the Stock page, and none for a product in sizes.
+
+- PR review fix: stock value (`count × cost_kobo`) could overflow int64; it is held at the largest int64 (`stock.MulKobo`, `AddKobo`) on `GET /v1/stock` and `GET /v1/stock/stock-items`. Test: `TestStockValueDoesNotOverflow`.
 
 ### As built: S2 (app)
 
@@ -550,6 +567,8 @@ Names are keyed one way (review fix): the line's `name_key` and `supplier_items.
 **Web and app.** Types only: `PurchaseLine` and `ItemLink` follow; Prices and the order sheet find our item through the memory's stock item. The app's client is unchanged (it calls none of these). No screens (U2a).
 
 **Not done:** labels made or suggested by name (the money side's); U2b's chat question (chat drafts as suggested).
+
+- PR review check: a 200-letter name of "İ" keys in 200 (Go lowers letter for letter, "İ" to "i"), so it never failed the 00504 CHECK; `NameKey` cuts the key to 200 letters all the same. Test: `TestLongNameKeyFits`.
 
 ### As built: U1 (money)
 

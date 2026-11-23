@@ -110,7 +110,7 @@ func StockItemRows(rows []map[string]any, m storefront.Columns, items []StockIte
 			r.Suggest = &n
 		}
 		if x.CostKobo != nil && x.Count > 0 {
-			r.ValueKobo = x.Count * *x.CostKobo
+			r.ValueKobo = MulKobo(x.Count, *x.CostKobo)
 		}
 		out = append(out, r)
 	}

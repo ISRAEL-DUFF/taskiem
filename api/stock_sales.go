@@ -51,6 +51,11 @@ func saleLines(items []stock.Item, asked []saleItem, amount *int64) ([]stock.Sal
 		if !ok {
 			return nil, errNoItem
 		}
+		// A material is counted, not sold (what a business buys §4.5), as
+		// chat's sold and stock@1 refuse it.
+		if it.Material {
+			return nil, fmt.Errorf("%w: %s is only counted, not sold: count it out with an adjustment", errBadRequest, it.Name)
+		}
 		price := int64(0)
 		switch {
 		case a.PriceKobo != nil:

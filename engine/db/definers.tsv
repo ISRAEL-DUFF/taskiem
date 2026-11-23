@@ -227,7 +227,7 @@ taskiem_purge_sessions(integer)	@ISRAEL-DUFF (identity)	deletes sign-in sessions
 taskiem_purge_trigger_receipts()	@ISRAEL-DUFF (engine)	deletes trigger receipts older than the fixed 30-day dedup window, for every tenant; reads only received_at and takes no arguments, so it cannot clear a fresh receipt (00240)
 taskiem_push_device_live(uuid,uuid)	@ISRAEL-DUFF (messaging)	Whether a phone app install still has a session, so a signed-out phone is not notified (00447)
 taskiem_push_expire(interval)	@ISRAEL-DUFF (messaging)	Pushes queued past their life go, while this server sends none (00447)
-taskiem_product_left(uuid,text[])	@ISRAEL-DUFF (stock)	How many whole sales each counted product of a business has left (its stock item's count over its uses), and nothing else about its stock: for the business in scope, one actively linked to it, or one with a page online (00502)
+taskiem_product_left(uuid,text[])	@ISRAEL-DUFF (stock)	How many whole sales each counted product of a business has left (its stock item's count over its uses), and nothing else about its stock: for the business in scope, one actively linked to it, or, of the products its page online holds on sale and their sizes, the public page (00502, 00508)
 taskiem_put_plan(jsonb,text)	@ISRAEL-DUFF (engine)	Operators load a plan (taskiem billing plans --load) (00090)
 taskiem_queue_stats()	@ISRAEL-DUFF (engine)	Queue depth and age for metrics (spec 15.2), across tenants (00013)
 taskiem_reach_blocked(text,bytea)	@ISRAEL-DUFF (messaging)	Telegram told the bot it may not write to an account (the person blocked it) (00193)

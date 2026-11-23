@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -157,6 +158,29 @@ func TestReceiptKeysKept(t *testing.T) {
 	})
 	if got.Lines[0].Received != 7 || got.ReceivedKobo != 7000 || keys() != 3 {
 		t.Fatalf("adjusted once: %d received, %d kobo, %d keys", got.Lines[0].Received, got.ReceivedKobo, keys())
+	}
+}
+
+// PR review check: a name of 200 letters of "İ" (which a full lowering
+// makes two letters each) keys within the 200 the CHECK allows: the line is
+// placed and its treatment remembered, never a 500.
+func TestLongNameKeyFits(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t, nil)
+	sup := reviewSupplier(t, w, "Istanbul Mama", "0803 123 4594")
+	name := strings.Repeat("İ", 200)
+	if k := stock.NameKey(name); utf8.RuneCountInString(k) > 200 || k != strings.TrimSpace(k) {
+		t.Fatalf("the key: %d letters", utf8.RuneCountInString(k))
+	}
+	w.in(func(tx pgx.Tx) error {
+		return stock.SetSupplierItemTx(ctx, tx, w.env.Tenant, sup.ID, name, stock.LineChoice{Treatment: stock.Track}, "user:owner")
+	})
+	x, err := placed(t, w, sup.ID, stock.PurchaseLine{Item: name, Quantity: 1, CostKobo: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.Lines) != 1 || x.Lines[0].Treatment != stock.Track {
+		t.Fatalf("placed: %+v", x.Lines)
 	}
 }
 
