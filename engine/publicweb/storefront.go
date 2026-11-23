@@ -100,8 +100,35 @@ func DBStorefronts(pool *pgxpool.Pool) Storefronts {
 				p.Lists[t] = list
 			}
 		}
+		// A front listing the catalogue's own table shows its products
+		// sold out as the home page does; another table's rows are no
+		// products, whatever their ids.
+		if cat := catalogueTable(p.Model); cat != "" {
+			if list, ok := p.Lists[cat]; ok {
+				if err := productLeft(ctx, pool, tenant, list); err != nil {
+					return StorefrontPage{}, false, err
+				}
+			}
+		}
 		return p, true, nil
 	}
+}
+
+// catalogueTable is the name of the table the home page's catalogue lists
+// ("" for none): the table whose rows products are counted by.
+func catalogueTable(m storefront.Model) string {
+	for _, f := range m.Fronts {
+		if f.Slug != "" {
+			continue
+		}
+		for _, b := range f.Blocks {
+			var lc storefront.ListConfig
+			if b.Kind == "list" && json.Unmarshal(b.Config, &lc) == nil && lc.Role == "catalogue" {
+				return lc.TableName
+			}
+		}
+	}
+	return ""
 }
 
 // productLeft puts on a page's items how many are left of each counted
