@@ -89,6 +89,10 @@ func TestToolAnswerWaitingFor(t *testing.T) {
 	if got := one(waits(owner, flow("wf_role", form(`{"role":"cashier"}`)), map[string]any{})); got["who"] != "the cashiers" {
 		t.Errorf("a form to cashiers: %v", got)
 	}
+	// To a role that names no person, held by nobody: the role, not an owner.
+	if got := one(waits(owner, flow("wf_fin", form(`{"role":"finance"}`)), map[string]any{})); got["who"] != "someone with the role finance" {
+		t.Errorf("a form to finance: %v", got)
+	}
 	// To a phone: someone outside, the number never said.
 	if got := one(waits(owner, flow("wf_phone", form(`{"phone":"+2348031230000"}`)), map[string]any{})); got["who"] != "someone outside the business" {
 		t.Errorf("a form to a phone: %v", got)

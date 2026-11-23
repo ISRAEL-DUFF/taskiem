@@ -128,9 +128,9 @@ type named struct {
 }
 
 // roleWho says who holds role, given the people who do: one person by
-// name ("you" for the viewer); nobody, an owner (who may do what any role
-// may); several, "the cashiers" for a role that names a person (plural)
-// or "someone with the role manager" (else).
+// name ("you" for the viewer); for an approval nobody holds, an owner
+// (who may decide for any role); else "the cashiers" for a form's role
+// that names a person (plural), or "someone with the role manager".
 func roleWho(role string, people []named, viewer uuid.UUID, plural bool) (string, bool) {
 	words := strings.ReplaceAll(role, "_", " ")
 	if len(people) == 1 {
@@ -141,7 +141,9 @@ func roleWho(role string, people []named, viewer uuid.UUID, plural bool) (string
 			return n, false
 		}
 	}
-	if role == "owner" || len(people) == 0 {
+	// An approval nobody holds the role of goes to an owner; a form put to
+	// a role nobody holds is still said as the role.
+	if role == "owner" || len(people) == 0 && !plural {
 		return "an owner", false
 	}
 	if plural {
