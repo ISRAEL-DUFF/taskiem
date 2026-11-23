@@ -49,7 +49,7 @@ import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
-import { BookSheet, OrdersSheet, PayButton, ShopSheet, ToolsMenu, type PersonTool } from "./PersonTools";
+import { BookSheet, loadTheirTools, OrdersSheet, PayButton, ShopSheet, TheirToolSheet, ToolsMenu, type CustomerTool, type PersonTool } from "./PersonTools";
 import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
@@ -407,6 +407,19 @@ export function PersonChatPage() {
     nav(`${loc.pathname}${loc.search}`, { replace: true, state: left });
   }, []);
   const [reporting, setReporting] = useState(false);
+  // Their tools (made tools T5): read when the tools button opens.
+  const [theirs, setTheirs] = useState<CustomerTool[]>([]);
+  const [their, setTheir] = useState<{ tool: CustomerTool; from?: DOMRect }>();
+  useEffect(() => {
+    if (tool?.key !== "menu") return;
+    let live = true;
+    void loadTheirTools(id).then((t) => {
+      if (live) setTheirs(t);
+    });
+    return () => {
+      live = false;
+    };
+  }, [tool?.key, id]);
   // Share the business, or one of its products, with someone (§10.1).
   const [sharing, setSharing] = useState<{ item?: { id: string; name: string } }>();
   const [orders, setOrders] = useState<DoorOrder[]>();
@@ -888,7 +901,19 @@ export function PersonChatPage() {
           </a>
         </p>
       )}
-      {c && tool?.key === "menu" && <ToolsMenu business={c.name} onClose={() => setTool(undefined)} onPick={(k, from) => setTool({ key: k, from })} />}
+      {c && tool?.key === "menu" && (
+        <ToolsMenu
+          business={c.name}
+          onClose={() => setTool(undefined)}
+          onPick={(k, from) => setTool({ key: k, from })}
+          theirs={theirs}
+          onTheirs={(t, from) => {
+            setTool(undefined);
+            setTheir({ tool: t, from });
+          }}
+        />
+      )}
+      {c && their && <TheirToolSheet chat={id} tools={theirs} start={{ tool: their.tool }} from={their.from} onClose={() => setTheir(undefined)} />}
       {c && tool?.key === "shop" && (
         <ShopSheet
           chat={id}

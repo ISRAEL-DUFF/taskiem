@@ -57,8 +57,12 @@ const newKey = () =>
 const path = (command: string, what: string) =>
   `/v1/tools/${encodeURIComponent(command)}/${what}`;
 
-/** The run's answer, asked for again while the run is on its way. */
-export function useAnswer(run: string | undefined): {
+/** The run's answer, asked for again while the run is on its way; at
+ * answerPath when it is read elsewhere (a customer's, in their chat). */
+export function useAnswer(
+  run: string | undefined,
+  answerPath?: (run: string) => string,
+): {
   answer?: ToolAnswer;
   error?: unknown;
 } {
@@ -70,7 +74,9 @@ export function useAnswer(run: string | undefined): {
     let timer = 0;
     let asked = 0;
     const ask = () =>
-      get<ToolAnswer>(`/v1/runs/${encodeURIComponent(run)}/answer`).then(
+      get<ToolAnswer>(
+        answerPath ? answerPath(run) : `/v1/runs/${encodeURIComponent(run)}/answer`,
+      ).then(
         (a) => {
           if (!live) return;
           setAnswer(a);
@@ -90,6 +96,7 @@ export function useAnswer(run: string | undefined): {
       live = false;
       window.clearTimeout(timer);
     };
+    // answerPath is fixed for a sheet: only the run asks again.
   }, [run]);
   return { answer, error };
 }
@@ -118,10 +125,12 @@ function AnswerButtons({
   bs,
   onOpenTool,
   row,
+  press: pressAt,
 }: {
   bs?: ToolButton[];
   onOpenTool?: OpenTool;
   row?: string;
+  press?: (token: string) => Promise<PressedButton>;
 }) {
   const [busy, setBusy] = useState<number>();
   const [spent, setSpent] = useState<Record<number, true>>({});
@@ -133,9 +142,11 @@ function AnswerButtons({
     setBusy(i);
     setNote(undefined);
     try {
-      const p = await post<PressedButton>(
-        `/v1/tools/buttons/${encodeURIComponent(b.token)}`,
-      );
+      const p = pressAt
+        ? await pressAt(b.token)
+        : await post<PressedButton>(
+            `/v1/tools/buttons/${encodeURIComponent(b.token)}`,
+          );
       onOpenTool(p.command, p.inputs ?? {}, b.token);
     } catch (e) {
       const why = pressErrorWords(e);
@@ -180,11 +191,15 @@ export function AnswerView({
   run,
   name,
   onOpenTool,
+  customer,
 }: {
   answer: ToolAnswer;
   run: string;
   name: string;
   onOpenTool?: OpenTool;
+  /** A customer's answer (made tools T5): its buttons pressed through
+   * their chat, and no way to the run, which is the business's. */
+  customer?: { press: (token: string) => Promise<PressedButton> };
 }) {
   const [all, setAll] = useState(false);
   const words = answerWords(a);
@@ -204,7 +219,7 @@ export function AnswerView({
             {act.label}
           </Link>
         )}
-        {(bad || a.status === "cancelled") && (
+        {(bad || a.status === "cancelled") && !customer && (
           <Link to={`/runs/${encodeURIComponent(run)}`}>
             Open the run to see why
           </Link>
@@ -254,7 +269,7 @@ export function AnswerView({
             ))}
           </dl>
         )}
-        <AnswerButtons bs={a.buttons} onOpenTool={onOpenTool} />
+        <AnswerButtons bs={a.buttons} onOpenTool={onOpenTool} press={customer?.press} />
       </article>
     );
   const rows = a.rows ?? [];
@@ -288,6 +303,7 @@ export function AnswerView({
                   bs={r.actions}
                   onOpenTool={onOpenTool}
                   row={r.title}
+                  press={customer?.press}
                 />
               )}
             </li>

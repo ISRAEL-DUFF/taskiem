@@ -570,6 +570,7 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .pc-app-line a { color: var(--muted); }
 .pc-offers { margin: 8px auto; max-width: 420px; }
 .pc-tiles, .pc-items, .pc-orders, .pc-lines { list-style: none; margin: 0; padding: 0; }
+.pc-tools-head { margin: 14px 16px 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .pc-tile { width: 100%; text-align: left; background: none; border: 0; box-shadow: none; cursor: pointer; font: inherit; }
 .pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
 .pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
