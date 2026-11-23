@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/stock"
-	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // getStockItems is GET /v1/stock/stock-items?show=all|sold|not_sold&retired=false:
@@ -47,7 +46,7 @@ func (s *Server) getStockItems(w http.ResponseWriter, r *http.Request) {
 		s.stockFail(w, r, err)
 		return
 	}
-	rows, err := s.readAllRows(r.Context(), p.TenantID, sh.table, storefront.MaxItems+1)
+	rows, err := s.stockCatalogueRows(r.Context(), p.TenantID, sh)
 	if err != nil {
 		s.stockFail(w, r, err)
 		return

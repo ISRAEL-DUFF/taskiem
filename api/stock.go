@@ -57,6 +57,9 @@ var (
 // named category is mapped if the table has one, else added (the plan's
 // column limit allowing). The shop is answered as it now is.
 func (s *Server) stockCategories(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop) (stockShop, error) {
+	if err := sh.products(); err != nil {
+		return sh, err
+	}
 	if sh.cols().Category != "" {
 		return sh, nil
 	}
@@ -113,7 +116,20 @@ type stockShop struct {
 
 func (sh stockShop) cols() storefront.Columns { return sh.sf.CatalogueColumns }
 
-// stockShopOf is the business's catalogue, or errStockOff.
+// products is errStockOff for a business keeping stock items with no
+// catalogue table (materials only, what a business buys §4.5: the
+// tailor): what needs products (adding one, its cells, sizes, categories,
+// what counts it) is off; its stock items are counted all the same.
+func (sh stockShop) products() error {
+	if sh.table.ID == uuid.Nil {
+		return errStockOff
+	}
+	return nil
+}
+
+// stockShopOf is the business's catalogue, or errStockOff. A business
+// with stock items and no catalogue table keeps stock of them alone: a
+// shop with no products (stockShop.products).
 func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, error) {
 	var sh stockShop
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -130,7 +146,28 @@ func (s *Server) stockShopOf(ctx context.Context, tenant uuid.UUID) (stockShop, 
 	if errors.Is(err, storefront.ErrNotFound) || errors.Is(err, datatables.ErrNotFound) {
 		err = errStockOff
 	}
+	if errors.Is(err, errStockOff) {
+		sh.table = datatables.Table{}
+		var has bool
+		if qerr := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_items WHERE tenant_id = $1)`, tenant).Scan(&has)
+		}); qerr != nil {
+			return sh, qerr
+		}
+		if has {
+			return sh, nil
+		}
+	}
 	return sh, err
+}
+
+// stockCatalogueRows reads the catalogue's rows whole; none for a shop with no
+// products.
+func (s *Server) stockCatalogueRows(ctx context.Context, tenant uuid.UUID, sh stockShop) ([]map[string]any, error) {
+	if sh.products() != nil {
+		return nil, nil
+	}
+	return s.readAllRows(ctx, tenant, sh.table, storefront.MaxItems+1)
 }
 
 // stockItems reads the business's items: the catalogue table's products,
@@ -140,7 +177,7 @@ func (s *Server) stockItems(ctx context.Context, tenant uuid.UUID) (stockShop, [
 	if err != nil {
 		return sh, nil, err
 	}
-	rows, err := s.readAllRows(ctx, tenant, sh.table, storefront.MaxItems+1)
+	rows, err := s.stockCatalogueRows(ctx, tenant, sh)
 	if err != nil {
 		return sh, nil, err
 	}
@@ -175,10 +212,15 @@ func (s *Server) stockItem(ctx context.Context, tenant uuid.UUID, sh stockShop, 
 		} else if err != nil {
 			return stock.Item{}, err
 		}
-		if product == "" {
+		// With no catalogue, a stock item is listed on its own, as
+		// stock.Items lists it.
+		if product == "" || sh.products() != nil {
 			return stock.FromStockItem(x), nil
 		}
 		row = product
+	}
+	if sh.products() != nil {
+		return stock.Item{}, errNoItem
 	}
 	tr, err := s.tableRowsFor(ctx, tenant, sh.table, storefrontPurpose)
 	if err != nil {
@@ -486,6 +528,9 @@ func (s *Server) stockAdd(ctx context.Context, tenant uuid.UUID, actor, key stri
 	if in.Material {
 		return s.stockAddMaterial(ctx, tenant, actor, key, in, audit, false)
 	}
+	if err := sh.products(); err != nil {
+		return stock.Item{}, stock.Movement{}, err
+	}
 	if products >= storefront.MaxItems {
 		return stock.Item{}, stock.Movement{}, fmt.Errorf("%w: the catalogue holds at most %d items", errConflict, storefront.MaxItems)
 	}
@@ -658,6 +703,9 @@ func (s *Server) stockAdded(ctx context.Context, tenant uuid.UUID, actor, key st
 func (s *Server) stockSetCells(ctx context.Context, tenant uuid.UUID, sh stockShop, id, key string, set map[string]any) error {
 	if len(set) == 0 {
 		return nil
+	}
+	if err := sh.products(); err != nil {
+		return err
 	}
 	checked, err := datatables.CheckRow(sh.table.Columns, set, false, false)
 	if err != nil {

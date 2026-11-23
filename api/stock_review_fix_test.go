@@ -90,6 +90,38 @@ func TestSaleWarningSumsAStockItem(t *testing.T) {
 	w.say(t, on, "cancel")
 }
 
+// PR review fix: a business counting only materials keeps them with no
+// catalogue table (the spec's tailor): its stock items are listed,
+// counted, moved and low as before; what needs products (adding one) is
+// off.
+func TestMaterialsWithoutACatalogue(t *testing.T) {
+	w := newTablesWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Ada Tailors", "ada@tailors.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	thread := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Thread", "quantity": 4, "unit": "roll", "material": true},
+		"Idempotency-Key", "t1")["item"].(map[string]any)["id"].(string)
+	sf := owner.must(200, "GET", "/v1/storefront", nil)
+	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": sf["slug"], "draft": sf["draft"], "catalogue_table": nil})
+
+	out := owner.must(200, "GET", "/v1/stock", nil)
+	if th := itemsByName(t, out)["Thread"]; out["keeps_stock"] != true || th == nil || th["stock"] != float64(4) {
+		t.Fatalf("the materials with no catalogue: %v", out)
+	}
+	if x := stockItemByName(t, owner, "Thread"); x["count"] != float64(4) {
+		t.Fatalf("the stock items: %v", x)
+	}
+	owner.must(200, "POST", "/v1/stock/movements", map[string]any{"item_id": thread, "reason": "count", "count": 3}, "Idempotency-Key", "m1")
+	owner.must(200, "PATCH", "/v1/stock/items/"+thread, map[string]any{"reorder_level": 5})
+	if out := owner.must(200, "GET", "/v1/stock", nil); out["low"] != float64(1) || itemsByName(t, out)["Thread"]["stock"] != float64(3) {
+		t.Fatalf("counted and low: %v", out)
+	}
+	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Needles", "quantity": 10, "material": true}, "Idempotency-Key", "n1")
+	if e := owner.must(409, "POST", "/v1/stock/items", map[string]any{"name": "Shirt", "quantity": 1, "price_kobo": 500000}, "Idempotency-Key", "s1"); e["code"] != "stock_off" {
+		t.Fatalf("a product with no catalogue: %v", e)
+	}
+}
+
 // PR review fix 3: POST /v1/stock/sales refuses a material, as chat's sold
 // and stock@1 do: nothing is sold, nothing moves.
 func TestSaleRefusesAMaterial(t *testing.T) {
