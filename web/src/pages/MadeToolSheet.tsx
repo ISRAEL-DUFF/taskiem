@@ -382,7 +382,6 @@ function FillFromWords({
   const first = useRef(words);
   useEffect(() => {
     if (first.current) void read(first.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <div className="tk-tool-words" data-testid="tool-words">

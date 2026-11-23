@@ -720,7 +720,7 @@ export function ComposerView<R>({
           )}
           {c.madeReach?.by === "phrase" && !c.toolsShown && !c.mentions.q && (
             <div className="tk-request" data-testid="made-tool-chip">
-              <button type="button" className="tk-request-btn" onClick={() => c.openMadeWords(c.madeReach!)}>
+              <button type="button" className="tk-request-btn" onClick={() => c.madeReach && c.openMadeWords(c.madeReach)}>
                 <span className="tk-request-icon" aria-hidden="true">
                   <Icon name="bolt" />
                 </span>
