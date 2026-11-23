@@ -20,13 +20,16 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// Public self-service menus (spec 11.2). A tenant with its own number may
-// offer a short menu to anyone who writes to it without a bound account:
-// only the workflows the tenant marked public, deployed in prod; inputs
-// in a WhatsApp form (never field by field), checked against the schema;
-// an explicit yes; then a run started by the actor
-// "whatsapp_public:<number>". No sign-in means no roles: the menu can do
-// nothing but start those workflows, under the tenant's plan limits and
+// Public self-service menus (spec 11.2), now customers' tools (made tools
+// T5, tools_customers.go). A tenant with its own number may offer a short
+// menu to anyone who writes to it without a bound account: its customers'
+// tools (those it deploys in prod for customers, and the entries of its
+// public menu carried over); inputs in a WhatsApp form (never field by
+// field), checked against the schema; an explicit yes, whatever the tool's
+// care; then a run started by the actor "whatsapp_public:<number>", and,
+// for a tool with an answer, the answer from its public outputs when the
+// run ends (customerToolsNotify). No sign-in means no roles: the menu can
+// do nothing but start those tools, under the tenant's plan limits and
 // strict per-number and per-tenant rate limits. It is never offered on the
 // shared number.
 
@@ -39,6 +42,11 @@ type pubData struct {
 	Flow     string         `json:"flow,omitempty"`
 	Inputs   map[string]any `json:"inputs,omitempty"` // personal fields sealed
 	Nonce    string         `json:"nonce,omitempty"`
+	// Tool is the customers' tool chosen, by its command.
+	Tool string `json:"tool,omitempty"`
+	// Given are the values a button on an answer carried (personal ones
+	// sealed): the form's own answers come first.
+	Given map[string]any `json:"given,omitempty"`
 }
 
 type pubSession struct {
@@ -51,7 +59,7 @@ type pubSession struct {
 func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) (bool, error) {
 	tenant := wa.Tenant
 	var on bool
-	var items []waPublicWorkflow
+	var items []toolRow
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `SELECT public_menu FROM whatsapp_numbers WHERE tenant_id = $1 AND phone_number_id = $2 AND status = 'active'`,
 			tenant, wa.Config.PhoneNumberID).Scan(&on)
@@ -61,14 +69,7 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 		if err != nil || !on {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT workflow_id, label FROM whatsapp_public_workflows WHERE tenant_id = $1 ORDER BY created_at, label`, tenant)
-		if err != nil {
-			return err
-		}
-		items, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (waPublicWorkflow, error) {
-			var x waPublicWorkflow
-			return x, r.Scan(&x.WorkflowID, &x.Label)
-		})
+		items, err = s.customerToolsFit(ctx, tx, tenant)
 		return err
 	})
 	if err != nil || !on || len(items) == 0 {
@@ -90,6 +91,10 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	}
 	if in.Flow != "" {
 		return true, s.waPublicFlowDone(ctx, wa, number, in, sess)
+	}
+	// A button on an answer the customer was sent: the tool it opens.
+	if token, ok := strings.CutPrefix(in.Reply, buttonReplyPrefix); ok {
+		return true, s.waPublicButton(ctx, wa, number, token, say)
 	}
 	// A tapped Yes is for the summary it was shown under.
 	if yes, stale := staleYes(in.Reply, pubAsk(sess.data)); yes {
@@ -134,11 +139,11 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 		return true, say(tr(l, "wa.public.confirm_reminder"), pubConfirmButtons(l, sess.data)...)
 	}
 	if n, err := strconv.Atoi(cmd); err == nil && n >= 1 && n <= len(items) {
-		return true, s.waPublicChoose(ctx, wa, number, items[n-1], say)
+		return true, s.waPublicChoose(ctx, wa, number, items[n-1], nil, say)
 	}
 	lines := make([]string, len(items))
 	for i, x := range items {
-		lines[i] = fmt.Sprintf("%d. %s", i+1, x.Label)
+		lines[i] = fmt.Sprintf("%d. %s", i+1, whatsapp.SafeText(x.Name))
 	}
 	if sess.state == "" {
 		// A menu shown: the number chosen from it comes back here.
@@ -157,7 +162,7 @@ const stateMenu = "menu"
 // shown (a number, or cancel), or a step of a workflow under way. All
 // else is the customer's conversation with the business.
 func (s *Server) waPublicAsked(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) bool {
-	if in.Flow != "" {
+	if in.Flow != "" || strings.HasPrefix(in.Reply, buttonReplyPrefix) {
 		return true
 	}
 	text := in.Text
@@ -212,46 +217,72 @@ func (s *Server) pubSave(ctx context.Context, tenant uuid.UUID, number, state st
 	})
 }
 
-// waPublicChoose starts the chosen item: its form, or straight to the
-// confirmation when it takes no inputs.
-func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, number string, item waPublicWorkflow, say func(string, ...whatsapp.Button) error) error {
+// waPublicChoose starts the chosen customers' tool: its form, or straight
+// to the confirmation when it takes no inputs or a button gave them all.
+// given are a button's values.
+func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, number string, item toolRow, given map[string]any, say func(string, ...whatsapp.Button) error) error {
 	tenant := wa.Tenant
 	l := s.chooseLang(ctx, tenant, number, "").Tag
-	var version int
+	label := item.Name
+	var fields []whatsapp.Field
+	data := pubData{Workflow: item.Workflow, Version: item.Version, Label: label, Tool: item.Command}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var err error
-		version, err = deployedVersion(ctx, tx, item.WorkflowID, "prod")
-		return err
+		_, d, err := s.customerDefinition(ctx, tx, tenant, item)
+		if err != nil {
+			return err
+		}
+		var raw json.RawMessage
+		if d.RawInputs != nil {
+			raw = d.RawInputs.Schema
+		}
+		if fields, err = whatsapp.InputFields(raw, d.RawTypes); err != nil {
+			return err
+		}
+		// A button's values, for the fields the form has; personal ones
+		// wait sealed, as the form's answers do.
+		for _, f := range fields {
+			v, ok := given[f.Name]
+			if !ok {
+				continue
+			}
+			if f.PII != "" {
+				env, err := s.Store.PII.SealTx(ctx, tx, tenant, f.PII, v)
+				if err != nil {
+					return err
+				}
+				v = env
+			}
+			if data.Given == nil {
+				data.Given = map[string]any{}
+			}
+			data.Given[f.Name] = v
+		}
+		return nil
 	})
-	if err != nil {
+	switch {
+	case errors.Is(err, errCustomerMoney):
+		return say(tr(l, "wa.public.not_offered", "label", label))
+	case errors.Is(err, errCustomerForm), errors.Is(err, whatsapp.ErrInputsUnsupported):
+		return say(tr(l, "wa.public.not_here", "label", label))
+	case err != nil:
 		return err
 	}
-	if version == 0 {
-		return say(tr(l, "wa.public.unavailable", "label", item.Label))
-	}
-	data := pubData{Workflow: item.WorkflowID, Version: version, Label: item.Label}
-	fields, err := s.waFieldsOf(ctx, tenant, item.WorkflowID, version)
-	if errors.Is(err, whatsapp.ErrInputsUnsupported) {
-		return say(tr(l, "wa.public.not_here", "label", item.Label))
-	}
-	if err != nil {
-		return err
-	}
-	if len(fields) == 0 {
+	if len(data.Given) == len(fields) {
+		data.Inputs, data.Given = data.Given, nil
 		return s.waPublicConfirm(ctx, wa, number, data, say)
 	}
-	form, err := whatsapp.FlowForm(item.Label, fields, nil)
+	form, err := whatsapp.FlowForm(label, fields, nil)
 	if wa.Config.FlowKey == nil || errors.Is(err, whatsapp.ErrFlowUnsupported) {
-		return say(tr(l, "wa.public.not_here", "label", item.Label))
+		return say(tr(l, "wa.public.not_here", "label", label))
 	}
 	if err != nil {
 		return err
 	}
 	tok, hash := whatsapp.NewFlowToken(tenant)
-	meta, _ := json.Marshal(map[string]any{"title": item.Label})
+	meta, _ := json.Marshal(map[string]any{"title": label})
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO whatsapp_flows (token_hash, tenant_id, kind, number, phone_number_id, workflow_id, version, data, expires_at)
-			VALUES ($1, $2, 'public', $3, $4, $5, $6, $7, now() + $8::interval)`, hash, tenant, number, wa.Config.PhoneNumberID, item.WorkflowID, version, meta, waPublicTTL.String())
+			VALUES ($1, $2, 'public', $3, $4, $5, $6, $7, now() + $8::interval)`, hash, tenant, number, wa.Config.PhoneNumberID, item.Workflow, item.Version, meta, waPublicTTL.String())
 		return err
 	}); err != nil {
 		return err
@@ -261,7 +292,7 @@ func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, numb
 		return err
 	}
 	if _, err := wa.Client.SendFlow(ctx, number, whatsapp.FlowMessage{Flow: whatsapp.FlowInputs, Token: tok, CTA: tr(l, "button.fill_in"), Screen: whatsapp.ScreenInputs, Data: form,
-		Body: tr(l, "wa.public.form", "label", item.Label, "cta", tr(l, "button.fill_in"))}); err != nil {
+		Body: tr(l, "wa.public.form", "label", label, "cta", tr(l, "button.fill_in"))}); err != nil {
 		s.Logger.Warn("whatsapp: sending a public form", "err", err)
 		s.waDropFlow(ctx, tenant, data.Flow)
 		return say(tr(l, "wa.public.form_failed"))
@@ -293,7 +324,16 @@ func (s *Server) waPublicFlowDone(ctx context.Context, wa *whatsapp.Platform, nu
 	}
 	data := sess.data
 	data.Inputs, _ = row.data["inputs"].(map[string]any)
-	data.Flow = ""
+	// A button's values fill what the form left blank.
+	for k, v := range data.Given {
+		if _, ok := data.Inputs[k]; !ok {
+			if data.Inputs == nil {
+				data.Inputs = map[string]any{}
+			}
+			data.Inputs[k] = v
+		}
+	}
+	data.Flow, data.Given = "", nil
 	if err := s.setFlow(ctx, row, "done", map[string]any{}); err != nil {
 		return err
 	}
@@ -335,7 +375,10 @@ func (s *Server) waPublicConfirm(ctx context.Context, wa *whatsapp.Platform, num
 	return say(msg, pubConfirmButtons(l, data)...)
 }
 
-// waPublicStart starts the confirmed run as whatsapp_public:<number>.
+// waPublicStart starts the confirmed customers' tool as
+// whatsapp_public:<number>: the tool as deployed now, still the one shown
+// and fit for a customer. A tool with an answer sends it back here when
+// the run ends.
 func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, number string, data pubData, say func(string, ...whatsapp.Button) error) error {
 	tenant := wa.Tenant
 	l := s.chooseLang(ctx, tenant, number, "").Tag
@@ -347,41 +390,45 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	}
 	var input any
 	var def []byte
-	deployed, public := 0, false
+	var t toolRow
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_public_workflows WHERE tenant_id = $1 AND workflow_id = $2)`, tenant, data.Workflow).Scan(&public); err != nil {
+		tools, err := customerToolsTx(ctx, tx)
+		if err != nil {
 			return err
 		}
-		var err error
-		if deployed, err = deployedVersion(ctx, tx, data.Workflow, "prod"); err != nil {
-			return err
+		found := false
+		for _, x := range tools {
+			// A session from before tools named only its workflow.
+			if x.Workflow == data.Workflow && (data.Tool == "" || x.Command == data.Tool) {
+				t, found = x, true
+			}
 		}
-		if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2 AND state IN ('published', 'deprecated')`,
-			data.Workflow, data.Version).Scan(&def); err != nil {
+		if !found || t.Version != data.Version {
+			return pgx.ErrNoRows
+		}
+		if def, _, err = s.customerDefinition(ctx, tx, tenant, t); err != nil {
 			return err
 		}
 		input, err = pii.Open(ctx, s.Store.PII, tx, tenant, data.Inputs, pii.Taint{})
 		return err
 	})
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && (!public || deployed != data.Version) {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
 		return say(tr(l, "wa.public.changed", "label", data.Label))
-	}
-	if err != nil {
+	case errors.Is(err, errCustomerMoney):
+		return say(tr(l, "wa.public.not_offered", "label", data.Label))
+	case errors.Is(err, errCustomerForm):
+		return say(tr(l, "wa.public.not_here", "label", data.Label))
+	case err != nil:
 		return err
 	}
-	if input == nil {
-		input = map[string]any{}
+	in, _ := input.(map[string]any)
+	run, created, err := s.startForCustomer(ctx, tenant, customerStart{tool: t, def: def, input: in, actor: customerWAActor(number),
+		shown: customerWAActor(whatsapp.MaskNumber(number)), kind: "system", channel: "whatsapp_public", dedup: data.Nonce})
+	var bad toolInputError
+	if errors.As(err, &bad) {
+		return say(tr(l, "wa.public.bad_details", "problems", whatsapp.SafeText(strings.Join(bad, "; "))))
 	}
-	raw, _ := json.Marshal(input)
-	if probs := s.inputProblems(data.Workflow, data.Version, def, raw); len(probs) > 0 {
-		return say(tr(l, "wa.public.bad_details", "problems", whatsapp.SafeText(strings.Join(probs, "; "))))
-	}
-	actor := "whatsapp_public:" + number
-	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
-		TenantID: tenant, WorkflowID: data.Workflow, Version: data.Version, Environment: "prod",
-		Trigger:   map[string]any{"type": "manual", "channel": "whatsapp_public", "body": input},
-		StartedBy: actor, TriggerID: "whatsapp_public/" + data.Workflow.String(), DedupKey: data.Nonce,
-	})
 	if le, ok := runtime.IsLimit(err); ok {
 		s.Logger.Info("whatsapp: a public run refused by a plan limit", "limit", le.Limit)
 		return say(tr(l, "wa.public.busy"))
@@ -389,12 +436,130 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	if err != nil {
 		return err
 	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		detail, _ := json.Marshal(map[string]any{"workflow": data.Workflow, "version": data.Version, "environment": "prod", "created": created, "channel": "whatsapp_public"})
-		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', $2, 'run.start', $3, $4)`, tenant, "whatsapp_public:"+whatsapp.MaskNumber(number), ref.ID.String(), detail)
+	reference := strings.ToUpper(run.String()[:8])
+	if t.AnswerType == "" {
+		return say(tr(l, "wa.public.started", "label", data.Label, "reference", reference))
+	}
+	if created {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `INSERT INTO customer_tool_watches (tenant_id, run_id, phone_number_id, number, label) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+				tenant, run, wa.Config.PhoneNumberID, number, data.Label)
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	return say(tr(l, "wa.public.working", "label", data.Label, "reference", reference))
+}
+
+// waPublicButton is a button on an answer a customer was sent, pressed:
+// the customers' tool it opens, its form, then yes, as a choice from the
+// menu is. Only the customer the answer went to may press it.
+func (s *Server) waPublicButton(ctx context.Context, wa *whatsapp.Platform, number, token string, say func(string, ...whatsapp.Button) error) error {
+	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
+	id, err := uuid.Parse(token)
+	if err != nil {
+		return say(tr(l, "wa.public.button_gone"))
+	}
+	var t toolRow
+	var given map[string]any
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{wa.Tenant}, func(tx pgx.Tx) error {
+		var err error
+		t, given, err = pressCustomerButton(ctx, tx, id, customerWAActor(number))
 		return err
-	}); err != nil {
+	})
+	if errors.Is(err, errNotFound) {
+		return say(tr(l, "wa.public.button_gone"))
+	}
+	if err != nil {
 		return err
 	}
-	return say(tr(l, "wa.public.started", "label", data.Label, "reference", strings.ToUpper(ref.ID.String()[:8])))
+	return s.waPublicChoose(ctx, wa, number, t, given, say)
+}
+
+// customerToolsNotify sends each customer whose tool's run ended on the
+// business's own number its answer there: the public outputs only, a
+// card's buttons as reply buttons (customers' tools only), how a run that
+// failed ended in plain words with its reference. Outside WhatsApp's
+// 24-hour window, or once the business's number changed, it is dropped;
+// a send that failed is tried again on the next ticks, four times.
+func (s *Server) customerToolsNotify(ctx context.Context, tenant uuid.UUID) error {
+	type ended struct {
+		run                 uuid.UUID
+		pnid, number, label string
+		attempts            int
+		status              string
+	}
+	var done []ended
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `UPDATE customer_tool_watches w SET notified_at = now() FROM runs r
+			WHERE r.id = w.run_id AND w.notified_at IS NULL AND r.status IN ('completed', 'failed', 'cancelled', 'needs_reconciliation')
+			RETURNING w.run_id, w.phone_number_id, w.number, w.label, w.attempts, r.status`)
+		if err != nil {
+			return err
+		}
+		done, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (ended, error) {
+			var e ended
+			return e, r.Scan(&e.run, &e.pnid, &e.number, &e.label, &e.attempts, &e.status)
+		})
+		return err
+	})
+	if err != nil || len(done) == 0 || s.WhatsApp == nil {
+		return err
+	}
+	wa, err := s.WhatsApp.ForTenant(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, e := range done {
+		if !wa.Own() || wa.Config.PhoneNumberID != e.pnid {
+			continue // the business's number changed: nowhere to answer
+		}
+		err := s.sendCustomerAnswer(ctx, wa, e.run, e.number, e.label, e.status)
+		if err == nil || errors.Is(err, whatsapp.ErrWindowClosed) || e.attempts >= 4 {
+			continue
+		}
+		errs = append(errs, err)
+		if rerr := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE customer_tool_watches SET notified_at = NULL, attempts = attempts + 1 WHERE run_id = $1`, e.run)
+			return err
+		}); rerr != nil {
+			errs = append(errs, rerr)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// sendCustomerAnswer sends one customer the answer of the run they
+// started.
+func (s *Server) sendCustomerAnswer(ctx context.Context, wa *whatsapp.Platform, run uuid.UUID, number, label, status string) error {
+	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
+	reference := strings.ToUpper(run.String()[:8])
+	m := whatsapp.Message{Tenant: wa.Tenant, Text: tr(l, "wa.public.failed", "label", label, "reference", reference)}
+	if status == "completed" {
+		a, err := s.customerAnswer(ctx, wa.Tenant, run, customerWAActor(number), chatRows)
+		if err != nil {
+			return err
+		}
+		m.Text = customerAnswerWords(l, a)
+		if m.Text == "" {
+			m.Text = tr(l, "wa.public.done", "label", label, "reference", reference)
+		}
+		m.Buttons = chatButtons(a.Buttons)
+	}
+	_, err := wa.Send(ctx, number, m)
+	return err
+}
+
+// customerAnswerWords is a customer's answer as a chat message: as a
+// member's, but a long list says how many more without sending anyone to
+// an app.
+func customerAnswerWords(l lang.Tag, a madeAnswer) string {
+	if a.Type != "list" || len(a.Rows) <= 10 {
+		return toolAnswerWords(l, a)
+	}
+	more := len(a.Rows) - 10
+	a.Rows = a.Rows[:10]
+	return toolAnswerWords(l, a) + "\n" + tr(l, "wa.public.list_more", "count", strconv.Itoa(more))
 }

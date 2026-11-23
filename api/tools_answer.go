@@ -131,6 +131,15 @@ func (s *Server) runAnswer(w http.ResponseWriter, r *http.Request) {
 // run (by who started it). rows is how many of a list's first rows get
 // their buttons (none past them: they are pressed from a narrower list).
 func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(startedBy, env string) bool, rows int) (madeAnswer, error) {
+	return s.answerAs(ctx, tenant, id, may, rows, false)
+}
+
+// answerAs draws run id's answer for a member, or for a customer (made
+// tools §11): only the outputs the workflow marks public are drawn (the
+// rest dropped before the answer's expressions see them, not masked),
+// its buttons open only customers' tools, and a failure is not said in
+// the business's words.
+func (s *Server) answerAs(ctx context.Context, tenant, id uuid.UUID, may func(startedBy, env string) bool, rows int, customer bool) (madeAnswer, error) {
 	var a madeAnswer
 	var wf uuid.UUID
 	var version int
@@ -169,7 +178,7 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 		return a, err
 	}
 	a.Type = "outcome"
-	if a.Status == "failed" {
+	if a.Status == "failed" && !customer {
 		a.Error = maskWords(s.runFailureText(ctx, tenant, id))
 	}
 	d, err := s.definitionFor(wf, version, def)
@@ -183,12 +192,34 @@ func (s *Server) answerOf(ctx context.Context, tenant, id uuid.UUID, may func(st
 	if outputs == nil {
 		outputs = map[string]any{}
 	}
+	audience := wd.ToolForMembers
+	if customer {
+		outputs = publicOutputs(d, outputs)
+		audience = wd.ToolForCustomers
+	}
 	maskDeclared(d, outputs)
 	drawAnswer(&a, d.Tool.Answer, outputs)
-	if err := s.mintAnswerButtons(ctx, tenant, env, id, &a, rows); err != nil {
+	if err := s.mintAnswerButtons(ctx, tenant, env, id, &a, rows, audience); err != nil {
 		return a, err
 	}
 	return a, nil
+}
+
+// publicOutputs are the outputs a workflow marks public, and nothing
+// else: a customer's answer is drawn from them alone, so an output written
+// for staff never reaches a customer, at any depth, whatever the answer's
+// expressions name.
+func publicOutputs(d *wd.Definition, outputs map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, o := range d.Outputs {
+		if !o.Public {
+			continue
+		}
+		if v, ok := outputs[o.Name]; ok {
+			out[o.Name] = v
+		}
+	}
+	return out
 }
 
 // maskDeclared masks the outputs declared personal data whatever their

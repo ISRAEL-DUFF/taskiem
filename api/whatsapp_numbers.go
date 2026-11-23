@@ -51,6 +51,9 @@ type waPublicWorkflow struct {
 	WorkflowID uuid.UUID `json:"workflow_id"`
 	Label      string    `json:"label"`
 	Name       string    `json:"name,omitempty"`
+	// Command is the customers' tool the entry is (made tools T5): made
+	// from its label, unique in the business.
+	Command string `json:"command,omitempty"`
 }
 
 func (s *Server) waNumberView(r *http.Request) (waNumberView, error) {
@@ -73,14 +76,14 @@ func (s *Server) waNumberView(r *http.Request) (waNumberView, error) {
 				v.WebhookPath, v.FlowsPath = "/channels/whatsapp/n/"+v.PhoneNumberID, "/channels/whatsapp/flows/"+v.PhoneNumberID
 			}
 		}
-		rows, err := tx.Query(r.Context(), `SELECT p.workflow_id, p.label, COALESCE(w.name, '') FROM whatsapp_public_workflows p
+		rows, err := tx.Query(r.Context(), `SELECT p.workflow_id, p.label, COALESCE(w.name, ''), p.command FROM whatsapp_public_workflows p
 			LEFT JOIN workflows w ON w.id = p.workflow_id WHERE p.tenant_id = $1 ORDER BY p.created_at, p.label`, p.TenantID)
 		if err != nil {
 			return err
 		}
 		v.Public, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (waPublicWorkflow, error) {
 			var x waPublicWorkflow
-			return x, r.Scan(&x.WorkflowID, &x.Label, &x.Name)
+			return x, r.Scan(&x.WorkflowID, &x.Label, &x.Name, &x.Command)
 		})
 		return err
 	})
@@ -307,6 +310,61 @@ func (s *Server) putWhatsAppPublicMenu(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return fmt.Errorf("%w: connect the organisation's own WhatsApp number first; public menus are not offered on the shared number", errConflict)
 		}
+		// Each entry keeps the command it had; a new one is given one from
+		// its label, never a command another workflow's tool has in prod.
+		had := map[uuid.UUID]string{}
+		rows, err := tx.Query(r.Context(), `SELECT workflow_id, command FROM whatsapp_public_workflows WHERE tenant_id = $1`, p.TenantID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var wf uuid.UUID
+			var c string
+			if err := rows.Scan(&wf, &c); err != nil {
+				rows.Close()
+				return err
+			}
+			had[wf] = c
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		toolCommands := map[string]uuid.UUID{}
+		rows, err = tx.Query(r.Context(), `SELECT command, workflow_id FROM workflow_tools WHERE environment = 'prod'`)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var c string
+			var wf uuid.UUID
+			if err := rows.Scan(&c, &wf); err != nil {
+				rows.Close()
+				return err
+			}
+			toolCommands[c] = wf
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		used := map[string]bool{}
+		for _, x := range req.Workflows {
+			if c, ok := had[x.WorkflowID]; ok {
+				used[c] = true
+			}
+		}
+		for i, x := range req.Workflows {
+			c, ok := had[x.WorkflowID]
+			if !ok {
+				c = menuCommand(x.Label, func(c string) bool {
+					wf, tool := toolCommands[c]
+					return used[c] || tool && wf != x.WorkflowID
+				})
+				used[c] = true
+			}
+			req.Workflows[i].Command = c
+		}
 		if _, err := tx.Exec(r.Context(), `DELETE FROM whatsapp_public_workflows WHERE tenant_id = $1`, p.TenantID); err != nil {
 			return err
 		}
@@ -318,8 +376,8 @@ func (s *Server) putWhatsAppPublicMenu(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return fmt.Errorf("%w: no workflow %s", errBadRequest, x.WorkflowID)
 			}
-			if _, err := tx.Exec(r.Context(), `INSERT INTO whatsapp_public_workflows (tenant_id, workflow_id, label, created_by) VALUES ($1, $2, $3, $4)`,
-				p.TenantID, x.WorkflowID, x.Label, p.Actor()); err != nil {
+			if _, err := tx.Exec(r.Context(), `INSERT INTO whatsapp_public_workflows (tenant_id, workflow_id, label, created_by, command) VALUES ($1, $2, $3, $4, $5)`,
+				p.TenantID, x.WorkflowID, x.Label, p.Actor(), x.Command); err != nil {
 				return err
 			}
 		}

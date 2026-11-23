@@ -2738,6 +2738,36 @@
       "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "Bọtịnụ a adịghịzi. Zipu *menu* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "Emechala: {label} agwụla. Nọmba ntụaka gị bụ {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Ndo, {label} agaghị nke ọma. Nọmba ntụaka gị bụ {reference}. Zipu *menu* ka ị nwaa ọzọ, ma ọ bụ dee anyị ebe a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…na {count} ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "Enweghị ike ime {label} site ebe a. Dee anyị ebe a, anyị ga-enyere gị aka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} amalitela. Nọmba ntụaka gị bụ {reference}. Azịza ga-abịa ebe a mgbe ọ dị njikere.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
     "wa.saved.bank": {
       "text": "{bank}, account number {number}",
       "reviewed": false

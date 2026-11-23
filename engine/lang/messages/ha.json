@@ -2738,6 +2738,36 @@
       "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "Wannan maɓalli ba ya nan kuma. Aika *menu* don ganin abin da za ka iya yi a nan.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "An gama: {label} ya kammala. Lambar shaidarka ita ce {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Yi haƙuri, {label} bai yi nasara ba. Lambar shaidarka ita ce {reference}. Aika *menu* don sake gwadawa, ko ka rubuto mana nan.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…da wasu {count}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "Ba za a iya yin {label} daga nan ba. Rubuto mana nan za mu taimaka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} ya fara. Lambar shaidarka ita ce {reference}. Amsar za ta zo nan idan ta shirya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
     "wa.saved.bank": {
       "text": "{bank}, account number {number}",
       "reviewed": false

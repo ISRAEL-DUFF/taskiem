@@ -22629,6 +22629,254 @@ paths:
                       format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/tools:
+    get:
+      operationId: myChatTools
+      tags:
+      - You
+      summary: Their tools
+      description: 'Through the door (`customer.tools`), the business''s tools for its customers (made tools T5, decision 0070): those it deploys in prod with `tool.for` `customers`, and the entries of its public menu carried over (migration 00560). Only tools a customer may start: none whose steps move money, none whose workflow names roles, none whose inputs a form cannot carry (nested, or more than ten). Each with its form; never its care, roles or steps.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Their tools
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [tools]
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CustomerTool'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/tools/buttons/{token}:
+    post:
+      operationId: pressMyChatToolButton
+      tags:
+      - You
+      summary: Press a button on an answer
+      description: 'Through the door (`customer.tool`): a button on an answer the person was given (on a run they started as this business''s customer) gives the customers'' tool it opens and the values it fills in (those shown masked are left to be asked). It never runs anything. A button of anyone else''s answer, past its seven days, or whose tool is no customers'' tool now, 404.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The tool and its values
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [button, command, name, inputs]
+                properties:
+                  button:
+                    type: string
+                    format: uuid
+                  command:
+                    type: string
+                  name:
+                    type: string
+                  inputs:
+                    type: object
+                  once:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/tools/{command}/start:
+    post:
+      operationId: startMyChatTool
+      tags:
+      - You
+      summary: Start one of their tools
+      description: 'Through the door (`customer.tool`): the values checked against the tool''s form, then what will run and a confirm to send back with the same values. Never a run: a customer always says yes, whatever the tool''s care. 409 `not_offered` for a tool whose steps move money or whose inputs no form carries; 404 for a tool the business does not offer its customers (a members'' tool is never one).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: object
+      responses:
+        '200':
+          description: Waiting for its yes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolStart'
+        '422':
+          description: The values do not fit the tool's form
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  problems:
+                    type: array
+                    items:
+                      type: string
+        '409':
+          description: Not offered to customers (`not_offered`), or a business that turned this off
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  not_offered:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/tools/{command}/confirm:
+    post:
+      operationId: confirmMyChatTool
+      tags:
+      - You
+      summary: Say yes to one of their tools
+      description: 'Through the door (`customer.tool`): the run a start waited for, once, with the same values, by the same person, before it expires (a confirm used before answers 200 with its run). Started as the business''s customer (`customer:<person>`), never as a member, audited in the business''s chain, under its plan''s run limits (429) and the menu''s limits: three starts, then one every 20 minutes.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: command
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  format: uuid
+                input:
+                  type: object
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id, created]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        '200':
+          description: Started before, by this confirm
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [run_id, created]
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+                  created:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/runs/{run}/answer:
+    get:
+      operationId: myChatToolAnswer
+      tags:
+      - You
+      summary: The answer to your tool
+      description: 'Through the door (`customer.tool`): the answer of a run the person started in this chat, drawn from the outputs the workflow marks public and nothing else (the rest dropped before it is drawn), masked as messages are; its buttons open only the business''s customers'' tools. How a failed run failed and who it waits for are not said. A run anyone else started, 404.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolAnswer'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/chats/{id}/orders:
     get:
       operationId: myChatOrders
@@ -42091,6 +42339,27 @@ components:
         inputs:
           type: object
           description: The tool's inputs schema, for its form
+    CustomerTool:
+      type: object
+      additionalProperties: false
+      required:
+      - command
+      - name
+      properties:
+        command:
+          type: string
+        name:
+          type: string
+        about:
+          type: string
+        icon:
+          type: string
+        inputs:
+          type: object
+          description: The tool's inputs schema, for its form (flat, ten fields at most)
+        answer:
+          type: string
+          description: text, card or list; left out when the tool tells only that it started (a public menu's entry)
     ToolStart:
       type: object
       required:
@@ -59236,6 +59505,9 @@ components:
         name:
           type: string
           description: The workflow's name (answers only).
+        command:
+          type: string
+          description: The customers' tool the entry is (made tools T5), made from its label and kept while the entry is (answers only).
       additionalProperties: false
     WhatsAppTemplateStatus:
       type: object

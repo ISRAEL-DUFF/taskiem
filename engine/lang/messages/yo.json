@@ -2738,6 +2738,36 @@
       "text": "Tábìlì rẹ {table} kò tíì ní ọ̀wọ̀n {columns}, tí ó ń lò. Fi kún un nínú áàpù{link}, bí bẹ́ẹ̀ kọ́ àwọn ìgbésẹ̀ yẹn yóò kùnà.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "Bọ́tìnnì yìí kò sí mọ́. Ẹ fi *menu* ránṣẹ́ láti rí ohun tí ẹ lè ṣe níbí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "Ó ti parí: {label} ti parí. Nọ́mbà ìtọ́kasí yín ni {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Ẹ má bínú, {label} kò lọ. Nọ́mbà ìtọ́kasí yín ni {reference}. Ẹ fi *menu* ránṣẹ́ láti gbìyànjú lẹ́ẹ̀kan sí i, tàbí kí ẹ kọ̀wé sí wa níbí.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…àti {count} mìíràn.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "A kò lè ṣe {label} láti ibí. Ẹ kọ̀wé sí wa níbí, a ó sì ràn yín lọ́wọ́.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} ti bẹ̀rẹ̀. Nọ́mbà ìtọ́kasí yín ni {reference}. Ìdáhùn yóò wá síbí nígbà tí ó bá ṣetán.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
     "wa.saved.bank": {
       "text": "{bank}, account number {number}",
       "reviewed": false

@@ -514,6 +514,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
 			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
 			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			s.customerToolRoutes(r)                              // a business's tools for its customers (tools_customers_door.go)
 			s.discoverRoutes(r)                                  // the public finding businesses (discover.go)
 			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
 			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)

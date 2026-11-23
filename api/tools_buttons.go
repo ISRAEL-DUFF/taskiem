@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -40,6 +41,13 @@ const buttonReplyPrefix = "tb:"
 // masked as messages are, at any depth, so a button carries nothing its
 // presser could not read in the answer.
 func mintButton(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, run uuid.UUID, place string, b answerBtn) (uuid.UUID, error) {
+	return mintButtonFor(ctx, tx, tenant, env, run, place, b, wd.ToolForMembers)
+}
+
+// mintButtonFor is mintButton for the tools of an audience: a button on a
+// member's answer opens only members' tools, one on a customer's answer
+// only customers' tools (made tools §11); any other is left out.
+func mintButtonFor(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, run uuid.UUID, place string, b answerBtn, audience string) (uuid.UUID, error) {
 	var id uuid.UUID
 	var expires time.Time
 	err := tx.QueryRow(ctx, `SELECT id, expires_at FROM tool_buttons WHERE from_run = $1 AND place = $2`, run, place).Scan(&id, &expires)
@@ -52,7 +60,7 @@ func mintButton(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, ru
 		return uuid.Nil, err
 	}
 	var wf uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT workflow_id FROM workflow_tools WHERE environment = $1 AND command = $2`, env, b.Tool).Scan(&wf)
+	err = tx.QueryRow(ctx, `SELECT workflow_id FROM workflow_tools WHERE environment = $1 AND command = $2 AND audience = $3`, env, b.Tool, audience).Scan(&wf)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, nil
 	}
@@ -121,12 +129,18 @@ const buttonRows = 100
 // mintAnswerButtons gives each of an answer's buttons (a card's, each of
 // the first rows rows') its id; a button whose tool is not there is left
 // out.
-func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer, rows int) error {
+func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer, rows int, audience string) error {
+	// A customer's answer has buttons of its own, apart from those a
+	// member drawing the same run is given.
+	prefix := ""
+	if audience != wd.ToolForMembers {
+		prefix = audience + "/"
+	}
 	return db0(ctx, s, tenant, func(tx pgx.Tx) error {
 		mint := func(place string, bs []answerBtn) ([]answerBtn, error) {
 			var out []answerBtn
 			for i, b := range bs {
-				id, err := mintButton(ctx, tx, tenant, env, run, place+"/"+strconv.Itoa(i), b)
+				id, err := mintButtonFor(ctx, tx, tenant, env, run, prefix+place+"/"+strconv.Itoa(i), b, audience)
 				if err != nil {
 					return nil, err
 				}

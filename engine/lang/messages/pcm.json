@@ -2738,6 +2738,36 @@
       "text": "Your table {table} never get {columns} column, wey e dey use. Add am for the app{link}, or those steps go fail.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "This button no dey work again. Send *menu* make you see wetin you fit do here.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "E don do: {label} don finish. Your reference na {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Sorry, {label} no go through. Your reference na {reference}. Send *menu* make you try again, or write us here.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…and {count} more.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "{label} no fit happen from here. Write us here and we go help you.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} don start. Your reference na {reference}. The answer go come here when e ready.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
     "wa.saved.bank": {
       "text": "{bank}, account number {number}",
       "reviewed": false
