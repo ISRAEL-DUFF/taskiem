@@ -645,11 +645,20 @@ func (d *Definition) ValidateInputs(body []byte) []string {
 		if len(d.RawTypes) > 0 {
 			root["types"] = d.RawTypes
 		}
+		if name, _, ok := ScanInput(d); ok {
+			// A scan input takes the code typed, or as the phone read it.
+			if props, ok := root["properties"].(map[string]any); ok {
+				props[name] = scanInputSchema()
+			}
+		}
 		raw, _ := json.Marshal(root)
 		d.inputs = schemacheck.New("https://schemas.taskiem.dev/inputs/"+d.ID+".json", raw)
 	})
 	if d.inputs == nil {
 		return nil
 	}
-	return d.inputs.Validate(body)
+	if msgs := d.inputs.Validate(body); len(msgs) > 0 {
+		return msgs
+	}
+	return d.scanInputProblems(body)
 }

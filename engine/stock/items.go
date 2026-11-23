@@ -27,6 +27,9 @@ type Item struct {
 	Reorder  *int64 `json:"reorder_level,omitempty"`
 	Target   *int64 `json:"target_level,omitempty"`
 	Supplier string `json:"supplier,omitempty"`
+	// Code is the barcode on its pack, when the catalogue keeps codes: a
+	// count by scanning matches it (device fields D2).
+	Code string `json:"code,omitempty"`
 	// Category is the owner's label for the kind of thing it is
 	// ("Sneakers"), when the catalogue has a category column.
 	Category string `json:"category,omitempty"`
@@ -133,6 +136,9 @@ func Items(rows []map[string]any, m storefront.Columns) []Item {
 		}
 		if m.Category != "" {
 			it.Category = str(r[m.Category])
+		}
+		if m.Code != "" {
+			it.Code = str(r[m.Code])
 		}
 		if m.Description != "" {
 			it.Description = str(r[m.Description])

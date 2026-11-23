@@ -2535,6 +2535,8 @@ export interface RidersRecordProofInput {
   /** A form step's photo answer: {state, source, id} */
   photo?: Value;
   reference: Val<string>;
+  /** A form step's signature answer: {state, source, id}; the customer's signature drawn on the rider's phone (D2), shown on the Confirm card */
+  signature?: Value;
   /** A form step's location answer: {state, source, lat, lng, accuracy_m, coarse} */
   where?: Value;
 }

@@ -85,6 +85,10 @@ type alertProof struct {
 	// camera (taken in the app at the tap) or sent.
 	PhotoURL    string `json:"photo_url,omitempty"`
 	PhotoSource string `json:"photo_source,omitempty"`
+	// Signed is true when the customer signed on the rider's phone (D2);
+	// SignatureURL a short-lived link to what they drew.
+	Signed       bool   `json:"signed,omitempty"`
+	SignatureURL string `json:"signature_url,omitempty"`
 }
 
 type alertReorder struct {

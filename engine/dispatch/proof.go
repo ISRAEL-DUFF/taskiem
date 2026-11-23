@@ -29,6 +29,9 @@ type Proof struct {
 	// Photo is the form file answered (its id), and PhotoSource camera or sent.
 	Photo       string
 	PhotoSource string
+	// Signature is the customer's signature answered (a form file's id),
+	// drawn on the rider's phone (D2).
+	Signature string
 	// Run is the run recording the proof: the photo must be a file
 	// answered to it (a form step of the run, or the form that started
 	// it), never another run's file named by its id.
@@ -128,22 +131,20 @@ func (d *Dispatch) RecordProof(ctx context.Context, tenant uuid.UUID, reference 
 		if _, err := tx.Exec(ctx, `UPDATE deliveries SET proof_where = $2, proof_mark = $3 WHERE id = $1`, x.ID, where, mark); err != nil {
 			return err
 		}
+		if p.Signature != "" {
+			path, err := runFile(ctx, tx, p.Signature, p.Run, "signature")
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE deliveries SET proof_signature = $2 WHERE id = $1`, x.ID, path); err != nil {
+				return err
+			}
+		}
 		if p.Photo == "" {
 			return nil
 		}
-		fid, err := uuid.Parse(p.Photo)
+		path, err := runFile(ctx, tx, p.Photo, p.Run, "photo")
 		if err != nil {
-			return fmt.Errorf("%w: the photo is a form file's id", ErrInvalid)
-		}
-		var path string
-		// Answered to this run: a file of a submission to one of its form
-		// steps' requests, or of the form that started it.
-		if err := tx.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id
-			LEFT JOIN form_requests q ON q.id = s.request_id
-			WHERE f.id = $1 AND s.status <> 'refused' AND (q.run_id = $2 OR s.run_id = $2)`, fid, p.Run).Scan(&path); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return fmt.Errorf("%w: no such photo answered to this run", ErrInvalid)
-			}
 			return err
 		}
 		src := p.PhotoSource
@@ -160,6 +161,26 @@ func (d *Dispatch) RecordProof(ctx context.Context, tenant uuid.UUID, reference 
 	return mark, err
 }
 
+// runFile is a form file's place in storage, when it was answered to
+// this run: a file of a submission to one of its form steps' requests, or
+// of the form that started it; never another run's file named by its id.
+func runFile(ctx context.Context, tx pgx.Tx, id string, run uuid.UUID, what string) (string, error) {
+	fid, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("%w: the %s is a form file's id", ErrInvalid, what)
+	}
+	var path string
+	if err := tx.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id
+		LEFT JOIN form_requests q ON q.id = s.request_id
+		WHERE f.id = $1 AND s.status <> 'refused' AND (q.run_id = $2 OR s.run_id = $2)`, fid, run).Scan(&path); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("%w: no such %s answered to this run", ErrInvalid, what)
+		}
+		return "", err
+	}
+	return path, nil
+}
+
 // ProofView is what a delivery's Confirm card shows of its proof.
 type ProofView struct {
 	// Where is the masked point and how it was got; Mark what it says.
@@ -169,6 +190,9 @@ type ProofView struct {
 	// sent (empty for a photo from before D1, sent in a chat).
 	Photo       string `json:"-"`
 	PhotoSource string `json:"photo_source,omitempty"`
+	// Signature is the customer's signature's place in storage, when they
+	// signed on the rider's phone (D2).
+	Signature string `json:"-"`
 }
 
 // ProofWhere is a delivery's location, masked to about 100 m.
@@ -183,7 +207,7 @@ type ProofWhere struct {
 // ProofsTx are deliveries' proofs, by delivery, in the business's scope.
 func ProofsTx(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (map[uuid.UUID]ProofView, error) {
 	out := map[uuid.UUID]ProofView{}
-	rows, err := tx.Query(ctx, `SELECT d.id, d.proof_where, COALESCE(d.proof_mark, ''), COALESCE(d.proof, ''),
+	rows, err := tx.Query(ctx, `SELECT d.id, d.proof_where, COALESCE(d.proof_mark, ''), COALESCE(d.proof, ''), COALESCE(d.proof_signature, ''),
 		COALESCE((SELECT p.source FROM delivery_proofs p WHERE p.delivery_id = d.id ORDER BY p.created_at DESC, p.id DESC LIMIT 1), '')
 		FROM deliveries d WHERE d.id = ANY ($1)`, ids)
 	if err != nil {
@@ -194,7 +218,7 @@ func ProofsTx(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (map[uuid.UUID]Pr
 		var id uuid.UUID
 		var where *ProofWhere
 		var v ProofView
-		if err := rows.Scan(&id, &where, &v.Mark, &v.Photo, &v.PhotoSource); err != nil {
+		if err := rows.Scan(&id, &where, &v.Mark, &v.Photo, &v.Signature, &v.PhotoSource); err != nil {
 			return nil, err
 		}
 		v.Where = where

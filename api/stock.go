@@ -18,6 +18,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // Stock by chat (docs/spec/stock.md, decision 0057), the web's and the
@@ -68,31 +69,57 @@ var (
 // named category is mapped if the table has one, else added (the plan's
 // column limit allowing). The shop is answered as it now is.
 func (s *Server) stockCategories(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop) (stockShop, error) {
-	if sh.cols().Category != "" {
+	return s.stockOwnColumn(ctx, tenant, actor, audit, sh, func(m *storefront.Columns) *string { return &m.Category }, categoryColumn, errNoCategoryColumn, errCategoryColumnLimit)
+}
+
+// codeColumn is the column a catalogue gets the first time an item is
+// given the barcode on its pack (device fields D2: a count by scanning).
+var codeColumn = datatables.Column{Name: "barcode", Title: "Barcode", Type: "text"}
+
+// maxCode is how long an item's barcode may be, in characters.
+const maxCode = 64
+
+// errNoCodeColumn, errCodeColumnLimit: as for categories.
+var (
+	errNoCodeColumn    = errors.New("stock: add a barcode column to keep codes")
+	errCodeColumnLimit = errors.New("stock: no room for a barcode column")
+)
+
+// stockCodes makes the catalogue hold barcodes, once, as stockCategories.
+func (s *Server) stockCodes(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop) (stockShop, error) {
+	return s.stockOwnColumn(ctx, tenant, actor, audit, sh, func(m *storefront.Columns) *string { return &m.Code }, codeColumn, errNoCodeColumn, errCodeColumnLimit)
+}
+
+// stockOwnColumn maps a text column of the catalogue to field, once: one
+// of col's name is mapped if the table has it, else col is added (the
+// plan's column limit allowing).
+func (s *Server) stockOwnColumn(ctx context.Context, tenant uuid.UUID, actor string, audit stockAudit, sh stockShop,
+	field func(*storefront.Columns) *string, col datatables.Column, errNo, errLimit error) (stockShop, error) {
+	if cur := sh.cols(); *field(&cur) != "" {
 		return sh, nil
 	}
 	t := sh.table
 	m := sh.cols()
 	for _, c := range t.Columns {
-		if c.Name == categoryColumn.Name && c.Type == "text" {
-			m.Category = c.Name
+		if c.Name == col.Name && c.Type == col.Type {
+			*field(&m) = c.Name
 		}
 	}
-	if m.Category == "" {
+	if *field(&m) == "" {
 		if datatables.Writable(t) != nil {
-			return sh, errNoCategoryColumn
+			return sh, errNo
 		}
 		lim, err := s.Store.LimitsFor(ctx, tenant)
 		if err != nil {
 			return sh, err
 		}
 		if lim.MaxDataTableColumns > 0 && len(t.Columns) >= lim.MaxDataTableColumns {
-			return sh, errCategoryColumnLimit
+			return sh, errLimit
 		}
-		if err := s.addOwnColumn(ctx, tenant, actor, audit, &t, categoryColumn); err != nil {
+		if err := s.addOwnColumn(ctx, tenant, actor, audit, &t, col); err != nil {
 			return sh, err
 		}
-		m.Category = categoryColumn.Name
+		*field(&m) = col.Name
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if err := m.Check(tableColumns(t)); err != nil {
@@ -104,6 +131,22 @@ func (s *Server) stockCategories(ctx context.Context, tenant uuid.UUID, actor st
 		return sh, err
 	}
 	return s.stockShopOf(ctx, tenant)
+}
+
+// checkCode trims a barcode and checks it: what a scanner reads off a
+// pack, at most 64 characters, with no control characters.
+func checkCode(c string) (string, error) {
+	c = strings.TrimSpace(c)
+	if c == "" {
+		return c, nil
+	}
+	if len([]rune(c)) > maxCode {
+		return c, fmt.Errorf("%w: a barcode is up to %d characters", errBadRequest, maxCode)
+	}
+	if why := wd.ScanTextProblem(c); why != "" {
+		return c, fmt.Errorf("%w: %s", errBadRequest, why)
+	}
+	return c, nil
 }
 
 // checkCategory trims a category and checks its length.
@@ -823,6 +866,10 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		// Available shows or hides it on the storefront and the price
 		// lists it is on (chat tools' product form).
 		Available *bool `json:"available"`
+		// Code is the barcode on its pack ("" for none): the catalogue
+		// gets a barcode column the first time one is set (device fields
+		// D2, a count by scanning).
+		Code *string `json:"code"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -860,6 +907,25 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if sh.cols().Category == "" {
 			in.Category = nil // none to clear
+		}
+	}
+	if in.Code != nil {
+		c, err := checkCode(*in.Code)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		in.Code = &c
+		if c != "" {
+			audit := func(tx pgx.Tx, action, target string, detail map[string]any) error {
+				return auditTx(r, tx, action, target, detail)
+			}
+			if sh, err = s.stockCodes(r.Context(), p.TenantID, p.Actor(), audit, sh); err != nil {
+				s.stockFail(w, r, err)
+				return
+			}
+		} else if sh.cols().Code == "" {
+			in.Code = nil // none to clear
 		}
 	}
 	m := sh.cols()
@@ -933,6 +999,12 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 			return put(m.Category, "category", *in.Category)
+		},
+		func() error {
+			if in.Code == nil {
+				return nil
+			}
+			return put(m.Code, "barcode", *in.Code)
 		},
 	} {
 		if perr = f(); perr != nil {
@@ -1009,6 +1081,13 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.PriceKobo != nil && (before.PriceKobo == nil || *before.PriceKobo != *in.PriceKobo) {
 		lines = append(lines, priceChangeWords(it.Name, before.PriceKobo, *in.PriceKobo))
+	}
+	if in.Code != nil && before.Code != it.Code {
+		if it.Code == "" {
+			lines = append(lines, it.Name+" has no barcode now")
+		} else {
+			lines = append(lines, "Barcode of "+it.Name+": "+it.Code)
+		}
 	}
 	if in.Category != nil && before.Category != it.Category {
 		if it.Category == "" {
@@ -1112,6 +1191,11 @@ func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errCategoryColumnLimit):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has as many columns as your plan allows: remove one you do not use on the Tables page, then set the category again.",
 			"code": "no_category_column"})
+	case errors.Is(err, errCodeColumnLimit):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your products table has as many columns as your plan allows: remove one you do not use on the Tables page, then give the item its barcode again.",
+			"code": "no_code_column"})
+	case errors.Is(err, errNoCodeColumn):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a barcode column to keep codes: on the Tables page, open your products table and add a text column called barcode.", "code": "no_code_column"})
 	case errors.Is(err, errNoCategoryColumn):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "Add a category column to use categories: on the Tables page, open your products table and add a text column called category.", "code": "no_category_column"})
 	case errors.Is(err, stock.ErrInvalid):

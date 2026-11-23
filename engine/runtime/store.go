@@ -240,6 +240,9 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 				req.Env = map[string]any{}
 			}
 		}
+		if fork == nil {
+			req.Trigger = withScanRead(def, req.Trigger)
+		}
 		// Capability steps run as the rails the environment's connections
 		// are, pinned now so the run never changes rail; a fork keeps the
 		// failed run's.
@@ -1490,4 +1493,35 @@ func (s *Store) HistoryAfter(ctx context.Context, ref RunRef, after int64, limit
 
 func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, fn)
+}
+
+// withScanRead is a manual start's trigger with its scan input as the run
+// keeps it (device fields §7, D2): {state, source, text, format}, its
+// source set here from whether the phone gave a format, never from the
+// body. The caller's maps are left as they were.
+func withScanRead(def *wd.Definition, raw any) any {
+	trigger, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+	if t, _ := trigger["type"].(string); t != "manual" {
+		return trigger
+	}
+	body, ok := trigger["body"].(map[string]any)
+	if !ok {
+		return trigger
+	}
+	b := make(map[string]any, len(body))
+	for k, v := range body {
+		b[k] = v
+	}
+	if !def.ReadScanInput(b) {
+		return trigger
+	}
+	out := make(map[string]any, len(trigger))
+	for k, v := range trigger {
+		out[k] = v
+	}
+	out["body"] = b
+	return out
 }

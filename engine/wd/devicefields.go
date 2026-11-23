@@ -1,6 +1,7 @@
 package wd
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -38,7 +39,7 @@ var deviceOptions = map[string][]string{
 	DeviceLocation:  {"require_source", "max_accuracy_m", "max_age", "allow_typed"},
 	DevicePhoto:     {"require_source"},
 	DeviceScan:      {"formats", "allow_typed"},
-	DeviceSignature: {},
+	DeviceSignature: {"ask_name"},
 }
 
 // commonDeviceOptions are what every device field may carry.
@@ -147,6 +148,11 @@ func DeviceFieldProblems(schema map[string]any, to FormTo, path string) []Proble
 				add(at+"/allow_typed", "%q: allow_typed is true or false", name)
 			}
 		}
+		if v, ok := p["ask_name"]; ok {
+			if _, ok := v.(bool); !ok {
+				add(at+"/ask_name", "%q: ask_name is true or false", name)
+			}
+		}
 		if v, ok := p["formats"]; ok {
 			list, _ := v.([]any)
 			if len(list) == 0 {
@@ -191,12 +197,15 @@ func DeviceFieldProblems(schema map[string]any, to FormTo, path string) []Proble
 }
 
 // deviceFieldsOutsideSteps refuses device fields anywhere in a
-// workflow's inputs schema: a form that starts a workflow, a manual run
-// and an API call cannot ask a device yet (device fields §3: form steps,
-// and tools' inputs once made tools exist).
+// workflow's inputs schema but one: a scan, at the top of the inputs of a
+// workflow started by hand (a member's tool, or the Run's), which the
+// phone's scan from the home screen fills in (device fields §7, D2). A
+// form that starts a workflow and a customers' tool cannot take one; a
+// location, a photo and a signature are asked by a form step.
 func deviceFieldsOutsideSteps(d *Definition) []Problem {
 	schema, types := d.InputsSchema()
 	var out []Problem
+	scans := 0
 	var walk func(v any, path string, depth int)
 	walk = func(v any, path string, depth int) {
 		m, ok := v.(map[string]any)
@@ -204,7 +213,19 @@ func deviceFieldsOutsideSteps(d *Definition) []Problem {
 			return
 		}
 		if k := DeviceKind(m); k != "" {
-			out = append(out, Problem{Path: path, Message: fmt.Sprintf("%s field is asked by a form step; a workflow's inputs cannot ask a device yet", strings.ToUpper(deviceNoun(k)[:1])+deviceNoun(k)[1:])})
+			top := depth == 1 && strings.HasPrefix(path, "/inputs/schema/properties/")
+			switch {
+			case k == DeviceScan && d.Tool.Audience() != ToolForMembers:
+				out = append(out, Problem{Path: path, Message: "a tool for customers cannot take a scan: WhatsApp has no scanner"})
+			case k == DeviceScan && top && d.Trigger.Type == "manual":
+				if scans++; scans == 2 {
+					out = append(out, Problem{Path: path, Message: "a workflow's inputs take at most one scan: the code the phone read"})
+				}
+			case k == DeviceScan:
+				out = append(out, Problem{Path: path, Message: "A scan in a workflow's inputs is one of its top-level inputs, in a workflow started by hand (a manual trigger): the code the phone read"})
+			default:
+				out = append(out, Problem{Path: path, Message: fmt.Sprintf("%s field is asked by a form step; a workflow's inputs cannot ask a device yet", strings.ToUpper(deviceNoun(k)[:1])+deviceNoun(k)[1:])})
+			}
 			return
 		}
 		if props, ok := m["properties"].(map[string]any); ok {
@@ -220,7 +241,148 @@ func deviceFieldsOutsideSteps(d *Definition) []Problem {
 	for _, k := range sortedKeys(types) {
 		walk(types[k], "/types/"+k, 0)
 	}
+	if name, p, ok := ScanInput(d); ok && scans == 1 {
+		// Its why and options, as a form step's scan.
+		one := map[string]any{"type": "object", "properties": map[string]any{name: p}}
+		out = append(out, DeviceFieldProblems(one, FormTo{}, "/inputs/schema")...)
+	}
 	return out
+}
+
+// ScanInput is a workflow's scan input (device fields §7, D2): its first
+// top-level input of type scan, in a workflow started by hand.
+func ScanInput(d *Definition) (string, map[string]any, bool) {
+	if d.Trigger.Type != "manual" || d.Tool.Audience() != ToolForMembers {
+		return "", nil, false
+	}
+	raw, _ := d.InputsSchema()
+	schema, _ := raw.(map[string]any)
+	props, _ := schema["properties"].(map[string]any)
+	for _, name := range SchemaOrder(schema) {
+		p, _ := props[name].(map[string]any)
+		if DeviceKind(p) == DeviceScan {
+			return name, p, true
+		}
+	}
+	return "", nil, false
+}
+
+// ScanTakes reports whether a scan field takes a code of this format: one
+// its formats name, or any the scanner reads when it names none. A code
+// typed (no format) is taken unless allow_typed is false.
+func ScanTakes(p map[string]any, format string) bool {
+	if format == "" {
+		return p["allow_typed"] != false
+	}
+	if !slices.Contains(ScanFormats, format) {
+		return false
+	}
+	fs, ok := p["formats"].([]any)
+	return !ok || slices.Contains(fs, any(format))
+}
+
+// MaxScanText is how long a scanned code may be, in characters: a QR code
+// holds a few thousand at most, a barcode a few dozen.
+const MaxScanText = 2000
+
+// ScanTextProblem checks a code's text: not empty, at most MaxScanText
+// characters, and no control characters (a code is read, then shown).
+func ScanTextProblem(text string) string {
+	switch {
+	case strings.TrimSpace(text) == "":
+		return "a scan is the code's text"
+	case len([]rune(text)) > MaxScanText:
+		return fmt.Sprintf("a code is at most %d characters", MaxScanText)
+	}
+	for _, r := range text {
+		if (r < 0x20 && r != '\t') || r == 0x7f {
+			return "a code has no control characters"
+		}
+	}
+	return ""
+}
+
+// scanInputSchema is what a scan input takes before the run reads it: the
+// code typed (a string), {text, format} as the phone read it, or a
+// refusal.
+func scanInputSchema() map[string]any {
+	str := map[string]any{"type": "string"}
+	return map[string]any{"anyOf": []any{
+		map[string]any{"type": "string", "minLength": 1, "maxLength": MaxScanText},
+		map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{
+			"text": map[string]any{"type": "string", "minLength": 1, "maxLength": MaxScanText}, "format": str,
+			"state": map[string]any{"enum": []any{"answered", "refused", "unavailable"}}, "source": str,
+			"reason": map[string]any{"type": "string", "maxLength": 500}}},
+	}}
+}
+
+// scanInputProblems checks a scan input beyond its schema: a code, of a
+// format the input takes.
+func (d *Definition) scanInputProblems(body []byte) []string {
+	name, p, ok := ScanInput(d)
+	if !ok {
+		return nil
+	}
+	var in map[string]any
+	if json.Unmarshal(body, &in) != nil {
+		return nil
+	}
+	text, format := "", ""
+	switch t := in[name].(type) {
+	case string:
+		text = t
+	case map[string]any:
+		if st, _ := t["state"].(string); st == "refused" || st == "unavailable" {
+			return nil
+		}
+		text, _ = t["text"].(string)
+		format, _ = t["format"].(string)
+	default:
+		return nil
+	}
+	if why := ScanTextProblem(text); why != "" {
+		return []string{fmt.Sprintf("%s: %s", name, why)}
+	}
+	if !ScanTakes(p, format) {
+		if format == "" {
+			return []string{fmt.Sprintf("%s: this needs the code scanned; a code typed is not taken", name)}
+		}
+		return []string{fmt.Sprintf("%s: this does not take %s codes", name, format)}
+	}
+	return nil
+}
+
+// ReadScanInput puts a manual start's scan input as the run keeps it,
+// {state, source, text, format}: a code with a format was read by the
+// camera, one without was typed. The source is set here, never taken
+// from the body (device fields §3). Answers whether body changed.
+func (d *Definition) ReadScanInput(body map[string]any) bool {
+	name, _, ok := ScanInput(d)
+	if !ok || body == nil {
+		return false
+	}
+	out := map[string]any{"state": "answered"}
+	switch t := body[name].(type) {
+	case string:
+		out["text"], out["source"] = t, "typed"
+	case map[string]any:
+		if st, _ := t["state"].(string); st == "refused" || st == "unavailable" {
+			out = map[string]any{"state": st}
+			if r, _ := t["reason"].(string); strings.TrimSpace(r) != "" {
+				out["reason"] = r
+			}
+			break
+		}
+		out["text"], _ = t["text"].(string)
+		out["source"] = "typed"
+		if f, _ := t["format"].(string); f != "" {
+			out["format"], out["source"] = f, "camera"
+		}
+	default:
+		return false
+	}
+	body[name] = out
+	return true
 }
 
 func sortedKeys(m map[string]any) []string {
@@ -325,6 +487,9 @@ func deviceAnswerSchema(kind string) map[string]any {
 			props[k] = str
 		}
 		props["size"] = map[string]any{"type": "integer"}
+		if kind == DeviceSignature {
+			props["signed_by"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 120}
+		}
 	}
 	return map[string]any{"type": "object", "required": []any{"state"}, "additionalProperties": false, "properties": props}
 }

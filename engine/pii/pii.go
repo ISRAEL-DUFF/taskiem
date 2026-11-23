@@ -112,6 +112,12 @@ func SchemaPaths(schema any, defs map[string]any) []Path {
 			}
 			return
 		}
+		if t, _ := m["type"].(string); t == "signature" {
+			// A signature's signer, when the field asks their name (D2):
+			// a person's name, sealed as one.
+			out = append(out, Path{Segments: append(append([]string(nil), prefix...), "signed_by"), Category: CategorySignerName})
+			return
+		}
 		if cat, ok := m["x-pii"].(string); ok && cat != "" {
 			out = append(out, Path{Segments: append([]string(nil), prefix...), Category: cat})
 		}

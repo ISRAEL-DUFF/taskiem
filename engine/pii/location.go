@@ -14,6 +14,10 @@ import (
 // CategoryLocation is a location's x-pii category.
 const CategoryLocation = "location"
 
+// CategorySignerName is the category a signature's signer is sealed under
+// (device fields D2): a person's name.
+const CategorySignerName = "name"
+
 // LocationKeys are the parts of a location answer that are sealed.
 var LocationKeys = []string{"lat", "lng", "address"}
 

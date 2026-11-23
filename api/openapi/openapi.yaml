@@ -13261,6 +13261,10 @@ paths:
                   type: string
                   maxLength: 60
                   description: The kind of thing it is ("Sneakers"); empty for none. The catalogue gets a category column the first time one is set
+                code:
+                  type: string
+                  maxLength: 64
+                  description: The barcode on its pack; empty for none. The catalogue gets a barcode column the first time one is set (a count by scanning, device fields D2)
                 available:
                   type: boolean
                   description: Shown on the storefront and the price lists it is on
@@ -37074,6 +37078,53 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/scan/offers:
+    get:
+      operationId: scanOffers
+      tags:
+      - Tools
+      summary: What a scanned code can start
+      description: A code scanned from the phone's home screen, with no workflow open (device fields D2). The workflows started by hand that have a scan among their top-level inputs taking a code of this format, those the caller may start (the workflow's roles), tools first. The code itself is not sent. Nothing is started.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: run.start
+      parameters:
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [qr, ean_13, ean_8, upc_a, upc_e, code_128]
+        description: The code's format as the phone read it; left out for a code typed
+      - name: environment
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The environment (prod by default)
+      responses:
+        '200':
+          description: The workflows that take it
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - offers
+                - format
+                properties:
+                  format:
+                    type: string
+                  offers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScanOffer'
+        '400':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/tools:
     get:
       operationId: listTools
@@ -41397,6 +41448,12 @@ components:
             photo_source:
               type: string
               enum: [camera, sent]
+            signed:
+              type: boolean
+              description: The customer signed on the rider's phone (device fields D2)
+            signature_url:
+              type: string
+              description: A link to the customer's signature, valid for 10 minutes
     Agent:
       type: object
       required: [id, code, name, status, region, workspace_id]
@@ -42284,6 +42341,48 @@ components:
           description: Whether newer edits were merged in.
         problems:
           $ref: '#/components/schemas/Problems'
+    ScanOffer:
+      type: object
+      description: A workflow a scanned code can start (device fields D2)
+      required:
+      - kind
+      - workflow_id
+      - version
+      - environment
+      - name
+      - input
+      - asks
+      properties:
+        kind:
+          type: string
+          enum: [tool, workflow]
+          description: tool, opened by its command; or a workflow
+        workflow_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        environment:
+          type: string
+        name:
+          type: string
+        about:
+          type: string
+        command:
+          type: string
+          description: A tool's command
+        icon:
+          type: string
+        input:
+          type: string
+          description: The scan input the code fills
+        why:
+          type: string
+        asks:
+          type: array
+          items:
+            type: string
+          description: The other inputs it requires; none, and the code is all it needs
     MadeTool:
       type: object
       required:
@@ -46595,6 +46694,9 @@ components:
           type: string
         supplier:
           type: string
+        code:
+          type: string
+          description: The barcode on an item's pack, for a count by scanning (device fields D2); never on the public page
         variant_of:
           type: string
           description: A size or colour's product row (sizes and colours)
@@ -51566,6 +51668,9 @@ components:
         category:
           type: string
           description: The kind of thing it is ("Sneakers"), when the catalogue has a category column
+        code:
+          type: string
+          description: The barcode on its pack, when the catalogue keeps barcodes (a count by scanning)
         description:
           type: string
           description: Its words on the storefront, when the catalogue maps them

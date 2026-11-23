@@ -205,6 +205,9 @@ func (a *actions) recordProof(ctx context.Context, req connector.Request) (conne
 		p.Photo, _ = ph["id"].(string)
 		p.PhotoSource, _ = ph["source"].(string)
 	}
+	if sg, ok := req.Input["signature"].(map[string]any); ok && sg["state"] == "answered" {
+		p.Signature, _ = sg["id"].(string)
+	}
 	p.Run = c.Run
 	mark, err := d.RecordProof(ctx, c.Tenant, ref, p)
 	if err != nil {

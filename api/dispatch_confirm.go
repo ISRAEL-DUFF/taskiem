@@ -201,7 +201,7 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 			}
 			al := chatAlert{Key: "confirm:" + x.id.String(), Kind: "confirm", At: x.at, ID: x.id.String(), Reference: x.ref,
 				Title: "Confirm " + x.ref + ", delivered by " + name, Line: line, AmountKobo: &fee}
-			if pv, ok := proofs[x.id]; ok && (pv.Where != nil || pv.Photo != "" || pv.Mark != "") {
+			if pv, ok := proofs[x.id]; ok && (pv.Where != nil || pv.Photo != "" || pv.Mark != "" || pv.Signature != "") {
 				al.Proof = &alertProof{Where: pv.Where, Mark: pv.Mark, PhotoSource: pv.PhotoSource}
 				// The photo is in the business's private storage: a rider's
 				// from dispatch, or a form step's file (the same storage).
@@ -217,6 +217,15 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 				if pv.Photo != "" && signer != nil {
 					if u, _, err := signer.SignURL(ctx, p.TenantID, pv.Photo, 10*time.Minute); err == nil {
 						al.Proof.PhotoURL = u
+					}
+				}
+				if pv.Signature != "" {
+					// Signed by the customer on the rider's phone (D2).
+					al.Proof.Signed = true
+					if signer != nil {
+						if u, _, err := signer.SignURL(ctx, p.TenantID, pv.Signature, 10*time.Minute); err == nil {
+							al.Proof.SignatureURL = u
+						}
 					}
 				}
 				if w := proofWords(pv); w != "" {
@@ -249,6 +258,9 @@ func proofWords(pv dispatch.ProofView) string {
 		parts = append(parts, "photo taken in the app")
 	case "sent":
 		parts = append(parts, "photo sent")
+	}
+	if pv.Signature != "" {
+		parts = append(parts, "signed by the customer")
 	}
 	return strings.Join(parts, " · ")
 }

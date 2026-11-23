@@ -3,7 +3,6 @@ package forms
 import (
 	"fmt"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -168,6 +167,10 @@ func deviceAnswers(schema map[string]any, answers map[string]any, sub Submission
 			// Stored from this submission's own uploads (Service.files).
 			m = map[string]any{"id": t.ID, "name": t.Name, "type": t.Type, "size": t.Size, "sha256": t.SHA256}
 			uploaded = true
+		case signedFile:
+			// A signature uploaded with the signer's name beside it.
+			m = map[string]any{"id": t.ID, "name": t.Name, "type": t.Type, "size": t.Size, "sha256": t.SHA256, "signed_by": t.SignedBy}
+			uploaded = true
 		default:
 			return fmt.Sprintf("%q: the answer is not one %s field takes", name, kind)
 		}
@@ -242,17 +245,17 @@ func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, device
 		}
 	case wd.DeviceScan:
 		text, _ := m["text"].(string)
-		if strings.TrimSpace(text) == "" {
-			return nil, fmt.Sprintf("%q: a scan is the code's text", name)
+		if why := wd.ScanTextProblem(text); why != "" {
+			return nil, fmt.Sprintf("%q: %s", name, why)
 		}
-		out["text"] = clip(text, 2000)
+		out["text"] = text
 		format, _ := m["format"].(string)
 		typed = format == ""
 		if typed && !allowTyped {
 			return nil, fmt.Sprintf("%q needs the code scanned: a code typed is not taken", name)
 		}
 		if format != "" {
-			if fs, ok := p["formats"].([]any); ok && !slices.Contains(fs, any(format)) {
+			if !wd.ScanTakes(p, format) {
 				return nil, fmt.Sprintf("%q: this question does not take %s codes", name, format)
 			}
 			out["format"] = format
@@ -269,6 +272,15 @@ func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, device
 		if _, ok := out["id"].(string); !ok {
 			return nil, fmt.Sprintf("%q: %s is sent as a file", name, kind)
 		}
+		if kind == wd.DeviceSignature && p["ask_name"] == true {
+			// The signer's name, asked beside the pad: sealed as a name.
+			who, _ := m["signed_by"].(string)
+			who = strings.Join(strings.Fields(who), " ")
+			if who == "" {
+				return nil, fmt.Sprintf("%q: say who signed", name)
+			}
+			out["signed_by"] = clip(who, MaxSignerName)
+		}
 	}
 	source := deviceSource(kind, sub, typed)
 	out["source"] = source
@@ -280,6 +292,38 @@ func deviceAnswer(name, kind string, p, m map[string]any, sub Submission, device
 	}
 	return out, ""
 }
+
+// deviceAudit is what the audit keeps of an answer's device fields, as
+// for photos (D2): each field's kind, state and source, never its value
+// (no code, no place, no file, no signer).
+func deviceAudit(schema map[string]any, answers map[string]any) map[string]string {
+	out := map[string]string{}
+	for name, kind := range wd.DeviceFields(schema) {
+		m, _ := answers[name].(map[string]any)
+		st, _ := m["state"].(string)
+		src, _ := m["source"].(string)
+		if st == "" {
+			st = "none"
+		}
+		out[name] = strings.TrimSuffix(kind+" "+st+" "+src, " ")
+	}
+	return out
+}
+
+// signedFile is a signature uploaded with this submission and the
+// signer's name given beside it in the answers (a signature field with
+// ask_name).
+type signedFile struct {
+	FileRef
+	SignedBy string
+}
+
+// MaxSignerName is how long a signer's name may be, in characters.
+const MaxSignerName = 120
+
+// MaxSignatureBytes is how large a signature's PNG may be: a pad's
+// strokes at a phone's resolution are tens of kilobytes.
+const MaxSignatureBytes = 1 << 20
 
 func number(v any) (float64, bool) {
 	var f float64

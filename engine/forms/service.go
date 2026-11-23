@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -370,7 +371,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 			payload["device"] = device
 			signal = payload
 		}
-		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
+		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch, "device": deviceAudit(tg.schema, answers)})
 	})
 	if errors.Is(err, ErrNoRequest) {
 		// Answered by another submission meanwhile: refused, its files
@@ -487,6 +488,14 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 		case wd.DevicePhoto:
 			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/jpeg", "image/png"}}}
 		case wd.DeviceSignature:
+			// A pad's drawing: a PNG by its content, not only its name,
+			// and small (device fields §5, D2).
+			if len(u.Data) > MaxSignatureBytes {
+				return nil, out, fmt.Sprintf("the signature %q is larger than 1 MB", clipName(u.Meta.Name)), nil
+			}
+			if http.DetectContentType(u.Data) != "image/png" {
+				return nil, out, fmt.Sprintf("a signature is a PNG drawing; %q is not one", clipName(u.Meta.Name)), nil
+			}
 			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/png"}}}
 		}
 		if why := fileRule(p, u); why != "" {
@@ -511,6 +520,14 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 		ref := FileRef{ID: uuid.Must(uuid.NewV7()).String(), Name: clipName(u.Meta.Name), Type: f.Type, Size: f.Size, SHA256: hex.EncodeToString(sum[:])}
 		out = append(out, storedFile{field: u.Meta.Field, path: f.Path, ref: ref})
 		answers[u.Meta.Field] = ref
+		if kind == wd.DeviceSignature {
+			// The signer's name, given beside the pad in the answers.
+			if m, ok := in.Submission.Answers[u.Meta.Field].(map[string]any); ok {
+				if who, ok := m["signed_by"].(string); ok {
+					answers[u.Meta.Field] = signedFile{FileRef: ref, SignedBy: who}
+				}
+			}
+		}
 	}
 	return answers, out, "", nil
 }
