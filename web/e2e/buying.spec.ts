@@ -351,3 +351,176 @@ test("labels in Money: renamed, and merged into another", async ({ page }) => {
     { method: "POST", path: "/v1/money/labels/lab-s/merge", body: { into: "lab-w" } },
   ]);
 });
+
+/** A toast that says it (in the shell's live region). */
+const toastOf = (page: Page, text: string) => page.locator(".toast").filter({ hasText: text });
+
+/** Every toast the page shows, in order (one said twice is two), for
+ * toastsShown; before the page is opened. */
+async function recordToasts(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __toasts: string[] };
+    w.__toasts = [];
+    new MutationObserver((ms) => {
+      for (const m of ms)
+        for (const n of m.addedNodes)
+          if (n instanceof HTMLElement && n.classList.contains("toast")) w.__toasts.push(n.querySelector(".toast-text")?.textContent ?? "");
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+const toastsShown = (page: Page) => page.evaluate(() => (window as unknown as { __toasts: string[] }).__toasts);
+
+test("an order by hand asks from the name once it settles, and says drafted only when it is", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page, [{ id: "lab-p", name: "Packaging", uses: 4, created_by: "user:ada", created_at: now }]);
+  await stockAndThings(page);
+  // What the question asked suggestions for: whole names only, not "N", "Ny".
+  const askedFor: string[] = [];
+  await page.route("**/v1/money/labels?item=**", (route) => {
+    askedFor.push(new URL(route.request().url()).searchParams.get("item") ?? "");
+    return route.fallback();
+  });
+  await page.route("**/v1/stock", (route) => route.fulfill(json({ keeps_stock: true, catalogue: "products", low: 0, published: false, items: [] })));
+  await page.route("**/v1/stock/stock-items?**", (route) => route.fulfill(json({ keeps_stock: true, value_kobo: 0, low: 0, items: [] })));
+  await page.route("**/v1/stock/movements?**", (route) => route.fulfill(json({ movements: [] })));
+  await page.route("**/v1/stock/sales", (route) =>
+    route.fulfill(json({ day: "2026-11-22", total_kobo: 0, by_how: { cash: 0, transfer: 0, pos: 0 }, count: 0, waiting: 0, top: [], unsold: [], sales: [] })),
+  );
+  await page.route("**/v1/stock/suppliers", (route) =>
+    route.fulfill(
+      json({
+        suppliers: [{ id: "s2", name: "Mama Nkechi Fabrics", phone: "0803 123 4567", reached: "sms", link_id: null, owed_kobo: 0, open: 0, invited_at: null, created_at: now, retired_at: null }],
+        settings: { purchase_limit_kobo: null },
+      }),
+    ),
+  );
+  // Nylon bags from her are remembered: kept track of, Packaging.
+  await page.route("**/v1/stock/suppliers/s2/items", (route) =>
+    route.fulfill(
+      json({ items: [{ supplier_id: "s2", name_key: "nylon bags", name: "Nylon bags", treatment: "track", uses: 1, label_id: "lab-p", label: "Packaging", updated_by: "user:ada", updated_at: now }] }),
+    ),
+  );
+  const orders: { lines: Record<string, unknown>[] }[] = [];
+  await page.route("**/v1/stock/purchases", async (route) => {
+    const r = route.request();
+    if (r.method() !== "POST") return route.fulfill(json({ purchases: [] }));
+    const body = r.postDataJSON() as { lines: Record<string, unknown>[] };
+    orders.push(body);
+    // As remembered (kept track of), 60 is asked first.
+    if (!body.lines[0]?.treatment)
+      return route.fulfill(
+        json({ error: "put 60 Nylon bags on Things we have, one row each? Say so, or just record them", code: "track_ask", line: 0, item: "Nylon bags", quantity: 60, ask_over: 50, most: 200 }, 409),
+      );
+    return route.fulfill(json({ purchase: { id: "p7", lines: [] } }, 201));
+  });
+
+  await recordToasts(page);
+  await page.goto("/storefront/stock");
+  await page.getByRole("button", { name: "New order" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Supplier").selectOption("s2");
+  const what = dialog.getByLabel("What 1");
+  // Typed a letter at a time: nothing is asked of half a name.
+  await what.pressSequentially("Nylon", { delay: 60 });
+  const q = dialog.getByTestId("treat");
+  await expect(q).toContainText("Nylon from Mama Nkechi Fabrics");
+  await expect(q.getByRole("radio", { name: /Just record it/ })).toBeChecked();
+  // The whole name: as remembered for it, not Taskiem's answer for "Nylon".
+  await what.pressSequentially(" bags", { delay: 60 });
+  await expect(q).toContainText("Nylon bags from Mama Nkechi Fabrics");
+  await expect(q).toContainText("Keep track of it · Packaging");
+  await expect(q.getByRole("radio")).toHaveCount(0);
+  expect(askedFor.length).toBeGreaterThan(0);
+  expect(new Set(askedFor)).toEqual(new Set(["Nylon"]));
+  await dialog.getByLabel("How many 1").fill("60");
+  await dialog.getByLabel("Price of one 1 (₦)").fill("50");
+  await axeAt(page, "an order by hand, remembered");
+  await dialog.getByRole("button", { name: "Draft the order" }).click();
+  const ask = dialog.getByTestId("track-ask");
+  await expect(ask).toContainText("Put 60 Nylon bags on Things we have, one row each?");
+  await expect.poll(() => orders.length).toBe(1);
+  // Asked, not drafted: no "Order drafted".
+  await expect(toastOf(page, "Order drafted")).toHaveCount(0);
+  await ask.getByRole("button", { name: "Just record them" }).click();
+  await expect(toastOf(page, "Order drafted")).toBeVisible();
+  // Said once, when it was so (a toast at the question would be a second).
+  expect(await toastsShown(page)).toEqual(["Order drafted"]);
+  await expect(dialog).toBeHidden();
+  expect(orders.map((o) => o.lines[0])).toEqual([
+    { item: "Nylon bags", quantity: 60, cost_kobo: 5_000 },
+    { item: "Nylon bags", quantity: 60, cost_kobo: 5_000, treatment: "record", label_id: "lab-p" },
+  ]);
+});
+
+const proposedOrder = {
+  id: "p3", reference: "PO-0300", supplier_id: "s1", supplier: "Singer Ltd", total_kobo: 120_000, status: "drafted", seller_status: "proposed", link_id: "l1",
+  drafted_by: "user:ada", approved_by: null, sent_at: null, confirmed_at: null, confirmed_how: null, counter: null, counter_at: null,
+  received_at: null, cancelled_at: null, received_kobo: 0, paid_kobo: 0, owed_kobo: 0, created_at: now,
+  lines: [{ id: "a", position: 0, item_id: "nb", item: "Nylon bags", unit: "", quantity: 60, cost_kobo: 2_000, received: 0, uses: 1, treatment: "track", label_id: "lab-p", unconfirmed: true }],
+};
+
+test("confirming an order that asks first says confirmed only once it is", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page, [{ id: "lab-p", name: "Packaging", uses: 4, created_by: "user:ada", created_at: now }]);
+  await stockAndThings(page);
+  const sent: unknown[] = [];
+  await page.route("**/v1/stock/purchases/p3**", async (route) => {
+    const r = route.request();
+    if (r.method() !== "POST") return route.fulfill(json({ purchase: proposedOrder }));
+    const body = r.postDataJSON() as { lines: { treatment?: string }[] };
+    sent.push(body);
+    if (body.lines[0]?.treatment === "track")
+      return route.fulfill(json({ error: "put 60 Nylon bags on Things we have, one row each?", code: "track_ask", line: 0, item: "Nylon bags", quantity: 60, ask_over: 50, most: 200 }, 409));
+    return route.fulfill(json({ purchase: proposedOrder }));
+  });
+  await recordToasts(page);
+  await page.goto("/purchases/p3");
+  const card = page.getByTestId("purchase-confirm");
+  await expect(card.getByTestId("treat")).toContainText("How should we treat it?");
+  await card.getByRole("button", { name: "Confirm the order" }).click();
+  const ask = card.getByTestId("track-ask");
+  await expect(ask).toContainText("Put 60 Nylon bags on Things we have, one row each?");
+  await expect.poll(() => sent.length).toBe(1);
+  await expect(toastOf(page, "Confirmed, and the supplier is told")).toHaveCount(0);
+  await ask.getByRole("button", { name: "Just record them" }).click();
+  await expect(toastOf(page, "Confirmed, and the supplier is told")).toBeVisible();
+  // Said once, when it was so (a toast at the question would be a second).
+  expect(await toastsShown(page)).toEqual(["Confirmed, and the supplier is told"]);
+  expect(sent).toEqual([
+    { lines: [{ treatment: "track", label_id: "lab-p" }] },
+    { lines: [{ treatment: "record", label_id: "lab-p" }] },
+  ]);
+});
+
+test("an order's lines saved part way, asked first, are not said saved", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page, [{ id: "lab-p", name: "Packaging", uses: 4, created_by: "user:ada", created_at: now }]);
+  await stockAndThings(page);
+  const purchase = { ...proposedOrder, status: "sent", seller_status: undefined, link_id: null };
+  const patches: { path: string; body: { treatment?: string } }[] = [];
+  await page.route("**/v1/stock/purchases/p3", (route) => route.fulfill(json({ purchase })));
+  await page.route("**/v1/stock/purchases/p3/lines/*", async (route) => {
+    const body = route.request().postDataJSON() as { treatment?: string };
+    patches.push({ path: new URL(route.request().url()).pathname, body });
+    if (body.treatment === "track")
+      return route.fulfill(json({ error: "put 60 Nylon bags on Things we have, one row each?", code: "track_ask", line: 0, item: "Nylon bags", quantity: 60, ask_over: 50, most: 200 }, 409));
+    return route.fulfill(json({ purchase }));
+  });
+  await recordToasts(page);
+  await page.goto("/purchases/p3");
+  const card = page.getByTestId("purchase-treat");
+  await expect(card.getByTestId("treat")).toContainText("How should we treat it?");
+  await card.getByRole("button", { name: "Save" }).click();
+  const ask = card.getByTestId("track-ask");
+  await expect(ask).toContainText("Put 60 Nylon bags on Things we have, one row each?");
+  await expect.poll(() => patches.length).toBe(1);
+  await expect(toastOf(page, "Saved")).toHaveCount(0);
+  await ask.getByRole("button", { name: "Just record them" }).click();
+  await expect(toastOf(page, "Saved")).toBeVisible();
+  // Said once, when it was so (a toast at the question would be a second).
+  expect(await toastsShown(page)).toEqual(["Saved"]);
+  expect(patches.map((p) => p.body)).toEqual([
+    { treatment: "track", label_id: "lab-p" },
+    { treatment: "record", label_id: "lab-p" },
+  ]);
+});

@@ -129,6 +129,27 @@ async function plannedTerm(page: Page): Promise<string> {
   return id ?? "";
 }
 
+/** One of Things we have, added by hand (made once, whichever theme runs
+ * first): its id. */
+async function aThing(page: Page): Promise<string> {
+  type List = { things: { id: string; name: string }[] };
+  const find = async () =>
+    (
+      (await (await page.request.get("/v1/things?all=true")).json()) as List
+    ).things.find((t) => t.name === "Accessible generator");
+  let t = await find();
+  if (!t) {
+    const r = await page.request.post("/v1/things", {
+      headers: { "X-Taskiem-Request": "1" },
+      data: { name: "Accessible generator", cost_kobo: 45_000_000, serial: "G-1" },
+    });
+    expect(r.status(), await r.text()).toBe(201);
+    t = await find();
+  }
+  expect(t?.id, "the accessibility thing").toBeTruthy();
+  return t?.id ?? "";
+}
+
 /** A run of a workflow that waits (made once, whichever theme runs first): its id. */
 async function aRun(page: Page): Promise<string> {
   const h = { headers: { "X-Taskiem-Request": "1" } };
@@ -235,6 +256,11 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, path);
       await check(path.replace(term, ":id"));
     }
+    // One of Things we have, on its page.
+    const thing = await aThing(page);
+    await open(page, `/money/things/${thing}`);
+    await expect(page.getByTestId("thing-hero")).toBeVisible();
+    await check("/money/things/:id");
     // A run, live, on its canvas and its timeline.
     const run = await aRun(page);
     await open(page, `/runs/${run}`);

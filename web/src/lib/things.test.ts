@@ -4,6 +4,7 @@ import {
   detailsRequest,
   emptyThing,
   hadOf,
+  keyFor,
   priceProblem,
   profitWords,
   rowsOf,
@@ -187,5 +188,18 @@ describe("spending by label", () => {
   it("says a loss as a loss", () => {
     expect(profitWords(1_000_000)).toMatch(/10,000 profit$/);
     expect(profitWords(-300)).toMatch(/3 loss$/);
+  });
+});
+
+describe("a change's Idempotency-Key", () => {
+  it("is kept for the same change tried again, new for a different one", () => {
+    let n = 0;
+    const make = () => `k${++n}`;
+    const a = keyFor(undefined, statusRequest("sold", "150,000"), make);
+    expect(a.key).toBe("k1");
+    expect(keyFor(a, statusRequest("sold", "150,000"), make)).toBe(a);
+    const b = keyFor(a, statusRequest("sold", "120,000"), make);
+    expect(b.key).toBe("k2");
+    expect(keyFor(b, statusRequest("sold", "120,000", "transfer"), make).key).toBe("k3");
   });
 });

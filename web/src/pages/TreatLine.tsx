@@ -49,6 +49,8 @@ export interface TreatData {
 }
 
 export function useTreatData(on = true): TreatData {
+  // Things we have only for those who may see them (table.read).
+  const read = useAuth().can("table.read");
   const labels = useLoad(
     () =>
       on
@@ -71,13 +73,15 @@ export function useTreatData(on = true): TreatData {
   );
   const things = useLoad(
     () =>
-      on
-        ? get<{ things: { name: string }[] }>("/v1/things?all=true").then(
-            (r) => r.things.map((t) => t.name),
-            (): string[] => [],
-          )
-        : Promise.resolve(undefined),
-    [on],
+      !on
+        ? Promise.resolve(undefined)
+        : read
+          ? get<{ things: { name: string }[] }>("/v1/things?all=true").then(
+              (r) => r.things.map((t) => t.name),
+              (): string[] => [],
+            )
+          : Promise.resolve([]),
+    [on, read],
   );
   return {
     labels: labels.data,
@@ -152,7 +156,8 @@ export function TreatQuestion({
   memory?: Choice;
   /** This order's answer; undefined: as remembered (or not yet known). */
   value?: Choice;
-  onChange: (c: Choice | undefined) => void;
+  /** seeded: the answer is Taskiem's suggestion, not the person's. */
+  onChange: (c: Choice | undefined, seeded?: boolean) => void;
   locked?: boolean;
   /** Offer "Remember for next time" when a remembered item changes. */
   rememberable?: boolean;
@@ -183,6 +188,7 @@ export function TreatQuestion({
       suggested
         ? { ...suggested, label: suggested.label || (sugg.data[0]?.name ?? "") }
         : suggestChoice(item, data.stockItems, data.tracked, sugg.data),
+      true,
     );
   }, [memory, value, suggested, data.ready, data.stockItems, data.tracked, sugg.data, item, onChange]);
   const stockName = (sid: string) =>
