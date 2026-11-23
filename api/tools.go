@@ -247,6 +247,13 @@ func toolValues(d *wd.Definition, input map[string]any) []toolValue {
 	out := []toolValue{}
 	for _, k := range names {
 		label, value := k, fmt.Sprint(input[k])
+		// A scanned code ({text, format}, or as the run keeps it) reads as
+		// its text.
+		if m, ok := input[k].(map[string]any); ok {
+			if t, ok := m["text"].(string); ok {
+				value = t
+			}
+		}
 		if p, ok := props[k].(map[string]any); ok {
 			if t, ok := p["title"].(string); ok && t != "" {
 				label = t
