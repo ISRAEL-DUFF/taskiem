@@ -603,7 +603,7 @@ func (s *Server) formDone(ctx context.Context, c *chat, rest string) error {
 			values[f.Key] = ""
 			continue
 		}
-		label, _ := formLabel(word(c.lang.Tag, askWordID(a, f), f.Ask))
+		label, _ := askLabel(c.lang.Tag, a, f)
 		missing = append(missing, label)
 	}
 	if len(missing) > 0 {

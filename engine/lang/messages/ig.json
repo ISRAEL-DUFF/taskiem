@@ -1193,6 +1193,11 @@
       "reviewed": false,
       "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
+    "menu.riders.add.ask.areas.label": {
+      "text": "Ebee ka ọ na-eje?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
     "menu.riders.add.ask.name": {
       "text": "Kedu aha onye na-ebuga ihe ahụ?",
       "reviewed": false,
@@ -1202,6 +1207,11 @@
       "text": "Kedu nọmba ekwentị {name}?",
       "reviewed": false,
       "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone.label": {
+      "text": "Gịnị bụ nọmba ekwentị ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
     },
     "menu.riders.add.line": {
       "text": "Aha, ekwentị, na mpaghara ha na-aga",

@@ -1269,6 +1269,11 @@
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
+    "menu.riders.add.ask.areas.label": {
+      "text": "Which areas do they cover?",
+      "reviewed": true,
+      "context": "A form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
     "menu.riders.add.ask.name": {
       "text": "What's the rider's name?",
       "reviewed": true,
@@ -1278,6 +1283,11 @@
       "text": "What's {name}'s phone number?",
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone.label": {
+      "text": "What's their phone number?",
+      "reviewed": true,
+      "context": "A form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
     },
     "menu.riders.add.line": {
       "text": "Name, phone, and the areas they cover",

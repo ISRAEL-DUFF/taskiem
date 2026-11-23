@@ -757,7 +757,22 @@ var (
 	possessiveRe = regexp.MustCompile(`\{[a-z_]+\}'s`)
 	doesRe       = regexp.MustCompile(`does \{[a-z_]+\}`)
 	sentenceRe   = regexp.MustCompile(`[^.?!]+[.?!]?`)
+	skipRe       = regexp.MustCompile(`\bskip\b`)
+	placeRe      = regexp.MustCompile(`\{[a-z_]+\}`)
 )
+
+// askLabel is a field's form label and hint in l. A question naming
+// another value ("What's {name}'s phone number?") is made a pronoun in
+// English; another language has its own label for it (the question's id
+// and ".label"), since a form shows the field before that value is known.
+func askLabel(l lang.Tag, a chatAction, f chatField) (label, hint string) {
+	label, hint = formLabel(word(l, askWordID(a, f), f.Ask))
+	if placeRe.MatchString(label) {
+		en, _ := formLabel(f.Ask)
+		label = word(l, askWordID(a, f)+".label", en)
+	}
+	return label, hint
+}
 
 // formLabel parts a question into a form's label and hint: its first
 // sentence, and the rest less what only a chat needs ("Send skip ...");
@@ -771,7 +786,9 @@ func formLabel(ask string) (label, hint string) {
 		switch {
 		case i == 0:
 			label = sn
-		case sn == "" || strings.HasPrefix(sn, "Send skip") || strings.HasPrefix(sn, "Send its number"):
+		// "skip" is kept in English in every language (the chat reads it in
+		// English), so a sentence naming it is the chat's, in any language.
+		case sn == "" || skipRe.MatchString(sn) || strings.HasPrefix(sn, "Send its number"):
 		default:
 			rest = append(rest, sn)
 		}
@@ -808,7 +825,7 @@ func actionOut(l lang.Tag, a chatAction) chatActionOut {
 	out := chatActionOut{ID: a.ID, Title: word(l, titleWordID(a), a.Title), Line: word(l, lineWordID(a), a.Line), Icon: a.Icon, Does: a.Does, Opens: a.Opens,
 		Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page, Confirm: a.Confirm}
 	for _, f := range a.Fields {
-		label, hint := formLabel(word(l, askWordID(a, f), f.Ask))
+		label, hint := askLabel(l, a, f)
 		out.Fields = append(out.Fields, chatFieldOut{Key: f.Key, Label: label, Hint: hint, Kind: f.Kind, Choices: f.Choices, Optional: f.Optional})
 	}
 	return out
