@@ -59,6 +59,37 @@ func TestCountingInAProductByItsUses(t *testing.T) {
 	}
 }
 
+// PR review fix: the warning before a sale takes each stock item's lines
+// together. 4 cups and 1 jug of 6, both of the one stock item of 8, are
+// 10: beyond, though neither line is alone.
+func TestSaleWarningSumsAStockItem(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	owner := w.tenant(t, "Ada Drinks", "ada@drinks.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil)
+	zobo := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Zobo", "quantity": 8, "unit": "cup", "material": true},
+		"Idempotency-Key", "z1")["item"].(map[string]any)["id"].(string)
+	for i, p := range []struct {
+		name string
+		uses int
+	}{{"Zobo cup", 1}, {"Zobo jug", 6}} {
+		added := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": p.name, "quantity": 0, "price_kobo": 50000},
+			"Idempotency-Key", "p"+string(rune('a'+i)))["item"].(map[string]any)
+		owner.must(200, "PUT", "/v1/stock/products/"+added["id"].(string)+"/counted-by", map[string]any{"stock_item_id": zobo, "uses": p.uses})
+		owner.must(200, "PATCH", "/v1/stock/items/"+added["stock_item_id"].(string), map[string]any{"name": "Old " + string(rune('a'+i))})
+	}
+	const on = "+2348010000232"
+	w.bind(t, owner, on)
+	if r := w.say(t, on, "sold 4 zobo cup and 1 zobo jug cash"); !strings.Contains(r, "than Taskiem counts on your shelf") {
+		t.Fatalf("10 of 8 sold, no warning: %q", r)
+	}
+	w.say(t, on, "cancel")
+	if r := w.say(t, on, "sold 2 zobo cup and 1 zobo jug cash"); strings.Contains(r, "than Taskiem counts on your shelf") {
+		t.Fatalf("8 of 8 sold, a warning: %q", r)
+	}
+	w.say(t, on, "cancel")
+}
+
 // PR review fix 3: POST /v1/stock/sales refuses a material, as chat's sold
 // and stock@1 do: nothing is sold, nothing moves.
 func TestSaleRefusesAMaterial(t *testing.T) {

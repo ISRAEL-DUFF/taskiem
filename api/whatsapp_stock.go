@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -955,6 +956,32 @@ func saleSaid(args string, items []stock.Item) (stock.Sold, bool) {
 	return said, ok
 }
 
+// beyondTogether names the items of a sale's lines (items[i] is lines[i]'s)
+// sold beyond the stock there is, each stock item's lines taken together:
+// "4 Malt bottle and 1 Malt pack of 6" are 10 bottles of the one stock
+// item, beyond 8 though neither line is alone.
+func beyondTogether(items []stock.Item, lines []stock.SaleLine) []string {
+	key := func(it stock.Item) string {
+		if it.StockItemID != "" {
+			return it.StockItemID
+		}
+		return it.ID
+	}
+	need := map[string]int64{}
+	for i, it := range items {
+		if it.Stock != nil {
+			need[key(it)] += lines[i].Quantity * max(it.Uses, 1)
+		}
+	}
+	var out []string
+	for _, it := range items {
+		if it.Stock != nil && need[key(it)] > *it.Stock && !slices.Contains(out, it.Name) {
+			out = append(out, it.Name)
+		}
+	}
+	return out
+}
+
 // saleFrom shows a sale for yes: its items found as the other stock words
 // find them, a product's size asked one choice at a time (the sale waits,
 // then goes on). One that matches several others, or none, is said, and
@@ -975,6 +1002,7 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		sale.PaidHow = stock.Cash
 	}
 	var total int64
+	var soldItems []stock.Item // each line's item, in the lines' order
 	for i, x := range said.Items {
 		var match []stock.Item
 		if id, chosen := ask.Chosen[i]; chosen {
@@ -1029,10 +1057,9 @@ func (s *Server) saleFrom(ctx context.Context, c *chat, ask *saleAsk) error {
 		sale.Lines = append(sale.Lines, stock.SaleLine{ItemID: it.ID, Item: it.Name, Quantity: x.Quantity, Unit: unit, PriceKobo: price, LineKobo: price * x.Quantity,
 			CostKobo: it.CostKobo})
 		total += price * x.Quantity
-		if it.Beyond(x.Quantity) {
-			sale.Beyond = append(sale.Beyond, it.Name)
-		}
+		soldItems = append(soldItems, it)
 	}
+	sale.Beyond = beyondTogether(soldItems, sale.Lines)
 	if sale.AmountKobo == nil {
 		sale.AmountKobo = &total
 	}
