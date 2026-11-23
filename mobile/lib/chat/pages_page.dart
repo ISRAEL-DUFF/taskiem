@@ -5,7 +5,13 @@
 // figures (the main one on the top card), lists in their groups, tables
 // as rows (put in a column's order from the part's Order button, among the
 // columns the server says this person may order by), and a row's card in a
-// sheet. Nothing here reads a table itself.
+// sheet. Nothing here reads a table itself. A part over Taskiem's own
+// orders or invoices is drawn the same way; a row of them opens the order
+// or invoice, and a part this person may not see says so in its place.
+// While the page is open it follows the page's live notices
+// (GET /v1/pages/{name}/live): the parts named are read again, at most once
+// in two seconds, a part put in an order or shown further keeping its
+// order and reading its first rows again. Pull to refresh stays.
 // Making and changing pages is on the web.
 
 import 'dart:async';
@@ -27,6 +33,9 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'groups.dart' show pickOneOf;
+import 'invoices_page.dart' show openInvoice;
+import 'live.dart' show SseEvent, readSse;
+import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone;
 
 Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
@@ -89,6 +98,19 @@ String orderLabel(PageBlock b) {
 
 /// Which way a column's order goes, in words.
 String orderWay(bool desc) => desc ? 'Z to A, largest or latest first' : 'A to Z, smallest or earliest first';
+
+/// The record a row of Taskiem's own records opens: an order by its
+/// reference, an invoice by its number (the web's addresses).
+({String kind, String id})? recordLinkOf(String? link) {
+  if (link == null) return null;
+  final m = RegExp(r'^/(storefront/orders|invoices)/([^/]+)$').firstMatch(link);
+  if (m == null) return null;
+  try {
+    return (kind: m[1] == 'invoices' ? 'invoice' : 'order', id: Uri.decodeComponent(m[2]!));
+  } on FormatException {
+    return null;
+  }
+}
 
 /// The filters param a page is drawn with: only those set.
 String? filtersParam(Map<String, String> values) {
@@ -194,19 +216,125 @@ class _PageScreenState extends State<PageScreen> {
   // Rows read with More, by part.
   final _more = <String, PageBlock>{};
   String? _loadingMore;
+  // The live notices: the parts named since the last read, and when it was.
+  StreamSubscription<SseEvent>? _live;
+  Timer? _liveRetry;
+  Timer? _liveWait;
+  final _liveIds = <String>{};
+  bool _liveAll = false;
+  bool _liveBusy = false;
+  DateTime _liveLast = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _gone = false;
 
   @override
   void initState() {
     super.initState();
     _search.addListener(_searched);
     unawaited(_load());
+    unawaited(_liveOpen());
   }
 
   @override
   void dispose() {
+    _gone = true;
     _typing?.cancel();
+    _liveRetry?.cancel();
+    _liveWait?.cancel();
+    unawaited(_live?.cancel());
     _search.dispose();
     super.dispose();
+  }
+
+  // --- kept up to date ---
+
+  Future<void> _liveOpen() async {
+    try {
+      final res = await widget.auth.transport.stream('/v1/pages/${Uri.encodeComponent(widget.name)}/live');
+      if (_gone) {
+        unawaited(res.stream.listen(null).cancel());
+        return;
+      }
+      _live = readSse(res.stream).listen(_liveOn, onError: (Object _) => _liveDropped(), onDone: _liveDropped, cancelOnError: true);
+    } on Object {
+      // Offline, refused (too many open) or no such page: pull to refresh
+      // as before, and it is tried again later.
+      _liveDropped();
+    }
+  }
+
+  void _liveDropped() {
+    unawaited(_live?.cancel());
+    _live = null;
+    if (_gone) return;
+    _liveRetry?.cancel();
+    _liveRetry = Timer(const Duration(seconds: 30), () => unawaited(_liveOpen()));
+  }
+
+  void _liveOn(SseEvent e) {
+    if (e.event == 'gone') {
+      unawaited(_live?.cancel());
+      _live = null;
+      return;
+    }
+    if (e.event != 'changed') return;
+    try {
+      final d = jsonDecode(e.data) as Map<String, dynamic>;
+      _liveIds.addAll([for (final b in (d['blocks'] as List? ?? const [])) '$b']);
+      _liveAll = _liveAll || d['all'] == true;
+    } on Object {
+      return;
+    }
+    _liveSoon();
+  }
+
+  /// At most one read in two seconds: a burst of notices is one.
+  void _liveSoon() {
+    if (_liveWait != null || _liveBusy) return;
+    final wait = const Duration(seconds: 2) - DateTime.now().difference(_liveLast);
+    _liveWait = Timer(wait.isNegative ? Duration.zero : wait, () {
+      _liveWait = null;
+      unawaited(_liveRead());
+    });
+  }
+
+  /// Reads again the parts named: the page as drawn, keeping the rows
+  /// shown further or put in an order for the parts not named; a part
+  /// named that is in an order reads its first rows in that order.
+  Future<void> _liveRead() async {
+    final ids = {..._liveIds};
+    final all = _liveAll;
+    _liveIds.clear();
+    _liveAll = false;
+    if ((ids.isEmpty && !all) || _gone) return;
+    _liveBusy = true;
+    _liveLast = DateTime.now();
+    try {
+      final r = await widget.auth.api.viewPage(name: widget.name, filters: filtersParam(_values));
+      final again = <String, PageBlock>{};
+      for (final MapEntry(key: id, value: b) in _more.entries) {
+        if (!all && !ids.contains(id)) {
+          again[id] = b;
+          continue;
+        }
+        final o = b.order;
+        if (o == null) continue; // the page's first rows, as drawn
+        again[id] = await widget.auth.api.getPageBlock(name: widget.name, block: id, order: o.column, desc: o.desc ? '1' : null, filters: filtersParam(_values));
+      }
+      if (mounted) {
+        setState(() {
+          _page = r;
+          _error = null;
+          _more
+            ..clear()
+            ..addAll(again);
+        });
+      }
+    } on Object {
+      // Kept as it is: the next notice, or a pull, reads it.
+    } finally {
+      _liveBusy = false;
+      if (_liveIds.isNotEmpty || _liveAll) _liveSoon();
+    }
   }
 
   String? get _searchId => _page?.filters.where((f) => f.type == 'search').firstOrNull?.id;
@@ -314,7 +442,16 @@ class _PageScreenState extends State<PageScreen> {
 
   void _open(PageRow r) {
     final d = r.detail;
-    if (d == null) return;
+    if (d == null) {
+      final rec = recordLinkOf(r.link);
+      if (rec == null) return;
+      if (rec.kind == 'invoice') {
+        unawaited(openInvoice(context, widget.auth, rec.id));
+      } else {
+        openStorefrontOrder(context, widget.auth, rec.id);
+      }
+      return;
+    }
     unawaited(showTkSheet<void>(
       context,
       (_) => TkAppLook(
@@ -326,6 +463,20 @@ class _PageScreenState extends State<PageScreen> {
         ),
       ),
     ));
+  }
+
+  bool _opens(PageRow r) => r.detail != null || recordLinkOf(r.link) != null;
+
+  /// A part over Taskiem's records this person may not see, or whose area
+  /// is off: said in its place.
+  Widget _unavailable(PageBlock b) {
+    final look = TkLook.of(context);
+    return TkCallout(
+      leading: TkSquare('b-lock', color: look.violet),
+      title: b.title ?? b.label ?? 'This part',
+      sub: b.unavailable!,
+      color: look.violet,
+    );
   }
 
   Widget _filters(PageDrawing p) {
@@ -441,9 +592,9 @@ class _PageScreenState extends State<PageScreen> {
                 sub: r.sub ?? '',
                 status: r.state?.text,
                 statusTone: pageTone(r.state?.tone),
-                chevron: r.detail != null,
-                semanticsLabel: [r.title ?? '', if ((r.sub ?? '').isNotEmpty) r.sub!, if (r.state != null) r.state!.text].join(', ') + (r.detail != null ? '. Open' : ''),
-                onTap: r.detail == null ? null : () => _open(r),
+                chevron: _opens(r),
+                semanticsLabel: [r.title ?? '', if ((r.sub ?? '').isNotEmpty) r.sub!, if (r.state != null) r.state!.text].join(', ') + (_opens(r) ? '. Open' : ''),
+                onTap: _opens(r) ? () => _open(r) : null,
               ),
           ],
         ));
@@ -479,9 +630,9 @@ class _PageScreenState extends State<PageScreen> {
                 title: title,
                 sub: sub,
                 subLines: 3,
-                chevron: r.detail != null,
-                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${r.detail != null ? '. Open' : ''}',
-                onTap: r.detail == null ? null : () => _open(r),
+                chevron: _opens(r),
+                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${_opens(r) ? '. Open' : ''}',
+                onTap: _opens(r) ? () => _open(r) : null,
               );
             }(),
         ],
@@ -521,6 +672,11 @@ class _PageScreenState extends State<PageScreen> {
       }
 
       for (final b in p.blocks) {
+        if (b.unavailable != null) {
+          flush();
+          children.add(_unavailable(b));
+          continue;
+        }
         if (b.broken != null) {
           flush();
           children.add(TkCallout(leading: TkSquare('b-warn', color: look.orange), title: 'This part needs fixing', sub: 'Change it on the web.', color: look.orange));

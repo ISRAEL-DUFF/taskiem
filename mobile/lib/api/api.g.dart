@@ -16482,9 +16482,9 @@ class PageDrawing {
 /// One part as drawn. A heading has title and text; a figure label, value,
 /// shown, tone, lead, naira and maybe change and over; a list or table title,
 /// size, empty, count, rows, more and has_detail (a list groups, a table
-/// columns and order). broken or error replace the rest.
+/// columns and order). broken, error or unavailable replace the rest.
 class PageBlock {
-  const PageBlock({this.broken, this.change, this.columns, this.count, this.empty, this.error, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.shown, this.size, this.text, this.title, this.tone, required this.type, this.value});
+  const PageBlock({this.broken, this.change, this.columns, this.count, this.empty, this.error, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.shown, this.size, this.text, this.title, this.tone, required this.type, this.unavailable, this.value});
 
   /// For editors, why this part cannot be drawn ("This part needs fixing").
   final String? broken;
@@ -16514,6 +16514,9 @@ class PageBlock {
   final String? title;
   final String? tone;
   final String type;
+  /// In place of a part over Taskiem's own records, why it is not drawn for
+  /// this caller ("You cannot see orders.", or the area is turned off).
+  final String? unavailable;
   final double? value;
 
   factory PageBlock.fromJson(Map<String, dynamic> j) => PageBlock(
@@ -16539,6 +16542,7 @@ class PageBlock {
         title: j['title'] == null ? null : j['title'] as String,
         tone: j['tone'] == null ? null : j['tone'] as String,
         type: j['type'] as String,
+        unavailable: j['unavailable'] == null ? null : j['unavailable'] as String,
         value: j['value'] == null ? null : (j['value'] as num).toDouble(),
       );
 
@@ -16565,6 +16569,7 @@ class PageBlock {
         'title': ?title,
         'tone': ?tone,
         'type': type,
+        'unavailable': ?unavailable,
         'value': ?value,
       };
 }
@@ -16653,7 +16658,7 @@ class PageBlockOrder {
 }
 
 class PageRow {
-  const PageRow({this.cells, this.detail, this.group, required this.id, this.state, this.sub, this.title});
+  const PageRow({this.cells, this.detail, this.group, required this.id, this.link, this.state, this.sub, this.title});
 
   /// A table's cells, in its columns' order, written as people read them.
   final List<String>? cells;
@@ -16661,6 +16666,10 @@ class PageRow {
   /// The key of the group the row is under (a grouped list).
   final String? group;
   final String id;
+  /// A row of Taskiem's own records (an order, an invoice) links to the
+  /// record's own screen, as the web's address (/storefront/orders/AD-12,
+  /// /invoices/INV-0001); the app opens it too.
+  final String? link;
   final PageRowState? state;
   final String? sub;
   final String? title;
@@ -16670,6 +16679,7 @@ class PageRow {
         detail: j['detail'] == null ? null : PageRowDetail.fromJson(j['detail'] as Map<String, dynamic>),
         group: j['group'] == null ? null : j['group'] as String,
         id: j['id'] as String,
+        link: j['link'] == null ? null : j['link'] as String,
         state: j['state'] == null ? null : PageRowState.fromJson(j['state'] as Map<String, dynamic>),
         sub: j['sub'] == null ? null : j['sub'] as String,
         title: j['title'] == null ? null : j['title'] as String,
@@ -16680,6 +16690,7 @@ class PageRow {
         'detail': ?detail?.toJson(),
         'group': ?group,
         'id': id,
+        'link': ?link,
         'state': ?state?.toJson(),
         'sub': ?sub,
         'title': ?title,

@@ -6,6 +6,7 @@
 // table put in a column's order, only by the columns the server allows.
 // Pictured light and dark.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -27,19 +28,26 @@ import 'support.dart' show loadFonts, snap;
 const _json = {'content-type': 'application/json; charset=utf-8'};
 
 class _Api {
-  final calls = <http.Request>[];
-  final routes = <String, Object? Function(http.Request r)>{};
+  final calls = <http.BaseRequest>[];
+  final routes = <String, Object? Function(http.BaseRequest r)>{};
+
+  /// The page's live notices, when a test follows them.
+  StreamController<List<int>>? live;
 
   Auth auth() {
     final a = Auth(
       transport: Transport(
         base: 'http://localhost',
         token: 'tok',
-        client: MockClient((req) async {
+        client: MockClient.streaming((req, _) async {
           calls.add(req);
+          final l = live;
+          if (l != null && req.url.path.endsWith('/live')) {
+            return http.StreamedResponse(l.stream, 200, headers: {'content-type': 'text/event-stream'});
+          }
           final f = routes['${req.method} ${req.url.path}'];
-          if (f == null) return http.Response(jsonEncode({'error': 'not here'}), 404, headers: _json);
-          return http.Response(jsonEncode(f(req) ?? {}), 200, headers: _json);
+          final body = f == null ? jsonEncode({'error': 'not here'}) : jsonEncode(f(req) ?? {});
+          return http.StreamedResponse(Stream.value(utf8.encode(body)), f == null ? 404 : 200, headers: _json);
         }),
       ),
       store: SessionStore(MemoryKeyStore(), describe: () async => (name: 'Test phone', platform: 'android')),
@@ -328,6 +336,110 @@ void main() {
     await settle(t);
     expect(api.calls.length, before);
     expect(find.text('Order'), findsOneWidget);
+  });
+
+  testWidgets('Taskiem’s orders on a page: a row opens the order; a part not for this person says so', (t) async {
+    phone(t, 900);
+    final api = _Api();
+    api.routes['GET /v1/pages/desk/view'] = (_) => {
+      'page': _summary('desk', 'Shop desk'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-22T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {'id': 'n', 'type': 'figure', 'label': 'Invoiced', 'value': 5000000, 'shown': '₦50,000', 'tone': 'plain', 'lead': true, 'naira': true},
+        {
+          'id': 'orders',
+          'type': 'list',
+          'title': 'Orders',
+          'size': 'full',
+          'empty': 'No orders',
+          'has_detail': false,
+          'count': 2,
+          'more': null,
+          'rows': [
+            {'id': 'AC-2', 'title': 'AC-2', 'sub': 'C••• · ₦9,900', 'state': {'text': 'accepted', 'tone': 'good'}, 'link': '/storefront/orders/AC-2'},
+            {'id': 'AC-1', 'title': 'AC-1', 'sub': 'B••• · ₦1,500', 'state': {'text': 'received', 'tone': 'warn'}, 'link': '/storefront/orders/AC-1'},
+          ],
+        },
+        {'id': 'inv', 'type': 'table', 'title': 'Invoices', 'unavailable': 'You cannot see invoices.'},
+      ],
+    };
+    api.routes['GET /v1/storefront/orders/AC-2'] = (_) => {'error': 'stand-in'};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'desk', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('AC-2'), findsOneWidget);
+    expect(find.text('You cannot see invoices.'), findsOneWidget);
+    await looks(t, 'page-records');
+    await snap(t, 'page-records');
+    await t.pumpWidget(TaskiemApp(mode: TkMode.dark, home: PageScreen(auth: api.auth(), name: 'desk', backLabel: 'Back to Pages')));
+    await settle(t);
+    await snap(t, 'page-records-dark');
+    await t.tap(find.text('AC-2'));
+    await settle(t);
+    expect(api.calls.any((c) => c.url.path == '/v1/storefront/orders/AC-2'), isTrue);
+    expect(recordLinkOf('/invoices/INV-0001'), (kind: 'invoice', id: 'INV-0001'));
+    expect(recordLinkOf('/elsewhere/1'), isNull);
+  });
+
+  testWidgets('An open page reads the parts a notice names, once for a burst, keeping a table’s order', (t) async {
+    phone(t, 1500);
+    final api = _Api()..live = StreamController<List<int>>();
+    var drawn = 0;
+    api.routes['GET /v1/pages/tickets/view'] = (_) {
+      drawn++;
+      final v = _view(more: null);
+      (v['blocks'] as List)[0] = {...(v['blocks'] as List)[0] as Map<String, dynamic>, 'shown': drawn == 1 ? '7' : '8'};
+      return v;
+    };
+    var ordered = 0;
+    api.routes['GET /v1/pages/tickets/blocks/all_rows'] = (r) {
+      ordered++;
+      return {
+        'id': 'all_rows',
+        'type': 'table',
+        'title': 'Every ticket',
+        'count': 2,
+        'more': null,
+        'columns': [
+          {'column': 'title', 'label': 'Title', 'naira': false, 'sortable': true},
+        ],
+        'order': {'column': r.url.queryParameters['order'], 'desc': false},
+        'rows': [
+          {'id': '1', 'cells': ['Printer jam']},
+          if (ordered > 1) {'id': '9', 'cells': ['A new one']},
+        ],
+      };
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'tickets', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('7'), findsOneWidget);
+    // The table put in order by Title.
+    await t.ensureVisible(find.text('Order'));
+    await t.tap(find.text('Order'));
+    await settle(t);
+    await t.tap(find.text('Title').last);
+    await settle(t);
+    expect(find.text('By Title'), findsOneWidget);
+
+    // Three notices at once: one read, the figure and the table in its order.
+    void notice(String blocks) => api.live!.add(utf8.encode('event: changed\ndata: {"page":"tickets","blocks":$blocks}\n\n'));
+    notice('["all"]');
+    notice('["all_rows"]');
+    notice('["all","all_rows"]');
+    await settle(t);
+    await t.pump(const Duration(seconds: 2));
+    await settle(t);
+    expect(drawn, 2);
+    expect(ordered, 2);
+    expect(find.text('8'), findsOneWidget);
+    expect(find.text('A new one'), findsOneWidget);
+    expect(find.text('By Title'), findsOneWidget);
+    final asked = api.calls.where((c) => c.url.path == '/v1/pages/tickets/blocks/all_rows').last.url.queryParameters;
+    expect(asked['order'], 'title');
+    expect(asked['cursor'], isNull);
+    await api.live!.close();
   });
 
   test('A table part’s order in words', () {
