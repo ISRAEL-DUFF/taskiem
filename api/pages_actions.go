@@ -109,12 +109,45 @@ func pageToolInfo(ctx context.Context, s *Server, tx pgx.Tx, command string) (to
 	if schema, _ := d.InputsSchema(); schema != nil {
 		if m, ok := schema.(map[string]any); ok {
 			props, _ := m["properties"].(map[string]any)
-			for k := range props {
+			for k, v := range props {
 				info.Inputs = append(info.Inputs, k)
+				if prop, _ := v.(map[string]any); personalInput(k, prop) {
+					info.PersonalInputs = append(info.PersonalInputs, k)
+				}
 			}
 		}
 	}
+	info.Roles = t.Roles
 	return t, info, true
+}
+
+// personalInput says whether a tool's input takes personal data, as the
+// form's Saved button reads it (docs/tools.md): declared x-pii, a phone
+// or an email format, a saved person, phone, email, account or place, or
+// words of its name or title that say so.
+func personalInput(name string, prop map[string]any) bool {
+	if prop == nil {
+		return false
+	}
+	if _, ok := prop["x-pii"]; ok {
+		return true
+	}
+	switch prop["format"] {
+	case "phone", "phone-ng", "email":
+		return true
+	}
+	switch prop["x-saved"] {
+	case "phone", "email", "person", "bank_account", "place":
+		return true
+	}
+	title, _ := prop["title"].(string)
+	words := strings.ToLower(name + " " + title)
+	for _, w := range []string{"phone", "email", "account", "address", "customer", "contact"} {
+		if strings.Contains(words, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // pageWorkflow is the workflow a page names, as deployed in prod: its id,
@@ -329,7 +362,14 @@ func (s *Server) drawStatus(ctx context.Context, pc *pageCtx, b pages.Block, out
 		return out
 	}
 	words, tone := pages.StatusWords(status)
-	out["run"], out["status"], out["words"], out["tone"] = run, status, words, tone
+	out["status"], out["words"], out["tone"] = status, words, tone
+	if !p.Can(PermRunRead) {
+		// The page's viewers see where it is, in words; the run itself
+		// (its id, its times, who it waits for) is for those who may read
+		// runs.
+		return out
+	}
+	out["run"] = run
 	out["started_at"] = started.UTC().Format(time.RFC3339)
 	if ended != nil {
 		out["ended_at"] = ended.UTC().Format(time.RFC3339)
@@ -360,7 +400,14 @@ func (s *Server) drawToolPart(ctx context.Context, pc *pageCtx, b pages.Block, o
 	got, err := s.pageToolAnswer(ctx, pc, b, true)
 	if err != nil {
 		var bad toolInputError
-		if le, ok := runtime.IsLimit(err); ok {
+		var unseen errToolUnseen
+		if errors.As(err, &unseen) {
+			// As a part over records the viewer may not see: said in its place.
+			for _, k := range []string{"tone", "lead", "naira", "size", "empty", "has_detail"} {
+				delete(out, k)
+			}
+			out["unavailable"] = string(unseen)
+		} else if le, ok := runtime.IsLimit(err); ok {
 			out["error"] = le.Message
 		} else if errors.As(err, &bad) {
 			out["error"] = "This part's values do not fit its tool: " + strings.Join(bad, "; ") + "."
@@ -394,6 +441,26 @@ func (s *Server) drawToolPart(ctx context.Context, pc *pageCtx, b pages.Block, o
 	return out
 }
 
+// errToolUnseen is a part a tool works out that this viewer may not see:
+// drawn as unavailable, in plain words.
+type errToolUnseen string
+
+func (e errToolUnseen) Error() string { return string(e) }
+
+// toolNotFor says why p may not use tool t ("" when they may): its roles,
+// run.start, and a key kept to another environment.
+func toolNotFor(p *Principal, t toolRow) string {
+	switch {
+	case p.Environment != "" && p.Environment != t.Environment:
+		return "This key cannot use this part's tool."
+	case !p.Can(PermRunStart):
+		return "Your role does not use tools, so this part is not shown."
+	case !mayStart(p, t.Roles):
+		return "Only " + startRolesWords(t.Roles) + " can see this."
+	}
+	return ""
+}
+
 // pageToolGot is what a tool feeding a part answered.
 type pageToolGot struct {
 	run     uuid.UUID
@@ -407,6 +474,16 @@ type pageToolGot struct {
 // kept, however old (a button pressed on its rows reads them).
 func (s *Server) pageToolAnswer(ctx context.Context, pc *pageCtx, b pages.Block, start bool) (pageToolGot, error) {
 	p := principalFrom(ctx)
+	// Held to the tool before anything kept is read or anything started:
+	// a page opens to its roles, but what a tool answers is for whoever
+	// may use that tool (its roles, run.start, a key's environment).
+	t, ok := s.pageTool(ctx, pc, b.Source.Tool)
+	if !ok {
+		return pageToolGot{}, fmt.Errorf("%w: this part's tool is not available any more", errConflict)
+	}
+	if why := toolNotFor(p, t); why != "" {
+		return pageToolGot{}, errToolUnseen(why)
+	}
 	inputs := pages.ToolInputs(b.Source, pc.values)
 	sum := sha256.Sum256(canonicalJSON(inputs))
 	digest := sum[:]
@@ -431,8 +508,7 @@ func (s *Server) pageToolAnswer(ctx context.Context, pc *pageCtx, b pages.Block,
 	if !start {
 		return got, fmt.Errorf("%w: this part has not been worked out yet: open the page again", errConflict)
 	}
-	t, ok := s.pageTool(ctx, pc, b.Source.Tool)
-	if !ok || t.Asks() != wdcheck.CareAnswers {
+	if t.Asks() != wdcheck.CareAnswers {
 		return got, fmt.Errorf("%w: this part's tool does not answer at once", errConflict)
 	}
 	var def []byte
@@ -630,6 +706,10 @@ func (s *Server) pageRowAct(ctx context.Context, pc *pageCtx, b pages.Block, row
 		return nil, fmt.Errorf("%w: say which row the button was pressed on", errBadRequest)
 	case b.Source.Tool != "":
 		got, err := s.pageToolAnswer(ctx, pc, b, false)
+		var unseen errToolUnseen
+		if errors.As(err, &unseen) {
+			return nil, fmt.Errorf("%w: %s", errForbidden, string(unseen))
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -705,7 +785,7 @@ func (s *Server) actTool(w http.ResponseWriter, r *http.Request, pc *pageCtx, b 
 		writeErr(w, http.StatusNotFound, "this button's tool is not available any more")
 		return
 	}
-	if !p.Can(PermRunStart) {
+	if !p.Can(PermRunStart) || (p.Environment != "" && p.Environment != t.Environment) {
 		s.fail(w, r, fmt.Errorf("%w: your role does not use tools", errForbidden))
 		return
 	}
@@ -726,22 +806,22 @@ func (s *Server) actTool(w http.ResponseWriter, r *http.Request, pc *pageCtx, b 
 	if pc.draft {
 		version = 0
 	}
-	place := fmt.Sprintf("v%d/%s/%s/%d", version, b.ID, req.Row, req.Action)
+	stored, _ := maskDeep(maskEnvelopes(any(inputs))).(map[string]any)
+	place := pageButtonPlace(version, b, req, stored, act)
 	var id uuid.UUID
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		stored, _ := maskDeep(maskEnvelopes(any(inputs))).(map[string]any)
 		raw, _ := json.Marshal(stored)
 		if stored == nil {
 			raw = []byte("{}")
 		}
 		// A button not used yet is kept another seven days; one used stays
-		// spent.
+		// spent. What it was minted for is never changed: another row, or
+		// other values, is another place.
 		return tx.QueryRow(ctx, `INSERT INTO tool_buttons (id, tenant_id, environment, workflow_id, label, inputs, once, from_page, place, expires_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (tenant_id, from_page, place) WHERE from_page IS NOT NULL DO UPDATE
 			SET expires_at = CASE WHEN tool_buttons.used_at IS NULL THEN EXCLUDED.expires_at ELSE tool_buttons.expires_at END,
-			    workflow_id = CASE WHEN tool_buttons.used_at IS NULL THEN EXCLUDED.workflow_id ELSE tool_buttons.workflow_id END,
-			    inputs = EXCLUDED.inputs, once = tool_buttons.once OR EXCLUDED.once
+			    workflow_id = CASE WHEN tool_buttons.used_at IS NULL THEN EXCLUDED.workflow_id ELSE tool_buttons.workflow_id END
 			RETURNING id`, uuid.New(), p.TenantID, t.Environment, t.Workflow, a.Label, raw, a.Once, pc.row.ID, place, time.Now().Add(buttonFor)).Scan(&id)
 	})
 	if err != nil {
@@ -758,6 +838,27 @@ func (s *Server) actTool(w http.ResponseWriter, r *http.Request, pc *pageCtx, b 
 		"tool": pressed{Button: id, Command: t.Command, Name: t.Name, Inputs: inputs, Once: a.Once}})
 }
 
+// pageButtonPlace is where a page's button is minted: the page's version,
+// the part and the button, and a digest of what it is pressed on, the
+// same for every viewer: a table's row by its id (values filled from a
+// personal column differ by who presses), a tool's row by the item itself,
+// masked (its place in the list changes), the page's own buttons by their
+// values (which read the filters). A once button is so spent for that row
+// or those values alone.
+func pageButtonPlace(version int, b pages.Block, req pageActReq, stored map[string]any, act map[string]any) string {
+	var ident map[string]any
+	switch {
+	case b.Source != nil && b.Source.Tool != "":
+		ident = map[string]any{"item": maskDeep(maskEnvelopes(act["item"]))}
+	case req.Row != "":
+		ident = map[string]any{"row": req.Row}
+	default:
+		ident = map[string]any{"inputs": stored}
+	}
+	sum := sha256.Sum256(canonicalJSON(ident))
+	return fmt.Sprintf("v%d/%s/%d/%x", version, b.ID, req.Action, sum[:12])
+}
+
 // actSignal sends a button's signal, after a Yes, to the one run it names:
 // a run of the workflow the button names, in this business, waiting at a
 // step that declares a page may send it; held to the workflow's roles.
@@ -767,6 +868,12 @@ func (s *Server) actSignal(w http.ResponseWriter, r *http.Request, pc *pageCtx, 
 	sig := a.Signal
 	moved := func() {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "This has moved on: it is not waiting for " + a.Label + " any more.", "code": "moved_on"})
+	}
+	// A signal moves a run on: as starting one, it needs run.start, and a
+	// key kept to another environment never reaches prod's runs.
+	if !p.Can(PermRunStart) || (p.Environment != "" && p.Environment != pageToolEnv) {
+		s.fail(w, r, fmt.Errorf("%w: your role cannot tell a run something", errForbidden))
+		return
 	}
 	input := pages.ActionValues(b, sig.Input, act)
 	for k, v := range input {
@@ -782,14 +889,12 @@ func (s *Server) actSignal(w http.ResponseWriter, r *http.Request, pc *pageCtx, 
 		def  []byte
 	}
 	var found *wait
-	var roles []string
-	var wfName string
+	wfName := sig.Workflow
 	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		wf, _, wd0, n, err := pageWorkflow(ctx, s, tx, sig.Workflow)
+		wf, _, _, n, err := pageWorkflow(ctx, s, tx, sig.Workflow)
 		if err != nil || n != 1 {
 			return err
 		}
-		roles, wfName = wd0.Roles, sig.Workflow
 		var rows pgx.Rows
 		if sig.Run != "" {
 			run, perr := uuid.Parse(pages.Word(b, sig.Run, act))
@@ -841,8 +946,10 @@ func (s *Server) actSignal(w http.ResponseWriter, r *http.Request, pc *pageCtx, 
 		moved()
 		return
 	}
-	if !mayStart(p, roles) {
-		s.fail(w, r, fmt.Errorf("%w: only %s can tell %s this", errForbidden, startRolesWords(roles), wfName))
+	// Held to the roles of the version the run is of, not of the one
+	// deployed now.
+	if !mayStart(p, d.Roles) {
+		s.fail(w, r, fmt.Errorf("%w: only %s can tell %s this", errForbidden, startRolesWords(d.Roles), wfName))
 		return
 	}
 	if !req.Yes {

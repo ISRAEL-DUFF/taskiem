@@ -703,11 +703,11 @@ function Part({
         <section className="card pg-part" data-testid="page-status">
           <div className="pg-part-head">
             <h2>{part.title}</h2>
-            {part.words && part.run && <span className={`badge sf-status ${toneClass(part.tone)}`}>{part.words}</span>}
+            {part.words && part.status && <span className={`badge sf-status ${toneClass(part.tone)}`}>{part.words}</span>}
           </div>
           {part.error ? (
             <p className="hint">{part.error}</p>
-          ) : !part.run ? (
+          ) : !part.status ? (
             <p className="hint">{part.words}</p>
           ) : (
             <>

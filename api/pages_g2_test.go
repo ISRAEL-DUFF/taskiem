@@ -247,10 +247,14 @@ func TestPagesWithTools(t *testing.T) {
 	}
 	// The status part shows the workflow's latest run, and only its own.
 	v = viewOf(t, desk, "desk", nil)
-	if st := blockOf(t, v, "state"); st["words"] != "Done" || st["run"] != run {
+	// Its words for every viewer; the run itself for those who may read runs.
+	if st := blockOf(t, v, "state"); st["words"] != "Done" || st["run"] != nil || st["started_at"] != nil {
+		t.Errorf("status for desk (no run.read): %v", st)
+	}
+	if st := blockOf(t, viewOf(t, viewer, "desk", nil), "state"); st["words"] != "Done" || st["run"] != run {
 		t.Errorf("status: %v", st)
 	}
-	if st := blockOf(t, viewOf(t, desk, "desk", nil, "run", other), "state"); st["run"] != nil {
+	if st := blockOf(t, viewOf(t, viewer, "desk", nil, "run", other), "state"); st["run"] != nil || st["words"] != "Nothing has run yet." {
 		t.Errorf("another workflow's run shown: %v", st)
 	}
 

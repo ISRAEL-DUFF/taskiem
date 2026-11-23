@@ -16773,7 +16773,8 @@ class PageBlock {
   /// Said when a sum stopped at its first 5,000 rows.
   final String? over;
   final List<PageRow>? rows;
-  /// A status part's run.
+  /// A status part's run, with its times and who it waits for, only for a
+  /// caller with run.read (status and words are for every viewer).
   final String? run;
   /// The figure as drawn (a count, or naira).
   final String? shown;

@@ -593,14 +593,14 @@ class _PageScreenState extends State<PageScreen> {
     final started = b.startedAt;
     return TkSection(title: b.title, inset: 16, children: [
       TkListRow(
-        title: b.error ?? (b.run == null ? (b.words ?? 'Nothing has run yet.') : (waits.isEmpty ? 'Its latest run' : waits.removeAt(0))),
+        title: b.error ?? (b.status == null ? (b.words ?? 'Nothing has run yet.') : (waits.isEmpty ? 'Its latest run' : waits.removeAt(0))),
         sub: [
           ...waits,
           if (started != null) 'Started ${whenWords(started.toLocal(), DateTime.now())}',
         ].join(' · '),
         icon: 'b-clock',
         square: TkLook.of(context).blue,
-        status: b.run == null ? null : b.words,
+        status: b.status == null ? null : b.words,
         statusTone: pageTone(b.tone),
         chevron: false,
       ),

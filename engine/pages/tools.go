@@ -30,17 +30,70 @@ type ToolInfo struct {
 	Answer *wd.Answer
 	// Inputs are its inputs' names, for checking a page's values.
 	Inputs []string
+	// PersonalInputs are its inputs that take personal data (declared
+	// x-pii, a phone or an email, a saved person, account or place):
+	// never kept on a page as a fixed value.
+	PersonalInputs []string
+	// Roles are who may use it (none: everyone in the business).
+	Roles []string
+}
+
+// Literal is a fixed value as a page keeps it: words that read like an
+// expression ("=…") are written as one that gives back those very words
+// (a CEL string literal), at any depth, so nothing in a value is evaluated.
+func Literal(v any) any {
+	switch x := v.(type) {
+	case string:
+		if strings.HasPrefix(x, "=") {
+			return "=" + strconv.Quote(x)
+		}
+		return x
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[k] = Literal(e)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = Literal(e)
+		}
+		return out
+	}
+	return v
+}
+
+// narrower says whether a tool's roles let in fewer people than a page's:
+// a page that opens to more would show them what the tool answers only
+// to its own roles (owners always may both).
+func narrower(tool, page []string) bool {
+	if len(tool) == 0 {
+		return false
+	}
+	if len(page) == 0 {
+		return true
+	}
+	for _, r := range page {
+		if r != "owner" && !contains(tool, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkToolSource holds a tool source to the business: the tool is one,
 // it answers at once, and gives the output named, of a type the part can
 // show.
-func checkToolSource(ps *problems, at, name string, b Block, env Env) {
+func checkToolSource(ps *problems, at, name string, b Block, env Env, pageRoles []string) {
 	s := b.Source
 	t, ok := toolOf(env, s.Tool)
 	if !ok {
 		ps.add(at+"/source/tool", "%s shows what the tool %s works out, which the business does not have.", name, s.Tool)
 		return
+	}
+	if narrower(t.Roles, pageRoles) {
+		ps.add(at+"/source/tool", "%s is worked out by %s, which only %s may use, and the page opens to more people: let the page open to %s only.", name, t.Name, strings.Join(t.Roles, ", "), strings.Join(t.Roles, ", "))
 	}
 	if t.Care != wdcheck.CareAnswers {
 		ps.add(at+"/source/tool", "%s is worked out by %s, which asks before it runs: only a tool that answers at once can feed a page, so opening it never changes anything.", name, t.Name)
@@ -236,19 +289,20 @@ func FromTool(command string, t ToolInfo, inputs map[string]any) (*Page, error) 
 	if r := []rune(title); len(r) > 60 {
 		title = string(r[:60])
 	}
-	p := &Page{Page: Format, Name: name, Title: title, Icon: "reports"}
+	// The page opens to those the tool is for (none named: everyone).
+	p := &Page{Page: Format, Name: name, Title: title, Icon: "reports", Roles: append([]string(nil), t.Roles...)}
 	src := func(output string) *Source {
 		s := &Source{Tool: command, Output: output}
-		if len(inputs) > 0 {
-			s.Inputs = map[string]any{}
-			for k, v := range inputs {
-				// A value is a word, never an expression a viewer could
-				// steer: one that reads like one is kept as its words.
-				if str, ok := v.(string); ok && strings.HasPrefix(str, "=") {
-					v = "'" + str
-				}
-				s.Inputs[k] = v
+		for k, v := range inputs {
+			// A personal value (a phone, an account) is never kept on a
+			// page for everyone who opens it: the part asks for none.
+			if contains(t.PersonalInputs, k) {
+				continue
 			}
+			if s.Inputs == nil {
+				s.Inputs = map[string]any{}
+			}
+			s.Inputs[k] = Literal(v)
 		}
 		return s
 	}

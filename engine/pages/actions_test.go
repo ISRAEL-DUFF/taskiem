@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -211,15 +212,30 @@ func TestG2FromTool(t *testing.T) {
 	list := ToolInfo{Name: "Waiting list", Care: wdcheck.CareAnswers, Outputs: map[string]string{"rows": "list", "n": "integer"},
 		Answer: &wd.Answer{Type: "list", Title: "Waiting", From: "rows", Item: &wd.AnswerItem{Title: "=item.name", State: &wd.AnswerState{Text: "=item.state"}},
 			Actions: []wd.Button{{Label: "Call", Tool: "call", Inputs: map[string]any{"who": "=item.name"}}}}}
-	p, err := FromTool("waiting", list, map[string]any{"day": "today", "x": "=steps.secret"})
+	list.Roles = []string{"manager"}
+	list.PersonalInputs = []string{"phone"}
+	given := map[string]any{"day": "today", "x": "=steps.secret", "phone": "+2348012345678",
+		"deep": map[string]any{"list": []any{"=filters.q", "plain", `=a "quoted" \ word`}}}
+	p, err := FromTool("waiting", list, given)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Name != "waiting-page" || p.Blocks[0].Source.Tool != "waiting" || p.Blocks[0].Source.Output != "rows" || len(p.Blocks[0].Actions) != 1 {
 		t.Errorf("list: %+v", p.Blocks[0])
 	}
-	if p.Blocks[0].Source.Inputs["x"] != "'=steps.secret" {
-		t.Errorf("a value is never an expression: %v", p.Blocks[0].Source.Inputs)
+	// The page opens to the tool's roles; a personal value is not kept.
+	if strings.Join(p.Roles, ",") != "manager" {
+		t.Errorf("roles: %v", p.Roles)
+	}
+	if _, kept := p.Blocks[0].Source.Inputs["phone"]; kept {
+		t.Errorf("a phone kept on the page: %v", p.Blocks[0].Source.Inputs)
+	}
+	// Values that read like expressions, at any depth, come back as the
+	// very words given: nothing is evaluated.
+	got := ToolInputs(p.Blocks[0].Source, Values{Set: map[string]string{"q": "leak"}})
+	want := map[string]any{"day": "today", "x": "=steps.secret", "deep": map[string]any{"list": []any{"=filters.q", "plain", `=a "quoted" \ word`}}}
+	if toJSON(got) != toJSON(want) {
+		t.Errorf("literal values:\n got %s\nwant %s", toJSON(got), toJSON(want))
 	}
 	if _, ps := Parse(p.Marshal()); len(ps) > 0 {
 		t.Errorf("pinned page: %v", ps)
@@ -239,5 +255,31 @@ func TestG2FromTool(t *testing.T) {
 	text.Answer = &wd.Answer{Type: "text", Text: "hi"}
 	if _, err := FromTool("waiting", text, nil); err == nil {
 		t.Errorf("text pinned")
+	}
+}
+
+func toJSON(v any) string { b, _ := json.Marshal(v); return string(b) }
+
+// A tool whose roles are narrower than the page's cannot feed it.
+func TestG2ToolRolesNarrower(t *testing.T) {
+	env := g2Env()
+	tool := env.Tool
+	env.Tool = func(c string) (ToolInfo, bool) {
+		i, ok := tool(c)
+		if c == "spend" {
+			i.Roles = []string{"manager"}
+		}
+		return i, ok
+	}
+	if ps := Check(parseOK(t, g2), env); !hasProblem(ps, "/blocks/2/source/tool", "opens to more people") {
+		t.Errorf("no roles on the page: %v", ps)
+	}
+	narrow := parseOK(t, strings.Replace(g2, `"title": "Desk",`, `"title": "Desk", "roles": ["manager"],`, 1))
+	if ps := Check(narrow, env); hasProblem(ps, "/blocks/2/source/tool", "opens to more people") {
+		t.Errorf("same roles: %v", ps)
+	}
+	wider := parseOK(t, strings.Replace(g2, `"title": "Desk",`, `"title": "Desk", "roles": ["manager", "support"],`, 1))
+	if ps := Check(wider, env); !hasProblem(ps, "/blocks/2/source/tool", "opens to more people") {
+		t.Errorf("wider: %v", ps)
 	}
 }

@@ -99,7 +99,7 @@ func Check(p *Page, env Env) []Problem {
 			continue
 		}
 		if b.Source.Tool != "" {
-			checkToolSource(&ps, at, name, b, env)
+			checkToolSource(&ps, at, name, b, env, p.Roles)
 			for j, a := range b.Actions {
 				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 			}

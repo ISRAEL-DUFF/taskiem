@@ -61445,7 +61445,7 @@ components:
         run:
           type: string
           format: uuid
-          description: A status part's run.
+          description: A status part's run, with its times and who it waits for, only for a caller with run.read (status and words are for every viewer).
         status:
           type: string
           description: A status part's run's state (queued, running, waiting, completed, failed, cancelled).
