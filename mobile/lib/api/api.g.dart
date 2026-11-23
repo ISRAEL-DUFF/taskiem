@@ -1936,6 +1936,17 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/blocks/${Uri.encodeComponent(block)}', query: {'cursor': ?cursor, 'order': ?order, 'desc': ?desc, 'draft': ?draft, 'filters': ?filters});
     return PageBlock.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Press a page's button (`POST /v1/pages/{name}/act`)
+  Future<PageActResult> actOnPage({required PageActRequest body, required String name, String? draft, String? filters}) async {
+    final j = await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/act', body: body.toJson(), query: {'draft': ?draft, 'filters': ?filters});
+    return PageActResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Work a page's tools out again (`POST /v1/pages/{name}/refresh`)
+  Future<void> refreshPage({required String name}) async {
+    await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/refresh');
+  }
 }
 
 class AppConfig {
@@ -17123,5 +17134,95 @@ class PageFilterOptionsItem {
   Map<String, dynamic> toJson() => {
         'label': label,
         'value': value,
+      };
+}
+
+class PageActRequest {
+  const PageActRequest({required this.action, required this.block, this.row, this.yes});
+
+  final int action;
+  final String block;
+  /// The row's id as drawn (none for the page's own buttons).
+  final String? row;
+  /// The person said Yes to a signal.
+  final bool? yes;
+
+  factory PageActRequest.fromJson(Map<String, dynamic> j) => PageActRequest(
+        action: (j['action'] as num).toInt(),
+        block: j['block'] as String,
+        row: j['row'] == null ? null : j['row'] as String,
+        yes: j['yes'] == null ? null : j['yes'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'block': block,
+        'row': ?row,
+        'yes': ?yes,
+      };
+}
+
+class PageActResult {
+  const PageActResult({this.approval, this.asks, required this.kind, this.run, this.sent, this.tool, this.words});
+
+  final Approval? approval;
+  /// A signal not sent yet: the question to say Yes to (press again with yes).
+  final String? asks;
+  final String kind;
+  final String? run;
+  final bool? sent;
+  /// The tool to open and the values it fills in (a value shown masked is left
+  /// out, to be asked); start it with POST /v1/tools/{command}/start and this
+  /// button.
+  final PageActResultTool? tool;
+  final String? words;
+
+  factory PageActResult.fromJson(Map<String, dynamic> j) => PageActResult(
+        approval: j['approval'] == null ? null : Approval.fromJson(j['approval'] as Map<String, dynamic>),
+        asks: j['asks'] == null ? null : j['asks'] as String,
+        kind: j['kind'] as String,
+        run: j['run'] == null ? null : j['run'] as String,
+        sent: j['sent'] == null ? null : j['sent'] as bool,
+        tool: j['tool'] == null ? null : PageActResultTool.fromJson(j['tool'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approval': ?approval?.toJson(),
+        'asks': ?asks,
+        'kind': kind,
+        'run': ?run,
+        'sent': ?sent,
+        'tool': ?tool?.toJson(),
+        'words': ?words,
+      };
+}
+
+/// The tool to open and the values it fills in (a value shown masked is left
+/// out, to be asked); start it with POST /v1/tools/{command}/start and this
+/// button.
+class PageActResultTool {
+  const PageActResultTool({required this.button, required this.command, required this.inputs, required this.name, required this.once});
+
+  final String button;
+  final String command;
+  final Map<String, dynamic> inputs;
+  final String name;
+  final bool once;
+
+  factory PageActResultTool.fromJson(Map<String, dynamic> j) => PageActResultTool(
+        button: j['button'] as String,
+        command: j['command'] as String,
+        inputs: j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        once: j['once'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'button': button,
+        'command': command,
+        'inputs': inputs,
+        'name': name,
+        'once': once,
       };
 }

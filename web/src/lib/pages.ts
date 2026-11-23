@@ -21,15 +21,30 @@ export interface Source {
   filters?: Condition[];
   order?: { column: string; desc?: boolean }[];
   uses?: string[];
+  /** A made tool that answers at once (G2): its command, values and the output shown. */
+  tool?: string;
+  inputs?: Record<string, unknown>;
+  output?: string;
+}
+
+/** A button (G2): a tool's form, a signal to a run, or a run's approval. */
+export interface PageActionDef {
+  label: string;
+  tool?: string;
+  inputs?: Record<string, unknown>;
+  once?: boolean;
+  signal?: { workflow: string; name: string; run?: string; to?: string; input?: Record<string, unknown> };
+  approve?: { workflow: string; run: string; step: string };
+  when?: string;
 }
 
 export interface Part {
   id: string;
-  type: "heading" | "figure" | "list" | "table";
+  type: "heading" | "figure" | "list" | "table" | "buttons" | "status";
   title?: string;
   text?: string;
   label?: string;
-  value?: "count" | "sum";
+  value?: "count" | "sum" | "output";
   of?: string;
   naira?: boolean;
   tone?: Tone;
@@ -42,6 +57,10 @@ export interface Part {
   columns?: { column: string; label?: string; naira?: boolean }[];
   detail?: { title: string; lines?: { label: string; value: string; naira?: boolean }[] };
   empty?: string;
+  /** G2: buttons (the page's, or each row's), a counting figure as an alert, a status's workflow. */
+  actions?: PageActionDef[];
+  alert?: boolean;
+  workflow?: string;
 }
 
 export interface PageFilterDef {
@@ -62,6 +81,8 @@ export interface PageDoc {
   roles?: string[];
   filters?: PageFilterDef[];
   blocks: Part[];
+  /** A tab under one of Taskiem's areas, after its own tabs. */
+  place?: { area: string };
 }
 
 export interface PageSummary {
@@ -109,7 +130,46 @@ export interface DrawnRow {
   detail?: { title: string; lines: { label: string; value: string }[] };
   /** A row of Taskiem's own records: the record's own screen (/storefront/orders/AD-12). */
   link?: string;
+  /** The row's buttons that show for it (G2). */
+  actions?: DrawnAction[];
+  /** A table's yes/no cells this person may tick here, by column; null for the rest. */
+  ticks?: (boolean | null)[];
 }
+
+/** A button as drawn: pressed by its part, row and place (POST /v1/pages/{name}/act). */
+export interface DrawnAction {
+  index: number;
+  label: string;
+  kind: "tool" | "signal" | "approve";
+  tool?: string;
+  /** Why this person cannot use it (the tool's roles): drawn greyed. */
+  disabled?: string;
+}
+
+/** What pressing a button gives. */
+export interface ActResult {
+  kind: DrawnAction["kind"];
+  tool?: { button: string; command: string; name: string; inputs: Record<string, unknown>; once: boolean };
+  asks?: string;
+  sent?: boolean;
+  run?: string;
+  words?: string;
+  approval?: unknown;
+}
+
+/** "Worked out 3 minutes ago": when a tool worked a part out. */
+export function workedWords(at: string | undefined, now: number = Date.now()): string {
+  if (!at) return "";
+  const mins = Math.max(0, Math.round((now - Date.parse(at)) / 60000));
+  if (mins < 1) return "Worked out just now";
+  if (mins === 1) return "Worked out a minute ago";
+  if (mins < 60) return `Worked out ${mins} minutes ago`;
+  const hours = Math.round(mins / 60);
+  return hours === 1 ? "Worked out an hour ago" : `Worked out ${hours} hours ago`;
+}
+
+/** Whether a page has a part a tool is still working out (read again soon). */
+export const stillWorking = (page: { blocks: DrawnPart[] }) => page.blocks.some((b) => !!b.working);
 
 export interface DrawnPart {
   id: string;
@@ -133,8 +193,25 @@ export interface DrawnPart {
   groups?: { key: string; label: string }[];
   /** sortable: whether this viewer may put the rows in the column's order
    * (never a personal column for someone without table.read). */
-  columns?: { column: string; label: string; naira: boolean; sortable?: boolean }[];
+  columns?: { column: string; label: string; naira: boolean; sortable?: boolean; edit?: boolean }[];
   order?: { column: string; desc: boolean };
+  /** The page's own buttons (a buttons part). */
+  actions?: DrawnAction[];
+  /** A counting figure that is an alert while above zero. */
+  alert?: boolean;
+  /** A table with columns this person may tick here: its table. */
+  table_id?: string;
+  /** Worked out by a made tool: when, or still working. */
+  from_tool?: boolean;
+  worked_at?: string;
+  working?: string;
+  /** A status part: its run, state and words, and who it waits for. */
+  run?: string;
+  status?: string;
+  words?: string;
+  started_at?: string;
+  ended_at?: string;
+  waiting_for?: { kind: string; who: string; you?: boolean; request?: string }[];
   broken?: string;
   error?: string;
   /** In place of a part over Taskiem's records: "You cannot see orders.", or its area is off. */

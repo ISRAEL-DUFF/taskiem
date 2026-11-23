@@ -15,7 +15,8 @@ export type AlertKind =
   | "school_approval"
   | "deal"
   | "order_draft"
-  | "customer_waiting";
+  | "customer_waiting"
+  | "page";
 
 export interface ChatAlert {
   key: string;
@@ -103,6 +104,7 @@ export const ALERT_LOOK: Record<
   deal: { icon: "money", tone: "warn" },
   order_draft: { icon: "chat", tone: "lime" },
   customer_waiting: { icon: "chat", tone: "warn" },
+  page: { icon: "dashboard", tone: "warn" },
 };
 
 /** "Reorder 20 from Bayo Rice Mills". */

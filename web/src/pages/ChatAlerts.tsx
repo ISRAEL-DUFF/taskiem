@@ -364,6 +364,12 @@ function AlertCard({
         return can("invoice.manage")
           ? { words: "Match it", go: () => onSheet("match", from()) }
           : undefined;
+      case "page":
+        // A page's figure above zero (pages §9): the page itself.
+        return {
+          words: "Open the page",
+          go: () => nav(`/pages/${encodeURIComponent(a.reference ?? "")}`),
+        };
       default:
         return undefined;
     }

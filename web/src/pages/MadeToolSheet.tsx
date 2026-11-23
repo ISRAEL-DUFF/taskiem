@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put, type JSONSchema } from "../api";
 import { useAuth } from "../auth";
 import { SchemaForm } from "../forms/SchemaForm";
@@ -463,6 +463,10 @@ export function ToolRunner({
   const fields = Object.keys(schema?.properties ?? {}).length > 0;
   const run = phase.at === "run" ? phase.run : undefined;
   const { answer, error: answerError } = useAnswer(run);
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  // A list or a card from a tool that answers at once can be a page.
+  const pinnable = care === "answers" && can("page.edit") && can("table.read") && (answer?.type === "list" || answer?.type === "card");
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(undefined);
@@ -545,8 +549,30 @@ export function ToolRunner({
               <p>Working on it…</p>
             </div>
           )}
+          {error && (
+            <p className="tk-field-error" role="alert">
+              {error}
+            </p>
+          )}
         </div>
-        <div className="tk-sheet-foot">
+        <div className={pinnable ? "tk-sheet-foot tk-foot-two" : "tk-sheet-foot"}>
+          {pinnable && (
+            <button
+              type="button"
+              className="tk-btn ghost"
+              disabled={busy}
+              data-testid="pin-as-page"
+              onClick={() =>
+                void act(async () => {
+                  // Pin as a page (pages §10, 2): a page fed by this tool, with these values, as a draft.
+                  const pg = await post<{ name: string }>("/v1/pages", { from_tool: { command: tool.command, inputs: input ?? {} } });
+                  navigate(`/pages/${pg.name}/edit`);
+                })
+              }
+            >
+              Pin as a page
+            </button>
+          )}
           <button
             type="button"
             className="tk-cta"
@@ -670,6 +696,7 @@ export function MadeToolSheet({
   command,
   values,
   words,
+  button,
   from,
   onClose,
   onStarted,
@@ -679,6 +706,8 @@ export function MadeToolSheet({
   values?: Record<string, unknown>;
   /** Words typed after its command, read into its form when it opens. */
   words?: string;
+  /** The button pressed to open it (a page's), sent with the start. */
+  button?: string;
   from?: DOMRect | null;
   onClose: () => void;
   onStarted?: (run: string) => void;
@@ -693,7 +722,7 @@ export function MadeToolSheet({
     words?: string;
     button?: string;
     n: number;
-  }>({ command, values, words, n: 0 });
+  }>({ command, values, words, button, n: 0 });
   const tool = tools.find((t) => t.command === open.command);
   const openTool: OpenTool = (c, v, button) => {
     if (!tools.some((t) => t.command === c)) {

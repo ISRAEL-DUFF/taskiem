@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { get, post } from "../api";
+import { ApiError, get, patch, post, type Approval } from "../api";
 import { Icon } from "../icons";
-import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
+import { toast } from "../toast";
+import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { Decide } from "./Approvals";
+import { useConfirm } from "./ConfirmSheet";
+import { MadeToolSheet } from "./MadeToolSheet";
 import {
+  stillWorking,
+  workedWords,
+  type ActResult,
+  type DrawnAction,
   DATE_CHOICES,
   canSort,
   importWords,
@@ -343,9 +351,20 @@ export function DrawnPageView({
   /** A count per list or table, raised when it is to read its first rows again. */
   ticks?: Record<string, number>;
 }) {
-  const [open, setOpen] = useState<DrawnRow | null>(null);
+  const [open, setOpen] = useState<(DrawnRow & { part: string }) | null>(null);
   const name = page.page.name;
   const Heading = preview ? "h2" : "h1";
+  const press = usePagePress(name, page.draft, values, onRefresh);
+  // A part a tool is still working out is read again in a moment.
+  const working = stillWorking(page);
+  useEffect(() => {
+    if (!working || preview) return;
+    const t = window.setTimeout(onRefresh, 3000);
+    return () => window.clearTimeout(t);
+  }, [working, page.drawn_at]);
+  const refresh = () =>
+    // Refresh works out again what tools worked out (kept a minute otherwise).
+    void (page.blocks.some((b) => b.from_tool) ? post(`/v1/pages/${name}/refresh`).catch(() => undefined) : Promise.resolve()).then(onRefresh);
   return (
     <div className="pg" data-testid={preview ? "page-preview" : "page"}>
       {!preview && (
@@ -361,7 +380,7 @@ export function DrawnPageView({
         </div>
         {!preview && (
           <div className="page-actions">
-            <button onClick={onRefresh}>
+            <button onClick={refresh}>
               <Icon name="retry" />
               Refresh
             </button>
@@ -389,7 +408,17 @@ export function DrawnPageView({
             ))}
           </div>
         ) : (
-          <Part key={`${p.id}:${page.drawn_at}:${filtersParam(values)}`} part={p} name={name} draft={page.draft} values={values} onOpen={setOpen} tick={ticks[p.id] ?? 0} />
+          <Part
+            key={`${p.id}:${page.drawn_at}:${filtersParam(values)}`}
+            part={p}
+            name={name}
+            draft={page.draft}
+            values={values}
+            onOpen={(r) => setOpen({ ...r, part: p.id })}
+            tick={ticks[p.id] ?? 0}
+            onPress={preview ? undefined : press.press}
+            onChanged={onRefresh}
+          />
         ),
       )}
       {open?.detail && (
@@ -403,12 +432,78 @@ export function DrawnPageView({
             ))}
           </dl>
           <div className="toolbar">
+            {!preview && (open.actions ?? []).map((a) => (
+              <ActionButton key={a.index} a={a} onPress={() => (setOpen(null), void press.press(open.part, open.id, a))} />
+            ))}
             {open.link && <Link to={open.link}>Open it</Link>}
             <button onClick={() => setOpen(null)}>Close</button>
           </div>
         </Modal>
       )}
+      {press.node}
     </div>
+  );
+}
+
+/** Pressing a page's button (POST /v1/pages/{name}/act): a tool's form
+ * filled in, opened in its sheet; a signal after a Yes; an approval's
+ * sheet. The server reads the row again and works the values out. */
+function usePagePress(name: string, draft: boolean, values: Record<string, string>, reload: () => void) {
+  const { confirm, node: asking } = useConfirm();
+  const [tool, setTool] = useState<{ command: string; values: Record<string, unknown>; button: string } | null>(null);
+  const [approval, setApproval] = useState<Approval | null>(null);
+  const q = [filtersParam(values), draft ? "draft=1" : ""].filter(Boolean).join("&");
+  const path = `/v1/pages/${name}/act${q ? `?${q}` : ""}`;
+  const press = async (block: string, row: string | undefined, a: DrawnAction) => {
+    const body = { block, action: a.index, ...(row !== undefined && { row }) };
+    try {
+      const r = await post<ActResult>(path, body);
+      if (r.kind === "tool" && r.tool) {
+        setTool({ command: r.tool.command, values: r.tool.inputs, button: r.tool.button });
+      } else if (r.kind === "signal") {
+        if (!(await confirm({ title: r.asks ?? `${a.label}?`, ok: `Yes, ${a.label.toLowerCase()}` }))) return;
+        const sent = await post<ActResult>(path, { ...body, yes: true });
+        toast(sent.words ?? "Done.");
+        reload();
+      } else if (r.kind === "approve" && r.approval) {
+        setApproval(r.approval as Approval);
+      }
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "That did not work. Try again.", "error");
+      if (e instanceof ApiError && e.status === 409) reload();
+    }
+  };
+  const node = (
+    <>
+      {asking}
+      {tool && (
+        <MadeToolSheet
+          command={tool.command}
+          values={tool.values}
+          button={tool.button}
+          onClose={() => (setTool(null), reload())}
+        />
+      )}
+      {approval && <Decide a={approval} decision="approved" showSubject onClose={() => setApproval(null)} onDone={() => (setApproval(null), reload())} />}
+    </>
+  );
+  return { press, node };
+}
+
+/** A page's or a row's button: greyed, with why, when it is not this person's. */
+function ActionButton({ a, onPress, small }: { a: DrawnAction; onPress: () => void; small?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={small ? "small" : a.kind === "tool" ? "primary" : undefined}
+      disabled={!!a.disabled}
+      title={a.disabled}
+      aria-description={a.disabled}
+      data-testid="page-action"
+      onClick={onPress}
+    >
+      {a.label}
+    </button>
   );
 }
 
@@ -470,6 +565,13 @@ function Filters({ filters, values, onFilter, page }: { filters: DrawnFilter[]; 
 }
 
 function Figure({ part }: { part: DrawnPart }) {
+  if (part.working)
+    return (
+      <div className="stat" data-testid="page-figure" role="status">
+        <span className="stat-label">{part.label}</span>
+        <span className="stat-hint">{part.working}</span>
+      </div>
+    );
   if (part.unavailable)
     return (
       <div className="stat" data-testid="page-figure">
@@ -484,11 +586,32 @@ function Figure({ part }: { part: DrawnPart }) {
       <span className="stat-value">{part.shown}</span>
       {part.change && <span className="stat-hint">{part.change.words}</span>}
       {part.over && <span className="stat-hint">{part.over}</span>}
+      {part.worked_at && <span className="stat-hint">{workedWords(part.worked_at)}</span>}
     </div>
   );
 }
 
-function Part({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void; tick: number }) {
+type Press = (block: string, row: string | undefined, a: DrawnAction) => Promise<void>;
+
+function Part({
+  part,
+  name,
+  draft,
+  values,
+  onOpen,
+  tick,
+  onPress,
+  onChanged,
+}: {
+  part: DrawnPart;
+  name: string;
+  draft: boolean;
+  values: Record<string, string>;
+  onOpen: (r: DrawnRow) => void;
+  tick: number;
+  onPress?: Press;
+  onChanged: () => void;
+}) {
   if (part.broken) {
     return (
       <div className="warning" role="note" data-testid="page-broken">
@@ -525,17 +648,93 @@ function Part({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
           <div className="hero-top">
             <span className="hero-label">{part.label}</span>
           </div>
-          <div className="hero-amount">{part.error ? "—" : part.shown}</div>
-          {(part.change || part.error || part.over) && <p className="hero-sub">{part.error ?? part.change?.words ?? part.over}</p>}
+          <div className="hero-amount">{part.error || part.working ? "—" : part.shown}</div>
+          {(part.change || part.error || part.over || part.working || part.worked_at) && (
+            <p className="hero-sub">{part.error ?? part.working ?? part.change?.words ?? part.over ?? workedWords(part.worked_at)}</p>
+          )}
+        </section>
+      );
+    case "buttons":
+      // The page's own buttons (pages §7).
+      return (
+        <section className="pg-buttons" aria-label={part.title || "Buttons"} data-testid="page-buttons">
+          {part.title && <h2>{part.title}</h2>}
+          <div className="toolbar">
+            {(part.actions ?? []).map((a) => (
+              <ActionButton key={a.index} a={a} onPress={() => void onPress?.(part.id, undefined, a)} />
+            ))}
+          </div>
+          {(part.actions ?? []).filter((a) => a.disabled).map((a) => (
+            <p key={a.index} className="hint">
+              {a.label}: {a.disabled}
+            </p>
+          ))}
+        </section>
+      );
+    case "status":
+      // A run's state in plain words (pages §4).
+      return (
+        <section className="card pg-part" data-testid="page-status">
+          <div className="pg-part-head">
+            <h2>{part.title}</h2>
+            {part.words && part.run && <span className={`badge sf-status ${toneClass(part.tone)}`}>{part.words}</span>}
+          </div>
+          {part.error ? (
+            <p className="hint">{part.error}</p>
+          ) : !part.run ? (
+            <p className="hint">{part.words}</p>
+          ) : (
+            <>
+              {part.started_at && <p className="hint">Started {fmtTime(part.started_at)}{part.ended_at && `, ended ${fmtTime(part.ended_at)}`}</p>}
+              {(part.waiting_for ?? []).map((wf, i) => (
+                <p key={i}>Waiting for {wf.who}</p>
+              ))}
+            </>
+          )}
         </section>
       );
   }
-  return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} tick={tick} />;
+  return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} tick={tick} onPress={onPress} onChanged={onChanged} />;
 }
 
 /** A list or a table, with More and (a table) its order by a press on a column. */
-function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void; tick: number }) {
+function Rows({
+  part,
+  name,
+  draft,
+  values,
+  onOpen,
+  tick,
+  onPress,
+  onChanged,
+}: {
+  part: DrawnPart;
+  name: string;
+  draft: boolean;
+  values: Record<string, string>;
+  onOpen: (r: DrawnRow) => void;
+  tick: number;
+  onPress?: Press;
+  onChanged: () => void;
+}) {
   const [shown, setShown] = useState<DrawnPart>(part);
+  const hasActions = (shown.rows ?? []).some((r) => (r.actions ?? []).length > 0);
+  const rowActions = (r: DrawnRow) =>
+    onPress && (r.actions ?? []).length > 0 ? (
+      <span className="pg-row-actions">
+        {(r.actions ?? []).map((a) => (
+          <ActionButton key={a.index} a={a} small onPress={() => void onPress(part.id, r.id, a)} />
+        ))}
+      </span>
+    ) : null;
+  // A yes/no column ticked in place (table.edit): the row changed in its table.
+  const setTick = (r: DrawnRow, i: number, v: boolean) =>
+    void act.run(async () => {
+      const col = shown.columns?.[i]?.column;
+      if (!col || !shown.table_id) return;
+      await patch(`/v1/tables/${shown.table_id}/rows/${r.id}`, { set: { [col]: v } });
+      onChanged();
+    }, false);
   const act = useAction();
   const fetchPart = (extra: string) => {
     const q = [filtersParam(values), draft ? "draft=1" : "", extra].filter(Boolean).join("&");
@@ -567,10 +766,12 @@ function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
     <section className={`card pg-part${shown.size === "half" ? " half" : ""}`} data-testid="page-part">
       <div className="pg-part-head">
         {shown.title && <h2>{shown.title}</h2>}
-        {!shown.error && <span className="hint">{rowsWord(shown.count ?? 0)}</span>}
+        {!shown.error && !shown.working && <span className="hint">{rowsWord(shown.count ?? 0)}</span>}
       </div>
       {shown.error ? (
         <p className="hint">{shown.error}</p>
+      ) : shown.working ? (
+        <p className="hint" role="status">{shown.working}</p>
       ) : rows.length === 0 ? (
         <p className="hint">{shown.empty}</p>
       ) : shown.type === "list" ? (
@@ -595,6 +796,7 @@ function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
                       {r.detail && <Icon name="chevron" className="go" />}
                     </button>
                   )}
+                  {rowActions(r)}
                 </li>
               ))}
             </Items>
@@ -620,6 +822,11 @@ function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
                   <span className="sr-only">Open</span>
                 </th>
               )}
+              {hasActions && onPress && (
+                <th>
+                  <span className="sr-only">Buttons</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -627,7 +834,18 @@ function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
               <tr key={r.id} data-testid="page-row">
                 {(r.cells ?? []).map((cell, i) => (
                   <td key={i} data-label={shown.columns?.[i]?.label}>
-                    {cell || "—"}
+                    {r.ticks?.[i] != null ? (
+                      <input
+                        type="checkbox"
+                        checked={!!r.ticks[i]}
+                        disabled={act.busy}
+                        aria-label={`${shown.columns?.[i]?.label ?? ""}: ${r.cells?.[0] ?? ""}`}
+                        data-testid="page-tick"
+                        onChange={(e) => setTick(r, i, e.target.checked)}
+                      />
+                    ) : (
+                      cell || "—"
+                    )}
                   </td>
                 ))}
                 {shown.has_detail ? (
@@ -647,11 +865,13 @@ function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; na
                     </td>
                   )
                 )}
+                {hasActions && onPress && <td data-label="Buttons">{rowActions(r)}</td>}
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      {shown.worked_at && <p className="hint">{workedWords(shown.worked_at)}</p>}
       <ErrorBox error={act.error} />
       {shown.more && (
         <button disabled={act.busy} onClick={more}>

@@ -31,12 +31,14 @@ import '../kit/page.dart';
 import '../kit/sheet.dart' show TkFormBody, TkLines, TkSheet, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
+import 'approve.dart' show ApproveSheet;
 import 'cards.dart' show CardPill;
-import 'groups.dart' show pickOneOf;
+import 'groups.dart' show askSure, pickOneOf;
 import 'invoices_page.dart' show openInvoice;
+import 'made_tools.dart' show showMadeToolSheet;
 import 'live.dart' show SseEvent, readSse;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
-import 'words.dart' show CardTone;
+import 'words.dart' show CardTone, whenWords;
 
 Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
@@ -111,6 +113,21 @@ String orderWay(bool desc) => desc ? 'Z to A, largest or latest first' : 'A to Z
     return null;
   }
 }
+
+/// "Worked out 3 minutes ago": when a tool worked a part out (pages G2).
+String workedWords(DateTime? t, {DateTime? now}) {
+  if (t == null) return '';
+  final mins = (now ?? DateTime.now()).difference(t).inMinutes;
+  if (mins < 1) return 'Worked out just now';
+  if (mins == 1) return 'Worked out a minute ago';
+  if (mins < 60) return 'Worked out $mins minutes ago';
+  final hours = (mins / 60).round();
+  return hours == 1 ? 'Worked out an hour ago' : 'Worked out $hours hours ago';
+}
+
+/// A figure's line under its number: why it is not there, its change, or
+/// when a tool worked it out.
+String? figureLine(PageBlock b) => b.working ?? b.error ?? b.change?.words ?? b.over ?? (b.workedAt == null ? null : workedWords(b.workedAt));
 
 /// The filters param a page is drawn with: only those set.
 String? filtersParam(Map<String, String> values) {
@@ -225,6 +242,20 @@ class _PageScreenState extends State<PageScreen> {
   bool _liveBusy = false;
   DateTime _liveLast = DateTime.fromMillisecondsSinceEpoch(0);
   bool _gone = false;
+  // A part a tool is still working out: the page is read again in a moment.
+  Timer? _again;
+  int _tries = 0;
+
+  void _working() {
+    _again?.cancel();
+    final p = _page;
+    if (p == null || !p.blocks.any((b) => b.working != null) || _tries >= 10) {
+      _tries = 0;
+      return;
+    }
+    _tries++;
+    _again = Timer(const Duration(seconds: 3), () => unawaited(_load()));
+  }
 
   @override
   void initState() {
@@ -240,6 +271,7 @@ class _PageScreenState extends State<PageScreen> {
     _typing?.cancel();
     _liveRetry?.cancel();
     _liveWait?.cancel();
+    _again?.cancel();
     unawaited(_live?.cancel());
     _search.dispose();
     super.dispose();
@@ -357,6 +389,7 @@ class _PageScreenState extends State<PageScreen> {
           _page = r;
           _error = null;
           _more.clear();
+          _working();
         });
       }
     } on Object catch (e) {
@@ -440,8 +473,83 @@ class _PageScreenState extends State<PageScreen> {
     }
   }
 
-  void _open(PageRow r) {
+  /// Presses a page's button (POST /v1/pages/{name}/act): the server reads
+  /// the row again and works out the values. A tool's form opens filled in
+  /// (a masked value is left to be asked); a signal asks Yes first; an
+  /// approval opens its sheet, with its rules.
+  Future<void> _press(String block, String? row, PageAction a) async {
+    final api = widget.auth.api;
+    final filters = filtersParam(_values);
+    try {
+      final r = await api.actOnPage(name: widget.name, filters: filters, body: PageActRequest(block: block, row: row, action: a.index));
+      if (!mounted) return;
+      switch (r.kind) {
+        case 'tool':
+          final pressed = r.tool!;
+          final tool = (await api.listTools()).tools.where((x) => x.command == pressed.command).firstOrNull;
+          if (!mounted) return;
+          if (tool == null) {
+            showTkToast(context, 'This tool is not one of yours.', error: true);
+            return;
+          }
+          await showMadeToolSheet(context, auth: widget.auth, tool: tool, initial: pressed.inputs, button: pressed.button);
+        case 'signal':
+          final yes = await askSure(context, title: r.asks ?? '${a.label}?', ok: 'Yes, ${a.label.toLowerCase()}');
+          if (!yes || !mounted) return;
+          final sent = await api.actOnPage(name: widget.name, filters: filters, body: PageActRequest(block: block, row: row, action: a.index, yes: true));
+          if (mounted) showTkToast(context, sent.words ?? 'Done.');
+        case 'approve':
+          final ap = r.approval;
+          if (ap == null) return;
+          final card = ChatAlert(at: DateTime.now(), key: 'page:${widget.name}', kind: 'approval', title: ap.workflow, line: ap.stepName, approval: ap);
+          await showTkSheet<bool>(context, (_) => TkAppLook(child: ApproveSheet(a: card, decision: 'approved', auth: widget.auth)));
+      }
+      if (mounted) unawaited(_load());
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+      if (mounted) unawaited(_load());
+    }
+  }
+
+  /// A row's buttons, under its card or its words.
+  Widget _actionButtons(String block, String? row, List<PageAction> actions, {VoidCallback? before}) => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final a in actions)
+            TkSmallButton(
+              label: a.label,
+              primary: a.disabled == null,
+              semantics: a.disabled == null ? a.label : '${a.label}: ${a.disabled}',
+              onPressed: a.disabled != null
+                  ? null
+                  : () {
+                      before?.call();
+                      unawaited(_press(block, row, a));
+                    },
+            ),
+        ],
+      );
+
+  void _open(PageRow r, [String? block]) {
     final d = r.detail;
+    final actions = r.actions ?? const <PageAction>[];
+    if (d == null && actions.isNotEmpty && block != null) {
+      // A row with buttons and no card: its words and its buttons.
+      unawaited(showTkSheet<void>(
+        context,
+        (sheet) => TkAppLook(
+          child: TkSheet(
+            title: (r.title ?? '').isEmpty ? (r.cells?.firstOrNull ?? 'This row') : r.title!,
+            body: TkFormBody(children: [
+              if ((r.sub ?? '').isNotEmpty) TkFormGroup(children: [TkLines([('', r.sub!)])]),
+              _actionButtons(block, r.id, actions, before: () => Navigator.of(sheet).pop()),
+            ]),
+          ),
+        ),
+      ));
+      return;
+    }
     if (d == null) {
       final rec = recordLinkOf(r.link);
       if (rec == null) return;
@@ -454,18 +562,50 @@ class _PageScreenState extends State<PageScreen> {
     }
     unawaited(showTkSheet<void>(
       context,
-      (_) => TkAppLook(
+      (sheet) => TkAppLook(
         child: TkSheet(
           title: d.title.isEmpty ? 'Details' : d.title,
           body: TkFormBody(children: [
             TkFormGroup(children: [TkLines([for (final l in d.lines) (l.label, l.value.isEmpty ? '—' : l.value)])]),
+            if (actions.isNotEmpty && block != null) _actionButtons(block, r.id, actions, before: () => Navigator.of(sheet).pop()),
           ]),
         ),
       ),
     ));
   }
 
-  bool _opens(PageRow r) => r.detail != null || recordLinkOf(r.link) != null;
+  bool _opens(PageRow r) => r.detail != null || recordLinkOf(r.link) != null || (r.actions ?? const []).isNotEmpty;
+
+  /// The page's own buttons (pages §7).
+  Widget _buttons(PageBlock b) {
+    final t = TkTheme.tokens(context);
+    final actions = b.actions ?? const <PageAction>[];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if ((b.title ?? '').isNotEmpty) Text(b.title!, style: tkText(size: 18, weight: 700, color: t.text)),
+      _actionButtons(b.id, null, actions),
+      for (final a in actions.where((a) => a.disabled != null)) Text('${a.label}: ${a.disabled}', style: tkHint(t)),
+    ]);
+  }
+
+  /// A run's state in plain words (pages §4).
+  Widget _status(PageBlock b) {
+    final waits = [for (final w in b.waitingFor ?? const <ToolAnswerWait>[]) 'Waiting for ${w.who}'];
+    final started = b.startedAt;
+    return TkSection(title: b.title, inset: 16, children: [
+      TkListRow(
+        title: b.error ?? (b.run == null ? (b.words ?? 'Nothing has run yet.') : (waits.isEmpty ? 'Its latest run' : waits.removeAt(0))),
+        sub: [
+          ...waits,
+          if (started != null) 'Started ${whenWords(started.toLocal(), DateTime.now())}',
+        ].join(' · '),
+        icon: 'b-clock',
+        square: TkLook.of(context).blue,
+        status: b.run == null ? null : b.words,
+        statusTone: pageTone(b.tone),
+        chevron: false,
+      ),
+    ]);
+  }
 
   /// A part over Taskiem's records this person may not see, or whose area
   /// is off: said in its place.
@@ -528,12 +668,12 @@ class _PageScreenState extends State<PageScreen> {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(b.error != null ? '—' : b.shown ?? '', style: tkFigure(context, size: 42)),
+            child: Text(b.error != null || b.working != null ? '—' : b.shown ?? '', style: tkFigure(context, size: 42)),
           ),
           if (change != null) ...[const SizedBox(height: 6), TkTrend(change.words, up: change.up)],
-          if (b.error != null || b.over != null) ...[
+          if (change == null && figureLine(b) != null) ...[
             const SizedBox(height: 6),
-            Text(b.error ?? b.over!, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
+            Text(figureLine(b)!, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
           ],
         ],
       ),
@@ -548,12 +688,12 @@ class _PageScreenState extends State<PageScreen> {
       'bad' => look.redInk,
       _ => look.blueInk,
     };
-    final line = b.error ?? b.change?.words ?? b.over;
+    final line = figureLine(b);
     return TkHighlight(
       label: b.label ?? '',
       icon: 'b-bars',
       color: color,
-      value: b.error != null ? '—' : b.shown,
+      value: b.error != null || b.working != null ? '—' : b.shown,
       line: line,
       semanticsLabel: '${b.label}: ${b.error ?? b.shown}${line == null || b.error != null ? '' : ', $line'}',
     );
@@ -574,7 +714,7 @@ class _PageScreenState extends State<PageScreen> {
       ]);
     }
     if (rows.isEmpty) {
-      return TkSection(title: b.title, empty: b.empty ?? 'Nothing to show', children: const []);
+      return TkSection(title: b.title, empty: b.working ?? b.empty ?? 'Nothing to show', children: const []);
     }
     final out = <Widget>[];
     if (b.type == 'list') {
@@ -594,7 +734,7 @@ class _PageScreenState extends State<PageScreen> {
                 statusTone: pageTone(r.state?.tone),
                 chevron: _opens(r),
                 semanticsLabel: [r.title ?? '', if ((r.sub ?? '').isNotEmpty) r.sub!, if (r.state != null) r.state!.text].join(', ') + (_opens(r) ? '. Open' : ''),
-                onTap: _opens(r) ? () => _open(r) : null,
+                onTap: _opens(r) ? () => _open(r, b.id) : null,
               ),
           ],
         ));
@@ -632,7 +772,7 @@ class _PageScreenState extends State<PageScreen> {
                 subLines: 3,
                 chevron: _opens(r),
                 semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${_opens(r) ? '. Open' : ''}',
-                onTap: _opens(r) ? () => _open(r) : null,
+                onTap: _opens(r) ? () => _open(r, b.id) : null,
               );
             }(),
         ],
@@ -694,6 +834,12 @@ class _PageScreenState extends State<PageScreen> {
               Text(b.title ?? '', style: tkText(size: 18, weight: 700, color: t.text)),
               if ((b.text ?? '').isNotEmpty) Text(b.text!, style: tkHint(t)),
             ]));
+          case 'buttons':
+            flush();
+            children.add(_buttons(b));
+          case 'status':
+            flush();
+            children.add(_status(b));
           default:
             flush();
             children.add(_rows(b));

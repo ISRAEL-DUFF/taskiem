@@ -415,3 +415,5 @@ pressToolButton
 listPages
 viewPage
 getPageBlock
+actOnPage
+refreshPage

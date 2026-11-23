@@ -4,6 +4,8 @@
 // briefing on pine, then a card for each thing to act on, with its next
 // step and Later, and approvals with Decline and Approve.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -19,6 +21,7 @@ import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
+import 'pages_page.dart' show openPage;
 import 'words.dart';
 import '../school/school_money.dart' show SchoolApproveSheet;
 
@@ -36,6 +39,7 @@ const alertLook = <String, ({String icon, CardTone tone})>{
   'school_approval': (icon: 'approvals', tone: CardTone.plain),
   'deal': (icon: 'money', tone: CardTone.warn),
   'order_draft': (icon: 'chat', tone: CardTone.lime),
+  'page': (icon: 'tables', tone: CardTone.warn),
 };
 
 /// alerts.ts ago: "Just now", "3 min ago", "2 h ago", "Yesterday", "9 Nov".
@@ -651,6 +655,9 @@ class _AlertCardState extends State<_AlertCard> {
         return (words: 'Open the order', short: null, go: () => open?.call('customer', a));
       case 'unmatched':
         return can('invoice.manage') ? (words: 'Match it', short: null, go: () => open?.call('match', a)) : null;
+      case 'page':
+        // A page's figure above zero (pages §9): the page itself.
+        return (words: 'Open the page', short: null, go: () => unawaited(openPage(context, widget.auth, a.reference ?? '', backLabel: 'Back')));
     }
     return null;
   }

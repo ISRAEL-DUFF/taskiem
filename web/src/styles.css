@@ -2610,6 +2610,10 @@ button.pay-chip.save:hover { background: var(--panel-2); }
 .pg-heading { margin: 8px 0 12px; }
 .pg-heading h2 { margin: 0; }
 .pg-part { margin: 0 0 14px; }
+.pg-buttons { margin: 0 0 14px; }
+.pg-buttons h2 { margin: 0 0 8px; }
+.pg-row-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.pg-table .pg-row-actions { padding: 0; }
 .pg-part-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .pg-part-head h2 { margin: 0; }
 .pg-group h3 { margin: 12px 0 8px; font-size: 14px; }

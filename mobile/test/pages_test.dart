@@ -467,6 +467,101 @@ void main() {
     expect(filtersParam({'q': '', 'st': 'open'}), '{"st":"open"}');
     expect(filtersParam({}), isNull);
   });
+
+  // Pages G2: the page's own buttons, a figure a tool worked out (and when),
+  // a status, a row's buttons on its card; a signal asks Yes, then is sent;
+  // a tool's button this person may not use is greyed with why.
+  testWidgets('A page with buttons: a signal asks first, a tool not theirs is greyed', (t) async {
+    phone(t, 1100);
+    final api = _Api();
+    final acts = <Map<String, dynamic>>[];
+    final worked = DateTime.now().toUtc().subtract(const Duration(minutes: 3)).toIso8601String();
+    api.routes['GET /v1/pages/deliveries/view'] = (_) => {
+      'page': _summary('deliveries', 'Deliveries today'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-22T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {
+          'id': 'new',
+          'type': 'buttons',
+          'actions': [
+            {'index': 0, 'label': 'New delivery', 'kind': 'tool', 'tool': 'new-delivery'},
+            {'index': 1, 'label': 'Pay riders', 'kind': 'tool', 'tool': 'pay-riders', 'disabled': 'Only owners can use Pay riders.'},
+          ],
+        },
+        {'id': 'today', 'type': 'figure', 'label': 'Today', 'value': 3, 'shown': '3', 'tone': 'plain', 'lead': false, 'naira': false},
+        {'id': 'owed', 'type': 'figure', 'label': 'Owed to riders', 'value': 450000, 'shown': '₦4,500', 'tone': 'warn', 'lead': false, 'naira': true, 'from_tool': true, 'worked_at': worked},
+        {
+          'id': 'list',
+          'type': 'list',
+          'title': 'Delivered, to confirm',
+          'size': 'full',
+          'empty': 'Nothing to confirm',
+          'has_detail': true,
+          'count': 2,
+          'more': null,
+          'rows': [
+            {
+              'id': 'd1',
+              'title': 'AC-12 · Musa',
+              'sub': 'Lekki · ₦1,500',
+              'state': {'text': 'delivered', 'tone': 'good'},
+              'detail': {
+                'title': 'AC-12',
+                'lines': [
+                  {'label': 'Rider', 'value': 'Musa'},
+                  {'label': 'Fee', 'value': '₦1,500'},
+                ],
+              },
+              'actions': [
+                {'index': 1, 'label': 'Confirm', 'kind': 'signal'},
+              ],
+            },
+            {'id': 'd2', 'title': 'AC-13 · Ngozi', 'sub': 'Yaba · ₦1,200', 'state': {'text': 'on the way', 'tone': 'plain'}},
+          ],
+        },
+        {'id': 'state', 'type': 'status', 'title': 'Paying riders', 'run': 'r1', 'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
+          'started_at': '2026-11-22T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
+      ],
+    };
+    api.routes['POST /v1/pages/deliveries/act'] = (r) {
+      final body = jsonDecode((r as http.Request).body) as Map<String, dynamic>;
+      acts.add(body);
+      return body['yes'] == true ? {'kind': 'signal', 'sent': true, 'run': 'r9', 'words': 'Done: Confirm.'} : {'kind': 'signal', 'asks': 'Confirm?', 'sent': false};
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'deliveries', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('New delivery'), findsOneWidget);
+    expect(find.text('Pay riders: Only owners can use Pay riders.'), findsOneWidget);
+    expect(find.text('Worked out 3 minutes ago'), findsOneWidget);
+    expect(find.text('Waiting for an owner'), findsOneWidget);
+    await looks(t, 'page-buttons');
+    await snap(t, 'page-buttons');
+
+    // A row's card has its buttons; Confirm asks Yes, then is sent.
+    await t.tap(find.text('AC-12 · Musa'));
+    await settle(t);
+    expect(find.text('Confirm'), findsOneWidget);
+    await looks(t, 'page-buttons-row');
+    await t.tap(find.text('Confirm'));
+    await settle(t);
+    expect(acts.single, {'block': 'list', 'row': 'd1', 'action': 1});
+    expect(find.text('Confirm?'), findsOneWidget);
+    await t.tap(find.text('Yes, confirm'));
+    await settle(t);
+    expect(acts.last, {'block': 'list', 'row': 'd1', 'action': 1, 'yes': true});
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  test('when a tool worked a part out, in words', () {
+    final now = DateTime.utc(2026, 11, 23, 10);
+    expect(workedWords(null), '');
+    expect(workedWords(DateTime.utc(2026, 11, 23, 9, 59, 40), now: now), 'Worked out just now');
+    expect(workedWords(DateTime.utc(2026, 11, 23, 9, 48), now: now), 'Worked out 12 minutes ago');
+    expect(workedWords(DateTime.utc(2026, 11, 23, 8, 50), now: now), 'Worked out an hour ago');
+  });
 }
 
 /// Where a widget sits, to say which row comes first.
