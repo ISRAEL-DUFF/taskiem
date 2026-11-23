@@ -1,6 +1,6 @@
 # 0070 — Made tools: a workflow declares itself a tool, and who may start a workflow is a rule
 
-Date: 2026-11-22 · Status: **Proposed** (D1, for the founder to accept; the plan's choices were settled 19 November 2026; M0 built) · Plan: [Made tools](../spec/made-tools.md) · Build plan: [M0](../spec/build-plan-saved-tools-payments.md#4-the-phases)
+Date: 2026-11-22 · Status: **Accepted** (23 November 2026; the plan's choices were settled 19 November 2026; M0 to M4 built) · Plan: [Made tools](../spec/made-tools.md) · Build plan: [M0](../spec/build-plan-saved-tools-payments.md#4-the-phases)
 
 ## Context
 

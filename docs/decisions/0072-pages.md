@@ -1,6 +1,6 @@
 # 0072 — Pages: a business's own screens, as their own document
 
-Date: 2026-11-22 · Status: **Proposed** (for the founder to accept; the plan's choices were settled 19 November 2026; G0 and G1 built) · Plan: [Pages](../spec/pages.md) · Build plan: [G0, G1](../spec/build-plan-saved-tools-payments.md#stage-6-cards-the-reader-and-the-first-pages)
+Date: 2026-11-22 · Status: **Accepted** (23 November 2026; the plan's choices were settled 19 November 2026; G0 and G1 built) · Plan: [Pages](../spec/pages.md) · Build plan: [G0, G1](../spec/build-plan-saved-tools-payments.md#stage-6-cards-the-reader-and-the-first-pages)
 
 ## Context
 
