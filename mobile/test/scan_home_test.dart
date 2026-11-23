@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/app/auth.dart' show AuthState;
 import 'package:taskiem/app/shortcuts.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/code_scanner.dart';
@@ -78,20 +79,73 @@ Future<void> settle(WidgetTester t) async {
 void main() {
   setUpAll(loadFonts);
 
-  test('the icon: Scan a code, then three tools, those opened last first', () async {
+  test('the icon: Scan a code, then three tools, those opened last first, each naming its business', () async {
     final phone = FakeShortcuts();
     final s = HomeShortcuts(phone);
-    await s.show([
+    await s.show('biz-a', [
       (command: 'leave', name: 'Leave left'),
       (command: 'expense', name: 'Log an expense'),
       (command: 'tickets', name: 'Open tickets'),
       (command: 'count-item', name: 'Count an item'),
     ], recent: const ['tool:tickets', 'invoice']);
     expect([for (final i in phone.items) i.title], ['Scan a code', 'Open tickets', 'Count an item', 'Leave left']);
-    expect(phone.items.first.type, scanShortcut);
-    phone.tapped!('tool:expense');
-    expect(shortcutTool(s.take()!), 'expense');
+    expect([for (final i in phone.items) i.type], ['scan:biz-a', 'tool:biz-a:tickets', 'tool:biz-a:count-item', 'tool:biz-a:leave']);
+    phone.tapped!('tool:biz-a:expense');
+    expect(readShortcut(s.take()!), (business: 'biz-a', tool: 'expense'));
     expect(s.take(), isNull, reason: 'once');
+    expect(readShortcut('scan:biz-a'), (business: 'biz-a', tool: null));
+    // Kept from before shortcuts named their business: not read.
+    expect(readShortcut('tool:expense'), isNull);
+    expect(readShortcut('scan'), isNull);
+    await s.clear();
+    expect(phone.items, isEmpty);
+    expect(s.business, isNull);
+  });
+
+  testWidgets('signed in, the icon is this business’s; a shortcut of another business is not opened here; signed out, none', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final camera = StandInCamera();
+    final was = codeScanner;
+    codeScanner = DeviceCodeScanner(camera: camera.call);
+    addTearDown(() => codeScanner = was);
+    final phone = FakeShortcuts();
+    final shortcuts = HomeShortcuts(phone);
+    final f = Fixture('chat-tools');
+    final s = MadeServer(tools: [...madeTools, _countTool]);
+    final auth = f.auth(also: s.call);
+    final me = auth.me!.tenantId.toString();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: auth, shortcuts: shortcuts));
+    await settle(t);
+    expect(shortcuts.business, me);
+    expect(phone.items.first.type, 'scan:$me');
+    expect(phone.items.map((i) => i.type), contains('tool:$me:leave'));
+
+    // A shortcut of another business (the session moved since): not
+    // opened here, said so, and the icon set again for this one.
+    phone.items = const [];
+    phone.tapped!('tool:other-business:leave');
+    await settle(t);
+    expect(find.text('That shortcut was for another business. Use the shortcuts on the icon again: they are this one’s now.'), findsOneWidget);
+    expect(find.text('Leave left'), findsNothing, reason: 'no tool opened');
+    expect(phone.items.first.type, 'scan:$me');
+    await t.pump(const Duration(seconds: 5));
+
+    // This business's Scan a code opens the camera.
+    phone.tapped!('scan:$me');
+    await settle(t);
+    expect(camera.opened, greaterThan(0));
+    expect(find.text('Scan a code'), findsWidgets);
+    t.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await settle(t);
+
+    // Signed out: none on the icon.
+    auth.state = AuthState.signedOut;
+    auth.notifyListeners(); // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    await settle(t);
+    expect(phone.items, isEmpty);
+    expect(shortcuts.business, isNull);
   });
 
   testWidgets('scanned from the home screen: what takes the code; a tool opened filled in, a workflow started on Yes; pictured', (t) async {

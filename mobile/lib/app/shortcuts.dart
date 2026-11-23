@@ -3,6 +3,9 @@
 // code scanned with no workflow open offers the workflows that take it)
 // and for the person's tools, the ones they opened last on this phone
 // first. Each is a tap by the person; neither senses anything on its own.
+// Each shortcut names the business it was put there for: signed out, in a
+// personal account or another business, they are taken off, and one
+// tapped for another business is not opened in this one.
 //
 // The phone's quick actions are behind [ShortcutPlatform], so a test gives
 // its own.
@@ -10,14 +13,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:quick_actions/quick_actions.dart';
 
-/// The shortcut that scans a code.
-const scanShortcut = 'scan';
+/// The shortcut that scans a code, for a business: `scan:<business>`.
+String scanShortcut(String business) => 'scan:$business';
 
-/// A tool's shortcut: "tool:expense".
-String toolShortcut(String command) => 'tool:$command';
+/// A tool's shortcut, for a business: `tool:<business>:expense`.
+String toolShortcut(String business, String command) => 'tool:$business:$command';
 
-/// The command of a tool's shortcut, or null.
-String? shortcutTool(String type) => type.startsWith('tool:') ? type.substring(5) : null;
+/// A shortcut tapped, read: what it opens (scan, or a tool's command) and
+/// the business it was put there for; null for one this app does not
+/// know (one kept from before, with no business).
+({String business, String? tool})? readShortcut(String type) {
+  final scan = RegExp(r'^scan:([^:]+)$').firstMatch(type);
+  if (scan != null) return (business: scan[1]!, tool: null);
+  final tool = RegExp(r'^tool:([^:]+):([a-z][a-z0-9-]*)$').firstMatch(type);
+  if (tool != null) return (business: tool[1]!, tool: tool[2]!);
+  return null;
+}
 
 /// How many tools are put on the icon beside Scan (phones show four).
 const maxToolShortcuts = 3;
@@ -64,29 +75,36 @@ class HomeShortcuts extends ChangeNotifier {
     return p;
   }
 
-  /// What the icon offers for this person: Scan a code, then up to three of
-  /// their tools, those opened last here first ([recent] holds the panel's
-  /// keys, "tool:command"), then by name.
-  Future<void> show(List<({String command, String name})> tools, {List<String> recent = const []}) async {
+  /// The business the icon's shortcuts are for now; null when none are.
+  String? business;
+
+  /// What the icon offers for this person in [forBusiness]: Scan a code,
+  /// then up to three of their tools, those opened last here first
+  /// ([recent] holds the panel's keys, "tool:command"), then by name.
+  Future<void> show(String forBusiness, List<({String command, String name})> tools, {List<String> recent = const []}) async {
+    business = forBusiness;
     final order = [
       for (final k in recent)
-        ...tools.where((t) => toolShortcut(t.command) == k),
+        ...tools.where((t) => 'tool:${t.command}' == k),
       ...([...tools]..sort((a, b) => a.name.compareTo(b.name))),
     ];
     final seen = <String>{};
     final pick = [for (final t in order) if (seen.add(t.command)) t].take(maxToolShortcuts);
     try {
       await platform.set([
-        (type: scanShortcut, title: 'Scan a code'),
-        for (final t in pick) (type: toolShortcut(t.command), title: t.name),
+        (type: scanShortcut(forBusiness), title: 'Scan a code'),
+        for (final t in pick) (type: toolShortcut(forBusiness, t.command), title: t.name),
       ]);
     } on Object {
       // Not offered on this phone.
     }
   }
 
-  /// Signed out: none but Scan, which asks to sign in.
+  /// Signed out, in a personal account, or moved to another business:
+  /// none. One tapped before is still read, and opened only in the
+  /// business it names.
   Future<void> clear() async {
+    business = null;
     try {
       await platform.set(const []);
     } on Object {

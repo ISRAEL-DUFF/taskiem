@@ -236,6 +236,10 @@ class _RootState extends State<_Root> {
   void _changed() {
     final auth = widget.auth;
     if (auth.session != _session || auth.state != AuthState.signedIn) {
+      // Signed out, or another business or the person's own account: the
+      // icon's shortcuts were the last business's. A business's _Home puts
+      // its own back.
+      if (auth.state != AuthState.checking) unawaited(widget.shortcuts?.clear());
       _session = auth.session;
       Navigator.of(context).popUntil((r) => r.isFirst);
     }
@@ -516,7 +520,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   /// Scan a code and up to three of the person's tools, on the app's icon.
   Future<void> _putShortcuts() async {
     final shortcuts = widget.shortcuts;
-    if (shortcuts == null) return;
+    final business = _business;
+    if (shortcuts == null || business == null) return;
     var tools = <({String command, String name})>[];
     try {
       if (_chats.auth.can('run.start')) {
@@ -525,19 +530,32 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     } on Object {
       // Scan alone, then.
     }
-    await shortcuts.show(tools, recent: widget.prefs?.recentTools ?? const []);
+    // Still this business: the session may have moved while they were read.
+    if (!mounted || _business != business) return;
+    await shortcuts.show(business, tools, recent: widget.prefs?.recentTools ?? const []);
   }
+
+  /// The business this session is in.
+  String? get _business => _chats.auth.me?.tenantId?.toString();
 
   /// A shortcut tapped on the app's icon: Scan a code, or a tool.
   void _shortcut() {
     if (!mounted) return;
     final type = widget.shortcuts?.take();
     if (type == null) return;
+    // Put there for another business (or kept from before they named
+    // one): not opened in this one, and the icon set again for this one.
+    final s = readShortcut(type);
+    if (s == null || s.business != _business) {
+      showTkToast(context, 'That shortcut was for another business. Use the shortcuts on the icon again: they are this one’s now.', error: true);
+      unawaited(_putShortcuts());
+      return;
+    }
     Navigator.of(context).popUntil((r) => r.isFirst);
-    final tool = shortcutTool(type);
+    final tool = s.tool;
     if (tool != null) {
       _openTool(tool, const {});
-    } else if (type == scanShortcut) {
+    } else {
       unawaited(scanFromHome(context, auth: _chats.auth, openTool: _openTool));
     }
   }
