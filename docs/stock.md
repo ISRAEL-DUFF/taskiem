@@ -41,7 +41,7 @@ How a movement reaches the table:
 3. The change is sent to the table only while the table still holds the count read, under a key of the movement and that count, so a retried send lands once. When the count moved first, it is read again (up to five times; then the sweep tries later).
 4. Done, its `change` is what landed, and the public page's copy of the count is updated at once.
 
-A movement that cannot reach the table (the project is down) stays pending and is sent again every minute, then less often, up to every hour; the Stock page says so. A movement for an item that is gone is void and moves nothing.
+A movement that cannot reach the table (the project is down) stays pending and is sent again every minute, then less often, up to every hour; the Stock page no longer says so: since [what a business buys](spec/what-a-business-buys.md) S1a a movement is made in Taskiem's database only, never pending. A movement for an item that is gone is void and moves nothing.
 
 **An item's count is the sum of its movements.** The table is the owner's: anyone with `table.edit` may change a count on the table's page or in Xenibase. When the catalogue is read (every 15 minutes for a catalogue keeping stock, published or not, and before each change Taskiem sends), a count that differs from the sum of the item's movements, while no change of Taskiem's is on its way, is recorded as an `outside` movement ("Changed in the table"; the first count Taskiem sees is "First count seen in the table"). Times are compared on the database's clock, never the application's.
 
@@ -113,7 +113,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 
 | Send | What happens |
 | --- | --- |
-| `add 50 cartons of Indomie at 8,500` | Adds the item with 50 received and the cost price, or tops up the one there (`add 20 bags rice`, `add 6 Indomie Chicken`; the price after `at`, `@` or `for` is the cost of one) |
+| `add 50 cartons of Indomie at 8,500` | Tops up the item there with 50 received and the cost price (`add 20 bags rice`, `add 6 Indomie Chicken`, `stock in 20 bags rice`; the price after `at`, `@` or `for` is the cost of one). Something new asks **Do you sell it?** first: **Yes** adds it to the products too, **No** only keeps count of it (fabric, thread, bags: something used, not sold) |
 | `stock indomie`, `how many bags of rice do I have?` | The count, in its unit, whether it is low, and the last movement |
 | `stock` | The items at or below their reorder level, with how many to order |
 | `adjust rice -2 spoilt` | An adjustment with its reason (`+3 found` adds) |
@@ -121,7 +121,9 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `add supplier Dangote Depot 0803 123 4567 for rice, indomie` | A supplier, with the items they supply |
 | `suppliers` | Each supplier, their open orders and what is owed to them |
 | `order from Dangote` | Their low items as an order, sent on **yes** (or left for a second person above the limit: `send P-7QX4KD`) |
+| `order 1 sewing machine from Singer Ltd` | From a linked supplier's price list (and `@`/`#` mentions). Each line Taskiem does not remember for that supplier is asked first, one at a time: **Just record it**, **Add to stock** (which stock item, or a new one) or **Keep track of it** (more than 50 asks first; more than 200 is just recorded), then its label (three, **Another**, **No label**). Typed works too: `keep track of it, machines`. The answer is remembered; then **yes** sends it |
 | `received 10 bags of rice` | Goods received on the open order from the item's supplier; with none, goods received as `add` |
+| `we bought 10 bags of rice at 1,500` | Counted in as `add` is (`bought 5 cartons of Indomie`, `I bought …`; who from, `from Dangote`, is left out): a quantity in a unit bought is stock, not an expense. Bought with an amount and no unit (`bought snacks for 8,000`) is an expense ([WhatsApp](whatsapp.md)); `buy 10 bags of rice` is neither, as it has not come yet |
 | `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
 | `confirmed P-7QX4KD` | The supplier said yes by phone |
 | `count rice 12, indomie 40: rats` | A count, with its reason; `count` alone asks item by item |
@@ -131,15 +133,17 @@ Items are found as `price` finds them: the exact name, else the one the words st
 
 ## On the web
 
-**Storefront > Stock**: the low items first, each item with its count, levels, cost and supplier, **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted), **Change** (name, unit, prices, levels, supplier) and **History**; then every change, by item and reason. **Add items** adds one with how many there are. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day. **Orders to suppliers** lists the recent orders with **Approve and send**, **Mark confirmed**, **Goods came in**, **Record a payment** and **Cancel** as each fits, and **Order what is low**. **Counts and losses** shows this month's shrinkage, the latest counts, **Count the shelf** and the count's leak limit. **Storefront > Suppliers** lists the suppliers with where their orders reach them and what is owed, **Add a supplier** (with the items they supply), **Change**, **Send the link again**, **Retire**, and the approval limit.
+**Storefront > Stock** lists **what you count**: stock items, not products ([what a business buys](spec/what-a-business-buys.md) §4.5). The low ones come first. Each row has its count and unit, its levels, cost and supplier, and what it is **Sold as**: its product or products, with how many of it one sale uses when more than one ("Malt, pack of 6 (uses 6 bottles)"), or **Not sold** for a material. A product's sizes and colours have a stock item each, grouped under the product. A filter offers **All**, **Sold** and **Not sold**; the line above the list says how many there are, what they are worth at cost and how many are low, of those shown. Each row has **Record stock** (goods came in; some were spoilt, lost or found, with why; I counted) and **History**, both on the stock item itself. **Change** sets its unit, cost, levels and supplier. It sets the name only for a material, or for a stock item sold as one product, one for one; that product's selling price too. **Add something to count** asks **Do you sell it?**: Yes adds its product too, counted by it, with a selling price when given; No adds a material only, nothing in the catalogue. Then every change, by item and reason. Above them, **Today's sales** in a pine card (the total, by how paid, how many wait for their money) with **Record a sale** (items, how many, the price of one, how it was paid, the amount taken); the terminal's sales with no items, each with **Say what was sold**; and each sale of the day. A product's form in the chat's Products tool shows **Counted by**: its stock item, how many one sale uses and the count, with **Change** to choose another stock item and its uses, or none. A product sold in sizes and colours has none of its own, and says so. The chat's Stock tool lists materials as Not sold and offers **Add something to count**. **Orders to suppliers** lists the recent orders with **Approve and send**, **Mark confirmed**, **Goods came in**, **Record a payment** and **Cancel** as each fits, and **Order what is low**. **Counts and losses** shows this month's shrinkage, the latest counts, **Count the shelf** and the count's leak limit. **Storefront > Suppliers** lists the suppliers with where their orders reach them and what is owed, **Add a supplier** (with the items they supply), **Change**, **Send the link again**, **Retire**, and the approval limit.
 
 ## API
 
 | Route | What it does |
 | --- | --- |
-| `GET /v1/stock` | Whether the catalogue keeps stock, and its items from the table itself, low ones flagged with how many to order; movements stuck on their way |
+| `GET /v1/stock` | Whether the business keeps stock, and its products and materials with their counts, low ones flagged with how many to order |
+| `GET /v1/stock/stock-items?show=all\|sold\|not_sold` | The Stock page's rows: stock items, each with what it is `sold_as` (none: a material), grouped by `group_of`; `value_kobo` and `low` of those listed |
+| `PUT`/`DELETE /v1/stock/products/{id}/counted-by` | What a product is counted by (`stock_item_id`, `uses`), or none |
 | `POST /v1/stock/setup` | Keep my stock (`storefront.manage` and `table.edit`) |
-| `POST /v1/stock/items` | An item and how many there are, with an `Idempotency-Key`; 409 `item_exists` with its id |
+| `POST /v1/stock/items` | Something to count and how many there are, with an `Idempotency-Key`: a product counted by a new stock item, or with `material: true` a material; 409 `item_exists` with its id |
 | `PATCH /v1/stock/items/{id}` | An item's name, prices, unit, levels or supplier; its stock changes by movements only |
 | `GET /v1/stock/movements` | Movements, the latest to land first, by `item`, `reason`, `since`, `until` |
 | `POST /v1/stock/movements` | Goods received, an adjustment or a count, with an `Idempotency-Key`; 202 while it has not reached the table |

@@ -13,7 +13,9 @@ export interface Bill {
   supplier_name: string;
   /** The supplier's invoice number. */
   reference: string;
-  lines: InvoiceLine[];
+  /** A line raised from our order's line carries their item and our order
+   * (what a business buys §8): its label and treatment are that line's. */
+  lines: (InvoiceLine & { seller_item_id?: string; purchase_id?: string })[];
   amount_kobo: number;
   /** What the supplier's match has counted paid. */
   paid_kobo: number;

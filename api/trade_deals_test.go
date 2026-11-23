@@ -144,7 +144,7 @@ func TestTradeDeal(t *testing.T) {
 	}
 	var told bool
 	for _, m := range w.graph.Sent(buyerOn) {
-		told = told || strings.Contains(m.Text, "answers your offer on order "+ref+": ₦770,000 (was ₦790,000) for 20 Rice 25kg. Best I can do.")
+		told = told || strings.Contains(m.Text, "answers your offer on order "+ref+": ₦770,000 (was ₦790,000) for 20 Rice, 25kg bag. Best I can do.")
 	}
 	if !told {
 		t.Fatalf("the seller's counter on WhatsApp, as a deal: %+v", w.graph.Sent(buyerOn))

@@ -67,11 +67,3 @@ func TestFoodOptions(t *testing.T) {
 		t.Fatalf("no deposit stays none: %+v", pc)
 	}
 }
-
-// An item in a basket twice (two sizes) takes stock once, for both lines.
-func TestPerItemTotalsLines(t *testing.T) {
-	got := perItem([]Line{{ID: "1", Name: "Rice", Quantity: 1}, {ID: "2", Name: "Zobo", Quantity: 2}, {ID: "1", Name: "Rice", Quantity: 3}, {ID: "3", Quantity: 0}})
-	if len(got) != 2 || got[0].ID != "1" || got[0].Quantity != 4 || got[1].ID != "2" || got[1].Quantity != 2 {
-		t.Fatalf("perItem: %+v", got)
-	}
-}

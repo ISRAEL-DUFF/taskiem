@@ -387,3 +387,47 @@ func TestMessagesUseNoTechnicalWords(t *testing.T) {
 		}
 	}
 }
+
+// The answers to how a purchase line is treated, typed or spoken
+// (what-a-business-buys §6): the longest words first, what follows them as
+// the rest, the person's language first and English always; every
+// language has words for each answer.
+func TestMatchTreat(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		tags []lang.Tag
+		want lang.TreatAnswer
+		rest string
+	}{
+		{"keep track of it, machines", []lang.Tag{lang.EN}, lang.TreatTrack, "machines"},
+		{"Keep track of it", []lang.Tag{lang.EN}, lang.TreatTrack, ""},
+		{"track", []lang.Tag{lang.EN}, lang.TreatTrack, ""},
+		{"add to stock", []lang.Tag{lang.EN}, lang.TreatStock, ""},
+		{"add to stock, ankara fabric", []lang.Tag{lang.EN}, lang.TreatStock, "ankara fabric"},
+		{"Just record it.", []lang.Tag{lang.EN}, lang.TreatRecord, ""},
+		{"just record it, Staff welfare", []lang.Tag{lang.EN}, lang.TreatRecord, "Staff welfare"},
+		{"no label", []lang.Tag{lang.EN}, lang.TreatNoLabel, ""},
+		{"another", []lang.Tag{lang.EN}, lang.TreatAnother, ""},
+		{"dey track am, machines", []lang.Tag{lang.PCM, lang.EN}, lang.TreatTrack, "machines"},
+		{"fi si oja", []lang.Tag{lang.YO, lang.EN}, lang.TreatStock, ""}, // typed without tone marks
+		{"keep track", []lang.Tag{lang.HA, lang.EN}, lang.TreatTrack, ""},
+		{"machines", []lang.Tag{lang.EN}, "", ""},
+		{"trackers", []lang.Tag{lang.EN}, "", ""},
+	} {
+		got, rest, ok := lang.MatchTreat(c.text, c.tags)
+		if got != c.want || rest != c.rest || ok != (c.want != "") {
+			t.Errorf("%q: %q %q %v, want %q %q", c.text, got, rest, ok, c.want, c.rest)
+		}
+	}
+	words, err := lang.LoadWords()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tag, w := range words {
+		for _, a := range lang.TreatAnswers {
+			if len(w.Treat[a]) == 0 {
+				t.Errorf("%s has no words for %s", tag, a)
+			}
+		}
+	}
+}

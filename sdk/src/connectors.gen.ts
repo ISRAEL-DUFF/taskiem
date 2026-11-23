@@ -3006,7 +3006,7 @@ export interface StockMovementsInput {
   /** An item's row id; empty for every item */
   id?: Val<string>;
   limit?: Val<number>;
-  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "outside">;
+  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "moved">;
   /** RFC 3339 */
   since?: Val<string>;
 }

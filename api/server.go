@@ -146,6 +146,9 @@ type Server struct {
 	// termsAsked are the people asked about, or agreed to, the current
 	// terms since start: chat does not look them up again.
 	termsAsked sync.Map
+	// oldColumnsChecked are the businesses whose workflows were checked
+	// for the catalogue's old stock columns since start (stock_oldcolumns.go).
+	oldColumnsChecked sync.Map
 	// DocsURL is where the web app's help links point (TASKIEM_DOCS_URL);
 	// empty shows the in-product help only.
 	DocsURL string
@@ -683,10 +686,14 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/riders/{id}/remit", s.riderRemit)
 			// Stock by chat's web and API door (stock.go, docs/spec/stock.md).
 			r.With(s.need(PermTableRead)).Get("/stock", s.getStock)
+			r.With(s.need(PermTableRead)).Get("/stock/stock-items", s.getStockItems)
 			r.With(s.need(PermTableRead)).Get("/stock/movements", s.listStockMovements)
+			r.With(s.need(PermWorkflowRead)).Get("/stock/old-columns", s.getStockOldColumns)
 			r.With(s.need(PermStorefrontManage), s.need(PermTableEdit), s.tenantWide).Post("/stock/setup", s.setupStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/items", s.addStockItem)
 			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/items/{id}", s.patchStockItem)
+			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/products/{id}/counted-by", s.putCountedBy)
+			r.With(s.need(PermTableEdit), s.tenantWide).Delete("/stock/products/{id}/counted-by", s.deleteCountedBy)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements", s.moveStock)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/movements/grid", s.moveStockGrid)
 			r.With(s.need(PermTableEdit), s.tenantWide).Put("/stock/items/{id}/variants", s.setStockVariants)
@@ -716,6 +723,16 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/cancel", s.cancelPurchase)
 			r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/receive", s.receivePurchase)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/stock/purchases/{id}/pay", s.payPurchase)
+			// What a business buys, U1 (stock_purchases_u1.go): a line's
+			// treatment, the memory of a supplier's items, Things we have.
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/stock/purchases/{id}/lines/{position}", s.setPurchaseLine)
+			r.With(s.need(PermTableRead)).Get("/stock/suppliers/{id}/items", s.listSupplierItems)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/stock/suppliers/{id}/items", s.putSupplierItem)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Delete("/stock/suppliers/{id}/items", s.deleteSupplierItem)
+			r.With(s.need(PermTableRead)).Get("/things", s.listThings)
+			r.With(s.need(PermTableRead)).Get("/things/{id}", s.getThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Post("/things", s.addThing)
+			r.With(s.need(PermTableEdit), s.tenantWide).Patch("/things/{id}", s.patchThing)
 			// Deliveries with riders (dispatch.go, D2 to D4).
 			r.With(s.need(PermOrders)).Get("/deliveries", s.listDeliveries)
 			r.With(s.need(PermOrders)).Get("/storefront/orders/{reference}/deliveries", s.orderDeliveries)

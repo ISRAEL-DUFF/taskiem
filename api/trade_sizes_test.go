@@ -65,9 +65,10 @@ func TestSizesInTrade(t *testing.T) {
 		}
 		return buyer.do("POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": lines}, "Idempotency-Key", key)
 	}
-	// No product of the buyer's yet: which of yours is it?
-	if code, out := order("o1", map[string]int{"42": 6}, nil); code != 422 || out["item"].(map[string]any)["item_id"] != am {
-		t.Fatalf("which of yours: %d %v", code, out)
+	// No product of the buyer's named: drafted as suggested (recorded),
+	// for the buyer to confirm; no size of its own made.
+	if code, out := order("o1", map[string]int{"42": 6}, nil); code != 201 || out["purchase"].(map[string]any)["lines"].([]any)[0].(map[string]any)["unconfirmed"] != true {
+		t.Fatalf("unremembered: %d %v", code, out)
 	}
 	// A product with stock and no sizes: its sizes set up first.
 	stocked := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Trainers", "quantity": 4, "unit": "pair"}, "Idempotency-Key", "t")["item"].(map[string]any)["id"].(string)
@@ -89,8 +90,8 @@ func TestSizesInTrade(t *testing.T) {
 	if got["Air Max 90 – 42, Black"] == nil || got["Air Max 90 – 42, Black"]["variant_of"] != mine || got["Air Max 90 – 42, Black"]["stock"] != float64(0) {
 		t.Fatalf("the buyer's product got the sizes: %v", got)
 	}
-	if ls := buyer.must(200, "GET", "/v1/item-links/"+link, nil)["item_links"].([]any); len(ls) != 8 {
-		t.Fatalf("the product and each size linked: %v", ls)
+	if ls := buyer.must(200, "GET", "/v1/item-links/"+link, nil)["item_links"].([]any); len(ls) != 7 || ls[0].(map[string]any)["treatment"] != "stock" {
+		t.Fatalf("each size remembered, into its own size's stock item: %v", ls)
 	}
 	// 50 pairs in mixed sizes: the 50-pair price, for the sizes at the
 	// product's price; size 46 keeps its own.

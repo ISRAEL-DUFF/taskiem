@@ -576,6 +576,24 @@ class TaskiemApi {
     return GetStockResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// The Stock page's stock items (`GET /v1/stock/stock-items`)
+  Future<ListStockItemsResponse> listStockItems({String? show, String? retired}) async {
+    final j = await _t.send('GET', '/v1/stock/stock-items', query: {'show': ?show, 'retired': ?retired});
+    return ListStockItemsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say what a product is counted by (`PUT /v1/stock/products/{id}/counted-by`)
+  Future<PutCountedByResponse> putCountedBy({required PutCountedByRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/stock/products/${Uri.encodeComponent(id)}/counted-by', body: body.toJson());
+    return PutCountedByResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Count a product by no stock item (`DELETE /v1/stock/products/{id}/counted-by`)
+  Future<DeleteCountedByResponse> deleteCountedBy({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/stock/products/${Uri.encodeComponent(id)}/counted-by');
+    return DeleteCountedByResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Businesses to browse (`GET /v1/explore`)
   Future<ExploreResult> explore({String? q, String? section, String? category, String? ids, String? offset}) async {
     final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'ids': ?ids, 'offset': ?offset});
@@ -1594,6 +1612,100 @@ class TaskiemApi {
   Future<ListMyBanksResponse> listMyBanks() async {
     final j = await _t.send('GET', '/v1/me/banks');
     return ListMyBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Treat a line of a purchase order, and confirm it (`PATCH /v1/stock/purchases/{id}/lines/{position}`)
+  Future<SetPurchaseLineResponse> setPurchaseLine({required SetPurchaseLineRequest body, required String id, required String position}) async {
+    final j = await _t.send('PATCH', '/v1/stock/purchases/${Uri.encodeComponent(id)}/lines/${Uri.encodeComponent(position)}', body: body.toJson());
+    return SetPurchaseLineResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What you remember of a supplier's items (`GET /v1/item-links/{link}`)
+  Future<ListItemLinksResponse> listItemLinks({required String link}) async {
+    final j = await _t.send('GET', '/v1/item-links/${Uri.encodeComponent(link)}');
+    return ListItemLinksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say how a supplier's item is treated (`PUT /v1/item-links/{link}`)
+  Future<PutItemLinkResponse> putItemLink({required PutItemLinkRequest body, required String link}) async {
+    final j = await _t.send('PUT', '/v1/item-links/${Uri.encodeComponent(link)}', body: body.toJson());
+    return PutItemLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forget a supplier's item (`DELETE /v1/item-links/{link}/{item}`)
+  Future<void> deleteItemLink({required String link, required String item}) async {
+    await _t.send('DELETE', '/v1/item-links/${Uri.encodeComponent(link)}/${Uri.encodeComponent(item)}');
+  }
+
+  /// What you remember of a supplier's items (`GET /v1/stock/suppliers/{id}/items`)
+  Future<ListSupplierItemsResponse> listSupplierItems({required String id}) async {
+    final j = await _t.send('GET', '/v1/stock/suppliers/${Uri.encodeComponent(id)}/items');
+    return ListSupplierItemsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say how a supplier's item is treated (`PUT /v1/stock/suppliers/{id}/items`)
+  Future<PutSupplierItemResponse> putSupplierItem({required PutSupplierItemRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/stock/suppliers/${Uri.encodeComponent(id)}/items', body: body.toJson());
+    return PutSupplierItemResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forget a supplier's item (`DELETE /v1/stock/suppliers/{id}/items`)
+  Future<void> deleteSupplierItem({required String id, String? name}) async {
+    await _t.send('DELETE', '/v1/stock/suppliers/${Uri.encodeComponent(id)}/items', query: {'name': ?name});
+  }
+
+  /// The business's spend labels, and suggestions (`GET /v1/money/labels`)
+  Future<ListSpendLabelsResponse> listSpendLabels({String? item, String? category}) async {
+    final j = await _t.send('GET', '/v1/money/labels', query: {'item': ?item, 'category': ?category});
+    return ListSpendLabelsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Find or make a label by its name (`POST /v1/money/labels`)
+  Future<SpendLabel> makeSpendLabel({required SpendLabelName body}) async {
+    final j = await _t.send('POST', '/v1/money/labels', body: body.toJson());
+    return SpendLabel.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Rename a label (`PATCH /v1/money/labels/{id}`)
+  Future<SpendLabel> renameSpendLabel({required SpendLabelName body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/money/labels/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SpendLabel.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Merge a label into another (`POST /v1/money/labels/{id}/merge`)
+  Future<SpendLabel> mergeSpendLabel({required MergeSpendLabelRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/money/labels/${Uri.encodeComponent(id)}/merge', body: body.toJson());
+    return SpendLabel.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Things we have (`GET /v1/things`)
+  Future<ListThingsResponse> listThings({String? all, String? group, String? order, String? line}) async {
+    final j = await _t.send('GET', '/v1/things', query: {'all': ?all, 'group': ?group, 'order': ?order, 'line': ?line});
+    return ListThingsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of Things we have (`GET /v1/things/{id}`)
+  Future<GetThingResponse> getThing({required String id}) async {
+    final j = await _t.send('GET', '/v1/things/${Uri.encodeComponent(id)}');
+    return GetThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add something we have (`POST /v1/things`)
+  Future<AddThingResponse> addThing({required AddThingRequest body}) async {
+    final j = await _t.send('POST', '/v1/things', body: body.toJson());
+    return AddThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change one of Things we have (`PATCH /v1/things/{id}`)
+  Future<PatchThingResponse> patchThing({required PatchThingRequest body, required String id, String? idempotencyKey}) async {
+    final j = await _t.send('PATCH', '/v1/things/${Uri.encodeComponent(id)}', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
+    return PatchThingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A period's spending by label (`GET /v1/money/spending`)
+  Future<MoneySpending> getMoneySpending({String? from, String? to, String? month}) async {
+    final j = await _t.send('GET', '/v1/money/spending', query: {'from': ?from, 'to': ?to, 'month': ?month});
+    return MoneySpending.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -6835,7 +6947,7 @@ class StorefrontItem {
 }
 
 class GetStockResponse {
-  const GetStockResponse({this.catalogue, this.columns, required this.items, required this.keepsStock, this.low, this.published, this.stuck});
+  const GetStockResponse({this.catalogue, this.columns, required this.items, required this.keepsStock, this.low, this.published, this.valueKobo});
 
   final Object? catalogue;
   final StorefrontColumns? columns;
@@ -6843,7 +6955,7 @@ class GetStockResponse {
   final bool keepsStock;
   final int? low;
   final bool? published;
-  final List<StockMovement>? stuck;
+  final int? valueKobo;
 
   factory GetStockResponse.fromJson(Map<String, dynamic> j) => GetStockResponse(
         catalogue: j['catalogue'],
@@ -6852,7 +6964,7 @@ class GetStockResponse {
         keepsStock: j['keeps_stock'] as bool,
         low: j['low'] == null ? null : (j['low'] as num).toInt(),
         published: j['published'] == null ? null : j['published'] as bool,
-        stuck: j['stuck'] == null ? null : (j['stuck'] as List).map((e) => StockMovement.fromJson(e as Map<String, dynamic>)).toList(),
+        valueKobo: j['value_kobo'] == null ? null : (j['value_kobo'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -6862,12 +6974,12 @@ class GetStockResponse {
         'keeps_stock': keepsStock,
         'low': ?low,
         'published': ?published,
-        'stuck': ?stuck?.map((e) => e.toJson()).toList(),
+        'value_kobo': ?valueKobo,
       };
 }
 
 class StorefrontColumns {
-  const StorefrontColumns({this.available, this.buffer, this.capacity, this.category, this.choices, this.costPrice, this.description, this.duration, this.name, this.photo, this.price, this.priceUnit, this.reorderLevel, this.sort, this.stock, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf});
+  const StorefrontColumns({this.available, this.buffer, this.capacity, this.category, this.choices, this.description, this.duration, this.name, this.photo, this.price, this.priceUnit, this.sort, this.variant, this.variantOf});
 
   final String? available;
   /// Minutes kept free after each booking (default 0)
@@ -6877,7 +6989,6 @@ class StorefrontColumns {
   final String? category;
   /// A product's choices and their values, as JSON
   final String? choices;
-  final String? costPrice;
   final String? description;
   /// A services table's length in minutes (required there)
   final String? duration;
@@ -6885,14 +6996,7 @@ class StorefrontColumns {
   final String? photo;
   final String? price;
   final String? priceUnit;
-  final String? reorderLevel;
   final String? sort;
-  /// An integer column of how many are left; lowered when an order is accepted
-  final String? stock;
-  final String? supplier;
-  final String? targetLevel;
-  /// Stock by chat's columns (docs/stock.md), none shown on the page
-  final String? unit;
   /// A size or colour's values, as JSON
   final String? variant;
   /// A size or colour's product row (sizes and colours)
@@ -6904,19 +7008,13 @@ class StorefrontColumns {
         capacity: j['capacity'] == null ? null : j['capacity'] as String,
         category: j['category'] == null ? null : j['category'] as String,
         choices: j['choices'] == null ? null : j['choices'] as String,
-        costPrice: j['cost_price'] == null ? null : j['cost_price'] as String,
         description: j['description'] == null ? null : j['description'] as String,
         duration: j['duration'] == null ? null : j['duration'] as String,
         name: j['name'] == null ? null : j['name'] as String,
         photo: j['photo'] == null ? null : j['photo'] as String,
         price: j['price'] == null ? null : j['price'] as String,
         priceUnit: j['price_unit'] == null ? null : j['price_unit'] as String,
-        reorderLevel: j['reorder_level'] == null ? null : j['reorder_level'] as String,
         sort: j['sort'] == null ? null : j['sort'] as String,
-        stock: j['stock'] == null ? null : j['stock'] as String,
-        supplier: j['supplier'] == null ? null : j['supplier'] as String,
-        targetLevel: j['target_level'] == null ? null : j['target_level'] as String,
-        unit: j['unit'] == null ? null : j['unit'] as String,
         variant: j['variant'] == null ? null : j['variant'] as String,
         variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
       );
@@ -6927,26 +7025,20 @@ class StorefrontColumns {
         'capacity': ?capacity,
         'category': ?category,
         'choices': ?choices,
-        'cost_price': ?costPrice,
         'description': ?description,
         'duration': ?duration,
         'name': ?name,
         'photo': ?photo,
         'price': ?price,
         'price_unit': ?priceUnit,
-        'reorder_level': ?reorderLevel,
         'sort': ?sort,
-        'stock': ?stock,
-        'supplier': ?supplier,
-        'target_level': ?targetLevel,
-        'unit': ?unit,
         'variant': ?variant,
         'variant_of': ?variantOf,
       };
 }
 
 class StockItem {
-  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.suggest, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf, this.waiting});
+  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, this.material, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.stockItemId, this.suggest, this.supplier, this.supplierId, this.targetLevel, this.unit, this.uses, this.variant, this.variantOf});
 
   final bool available;
   /// The kind of thing it is ("Sneakers"), when the catalogue has a category
@@ -6955,12 +7047,15 @@ class StockItem {
   /// A product's choices, when it has sizes and colours (it keeps no stock of
   /// its own then)
   final List<VariantChoice>? choices;
-  /// The last price paid for one
+  /// The last price paid for one of its stock item
   final int? costKobo;
   /// Its words on the storefront, when the catalogue maps them
   final String? description;
+  /// A product's catalogue row id, or a material's stock item id
   final String id;
   final bool? low;
+  /// A stock item no product is counted by
+  final bool? material;
   final String name;
   /// On a product, its sizes and colours with a price of their own, each as its
   /// values in lower case ("colour=black|size=42"); the others follow the
@@ -6968,18 +7063,24 @@ class StockItem {
   final List<String>? ownPrice;
   final int? priceKobo;
   final int? reorderLevel;
+  /// Its stock item's count, in the stock item's unit; null when it is not
+  /// counted
   final Object? stock;
+  /// The stock item that counts it; absent for a product not counted
+  final String? stockItemId;
   /// How many to order, when low
   final int? suggest;
   final String? supplier;
+  final String? supplierId;
   final int? targetLevel;
   final String? unit;
+  /// On a product counted by a stock item, how many of it one sale takes (a
+  /// "pack of 6" uses 6)
+  final int? uses;
   /// Its values: {"Size": "42", "Colour": "Black"}
   final Map<String, dynamic>? variant;
   /// The product this is a size or colour of
   final String? variantOf;
-  /// Its movements not yet in the table
-  final int? waiting;
 
   factory StockItem.fromJson(Map<String, dynamic> j) => StockItem(
         available: j['available'] as bool,
@@ -6989,18 +7090,21 @@ class StockItem {
         description: j['description'] == null ? null : j['description'] as String,
         id: j['id'] as String,
         low: j['low'] == null ? null : j['low'] as bool,
+        material: j['material'] == null ? null : j['material'] as bool,
         name: j['name'] as String,
         ownPrice: j['own_price'] == null ? null : (j['own_price'] as List).map((e) => e as String).toList(),
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         reorderLevel: j['reorder_level'] == null ? null : (j['reorder_level'] as num).toInt(),
         stock: j['stock'],
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
         suggest: j['suggest'] == null ? null : (j['suggest'] as num).toInt(),
         supplier: j['supplier'] == null ? null : j['supplier'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
         targetLevel: j['target_level'] == null ? null : (j['target_level'] as num).toInt(),
         unit: j['unit'] == null ? null : j['unit'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
         variant: j['variant'] == null ? null : j['variant'] as Map<String, dynamic>,
         variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
-        waiting: j['waiting'] == null ? null : (j['waiting'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -7011,80 +7115,187 @@ class StockItem {
         'description': ?description,
         'id': id,
         'low': ?low,
+        'material': ?material,
         'name': name,
         'own_price': ?ownPrice?.map((e) => e).toList(),
         'price_kobo': ?priceKobo,
         'reorder_level': ?reorderLevel,
         'stock': ?stock,
+        'stock_item_id': ?stockItemId,
         'suggest': ?suggest,
         'supplier': ?supplier,
+        'supplier_id': ?supplierId,
         'target_level': ?targetLevel,
         'unit': ?unit,
+        'uses': ?uses,
         'variant': ?variant,
         'variant_of': ?variantOf,
-        'waiting': ?waiting,
       };
 }
 
-class StockMovement {
-  const StockMovement({this.after, this.before, required this.by, this.change, required this.createdAt, this.delta, this.doneAt, this.error, required this.id, required this.item, required this.itemId, this.note, required this.reason, this.reference, this.setTo, this.short, required this.status});
+class ListStockItemsResponse {
+  const ListStockItemsResponse({required this.items, required this.keepsStock, required this.low, required this.valueKobo});
 
-  final Object? after;
-  final Object? before;
-  final String by;
-  final Object? change;
-  final DateTime createdAt;
-  final int? delta;
-  final Object? doneAt;
-  final String? error;
-  final String id;
-  final String item;
-  final String itemId;
-  final String? note;
-  final String reason;
-  final String? reference;
-  final int? setTo;
-  final int? short;
-  final String status;
+  final List<StockItemRow> items;
+  final bool keepsStock;
+  final int low;
+  final int valueKobo;
 
-  factory StockMovement.fromJson(Map<String, dynamic> j) => StockMovement(
-        after: j['after'],
-        before: j['before'],
-        by: j['by'] as String,
-        change: j['change'],
-        createdAt: DateTime.parse(j['created_at'] as String),
-        delta: j['delta'] == null ? null : (j['delta'] as num).toInt(),
-        doneAt: j['done_at'],
-        error: j['error'] == null ? null : j['error'] as String,
-        id: j['id'] as String,
-        item: j['item'] as String,
-        itemId: j['item_id'] as String,
-        note: j['note'] == null ? null : j['note'] as String,
-        reason: j['reason'] as String,
-        reference: j['reference'] == null ? null : j['reference'] as String,
-        setTo: j['set_to'] == null ? null : (j['set_to'] as num).toInt(),
-        short: j['short'] == null ? null : (j['short'] as num).toInt(),
-        status: j['status'] as String,
+  factory ListStockItemsResponse.fromJson(Map<String, dynamic> j) => ListStockItemsResponse(
+        items: (j['items'] as List).map((e) => StockItemRow.fromJson(e as Map<String, dynamic>)).toList(),
+        keepsStock: j['keeps_stock'] as bool,
+        low: (j['low'] as num).toInt(),
+        valueKobo: (j['value_kobo'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
-        'after': ?after,
-        'before': ?before,
-        'by': by,
-        'change': ?change,
-        'created_at': createdAt.toUtc().toIso8601String(),
-        'delta': ?delta,
-        'done_at': ?doneAt,
-        'error': ?error,
+        'items': items.map((e) => e.toJson()).toList(),
+        'keeps_stock': keepsStock,
+        'low': low,
+        'value_kobo': valueKobo,
+      };
+}
+
+/// A stock item as the Stock page lists it, with the products it is sold as
+/// (none for a material).
+class StockItemRow {
+  const StockItemRow({required this.category, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
+
+  final String category;
+  final Object? costKobo;
+  final int count;
+  final String groupName;
+  /// The product (catalogue row id) a size's or colour's stock item belongs to;
+  /// "" for none
+  final String groupOf;
+  final String id;
+  final bool low;
+  final Object? lowLevel;
+  final String name;
+  final bool retired;
+  final List<StockItemRowSoldAsItem> soldAs;
+  /// How many to reorder of a low one; null when it is not low
+  final Object? suggest;
+  final String supplier;
+  final Object? supplierId;
+  final Object? targetLevel;
+  final String unit;
+  /// Its count at its cost; 0 without a cost or below zero
+  final int valueKobo;
+
+  factory StockItemRow.fromJson(Map<String, dynamic> j) => StockItemRow(
+        category: j['category'] as String,
+        costKobo: j['cost_kobo'],
+        count: (j['count'] as num).toInt(),
+        groupName: j['group_name'] as String,
+        groupOf: j['group_of'] as String,
+        id: j['id'] as String,
+        low: j['low'] as bool,
+        lowLevel: j['low_level'],
+        name: j['name'] as String,
+        retired: j['retired'] as bool,
+        soldAs: (j['sold_as'] as List).map((e) => StockItemRowSoldAsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        suggest: j['suggest'],
+        supplier: j['supplier'] as String,
+        supplierId: j['supplier_id'],
+        targetLevel: j['target_level'],
+        unit: j['unit'] as String,
+        valueKobo: (j['value_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'category': category,
+        'cost_kobo': ?costKobo,
+        'count': count,
+        'group_name': groupName,
+        'group_of': groupOf,
         'id': id,
-        'item': item,
-        'item_id': itemId,
-        'note': ?note,
-        'reason': reason,
-        'reference': ?reference,
-        'set_to': ?setTo,
-        'short': ?short,
-        'status': status,
+        'low': low,
+        'low_level': ?lowLevel,
+        'name': name,
+        'retired': retired,
+        'sold_as': soldAs.map((e) => e.toJson()).toList(),
+        'suggest': ?suggest,
+        'supplier': supplier,
+        'supplier_id': ?supplierId,
+        'target_level': ?targetLevel,
+        'unit': unit,
+        'value_kobo': valueKobo,
+      };
+}
+
+class StockItemRowSoldAsItem {
+  const StockItemRowSoldAsItem({required this.available, required this.name, this.priceKobo, required this.productId, required this.uses, this.variant});
+
+  final bool available;
+  final String name;
+  final Object? priceKobo;
+  final String productId;
+  final int uses;
+  final Object? variant;
+
+  factory StockItemRowSoldAsItem.fromJson(Map<String, dynamic> j) => StockItemRowSoldAsItem(
+        available: j['available'] as bool,
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'],
+        productId: j['product_id'] as String,
+        uses: (j['uses'] as num).toInt(),
+        variant: j['variant'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'name': name,
+        'price_kobo': ?priceKobo,
+        'product_id': productId,
+        'uses': uses,
+        'variant': ?variant,
+      };
+}
+
+class PutCountedByRequest {
+  const PutCountedByRequest({required this.stockItemId, this.uses});
+
+  final String stockItemId;
+  /// How many of the stock item one sale takes; 1 when not said
+  final int? uses;
+
+  factory PutCountedByRequest.fromJson(Map<String, dynamic> j) => PutCountedByRequest(
+        stockItemId: j['stock_item_id'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'stock_item_id': stockItemId,
+        'uses': ?uses,
+      };
+}
+
+class PutCountedByResponse {
+  const PutCountedByResponse({required this.item});
+
+  final StockItem item;
+
+  factory PutCountedByResponse.fromJson(Map<String, dynamic> j) => PutCountedByResponse(
+        item: StockItem.fromJson(j['item'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item': item.toJson(),
+      };
+}
+
+class DeleteCountedByResponse {
+  const DeleteCountedByResponse({required this.item});
+
+  final StockItem item;
+
+  factory DeleteCountedByResponse.fromJson(Map<String, dynamic> j) => DeleteCountedByResponse(
+        item: StockItem.fromJson(j['item'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item': item.toJson(),
       };
 }
 
@@ -13547,5 +13758,965 @@ class ListMyBanksResponseBanksItem {
   Map<String, dynamic> toJson() => {
         'code': code,
         'name': name,
+      };
+}
+
+class SetPurchaseLineRequest {
+  const SetPurchaseLineRequest({this.labelId, this.remember, this.stockItemId, this.trackMany, required this.treatment, this.uses});
+
+  /// The business's own label for it (spend_labels)
+  final String? labelId;
+  /// Remember it for the supplier's item too, from now on
+  final bool? remember;
+  /// For stock, the stock item it goes into
+  final String? stockItemId;
+  /// Tracking more than 50 asked and said yes to: without it, 409 track_ask
+  final bool? trackMany;
+  /// How the line is treated when it arrives (what a business buys §5): just
+  /// recorded (the default), added to a stock item, or each one put on Things
+  /// we have
+  final String treatment;
+  /// For stock, how many of the stock item one of the line is
+  final int? uses;
+
+  factory SetPurchaseLineRequest.fromJson(Map<String, dynamic> j) => SetPurchaseLineRequest(
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        remember: j['remember'] == null ? null : j['remember'] as bool,
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
+        trackMany: j['track_many'] == null ? null : j['track_many'] as bool,
+        treatment: j['treatment'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label_id': ?labelId,
+        'remember': ?remember,
+        'stock_item_id': ?stockItemId,
+        'track_many': ?trackMany,
+        'treatment': treatment,
+        'uses': ?uses,
+      };
+}
+
+class SetPurchaseLineResponse {
+  const SetPurchaseLineResponse({required this.purchase});
+
+  final PurchaseOrder purchase;
+
+  factory SetPurchaseLineResponse.fromJson(Map<String, dynamic> j) => SetPurchaseLineResponse(
+        purchase: PurchaseOrder.fromJson(j['purchase'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'purchase': purchase.toJson(),
+      };
+}
+
+class PurchaseOrder {
+  const PurchaseOrder({this.approvedBy, this.cancelAskedAt, this.cancelledAt, this.change, this.confirmedAt, this.confirmedHow, this.counter, this.counterAt, required this.createdAt, this.dealHistory, this.dealUntil, this.deliveredAt, required this.draftedBy, required this.id, this.invoicedAt, required this.lines, this.linkId, this.note, this.offer, required this.owedKobo, required this.paidKobo, this.receivedAt, required this.receivedKobo, required this.reference, this.sellerNote, this.sellerStatus, this.sentAt, this.short, this.shortAgreedAt, this.shortAt, required this.status, required this.supplier, required this.supplierId, required this.totalKobo});
+
+  final Object? approvedBy;
+  /// We asked the linked supplier to cancel it after it accepted
+  final DateTime? cancelAskedAt;
+  final Object? cancelledAt;
+  /// The lines the linked supplier proposes instead, one per line in order
+  /// (quantity 0 cannot be supplied)
+  final List<PurchaseOrderChangeItem>? change;
+  final Object? confirmedAt;
+  final Object? confirmedHow;
+  /// The supplier's Change, in their words
+  final Object? counter;
+  final Object? counterAt;
+  final DateTime createdAt;
+  /// The deal's offers and counters, newest last (mirrored from the supplier)
+  final List<DealStep>? dealHistory;
+  /// When the latest offer or counter lapses
+  final DateTime? dealUntil;
+  final DateTime? deliveredAt;
+  final String draftedBy;
+  final String id;
+  /// The linked supplier raised the order's invoice (mirrored)
+  final DateTime? invoicedAt;
+  final List<PurchaseLine> lines;
+  /// Sent to a linked supplier, through this link (business links L2)
+  final String? linkId;
+  final String? note;
+  /// Sent at our own prices (a deal, chat tools phase 7), not the supplier's
+  final bool? offer;
+  final int owedKobo;
+  final int paidKobo;
+  final Object? receivedAt;
+  final int receivedKobo;
+  final String reference;
+  /// The linked supplier's word on it
+  final String? sellerNote;
+  /// The linked supplier's side, mirrored from its order; proposed, drafted by
+  /// the supplier for us, waiting for our Confirm
+  final String? sellerStatus;
+  final Object? sentAt;
+  /// Not all came, our count of each line
+  final List<int>? short;
+  /// The linked supplier agreed our count of what came
+  final DateTime? shortAgreedAt;
+  /// We said Not all came
+  final DateTime? shortAt;
+  final String status;
+  final String supplier;
+  final String supplierId;
+  final int totalKobo;
+
+  factory PurchaseOrder.fromJson(Map<String, dynamic> j) => PurchaseOrder(
+        approvedBy: j['approved_by'],
+        cancelAskedAt: j['cancel_asked_at'] == null ? null : DateTime.parse(j['cancel_asked_at'] as String),
+        cancelledAt: j['cancelled_at'],
+        change: j['change'] == null ? null : (j['change'] as List).map((e) => PurchaseOrderChangeItem.fromJson(e as Map<String, dynamic>)).toList(),
+        confirmedAt: j['confirmed_at'],
+        confirmedHow: j['confirmed_how'],
+        counter: j['counter'],
+        counterAt: j['counter_at'],
+        createdAt: DateTime.parse(j['created_at'] as String),
+        dealHistory: j['deal_history'] == null ? null : (j['deal_history'] as List).map((e) => DealStep.fromJson(e as Map<String, dynamic>)).toList(),
+        dealUntil: j['deal_until'] == null ? null : DateTime.parse(j['deal_until'] as String),
+        deliveredAt: j['delivered_at'] == null ? null : DateTime.parse(j['delivered_at'] as String),
+        draftedBy: j['drafted_by'] as String,
+        id: j['id'] as String,
+        invoicedAt: j['invoiced_at'] == null ? null : DateTime.parse(j['invoiced_at'] as String),
+        lines: (j['lines'] as List).map((e) => PurchaseLine.fromJson(e as Map<String, dynamic>)).toList(),
+        linkId: j['link_id'] == null ? null : j['link_id'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        offer: j['offer'] == null ? null : j['offer'] as bool,
+        owedKobo: (j['owed_kobo'] as num).toInt(),
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        receivedAt: j['received_at'],
+        receivedKobo: (j['received_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        sellerNote: j['seller_note'] == null ? null : j['seller_note'] as String,
+        sellerStatus: j['seller_status'] == null ? null : j['seller_status'] as String,
+        sentAt: j['sent_at'],
+        short: j['short'] == null ? null : (j['short'] as List).map((e) => (e as num).toInt()).toList(),
+        shortAgreedAt: j['short_agreed_at'] == null ? null : DateTime.parse(j['short_agreed_at'] as String),
+        shortAt: j['short_at'] == null ? null : DateTime.parse(j['short_at'] as String),
+        status: j['status'] as String,
+        supplier: j['supplier'] as String,
+        supplierId: j['supplier_id'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approved_by': ?approvedBy,
+        'cancel_asked_at': ?cancelAskedAt?.toUtc().toIso8601String(),
+        'cancelled_at': ?cancelledAt,
+        'change': ?change?.map((e) => e.toJson()).toList(),
+        'confirmed_at': ?confirmedAt,
+        'confirmed_how': ?confirmedHow,
+        'counter': ?counter,
+        'counter_at': ?counterAt,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deal_history': ?dealHistory?.map((e) => e.toJson()).toList(),
+        'deal_until': ?dealUntil?.toUtc().toIso8601String(),
+        'delivered_at': ?deliveredAt?.toUtc().toIso8601String(),
+        'drafted_by': draftedBy,
+        'id': id,
+        'invoiced_at': ?invoicedAt?.toUtc().toIso8601String(),
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'link_id': ?linkId,
+        'note': ?note,
+        'offer': ?offer,
+        'owed_kobo': owedKobo,
+        'paid_kobo': paidKobo,
+        'received_at': ?receivedAt,
+        'received_kobo': receivedKobo,
+        'reference': reference,
+        'seller_note': ?sellerNote,
+        'seller_status': ?sellerStatus,
+        'sent_at': ?sentAt,
+        'short': ?short?.map((e) => e).toList(),
+        'short_agreed_at': ?shortAgreedAt?.toUtc().toIso8601String(),
+        'short_at': ?shortAt?.toUtc().toIso8601String(),
+        'status': status,
+        'supplier': supplier,
+        'supplier_id': supplierId,
+        'total_kobo': totalKobo,
+      };
+}
+
+class PurchaseOrderChangeItem {
+  const PurchaseOrderChangeItem({this.costKobo, this.item, this.itemId, this.quantity, this.received, this.unit});
+
+  final int? costKobo;
+  final String? item;
+  final String? itemId;
+  final int? quantity;
+  final int? received;
+  final String? unit;
+
+  factory PurchaseOrderChangeItem.fromJson(Map<String, dynamic> j) => PurchaseOrderChangeItem(
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        item: j['item'] == null ? null : j['item'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        quantity: j['quantity'] == null ? null : (j['quantity'] as num).toInt(),
+        received: j['received'] == null ? null : (j['received'] as num).toInt(),
+        unit: j['unit'] == null ? null : j['unit'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': ?costKobo,
+        'item': ?item,
+        'item_id': ?itemId,
+        'quantity': ?quantity,
+        'received': ?received,
+        'unit': ?unit,
+      };
+}
+
+/// An offer or a counter in a deal (chat tools phase 7)
+class DealStep {
+  const DealStep({this.asTotal, required this.at, required this.by, required this.lines, this.listKobo, this.note, required this.totalKobo, this.who});
+
+  /// A total was offered, spread over the lines
+  final bool? asTotal;
+  final DateTime at;
+  final String by;
+  final List<DealStepLinesItem> lines;
+  /// What the lines come to at the seller's own prices (the was)
+  final int? listKobo;
+  final String? note;
+  final int totalKobo;
+  /// The person who made it
+  final String? who;
+
+  factory DealStep.fromJson(Map<String, dynamic> j) => DealStep(
+        asTotal: j['as_total'] == null ? null : j['as_total'] as bool,
+        at: DateTime.parse(j['at'] as String),
+        by: j['by'] as String,
+        lines: (j['lines'] as List).map((e) => DealStepLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        listKobo: j['list_kobo'] == null ? null : (j['list_kobo'] as num).toInt(),
+        note: j['note'] == null ? null : j['note'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        who: j['who'] == null ? null : j['who'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'as_total': ?asTotal,
+        'at': at.toUtc().toIso8601String(),
+        'by': by,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'list_kobo': ?listKobo,
+        'note': ?note,
+        'total_kobo': totalKobo,
+        'who': ?who,
+      };
+}
+
+class DealStepLinesItem {
+  const DealStepLinesItem({required this.item, required this.priceKobo, required this.quantity});
+
+  final String item;
+  final int priceKobo;
+  final int quantity;
+
+  factory DealStepLinesItem.fromJson(Map<String, dynamic> j) => DealStepLinesItem(
+        item: j['item'] as String,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item': item,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+      };
+}
+
+/// One line of a purchase order, as the business sees it (what a business buys
+/// §5): its treatment, stock item and label are never sent to the supplier
+class PurchaseLine {
+  const PurchaseLine({required this.costKobo, this.delivered, required this.id, required this.item, required this.itemId, this.labelId, required this.position, required this.quantity, required this.received, this.sellerItemId, this.stockItemId, required this.treatment, this.unconfirmed, this.unit, required this.uses});
+
+  /// The price of one
+  final int costKobo;
+  /// What a linked supplier says it delivered, mirrored from its order
+  final int? delivered;
+  final String id;
+  final String item;
+  /// How the order's steps name the line (receiving: lines[].item_id): the
+  /// linked supplier's item, else the stock item of a stock line, else the
+  /// line's own id
+  final String itemId;
+  final String? labelId;
+  /// Its place on the order, from 0; the order's change and short are by it
+  final int position;
+  final int quantity;
+  final int received;
+  /// The linked supplier's own item
+  final String? sellerItemId;
+  /// For a stock line, the stock item it goes into
+  final String? stockItemId;
+  /// What happens when it arrives: nothing beyond the receipt (record); its
+  /// stock item moves by the quantity times uses, its cost set (stock); a row
+  /// on Things we have per unit (track)
+  final String treatment;
+  /// The business has said nothing yet of this item from this supplier:
+  /// treatment and label are a suggestion to confirm (PATCH
+  /// /v1/stock/purchases/{id}/lines/{position})
+  final bool? unconfirmed;
+  final String? unit;
+  /// How many of the stock item one of the line is (1 unless stock)
+  final int uses;
+
+  factory PurchaseLine.fromJson(Map<String, dynamic> j) => PurchaseLine(
+        costKobo: (j['cost_kobo'] as num).toInt(),
+        delivered: j['delivered'] == null ? null : (j['delivered'] as num).toInt(),
+        id: j['id'] as String,
+        item: j['item'] as String,
+        itemId: j['item_id'] as String,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        position: (j['position'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+        received: (j['received'] as num).toInt(),
+        sellerItemId: j['seller_item_id'] == null ? null : j['seller_item_id'] as String,
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
+        treatment: j['treatment'] as String,
+        unconfirmed: j['unconfirmed'] == null ? null : j['unconfirmed'] as bool,
+        unit: j['unit'] == null ? null : j['unit'] as String,
+        uses: (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': costKobo,
+        'delivered': ?delivered,
+        'id': id,
+        'item': item,
+        'item_id': itemId,
+        'label_id': ?labelId,
+        'position': position,
+        'quantity': quantity,
+        'received': received,
+        'seller_item_id': ?sellerItemId,
+        'stock_item_id': ?stockItemId,
+        'treatment': treatment,
+        'unconfirmed': ?unconfirmed,
+        'unit': ?unit,
+        'uses': uses,
+      };
+}
+
+class ListItemLinksResponse {
+  const ListItemLinksResponse({required this.itemLinks});
+
+  final List<ItemMemory> itemLinks;
+
+  factory ListItemLinksResponse.fromJson(Map<String, dynamic> j) => ListItemLinksResponse(
+        itemLinks: (j['item_links'] as List).map((e) => ItemMemory.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_links': itemLinks.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// What the business remembers of a supplier's item (what a business buys §6),
+/// how its next orders are filled
+class ItemMemory {
+  const ItemMemory({this.label, this.labelId, this.linkId, required this.name, this.nameKey, this.sellerItemId, this.stockItem, this.stockItemId, this.supplierId, required this.treatment, required this.updatedAt, required this.updatedBy, required this.uses});
+
+  final String? label;
+  final String? labelId;
+  /// A linked supplier's item, with seller_item_id
+  final String? linkId;
+  /// The item's name as last seen
+  final String name;
+  final String? nameKey;
+  final String? sellerItemId;
+  final String? stockItem;
+  final String? stockItemId;
+  /// A supplier not on Taskiem's item, by name_key
+  final String? supplierId;
+  final String treatment;
+  final DateTime updatedAt;
+  final String updatedBy;
+  final int uses;
+
+  factory ItemMemory.fromJson(Map<String, dynamic> j) => ItemMemory(
+        label: j['label'] == null ? null : j['label'] as String,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        linkId: j['link_id'] == null ? null : j['link_id'] as String,
+        name: j['name'] as String,
+        nameKey: j['name_key'] == null ? null : j['name_key'] as String,
+        sellerItemId: j['seller_item_id'] == null ? null : j['seller_item_id'] as String,
+        stockItem: j['stock_item'] == null ? null : j['stock_item'] as String,
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
+        treatment: j['treatment'] as String,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+        updatedBy: j['updated_by'] as String,
+        uses: (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': ?label,
+        'label_id': ?labelId,
+        'link_id': ?linkId,
+        'name': name,
+        'name_key': ?nameKey,
+        'seller_item_id': ?sellerItemId,
+        'stock_item': ?stockItem,
+        'stock_item_id': ?stockItemId,
+        'supplier_id': ?supplierId,
+        'treatment': treatment,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+        'updated_by': updatedBy,
+        'uses': uses,
+      };
+}
+
+class PutItemLinkRequest {
+  const PutItemLinkRequest({this.itemId, this.labelId, this.sellerItem, required this.sellerItemId, this.stockItemId, this.trackMany, this.treatment, this.uses});
+
+  /// One of your items whose stock item it goes into
+  final String? itemId;
+  /// The business's own label for it (spend_labels)
+  final String? labelId;
+  /// Its name, when it is not on their price list
+  final String? sellerItem;
+  final String sellerItemId;
+  /// For stock, the stock item it goes into
+  final String? stockItemId;
+  /// Tracking more than 50 asked and said yes to: without it, 409 track_ask
+  final bool? trackMany;
+  /// How the line is treated when it arrives (what a business buys §5): just
+  /// recorded (the default), added to a stock item, or each one put on Things
+  /// we have
+  final String? treatment;
+  /// For stock, how many of the stock item one of the line is
+  final int? uses;
+
+  factory PutItemLinkRequest.fromJson(Map<String, dynamic> j) => PutItemLinkRequest(
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        sellerItem: j['seller_item'] == null ? null : j['seller_item'] as String,
+        sellerItemId: j['seller_item_id'] as String,
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
+        trackMany: j['track_many'] == null ? null : j['track_many'] as bool,
+        treatment: j['treatment'] == null ? null : j['treatment'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': ?itemId,
+        'label_id': ?labelId,
+        'seller_item': ?sellerItem,
+        'seller_item_id': sellerItemId,
+        'stock_item_id': ?stockItemId,
+        'track_many': ?trackMany,
+        'treatment': ?treatment,
+        'uses': ?uses,
+      };
+}
+
+class PutItemLinkResponse {
+  const PutItemLinkResponse({required this.itemLinks});
+
+  final List<ItemMemory> itemLinks;
+
+  factory PutItemLinkResponse.fromJson(Map<String, dynamic> j) => PutItemLinkResponse(
+        itemLinks: (j['item_links'] as List).map((e) => ItemMemory.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_links': itemLinks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListSupplierItemsResponse {
+  const ListSupplierItemsResponse({required this.items});
+
+  final List<ItemMemory> items;
+
+  factory ListSupplierItemsResponse.fromJson(Map<String, dynamic> j) => ListSupplierItemsResponse(
+        items: (j['items'] as List).map((e) => ItemMemory.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PutSupplierItemRequest {
+  const PutSupplierItemRequest({this.labelId, required this.name, this.stockItemId, this.trackMany, required this.treatment, this.uses});
+
+  /// The business's own label for it (spend_labels)
+  final String? labelId;
+  final String name;
+  /// For stock, the stock item it goes into
+  final String? stockItemId;
+  /// Tracking more than 50 asked and said yes to: without it, 409 track_ask
+  final bool? trackMany;
+  /// How the line is treated when it arrives (what a business buys §5): just
+  /// recorded (the default), added to a stock item, or each one put on Things
+  /// we have
+  final String treatment;
+  /// For stock, how many of the stock item one of the line is
+  final int? uses;
+
+  factory PutSupplierItemRequest.fromJson(Map<String, dynamic> j) => PutSupplierItemRequest(
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+        stockItemId: j['stock_item_id'] == null ? null : j['stock_item_id'] as String,
+        trackMany: j['track_many'] == null ? null : j['track_many'] as bool,
+        treatment: j['treatment'] as String,
+        uses: j['uses'] == null ? null : (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label_id': ?labelId,
+        'name': name,
+        'stock_item_id': ?stockItemId,
+        'track_many': ?trackMany,
+        'treatment': treatment,
+        'uses': ?uses,
+      };
+}
+
+class PutSupplierItemResponse {
+  const PutSupplierItemResponse({required this.items});
+
+  final List<ItemMemory> items;
+
+  factory PutSupplierItemResponse.fromJson(Map<String, dynamic> j) => PutSupplierItemResponse(
+        items: (j['items'] as List).map((e) => ItemMemory.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListSpendLabelsResponse {
+  const ListSpendLabelsResponse({required this.labels, required this.suggestions});
+
+  final List<SpendLabel> labels;
+  final List<ListSpendLabelsResponseSuggestionsItem> suggestions;
+
+  factory ListSpendLabelsResponse.fromJson(Map<String, dynamic> j) => ListSpendLabelsResponse(
+        labels: (j['labels'] as List).map((e) => SpendLabel.fromJson(e as Map<String, dynamic>)).toList(),
+        suggestions: (j['suggestions'] as List).map((e) => ListSpendLabelsResponseSuggestionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'labels': labels.map((e) => e.toJson()).toList(),
+        'suggestions': suggestions.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SpendLabel {
+  const SpendLabel({required this.createdAt, required this.createdBy, required this.id, this.mergedInto, required this.name, required this.uses});
+
+  final DateTime createdAt;
+  final String createdBy;
+  final String id;
+  /// The label kept, for a merged label.
+  final String? mergedInto;
+  final String name;
+  /// Money-log entries and purchase lines carrying it, its merged labels'
+  /// included (lists only; 0 elsewhere).
+  final int uses;
+
+  factory SpendLabel.fromJson(Map<String, dynamic> j) => SpendLabel(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        id: j['id'] as String,
+        mergedInto: j['merged_into'] == null ? null : j['merged_into'] as String,
+        name: j['name'] as String,
+        uses: (j['uses'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'id': id,
+        'merged_into': ?mergedInto,
+        'name': name,
+        'uses': uses,
+      };
+}
+
+class ListSpendLabelsResponseSuggestionsItem {
+  const ListSpendLabelsResponseSuggestionsItem({this.labelId, required this.name});
+
+  /// The business's own label; none for a new name.
+  final String? labelId;
+  final String name;
+
+  factory ListSpendLabelsResponseSuggestionsItem.fromJson(Map<String, dynamic> j) => ListSpendLabelsResponseSuggestionsItem(
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label_id': ?labelId,
+        'name': name,
+      };
+}
+
+class SpendLabelName {
+  const SpendLabelName({required this.name});
+
+  final String name;
+
+  factory SpendLabelName.fromJson(Map<String, dynamic> j) => SpendLabelName(
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+      };
+}
+
+class MergeSpendLabelRequest {
+  const MergeSpendLabelRequest({required this.into});
+
+  final String into;
+
+  factory MergeSpendLabelRequest.fromJson(Map<String, dynamic> j) => MergeSpendLabelRequest(
+        into: j['into'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'into': into,
+      };
+}
+
+class ListThingsResponse {
+  const ListThingsResponse({required this.count, this.groups, required this.things, required this.totalKobo});
+
+  /// The rows had (status have) that the filters keep, all of them.
+  final int count;
+  final List<ListThingsResponseGroupsItem>? groups;
+  final List<Thing> things;
+  /// What those had cost.
+  final int totalKobo;
+
+  factory ListThingsResponse.fromJson(Map<String, dynamic> j) => ListThingsResponse(
+        count: (j['count'] as num).toInt(),
+        groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => ListThingsResponseGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        things: (j['things'] as List).map((e) => Thing.fromJson(e as Map<String, dynamic>)).toList(),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'groups': ?groups?.map((e) => e.toJson()).toList(),
+        'things': things.map((e) => e.toJson()).toList(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class ListThingsResponseGroupsItem {
+  const ListThingsResponseGroupsItem({required this.count, required this.label, this.labelId, required this.totalKobo});
+
+  final int count;
+  final String label;
+  final Object? labelId;
+  final int totalKobo;
+
+  factory ListThingsResponseGroupsItem.fromJson(Map<String, dynamic> j) => ListThingsResponseGroupsItem(
+        count: (j['count'] as num).toInt(),
+        label: j['label'] as String,
+        labelId: j['label_id'],
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'label': label,
+        'label_id': ?labelId,
+        'total_kobo': totalKobo,
+      };
+}
+
+/// A row of Things we have (what a business buys §5.3)
+class Thing {
+  const Thing({this.costKobo, required this.createdAt, required this.createdBy, required this.id, this.label, this.labelId, required this.name, this.note, this.orderReference, this.purchaseLineId, this.purchaseOrderId, this.receivedAt, this.saleEntryId, this.serial, required this.status, required this.statusAt, this.supplier, this.supplierId, this.unitNo, this.warrantyUntil});
+
+  final int? costKobo;
+  final DateTime createdAt;
+  final String createdBy;
+  final String id;
+  final String? label;
+  final String? labelId;
+  final String name;
+  final String? note;
+  final String? orderReference;
+  final String? purchaseLineId;
+  final String? purchaseOrderId;
+  final DateTime? receivedAt;
+  /// The money in of its sale, Sale of things we had
+  final String? saleEntryId;
+  final String? serial;
+  final String status;
+  final DateTime statusAt;
+  final String? supplier;
+  final String? supplierId;
+  /// Which of its line's units it is, from 1
+  final int? unitNo;
+  final String? warrantyUntil;
+
+  factory Thing.fromJson(Map<String, dynamic> j) => Thing(
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        id: j['id'] as String,
+        label: j['label'] == null ? null : j['label'] as String,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        orderReference: j['order_reference'] == null ? null : j['order_reference'] as String,
+        purchaseLineId: j['purchase_line_id'] == null ? null : j['purchase_line_id'] as String,
+        purchaseOrderId: j['purchase_order_id'] == null ? null : j['purchase_order_id'] as String,
+        receivedAt: j['received_at'] == null ? null : DateTime.parse(j['received_at'] as String),
+        saleEntryId: j['sale_entry_id'] == null ? null : j['sale_entry_id'] as String,
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        status: j['status'] as String,
+        statusAt: DateTime.parse(j['status_at'] as String),
+        supplier: j['supplier'] == null ? null : j['supplier'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
+        unitNo: j['unit_no'] == null ? null : (j['unit_no'] as num).toInt(),
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': ?costKobo,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'id': id,
+        'label': ?label,
+        'label_id': ?labelId,
+        'name': name,
+        'note': ?note,
+        'order_reference': ?orderReference,
+        'purchase_line_id': ?purchaseLineId,
+        'purchase_order_id': ?purchaseOrderId,
+        'received_at': ?receivedAt?.toUtc().toIso8601String(),
+        'sale_entry_id': ?saleEntryId,
+        'serial': ?serial,
+        'status': status,
+        'status_at': statusAt.toUtc().toIso8601String(),
+        'supplier': ?supplier,
+        'supplier_id': ?supplierId,
+        'unit_no': ?unitNo,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class GetThingResponse {
+  const GetThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory GetThingResponse.fromJson(Map<String, dynamic> j) => GetThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class AddThingRequest {
+  const AddThingRequest({this.costKobo, this.labelId, required this.name, this.note, this.receivedAt, this.serial, this.supplierId, this.warrantyUntil});
+
+  final int? costKobo;
+  final String? labelId;
+  final String name;
+  final String? note;
+  final DateTime? receivedAt;
+  final String? serial;
+  final String? supplierId;
+  final String? warrantyUntil;
+
+  factory AddThingRequest.fromJson(Map<String, dynamic> j) => AddThingRequest(
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        name: j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        receivedAt: j['received_at'] == null ? null : DateTime.parse(j['received_at'] as String),
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cost_kobo': ?costKobo,
+        'label_id': ?labelId,
+        'name': name,
+        'note': ?note,
+        'received_at': ?receivedAt?.toUtc().toIso8601String(),
+        'serial': ?serial,
+        'supplier_id': ?supplierId,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class AddThingResponse {
+  const AddThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory AddThingResponse.fromJson(Map<String, dynamic> j) => AddThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class PatchThingRequest {
+  const PatchThingRequest({this.clearLabel, this.labelId, this.note, this.salePaidHow, this.salePriceKobo, this.serial, this.status, this.warrantyUntil});
+
+  final bool? clearLabel;
+  final String? labelId;
+  final String? note;
+  final String? salePaidHow;
+  final int? salePriceKobo;
+  final String? serial;
+  final String? status;
+  /// A date (YYYY-MM-DD); empty clears it
+  final String? warrantyUntil;
+
+  factory PatchThingRequest.fromJson(Map<String, dynamic> j) => PatchThingRequest(
+        clearLabel: j['clear_label'] == null ? null : j['clear_label'] as bool,
+        labelId: j['label_id'] == null ? null : j['label_id'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        salePaidHow: j['sale_paid_how'] == null ? null : j['sale_paid_how'] as String,
+        salePriceKobo: j['sale_price_kobo'] == null ? null : (j['sale_price_kobo'] as num).toInt(),
+        serial: j['serial'] == null ? null : j['serial'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'clear_label': ?clearLabel,
+        'label_id': ?labelId,
+        'note': ?note,
+        'sale_paid_how': ?salePaidHow,
+        'sale_price_kobo': ?salePriceKobo,
+        'serial': ?serial,
+        'status': ?status,
+        'warranty_until': ?warrantyUntil,
+      };
+}
+
+class PatchThingResponse {
+  const PatchThingResponse({required this.thing});
+
+  final Thing thing;
+
+  factory PatchThingResponse.fromJson(Map<String, dynamic> j) => PatchThingResponse(
+        thing: Thing.fromJson(j['thing'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'thing': thing.toJson(),
+      };
+}
+
+class MoneySpending {
+  const MoneySpending({required this.boughtToKeepKobo, required this.boughtToSellKobo, required this.from, required this.labels, required this.profit, required this.runningCostsKobo, required this.to, required this.totalKobo});
+
+  /// Bought to keep (lines kept track of), left out of profit.
+  final int boughtToKeepKobo;
+  /// Bought to sell or make with (lines added to stock), counted as stock
+  /// bought.
+  final int boughtToSellKobo;
+  final DateTime from;
+  /// The most first.
+  final List<MoneySpendingLabelsItem> labels;
+  final MoneySpendingProfit profit;
+  final int runningCostsKobo;
+  final DateTime to;
+  final int totalKobo;
+
+  factory MoneySpending.fromJson(Map<String, dynamic> j) => MoneySpending(
+        boughtToKeepKobo: (j['bought_to_keep_kobo'] as num).toInt(),
+        boughtToSellKobo: (j['bought_to_sell_kobo'] as num).toInt(),
+        from: DateTime.parse(j['from'] as String),
+        labels: (j['labels'] as List).map((e) => MoneySpendingLabelsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        profit: MoneySpendingProfit.fromJson(j['profit'] as Map<String, dynamic>),
+        runningCostsKobo: (j['running_costs_kobo'] as num).toInt(),
+        to: DateTime.parse(j['to'] as String),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bought_to_keep_kobo': boughtToKeepKobo,
+        'bought_to_sell_kobo': boughtToSellKobo,
+        'from': from.toUtc().toIso8601String(),
+        'labels': labels.map((e) => e.toJson()).toList(),
+        'profit': profit.toJson(),
+        'running_costs_kobo': runningCostsKobo,
+        'to': to.toUtc().toIso8601String(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class MoneySpendingLabelsItem {
+  const MoneySpendingLabelsItem({required this.boughtToKeepKobo, required this.boughtToSellKobo, required this.entries, required this.kobo, this.labelId, required this.name, required this.runningCostsKobo});
+
+  final int boughtToKeepKobo;
+  final int boughtToSellKobo;
+  final int entries;
+  final int kobo;
+  /// The label kept; null for Not labelled.
+  final Object? labelId;
+  final String name;
+  final int runningCostsKobo;
+
+  factory MoneySpendingLabelsItem.fromJson(Map<String, dynamic> j) => MoneySpendingLabelsItem(
+        boughtToKeepKobo: (j['bought_to_keep_kobo'] as num).toInt(),
+        boughtToSellKobo: (j['bought_to_sell_kobo'] as num).toInt(),
+        entries: (j['entries'] as num).toInt(),
+        kobo: (j['kobo'] as num).toInt(),
+        labelId: j['label_id'],
+        name: j['name'] as String,
+        runningCostsKobo: (j['running_costs_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bought_to_keep_kobo': boughtToKeepKobo,
+        'bought_to_sell_kobo': boughtToSellKobo,
+        'entries': entries,
+        'kobo': kobo,
+        'label_id': ?labelId,
+        'name': name,
+        'running_costs_kobo': runningCostsKobo,
+      };
+}
+
+class MoneySpendingProfit {
+  const MoneySpendingProfit({required this.costsKobo, required this.feesKobo, required this.inKobo, required this.profitKobo});
+
+  /// Spending less Bought to keep, plus what the things we had cost whose
+  /// sale's money (Sale of things we had) came in in the period, so each sale
+  /// counts as price less cost.
+  final int costsKobo;
+  final int feesKobo;
+  /// The period's own money in, settled (less money collected for others).
+  final int inKobo;
+  final int profitKobo;
+
+  factory MoneySpendingProfit.fromJson(Map<String, dynamic> j) => MoneySpendingProfit(
+        costsKobo: (j['costs_kobo'] as num).toInt(),
+        feesKobo: (j['fees_kobo'] as num).toInt(),
+        inKobo: (j['in_kobo'] as num).toInt(),
+        profitKobo: (j['profit_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'costs_kobo': costsKobo,
+        'fees_kobo': feesKobo,
+        'in_kobo': inKobo,
+        'profit_kobo': profitKobo,
       };
 }

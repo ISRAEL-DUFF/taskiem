@@ -860,6 +860,18 @@ class TkListRow extends StatelessWidget {
   }
 }
 
+/// A choice's tick, at the end of a [TkListRow] (`chevron: false`) chosen
+/// from a few: the tick when [on], else the same room left blank so the
+/// words do not move.
+class TkTick extends StatelessWidget {
+  const TkTick(this.on, {super.key});
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) =>
+      ExcludeSemantics(child: on ? TkIcon('b-check', size: 20, stroke: 2.4, color: TkLook.of(context).limeInk) : const SizedBox(width: 20, height: 20));
+}
+
 String tkInitials(String name) {
   final words = name.split(RegExp(r'[\s·]+')).where((w) => w.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(w[0])).toList();
   if (words.isEmpty) return '?';

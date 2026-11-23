@@ -54,6 +54,22 @@ describe("the chat's tools", () => {
       tone: "plain",
     });
   });
+  it("keeps a material to Stock, as not sold", () => {
+    const fabric = {
+      id: "0192e2e0-0000-7000-8000-00000000000a",
+      name: "Ankara fabric",
+      material: true,
+      available: false,
+      stock: 20,
+      unit: "yard",
+    };
+    const pack = { id: "8", name: "Malt, pack of 6", available: true, stock: 20, unit: "bottle", uses: 6, price_kobo: 240_000 };
+    const more = { items: [...stock.items, fabric, pack] };
+    expect(tool("products").rows(more).map((r) => r.name)).not.toContain("Ankara fabric");
+    expect(tool("products").rows(more).find((r) => r.id === "8")?.sub).toBe("₦2,400");
+    expect(tool("stock").rows(more).find((r) => r.name === "Ankara fabric")?.sub).toBe("Not sold");
+    expect(tool("sell").rows(more).map((r) => r.name)).not.toContain("Ankara fabric");
+  });
   it("filters by chip and by search", () => {
     const rows = tool("products").rows(stock);
     expect(filterRows(rows, "low", "").map((r) => r.id)).toEqual(["2"]);

@@ -14,7 +14,9 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'guidelines.dart';
+import 'looks.dart';
 import 'support.dart';
+import 'treat_fixture.dart';
 
 Map<String, dynamic> _purchase({
   String id = 'P1',
@@ -23,6 +25,7 @@ Map<String, dynamic> _purchase({
   String link = 'L1',
   List<Map<String, dynamic>>? change,
   int owed = 0,
+  List<Map<String, dynamic>>? lines,
 }) => {
   'id': id,
   'reference': 'PO-0012',
@@ -38,9 +41,29 @@ Map<String, dynamic> _purchase({
   'sent_at': '2026-11-10T09:05:00Z',
   'delivered_at': seller == 'delivered' ? '2026-11-12T08:00:00Z' : null,
   'change': ?change,
-  'lines': [
-    {'item_id': 'IT1', 'item': 'Rice 50kg', 'quantity': 2, 'unit': 'bags', 'cost_kobo': 7800000, 'received': 0, 'delivered': 2},
-  ],
+  'lines':
+      lines ??
+      [
+        {'item_id': 'IT1', 'item': 'Rice 50kg', 'quantity': 2, 'unit': 'bags', 'cost_kobo': 7800000, 'received': 0, 'delivered': 2},
+      ],
+};
+
+/// A line as U1 has it: its place, treatment, stock item and label.
+Map<String, dynamic> _line(int at, String item, {int quantity = 2, int received = 0, String treatment = 'record', String? stock, String? label, bool unconfirmed = false}) => {
+  'id': 'PL$at',
+  'position': at,
+  'item_id': 'IT$at',
+  'item': item,
+  'quantity': quantity,
+  'unit': 'bags',
+  'cost_kobo': 7800000,
+  'received': received,
+  'delivered': quantity,
+  'treatment': treatment,
+  'stock_item_id': ?stock,
+  'uses': 1,
+  'label_id': ?label,
+  'unconfirmed': unconfirmed,
 };
 
 void main() {
@@ -77,6 +100,7 @@ void main() {
     List<Map<String, dynamic>>? list,
     bool keeps = true,
     bool linksFail = false,
+    http.Response? Function(http.Request req)? answer,
   }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
@@ -89,6 +113,8 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          final treat = treatAnswers(req);
+          if (treat != null) return treat;
           if (req.method == 'GET') {
             return switch (p) {
               '/v1/stock/purchases' => ok({
@@ -120,11 +146,19 @@ void main() {
                   {'id': 'L9', 'name': 'Dangote Depot Ltd', 'state': 'active', 'role': 'supplier'},
                 ],
               }),
+              '/v1/stock/suppliers/S2/items' => ok({
+                'items': [memory('Diesel', 'record', label: 'Staff welfare', labelId: 'lb-staff')],
+              }),
+              '/v1/item-links/L1' => ok({
+                'item_links': [memory('Rice 50kg', 'stock', sellerItem: 'R50', stockItemId: 'si-rice', stockItem: 'Rice', labelId: 'lb-pack', label: 'Packaging')],
+              }),
               _ when p.startsWith('/v1/stock/purchases/') => ok({'purchase': purchase ?? _purchase()}),
               _ => null,
             };
           }
           sent.add('${req.method} $p ${req.body}');
+          final said = answer?.call(req);
+          if (said != null) return said;
           if (p == '/v1/stock/purchases/low') {
             return ok({
               'purchases': [],
@@ -141,17 +175,72 @@ void main() {
     return sent;
   }
 
-  testWidgets('their draft confirmed: each line is one of our items', (t) async {
+  testWidgets('their draft confirmed: the question on each line, a remembered one as it is', (t) async {
     final sent = await open(
       t,
       (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
-      purchase: _purchase(status: 'drafted', seller: 'proposed'),
+      purchase: _purchase(
+        status: 'drafted',
+        seller: 'proposed',
+        lines: [_line(0, 'Sewing machine', quantity: 1, unconfirmed: true), _line(1, 'Rice 50kg', treatment: 'stock', stock: 'si-rice', label: 'lb-pack')],
+      ),
     );
     expect(find.textContaining('drafted this order for you'), findsOneWidget);
-    expect(find.bySemanticsLabel('Their Rice 50kg: rice 50kg'), findsOneWidget, reason: 'the same name, chosen');
+    // Asked: the line never ordered before; the other in a few words.
+    expect(find.text('How should we treat it?'), findsOneWidget);
+    expect(find.text('Add to stock: Rice · Packaging'), findsOneWidget);
+    await looks(t, 'purchase-confirm');
+    await t.tap(find.bySemanticsLabel(RegExp('^Keep track of it: Sewing machine')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Label for Sewing machine'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Your labels'), findsOneWidget);
+    expect(find.text('Suggested'), findsOneWidget, reason: 'a new name suggested after the labels by use');
+    await t.tap(find.text('Machines'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Confirm the order'));
     await settle(t);
-    expect(sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"items":["MY1"]}');
+    expect(sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"lines":[{"treatment":"track","label_id":"lb-mach"},null]}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a label typed is made; a new stock item asks Do you sell it?', (t) async {
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(status: 'drafted', seller: 'proposed', lines: [_line(0, 'Ankara fabric', quantity: 20, unconfirmed: true)]),
+      answer: (req) => switch (req.url.path) {
+        '/v1/money/labels' => http.Response(jsonEncode(label('lb-fab', 'Fabric', 0)), 201, headers: {'content-type': 'application/json'}),
+        '/v1/stock/items' => http.Response(jsonEncode({'item': {'id': 'si-ankara', 'name': 'Ankara fabric', 'material': true, 'available': true, 'stock': 0}}), 201, headers: {'content-type': 'application/json'}),
+        _ => null,
+      },
+    );
+    await t.tap(find.bySemanticsLabel(RegExp('^Add to stock: Ankara fabric')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Stock item for Ankara fabric'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Make a new one'));
+    await t.pumpAndSettle();
+    expect(find.text('Do you sell it?'), findsOneWidget);
+    await t.tap(find.text('No, I don’t'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Make it'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, startsWith('POST /v1/stock/items {"name":"Ankara fabric","quantity":0,"unit":"","material":true}'));
+    await t.tap(find.bySemanticsLabel('Label for Ankara fabric'));
+    await settle(t);
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('Type or pick a label')), matching: find.byType(EditableText)), 'Fabric');
+    await t.pump();
+    await t.tap(find.text('Make this label'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'POST /v1/money/labels {"name":"Fabric"}');
+    await t.tap(find.bySemanticsLabel('Confirm the order'));
+    await settle(t);
+    expect(sent.last, 'POST /v1/stock/purchases/P1/confirm-proposed {"lines":[{"treatment":"stock","stock_item_id":"si-ankara","label_id":"lb-fab"}]}');
     await t.pump(const Duration(seconds: 5));
   });
 
@@ -280,16 +369,119 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('M8 fixes 5, 21: no stock kept on Taskiem: no items offered, and Stock leads there', (t) async {
+  testWidgets('an order by hand: its lines marked; one changed for this order; tracking many asks first; one that came stays', (t) async {
+    var asked = false;
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(
+        link: '',
+        lines: [_line(0, 'Rice 50kg', quantity: 60, treatment: 'stock', stock: 'si-rice', label: 'lb-pack'), _line(1, 'Nylon bags', received: 1, treatment: 'track', label: 'lb-mach')],
+      ),
+      answer: (req) {
+        if (req.method != 'PATCH' || asked) return null;
+        asked = true;
+        return http.Response(
+          jsonEncode({'error': 'put 60 Rice 50kg on Things we have, one row each?', 'code': 'track_ask', 'line': 0, 'item': 'Rice 50kg', 'quantity': 60}),
+          409,
+          headers: {'content-type': 'application/json'},
+        );
+      },
+    );
+    // The order's card: each line's mark and label.
+    expect(find.text('To stock'), findsOneWidget);
+    expect(find.text('Things we have'), findsOneWidget);
+    expect(find.text('Packaging'), findsOneWidget);
+    expect(find.textContaining('it came, so it stays'), findsOneWidget);
+    expect(find.bySemanticsLabel('Change how Nylon bags is treated'), findsNothing);
+    await looks(t, 'purchase-lines');
+    await t.tap(find.bySemanticsLabel('Change how Rice 50kg is treated'));
+    await t.pump();
+    expect(find.text('Remember for next time'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel(RegExp('^Keep track of it: Rice 50kg')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save how Rice 50kg is treated'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Put 60 Rice 50kg on Things we have, one row each?'), findsOneWidget);
+    expect(find.bySemanticsLabel('Just record them'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Put them on'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent, [
+      'PATCH /v1/stock/purchases/P1/lines/0 {"treatment":"track","label_id":"lb-pack"}',
+      'PATCH /v1/stock/purchases/P1/lines/0 {"treatment":"track","label_id":"lb-pack","track_many":true}',
+    ]);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a line confirmed: the question shuts to a few words', (t) async {
+    final p = _purchase(link: '', lines: [_line(0, 'Diesel', unconfirmed: true)]);
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: p,
+      answer: (req) {
+        // Confirmed: read again, the line is no longer asked.
+        if (req.method == 'PATCH') (p['lines'] as List).first['unconfirmed'] = false;
+        return null;
+      },
+    );
+    expect(find.text('How should we treat it?'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Confirm how Diesel is treated'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH /v1/stock/purchases/P1/lines/0')), hasLength(1));
+    expect(find.text('How should we treat it?'), findsNothing, reason: 'closed once confirmed');
+    expect(find.bySemanticsLabel('Confirm how Diesel is treated'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a line that came meanwhile: locked, said, read again', (t) async {
     await open(
       t,
       (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
-      purchase: _purchase(status: 'drafted', seller: 'proposed'),
-      keeps: false,
+      purchase: _purchase(link: '', lines: [_line(0, 'Diesel', unconfirmed: true)]),
+      answer: (req) => http.Response(jsonEncode({'error': 'locked', 'code': 'line_locked'}), 409, headers: {'content-type': 'application/json'}),
     );
-    expect(find.text('Keep your stock on Taskiem to confirm it, so what comes is received into your items.'), findsOneWidget);
-    expect(find.bySemanticsLabel('Confirm the order'), findsNothing);
-    expect(find.text('Stock'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Confirm how Diesel is treated'));
+    await settle(t);
+    expect(find.text('Something on this line came already, so how it is treated stays.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('Suppliers: what you buy from them, changed and forgotten', (t) async {
+    final sent = await open(t, (c) => SuppliersPage(auth: c.auth));
+    await t.tap(find.text('Dangote Depot'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('What you buy from them'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('What you buy from Dangote Depot'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Diesel: Just record it · Staff welfare')), findsOneWidget);
+    await t.tap(find.text('Diesel'));
+    await settle(t);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel(RegExp('^Add to stock: Diesel')));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Stock item for Diesel'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Nylon bags'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Save'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'PUT /v1/stock/suppliers/S2/items {"name":"Diesel","treatment":"stock","stock_item_id":"si-nylon","label_id":"lb-staff"}');
+    await t.pump(const Duration(seconds: 5));
+    await t.tap(find.text('Diesel'));
+    await settle(t);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Forget'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Forget it'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(sent.last, 'DELETE /v1/stock/suppliers/S2/items ');
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('M8 fixes 3: the links failing to read is said, not "not linked"', (t) async {

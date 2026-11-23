@@ -47,7 +47,7 @@ func TestWritePreview(t *testing.T) {
 		p := previewShop()
 		e := formServer(t, p)
 		withBrand(e.s, b)
-		e.s.Storefronts = func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil }
+		e.s.Storefronts = func(context.Context, uuid.UUID, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil }
 		pages["storefront"] = get(e.h, "GET", sfHost, "/").Body.String()
 		pages["order"], _ = e.form(t, "/a/order?item=2")
 		pages["enquiry"], _ = e.form(t, "/a/enquiry")

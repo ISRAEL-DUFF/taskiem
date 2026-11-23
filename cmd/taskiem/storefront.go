@@ -27,8 +27,7 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 	}
 	o := &storefront.Orders{Pool: e.pool, Vault: e.vault, InboxKey: key, Start: e.store.Start, Signal: e.store.DeliverSignalOnce, Logger: log.With("component", "storefront")}
 	o.Payments = &storefront.PaystackPayments{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
-	stock := &storefront.XenibaseStock{Pool: o.Pool, Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
-	o.Stock, o.Live = stock, stock
+	o.Live = &storefront.XenibaseCatalogue{Pool: o.Pool, Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}
 	// Accepting an order lowers the stock as movements (docs/spec/stock.md).
 	o.Moves = e.stock
 	o.Cancel = e.store.CancelRun

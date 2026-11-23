@@ -63,11 +63,34 @@ export interface SupplierPrices {
   updated_at: string;
 }
 
+/** What the business remembers of a linked supplier's item (what a
+ * business buys §6): how it is treated when ordered. */
 export interface ItemLink {
-  link: string;
-  item_id: string;
+  link_id: string;
   seller_item_id: string;
-  seller_item: string;
+  /** The supplier's name for it. */
+  name: string;
+  treatment: "record" | "stock" | "track";
+  /** For stock: the stock item it goes into, and its name. */
+  stock_item_id?: string;
+  stock_item?: string;
+  uses: number;
+  label_id?: string;
+  label?: string;
+  updated_by: string;
+  updated_at: string;
+}
+
+/** Which of our own items (a product, or a material) a remembered item
+ * goes into: the first counted by its stock item. */
+export function ownLinked<T extends { id: string; stock_item_id?: string }>(
+  links: ItemLink[] | undefined,
+  sellerItem: string,
+  own: T[] | undefined,
+): string | undefined {
+  const l = links?.find((x) => x.seller_item_id === sellerItem);
+  if (!l?.stock_item_id) return undefined;
+  return own?.find((x) => x.stock_item_id === l.stock_item_id)?.id;
 }
 
 /** A price as a buyer reads it: "₦45,000 a bag · at least 5". */

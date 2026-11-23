@@ -1,10 +1,11 @@
 // An order from a linked business (M5 part O; web/src/pages/ChatBuyer.tsx
 // OrderSheet, the Buyer design): their price list or their storefront,
 // picked with − and + (a product's sizes in a grid), the bag in pine at the
-// foot, then the review: which of our suppliers and items each is, a note,
-// Make an offer, and Place order or Ask for a quote. Placing drafts the
-// order at their prices and sends it, each step once however often it is
-// tried again.
+// foot, then the review: which of our suppliers they are, how each line is
+// treated (what a business buys §6: the question, asked of what is not
+// remembered), a note, Make an offer, and Place order or Ask for a quote.
+// Placing drafts the order at their prices and sends it, each step once
+// however often it is tried again.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -12,6 +13,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show ItemMemory, PutItemLinkRequest;
 import '../api/transport.dart';
 import '../kit/motion.dart';
 import '../kit/api_image.dart';
@@ -29,6 +31,7 @@ import 'buyer.dart';
 import 'chats.dart';
 import 'deal.dart' show dealKobo, offWords;
 import 'tools.dart' show categoryTag;
+import 'treat_line.dart';
 import 'words.dart' show naira;
 
 /// Where the sheet starts: an item in the bag, a past order's lines, a
@@ -82,6 +85,8 @@ class OrderSheet extends StatefulWidget {
 
 typedef _Load<T> = ({T? data, Object? error});
 
+int _int(Object? v) => (v as num?)?.toInt() ?? 0;
+
 class _OrderSheetState extends State<OrderSheet> {
   Transport get _t => widget.chats.auth.transport;
   String get _biz => widget.business;
@@ -106,7 +111,12 @@ class _OrderSheetState extends State<OrderSheet> {
   late bool _offering = widget.start?.offer ?? false;
   final _offer = TextEditingController();
   String? _who;
-  final Map<String, String> _mine = {};
+  // How each line is treated, by their item, as the person said it; and
+  // those to remember for next time.
+  final Map<String, Treat> _treat = {};
+  final Set<String> _remember = {};
+  final Set<String> _many = {};
+  late final TreatChoices _choices = TreatChoices(widget.chats.auth);
   String? _grid;
   bool _busy = false;
   bool _starting = false;
@@ -117,7 +127,6 @@ class _OrderSheetState extends State<OrderSheet> {
   // What placing has made so far: a retry does each step once.
   String? _madeSupplier;
   bool _linked = false;
-  final Map<String, String> _madeItems = {};
   final Map<String, Map<String, dynamic>> _madeOrders = {};
   final Map<String, String> _keys = {};
   final _rand = math.Random();
@@ -131,11 +140,18 @@ class _OrderSheetState extends State<OrderSheet> {
     for (final c in [_search, _offer]) {
       c.addListener(() => setState(() {}));
     }
+    _choices.addListener(_changed);
     _load();
+    unawaited(_choices.load());
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _choices.removeListener(_changed);
     for (final c in [_search, _note, _offer]) {
       c.dispose();
     }
@@ -220,17 +236,25 @@ class _OrderSheetState extends State<OrderSheet> {
     });
   }
 
-  String? _linkedTo(String sellerItem) => _links?.where((l) => l['seller_item_id'] == sellerItem).map((l) => l['item_id'] as String?).firstOrNull;
+  /// What the business remembers of their item, if anything.
+  ItemMemory? _memory(String sellerItem) {
+    final m = _links?.where((l) => l['seller_item_id'] == sellerItem).firstOrNull;
+    return m == null ? null : ItemMemory.fromJson(m);
+  }
 
-  /// Which of our items a line of theirs is: linked, chosen, the same name,
-  /// else a new one.
-  String _ownFor(PriceItem it) =>
-      _linkedTo(it.id) ??
-      _mine[it.id] ??
-      _own?.where((x) => x['variant_of'] == null && (x['name'] as String? ?? '').toLowerCase() == it.name.toLowerCase()).map((x) => x['id'] as String).firstOrNull ??
-      'new';
+  /// How a line of theirs is treated: as said here, as remembered, else as
+  /// Taskiem guesses.
+  Treat _treatOf(PriceItem it) {
+    final m = _memory(it.id);
+    return _treat[it.id] ?? (m != null ? Treat.ofMemory(m) : _choices.suggest(it.name));
+  }
 
-  PriceItem _lineProduct(PriceItem it) => it.variantOf == null ? it : (_items.where((x) => x.id == it.variantOf).firstOrNull ?? it);
+  /// Whether the line is sent with its treatment: not remembered, or
+  /// changed for this order.
+  bool _says(PriceItem it) {
+    final m = _memory(it.id);
+    return m == null || !_treatOf(it).same(Treat.ofMemory(m));
+  }
 
   Map<String, dynamic>? get _theirs => _suppliers?.where((x) => x['link_id'] == widget.link).firstOrNull;
   List<Map<String, dynamic>> get _unlinkedSuppliers => (_suppliers ?? const []).where((x) => x['link_id'] == null || x['link_id'] == '').toList();
@@ -275,13 +299,28 @@ class _OrderSheetState extends State<OrderSheet> {
       }
       final lines = <Map<String, Object?>>[];
       for (final l in bag.lines) {
-        final of = _lineProduct(l.item);
-        var itemId = _madeItems[of.id] ?? _ownFor(of);
-        if (itemId == 'new') {
-          final out = await _postOnce('/v1/stock/items', 'item-${of.id}', {'name': of.name, 'unit': of.unit, 'quantity': 0}) as Map<String, dynamic>;
-          itemId = _madeItems[of.id] = (out['item'] as Map)['id'] as String;
+        // A label typed as new is made first.
+        final tr = _treat[l.item.id] = await _choices.made(_treatOf(l.item));
+        if (_remember.contains(l.item.id) && _memory(l.item.id) != null) {
+          // Changed and remembered: from now on, for this order too.
+          await widget.chats.auth.api.putItemLink(
+            link: widget.link,
+            body: PutItemLinkRequest(
+              sellerItemId: l.item.id,
+              treatment: tr.how,
+              stockItemId: tr.how == 'stock' ? tr.stockItemId : null,
+              uses: tr.how == 'stock' ? tr.uses : null,
+              labelId: tr.labelId,
+              trackMany: tr.how == 'track' && l.quantity > 50 ? true : null,
+            ),
+          );
         }
-        lines.add({'seller_item_id': l.item.id, 'quantity': l.quantity, if (_linkedTo(of.id) == null) 'item_id': itemId});
+        lines.add({
+          'seller_item_id': l.item.id,
+          'quantity': l.quantity,
+          if (_says(l.item)) ...tr.fields(),
+          if (_many.contains(l.item.id)) 'track_many': true,
+        });
       }
       final deal = _offering ? {'offer': true, 'total_kobo': offerKobo} : <String, Object?>{};
       final what = '$lines|${_note.text.trim()}|$deal';
@@ -302,6 +341,29 @@ class _OrderSheetState extends State<OrderSheet> {
       }
       _finish(_offering ? 'Offer sent to $_biz: ${naira(offerKobo!)}' : 'Order sent to $_biz: ${naira(bag.total)}');
     } on ApiError catch (e) {
+      final code = treatCode(e);
+      final at = _int(e.body['line']);
+      final it = at < bag.lines.length ? bag.lines[at].item : null;
+      if (code == 'track_ask' && it != null && mounted) {
+        // Asked first: put them on, or just record them; then placed again.
+        setState(() => _busy = false);
+        final yes = await askTrackMany(context, e);
+        if (yes == null || !mounted) return;
+        setState(() {
+          if (yes) {
+            _many.add(it.id);
+          } else {
+            _treat[it.id] = _treatOf(it).copyWith(how: 'record');
+          }
+        });
+        return _place(bag, offerKobo);
+      }
+      if (code == 'track_too_many' && it != null && mounted) {
+        setState(() => _treat[it.id] = _treatOf(it).copyWith(how: 'record'));
+        showTkToast(context, treatRefusal(e));
+        if (mounted) setState(() => _busy = false);
+        return;
+      }
       if (mounted) setState(() => (_error = e.message, _busy = false));
     } on Offline {
       if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
@@ -358,14 +420,17 @@ class _OrderSheetState extends State<OrderSheet> {
     final now = DateTime.now();
     final updated = updatedAt != null && updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day ? 'updated today' : 'as they share them';
     final storefront = list?['name'] == storefrontPrices;
-    final loaded = _suppliers != null && _own != null && _links != null;
+    final loaded = _suppliers != null && _own != null && _links != null && _choices.ready;
+    final toStock = bag.lines.any((l) => _treatOf(l.item).how == 'stock');
     final stops = !loaded
         ? null
-        : _stockOff
-        ? 'Start keeping your stock on Taskiem to place the order.'
+        : _stockOff && toStock
+        ? 'Start keeping your stock on Taskiem to add to it.'
+        : bag.lines.any((l) => !_treatOf(l.item).ready)
+        ? 'Choose the stock item of each line added to stock.'
         : null;
     final canTrade = widget.chats.auth.can('chat.trade');
-    final stopped = _busy || !loaded || _stockOff || offerProblem.isNotEmpty;
+    final stopped = _busy || !loaded || stops != null || offerProblem.isNotEmpty;
     final place = TkCta(label: _busy ? 'Sending…' : (_offering ? 'Send offer' : 'Place order'), onTap: stopped ? null : () => _place(bag, offerKobo));
 
     return TkSheet(
@@ -423,7 +488,7 @@ class _OrderSheetState extends State<OrderSheet> {
 
   Widget _body(TkTokens t, Map<String, dynamic>? list, List<PriceItem> items, Bag bag, int? offerKobo, String offerProblem, bool storefront) {
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final stockSection = _stockOff && list != null
+    final stockSection = _stockOff && list != null && _review && bag.lines.any((l) => _treatOf(l.item).how == 'stock')
         ? Container(
             margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
             padding: const EdgeInsets.all(16),
@@ -434,7 +499,7 @@ class _OrderSheetState extends State<OrderSheet> {
                 Semantics(header: true, child: Text('First, keep your stock on Taskiem', style: tkText(size: 16, weight: 700, color: t.text))),
                 const SizedBox(height: 6),
                 Text(
-                  'What you order from $_biz is added to your stock when it comes, and they become one of your suppliers. Taskiem keeps your stock in your products table.',
+                  'What you add to stock from $_biz is counted in when it comes. Taskiem keeps your stock in your products table.',
                   style: tkText(size: 14, color: t.muted),
                 ),
                 const SizedBox(height: 10),
@@ -520,7 +585,6 @@ class _OrderSheetState extends State<OrderSheet> {
     }
     // The review.
     final theirs = _theirs;
-    final unlinkedProducts = {for (final l in bag.lines) _lineProduct(l.item).id: _lineProduct(l.item)}.values.where((it) => _linkedTo(it.id) == null).toList();
     return TkFormBody(
       children: [
         ?stockSection,
@@ -570,24 +634,27 @@ class _OrderSheetState extends State<OrderSheet> {
               ),
           ],
         ),
-        if (unlinkedProducts.isNotEmpty) ...[
-          Text('Which of your items is each? It is remembered for next time.', style: tkText(size: 14, color: t.muted)),
-          for (final it in unlinkedProducts)
-            TkKitField(
-              field: false,
-              label: it.name,
-              hint: soldInSizes(it) ? 'Its sizes and colours go into yours of the same size and colour; those it lacks are added to it.' : null,
-              child: _Select(
-                label: it.name,
-                value: _ownFor(it),
-                choices: [
-                  ('new', 'A new item of mine: ${it.name}'),
-                  for (final x in (_own ?? const []).where((x) => x['variant_of'] == null)) (x['id'] as String, x['name'] as String? ?? ''),
-                ],
-                onPick: (v) => setState(() => _mine[it.id] = v),
-              ),
-            ),
-        ],
+        // The question on each line (§6): asked of what is not remembered;
+        // a remembered one in a few words, changed for this order or
+        // remembered for the next.
+        if (_choices.ready)
+          for (final l in bag.lines)
+            TreatQuestion(
+              key: ValueKey('treat:${l.item.id}'),
+              item: l.item.name,
+              supplier: _biz,
+              quantity: l.quantity,
+              value: _treatOf(l.item),
+              choices: _choices,
+              asked: _memory(l.item.id) == null,
+              remember: _remember.contains(l.item.id),
+              onRemember: _memory(l.item.id) == null || !widget.chats.auth.can('storefront.manage')
+                  ? null
+                  : (on) => setState(() => on ? _remember.add(l.item.id) : _remember.remove(l.item.id)),
+              onChanged: _busy ? null : (v) => setState(() => _treat[l.item.id] = v),
+            )
+        else
+          const TkLoading(rows: 2, label: 'Loading your stock items and labels…'),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

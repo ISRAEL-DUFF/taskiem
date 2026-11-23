@@ -97,7 +97,7 @@ func reviewTables(proposed []TableSpec, existing []DataTable, doc []byte, check 
 		}
 		if stockTable(t) {
 			warns = append(warns, Warning{Kind: "table", Rule: RuleStockTable, Message: fmt.Sprintf("the table %q keeps items with a quantity: a shop's stock is Taskiem's own (the Stock page and stock@1), "+
-				"kept in its catalogue with every change a movement that explains the count; use stock@1 (list_items, low_items, adjust, receive, count, record_sale) instead of a table", t.Name)})
+				"kept on its stock items with every change a movement that explains the count; use stock@1 (list_items, low_items, adjust, receive, count, record_sale) instead of a table", t.Name)})
 		}
 		err := checkTableShape(t)
 		if err == nil && check != nil {

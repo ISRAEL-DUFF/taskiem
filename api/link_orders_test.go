@@ -34,7 +34,6 @@ func withLinkedOrders(w *world) {
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)},
 		Start:    w.env.Store.Start, Signal: w.env.Store.DeliverSignalOnce, Cancel: w.env.Store.CancelRun}
 	if w.srv.Stock != nil {
-		w.srv.Orders.Stock, _ = w.srv.Stock.Table.(storefront.Stock)
 		w.srv.Orders.Moves = w.srv.Stock
 	}
 	w.srv.Orders.TradeNotify = w.srv.TradeNotify
@@ -548,7 +547,7 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/send", nil)
 	buyer.must(400, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{"nope"}})
 	if p := buyer.must(200, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})["purchase"].(map[string]any); p["status"] != "confirmed" ||
-		p["lines"].([]any)[0].(map[string]any)["item_id"] != rice || p["lines"].([]any)[0].(map[string]any)["item"] != "Rice" {
+		p["lines"].([]any)[0].(map[string]any)["treatment"] != "stock" || p["lines"].([]any)[0].(map[string]any)["stock_item_id"] == nil {
 		t.Fatalf("confirmed: %v", p)
 	}
 	buyer.must(409, "POST", "/v1/stock/purchases/"+po3+"/confirm-proposed", map[string]any{"items": []string{rice}})

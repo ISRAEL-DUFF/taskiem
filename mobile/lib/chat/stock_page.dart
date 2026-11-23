@@ -1,29 +1,31 @@
 // A shop's stock (M6 part T; web/src/pages/StorefrontStock.tsx, lib/
 // stock.ts; docs/stock.md), opened from Stock's or Products' "Open stock":
 // today's sales (Record a sale, a terminal's sale said), what is low, each
-// item with Record stock, Change and its History, and every change kept.
+// stock item with what it is sold as (S2, docs/spec/what-a-business-buys.md
+// §4.5) and Record stock, Change and its History, and every change kept.
 
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../api/api.g.dart' show ListStockItemsResponse, StockItemRow;
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../kit/look.dart';
-import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection;
+import '../kit/mobile.dart' show TkChips, TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
 import 'chats.dart' show LinkSection;
-import 'sizes_forms.dart' show choicesOf, sizesOf, variantLabel, variantOf;
-import 'product_form.dart' show hasSizes, sizesLine, sizesWords;
+import 'product_form.dart' show sizesWords;
 import 'purchases_page.dart' show PurchasesCard, SuppliesPage;
+import 'stock_items.dart';
 import 'words.dart' show Tone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -46,21 +48,6 @@ String stockQuantity(int n, String? unit) {
 /// stock.ts stockLine: "48 cartons", "No count".
 String stockLine(Map<String, dynamic> it) => _int(it['stock']) == null ? 'No count' : stockQuantity(_int(it['stock'])!, it['unit'] as String?);
 
-/// stock.ts itemSub: its levels, cost, price and supplier.
-String itemSub(Map<String, dynamic> it) {
-  final unit = it['unit'] as String?;
-  final parts = <String>[
-    if (_int(it['reorder_level']) != null) 'reorder at ${_int(it['reorder_level'])}',
-    if (_int(it['target_level']) != null) 'up to ${_int(it['target_level'])}',
-    if (_int(it['cost_kobo']) != null) 'cost ${naira(_int(it['cost_kobo'])!)}',
-    if (_int(it['price_kobo']) != null) 'sells at ${naira(_int(it['price_kobo'])!)}',
-    if ((it['supplier'] as String? ?? '').isNotEmpty) it['supplier'] as String,
-    if (it['low'] == true && (_int(it['suggest']) ?? 0) > 0) 'order ${stockQuantity(_int(it['suggest'])!, unit)}',
-    if ((_int(it['waiting']) ?? 0) > 0) _int(it['waiting']) == 1 ? '1 change on its way' : '${_int(it['waiting'])} changes on their way',
-  ];
-  return parts.isEmpty ? 'No levels yet' : parts.join(' · ');
-}
-
 /// stock.ts REASON: why a change was made.
 const reasons = {
   'order': 'Order',
@@ -68,7 +55,6 @@ const reasons = {
   'received': 'Received',
   'adjustment': 'Adjusted',
   'count': 'Counted',
-  'outside': 'Changed in the table',
   'moved': 'Moved',
 };
 
@@ -82,9 +68,7 @@ String movementTitle(Map<String, dynamic> m) {
 /// stock.ts movementSub: when, the count it left, what from, why.
 String movementSub(Map<String, dynamic> m) {
   final parts = [whenLabel((m['done_at'] ?? m['created_at']) as String? ?? '')];
-  if (m['status'] == 'pending') {
-    parts.add(m['error'] != null ? 'not in the table yet: it is sent again' : 'on its way to the table');
-  } else if (m['before'] != null && m['after'] != null) {
+  if (m['before'] != null && m['after'] != null) {
     parts.add('${m['before']} → ${m['after']}');
   }
   if ((_int(m['short']) ?? 0) > 0) parts.add('${m['short']} more asked for than there was');
@@ -160,24 +144,6 @@ List<double> salesByHour(List<Map<String, dynamic>> sales) {
   return out;
 }
 
-/// StorefrontStock.tsx deskRows: each product once; one sold in sizes
-/// with their count together, its sizes after it.
-List<({Map<String, dynamic> it, Map<String, dynamic>? size, ({int count, int low, int? stock})? sizes})> deskRows(List<Map<String, dynamic>> items) {
-  final out = <({Map<String, dynamic> it, Map<String, dynamic>? size, ({int count, int low, int? stock})? sizes})>[];
-  for (final it in items) {
-    if (it['variant_of'] != null) continue;
-    if (!hasSizes(it)) {
-      out.add((it: it, size: null, sizes: null));
-      continue;
-    }
-    out.add((it: it, size: null, sizes: sizesLine(items, it['id'] as String)));
-    for (final z in sizesOf(items, it['id'] as String)) {
-      out.add((it: z, size: it, sizes: null));
-    }
-  }
-  return out;
-}
-
 class StockPage extends StatefulWidget {
   const StockPage({super.key, required this.auth, this.backLabel = 'Back'});
   final Auth auth;
@@ -191,6 +157,12 @@ class StockPage extends StatefulWidget {
 
 class _StockPageState extends State<StockPage> {
   Map<String, dynamic>? _view;
+
+  /// The stock items (GET /v1/stock/stock-items), every one: the filter
+  /// picks among them here, so the tiles keep the whole stock.
+  ListStockItemsResponse? _list;
+  String? _listError;
+  StockShow _show = StockShow.all;
   Map<String, dynamic>? _sales;
   List<Map<String, dynamic>>? _moves;
 
@@ -220,6 +192,12 @@ class _StockPageState extends State<StockPage> {
       if (!mounted) return;
       setState(() => (_view = v, _error = null));
       if (v['keeps_stock'] == true) {
+        try {
+          final l = await widget.auth.api.listStockItems();
+          if (mounted) setState(() => (_list = l, _listError = null));
+        } on Object catch (e) {
+          if (mounted) setState(() => _listError = _why(e));
+        }
         final s = await _t.send('GET', '/v1/stock/sales');
         if (mounted) setState(() => _sales = (s as Map?)?.cast<String, dynamic>());
         try {
@@ -275,8 +253,10 @@ class _StockPageState extends State<StockPage> {
     final v = _view;
     final keeps = v?['keeps_stock'] == true;
     final items = _maps(v?['items']);
-    final low = items.where((i) => i['low'] == true).toList();
-    final stuck = (v?['stuck'] as List?)?.length ?? 0;
+    final list = _list;
+    final rows = list?.items ?? const <StockItemRow>[];
+    final low = rows.where((r) => r.low).toList();
+    final value = list?.valueKobo ?? stockValue(items);
     final sales = _sales;
     final look = TkLook.of(context);
     return TkPageScreen(
@@ -288,14 +268,8 @@ class _StockPageState extends State<StockPage> {
         setState(() => _round++);
         await _reload();
       },
-      action: keeps
-          ? TkHeadButton(
-              icon: 'b-plus',
-              label: 'Add items',
-              primary: true,
-              onTap: () => _open((c) => _ItemForm(auth: widget.auth), 'Add an item'),
-            )
-          : null,
+      // Adding a stock item changes the business's tables: table.edit.
+      action: keeps && widget.auth.can('table.edit') ? TkHeadButton(icon: 'b-plus', label: 'Add something to count', primary: true, onTap: _add) : null,
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (v == null && _error == null) Text('Loading your stock…', style: tkHint(t)),
@@ -304,8 +278,8 @@ class _StockPageState extends State<StockPage> {
             title: 'Keep your stock here',
             children: [
               Text(
-                '${v['catalogue'] != null ? 'Taskiem keeps the count in your ${v['catalogue']} table, adding the columns it needs: stock, unit, cost price, reorder level and supplier.' : 'Taskiem makes a products table for your items and keeps the count there. You need no page for it.'}'
-                ' On WhatsApp, send add 50 cartons of Indomie at 8,500.',
+                '${v['catalogue'] != null ? 'Taskiem counts what you sell from your ${v['catalogue']} table, and what you only use, each change with its reason.' : 'Taskiem makes a products table for what you sell, and counts it and what you only use, each change with its reason. You need no page for it.'}'
+                ' On WhatsApp, send add 20 yards of ankara fabric.',
                 style: tkHint(t),
               ),
               const SizedBox(height: 12),
@@ -317,24 +291,18 @@ class _StockPageState extends State<StockPage> {
           ),
         if (keeps) ...[
           if (sales != null) ..._salesToday(t, sales, items),
-          if (stuck > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(color: look.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
-              child: Text(
-                '${stuck == 1 ? '1 change has' : '$stuck changes have'} not reached your ${v!['catalogue']} table yet. Taskiem sends ${stuck == 1 ? 'it' : 'them'} again by itself.',
-                style: tkText(size: 14, color: t.text),
-              ),
-            ),
+          // The stock items did not load: say so, never "nothing is low".
+          if (_listError case final e?) TkCallout(leading: TkSquare('b-alert', color: look.red), title: 'What you count did not load', sub: e, color: look.red, subLines: 3),
           TkHighlights(
             tiles: [
+              if (_listError == null)
               TkHighlight(
                 label: 'Low',
                 icon: 'b-box',
                 color: look.orangeInk,
                 trailing: low.isEmpty ? null : (low.length == 1 ? '1 item' : '${low.length} items'),
                 value: low.isEmpty ? 'None' : 'Order ${low.length}',
-                line: low.isEmpty ? 'nothing at its reorder level' : 'to reach your levels',
+                line: low.isEmpty ? 'nothing at its low level' : 'to reach your levels',
                 semanticsLabel: low.isEmpty ? 'Low on stock: none' : 'Low on stock: ${low.length}. Order them',
                 onTap: low.isEmpty ? null : () => _supplies(items),
               ),
@@ -342,9 +310,9 @@ class _StockPageState extends State<StockPage> {
                 label: 'At cost',
                 icon: 'b-bars',
                 color: look.tealInk,
-                value: compactNaira(stockValue(items)),
+                value: compactNaira(value),
                 line: 'on your shelves',
-                semanticsLabel: 'Your stock at cost: ${naira(stockValue(items))}',
+                semanticsLabel: 'Your stock at cost: ${naira(value)}',
               ),
               if (_lastCount case final c?)
                 TkHighlight(
@@ -359,46 +327,19 @@ class _StockPageState extends State<StockPage> {
                 ),
             ],
           ),
+          if (_listError == null)
           TkSection(
             title: 'Running low',
             count: low.length,
             trailing: low.isEmpty ? null : TkSmallButton(label: 'Order them', semantics: 'Order what is low', onPressed: () => _supplies(items)),
-            empty: items.any((i) => i['reorder_level'] != null)
-                ? 'Nothing is at or below its reorder level.'
-                : 'Give your items a reorder level, and they show here when they run low.',
-            children: [for (final it in low) _itemRow(look, it)],
+            empty: rows.any((r) => r.lowLevel != null)
+                ? 'Nothing is at or below its low level.'
+                : 'Give what you count a low level, and it shows here when it runs low.',
+            children: [for (final r in low) _stockRow(look, r, items)],
           ),
           PurchasesCard(key: const ValueKey('purchases'), auth: widget.auth, items: items, onChanged: _reload, round: _round),
           if (sales != null) ..._salesLists(t, sales, items),
-          TkSection(
-            key: const ValueKey('items'),
-            title: 'Your items',
-            empty: 'No items yet. Add what you sell, and how many you have.',
-            children: [
-              for (final r in deskRows(items))
-                r.size != null
-                    ? TkListRow(
-                        title: variantLabel(variantOf(r.it), choicesOf(r.size!)),
-                        sub: 'Of ${r.size!['name']}',
-                        icon: 'tag',
-                        amount: stockLine(r.it),
-                        status: r.it['low'] == true ? 'Low' : null,
-                        statusAccent: (fill: look.orange, ink: look.orangeInk),
-                        onTap: () => _itemActions(r.it, sized: true),
-                      )
-                    : (r.sizes != null
-                          ? TkListRow(
-                              title: r.it['name'] as String? ?? '',
-                              letters: r.it['name'] as String? ?? '',
-                              sub: '${sizesWords(r.sizes!.count)}${r.sizes!.low > 0 ? ' · ${r.sizes!.low} low' : ''}',
-                              amount: r.sizes!.stock != null ? '${r.sizes!.stock} in stock' : null,
-                              status: r.sizes!.low > 0 ? 'Low' : null,
-                              statusAccent: (fill: look.orange, ink: look.orangeInk),
-                              onTap: () => _itemActions(r.it, sizes: true),
-                            )
-                          : _itemRow(look, r.it)),
-            ],
-          ),
+          _stockItems(look, rows, items),
           _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
           TkPageCard(
             title: _item.isNotEmpty ? '${items.where((i) => i['id'] == _item).map((i) => i['name']).firstOrNull ?? 'The item'}: every change' : 'Every change',
@@ -445,7 +386,7 @@ class _StockPageState extends State<StockPage> {
                         tone: null,
                         title: movementTitle(m),
                         badge: reasons[m['reason']] ?? '',
-                        badgeTone: m['status'] == 'pending' ? Tone.warn : (m['reason'] == 'outside' ? Tone.info : Tone.muted),
+                        badgeTone: Tone.muted,
                         sub: movementSub(m),
                         actions: null,
                       ),
@@ -464,23 +405,109 @@ class _StockPageState extends State<StockPage> {
     await _reload();
   }
 
-  /// An item: its letters, its levels and price, how many are left (a bar
-  /// of it against its order-up-to level, or twice its reorder level), and
+  /// Add something to count: a stock item, asking Do you sell it?
+  Future<void> _add() async {
+    final name = await showTkSheet<String>(context, (_) => AddToCountSheet(auth: widget.auth));
+    if (name == null || !mounted) return;
+    showTkToast(context, '$name added');
+    await _reload();
+  }
+
+  /// What the forms of a stock item act on, as GET /v1/stock has it: the
+  /// product it is sold as (its row id), or the material itself; its
+  /// count, unit, cost, levels and supplier the stock item's.
+  Map<String, dynamic> _asItem(StockItemRow r, List<Map<String, dynamic>> items) {
+    final key = r.soldAs.isEmpty ? r.id : r.soldAs.first.productId;
+    final had = items.where((i) => i['id'] == key).firstOrNull;
+    return {
+      ...?had,
+      'id': key,
+      'name': had?['name'] ?? r.name,
+      'material': r.soldAs.isEmpty,
+      'stock': r.count,
+      'unit': r.unit,
+      'cost_kobo': r.costKobo,
+      'reorder_level': r.lowLevel,
+      'target_level': r.targetLevel,
+      'supplier': r.supplier,
+      'low': r.low,
+      'suggest': r.suggest,
+    };
+  }
+
+  /// What you count (§4.5): All, Sold or Not sold; each stock item with
+  /// what it is sold as, a product's sizes and colours under it.
+  Widget _stockItems(TkLook look, List<StockItemRow> rows, List<Map<String, dynamic>> items) {
+    final shown = rows.where((r) => shows(_show, r)).toList();
+    final none = switch (_show) {
+      StockShow.all => 'Nothing yet. Add what you sell, or what you only use, and how many you have.',
+      StockShow.sold => 'Nothing you count is sold yet.',
+      StockShow.notSold => 'Nothing here: fabric or packaging you only use shows here.',
+    };
+    return Column(
+      key: const ValueKey('items'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The head, the filter under it, then the rows (as Orders' lists).
+        const TkSection(title: 'What you count'),
+        TkChips<StockShow>(
+          label: 'Show',
+          padding: const EdgeInsets.only(bottom: 10),
+          chips: const [(StockShow.all, 'All'), (StockShow.sold, 'Sold'), (StockShow.notSold, 'Not sold')],
+          on: _show,
+          onPick: (s) => setState(() => _show = s),
+        ),
+        TkSection(
+          empty: _listError ?? (_list == null ? 'Loading…' : none),
+          children: [
+            for (final x in stockRows(shown))
+              if (x.item case final r?)
+                _stockRow(look, r, items)
+              else ...[
+                _groupRow(look, x.group!, x.of, items),
+                for (final r in x.of) _stockRow(look, r, items, size: true),
+              ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// A stock item: its letters, what it is sold as, its cost, levels and
+  /// supplier, how many there are (a bar of it against its level), and
   /// Low when it is; pressed, what can be done to it.
-  Widget _itemRow(TkLook look, Map<String, dynamic> it) {
-    final stock = _int(it['stock']);
-    final full = _int(it['target_level']) ?? ((_int(it['reorder_level']) ?? 0) * 2);
-    final low = it['low'] == true;
+  Widget _stockRow(TkLook look, StockItemRow r, List<Map<String, dynamic>> items, {bool size = false}) {
+    final words = size && r.soldAs.isNotEmpty ? variantWords(r.soldAs.first.variant) : '';
+    final facts = stockItemFacts(r);
     return TkListRow(
-      title: it['name'] as String? ?? '',
-      letters: it['name'] as String? ?? '',
-      sub: itemSub(it),
-      amount: stockLine(it),
-      status: low ? 'Low' : null,
+      title: words.isNotEmpty ? words : r.name,
+      letters: size ? null : r.name,
+      icon: size ? 'tag' : null,
+      sub: size ? ['Of ${r.groupName}', if (r.soldAs.isEmpty) 'Not sold', if (facts.isNotEmpty) facts].join(' · ') : stockItemSub(r),
+      amount: stockQuantity(r.count, r.unit),
+      status: r.low ? 'Low' : null,
       statusAccent: (fill: look.orange, ink: look.orangeInk),
-      level: stock == null || full <= 0 ? null : stock / full,
-      levelColor: low ? look.orange : look.lime,
-      onTap: () => _itemActions(it),
+      level: stockLevel(r),
+      levelColor: r.low ? look.orange : look.lime,
+      onTap: () => _itemActions(_asItem(r, items), sized: size),
+    );
+  }
+
+  /// A product sold in sizes and colours, over their stock items: how
+  /// many, how many low, and their count together.
+  Widget _groupRow(TkLook look, ({String id, String name}) g, List<StockItemRow> of, List<Map<String, dynamic>> items) {
+    final low = of.where((r) => r.low).length;
+    final units = of.map((r) => r.unit).toSet();
+    final total = of.fold(0, (n, r) => n + r.count);
+    final had = items.where((i) => i['id'] == g.id).firstOrNull;
+    return TkListRow(
+      title: g.name,
+      letters: g.name,
+      sub: 'Sold in ${sizesWords(of.length)}${low > 0 ? ' · $low low' : ''}',
+      amount: units.length == 1 ? stockQuantity(total, units.first) : '$total in stock',
+      status: low > 0 ? 'Low' : null,
+      statusAccent: (fill: look.orange, ink: look.orangeInk),
+      onTap: () => _itemActions({...?had, 'id': g.id, 'name': had?['name'] ?? g.name}, sizes: true),
     );
   }
 
@@ -508,7 +535,6 @@ class _StockPageState extends State<StockPage> {
         await _loadMoves();
     }
   }
-
 
   /// StorefrontStock.tsx SalesToday: the total in a pine hero with Record
   /// a sale, the terminal's sales with no items, then each sale.
@@ -645,42 +671,36 @@ Widget pageField(String label, TextEditingController c, {String? hint, String? p
   child: TkTextBox(controller: c, hint: placeholder, money: money, digits: number ? 7 : null, max: max),
 );
 
-/// StorefrontStock.tsx ItemModal: an item added with how many there are,
-/// or its name, unit, prices, levels and supplier changed.
+/// StorefrontStock.tsx ItemModal: a stock item's name, unit, cost, levels
+/// and supplier changed, and the selling price of the product it is sold
+/// as (a material has none). Adding is Add something to count.
 class _ItemForm extends StatefulWidget {
-  const _ItemForm({required this.auth, this.item});
+  const _ItemForm({required this.auth, required this.item});
   final Auth auth;
-  final Map<String, dynamic>? item;
+  final Map<String, dynamic> item;
 
   @override
   State<_ItemForm> createState() => _ItemFormState();
 }
 
 class _ItemFormState extends State<_ItemForm> {
-  Map<String, dynamic>? get _it => widget.item;
-  late final _name = _c(_it?['name'] as String? ?? '');
-  final _quantity = TextEditingController();
-  late final _unit = _c(_it?['unit'] as String? ?? '');
-  late final _cost = _c(_int(_it?['cost_kobo']) == null ? '' : feeInput(_int(_it!['cost_kobo'])!));
-  late final _price = _c(_int(_it?['price_kobo']) == null ? '' : feeInput(_int(_it!['price_kobo'])!));
-  late final _reorder = _c(_int(_it?['reorder_level'])?.toString() ?? '');
-  late final _target = _c(_int(_it?['target_level'])?.toString() ?? '');
-  late final _supplier = _c(_it?['supplier'] as String? ?? '');
-  late final _key = uuid4();
+  Map<String, dynamic> get _it => widget.item;
+  bool get _material => _it['material'] == true;
+  late final _name = _c(_it['name'] as String? ?? '');
+  late final _unit = _c(_it['unit'] as String? ?? '');
+  late final _cost = _c(_int(_it['cost_kobo']) == null ? '' : feeInput(_int(_it['cost_kobo'])!));
+  late final _price = _c(_int(_it['price_kobo']) == null ? '' : feeInput(_int(_it['price_kobo'])!));
+  late final _reorder = _c(_int(_it['reorder_level'])?.toString() ?? '');
+  late final _target = _c(_int(_it['target_level'])?.toString() ?? '');
+  late final _supplier = _c(_it['supplier'] as String? ?? '');
   bool _busy = false;
   String? _error;
 
   TextEditingController _c(String text) => TextEditingController(text: text)..addListener(() => setState(() {}));
 
   @override
-  void initState() {
-    super.initState();
-    _quantity.addListener(() => setState(() {}));
-  }
-
-  @override
   void dispose() {
-    for (final c in [_name, _quantity, _unit, _cost, _price, _reorder, _target, _supplier]) {
+    for (final c in [_name, _unit, _cost, _price, _reorder, _target, _supplier]) {
       c.dispose();
     }
     super.dispose();
@@ -688,18 +708,15 @@ class _ItemFormState extends State<_ItemForm> {
 
   /// stock.ts itemProblem.
   String? get _problem {
-    final adding = _it == null;
     if (_name.text.trim().isEmpty) return 'Give the item a name.';
     if (_name.text.trim().length > 120) return 'A name is up to 120 characters.';
-    final q = _whole(_quantity.text);
-    if (adding && _quantity.text.trim().isNotEmpty && !(q != null && q <= 1000000)) return 'How many there are is a whole number, like 50.';
     if (_unit.text.trim().length > 30) return 'A unit is one word, like bag or carton.';
     if (_cost.text.trim().isNotEmpty && feeKobo(_cost.text) == null) return 'The cost price is an amount, like 8500.';
     if (_price.text.trim().isNotEmpty && feeKobo(_price.text) == null) return 'The selling price is an amount, like 8500.';
-    if (_reorder.text.trim().isNotEmpty && _whole(_reorder.text) == null) return 'The reorder level is a whole number.';
+    if (_reorder.text.trim().isNotEmpty && _whole(_reorder.text) == null) return 'The low level is a whole number.';
     if (_target.text.trim().isNotEmpty && _whole(_target.text) == null) return 'The level to order up to is a whole number.';
     if (_reorder.text.trim().isNotEmpty && _target.text.trim().isNotEmpty && _whole(_target.text)! <= _whole(_reorder.text)!) {
-      return 'Order up to more than the reorder level.';
+      return 'Order up to more than the low level.';
     }
     return null;
   }
@@ -708,43 +725,24 @@ class _ItemFormState extends State<_ItemForm> {
     setState(() => (_busy = true, _error = null));
     final it = _it;
     try {
-      if (it == null) {
-        // stock.ts addRequest.
-        await widget.auth.transport.send(
-          'POST',
-          '/v1/stock/items',
-          body: {
-            'name': _name.text.trim(),
-            'quantity': _quantity.text.trim().isEmpty ? 0 : _whole(_quantity.text),
-            'unit': _unit.text.trim(),
-            if (_cost.text.trim().isNotEmpty) 'cost_kobo': feeKobo(_cost.text),
-            if (_price.text.trim().isNotEmpty) 'price_kobo': feeKobo(_price.text),
-            if (_reorder.text.trim().isNotEmpty) 'reorder_level': _whole(_reorder.text),
-            if (_target.text.trim().isNotEmpty) 'target_level': _whole(_target.text),
-            'supplier': _supplier.text.trim(),
-          },
-          headers: {'Idempotency-Key': _key},
-        );
-      } else {
-        // stock.ts changeRequest: what changed only.
-        String was(String k) => switch (k) {
-          'cost_kobo' || 'price_kobo' => _int(it[k]) == null ? '' : feeInput(_int(it[k])!),
-          'reorder_level' || 'target_level' => _int(it[k])?.toString() ?? '',
-          _ => it[k] as String? ?? '',
-        };
-        final out = <String, Object?>{
-          if (_name.text.trim() != it['name']) 'name': _name.text.trim(),
-          if (_unit.text.trim() != was('unit')) 'unit': _unit.text.trim(),
-          if (_supplier.text.trim() != was('supplier')) 'supplier': _supplier.text.trim(),
-          if (_cost.text.trim() != was('cost_kobo') && _cost.text.trim().isNotEmpty) 'cost_kobo': feeKobo(_cost.text),
-          if (_price.text.trim() != was('price_kobo') && _price.text.trim().isNotEmpty) 'price_kobo': feeKobo(_price.text),
-          if (_reorder.text.trim() != was('reorder_level') && _reorder.text.trim().isNotEmpty) 'reorder_level': _whole(_reorder.text),
-          if (_target.text.trim() != was('target_level') && _target.text.trim().isNotEmpty) 'target_level': _whole(_target.text),
-        };
-        await widget.auth.transport.send('PATCH', '/v1/stock/items/${it['id']}', body: out);
-      }
+      // stock.ts changeRequest: what changed only.
+      String was(String k) => switch (k) {
+        'cost_kobo' || 'price_kobo' => _int(it[k]) == null ? '' : feeInput(_int(it[k])!),
+        'reorder_level' || 'target_level' => _int(it[k])?.toString() ?? '',
+        _ => it[k] as String? ?? '',
+      };
+      final out = <String, Object?>{
+        if (_name.text.trim() != it['name']) 'name': _name.text.trim(),
+        if (_unit.text.trim() != was('unit')) 'unit': _unit.text.trim(),
+        if (_supplier.text.trim() != was('supplier')) 'supplier': _supplier.text.trim(),
+        if (_cost.text.trim() != was('cost_kobo') && _cost.text.trim().isNotEmpty) 'cost_kobo': feeKobo(_cost.text),
+        if (!_material && _price.text.trim() != was('price_kobo') && _price.text.trim().isNotEmpty) 'price_kobo': feeKobo(_price.text),
+        if (_reorder.text.trim() != was('reorder_level') && _reorder.text.trim().isNotEmpty) 'reorder_level': _whole(_reorder.text),
+        if (_target.text.trim() != was('target_level') && _target.text.trim().isNotEmpty) 'target_level': _whole(_target.text),
+      };
+      await widget.auth.transport.send('PATCH', '/v1/stock/items/${it['id']}', body: out);
       if (!mounted) return;
-      showTkToast(context, it == null ? '${_name.text.trim()} added' : 'Saved');
+      showTkToast(context, 'Saved');
       Navigator.of(context).pop(true);
     } on ApiError catch (e) {
       if (mounted) setState(() => (_error = e.message, _busy = false));
@@ -755,33 +753,25 @@ class _ItemFormState extends State<_ItemForm> {
 
   @override
   Widget build(BuildContext context) {
-    final adding = _it == null;
     return TkModalForm(
-      saveWords: adding ? 'Add the item' : 'Save',
+      saveWords: 'Save',
       busy: _busy,
       problem: _name.text.isEmpty ? null : _problem,
       error: _error,
       save: _problem == null ? _save : null,
       children: [
         pageField('Name', _name, max: 120),
-        if (adding)
-          pageField(
-            'How many you have',
-            _quantity,
-            hint: 'Recorded as goods received, so the count is explained from the start.',
-            placeholder: '50',
-            number: true,
-          ),
-        pageField('Unit', _unit, max: 30, hint: 'One word: bag, carton, piece. Leave it empty to count pieces.', placeholder: 'carton'),
+        pageField('Unit', _unit, max: 30, hint: 'One word: bag, carton, yard. Leave it empty to count pieces.', placeholder: 'carton'),
         pageField('Cost price (₦)', _cost, hint: 'What you pay for one, for the value of your stock and what you lose.', placeholder: '8500', money: true),
-        pageField(
-          'Selling price (₦)',
-          _price,
-          hint: 'Shown on your page once it is published. Without one, the item is not shown.',
-          placeholder: '9500',
-          money: true,
-        ),
-        pageField('Reorder at', _reorder, hint: 'When the count is this or less, the item is low and you are told each morning.', placeholder: '10', number: true),
+        if (!_material)
+          pageField(
+            'Selling price (₦)',
+            _price,
+            hint: 'Shown on your page once it is published. Without one, the item is not shown.',
+            placeholder: '9500',
+            money: true,
+          ),
+        pageField('Low at', _reorder, hint: 'When the count is this or less, it is low and you are told each morning.', placeholder: '10', number: true),
         pageField('Order up to', _target, hint: 'What to order a low item back up to.', placeholder: '50', number: true),
         pageField('Supplier', _supplier, placeholder: 'Dangote Depot', max: 120),
       ],
@@ -1265,7 +1255,7 @@ class _CountsCardState extends State<_CountsCard> {
         if (_shrinkError != null) TkErrorBox(_shrinkError!),
         if (s != null)
           Text(
-            'This month: ${shrinkLine(s)}.${worst != null ? ' Lost most: ${worst['item']} (${worst['lost']}${(_int(worst['lost_kobo']) ?? 0) > 0 ? ', ${naira(_int(worst['lost_kobo'])!)}' : ''}).' : ''}',
+            'This month: ${shrinkLine(s).replaceAll(RegExp(r'\.$'), '')}.${worst != null ? ' Lost most: ${worst['item']} (${worst['lost']}${(_int(worst['lost_kobo']) ?? 0) > 0 ? ', ${naira(_int(worst['lost_kobo'])!)}' : ''}).' : ''}',
             style: tkHint(t),
           ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),

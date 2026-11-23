@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/spend"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -368,7 +369,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, seller).Scan(&name); err != nil {
 			return err
 		}
-		lines, err := json.Marshal(x.Lines)
+		lines, err := billLines(ctx, tx, seller, x)
 		if err != nil {
 			return err
 		}
@@ -397,8 +398,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if _, err := links.EnterTx(ctx, tx, link, "link.bill", detail, links.Actor{Type: "system", ID: "link-mirror"}); err != nil {
 			return err
 		}
-		created, err = links.MirrorBillTx(ctx, tx, buyer, bill)
-		return err
+		if created, err = links.MirrorBillTx(ctx, tx, buyer, bill); err != nil {
+			return err
+		}
+		// Its stock lines take Stock bought, as an order paid by hand
+		// does, so the spending report does not depend on that.
+		return spend.BillLabelsTx(ctx, tx, buyer, link, bill.Lines, "system:link-mirror")
 	})
 	if errors.As(err, new(*links.OtherOffError)) {
 		// The buyer has turned Money off: nothing crosses, and the invoice
@@ -1125,4 +1130,65 @@ func (s *Server) settleInvoiceQuery(w http.ResponseWriter, r *http.Request) {
 		s.tellNotice(r.Context(), buyer, p.TenantID, n, "/bills")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"number": number, "settled": true})
+}
+
+// billLines are an invoice's lines as its bill holds them. An invoice
+// raised for a linked order also says, on each line it raised from one of
+// the order's, the seller's own item (seller_item_id) and the buyer's
+// order (purchase_id), read here in the seller's scope: the buyer's
+// expense is split by them (engine/spend, what a business buys §8). A
+// line matched to none (an extra, a delivery charge, an amendment) says
+// neither and is Not labelled.
+func billLines(ctx context.Context, tx pgx.Tx, seller uuid.UUID, x invoicing.Invoice) (json.RawMessage, error) {
+	var purchase uuid.UUID
+	var raw []byte
+	var ordered []links.OrderLine
+	err := tx.QueryRow(ctx, `SELECT source_id, lines FROM link_orders WHERE tenant_id = $1 AND invoice_id = $2`, seller, x.ID).Scan(&purchase, &raw)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(raw, &ordered); err != nil {
+			return nil, err
+		}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return nil, err
+	}
+	out, err := matchBillLines(x.Lines, ordered, purchase)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(out)
+}
+
+// matchBillLines are an invoice's lines, each matched to the order line it
+// was raised from (raiseOrderInvoice: the item, with its unit, at the
+// agreed price; each order line once) naming that line's seller item and
+// the buyer's order, purchase.
+func matchBillLines(lines []invoicing.Line, ordered []links.OrderLine, purchase uuid.UUID) ([]map[string]any, error) {
+	out := make([]map[string]any, len(lines))
+	used := make([]bool, len(ordered))
+	for i, l := range lines {
+		raw, err := json.Marshal(l)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(raw, &out[i]); err != nil {
+			return nil, err
+		}
+		if l.Kind != "" || l.Amendment != "" {
+			continue
+		}
+		for j, o := range ordered {
+			d := o.Item
+			if o.Unit != "" {
+				d += " (" + o.Unit + ")"
+			}
+			if used[j] || o.ItemID == "" || d != l.Description || o.PriceKobo != l.UnitKobo {
+				continue
+			}
+			used[j] = true
+			out[i]["seller_item_id"], out[i]["purchase_id"] = o.ItemID, purchase
+			break
+		}
+	}
+	return out, nil
 }

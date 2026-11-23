@@ -172,7 +172,7 @@ func (a *actions) receive(ctx context.Context, req connector.Request) (connector
 		if err != nil {
 			return connector.Response{}, classify(err)
 		}
-		return connector.Response{Output: map[string]any{"item_id": id, "reason": stock.Received, "status": "done", "change": n, "reference": x.Reference,
+		return connector.Response{Output: map[string]any{"item_id": id, "reason": stock.Received, "change": n, "reference": x.Reference,
 			"purchase": PurchaseOut(x)}}, nil
 	}
 	return a.move(ctx, req, stock.Received, &n, nil)
@@ -414,11 +414,20 @@ func (a *actions) sell(ctx context.Context, req connector.Request) (connector.Re
 // ItemOut is an item as workflows read it.
 func ItemOut(it stock.Item) map[string]any {
 	out := map[string]any{"id": it.ID, "name": it.Name, "low": it.Low()}
+	if it.StockItemID != "" {
+		out["stock_item_id"] = it.StockItemID
+	}
+	if it.Material {
+		out["material"] = true
+	}
 	for k, v := range map[string]*int64{"stock": it.Stock, "price_kobo": it.PriceKobo, "cost_kobo": it.CostKobo, "reorder_level": it.Reorder,
 		"target_level": it.Target} {
 		if v != nil {
 			out[k] = *v
 		}
+	}
+	if it.Uses > 0 {
+		out["uses"] = it.Uses
 	}
 	if it.Unit != "" {
 		out["unit"] = it.Unit
@@ -434,7 +443,7 @@ func ItemOut(it stock.Item) map[string]any {
 
 // MovementOut is a movement as workflows read it.
 func MovementOut(m stock.Movement) map[string]any {
-	out := map[string]any{"id": m.ID.String(), "item_id": m.ItemID, "item": m.Item, "reason": m.Reason, "status": m.Status}
+	out := map[string]any{"id": m.ID.String(), "item_id": m.ItemID, "item": m.Item, "reason": m.Reason}
 	for k, v := range map[string]*int64{"change": m.Change, "before": m.Before, "after": m.After} {
 		if v != nil {
 			out[k] = *v
@@ -449,11 +458,7 @@ func MovementOut(m stock.Movement) map[string]any {
 	if m.Reference != "" {
 		out["reference"] = m.Reference
 	}
-	at := m.CreatedAt
-	if m.DoneAt != nil {
-		at = *m.DoneAt
-	}
-	out["at"] = at.UTC().Format(time.RFC3339)
+	out["at"] = m.CreatedAt.UTC().Format(time.RFC3339)
 	return out
 }
 

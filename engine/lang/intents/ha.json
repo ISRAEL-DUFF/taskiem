@@ -137,7 +137,10 @@
     ],
     "expense": [
       "na kashe",
-      "kashewa"
+      "kashewa",
+      "na saya",
+      "mun saya",
+      "an saya"
     ],
     "cash_in": [
       "kuɗi ya shigo"
@@ -231,5 +234,27 @@
   ],
   "for_words": [
     "don"
-  ]
+  ],
+  "treat": {
+    "record": [
+      "kawai ka rubuta",
+      "rubuta shi kawai"
+    ],
+    "stock": [
+      "saka a cikin kaya",
+      "ƙara a kaya"
+    ],
+    "track": [
+      "bi diddigin sa",
+      "ka riƙe kowanne"
+    ],
+    "another": [
+      "wani",
+      "wata alama"
+    ],
+    "no_label": [
+      "babu alama",
+      "ba alama"
+    ]
+  }
 }

@@ -154,8 +154,25 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   count and what went missing. Running low, each item with a bar of what is
   left against its level, and Order them. One row to Supplies (how many are
   open, how many need you). The terminal's sales to say, today's sales,
-  your items (a row opens Record stock, Change, History), the counts and
-  every change.
+  What you count (a row opens Record stock, Change, History), the counts
+  and every change.
+- **What you count** (S2, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §4.5). Its head, the filter All, Sold,
+  Not sold as `TkChips` under it, then the stock items on one panel: each
+  a row with its letters, its count and unit at the end, a Low pill and a
+  level bar, and under its name what it is **Sold as** (a product using
+  more than one a sale says so: "Malt, pack of 6 (6 a sale)") or **Not
+  sold**, then its cost, levels and supplier. A product's sizes and
+  colours are one row with their count together, and each size a tag row
+  under it ("Of Ankara shirt"). The head's + is **Add something to
+  count**, a form sheet that asks **Do you sell it?** first (two radio
+  rows), then the name, how many and the unit, the selling price only
+  for Yes, and the cost, levels and supplier.
+- **Counted by**, on a product's sheet, a form row above In stock: its
+  stock item, how many a sale uses and its count, with Change opening a
+  form sheet (the stock item as a pick box over `pickOneOf`, how many a
+  sale uses, Count by none in red). A product in sizes and colours says
+  why it cannot be chosen there.
 - **Supplies** (from Stock and from Orders' "To suppliers"). Open, Received
   or Cancelled. A top card of what is on order and still owed, the orders as
   a flow (draft, sent, confirmed, coming in; violet, blue, teal, orange),
@@ -171,6 +188,70 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   confirmed, delivered, received), All came or Not all came; the supplier on
   one card with what they last said; the lines with their amounts and the
   total; Cancel as a row.
+- **The question on a purchase line** (U2a, 22 November 2026; [what a
+  business buys](what-a-business-buys.md) §6; `chat/treat_line.dart`). A
+  card per line: "**Sewing machine** from **Singer Ltd**", then "How should
+  we treat it?" muted; Just record it, Add to stock and Keep track of it as
+  choice rows (`TkListRow(chevron: false)` with an icon square and the
+  tick, `TkTick`, at the end; radios until the PR review of 23 November),
+  each with a short line; once confirmed the card shuts to its few words; for Add
+  to stock a pick box of the stock item (`pickOneOf`, Make a new one first,
+  which opens a form sheet asking **Do you sell it?**); Label as a pick box.
+  The label's sheet: a search box to type or pick, Make this label for a
+  new name typed, Your labels by use, Suggested, and No label. A line
+  remembered is one card in a few words ("Add to stock: Rice · Packaging")
+  with Change, which opens it with **Remember for next time** as a switch;
+  a line that came says "it came, so it stays". The cards stand on the
+  ground under a heading (`TreatSection`), not on a panel. Tracking more
+  than 50 asks in a sheet: "Put 500 nylon bags on Things we have, one row
+  each?", Just record them or Put them on.
+- **A line's mark** on an order to a supplier and on a bill (`LineMark`):
+  under its name, To stock (teal, a box) or Things we have (violet, #) as a
+  small pill, then its label, or Not labelled muted.
+- **What you buy from them** (Suppliers, a supplier's row): their
+  remembered items as rows, each with its treatment's square (recorded
+  blue, stock teal, tracked violet) and "Keep track of it · Machines";
+  a row opens a form sheet with the question, Save, and Forget in red.
+- **Labels** (Money, under Settings, for those who manage money): a callout
+  that renaming or merging changes reports, not records; the labels by use
+  as rows with their letters; a row opens Rename and Merge into another
+  label (`pickAction`), Merge asking which label (`pickOneOf`), then sure.
+- **Things we have** (U3, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §5.3; `chat/things_page.dart`), from
+  Money's Go to (a violet # square). The head's + is **Add something we
+  have**; chips Newest first and By label under it. A top card: "What we
+  still have" in violet, the total at cost large, how many, and a split bar
+  by label (three and Other). The rows have their letters, the label (or
+  Not labelled), from whom and the day it came, the cost at the end, and a
+  status pill only when no longer had. By label: a section per label with
+  its total at the title's end. **Show those no longer had** is a small
+  button under the list; they come in a section of their own.
+- **One of Things we have**: its name as a 22 px title; a top card of what
+  it cost, its status in the eyebrow's end, when it came and from whom (and
+  when it was sold, broken… in the status's accent). **Status** as five
+  radio rows (Have, Sold, Broken, Given away, Gone); **Details** (Label,
+  Serial number, Warranty ends, Note) and **Where it came from** (From, the
+  order, which opens, or Added by hand) as square-icon rows. Sold opens a
+  form sheet: Sold for (optional), Paid in cash or by transfer once a price
+  is typed; without `invoice.manage` a blue callout says a price is money
+  in, and it is marked sold without one. Without `table.edit`, a lock
+  callout and nothing pressable. A failed change is a toast.
+- **Add something we have**: a form sheet (name, what it cost, when it
+  came, from whom over `pickOneOf`, the label through the line's label
+  sheet), then "If you have them" (serial, warranty ends, note).
+- **An order's tracked lines** link to their rows: under What you ordered
+  (an order to a supplier) and on a bill, one row "On Things we have"
+  opening the list of that order's rows.
+- **Spending by label** (§5.4; `chat/spending.dart`). On Money, a section
+  for the period after In this period: the split bar (Running costs, Bought
+  to sell or make with, Bought to keep, with their amounts), then the
+  three labels spent on most, See all opening the page. The page: month
+  chips (This month and five before); a top card of profit (lime, red when
+  under) with "Bought to keep left out", what made it, and the split bar
+  in shares; tiles Running costs (orange), To sell or make with (teal) and
+  a wide Bought to keep (violet, "left out of profit"); then By label, each
+  with its amount and what of it was bought to sell or keep, Not labelled
+  with a # tile.
 
 ### Cards in a conversation
 

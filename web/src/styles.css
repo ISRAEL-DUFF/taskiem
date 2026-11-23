@@ -2472,3 +2472,36 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .bank-field { display: grid; grid-template-columns: 1fr; gap: 8px; }
 @media (min-width: 480px) { .bank-field { grid-template-columns: 3fr 2fr; } }
 .file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* The question on a line bought (what a business buys §6, TreatLine.tsx). */
+fieldset.treat, div.treat { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 4px; margin: 0 0 12px; min-width: 0; background: var(--panel); color: var(--text); text-align: left; }
+/* The heading inside the box, at its top (a float takes a legend off the border). */
+fieldset.treat > legend { float: left; width: 100%; padding: 0; margin: 0 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+fieldset.treat > legend + * { clear: both; }
+.treat .block { display: block; }
+.treat .treat-ask { display: block; font-weight: 600; margin-top: 2px; }
+div.treat-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 12px; }
+.treat-compact p { margin: 0; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.treat-now { display: block; color: var(--muted); font-size: 13px; }
+.treat-compact .hint { display: flex; align-items: center; gap: 4px; }
+.treat-compact .hint svg, .treat-went svg { width: 14px; height: 14px; }
+.treat-more { margin-top: 6px; }
+.treat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -8px 0 12px; }
+.treat-chips button { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font-size: 13px; font-weight: 600; box-shadow: none; }
+.treat-chips button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #ffffff; }
+:root[data-theme="dark"] .treat-chips button[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .treat-chips button[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: var(--brand-dark-text); }
+}
+.treat > button.small { margin: 0 0 10px; }
+.treat-problem { color: var(--warn); }
+.treat-ask-box p { margin: 0 0 8px; }
+.treat-mark { display: block; color: var(--muted); font-size: 12.5px; }
+.treat-went { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
+.things-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 18px 0 8px; font-size: 16px; }
+.things-head .hint { font-weight: 500; font-size: 13px; }
+.spending-sum { margin-bottom: 12px; }
+.spending-sum .hint { display: block; font-size: 12.5px; }
+.spending-profit { margin: 12px 0 0; }
+.spending-profit .hint { display: block; }

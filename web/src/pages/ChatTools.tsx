@@ -29,6 +29,7 @@ import type { StockItem } from "../lib/stock";
 import type { Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
+  CountAdd,
   OrderView,
   PriceListForm,
   ProductAdd,
@@ -533,6 +534,8 @@ function Detail({
       <InvoiceAdd onSaved={onSaved} onCancel={onCancel} />
     ) : tool === "money" ? (
       <MoneyAdd onSaved={onSaved} onCancel={onCancel} />
+    ) : tool === "stock" ? (
+      <CountAdd onSaved={onSaved} onCancel={onCancel} />
     ) : (
       <ProductAdd onSaved={onSaved} />
     );
@@ -637,6 +640,7 @@ const ADDS: Partial<Record<ToolKey, string>> = {
   services: "Add service",
   invoices: "New invoice",
   money: "Add cash or expense",
+  stock: "Add something to count",
 };
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's
