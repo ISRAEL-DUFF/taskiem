@@ -32,6 +32,7 @@ import (
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
+	payconn "github.com/israel-duff/taskiem/connectors/payments"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
@@ -103,6 +104,8 @@ type config struct {
 	SecureCookies, TrustProxy, Signup bool
 	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
 	AppMinVersion string
+	// SupportEmail is where people write to Taskiem (TASKIEM_SUPPORT_EMAIL).
+	SupportEmail string
 	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
 	// a chat link's page and the shared number's answer to a customer.
 	AppGetURL string
@@ -505,6 +508,7 @@ func loadConfig() (config, error) {
 		TrustProxy:         flag("TASKIEM_TRUST_PROXY", false),
 		Signup:             flag("TASKIEM_ALLOW_SIGNUP", false),
 		AppMinVersion:      os.Getenv("TASKIEM_APP_MIN_VERSION"),
+		SupportEmail:       strings.TrimSpace(os.Getenv("TASKIEM_SUPPORT_EMAIL")),
 		AppGetURL:          os.Getenv("TASKIEM_APP_GET_URL"),
 		UpdateChatTemplate: flag("TASKIEM_WA_UPDATE_CHAT_TEMPLATE", false),
 		Queues:             strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
@@ -839,6 +843,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
 	schoolOps := &schconn.Late{}
+	payOps := &payconn.Late{}
 	copts := cfg.Connectors
 	copts.Invoices = invoiceOps
 	copts.Schools = schoolOps
@@ -846,6 +851,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Riders = riderOps
 	bills := &links.Payments{Pool: pool}
 	copts.Bills = bills
+	copts.Payments = payOps
 	copts.Link = linkOps
 	copts.Stock = stockOps
 	copts.Forms = formOps
@@ -877,7 +883,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
 		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL,
 			WakeInterval: cfg.Wake.Interval, WakeInTx: cfg.Wake.InTx}}
-	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
+	// A business's saved things its workflows read, at each run's start
+	// (saved objects S3).
+	e.store.Saved = api.SavedResolver(e.store)
+	e.stock = &stock.Stock{Pool: pool, Catalogue: &storefront.XenibaseCatalogue{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
@@ -979,6 +988,9 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// payments connection, its prod credentials.
 	e.invoices.Rails = &invoicing.RegistryRails{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log, Loopback: connectorLoopback(reg, log)}}
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
+	// Payments' own records, for the pay-person workflow and a workflow's
+	// payments@1 prepare (P1), with the accounts people are paid from.
+	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault))
 	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and
@@ -1259,7 +1271,7 @@ func serve(ctx context.Context, args []string) error {
 		// Checking a key before it is saved calls the connector as a run
 		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
-			AllowSignup: cfg.Signup, AppMinVersion: cfg.AppMinVersion, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
+			AllowSignup: cfg.Signup, AppMinVersion: cfg.AppMinVersion, SupportEmail: cfg.SupportEmail, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
 			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
 		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
@@ -1477,8 +1489,8 @@ func serve(ctx context.Context, args []string) error {
 		// The money log, copied to each business's kept money_log table.
 		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
-		// Stock movements still on their way to the catalogue table, and
-		// done ones copied to the kept stock_movements table.
+		// Stock movements and stock items copied to the kept stock_movements
+		// and stock_items tables, and sales matched to their money.
 		stockSweep := &stock.Sweeper{Stock: e.stock, Logger: log.With("component", "stock"),
 			Mirror: &stock.Mirror{Stock: e.stock, Tables: e.tables(), Logger: log.With("component", "stock"),
 				Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}}
@@ -1871,7 +1883,6 @@ func (e *engine) chat(srv *api.Server) {
 	srv.Stock = e.stock
 	if e.purchases != nil {
 		srv.Purchases = e.purchases
-		e.purchases.Cost = srv.StockCost
 	}
 	if e.forms != nil {
 		keys := e.forms.Keys

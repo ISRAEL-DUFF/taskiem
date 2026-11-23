@@ -1,7 +1,7 @@
 name: taskiem
 description: "Taskiem's chat as a phone app (docs/spec/mobile-app.md)."
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ^3.13.7
@@ -59,6 +59,12 @@ dependencies:
   # Scanning a person's QR code in the app, the camera asked for only on tap
   # (lib/chat/people_scan.dart; people-chatting §5.2). BSD-3-Clause.
   mobile_scanner: 7.5.0
+  # Reading an account number or a list in a photo on the phone itself, the
+  # photo never sent for reading (lib/chat/photo_text.dart). MIT. Needs iOS 15.5.
+  google_mlkit_text_recognition: 0.17.1
+  # Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart;
+  # device fields D2). BSD-3-Clause.
+  quick_actions: 1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -74,6 +80,8 @@ flutter:
   uses-material-design: false
   assets:
     - assets/brand/
+    # The chat's wallpaper (tools/chatwallpaper).
+    - assets/chat/
   # The web's Inter, unpacked from its own files (tool/fonts.py): one family
   # per alphabet, the rest as fallbacks, as the browser picks by unicode-range.
   fonts:

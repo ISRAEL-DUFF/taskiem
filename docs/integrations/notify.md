@@ -35,9 +35,11 @@ The message goes through the chat [outbox](../whatsapp.md#delivery-and-retries) 
 | `message` | What to say, in plain words (up to 1,500 characters; an SMS is cut to three parts) |
 | `title` | Optional first line, and an email's subject |
 | `about` | What it is about, in a few words ("your leave request", "order AD-12"): WhatsApp's update template names it |
+| `payrolla_employee` | Optional: Payrolla's id of the employee it is about (payroll is Payrolla's; [Payrolla](payrolla.md#in-taskiems-own-screens)) |
 
 It goes:
 
+0. With `payrolla_employee`, when an owner has linked that employee to a staff member: to the staff member, as `tell` reaches them (their own chat with the business, else email), and `via` is `staff_chat` or `email`. Linked to no one, it goes on as below.
 1. On the WhatsApp or Telegram the person linked with the business.
 2. On the one they linked from this run's own form.
 3. By SMS from the business's name (`sms_monthly`).

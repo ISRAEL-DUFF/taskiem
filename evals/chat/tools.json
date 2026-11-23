@@ -1,0 +1,13 @@
+{
+  "commands": "Other commands:\n• *help*: what you can do here\n• *status*: what ran or failed recently\n• *approvals*: requests waiting for you\n• *invoice* a person and an amount (*invoice Ada 25k for rice*)\n• *owes*: who owes you, or *Ada owes 5,000*; *Ada paid 5,000*\n• *send* an amount *to* @someone (*send 20k to @bayo*): a payment prepared, to confirm in the app\n• *sold* and what (*sold 3 bags of rice 45,000 cash*); *stock* and an item\n• *tools*: the business's own tools\nThings they saved, by @name (kind), for the saved actions' values and for @name in the other commands: @warehouse (place), @bayo (bank account), @mum (person)\n",
+  "sets": {
+    "shop": [
+      {"command": "fuel-log", "name": "Log fuel", "about": "Record money spent on fuel or diesel for the vans and the generator",
+       "inputs": [{"name": "amount", "title": "Amount", "type": "number", "required": true}, {"name": "what", "title": "What", "type": "string", "required": true}]},
+      {"command": "rider-fee", "name": "Rider fee", "about": "What a rider charges to deliver to a place",
+       "inputs": [{"name": "to", "title": "Where to", "type": "string", "required": true}]},
+      {"command": "leave-left", "name": "Leave left", "about": "Days of leave a staff member has left",
+       "inputs": [{"name": "who", "title": "Who", "type": "string", "required": true}]}
+    ]
+  }
+}

@@ -8,6 +8,9 @@ import { coerce, isExpression, kindOf, setKey } from "../lib/schema";
 import { JsonInput } from "../ui";
 import { RecipientField } from "./RecipientField";
 import { FieldText } from "./FieldText";
+import { SavedFill } from "../pages/SavedFill";
+import { placeAddressFit } from "../lib/saved";
+import { toolSavedKind } from "../lib/toolsaved";
 
 interface Props {
   schema: JSONSchema | undefined;
@@ -16,9 +19,12 @@ interface Props {
   expressions?: boolean; // offer the expression toggle (workflow steps)
   /** Values from earlier steps a field can take instead of a fixed one (no-technical-steps N8). */
   sources?: Source[];
+  /** A tool's form in its sheet (made tools M1): a text input a saved
+   * kind fits (x-saved, its format, its words) has a Saved button. */
+  saved?: boolean;
 }
 
-export function SchemaForm({ schema, value, onChange, expressions = true, sources }: Props) {
+export function SchemaForm({ schema, value, onChange, expressions = true, sources, saved = false }: Props) {
   const props = schema?.properties;
   if (!props) {
     return <JsonInput value={value} onChange={(v) => onChange(v as Record<string, unknown> | undefined)} />;
@@ -31,13 +37,13 @@ export function SchemaForm({ schema, value, onChange, expressions = true, source
   return (
     <div>
       {Object.entries(props).map(([k, s]) => (
-        <SchemaField key={k} name={k} schema={s} required={required.has(k)} value={value?.[k]} onChange={(v) => update(k, v)} expressions={expressions} sources={sources} />
+        <SchemaField key={k} name={k} schema={s} required={required.has(k)} value={value?.[k]} onChange={(v) => update(k, v)} expressions={expressions} sources={sources} saved={saved} />
       ))}
     </div>
   );
 }
 
-function SchemaField({ name, schema, required, value, onChange, expressions, sources }: {
+function SchemaField({ name, schema, required, value, onChange, expressions, sources, saved }: {
   name: string;
   schema: JSONSchema;
   required: boolean;
@@ -45,6 +51,7 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
   onChange: (v: unknown) => void;
   expressions: boolean;
   sources?: Source[];
+  saved: boolean;
 }) {
   const kind = kindOf(schema);
   const expr = isExpression(value);
@@ -53,6 +60,9 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
   const textWithFields = !expressions && !!sources?.length && kind === "string" && !schema.format;
   const fromSource = !expressions && !!sources?.length && kind !== "object" && !textWithFields;
   const [picking, setPicking] = useState(() => fromSource && !!sourceOf(sources ?? [], value));
+  // What a Saved pick could not fill, or left out to fit.
+  const [savedNote, setSavedNote] = useState<string>();
+  const savedKind = saved && !expressions ? toolSavedKind(name, schema as Record<string, unknown>) : undefined;
   // Without expressions (plain words), a field with no title reads as words.
   const title = schema.title ?? (expressions ? name : (name.charAt(0).toUpperCase() + name.slice(1)).replaceAll("_", " "));
   const label = (
@@ -91,10 +101,10 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     // Someone to pay: their bank and account number, the name confirmed.
     input = <RecipientField label={title} value={typeof value === "string" ? value : ""} onChange={(v) => onChange(v || undefined)} />;
   } else if (kind === "boolean") {
-    input = <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
+    input = <input type="checkbox" aria-label={String(title)} checked={value === true} onChange={(e) => onChange(e.target.checked)} />;
   } else if (kind === "enum") {
     input = (
-      <select value={value === undefined ? "" : JSON.stringify(value)} onChange={(e) => onChange(e.target.value === "" ? undefined : JSON.parse(e.target.value))}>
+      <select aria-label={String(title)} value={value === undefined ? "" : JSON.stringify(value)} onChange={(e) => onChange(e.target.value === "" ? undefined : JSON.parse(e.target.value))}>
         <option value="">—</option>
         {schema.enum?.map((o) => (
           <option key={JSON.stringify(o)} value={JSON.stringify(o)}>
@@ -115,10 +125,42 @@ function SchemaField({ name, schema, required, value, onChange, expressions, sou
     input = (
       <input
         type={kind === "string" ? "text" : "number"}
+        aria-label={String(title)}
         value={value === undefined ? "" : String(value)}
         onChange={(e) => onChange(coerce(kind, e.target.value))}
       />
     );
+    if (savedKind && kind === "string") {
+      const limit = (schema as { maxLength?: unknown }).maxLength;
+      const max = typeof limit === "number" ? limit : 300;
+      input = (
+        <>
+          {input}
+          <SavedFill
+            kind={savedKind}
+            label={String(title).toLowerCase()}
+            inSheet
+            onPick={(x, v, problem) => {
+              let fill = v;
+              let note = problem;
+              if (savedKind === "person") fill = x.title;
+              else if (savedKind === "place") {
+                const fit = placeAddressFit(x.details, max);
+                fill = fit.address;
+                note = fit.hint || undefined;
+              }
+              setSavedNote(note);
+              if (fill) onChange(fill.slice(0, max));
+            }}
+          />
+          {savedNote && (
+            <p className="hint saved-fill-note" role="status" data-testid="saved-fill-note">
+              {savedNote}
+            </p>
+          )}
+        </>
+      );
+    }
   }
   return (
     <div className="field" style={{ marginBottom: 10 }}>

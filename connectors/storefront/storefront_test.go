@@ -29,6 +29,9 @@ func (o *ops) NotifyCustomer(_ context.Context, _ uuid.UUID, _, text, _, _ strin
 	return map[string]any{}, nil
 }
 func (o *ops) GetBooking(context.Context, uuid.UUID, string) (map[string]any, error) { return nil, nil }
+func (o *ops) RecentCustomers(context.Context, uuid.UUID, int) ([]map[string]any, bool, error) {
+	return []map[string]any{{"name": "Bola", "phone": "+2348031234567", "orders": 2}}, false, nil
+}
 func (o *ops) MarkReturned(context.Context, uuid.UUID, string, string) (sf.Returned, error) {
 	return sf.Returned{}, nil
 }

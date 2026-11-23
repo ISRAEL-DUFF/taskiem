@@ -18,10 +18,15 @@ import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import '../api/api.g.dart' show Payment;
 import 'book_sheet.dart' show lagosTime, whenLabel;
+import 'menu_card.dart' show catalogueOf;
+import 'pay_many.dart' show payAllRiders, peopleWords;
+import 'pay_sheet.dart' show PaySheet, paymentSentWords, riderPayAction;
+import 'saved_fill.dart' show SavedButton, bankCodeIn, pickSavedAccount, pickSavedPhone;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'words.dart' show CardTone, naira;
 import '../kit/look.dart';
@@ -265,6 +270,9 @@ class _RidersPageState extends State<RidersPage> with Polling {
   Object? _error;
   bool _busy = false;
   String? _actError;
+  // Paying people is on here (money.pay and a payments account): Pay on a
+  // rider with a bank account kept.
+  bool _pays = false;
 
   Auth get _auth => widget.auth;
 
@@ -273,6 +281,12 @@ class _RidersPageState extends State<RidersPage> with Polling {
     super.initState();
     _load();
     startPolling(const Duration(seconds: 60), _load);
+    if (_auth.can('money.pay')) {
+      catalogueOf(_auth).then((topics) {
+        final on = topics.any((t) => t.actions.any((a) => a.id == 'pay.person'));
+        if (mounted && on) setState(() => _pays = true);
+      }, onError: (Object _) {});
+    }
   }
 
   Future<void> _load() async {
@@ -412,6 +426,17 @@ class _RidersPageState extends State<RidersPage> with Polling {
                 onTap: () => openRidersPay(context, _auth),
                 semanticsLabel: 'Pay riders',
               ),
+              // Paying people is on: what each is due, as one batch to
+              // check, paid with one passkey.
+              if (_pays && (due ?? 0) > 0)
+                TkListRow(
+                  title: 'Pay all riders',
+                  sub: 'What each is due, with one passkey',
+                  icon: 'b-people',
+                  square: look.teal,
+                  onTap: _payAll,
+                  semanticsLabel: 'Pay all riders what each is due',
+                ),
             ],
           ),
         if (v != null)
@@ -426,6 +451,9 @@ class _RidersPageState extends State<RidersPage> with Polling {
                   status: _retired ? null : stateLine(r),
                   statusAccent: _retired ? null : accent(r),
                   onTap: _retired ? null : () => _more(r),
+                  trailing: !_retired && _pays && _str(r['bank']).isNotEmpty
+                      ? TkSmallButton(label: 'Pay', semantics: 'Pay ${_str(r['name'])}', onPressed: () => _pay(r))
+                      : null,
                 ),
             ],
           ),
@@ -464,6 +492,26 @@ class _RidersPageState extends State<RidersPage> with Polling {
         'WhatsApp could not be opened.',
       );
     }
+  }
+
+  /// Pay all riders: a batch of what each is due, to check and pay.
+  Future<void> _payAll() async {
+    final b = await payAllRiders(context, _auth);
+    if (b != null && b.status == 'sent' && mounted) {
+      showTkToast(context, 'Sent: ${peopleWords(b.count)}, ${naira(b.totalKobo)}');
+      await _load();
+    }
+  }
+
+  /// Pay on a rider: the Pay sheet, to the bank account kept for their
+  /// payouts, for a delivery unless changed.
+  Future<void> _pay(Map<String, dynamic> r) async {
+    final name = _str(r['name']);
+    final paid = await showTkSheet<Payment>(
+      context,
+      (_) => PaySheet(auth: _auth, action: riderPayAction(name), riderId: _str(r['id']), initial: const {'for': 'a delivery'}, from: 'tools'),
+    );
+    if (paid != null && mounted) showTkToast(context, '${paymentSentWords(paid)}: ${naira(paid.amountKobo)} to $name');
   }
 
   /// A rider pressed: change them, send the link again, retire them.
@@ -548,6 +596,20 @@ class _RiderFormState extends State<_RiderForm> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone (saved objects §6.4): the phone
+  /// only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _phone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   List<String> get _chosen => widget.zones.isNotEmpty ? _zones.toList() : _labels.text.split(',').map((z) => z.trim()).where((z) => z.isNotEmpty).toList();
 
   @override
@@ -567,7 +629,13 @@ class _RiderFormState extends State<_RiderForm> {
           TkKitField(
             label: 'Mobile number',
             hint: 'They get the link to your deliveries by SMS on this number.',
-            child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
+            child: Row(
+              children: [
+                Expanded(child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567')),
+                const SizedBox(width: 8),
+                SavedButton(semantics: 'Pick a saved phone number', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+              ],
+            ),
           )
         else
           Text('Mobile number: ${_r!['phone']}. To use another number, retire ${_r['name']} and add the new one.', style: tkHint(t)),
@@ -1011,6 +1079,32 @@ class _BankState extends State<_Bank> {
     super.dispose();
   }
 
+  /// A saved bank account (saved objects §6.4): its bank, and its number
+  /// once a passkey shows it; one picker at a time.
+  bool _picking = false;
+  Future<void> _fromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final a = await pickSavedAccount(context, widget.auth);
+      if (a == null || !mounted) return;
+      setState(() {
+        final banks = _banks ?? const [];
+        if (banks.isNotEmpty) {
+          final c = bankCodeIn(banks, a);
+          if (c.isNotEmpty) _code = c;
+        } else if (a.bankCode.isNotEmpty) {
+          _codeBox.text = a.bankCode;
+        }
+        _number.text = a.number;
+      });
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Widget _savedButton() => SavedButton(label: 'A saved account', semantics: 'Fill from a saved bank account', picking: _picking, busy: _busy, onPressed: _fromSaved);
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -1034,23 +1128,33 @@ class _BankState extends State<_Bank> {
           TkKitField(
             field: false,
             label: 'Bank',
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TkSmallButton(
-                label: banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'Choose their bank',
-                semantics: 'Bank: ${banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'none chosen'}',
-                onPressed: () async {
-                  final v = await showTkModalChoices(context, title: 'Bank', value: _code, choices: [for (final b in banks) (b.code, b.name)]);
-                  if (v != null) setState(() => _code = v);
-                },
-              ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TkSmallButton(
+                  label: banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'Choose their bank',
+                  semantics: 'Bank: ${banks.where((b) => b.code == _code).map((b) => b.name).firstOrNull ?? 'none chosen'}',
+                  onPressed: () async {
+                    final v = await showTkModalChoices(context, title: 'Bank', value: _code, choices: [for (final b in banks) (b.code, b.name)]);
+                    if (v != null) setState(() => _code = v);
+                  },
+                ),
+                _savedButton(),
+              ],
             ),
           )
         else
           TkKitField(
             label: 'Bank code',
             hint: 'The bank’s code, such as 058 for GTBank.',
-            child: TkTextBox(controller: _codeBox, plain: true, max: 6),
+            child: Row(
+              children: [
+                Expanded(child: TkTextBox(controller: _codeBox, plain: true, max: 6)),
+                const SizedBox(width: 8),
+                _savedButton(),
+              ],
+            ),
           ),
         const SizedBox(height: 10),
         TkKitField(

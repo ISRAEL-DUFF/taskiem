@@ -28,6 +28,7 @@
 /links/ | app lib/chat/statement_page.dart
 /invoices | app lib/chat/invoices_page.dart
 /invoices/ | app lib/chat/invoices_page.dart
+/pages/ | app lib/chat/pages_page.dart
 /bills | app lib/chat/bills_page.dart
 /bills/ | app lib/chat/bills_page.dart
 /purchases/ | app lib/chat/purchases_page.dart
@@ -48,3 +49,4 @@
 /void | not a page
 /you/chats/new | app lib/screens/chat_link.dart
 /schools/payments | app lib/school/school_money.dart
+/search | app lib/chat/search_everywhere.dart

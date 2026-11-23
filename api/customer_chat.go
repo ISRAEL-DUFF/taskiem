@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/voice"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -446,6 +447,32 @@ func (s *Server) openCustomerText(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return t, nil
 }
 
+// openCustomerCard opens a card the customer shared, sealed in the
+// business's copy (customerCard.Sealed): its title and details, or, once
+// the customer was erased, a card that says so.
+func (s *Server) openCustomerCard(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *customerCard) error {
+	if c == nil || len(c.Sealed) == 0 {
+		return nil
+	}
+	raw, err := s.openCustomerText(ctx, tx, tenant, c.Sealed)
+	if err != nil {
+		return err
+	}
+	*c = sealedCard(c.Type, raw)
+	return nil
+}
+
+// sealedCard is a sealed card opened: what it held, or, erased (raw empty)
+// or unreadable, a card that says its details are gone.
+func sealedCard(kind, raw string) customerCard {
+	var open customerCard
+	if raw == "" || json.Unmarshal([]byte(raw), &open) != nil {
+		return customerCard{Type: kind, Title: "Details no longer kept"}
+	}
+	open.Sealed = nil
+	return open
+}
+
 // customerName is the customer's name in the business's book, else the
 // name they gave WhatsApp, else their number.
 func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, profile, phone string) (string, error) {
@@ -708,6 +735,10 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 			if x.v.Attachment, err = s.openAttachment(r.Context(), tx, p.TenantID, x.att); err != nil {
 				return err
 			}
+			if err := s.openCustomerCard(r.Context(), tx, p.TenantID, x.v.Card); err != nil {
+				return err
+			}
+			x.v.Card = maskCustomerCard(x.v.Mine, x.v.Card)
 			out = append(out, x.v)
 		}
 		return nil
@@ -806,6 +837,39 @@ func (s *Server) putCustomerChat(w http.ResponseWriter, r *http.Request) {
 // characters in a variable; the rest of the template needs room).
 const customerTemplateMax = 900
 
+// templateLine is text on one line, as a template's variable must be: its
+// spaces folded; a paragraph, and a line of a saved thing's ("Bank:
+// GTBank"), kept apart by " · ", other lines run on as one.
+func templateLine(text string) string {
+	var b strings.Builder
+	prevLabel, gap := false, false
+	for _, l := range strings.Split(text, "\n") {
+		l = strings.Join(strings.Fields(l), " ")
+		if l == "" {
+			gap = b.Len() > 0
+			continue
+		}
+		label := labelLine(l)
+		if b.Len() > 0 {
+			if gap || label || prevLabel {
+				b.WriteString(" · ")
+			} else {
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString(l)
+		prevLabel, gap = label, false
+	}
+	return b.String()
+}
+
+// labelLine says whether l reads "Label: value", as a saved thing's lines
+// do: a short label before the first colon.
+func labelLine(l string) bool {
+	i := strings.Index(l, ": ")
+	return i > 0 && utf8.RuneCountInString(l[:i]) <= 40 && !strings.ContainsAny(l[:i], ".!?")
+}
+
 // replyCustomer sends a member's reply to the customer from the
 // business's own number and keeps it in the thread (sendCustomer).
 func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
@@ -832,7 +896,33 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text := strings.TrimSpace(req.Text)
+	// The share a saved thing's card makes, recorded once it is sent.
+	var share *savedShareRecord
 	var card *customerCard
+	if req.Card != nil && req.Card.Type == "saved" {
+		// A saved thing (saved_share.go): a card in the app; on WhatsApp, its
+		// plain lines as the words, easy to copy.
+		var err error
+		var inApp bool
+		var shared saved.Card
+		shared, share, inApp, err = s.savedForCustomer(r, chi.URLParam(r, "id"), req.Card.Saved, req.Line)
+		if shareConfirmFail(w, err) {
+			return
+		}
+		if err != nil {
+			s.customerSendFail(w, r, err)
+			return
+		}
+		if inApp {
+			card = &customerCard{Type: "saved", Title: shared.Title, Saved: &shared}
+			if text == "" {
+				text = shared.Title
+			}
+		} else {
+			text = strings.TrimSpace(text + "\n\n" + shared.Plain())
+		}
+		req.Card = nil
+	}
 	if req.Card != nil {
 		var err error
 		if card, err = s.cardFor(ctx, p.TenantID, chi.URLParam(r, "id"), *req.Card); err != nil {
@@ -877,7 +967,10 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 	code := http.StatusCreated
 	if !fresh {
 		code = http.StatusOK
+	} else {
+		s.recordShare(r, share)
 	}
+	m.Card = maskCustomerCard(m.Mine, m.Card)
 	writeJSON(w, code, m)
 }
 
@@ -945,6 +1038,10 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if m.Attachment, err = s.openAttachment(ctx, tx, tenant, att); err != nil {
 		return nil, err
 	}
+	if err := s.openCustomerCard(ctx, tx, tenant, m.Card); err != nil {
+		return nil, err
+	}
+	m.Card = maskCustomerCard(m.Mine, m.Card)
 	return &m, nil
 }
 
@@ -1024,8 +1121,9 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 		return customerMessageView{}, false, customerSendErr{http.StatusConflict, "the business has no WhatsApp number of its own connected now; connect it in Settings to reply"}
 	}
 	number := chat.Phone
-	// The words as the template carries them: on one line.
-	oneLine := strings.Join(strings.Fields(text), " ")
+	// The words as the template carries them: on one line, its lines kept
+	// apart by " · " (a saved thing's "Bank: GTBank · Account number: …").
+	oneLine := templateLine(text)
 	contact, err := wa.Contact(ctx, number)
 	if err != nil {
 		return customerMessageView{}, false, err

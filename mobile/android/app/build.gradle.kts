@@ -1,5 +1,7 @@
+import java.io.FileInputStream
 import java.net.URI
 import java.util.Base64
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -18,6 +20,24 @@ val taskiemHost: String = run {
     runCatching { URI(url).host }.getOrNull() ?: "staging.ispend.name.ng"
 }
 
+// The Play Store upload key: android/key.properties (never committed; see
+// mobile/README.md, "Releasing to Google Play"), or the same four values
+// from the environment in CI (TASKIEM_UPLOAD_STORE_FILE, _STORE_PASSWORD,
+// _KEY_ALIAS, _KEY_PASSWORD). Without it a release build is signed with
+// the debug key, for trying on a phone only: Play refuses it.
+val upload: Map<String, String>? = run {
+    val file = rootProject.file("key.properties")
+    val p = Properties()
+    if (file.exists()) FileInputStream(file).use { p.load(it) }
+    fun v(prop: String, env: String) = p.getProperty(prop) ?: System.getenv(env)
+    val store = v("storeFile", "TASKIEM_UPLOAD_STORE_FILE")
+    val storePassword = v("storePassword", "TASKIEM_UPLOAD_STORE_PASSWORD")
+    val alias = v("keyAlias", "TASKIEM_UPLOAD_KEY_ALIAS")
+    val keyPassword = v("keyPassword", "TASKIEM_UPLOAD_KEY_PASSWORD")
+    if (store.isNullOrBlank() || storePassword.isNullOrBlank() || alias.isNullOrBlank() || keyPassword.isNullOrBlank()) null
+    else mapOf("store" to store, "storePassword" to storePassword, "alias" to alias, "keyPassword" to keyPassword)
+}
+
 android {
     namespace = "app.taskiem.taskiem"
     compileSdk = flutter.compileSdkVersion
@@ -29,10 +49,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // The app's id on Google Play: permanent once published.
         applicationId = "app.taskiem.chat"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
@@ -44,11 +62,25 @@ android {
         manifestPlaceholders["taskiemHost"] = taskiemHost
     }
 
+    signingConfigs {
+        if (upload != null) {
+            create("upload") {
+                storeFile = rootProject.file(upload.getValue("store"))
+                storePassword = upload.getValue("storePassword")
+                keyAlias = upload.getValue("alias")
+                keyPassword = upload.getValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (upload != null) {
+                signingConfigs.getByName("upload")
+            } else {
+                logger.warn("Taskiem: no upload key (android/key.properties): this release build is signed with the debug key and Play will refuse it.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

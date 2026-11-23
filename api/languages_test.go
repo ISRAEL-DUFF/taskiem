@@ -46,7 +46,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 	if !strings.Contains(got2, yo("lang.switched", "language", "Yorùbá")) || !strings.Contains(got2, yo("lang.draft_note")) {
 		t.Fatalf("switched: %q", got2)
 	}
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, yo("wa.help.intro")) || !strings.Contains(got, "*language*") {
 		t.Fatalf("help in Yoruba: %q", got)
 	}
 	// Yoruba words work, and English ones still do.
@@ -83,7 +83,7 @@ func TestWhatsAppLanguages(t *testing.T) {
 
 	// The tenant turns its languages off: English again, whatever was chosen.
 	owner.must(200, "PUT", "/v1/languages", map[string]any{"languages": []string{}})
-	if got := w.say(t, "+2348010000001", "help"); !strings.Contains(got, "You can send:") {
+	if got := w.say(t, "+2348010000001", "help all"); !strings.Contains(got, "You can send:") {
 		t.Fatalf("off again: %q", got)
 	}
 	// Changes are audited.
@@ -100,17 +100,21 @@ func TestWhatsAppModelRoutesOtherLanguages(t *testing.T) {
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 	w.bind(t, owner, "+2348010000003")
 
-	// English never goes to the model.
+	// English is never routed by the model: what nothing recognised goes
+	// to it only for help with the person's own commands (chat_understand.go).
 	w.say(t, "+2348010000003", "what is going on with my stuff")
-	if n := len(fake.Requests()); n != 0 {
-		t.Fatalf("English sent to the model: %d", n)
+	for _, req := range fake.Requests() {
+		if !strings.Contains(ai.PromptText(req), "<commands>") {
+			t.Fatalf("English routed by the model: %s", ai.PromptText(req))
+		}
 	}
+	before := len(fake.Requests())
 	w.say(t, "+2348010000003", "language yo")
 	got := w.say(t, "+2348010000003", "Ṣé nǹkan kan bàjẹ́? Pe mi lórí 08031234567")
 	if !strings.Contains(got, yo("wa.status.none")) {
 		t.Fatalf("routed: %q", got)
 	}
-	reqs := fake.Requests()
+	reqs := fake.Requests()[before:]
 	if len(reqs) != 1 || !strings.Contains(ai.PromptText(reqs[0]), "Yoruba (yo)") || strings.Contains(ai.PromptText(reqs[0]), "08031234567") {
 		t.Fatalf("request: %d %v", len(reqs), reqs)
 	}
@@ -268,8 +272,13 @@ func TestChatModelCallsKeepNoText(t *testing.T) {
 	w.bind(t, owner, "+2348010000004")
 	w.say(t, "+2348010000004", "language pcm")
 	w.say(t, "+2348010000004", "Chinedu Okafor for Ikeja owe me 15k for rice")
-	if n := len(fake.Requests()); n != 1 {
+	if n := len(fake.Requests()); n < 1 {
 		t.Fatalf("%d model requests", n)
+	}
+	// Nor does the model's help with a message nothing recognised.
+	var words int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM ai_interactions WHERE messages::text || ' ' || COALESCE(response, '') ~ '(Chinedu|rice)'`).Scan(&words); err != nil || words != 0 {
+		t.Fatalf("words kept: %d %v", words, err)
 	}
 	var kept string
 	var tokens int64

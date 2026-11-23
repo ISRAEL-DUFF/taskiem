@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
 import { Link, useSearchParams } from "react-router-dom";
 import { TOOLS, type ToolKey } from "../lib/tools";
 import { DiaryLine } from "../kit";
@@ -11,6 +12,7 @@ import { ReadMore, useFold } from "./ReadMore";
 import { ComposerView, TASKIEM_FILES, useComposer } from "./ChatComposer";
 import { AlertCards, useChatAlerts } from "./ChatAlerts";
 import { BriefingCard, ChartCard } from "./ChatStaff";
+import { MenuCard, parseMenu } from "./ChatMenu";
 import { useAuth } from "../auth";
 import { asksBriefing, showBriefing, type SalesChart } from "../lib/staff";
 import { TasksSheet } from "./Tasks";
@@ -26,6 +28,7 @@ function parseChart(text: string): SalesChart | undefined {
   }
 }
 import { BubbleShell, CopyItem, Ticks } from "./BubbleShell";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { useChatLive } from "./ChatLive";
 import { get, post, upload } from "../api";
 import type { Conversation } from "../lib/linkchat";
@@ -213,10 +216,19 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   // The briefing card is here for those who sell or bill; the tools menu
   // and "briefing" typed bring it back.
   const briefs = !!chatTools && (can("storefront.manage") || can("invoice.manage"));
+  // Saved things by @name (saved objects S1): Taskiem reads any of them.
+  const savedPicks = useSavedPicks("all");
+  // Save as… on a message (saved objects S1, part 4): in a business, its
+  // saved things for whoever may manage them; else one's own.
+  const saveAs = useSaveAs({ business: true, onSaved: () => savedPicks.reload() });
   const c = useComposer<never>({
     draftKey: "taskiem",
     rules: TASKIEM_FILES,
     tools: chatTools,
+    // Your tools (made tools M1): whether or not the built-in tools are on.
+    madeTools: true,
+    // The tools panel's menu: as a row of the chat's own menus.
+    onAction: (reply, text) => say({ reply, text }),
     // With chat tools, "@" tags things and businesses in groups, and finds
     // businesses not yet linked (their card, with Connect); Taskiem is
     // who is being talked to, so it is not offered.
@@ -274,6 +286,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       )],
       categories: categoriesOf(ownStock.data ?? []),
       refs: { ...refSrc, product: ownProducts },
+      saved: savedPicks.saved, savedComplete: savedPicks.complete, wantSaved: savedPicks.want, saveNamed: (name) => saveAs.named(name),
     },
     onSend: (s) => {
       if (!s.file && briefs && asksBriefing(s.text)) showBriefing();
@@ -484,7 +497,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
   // For each of Taskiem's answers with buttons: the one pressed (the
   // person's next message, when it is the button's title); and which of the
   // person's messages Taskiem has answered (their ticks go blue).
-  const { pressed, answered, pressableId } = useMemo(() => {
+  const { pressed, answered, pressableId, lastMenu } = useMemo(() => {
     const pressed = new Map<string, string>();
     const answered = new Set<string>();
     const list = messages ?? [];
@@ -508,7 +521,19 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         break;
       }
     }
-    return { pressed, answered, pressableId };
+    // The newest menu stays open while nothing has been said since it;
+    // every other folds (chat-menus.md §6.1; folding once the person types
+    // something else, 21 November 2026).
+    let lastMenu: string | undefined;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (!m || m.inbound) break;
+      if (m.kind === "menu") {
+        lastMenu = m.id;
+        break;
+      }
+    }
+    return { pressed, answered, pressableId, lastMenu };
   }, [messages]);
 
   return (
@@ -555,6 +580,23 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
           </>
         }
         render={(m, { first }) => {
+          // A menu (chat-menus.md): a topic's actions, or the topics.
+          if (m.kind === "menu") {
+            const menu = parseMenu(m.text);
+            if (menu)
+              return (
+                <div className="tk-menu-wrap" data-msg={m.id}>
+                  <MenuCard
+                    id={m.id}
+                    menu={menu}
+                    open={m.id === lastMenu}
+                    busy={act.busy}
+                    onReply={(reply, text) => say({ reply, text })}
+                    openTool={(k, from, start) => c.openTool(k, from, start)}
+                  />
+                </div>
+              );
+          }
           // "How did we do?" answered: its chart, as a card.
           if (m.kind === "chart") {
             const chart = parseChart(m.text);
@@ -595,7 +637,14 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
               what={m.text.split("\n")[0]?.slice(0, 60) ?? "message"}
               menu={
                 !m.local && m.text
-                  ? () => ({ actions: <CopyItem text={m.text} /> })
+                  ? (close) => ({
+                      actions: (
+                        <>
+                          <CopyItem text={m.text} />
+                          <SaveAsItem text={m.text} onSave={saveAs.fromWords} close={close} />
+                        </>
+                      ),
+                    })
                   : undefined
               }
               after={
@@ -725,6 +774,7 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
       />
       {tasksOpen && <TasksSheet onClose={() => setTasksOpen(false)} />}
       {customersOpen && <CustomersSheet onClose={() => setCustomersOpen(false)} />}
+      {saveAs.node}
     </section>
   );
 }

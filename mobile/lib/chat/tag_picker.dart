@@ -8,15 +8,47 @@
 import 'package:flutter/widgets.dart';
 
 import '../kit/icon.dart';
+import '../kit/kit.dart';
+import '../kit/list.dart';
+import '../kit/mobile.dart';
 import '../theme/theme.dart';
 import 'tags.dart';
 import 'words.dart';
 
 /// The picker of chat tools.
 class TagPicker extends StatelessWidget {
-  const TagPicker({super.key, required this.query, required this.groups, required this.first, required this.onPick});
+  const TagPicker({
+    super.key,
+    required this.query,
+    required this.groups,
+    required this.first,
+    required this.onPick,
+    this.search,
+    this.onSearch,
+    this.chips = const [],
+    this.chip = 'all',
+    this.onChip,
+    this.more,
+    this.offline = false,
+  });
   final String query;
   final List<TagGroup> groups;
+
+  /// The search box (menus-everywhere.md §7): what is typed after the
+  /// mark, typed here or in the message box.
+  final TextEditingController? search;
+  final ValueChanged<String>? onSearch;
+
+  /// The kinds it may show, the one on, and a chip pressed.
+  final List<String> chips;
+  final String chip;
+  final ValueChanged<String>? onChip;
+
+  /// "Show more", when the chip has more than it shows.
+  final VoidCallback? more;
+
+  /// The server could not be asked: what the phone keeps was searched.
+  final bool offline;
 
   /// What Enter would take (drawn on the soft green).
   final TagSuggestion? first;
@@ -41,33 +73,45 @@ class TagPicker extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // `.tk-picker-head { padding: 2px 10px 8px; font-size: 13px }`
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Expanded(
-                      child: query.isEmpty
-                          ? Text(what, style: tkText(size: 13, color: t.muted))
-                          : Text.rich(
-                              TextSpan(
-                                children: [
-                                  const TextSpan(text: 'Matches for '),
-                                  TextSpan(
-                                    text: query,
-                                    style: TextStyle(color: t.text, fontWeight: FontWeight.w700, fontVariations: const [FontVariation('wght', 700)]),
-                                  ),
-                                ],
-                              ),
-                              style: tkText(size: 13, color: t.muted),
-                            ),
-                    ),
-                    if (query.isNotEmpty) ...[const SizedBox(width: 8), Text(what, style: tkText(size: 12, color: t.muted))],
-                  ],
+              // The search box, then the kinds (menus-everywhere.md §7).
+              if (search != null)
+                TkSearchBox(
+                  controller: search!,
+                  onChanged: onSearch,
+                  label: 'Search what to tag',
+                  hint: switch (chip) {
+                    'all' => 'Search things and businesses',
+                    'invoice' => 'Search invoices and bills',
+                    'order' => 'Search orders',
+                    'business' => 'Search businesses',
+                    _ => 'Search ${(tagChipLabels[chip] ?? '').toLowerCase()}',
+                  },
+                  margin: const EdgeInsets.fromLTRB(2, 0, 2, 4),
+                  fill: t.panel2,
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
+                  child: Text(query.isEmpty ? what : 'Matches for $query', style: tkText(size: 13, color: t.muted)),
                 ),
-              ),
+              if (chips.length > 1)
+                TkChips<String>(
+                  label: 'Kinds',
+                  chips: [for (final k in chips) (k, tagChipLabels[k] ?? k)],
+                  on: chip,
+                  onPick: (k) => onChip?.call(k),
+                  padding: const EdgeInsets.fromLTRB(2, 4, 2, 4),
+                ),
+              if (offline)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+                  child: Text('Searching what is on this phone', style: tkText(size: 12.5, color: t.muted)),
+                ),
+              if (groups.every((g) => g.items.isEmpty))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 14, 10, 10),
+                  child: Text(query.isEmpty ? 'Nothing here yet' : 'Nothing found for "$query"', style: tkText(size: 13.5, color: t.muted)),
+                ),
               for (final g in groups)
                 Semantics(
                   container: true,
@@ -85,6 +129,11 @@ class TagPicker extends StatelessWidget {
                       for (final s in g.items) _Pick(s: s, first: identical(s, first), onTap: () => onPick(s)),
                     ],
                   ),
+                ),
+              if (more != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Center(child: TkSmallButton(label: 'Show more', onPressed: more)),
                 ),
             ],
           ),
@@ -119,11 +168,12 @@ class _Pick extends StatelessWidget {
       'purchase' => _icon(t.tkBlueBg, child: TkIcon('orders', size: 20, color: t.tkBlueInk)),
       'taskiem' => _icon(t.brand, round: true, child: TkIcon('sparkle', size: 20, color: t.brandDark)),
       'service' => _icon(t.tkBlueBg, child: TkIcon('clock', size: 20, color: t.tkBlueInk)),
+      'save-new' => _icon(t.tkLimeSoft, child: TkIcon('plus', size: 20, color: softInk)),
       _ => _icon(t.tkLimeSoft, child: TkIcon('box', size: 20, color: dark ? t.brandDark : t.brand)),
     };
     return Semantics(
       button: true,
-      label: [s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
+      label: [s.kind == 'save-new' ? 'Save "@${s.name}"…' : s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -142,7 +192,7 @@ class _Pick extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(s.name, style: tkText(size: 15, weight: 600, lineHeight: 1.2, color: t.text)),
+                    Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : s.name, style: tkText(size: 15, weight: 600, lineHeight: 1.2, color: t.text)),
                     if (s.sub != null) Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),
                   ],
                 ),
@@ -174,8 +224,11 @@ class _Pick extends StatelessWidget {
 
 /// `.mention-list`: the plain list, each a name with its mark and a line.
 class TagList extends StatelessWidget {
-  const TagList({super.key, required this.mark, required this.items, required this.onPick});
+  const TagList({super.key, required this.mark, required this.items, required this.onPick, this.label});
   final String mark;
+
+  /// What a screen reader hears the list as, when not what the mark says.
+  final String? label;
   final List<TagSuggestion> items;
   final ValueChanged<TagSuggestion> onPick;
 
@@ -184,7 +237,7 @@ class TagList extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Semantics(
       container: true,
-      label: mark == '@' ? 'Businesses to mention' : (mark == '/' ? 'Things to tag' : 'Items to mention'),
+      label: label ?? (mark == '@' ? 'Businesses to mention' : (mark == '/' ? 'Things to tag' : 'Items to mention')),
       explicitChildNodes: true,
       child: Container(
         // `margin: 0 10px; padding: 4px; border: 1px solid; border-radius: 16px; max-height: 240px`
@@ -200,7 +253,7 @@ class TagList extends StatelessWidget {
               for (final s in items)
                 Semantics(
                   button: true,
-                  label: '${mark == '/' ? '#' : mark}${s.name}${s.sub != null ? ', ${s.sub}' : ''}',
+                  label: '${s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? (s.kind == 'saved' ? '@' : '#') : mark}${s.name}'}${s.sub != null ? ', ${s.sub}' : ''}',
                   onTap: () => onPick(s),
                   excludeSemantics: true,
                   child: GestureDetector(
@@ -212,7 +265,7 @@ class TagList extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${mark == '/' ? '#' : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
+                          Text(s.kind == 'save-new' ? 'Save "@${s.name}"…' : '${mark == '/' ? (s.kind == 'saved' ? '@' : '#') : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
                           if (s.sub != null) ...[
                             const SizedBox(height: 2),
                             Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),

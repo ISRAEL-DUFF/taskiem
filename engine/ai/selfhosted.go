@@ -135,6 +135,11 @@ type chatMessage struct {
 }
 
 func (s *SelfHosted) Complete(ctx context.Context, req Request) (*Response, error) {
+	for _, m := range req.Messages {
+		if len(m.Images) > 0 {
+			return nil, ErrNoImages
+		}
+	}
 	var sys strings.Builder
 	for _, b := range req.System {
 		sys.WriteString(b.Text)

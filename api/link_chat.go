@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -306,6 +307,59 @@ type linkMessageOut struct {
 	// Also are the other businesses the message named, with chat tools on:
 	// each got it as its own message in our conversation with it.
 	Also []alsoSent `json:"also,omitempty"`
+	// Messages are what Taskiem said, for a "@Taskiem" (the message is then
+	// the note it left in this conversation).
+	Messages []TaskiemMessage `json:"messages,omitempty"`
+}
+
+// taskiemNote keeps what Taskiem answered a "@Taskiem" in a conversation
+// with a linked business, as a note on this side only.
+func (s *Server) taskiemNote(ctx context.Context, p *Principal, link uuid.UUID, asked string, said []TaskiemMessage, client *uuid.UUID) (links.Message, error) {
+	var note links.Message
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		if _, err := links.GetTx(ctx, tx, link); err != nil {
+			return err
+		}
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, p.UserID).Scan(&name); err != nil {
+			return err
+		}
+		var err error
+		note, err = links.TaskiemNoteTx(ctx, tx, p.TenantID, link, asked, taskiemAnswerWords(said), links.Sender{ID: p.Actor(), FirstName: firstWord(name)}, client)
+		return err
+	})
+	return note, err
+}
+
+// taskiemAnswerWords is what Taskiem said, as plain words for a note: its
+// lines, *bold* marks off; a menu as its line and where to pick from it.
+func taskiemAnswerWords(said []TaskiemMessage) string {
+	var out []string
+	menu := false
+	for _, m := range said {
+		if m.Inbound {
+			continue
+		}
+		switch m.Kind {
+		case "text", "diary":
+			if w := strings.TrimSpace(strings.ReplaceAll(m.Text, "*", "")); w != "" {
+				out = append(out, w)
+			}
+		case "menu":
+			var mm chatMenuMsg
+			if json.Unmarshal([]byte(m.Text), &mm) == nil && strings.TrimSpace(mm.Line) != "" {
+				out = append(out, strings.TrimSpace(strings.ReplaceAll(mm.Line, "*", "")))
+			}
+			menu = true
+		}
+	}
+	if menu {
+		out = append(out, "Pick what to do in your Taskiem chat.")
+	}
+	if len(out) == 0 {
+		return "Taskiem answered in your Taskiem chat."
+	}
+	return strings.Join(out, "\n")
 }
 
 // alsoSent is how a copy to another business named in a message went.
@@ -342,6 +396,12 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	} else if m != nil {
+		// A "@Taskiem" sent again (the first answer was lost on the way):
+		// the note it left, without asking Taskiem a second time.
+		if m.Kind == links.KindTaskiem {
+			writeJSON(w, http.StatusOK, linkMessageOut{Message: *m})
+			return
+		}
 		if !sameSend(m, in.Text) {
 			s.fail(w, r, fmt.Errorf("%w: that client_id was used for a different message", errConflict))
 			return
@@ -378,21 +438,53 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Nothing went to the business: Taskiem answered in the
-			// person's own conversation with it.
-			writeJSON(w, http.StatusAccepted, taskiemChatOut{Messages: msgs})
+			// person's own conversation with it, and the answer is kept
+			// here as a note only this side sees.
+			note, err := s.taskiemNote(r.Context(), p, link, strings.TrimSpace(in.Text), msgs, in.ClientID)
+			if errors.Is(err, links.ErrDuplicate) {
+				if first, ferr := s.sentWith(r.Context(), p, link, in.ClientID); ferr == nil && first != nil {
+					note, err = *first, nil
+				}
+			}
+			if err != nil {
+				s.fail(w, r, linkMessageErr(err))
+				return
+			}
+			writeJSON(w, http.StatusCreated, linkMessageOut{Message: note, Messages: msgs})
 			return
 		}
 	}
 	var ments []links.Mention
-	if len(in.Mentions) > 0 {
+	// The shares saved things make, recorded once the message is sent.
+	var shares []*savedShareRecord
+	// Saved things shared (S1 part 3) apart: asked first before what is
+	// sensitive, each share recorded.
+	others := slices.DeleteFunc(slices.Clone(in.Mentions), func(m mentionRef) bool { return m.Kind == "saved" })
+	if len(others) > 0 {
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var err error
-			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, in.Mentions)
+			ments, err = checkMentions(r.Context(), tx, p, link, in.Text, others)
 			return err
 		}); err != nil {
 			s.fail(w, r, linkMessageErr(err))
 			return
 		}
+	}
+	if len(others) < len(in.Mentions) {
+		var shared []links.Mention
+		shared, shares, err = s.linkSavedMentions(r, link, in.Text, in.Mentions)
+		if err != nil {
+			if !shareConfirmFail(w, err) {
+				var se customerSendErr
+				if errors.As(err, &se) {
+					writeErr(w, se.code, se.msg)
+				} else {
+					s.fail(w, r, linkMessageErr(err))
+				}
+			}
+			return
+		}
+		ments = append(ments, shared...)
 	}
 	m, err := s.sendLink(r.Context(), p, link, in.Text, links.SendOpts{ReplyTo: in.ReplyTo, Mentions: ments, ClientID: in.ClientID})
 	if errors.Is(err, links.ErrDuplicate) {
@@ -406,11 +498,58 @@ func (s *Server) sendLinkMessage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, linkMessageErr(err))
 		return
 	}
+	for _, rec := range shares {
+		s.recordShare(r, rec)
+	}
 	out := linkMessageOut{Message: m}
 	if tools {
 		out.Also = s.sendAlso(r.Context(), p, link, in.Text, ments)
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// linkSavedMentions makes the cards of the saved things a message to a
+// linked business shares (saved objects S1, part 3): the business's own or
+// the sender's, each named in the words by its @name; the question, before
+// what is sensitive, names the other business.
+func (s *Server) linkSavedMentions(r *http.Request, link uuid.UUID, text string, refs []mentionRef) ([]links.Mention, []*savedShareRecord, error) {
+	p := principalFrom(r.Context())
+	person, err := personOf(r)
+	if err != nil {
+		return nil, nil, customerSendErr{http.StatusForbidden, "Saved things are shared by a person, not a key."}
+	}
+	var name string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := links.GetTx(r.Context(), tx, link)
+		name = l.Name
+		return err
+	}); err != nil {
+		return nil, nil, err
+	}
+	var out []links.Mention
+	var recs []*savedShareRecord
+	seen := map[uuid.UUID]bool{}
+	for _, ref := range refs {
+		if ref.Kind != "saved" {
+			continue
+		}
+		if ref.Saved == nil {
+			return nil, nil, customerSendErr{http.StatusBadRequest, "Choose the saved thing to share."}
+		}
+		if seen[ref.Saved.ID] {
+			continue
+		}
+		seen[ref.Saved.ID] = true
+		sh := *ref.Saved
+		sh.namedIn = text // named in the words before anything is asked
+		c, rec, err := s.savedCardFor(r, person, p.TenantID, sh, name)
+		if err != nil {
+			return nil, nil, err
+		}
+		out = append(out, links.Mention{Kind: "saved", Name: c.Name, Saved: &c})
+		recs = append(recs, rec)
+	}
+	return out, recs, nil
 }
 
 // sendAlso sends a message to the other linked businesses it names, with

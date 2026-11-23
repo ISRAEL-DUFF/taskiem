@@ -20,17 +20,22 @@ import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
 import 'app/route.dart';
 import 'app/session.dart';
+import 'app/shortcuts.dart';
 import 'app/sound.dart' show chime;
 import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
 import 'chat/bills_page.dart' show openBill;
 import 'chat/invoices_page.dart' show openInvoice;
 import 'chat/money_page.dart' show MoneyPage;
+import 'chat/payments_page.dart' show SentPaymentsPage;
+import 'chat/payroll_page.dart' show PayrollPage, PayrollRunPage;
+import 'chat/pages_page.dart' show PageScreen, PagesPage;
 import 'chat/purchases_page.dart' show openPurchase;
 import 'chat/storefront_orders_page.dart' show StorefrontOrdersPage, openStorefrontOrder;
 import 'chat/trade_orders_page.dart' show openTradeOrder;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
+import 'chat/search_everywhere.dart' show openSearchEverywhere;
 import 'chat/today_tab.dart' show TodayTab;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
@@ -41,6 +46,7 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'chat/scan_start.dart' show scanFromHome;
 import 'screens/chat_link.dart';
 import 'chat/group_chat.dart' show GroupChatData, GroupChatScreen;
 import 'chat/group_new.dart' show GroupJoinScreen;
@@ -50,6 +56,7 @@ import 'school/school_clearance.dart' show GateScreen;
 import 'school/school_tab.dart' show SchoolTab;
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
+import 'screens/you_pin.dart' show PinStepScreen;
 import 'screens/forgot_password.dart';
 import 'screens/sign_in.dart';
 import 'screens/switcher.dart' show showSwitcher;
@@ -84,13 +91,15 @@ void main() {
   auth.start();
   // Links to this server's pages, opened in the app (lib/app/applinks.dart).
   final links = LinkInbox();
+  // Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart).
+  final shortcuts = HomeShortcuts(PhoneShortcuts());
   // The phone's own start screen (the mark on pine) stays until the app's
   // first screen is the real one, so there is one opening, not two: the
   // app draws nothing until the session and the settings are read (or a
   // few seconds have gone, on a slow phone: then its own mark on pine).
   WidgetsBinding.instance.deferFirstFrame();
   unawaited(_whenOpen(auth, prefs).timeout(const Duration(seconds: 3), onTimeout: () {}).whenComplete(WidgetsBinding.instance.allowFirstFrame));
-  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
+  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links, shortcuts: shortcuts));
 }
 
 /// Done once the session is known and the settings are read.
@@ -111,7 +120,10 @@ Future<void> _whenOpen(Auth auth, Prefs prefs) async {
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.now = DateTime.now});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.shortcuts, this.now = DateTime.now});
+
+  /// The app icon's shortcuts: Scan a code, and the person's tools.
+  final HomeShortcuts? shortcuts;
 
   /// The theme when there are no [prefs] (tests show one theme).
   final TkMode mode;
@@ -176,7 +188,7 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links, shortcuts: shortcuts)),
     );
   }
 }
@@ -186,12 +198,13 @@ class TaskiemApp extends StatelessWidget {
 /// or moved to another business, they are closed, and the chats start
 /// afresh for the new session.
 class _Root extends StatefulWidget {
-  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links});
+  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links, this.shortcuts});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
   final PhoneNotifications? notify;
   final LinkInbox? links;
+  final HomeShortcuts? shortcuts;
 
   @override
   State<_Root> createState() => _RootState();
@@ -224,6 +237,10 @@ class _RootState extends State<_Root> {
   void _changed() {
     final auth = widget.auth;
     if (auth.session != _session || auth.state != AuthState.signedIn) {
+      // Signed out, or another business or the person's own account: the
+      // icon's shortcuts were the last business's. A business's _Home puts
+      // its own back.
+      if (auth.state != AuthState.checking) unawaited(widget.shortcuts?.clear());
       _session = auth.session;
       Navigator.of(context).popUntil((r) => r.isFirst);
     }
@@ -242,8 +259,10 @@ class _RootState extends State<_Root> {
       AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       // A personal session: the person's own side (taskiem-for-everyone §7).
+      // Just made an account: Set your PIN, or Not now (when it has none).
+      AuthState.signedIn when auth.offerPin => PinStepScreen(key: ValueKey('pin ${auth.session}'), auth: auth, onDone: () => setState(() => auth.offerPin = false)),
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
-      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links, shortcuts: widget.shortcuts),
     };
   }
 }
@@ -395,7 +414,8 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links});
+  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links, this.shortcuts});
+  final HomeShortcuts? shortcuts;
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
@@ -430,6 +450,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // waited behind signing in.
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
+    // The app icon's shortcuts: this person's tools on it, and the one
+    // tapped (now, or before signing in) opened.
+    widget.shortcuts?.addListener(_shortcut);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _shortcut());
+    unawaited(_putShortcuts());
     final notify = widget.notify;
     if (notify != null) {
       notify.addListener(_notified);
@@ -491,6 +516,57 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
     final page = widget.links?.take();
     if (page != null) _openPath(page);
+  }
+
+  /// Scan a code and up to three of the person's tools, on the app's icon.
+  Future<void> _putShortcuts() async {
+    final shortcuts = widget.shortcuts;
+    final business = _business;
+    if (shortcuts == null || business == null) return;
+    var tools = <({String command, String name})>[];
+    try {
+      if (_chats.auth.can('run.start')) {
+        tools = [for (final t in (await _chats.auth.api.listTools()).tools) (command: t.command, name: t.name)];
+      }
+    } on Object {
+      // Scan alone, then.
+    }
+    // Still this business: the session may have moved while they were read.
+    if (!mounted || _business != business) return;
+    await shortcuts.show(business, tools, recent: widget.prefs?.recentTools ?? const []);
+  }
+
+  /// The business this session is in.
+  String? get _business => _chats.auth.me?.tenantId?.toString();
+
+  /// A shortcut tapped on the app's icon: Scan a code, or a tool.
+  void _shortcut() {
+    if (!mounted) return;
+    final type = widget.shortcuts?.take();
+    if (type == null) return;
+    // Put there for another business (or kept from before they named
+    // one): not opened in this one, and the icon set again for this one.
+    final s = readShortcut(type);
+    if (s == null || s.business != _business) {
+      showTkToast(context, 'That shortcut was for another business. Use the shortcuts on the icon again: they are this one’s now.', error: true);
+      unawaited(_putShortcuts());
+      return;
+    }
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    final tool = s.tool;
+    if (tool != null) {
+      _openTool(tool, const {});
+    } else {
+      unawaited(scanFromHome(context, auth: _chats.auth, openTool: _openTool));
+    }
+  }
+
+  /// A tool's sheet in Taskiem's conversation, filled in with [initial].
+  void _openTool(String command, Map<String, dynamic> initial) {
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst);
+    nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats, openTool: (command: command, initial: initial))));
   }
 
   void _arrived(PushNote n) {
@@ -595,8 +671,16 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openTradeOrder(context, auth, id);
       case RouteScreen.storefrontOrder:
         openStorefrontOrder(context, auth, id);
+      case RouteScreen.payments:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, open: id.isEmpty ? null : id)));
+      case RouteScreen.paymentBatch:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => SentPaymentsPage(auth: auth, openBatch: id)));
+      case RouteScreen.payroll:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PayrollPage(auth: auth) : PayrollRunPage(auth: auth, run: id)));
+      case RouteScreen.pages:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => id.isEmpty ? PagesPage(auth: auth) : PageScreen(auth: auth, name: id)));
       case RouteScreen.you:
-        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id, prefs: widget.prefs), notify: widget.notify)));
       case RouteScreen.youPage:
         // The rest of the person's own side: pushed over the business.
         final you = youRouteOf(id);
@@ -608,7 +692,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   /// The person's own chat with a business, over the business (a business
   /// session is its person too).
   Future<void> _openMine(String chat, {String? notice, String draft = '', String? tool}) =>
-      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
+      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice, prefs: widget.prefs), draft: draft, notify: widget.notify, tool: tool));
 
   /// The person's own chat with a person, over the business: a shared
   /// card's Chat opens their chat with that business, and this phone's
@@ -624,6 +708,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   void dispose() {
     widget.notify?.removeListener(_notified);
     widget.links?.removeListener(_linked);
+    widget.shortcuts?.removeListener(_shortcut);
     if (widget.notify?.onArrived == _arrived) widget.notify?.onArrived = null;
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;
@@ -662,7 +747,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         (label: 'Chats', icon: 'b-chat', build: _chatsTab),
         // Today (the web's Home); Updates as WhatsApp's (status and
         // channels) is planned for later: docs/spec/mobile-app-updates.md.
-        (label: 'Today', icon: 'b-home', build: (_) => TodayTab(auth: _chats.auth)),
+        (label: 'Today', icon: 'b-home', build: (context) => TodayTab(auth: _chats.auth, onSearch: () => _searchAll(context))),
         (
           label: 'Money',
           icon: 'b-money',
@@ -679,6 +764,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       ],
     );
   }
+
+  /// Search everywhere (menus-everywhere.md §6), over [context]: a chat or
+  /// a customer found opens by its path, as a notification's would.
+  void _searchAll(BuildContext context) => unawaited(openSearchEverywhere(context, _chats, onPath: (p) => unawaited(_openPath(p))));
 
   void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
@@ -702,6 +791,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     return ChatsScreen(
       data: _chats,
       onLinks: () => _links(context),
+      onSearchAll: () => _searchAll(context),
       // You and the person's other businesses (taskiem-for-everyone §6).
       onSwitch: () => showSwitcher(context, widget.auth),
       onProfile: () => _profile(context),
@@ -781,8 +871,9 @@ class _OpenState extends State<_Open> {
 
 /// Taskiem's conversation, open: its data lives while it is open.
 class _OpenTaskiem extends StatefulWidget {
-  const _OpenTaskiem({required this.chats});
+  const _OpenTaskiem({required this.chats, this.openTool});
   final ChatsData chats;
+  final ToolToOpen? openTool;
 
   @override
   State<_OpenTaskiem> createState() => _OpenTaskiemState();
@@ -800,6 +891,7 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   @override
   Widget build(BuildContext context) => TaskiemScreen(
     data: _data,
+    openTool: widget.openTool,
     onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,

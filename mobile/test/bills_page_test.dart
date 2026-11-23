@@ -7,13 +7,18 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/bills_page.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
+
+// The day the pictures were made: the bill falls due the next day.
+DateTime _picturedOn() => DateTime(2026, 11, 19, 9);
 
 Map<String, dynamic> _bill({String status = 'open', bool disputed = false}) => {
   'id': 'B1',
@@ -87,6 +92,19 @@ void main() {
               });
             }
             if (p == '/v1/bills/pay') return ok({'workflow_id': set ? 'W1' : '', 'approver_role': 'owner'});
+            if (p == '/v1/money/labels') return ok({'labels': <Object>[], 'suggestions': <Object>[]});
+            if (p.startsWith('/v1/stock/purchases/')) {
+              sent.add('GET $p');
+              return ok({
+                'purchase': {
+                  'id': 'po-1',
+                  'reference': 'PO-0012',
+                  'lines': [
+                    {'seller_item_id': 'si-1', 'treatment': 'track', 'received': 1},
+                  ],
+                },
+              });
+            }
             if (p.startsWith('/v1/bills/')) return ok(bill ?? _bill());
             return null;
           }
@@ -105,7 +123,8 @@ void main() {
   }
 
   testWidgets('the list: left to pay, then paid', (t) async {
-    final sent = await open(t, (c) => BillsPage(auth: c.auth));
+    final sent = await open(t, (c) => BillsPage(auth: c.auth, now: _picturedOn));
+    await looks(t, 'bills');
     expect(sent, containsAll(['LIST ', 'LIST status=paid']));
     expect(find.text('₦100,000'), findsWidgets);
     expect(find.text('1 bill'), findsOneWidget);
@@ -184,6 +203,56 @@ void main() {
     expect(find.bySemanticsLabel('Query this bill'), findsNothing);
   });
 
+  testWidgets('a bill line not matched to its order line has no mark', (t) async {
+    final b = _bill()
+      ..['lines'] = [
+        {'description': 'Sewing machine', 'quantity': 1, 'unit_kobo': 15600000, 'purchase_id': 'po-1', 'seller_item_id': 'si-1'},
+        {'description': 'Delivery', 'quantity': 1, 'unit_kobo': 500000, 'purchase_id': 'po-1'},
+      ];
+    await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), bill: b);
+    expect(find.text('Delivery'), findsOneWidget);
+    expect(find.text('Things we have'), findsOneWidget, reason: 'the matched line, kept track of');
+    expect(find.text('Not labelled'), findsOneWidget, reason: 'only the matched line, which has no label');
+  });
+
+  testWidgets('On Things we have shows only to someone who may see Things we have', (t) async {
+    final tracked = _bill()
+      ..['lines'] = [
+        {'description': 'Sewing machine', 'quantity': 1, 'unit_kobo': 15600000, 'purchase_id': 'po-1', 'seller_item_id': 'si-1'},
+      ];
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), bill: tracked);
+    expect(sent, contains('GET /v1/stock/purchases/po-1'));
+    expect(find.text('On Things we have'), findsOneWidget);
+    expect(find.text('From PO-0012'), findsOneWidget);
+
+    // table.read taken away while the page is open (the order is loaded):
+    // the row goes, as on an order to a supplier.
+    final auth = (t.widget(find.byType(BillPage)) as BillPage).auth;
+    auth.me = Me.fromJson({...Fixture('chats').json('/v1/me'), 'permissions': auth.me!.permissions.where((x) => x != 'table.read').toList()});
+    (t.element(find.byType(BillPage)) as StatefulElement).markNeedsBuild();
+    await t.pump();
+    expect(auth.can('table.read'), isFalse);
+    expect(find.text('On Things we have'), findsNothing);
+
+    final f = Fixture('chats');
+    final sent2 = <String>[];
+    final c = f.auth(
+      also: (req) async {
+        if (req.method == 'GET') sent2.add(req.url.path);
+        return switch (req.url.path) {
+          '/v1/bills/B1' => http.Response(jsonEncode(tracked), 200, headers: {'content-type': 'application/json'}),
+          _ => null,
+        };
+      },
+    );
+    c.me = Me.fromJson({...f.json('/v1/me'), 'permissions': ['invoice.read', 'invoice.manage']});
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: BillPage(auth: c, id: 'B1', follow: false)));
+    await settle(t);
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(find.text('On Things we have'), findsNothing);
+    expect(sent2.where((x) => x.startsWith('/v1/stock/purchases/')), isEmpty);
+  });
+
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
     final f = Fixture('chats');
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
@@ -204,7 +273,7 @@ void main() {
       t,
       TaskiemApp(
         mode: TkMode.light,
-        home: BillsPage(auth: chats.auth),
+        home: BillsPage(auth: chats.auth, now: _picturedOn),
       ),
       drive: settle,
     );

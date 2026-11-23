@@ -99,6 +99,8 @@ export interface Source {
   expr: string;
   /** Whether it is a number, for the rules that compare amounts. */
   number?: boolean;
+  /** The pickers' group for it ("Saved"); none for what came before. */
+  group?: string;
 }
 
 interface StepLike {
@@ -246,7 +248,8 @@ export function rulesExpr(r: Rules): string {
   return parts.length ? "=" + parts.join(r.all ? " && " : " || ") : "";
 }
 
-const PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+// A path's parts: .name, or ["2go"] (a saved thing whose name starts with a number).
+const PATH = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\["[a-z0-9-]+"\])*$/;
 const COMPARE = /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$/;
 
 /** The rules an expression is, or null when it is not one the builder says. */

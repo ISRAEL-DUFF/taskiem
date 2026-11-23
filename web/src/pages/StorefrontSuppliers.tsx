@@ -1,6 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, get, patch, post, put, whenOff } from "../api";
+import { ApiError, del, get, patch, post, put, whenOff } from "../api";
+import { useAuth } from "../auth";
+import {
+  choiceProblem,
+  choiceWords,
+  fromMemory,
+  type Choice,
+  type Remembered,
+} from "../lib/treat";
+import {
+  TreatQuestion,
+  resolveChoice,
+  useTreatData,
+  type Made,
+} from "./TreatLine";
 import {
   EmptyState,
   ErrorBox,
@@ -28,6 +42,9 @@ import type { LinksView } from "../lib/links";
 import type { StockView } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
+import { placeAddressFit, placeOffer, type PlaceOffer } from "../lib/saved";
+import { PlaceSaveOffer } from "./SaveAfter";
 
 /** The business's suppliers (docs/stock.md "Suppliers and purchase
  * orders"): who it buys from, where their orders reach them, and what is
@@ -43,6 +60,7 @@ export function StorefrontSuppliers() {
   );
   const [editing, setEditing] = useState<Supplier | "new" | null>(null);
   const [linking, setLinking] = useState<Supplier | null>(null);
+  const [items, setItems] = useState<Supplier | null>(null);
   const act = useAction();
   const v = view.data;
   // What is owed to a linked supplier is its open bills alone (business
@@ -135,6 +153,14 @@ export function StorefrontSuppliers() {
                           onClick={() => setEditing(s)}
                         >
                           Change<span className="sr-only"> {s.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setItems(s)}
+                        >
+                          What you buy
+                          <span className="sr-only"> from {s.name}</span>
                         </button>
                         {s.link_id && (
                           <Link
@@ -237,6 +263,9 @@ export function StorefrontSuppliers() {
           }}
         />
       )}
+      {items && (
+        <SupplierItemsModal supplier={items} onClose={() => setItems(null)} />
+      )}
       <LinkedSuppliersOwed />
       <DeliverTo />
     </>
@@ -263,6 +292,13 @@ function DeliverToForm({
 }) {
   const [address, setAddress] = useState(initial.address);
   const [phone, setPhone] = useState(initial.phone);
+  // What a saved place left out to fit the address's 300 letters.
+  const [fitHint, setFitHint] = useState("");
+  // The address a saved place filled, until it is typed in: not offered.
+  const [picked, setPicked] = useState<string>();
+  // A typed address just saved (saved objects S3): offered as a place.
+  const [offer, setOffer] = useState<PlaceOffer | null>(null);
+  const { can } = useAuth();
   const act = useAction();
   return (
     <section
@@ -270,7 +306,20 @@ function DeliverToForm({
       aria-labelledby="suppliers-deliver"
       data-testid="deliver-to"
     >
-      <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
+      <div className="saved-fill-head">
+        <h2 id="suppliers-deliver">Where linked suppliers deliver</h2>
+        <SavedFill
+          kind="place"
+          label="the address"
+          onPick={(x) => {
+            const fit = placeAddressFit(x.details, 300);
+            setAddress(fit.address);
+            setPicked(fit.address);
+            setFitHint(fit.hint);
+            if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
+          }}
+        />
+      </div>
       <p className="hint">
         Orders to suppliers on Taskiem carry it, and their rider brings them
         here. Leave it empty and you pick orders up.
@@ -278,16 +327,14 @@ function DeliverToForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(
-            async () => (
-              await put("/v1/stock/deliver-to", {
-                address: address.trim(),
-                phone: phone.trim(),
-              }),
-              onSaved()
-            ),
-            "Saved",
-          );
+          void act.run(async () => {
+            const body = { address: address.trim(), phone: phone.trim() };
+            await put("/v1/stock/deliver-to", body);
+            const next = placeOffer({ ...body, was: initial.address, picked, may: can("saved.manage") });
+            // Only its number changed: the place offered (or saved) stays.
+            setOffer((o) => next ?? (o?.address === body.address ? { ...o, phone: body.phone } : null));
+            onSaved();
+          }, "Saved");
         }}
       >
         <Field label="Address">
@@ -295,10 +342,17 @@ function DeliverToForm({
             value={address}
             maxLength={300}
             placeholder="12 Admiralty Way, Lekki"
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setPicked(undefined);
+              setFitHint("");
+            }}
             autoComplete="street-address"
           />
         </Field>
+        <p className="hint saved-fill-note" role="status" data-testid="saved-fill-note">
+          {fitHint}
+        </p>
         <Field label="Number the rider calls at the door">
           <input
             value={phone}
@@ -322,6 +376,7 @@ function DeliverToForm({
           </button>
         </div>
       </form>
+      {offer && <PlaceSaveOffer key={offer.address} offer={offer} />}
     </section>
   );
 }
@@ -606,5 +661,151 @@ function LinkedSuppliersOwed() {
         ))}
       </Items>
     </section>
+  );
+}
+
+/** What the business remembers of a supplier's items (what a business
+ * buys §6): each one's treatment, stock item and label, changed here for
+ * orders drafted after, or forgotten (its next order asks again). A linked
+ * supplier's are its item links; another's, its items by name. */
+function SupplierItemsModal({
+  supplier,
+  onClose,
+}: {
+  supplier: Supplier;
+  onClose: () => void;
+}) {
+  const { can } = useAuth();
+  const manage = can("storefront.manage");
+  const path = supplier.link_id
+    ? `/v1/item-links/${encodeURIComponent(supplier.link_id)}`
+    : `/v1/stock/suppliers/${encodeURIComponent(supplier.id)}/items`;
+  const list = useLoad(
+    () =>
+      supplier.link_id
+        ? get<{ item_links: Remembered[] }>(path).then((r) => r.item_links)
+        : get<{ items: Remembered[] }>(path).then((r) => r.items),
+    [path],
+  );
+  const data = useTreatData();
+  const made = useRef<Made>(new Map());
+  const [editing, setEditing] = useState<{ m: Remembered; c?: Choice }>();
+  const act = useAction();
+  const idOf = (m: Remembered) => m.seller_item_id ?? m.name_key ?? m.name;
+  const save = () =>
+    void act
+      .run(async () => {
+        if (!editing?.c) return;
+        const body = await resolveChoice(editing.c, data, made.current);
+        await put(
+          path,
+          supplier.link_id
+            ? { seller_item_id: editing.m.seller_item_id, ...body }
+            : { name: editing.m.name, ...body },
+        );
+        setEditing(undefined);
+        list.reload();
+        data.reloadLabels();
+      }, `Saved: ${editing?.m.name ?? ""}`)
+      .then(() => undefined);
+  const forget = (m: Remembered) =>
+    confirm(`Forget ${m.name}? Its next order asks again.`) &&
+    void act.run(
+      async () => {
+        await del(
+          supplier.link_id
+            ? `${path}/${encodeURIComponent(m.seller_item_id ?? "")}`
+            : `${path}?name=${encodeURIComponent(m.name)}`,
+        );
+        list.reload();
+      },
+      `Forgot ${m.name}`,
+    );
+  return (
+    <Modal title={`What you buy from ${supplier.name}`} onClose={onClose}>
+      <p className="hint">
+        How each item is treated when it comes, and its label. A change is for
+        orders made after it; nothing already received moves.
+      </p>
+      <ErrorBox error={list.error ?? act.error} />
+      {!list.data ? (
+        !list.error && <Skeleton rows={2} label="Loading their items…" />
+      ) : list.data.length === 0 ? (
+        <p className="hint">
+          Nothing yet. The first order of each item asks how to treat it.
+        </p>
+      ) : (
+        <Items label={`What you buy from ${supplier.name}`}>
+          {list.data.map((m) =>
+            editing && idOf(editing.m) === idOf(m) ? (
+              <li key={idOf(m)} className="act-row" data-testid="supplier-item">
+                <div className="grow">
+                <TreatQuestion
+                  item={m.name}
+                  supplier={supplier.name}
+                  data={data}
+                  value={editing.c}
+                  onChange={(c) => setEditing({ m, c })}
+                  rememberable={false}
+                />
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={
+                      act.busy || !editing.c || !!choiceProblem(editing.c)
+                    }
+                    onClick={save}
+                  >
+                    Save<span className="sr-only"> {m.name}</span>
+                  </button>
+                  <button type="button" onClick={() => setEditing(undefined)}>
+                    Cancel
+                  </button>
+                </div>
+                </div>
+              </li>
+            ) : (
+              <Row
+                key={idOf(m)}
+                letter={m.name}
+                title={m.name}
+                sub={
+                  <span className="sub">
+                    {choiceWords(fromMemory(m), () => m.stock_item)}
+                  </span>
+                }
+                testid="supplier-item"
+              >
+                {manage && (
+                  <>
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() => setEditing({ m, c: fromMemory(m) })}
+                    >
+                      Change<span className="sr-only"> {m.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="small danger"
+                      disabled={act.busy}
+                      onClick={() => forget(m)}
+                    >
+                      Forget<span className="sr-only"> {m.name}</span>
+                    </button>
+                  </>
+                )}
+              </Row>
+            ),
+          )}
+        </Items>
+      )}
+      <div className="toolbar">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }

@@ -129,6 +129,53 @@ void main() {
     expect(find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'You chose Yes'), findsOneWidget);
   });
 
+  testWidgets('a question a run asks of whoever started it (fq:) comes in the history, and its button answers it as the chat\'s reply', (t) async {
+    // Made tools M4 (api/forms_starter.go askStarter): sent by the web
+    // channel outside any exchange, so it arrives with the history, its
+    // buttons' ids kept live by the server; nothing in the app is special
+    // to it.
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final said = <Map<String, dynamic>>[];
+    const fq = 'fq:0193d000-0000-7000-8000-000000000001';
+    final question = _msg('fq1', 'Which branch?\nChoose one:', at: '2026-11-11T13:24:00Z', buttons: [
+      {'id': '$fq:0', 'title': 'Ikeja branch'},
+      {'id': '$fq:1', 'title': 'Yaba branch'},
+    ]);
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/taskiem-chat' && !req.url.queryParameters.containsKey('after')) {
+          final h = f.json('/v1/taskiem-chat');
+          return http.Response(jsonEncode({...h, 'messages': [...(h['messages'] as List), question]}), 200, headers: {'content-type': 'application/json'});
+        }
+        if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
+          said.add(jsonDecode(req.body) as Map<String, dynamic>);
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                _msg('said-1', 'Yaba branch', inbound: true, at: '2026-11-11T13:25:00Z'),
+                _msg('a-1', 'Which branch?: Yaba branch. Thank you.', at: '2026-11-11T13:25:01Z'),
+              ],
+            }),
+            200,
+          );
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    expect(find.textContaining('Which branch?', findRichText: true), findsOneWidget);
+    await t.ensureVisible(find.bySemanticsLabel('Yaba branch'));
+    await t.tap(find.bySemanticsLabel('Yaba branch'));
+    await settle(t);
+    expect(said.single, {'text': 'Yaba branch', 'reply': '$fq:1'});
+    expect(find.textContaining('Which branch?: Yaba branch. Thank you.', findRichText: true), findsOneWidget);
+  });
+
   testWidgets('a send that fails gives the words back to the box', (t) async {
     await open(t, fail: 500);
     await t.enterText(find.byType(EditableText), 'orders today');
@@ -140,8 +187,8 @@ void main() {
   });
 
   test('merging: by id, a code kept as sent, ours giving way to the stored copy, buttons with ids kept', () {
-    TaskiemChatMessagesItem m(String id, String text, {bool inbound = false, String at = '2026-11-11T13:00:00Z', List<Map<String, dynamic>>? buttons}) =>
-        TaskiemChatMessagesItem.fromJson(_msg(id, text, inbound: inbound, at: at, buttons: buttons));
+    TaskiemMessage m(String id, String text, {bool inbound = false, String at = '2026-11-11T13:00:00Z', List<Map<String, dynamic>>? buttons}) =>
+        TaskiemMessage.fromJson(_msg(id, text, inbound: inbound, at: at, buttons: buttons));
     final local = TaskiemLine(m('local-1', 'hello', inbound: true, at: '2026-11-11T13:00:05Z'), local: true);
     var list = mergeTaskiem([TaskiemLine(m('a', 'hi'))], []);
     list = mergeTaskiem([...list, local], [m('s1', 'hello', inbound: true, at: '2026-11-11T13:00:06Z')]);
@@ -393,7 +440,7 @@ void main() {
     // The tools button opens the tools (M5); pressed again, they close.
     await t.tap(find.bySemanticsLabel('Open tools'));
     await t.pumpAndSettle();
-    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('Tools'), findsWidgets);
     await t.tap(find.bySemanticsLabel('Close tools'));
     await t.pumpAndSettle();
     expect(find.text('Tools'), findsNothing);

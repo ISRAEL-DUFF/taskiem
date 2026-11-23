@@ -2,6 +2,8 @@
 
 Status: **plan, settled** (17 November 2026; every question settled the same day, §17; decision [0069](../decisions/0069-people-chatting-with-people.md) accepted the same day). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Stage 5a's server (finding people, and one-to-one chats) is built and joined (see the "As built" sections at the end); the rest is not. The founder's answers are in §17.
 
+**What Taskiem is for (founder, 19 November 2026; [0068, amendment](../decisions/0068-taskiem-for-everyone.md#amendment-2026-11-19-what-taskiem-is-for)):** Taskiem is not here to replace WhatsApp, Telegram or any other chat app. It is here to automate businesses, alongside their conversations, in the way that is most natural and easiest to use. Chats between people are for what involves a business (sharing a product or an order, ordering together), not a place to move one's chats to.
+
 ## 1. Summary
 
 Stages 1 to 4 made the Taskiem app a chat app for everyone: a person signs up with a phone, chats with the businesses they buy from, finds new ones in Discover, and sees their orders in one place. Stage 5 lets people chat **with each other**.

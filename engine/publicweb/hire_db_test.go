@@ -65,7 +65,7 @@ func TestHireThroughTheDatabase(t *testing.T) {
 	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
 		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
 	},
-		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Storefronts: func(context.Context, uuid.UUID, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
 		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Claim: DBClaim(pool),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
@@ -186,7 +186,7 @@ func TestSpaceThroughTheDatabase(t *testing.T) {
 	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
 		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
 	},
-		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Storefronts: func(context.Context, uuid.UUID, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
 		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Claim: DBClaim(pool),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}
@@ -300,7 +300,7 @@ func TestCountsThroughTheDatabase(t *testing.T) {
 	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
 		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
 	},
-		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Storefronts: func(context.Context, uuid.UUID, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
 		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Claim: DBClaim(pool),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),
 		Submissions: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour)}

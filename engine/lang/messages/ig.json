@@ -112,6 +112,46 @@
       "text": "Jụ",
       "reviewed": false
     },
+    "button.treat_label_another": {
+      "text": "Another",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+    },
+    "button.treat_label_none": {
+      "text": "No label",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+    },
+    "button.treat_many_record": {
+      "text": "Just record them",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+    },
+    "button.treat_many_yes": {
+      "text": "Yes, one row each",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+    },
+    "button.treat_new_item": {
+      "text": "A new one",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+    },
+    "button.treat_record": {
+      "text": "Just record it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+    },
+    "button.treat_stock": {
+      "text": "Add to stock",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+    },
+    "button.treat_track": {
+      "text": "Keep track of it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+    },
     "button.yes": {
       "text": "Ee",
       "reviewed": false
@@ -119,6 +159,16 @@
     "button.yes_add": {
       "text": "Ee, tinye ya",
       "reviewed": false
+    },
+    "button.yes_sell": {
+      "text": "Yes, I sell it",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+    },
+    "button.no_sell": {
+      "text": "No, I don't",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Ee, bipụta ya",
@@ -308,6 +358,1351 @@
       "text": "{name} adịghị ebe a. Asụsụ dị ebe a: {languages}.",
       "reviewed": false
     },
+    "menu.about": {
+      "text": "Maka {topic}. Gịnị ka ị chọrọ ime?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heads a topic's menu when Taskiem's model could tell the topic but not the action"
+    },
+    "menu.account.lang": {
+      "text": "Asụsụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.lang.line": {
+      "text": "Asụsụ m ji aza gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.plan": {
+      "text": "Atụmatụ gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.plan.line": {
+      "text": "Ihe ị na-akwụ, ihe ị na-enweta",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.signin": {
+      "text": "Banye na weebụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.signin.line": {
+      "text": "Njikọ maka kọmputa gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.account.switch": {
+      "text": "Gbanwee azụmahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.account.switch.line": {
+      "text": "Rụọ ọrụ n'ime nke ọzọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.anything_else": {
+      "text": "Ọ dị ihe ọzọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a topic's menu shown after that topic's command was answered"
+    },
+    "menu.auto.build": {
+      "text": "Usoro ọrụ ọhụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.build.ask.goal": {
+      "text": "Gịnị kwesịrị ime, oleekwa mgbe? Dịka every Friday text my customers who owe me.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.auto.build.line": {
+      "text": "Kwuo ya, Taskiem ga-ahazi ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.auto.run": {
+      "text": "Malite usoro ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.run.ask.name": {
+      "text": "Kedu nke? Aha ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.auto.run.line": {
+      "text": "Nke ị nwerelarị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.auto.status": {
+      "text": "Ihe rụrụ ọrụ taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.auto.status.line": {
+      "text": "Na ihe ọ bụla dara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.cancel": {
+      "text": "Kagbuo ndokwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.cancel.ask.ref": {
+      "text": "Kedu ndokwa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.cancel.line": {
+      "text": "A ga-agwa onye ahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.move": {
+      "text": "Bugharịa ndokwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.move.ask.ref": {
+      "text": "Kedu ndokwa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.move.ask.when": {
+      "text": "Gaa mgbe ole? Dịka Sat 11:00.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.move.line": {
+      "text": "Ụbọchị ma ọ bụ oge ọhụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.off": {
+      "text": "Were ụbọchị ezumike",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.off.ask.day": {
+      "text": "Kedu ụbọchị? Dịka 25 Dec.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.bookings.off.line": {
+      "text": "Enweghị ndokwa n'ụbọchị ahụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.bookings.today": {
+      "text": "Ndokwa taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.bookings.today.line": {
+      "text": "Onye na-abịa, na mgbe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.add": {
+      "text": "Tinye onye na-ebute ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.add.ask.for": {
+      "text": "Gịnị ka ị na-azụ n'aka ha? Zipu skip ma ọ bụrụ ọtụtụ ihe.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.ask.name": {
+      "text": "Kedu aha onye na-ebute ihe ahụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.ask.phone": {
+      "text": "Kedu nọmba ekwentị ha?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.add.line": {
+      "text": "Aha, ekwentị, ihe ha na-ere",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.bills": {
+      "text": "Ụgwọ ị ji",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.bills.line": {
+      "text": "Ihe ị ji ndị na-ebute ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.got": {
+      "text": "Ngwa abatala",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.got.ask.what": {
+      "text": "Gịnị bịara? Kwuo ole, dịka 50 cartons of Indomie.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.got.line": {
+      "text": "A gụkọọ ya n'ime ngwa ahịa gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.list": {
+      "text": "Ndị na-ebute ihe gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.list.line": {
+      "text": "Ndị ị na-azụ n'aka ha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.order": {
+      "text": "Nye ndị na-ebute iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.order.ask.who": {
+      "text": "Kedu onye na-ebute ihe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.order.line": {
+      "text": "Ihe ị chọrọ, ezigara ha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.buying.pay": {
+      "text": "Kwụọ onye na-ebute ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.buying.pay.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.ask.how": {
+      "text": "Kedu ka i si kwụọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.ask.who": {
+      "text": "Kedu onye na-ebute ihe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.pay.line": {
+      "text": "Maka ụgwọ i ji ha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.check.long": {
+      "text": "Nke ahụ ogologo nke ukwuu. Kwuo ya n'okwu ole na ole.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer over 150 characters"
+    },
+    "menu.check.money": {
+      "text": "Zipu ego ole, dịka 12,000 ma ọ bụ 12k.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an amount"
+    },
+    "menu.check.number": {
+      "text": "Zipu nọmba, dịka 30.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a number"
+    },
+    "menu.check.phone": {
+      "text": "Nke ahụ adịghị ka nọmba ekwentị. Nwaa nke dị ka 0803 123 4567.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a phone number"
+    },
+    "menu.check.ref": {
+      "text": "Nke ahụ abụghị nọmba iwu. Ọ na-adị ka TK-A1B2C3.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an order's or booking's number"
+    },
+    "menu.buying.deliver": {
+      "text": "Buga n'ebe echekwara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.place": {
+      "text": "Ebee? Aha ebe echekwara, dịka warehouse.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.ref": {
+      "text": "Kedu iwu? Nọmba ya, dịka P-7QX4KD.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.line": {
+      "text": "Ebe otu iwu na-aga, dịka @warehouse",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.saved": {
+      "text": "Nke ahụ abụghị aha ihe echekwara. Aha bụ mkpụrụedemede, nọmba na -, dịka mum ma ọ bụ our-account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a saved thing's name"
+    },
+    "menu.saved.ask": {
+      "text": "Jụọ maka ihe echekwara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.name": {
+      "text": "Kedu ihe echekwara? Aha ya, dịka mum.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.what": {
+      "text": "Gịnị ka ị chọrọ ịma? Dịka phone, ma ọ bụ ụbọchị insurance. Zipu skip maka ya niile.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.line": {
+      "text": "Otu nkọwa, dịka ekwentị @mum",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.import": {
+      "text": "Bubata site na faịlụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.import.line": {
+      "text": "Spredshiit nke akaụntụ, ndị mmadụ, ebe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.remind": {
+      "text": "Chetara m otu ụbọchị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.name": {
+      "text": "Kedu ihe echekwara? Aha ya, dịka car.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.what": {
+      "text": "Kedu n'ime ụbọchị ya? Dịka insurance ma ọ bụ birthday. Zipu skip ma ọ bụrụ na o nwere naanị otu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.line": {
+      "text": "Ụbọchị echekwara, a gwa gị n'ụbọchị ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders": {
+      "text": "Ncheta gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders.line": {
+      "text": "Ụbọchị ndị ị rịọrọ ka a gwa gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.share": {
+      "text": "Kesaa ihe echekwara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.name": {
+      "text": "Kedu ihe echekwara? Aha ya, dịka our-account.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.to": {
+      "text": "Ya na onye? Azụmahịa ejikọrọ ma ọ bụ onye ahịa, site n'aha.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.line": {
+      "text": "Ya na azụmahịa ejikọrọ ma ọ bụ onye ahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.signed": {
+      "text": "Zipu nọmba, dịka -2 ma ọ bụ 3.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not a number up or down"
+    },
+    "menu.choose": {
+      "text": "Họrọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The button that opens a menu's list on WhatsApp; at most 20 characters"
+    },
+    "menu.choose_one": {
+      "text": "Họrọ otu n'ime: {choices}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: An answer that is not one of a question's fixed choices"
+    },
+    "menu.form_missing": {
+      "text": "Dejupụta: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A form sent without a value it needs; {fields} are the questions left"
+    },
+    "menu.here_help": {
+      "text": "Nke a bụ ihe m nwere ike inyere gị aka na ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after the model said Taskiem cannot do something"
+    },
+    "menu.leave": {
+      "text": "Ka anyị hapụ ya ugbu a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question answered wrongly three times: it is dropped"
+    },
+    "menu.lists.add": {
+      "text": "Tinye na ndepụta",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.add.ask.list": {
+      "text": "Na kedu ndepụta?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.add.line": {
+      "text": "Otu ihe ọhụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.all": {
+      "text": "Ndepụta gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.all.line": {
+      "text": "Ndị ahịa, ndị otu, ihe ọ bụla ị na-edebe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.find": {
+      "text": "Chọọ ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.find.ask.list": {
+      "text": "N'ime kedu ndepụta?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.find.ask.words": {
+      "text": "Gịnị ka m ga-achọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.lists.find.line": {
+      "text": "N'otu n'ime ndepụta gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.lists.new": {
+      "text": "Mee ndepụta ọhụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.lists.new.line": {
+      "text": "Ihe ọ bụla ị chọrọ idebe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.cash": {
+      "text": "Ego batara ma ọ bụ pụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.cash.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.ask.dir": {
+      "text": "Ego batara, ka ọ pụrụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.ask.what": {
+      "text": "Maka gịnị? Zipu skip ma ọ bụrụ na ọ dịghị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.cash.line": {
+      "text": "Igbe ego, sefu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.invoice": {
+      "text": "Zipu invoice",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.invoice.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.ask.for": {
+      "text": "Maka gịnị?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.ask.who": {
+      "text": "Maka onye? Aha, ma ọ bụ onye echekwara dịka @acme.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.invoice.line": {
+      "text": "Nye onye ahịa, site na mkparịta ụka",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.invoices": {
+      "text": "Invoice gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.invoices.line": {
+      "text": "Ezigara, akwụrụ, na ndị gafere oge",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.spent": {
+      "text": "Dee ego i mefuru",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.spent.ask.amount": {
+      "text": "Ego ole ka i mefuru?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.spent.ask.what": {
+      "text": "Na gịnị?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.money.spent.line": {
+      "text": "Diesel, ụgwọ ụlọ, njem",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.money.week": {
+      "text": "Ego gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.money.week.line": {
+      "text": "Nke batara, nke pụrụ, na nke fọdụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.more": {
+      "text": "Ndị ọzọ…",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+    },
+    "menu.more_line": {
+      "text": "Isiokwu ndị ọzọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the More… row, and heading the rest of the topics"
+    },
+    "menu.need_answer": {
+      "text": "Achọrọ m azịza iji gaa n'ihu. Ziga *cancel* ka ịkwụsị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: An empty answer to a question"
+    },
+    "menu.not_yours": {
+      "text": "Nke ahụ abụghị ihe ị nwere ike ime ebe a. Zipu *help* ka ị hụ ihe ị nwere ike ime.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row the person may not use"
+    },
+    "menu.open_web": {
+      "text": "{title}: mepee ya na Taskiem na weebụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row with no form or page on this channel"
+    },
+    "menu.orders.move": {
+      "text": "Njikere ma ọ bụ ebugala",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.move.ask.ref": {
+      "text": "Kedu iwu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.move.ask.to": {
+      "text": "Ọ dị njikere, ka e bugala ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.move.line": {
+      "text": "Kwaga iwu n'ihu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.one": {
+      "text": "Otu iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.one.ask.ref": {
+      "text": "Kedu iwu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.one.line": {
+      "text": "Chọta ya site na nọmba ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.open": {
+      "text": "Iwu ndị na-aga n'ihu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.open.line": {
+      "text": "Na-eche, a na-eme ya, na-abịa n'ụzọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.orders.refund": {
+      "text": "Laghachi ego iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.orders.refund.ask.ref": {
+      "text": "Kedu iwu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.orders.refund.line": {
+      "text": "Ego alaghachi n'aka onye ahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.add": {
+      "text": "Mmadụ ji gị ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.add.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.ask.for": {
+      "text": "Maka gịnị? Zipu skip ma ọ bụrụ na ọ dịghị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.ask.who": {
+      "text": "Onye ji gị ụgwọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.add.line": {
+      "text": "Dee ya n'akwụkwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.list": {
+      "text": "Ndị ji gị ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.list.line": {
+      "text": "Mmadụ niile, nke kachasị ibu na mbụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.paid": {
+      "text": "Mmadụ akwụọla",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.paid.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.ask.how": {
+      "text": "Ego nkịtị, ka transfer?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.ask.who": {
+      "text": "Onye kwụrụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.paid.line": {
+      "text": "Ewepụ ya n'ihe ha ji",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.owe.send": {
+      "text": "Zipu onye ahịa ụgwọ ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.owe.send.ask.who": {
+      "text": "Kedu onye ahịa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.owe.send.line": {
+      "text": "Ncheta enyi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.fronts": {
+      "text": "Peeji ndị ọzọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.fronts.line": {
+      "text": "Menu, peeji nri nta",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.hours": {
+      "text": "Oge imeghe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.hours.ask.hours": {
+      "text": "Olee mgbe ị na-emeghe? Dịka mon-sat 8-6.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.page.hours.line": {
+      "text": "Ụbọchị na oge ị na-emeghe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.see": {
+      "text": "Lee peeji gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.see.line": {
+      "text": "Ihe ndị ahịa na-ahụ, na koodu QR ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.page.shut": {
+      "text": "Mepee/mechie ụlọ ahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.page.shut.ask.do": {
+      "text": "Mechie ụlọ ahịa, ka mepee ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.page.shut.line": {
+      "text": "Kwụsị ịnata iwu nwa oge, ma ọ bụ malite ọzọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.pick_topic": {
+      "text": "Họrọ isiokwu, ma ọ bụ gwa m ihe ị chọrọ n'okwu nke gị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after help"
+    },
+    "menu.products.add": {
+      "text": "Tinye ngwaahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.add.ask.name": {
+      "text": "Kedu aha ngwaahịa ahụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.add.ask.price": {
+      "text": "Kedu ọnụahịa ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.add.line": {
+      "text": "Aha, ọnụahịa, foto, nha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.hide": {
+      "text": "Zoo/gosi ngwaahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.hide.ask.do": {
+      "text": "Zoo ya, ka gosi ya ọzọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.hide.ask.name": {
+      "text": "Kedu ngwaahịa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.hide.line": {
+      "text": "Wepụ ya na peeji gị nwa oge, ma ọ bụ weghachi ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.price": {
+      "text": "Gbanwee ọnụahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.price.ask.name": {
+      "text": "Kedu ngwaahịa?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.price.ask.price": {
+      "text": "Kedu ọnụahịa ọhụrụ ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.price.line": {
+      "text": "Ọnụahịa ọhụrụ maka otu ngwaahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.prices": {
+      "text": "Ndepụta ọnụahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.prices.line": {
+      "text": "Ọnụahịa maka ndị na-azụ ka ha ree",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.products.service": {
+      "text": "Tinye ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.products.service.ask.minutes": {
+      "text": "Nkeji ole ka ọ na-ewe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.ask.name": {
+      "text": "Kedu aha ọrụ ahụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.ask.price": {
+      "text": "Kedu ọnụahịa ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.products.service.line": {
+      "text": "Ịkpụ isi, nlele uwe, otu oge",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.reply_number": {
+      "text": "Zaa na nọmba:",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After a numbered menu's head, on the chat apps without menus of their own"
+    },
+    "menu.reply_or_type": {
+      "text": "Zaa na nọmba, ma ọ bụ dee ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a question's numbered choices"
+    },
+    "menu.riders.add": {
+      "text": "Tinye onye na-ebuga ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.add.ask.areas": {
+      "text": "Kedu mpaghara {name} na-aga? Zipu skip maka ebe ọ bụla.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.areas.label": {
+      "text": "Ebee ka ọ na-eje?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
+    "menu.riders.add.ask.name": {
+      "text": "Kedu aha onye na-ebuga ihe ahụ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone": {
+      "text": "Kedu nọmba ekwentị {name}?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone.label": {
+      "text": "Gịnị bụ nọmba ekwentị ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: a form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
+    "menu.riders.add.line": {
+      "text": "Aha, ekwentị, na mpaghara ha na-aga",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.auto": {
+      "text": "Kesaa iwu niile",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.auto.line": {
+      "text": "Ndị na-ebuga ihe na-ewere ha ka ha si abịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.back": {
+      "text": "Weghachi otu iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.back.ask.ref": {
+      "text": "Kedu iwu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.back.line": {
+      "text": "Site n'aka onye na-enweghị ike ịga",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.give": {
+      "text": "Nye onye na-ebuga iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.give.ask.ref": {
+      "text": "Kedu iwu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.give.ask.rider": {
+      "text": "Kedu onye na-ebuga ihe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.give.line": {
+      "text": "Họrọ iwu ahụ, mgbe ahụ onye na-ebuga ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.list": {
+      "text": "Ndị na-ebuga ihe gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.list.line": {
+      "text": "Onye nọ n'èzí, onye nwere ike ịga ugbu a",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.riders.today": {
+      "text": "Mbuga taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.riders.today.line": {
+      "text": "Na-aga, emechara, na ndị na-eche",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.handover": {
+      "text": "Nyefee oge ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.handover.line": {
+      "text": "Ego na ngwa ahịa mgbe a na-agbanwe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.sell": {
+      "text": "Dee ihe e rere",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.sell.ask.amount": {
+      "text": "Ego ole n'ozuzu?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.ask.paid": {
+      "text": "Kedu ka ha si kwụọ?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.ask.what": {
+      "text": "Gịnị ka i rere? Kwuo ole, dịka 3 bags of rice.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.sales.sell.line": {
+      "text": "Ihe, ego, na otu ha si kwụọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.today": {
+      "text": "Ire taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.today.line": {
+      "text": "Ihe batara taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.sales.week": {
+      "text": "Otu izu a si gaa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.sales.week.line": {
+      "text": "Ire, ego batara na nke pụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.saved.add": {
+      "text": "Chekwaa ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.saved.add.ask.name": {
+      "text": "Kedu aha ọ ga-enwe? Dịka mum.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.add.ask.what": {
+      "text": "Gịnị ka m ga-edebe? Dịka GTBank 0123456789.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.add.line": {
+      "text": "Kpọọ ya mgbe e mesịrị site n'aha ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.saved.all": {
+      "text": "Ihe ndị ị chekwara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.saved.all.line": {
+      "text": "Akaụntụ, adreesị, ndetu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.say_another": {
+      "text": "Họrọ isiokwu, ma ọ bụ kwuo ya n'ụzọ ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under the topics menu, after a message nothing understood"
+    },
+    "menu.school.clear": {
+      "text": "Nkwado ule",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.clear.line": {
+      "text": "Ndị nwere ike ide ule",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.debtors": {
+      "text": "Ndị ji ụgwọ, site n'oge",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.debtors.line": {
+      "text": "Ya na ncheta a ga-eziga",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.pay": {
+      "text": "Dee ịkwụ ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.pay.line": {
+      "text": "Ego nkịtị ma ọ bụ transfer na tebụl",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.school.students": {
+      "text": "Ụmụ akwụkwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.school.students.line": {
+      "text": "Site na klaasị, ya na ihe ha ji",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.shall": {
+      "text": "{title}: *{command}*\nKa m mee ya?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The command a menu's questions made, waiting for Yes"
+    },
+    "menu.staff.approvals": {
+      "text": "Na-echere nkwado gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.approvals.line": {
+      "text": "Ego, mbelata, ịkwụ ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.staff.give": {
+      "text": "Nye mmadụ ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.give.ask.what": {
+      "text": "Gịnị ka ha ga-eme, tupu mgbe ole? Dịka count the float by 7am.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.staff.give.ask.who": {
+      "text": "Maka onye? Aha ya dịka ọ dị na otu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.staff.give.line": {
+      "text": "Ya na oge ọ ga-emecha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.staff.mine": {
+      "text": "Ọrụ gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.staff.mine.line": {
+      "text": "Ihe dị n'aka gị taa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.add": {
+      "text": "Tinye ngwa batara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.add.ask.cost": {
+      "text": "Ego ole ka nke ọ bụla ji? Zipu skip ma ọ bụrụ na ịchọghị ikwu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.add.ask.what": {
+      "text": "Gịnị batara? Kwuo ole, dịka 50 cartons of Indomie.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.add.line": {
+      "text": "Ihe bịara, ole, na ọnụahịa ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.adjust": {
+      "text": "Dozie ọnụọgụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.adjust.ask.by": {
+      "text": "Site na ole? Jiri - maka mbelata, dịka -2.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.ask.item": {
+      "text": "Kedu ihe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.ask.why": {
+      "text": "Gịnị mere? Zipu skip ma ọ bụrụ na ịchọghị ikwu.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.adjust.line": {
+      "text": "Mebiri emebi, furu efu, ma ọ bụ agụhiere ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.count": {
+      "text": "Gụọ ihe dị na shelf",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.count.line": {
+      "text": "Otu otu, ihe dị n'ezie",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.low": {
+      "text": "Lee ihe na-agwụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.low.line": {
+      "text": "Ihe ndị na-achọ ịgwụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.new": {
+      "text": "Add something to count",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.new.ask.what": {
+      "text": "What is it, and how many? Like 20 yards of ankara fabric.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.new.line": {
+      "text": "Something new, sold or used: fabric, thread, bags",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.one": {
+      "text": "Ole fọdụrụ n'otu ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.one.ask.item": {
+      "text": "Kedu ihe?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.one.line": {
+      "text": "Ọnụọgụ otu ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.taken": {
+      "text": "{title}: {values}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)"
+    },
+    "menu.tip": {
+      "text": "Oge ọzọ ị nwere ike ide: *{command}*",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Under a menu: the typed command for the row Taskiem picked"
+    },
+    "menu.topic.account": {
+      "text": "Akaụntụ gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.auto": {
+      "text": "Usoro ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.bookings": {
+      "text": "Ndokwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.buying": {
+      "text": "Ndị na-ebute ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.lists": {
+      "text": "Ndepụta gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.money": {
+      "text": "Ego",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.orders": {
+      "text": "Iwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.owe": {
+      "text": "Ndị ji gị ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.page": {
+      "text": "Peeji gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.products": {
+      "text": "Ngwaahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.riders": {
+      "text": "Ndị na-ebuga ihe",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.sales": {
+      "text": "Ire",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.saved": {
+      "text": "Ihe echekwara",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.school": {
+      "text": "Ụlọ akwụkwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.staff": {
+      "text": "Ndị ọrụ na ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topic.stock": {
+      "text": "Ngwa ahịa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.topics": {
+      "text": "Isiokwu",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The title over the topics in a WhatsApp list; at most 24 characters"
+    },
+    "menu.what_do": {
+      "text": "Gịnị ka ị chọrọ ime?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heads a menu of the chat (docs/spec/chat-menus.md)"
+    },
     "money.channel.cash": {
       "text": "ego nkịtị",
       "reviewed": false
@@ -470,6 +1865,14 @@
     },
     "ready.secret": {
       "text": "Tinye uru nzuzo {name}.",
+      "reviewed": false
+    },
+    "ready.saved_invalid": {
+      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "reviewed": false
+    },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
       "reviewed": false
     },
     "ready.table": {
@@ -770,6 +2173,10 @@
     },
     "door.cooling": {
       "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": false
+    },
+    "wa.not_understood_help": {
+      "text": "Zipu *help* ka ị hụ ihe m nwere ike ime.",
       "reviewed": false
     },
     "wa.password.off": {
@@ -1396,6 +2803,248 @@
       "text": "Tebụl gị {table} enweghị kọlụm {columns} ugbu a, nke ọ na-eji. Tinye ya na ngwa ahụ{link}, ma ọ bụghị ya, nzọụkwụ ndị ahụ ga-ada.",
       "reviewed": false
     },
+    "wa.public.button_gone": {
+      "text": "Bọtịnụ a adịghịzi. Zipu *menu* ka ị hụ ihe ị nwere ike ime ebe a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "Emechala: {label} agwụla. Nọmba ntụaka gị bụ {reference}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Ndo, {label} agaghị nke ọma. Nọmba ntụaka gị bụ {reference}. Zipu *menu* ka ị nwaa ọzọ, ma ọ bụ dee anyị ebe a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…na {count} ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "Enweghị ike ime {label} site ebe a. Dee anyị ebe a, anyị ga-enyere gị aka.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} amalitela. Nọmba ntụaka gị bụ {reference}. Azịza ga-abịa ebe a mgbe ọ dị njikere.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Customers' tools: a tool with an answer has started; the answer follows"
+    },
+    "wa.saved.bank": {
+      "text": "{bank}, account number {number}",
+      "reviewed": false
+    },
+    "wa.saved.bank_name": {
+      "text": "The bank's name for it: {name}",
+      "reviewed": false
+    },
+    "wa.saved.business": {
+      "text": "{org}'s:",
+      "reviewed": false
+    },
+    "wa.saved.head": {
+      "text": "@{name}: {title}",
+      "reviewed": false
+    },
+    "wa.saved.not_checked": {
+      "text": "Its name is not checked with the bank yet.",
+      "reviewed": false
+    },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": false
+    },
+    "wa.saved.offer": {
+      "text": "Save {title} as @{name} for next time?",
+      "reviewed": false
+    },
+    "wa.saved.suggest": {
+      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "reviewed": false
+    },
+    "wa.saved.two": {
+      "text": "You have two things called @{name}:",
+      "reviewed": false
+    },
+    "button.keep_mine": {
+      "text": "Keep it to myself",
+      "reviewed": false
+    },
+    "button.save": {
+      "text": "Save",
+      "reviewed": false
+    },
+    "wa.saved.need_bank": {
+      "text": "Which bank is {number} with? Say it again with the bank, like: save {name}: GTBank {number}",
+      "reviewed": false
+    },
+    "wa.saved.own_app": {
+      "text": "On this number only {org}'s saved things are kept and found. Keep your own in the Taskiem app.",
+      "reviewed": false
+    },
+    "wa.saved.share_ask": {
+      "text": "{question}",
+      "reviewed": false
+    },
+    "wa.saved.share_plain": {
+      "text": "Share @{name} with {to}?",
+      "reviewed": false
+    },
+    "wa.saved.share_which": {
+      "text": "Which do you mean? {names}. Say it again with the whole name.",
+      "reviewed": false
+    },
+    "wa.saved.share_nobody": {
+      "text": "No linked business or customer is called {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_none": {
+      "text": "You have nothing saved as @{name}.",
+      "reviewed": false
+    },
+    "wa.saved.shared": {
+      "text": "Shared @{name} with {to}.",
+      "reviewed": false
+    },
+    "wa.saved.share_left": {
+      "text": "Not shared.",
+      "reviewed": false
+    },
+    "wa.saved.share_reminder": {
+      "text": "Share @{name}? Tap Share or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.share_not": {
+      "text": "Not shared: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_quoted_none": {
+      "text": "Reply to a message from a linked business to save it.",
+      "reviewed": false
+    },
+    "button.share": {
+      "text": "Share",
+      "reviewed": false
+    },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": false
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": false
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": false
+    },
+    "wa.invoice.saved_kind": {
+      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "reviewed": false
+    },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": false
+    },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": false
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": false
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": false
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": false
+    },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": false
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": false
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": false
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": false
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": false
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": false
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": false
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": false
+    },
+    "wa.saved.not_saved": {
+      "text": "Not saved: {reason}",
+      "reviewed": false
+    },
+    "wa.saved.save_ask": {
+      "text": "Save this as @{name}?\n\n{card}\n\nIt goes in {where}.",
+      "reviewed": false
+    },
+    "wa.saved.save_left": {
+      "text": "Not saved.",
+      "reviewed": false
+    },
+    "wa.saved.save_reminder": {
+      "text": "Tap Save to keep it as @{name}, or Cancel.",
+      "reviewed": false
+    },
+    "wa.saved.saved": {
+      "text": "Saved as @{name}. Type @{name} any time to call it up.",
+      "reviewed": false
+    },
+    "wa.saved.taken": {
+      "text": "You already have something called @{name}. Choose another name.",
+      "reviewed": false
+    },
+    "wa.saved.where_business": {
+      "text": "{org}'s saved things",
+      "reviewed": false
+    },
+    "wa.saved.where_mine": {
+      "text": "your own saved things, which only you see",
+      "reviewed": false
+    },
+    "wa.saved.yours": {
+      "text": "Your own:",
+      "reviewed": false
+    },
     "wa.stock.category": {
       "text": "*{category}* ({count}):\n{list}",
       "reviewed": false
@@ -1618,6 +3267,94 @@
     },
     "wa.cancelled": {
       "text": "Akagbuola ya.",
+      "reviewed": false
+    },
+    "wa.treat.ask": {
+      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+    },
+    "wa.treat.how": {
+      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+    },
+    "wa.treat.item_reminder": {
+      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+    },
+    "wa.treat.label": {
+      "text": "Label for *{item}*? Pick one, or type it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+    },
+    "wa.treat.label_reminder": {
+      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+    },
+    "wa.treat.label_type": {
+      "text": "Type the label for *{item}*, like _Machines_.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+    },
+    "wa.treat.many": {
+      "text": "Put {count} {item} on Things we have, one row each?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+    },
+    "wa.treat.new_item": {
+      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+    },
+    "wa.treat.no_item": {
+      "text": "None of your stock items is called *{name}*.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+    },
+    "wa.treat.not_labelled": {
+      "text": "Not labelled",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+    },
+    "wa.treat.not_saved": {
+      "text": "*{item}* could not be changed: {reason}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+    },
+    "wa.treat.reminder": {
+      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+    },
+    "wa.treat.saved": {
+      "text": "*{item}*: {how}.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label"
+    },
+    "wa.treat.to_stock": {
+      "text": "Add to stock ({item})",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+    },
+    "wa.treat.too_many": {
+      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.which_item": {
+      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+    },
+    "wa.understood.confirm": {
+      "text": "Echere m na ị chọrọ: *{command}*\nKa m mee ya?",
+      "reviewed": false
+    },
+    "wa.understood.left": {
+      "text": "Ọ dị mma, ahapụla m ya. Gwa m ọzọ n'ụzọ ọzọ, ma ọ bụ zipu *help* ka ị hụ ihe m nwere ike ime.",
       "reviewed": false
     },
     "wa.yes_stale": {
@@ -1926,6 +3663,10 @@
     },
     "wa.help.intro": {
       "text": "Ị nwere ike iziga:",
+      "reviewed": false
+    },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
       "reviewed": false
     },
     "wa.help.invoice": {
@@ -2419,6 +4160,91 @@
     "wa.run.denied_now": {
       "text": "Ị pụghịzi ịmalite ọrụ na {org}.",
       "reviewed": false
+    },
+    "wa.tool.yours": {
+      "text": "Ngwá ọrụ azụmahịa gị (dee okwu ahụ):",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Heading over the business's own tools listed by tools"
+    },
+    "wa.tool.taken": {
+      "text": "Emeela ya: {who} weere ya na {when}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A once button on a tool's answer or a message, pressed after someone else's press started its run"
+    },
+    "wa.tool.button_gone": {
+      "text": "Bọtịnụ a anọghị ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A button whose tool is gone, or which is more than seven days old"
+    },
+    "wa.tool.echo": {
+      "text": "Na-amalite {tool}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool that only reads, started at once with nothing to show back"
+    },
+    "wa.tool.echo_values": {
+      "text": "Na-amalite {tool} na:\n{values}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
+    },
+    "wa.tool.step_up": {
+      "text": "{tool} na-ebugharị ego, ya mere a na-akwado ya site na passkey gị na ngwa ma ọ bụ na weebụ, ọ bụghị ebe a.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool whose steps move money, called from a chat app"
+    },
+    "wa.page.more": {
+      "text": "…na {count} ndị ọzọ na peeji ahụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Mepee peeji ahụ: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
+    "wa.tool.list_empty": {
+      "text": "Ọ dịghị ihe a ga-egosi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's list answer with no rows and no empty text of its own"
+    },
+    "wa.tool.row_not_yours": {
+      "text": "E zigara onye ọzọ ndepụta ahụ, ma ọ bụ na ọ anọghị ọzọ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
+    },
+    "wa.tool.list_more": {
+      "text": "…na {count} ọzọ: hụ ha niile na ngwa ahụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's list answer with more than ten rows"
+    },
+    "wa.tool.which": {
+      "text": "Kedu nke ị chọrọ? Zipu nọmba ya:\n{list}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Two of the business's own tools fit a message (made tools M3): a numbered pick; {list} is one tool a line, with its command"
+    },
+    "wa.tool.read": {
+      "text": "Maka {tool} agụrụ m:\n{values}\n\n{prompt}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The reader filled some of a tool's inputs from the message (made tools M3): every value read, masked, then the next input to give"
+    },
+    "wa.tool.saved_none": {
+      "text": "Ọ dịghị ihe azụmahịa ahụ chekwara a na-akpọ @{name}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of no saved thing of the business (a person's own saved things are never a tool's)"
+    },
+    "wa.tool.saved_kind": {
+      "text": "@{name} bụ {kind}: ọ pụghị idejupụta {label}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing that cannot fill it (a bank account, a file); {kind} is what it is, {label} the input"
+    },
+    "wa.tool.saved_not_fit": {
+      "text": "@{name} adabaghị na {label}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing whose words do not fit the input (an address for a number)"
+    },
+    "wa.run.not_yours": {
+      "text": "Naanị {roles} nwere ike ịmalite {workflow}. Jụọ onye nwe ya ma ọ bụrụ na ị chọrọ ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: run <workflow> by a member whose roles the workflow does not allow (decision 0073); {roles} are role names"
     },
     "wa.run.does_not_fit": {
       "text": "Nke ahụ adabaghị: {reason}.\n\n{prompt}",
@@ -3060,13 +4886,30 @@
       "text": " na {price} nke ọ bụla",
       "reviewed": false
     },
-    "wa.stock.confirm_new": {
-      "text": "Tinye *{name}* na {qty}{cost}?",
-      "reviewed": false
+    "wa.stock.ask_sell": {
+      "text": "*{name}* is new: {qty}{cost}. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
-    "wa.stock.confirm_first": {
-      "text": "Malite idebe ngwa ahịa na *{name}*: {qty}{cost}? Taskiem ga-eme tebụl products maka ngwa ahịa gị.",
-      "reviewed": false
+    "wa.stock.ask_sell_first": {
+      "text": "Start keeping stock with *{name}*: {qty}{cost}. Do you sell it?",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+    },
+    "wa.stock.sell_how": {
+      "text": "*Yes* adds it to your products too. *No* only keeps count of it: something you use, not sell.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+    },
+    "wa.stock.sell_reminder": {
+      "text": "Do you sell *{name}*? Reply *yes* or *no*, or *cancel* to leave it.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+    },
+    "wa.stock.added_material": {
+      "text": "It is counted only: it is not one of your products.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "Tinye {qty} na *{name}* ({from} → {to}){cost}?",
@@ -3094,10 +4937,6 @@
     },
     "wa.stock.no_price": {
       "text": "Ọ ga-apụta na peeji gị ozugbo o nwere ọnụ ahịa: zipu *price {name} 9500*.",
-      "reviewed": false
-    },
-    "wa.stock.waiting": {
-      "text": "Edekọọla maka *{name}*. Ọ ga-eru tebụl products gị n'oge na-adịghị anya.",
       "reviewed": false
     },
     "wa.stock.now": {
@@ -6121,6 +7960,253 @@
     },
     "signup.customer_no_app": {
       "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "reviewed": false
+    },
+    "menu.pay.account": {
+      "text": "Kwụọ na nọmba akaụntụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.bank": {
+      "text": "Kedu bank ọ dị?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.for": {
+      "text": "Maka gịnị?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.number": {
+      "text": "Kedu nọmba akaụntụ ahụ? Ọnụọgụ 10.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.line": {
+      "text": "Bank ọ bụla: a na-elele aha ya mbụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.list": {
+      "text": "Ịkwụ ụgwọ gị",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.list.line": {
+      "text": "Ezigara, na-eche nkwado, na akwụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payees": {
+      "text": "Ndị ị na-akwụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payees.line": {
+      "text": "Akaụntụ ndị ị na-akwụ, site n'aha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll": {
+      "text": "Ụgwọ ọnwa",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll.line": {
+      "text": "Ọrụ Payrolla: onye a kwụrụ, na onye a na-akwụghị na ihe kpatara ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.person": {
+      "text": "Kwụọ mmadụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.amount": {
+      "text": "Ego ole?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.for": {
+      "text": "Maka gịnị?",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.note": {
+      "text": "Okwu ole na ole maka akwụkwọ bank ha? Zipu skip ma ọ bụrụ na ọ dịghị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.who": {
+      "text": "Onye ka ị na-akwụ? Otu n'ime akaụntụ ị chekwara, dịka @chidi.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.line": {
+      "text": "Site n'ego dị n'akaụntụ gị, e lelere ya na bank",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.topic.pay": {
+      "text": "Kwụọ ụgwọ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.check.account": {
+      "text": "Nọmba akaụntụ bụ ọnụọgụ 10, dịka 0123456789.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A question's answer that is not an account number"
+    },
+    "wa.pay.which_bank": {
+      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "reviewed": false
+    },
+    "wa.pay.not": {
+      "text": "Not prepared: {reason}",
+      "reviewed": false
+    },
+    "wa.pay.prepared": {
+      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "reviewed": false
+    },
+    "wa.pay.first": {
+      "text": "This is the first payment to this account.",
+      "reviewed": false
+    },
+    "wa.pay.changed": {
+      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "reviewed": false
+    },
+    "wa.pay.again": {
+      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "reviewed": false
+    },
+    "wa.pay.confirm_link": {
+      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "reviewed": false
+    },
+    "wa.pay.confirm_app": {
+      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "reviewed": false
+    },
+    "wa.pay.list.how": {
+      "text": "Zipu ndepụta n'okpuru pay these, otu mmadụ n'ahịrị, dịka:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Paying several people from the chat: \"pay these\" came with no list under it"
+    },
+    "wa.pay.list.person": {
+      "text": "Mmadụ 1",
+      "reviewed": false,
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: one"
+    },
+    "wa.pay.list.people": {
+      "text": "Mmadụ {count}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: more than one"
+    },
+    "wa.pay.list.ready_link": {
+      "text": "{people}, {amount}. E zibeghị ihe ọ bụla: mepee ka ị lelee ma kwụọ site na passkey gị: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
+    },
+    "wa.pay.list.ready_app": {
+      "text": "{people}, {amount}. E zibeghị ihe ọ bụla: mepee Pay several na ngwa Taskiem ka ị lelee ma kwụọ site na passkey gị.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent, when there is no link"
+    },
+    "wa.pay.list.held": {
+      "text": "Ejidere, {who}: {problem}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A row of a batch from the chat held out before anything moves, with why"
+    },
+    "wa.pay.list.unread": {
+      "text": "Agụghị ahịrị {line} ({text}): {problem}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
+    },
+    "wa.pay.list.none": {
+      "text": "Ọ dịghị ihe a kwadoro ịkwụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A list pasted in the chat where no line could be prepared; why follows"
+    },
+    "wa.pay.result.paid": {
+      "text": "Akwụọla {to} {amount}. Bank anatala ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid: who and how much"
+    },
+    "wa.pay.result.failed": {
+      "text": "Akwụghị: {to} {amount}. {reason}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat failed: who, how much, and why"
+    },
+    "wa.pay.result.let_go": {
+      "text": "ahapụrụ ya, ezighị ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was let go before it was sent"
+    },
+    "wa.pay.result.rejected": {
+      "text": "Akwụghị: a jụrụ ịkwụ {amount} nye {to}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A payment prepared from the chat was declined at its approval"
+    },
+    "wa.pay.result.no_reason": {
+      "text": "Bank ekwughị ihe kpatara ya.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a payment failed, when the bank gave no reason"
+    },
+    "wa.pay.result.declined": {
+      "text": "ajụrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was declined at its approval"
+    },
+    "wa.pay.result.batch": {
+      "text": "Akwụọla mmadụ {paid} n'ime {count}, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
+    },
+    "wa.pay.result.batch_all": {
+      "text": "Akwụọla mmadụ {count} niile, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with everyone paid"
+    },
+    "wa.pay.result.batch_not": {
+      "text": "Akwụghị {count}: {who}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Who in a batch from the chat was not paid, each with why"
+    },
+    "wa.pay.result.batch_one": {
+      "text": "Akwụọla mmadụ 1, {amount}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with its one person paid"
+    },
+    "wa.pay.pin_form": {
+      "text": "Ma ọ bụ kwụọ ya ugbu a site na PIN gị n'ime fọm a, n'ime nkeji 10: {amount} nye {to}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+    },
+    "bill.transfer.send": {
+      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "reviewed": false
+    },
+    "bill.transfer.good_for": {
+      "text": "Good for {minutes} minutes.",
+      "reviewed": false
+    },
+    "bill.transfer.next": {
+      "text": "I'll say here when it lands.",
+      "reviewed": false
+    },
+    "bill.transfer.asking": {
+      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "reviewed": false
+    },
+    "bill.transfer.off": {
+      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
     }
   }

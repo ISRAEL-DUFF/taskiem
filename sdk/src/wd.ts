@@ -75,6 +75,10 @@ export interface Output {
   title: string;
   description: string;
   value: Expression;
+  /** A tool may show this output to customers and linked businesses. */
+  public?: boolean;
+  /** The output is personal data of this category: masked in a tool's answer. */
+  "x-pii"?: string;
 }
 
 export interface CodeStep extends StepBase {
@@ -146,7 +150,8 @@ export interface WaitStep extends StepBase {
 
 export interface SignalStep extends StepBase {
   type: "signal";
-  config: { event: string; correlation: Expression; timeout?: Duration };
+  /** pages: a page's button may send this signal to a run waiting here (docs/spec/pages.md §7). */
+  config: { event: string; correlation: Expression; timeout?: Duration; pages?: boolean };
 }
 
 /** Waits for another system to call the run back at run.callbacks.<id> (docs/contracts/wd-v1.md, callback steps). */
@@ -179,8 +184,8 @@ export interface FormStep extends StepBase {
   config: {
     title: string;
     description?: string;
-    /** Exactly one: a phone or email (usually an expression over the run), or members with a role. */
-    to: { phone: string } | { email: string } | { role: string };
+    /** A person (docs/spec/device-fields.md §2): a phone or email (usually an expression over the run), members with a role, or one member (an id or an expression). `link` waits for device fields D1 and "starter" for made tools M4; both are refused until then. */
+    to: { phone: string } | { email: string } | { role: string } | { member: string } | { link: string } | "starter";
     via?: ("sms" | "email")[];
     verify?: boolean;
     /** The questions, as an inputs schema (x-form hints per property). */
@@ -320,4 +325,39 @@ export interface WorkflowDefinition {
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
   outputs?: Output[];
+  /** Who may start it by hand (decision 0073): members holding one of these roles, beside run.start; owners always may. Left out: everyone with run.start. */
+  roles?: string[];
+  /** The workflow as a tool in the chat (decision 0073): its name, command, who it is for and what it answers with. */
+  tool?: Tool;
+}
+
+/** A value an answer shows: words, or an expression over outputs (and item in a list's rows). */
+export type AnswerValue = string;
+
+export interface ToolButton {
+  label: string;
+  /** The command of the tool whose form it fills. */
+  tool: string;
+  inputs?: Record<string, unknown>;
+  once?: boolean;
+}
+
+export interface AnswerState {
+  text: AnswerValue;
+  tone?: "plain" | "good" | "warn" | "bad";
+}
+
+export type Answer =
+  | { type: "text"; text: AnswerValue }
+  | { type: "card"; title: AnswerValue; ref?: AnswerValue; state?: AnswerState; lines?: { label: string; value: AnswerValue }[]; amount?: AnswerValue; buttons?: ToolButton[] }
+  | { type: "list"; from: string; title?: AnswerValue; item: { title: AnswerValue; sub?: AnswerValue; state?: AnswerState }; empty?: string; actions?: ToolButton[] };
+
+export interface Tool {
+  name: string;
+  command: string;
+  about: string;
+  says?: string[];
+  icon?: string;
+  for?: "members" | "customers" | "linked";
+  answer?: Answer;
 }

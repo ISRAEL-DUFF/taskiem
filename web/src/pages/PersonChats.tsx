@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSavedPicks } from "./SavedPicks";
+import { sendSaved } from "./SavedCard";
+import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
+import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get, post, put, upload, del } from "../api";
 import { useAuth } from "../auth";
@@ -36,14 +41,15 @@ import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, yo
 import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
-import { BubbleShell, Ticks } from "./BubbleShell";
+import { CustomerInvoiceCard } from "./PayByTransfer";
+import { BubbleShell, CopyItem, PopItem, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
-import { BookSheet, OrdersSheet, PayButton, ShopSheet, ToolsMenu, type PersonTool } from "./PersonTools";
+import { BookSheet, loadTheirTools, OrdersSheet, PayButton, ShopSheet, TheirToolSheet, ToolsMenu, type CustomerTool, type PersonTool } from "./PersonTools";
 import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
@@ -401,6 +407,19 @@ export function PersonChatPage() {
     nav(`${loc.pathname}${loc.search}`, { replace: true, state: left });
   }, []);
   const [reporting, setReporting] = useState(false);
+  // Their tools (made tools T5): read when the tools button opens.
+  const [theirs, setTheirs] = useState<CustomerTool[]>([]);
+  const [their, setTheir] = useState<{ tool: CustomerTool; from?: DOMRect }>();
+  useEffect(() => {
+    if (tool?.key !== "menu") return;
+    let live = true;
+    void loadTheirTools(id).then((t) => {
+      if (live) setTheirs(t);
+    });
+    return () => {
+      live = false;
+    };
+  }, [tool?.key, id]);
   // Share the business, or one of its products, with someone (§10.1).
   const [sharing, setSharing] = useState<{ item?: { id: string; name: string } }>();
   const [orders, setOrders] = useState<DoorOrder[]>();
@@ -532,10 +551,36 @@ export function PersonChatPage() {
     }
   };
 
+  const savedTexts = useSavedPicks("share-mine");
+  // Save "mum"… in the picker (saved objects S1, part 4): one's own.
+  const saveAs = useSaveAs({ onSaved: () => savedTexts.reload() });
+  // One's own saved thing other than a text, picked: shared with the
+  // business as a card (saved objects S1), after a yes to sharing what is
+  // sensitive in it.
+  const shareSaved = (pick: Suggestion) =>
+    void (async () => {
+      setSendError(undefined);
+      try {
+        const out = await sendSaved(
+          (confirm) => post<PersonMessage>(`${base}/messages`, { card: { type: "saved", saved: { id: pick.id, owner: "mine", confirm } }, client_id: `${Date.now()}-${++localN}` }),
+          (question) => sure.confirm({ title: question, ok: "Share" }),
+        );
+        if (!out) return;
+        setMessages((cur) => mergeMessages(cur ?? [], [out]));
+        thread.toBottom?.();
+      } catch (e) {
+        const closedNow = e instanceof ApiError ? erasedWords(e.status, e.message, "person") : null;
+        if (closedNow) setErased(closedNow);
+        else setSendError(e);
+        reloadChat();
+      }
+    })();
   const composer = useComposer<never>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
-    sources: { "@": [], "#": [] },
+    // Saved things (saved objects S1): a text's words into the box; the
+    // rest shared as cards.
+    sources: { "@": [], "#": [], saved: savedTexts.saved, savedComplete: savedTexts.complete, wantSaved: savedTexts.want, shareSaved, saveNamed: (name) => saveAs.named(name) },
     onType: typing,
     onSend: (s) => {
       setSendError(undefined);
@@ -603,6 +648,9 @@ export function PersonChatPage() {
   const openTool = (key: PersonTool, from?: DOMRect, extra?: { item?: string; service?: string }) => setTool({ key, from, ...extra });
 
   return (
+    // A photo's Pay this account, for a business's people who may pay (the
+    // app's my_chat.dart): the chip's sheet, though no chip shows here.
+    <PayFromMessages chat={{ kind: "person", id, name: c?.name }}>
     <section className="chat-pane person-pane" aria-label={`Conversation with ${name}`} data-testid="person-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
       <h1 className="sr-only">{c ? `Chat with ${c.name}` : "Chat"}</h1>
       <ChatHead
@@ -700,6 +748,27 @@ export function PersonChatPage() {
               testid="person-message"
               className={`${card ? "card-bubble" : ""}${m.offer ? " offer-bubble" : ""}`.trim()}
               what={(card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
+              menu={(() => {
+                // Copy and Save as… (saved objects S1): the words, or a photo
+                // or document as a file thing.
+                const words = !card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) ? m.body : "";
+                const file = m.attachment && m.attachment.kind !== "voice" && !m.local ? m.attachment : undefined;
+                if (m.local || (!words && !file)) return undefined;
+                return (close: () => void) => ({
+                  actions: (
+                    <>
+                      {words && <CopyItem text={words} />}
+                      {words && <SaveAsItem text={words} onSave={saveAs.fromWords} close={close} label={file ? "Save the words as…" : "Save as…"} />}
+                      {file && (
+                        <PopItem icon="note" disabled={saveAs.fileBusy} onClick={() => (close(), saveAs.fromFile(personFileURL(id, m.id), file.name ?? "File", file.type))}>
+                          {words ? "Save the file as…" : "Save as…"}
+                        </PopItem>
+                      )}
+                      {file?.kind === "photo" && <PhotoAccountItems url={personFileURL(id, m.id)} message={m.id} close={close} saveAccount={saveAs.fromPhoto} />}
+                    </>
+                  ),
+                });
+              })()}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
@@ -727,9 +796,14 @@ export function PersonChatPage() {
                   <Pill tone="plain">Offer</Pill>
                 </span>
               )}
-              {card && (
+              {card && card.type === "invoice" && card.invoice_id && !m.mine && (
+                // Paid by transfer from the chat (the payments flow, part 1).
+                <CustomerInvoiceCard chat={id} business={c?.business ?? id} card={card} mine={m.mine} />
+              )}
+              {card && !(card.type === "invoice" && card.invoice_id && !m.mine) && (
                 <AppCardView
                   card={card}
+                  mine={m.mine}
                   actions={
                     (card.type === "pay" || card.type === "invoice") && card.url ? (
                       <a className="tk-btn primary" href={card.url} target="_blank" rel="noopener noreferrer">
@@ -792,6 +866,7 @@ export function PersonChatPage() {
           ) : undefined
         }
       />
+      <PayListBar />
       {closed ? (
         <p className="customer-note stop" role="status" data-testid="person-closed">
           {closed}
@@ -826,7 +901,19 @@ export function PersonChatPage() {
           </a>
         </p>
       )}
-      {c && tool?.key === "menu" && <ToolsMenu business={c.name} onClose={() => setTool(undefined)} onPick={(k, from) => setTool({ key: k, from })} />}
+      {c && tool?.key === "menu" && (
+        <ToolsMenu
+          business={c.name}
+          onClose={() => setTool(undefined)}
+          onPick={(k, from) => setTool({ key: k, from })}
+          theirs={theirs}
+          onTheirs={(t, from) => {
+            setTool(undefined);
+            setTheir({ tool: t, from });
+          }}
+        />
+      )}
+      {c && their && <TheirToolSheet chat={id} tools={theirs} start={{ tool: their.tool }} from={their.from} onClose={() => setTheir(undefined)} />}
       {c && tool?.key === "shop" && (
         <ShopSheet
           chat={id}
@@ -878,7 +965,9 @@ export function PersonChatPage() {
         />
       )}
       {sure.node}
+      {saveAs.node}
     </section>
+    </PayFromMessages>
   );
 }
 

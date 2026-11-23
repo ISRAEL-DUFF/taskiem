@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { Prefill } from "../lib/intents";
 import type { Purchase } from "../lib/purchases";
@@ -25,9 +26,11 @@ import type { Service } from "../lib/bookings";
 import { bookLine, useLinkServices } from "../lib/linkbook";
 import type { PriceList } from "../lib/pricelists";
 import type { StockItem } from "../lib/stock";
+import type { PageSummary } from "../lib/pages";
 import type { Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
+  CountAdd,
   OrderView,
   PriceListForm,
   ProductAdd,
@@ -40,7 +43,9 @@ import {
   BUSINESS_TOOLS,
   filterRows,
   categoryChips,
+  madeIcon,
   toolsFor,
+  type MadeTool,
   type Tool,
   type ToolKey,
   type ToolRow,
@@ -222,6 +227,9 @@ export const extrasFor = (extras: ExtraTile[] | undefined, query: string) => {
 };
 
 /** The panel of tiles over the composer. */
+/** The panel's view used last, while the page is open. */
+let lastView: "tools" | "menu" = "tools";
+
 export function ToolsPanel({
   query,
   onOpen,
@@ -231,7 +239,18 @@ export function ToolsPanel({
   supplier,
   business,
   extras,
+  builtIns = true,
+  made = [],
+  onOpenMade,
+  pages = [],
+  onOpenPage,
+  menu,
+  slashed = false,
 }: {
+  /** The topics' menu, as the panel's other view (menus-everywhere.md §4). */
+  menu?: ReactNode;
+  /** Opened by "/" typed (not the button): the tools, never the menu. */
+  slashed?: boolean;
   /** What follows "/" in the box, when it was typed. */
   query: string;
   onOpen: (k: ToolKey, from: DOMRect) => void;
@@ -244,14 +263,32 @@ export function ToolsPanel({
   /** The business the conversation is with, for the heading. */
   business?: string;
   extras?: ExtraTile[];
+  /** The built-in tools: off when the business has chat tools off, and
+   * the panel holds Your tools alone. */
+  builtIns?: boolean;
+  /** Your tools (made tools M1) that what follows "/" names. */
+  made?: MadeTool[];
+  onOpenMade?: (command: string, from: DOMRect) => void;
+  /** The business's pages (pages G3): pinned ones, or those "/" names. */
+  pages?: PageSummary[];
+  onOpenPage?: (name: string) => void;
 }) {
   const more = extrasFor(extras, query);
   const { can, me } = useAuth();
+  // "/" and a word looks for a tool: the tools, whichever view was last.
+  const [view, setView] = useState(lastView);
+  const onMenu = !!menu && !slashed && !query && view === "menu";
+  const show = (v: "tools" | "menu") => {
+    lastView = v;
+    setView(v);
+  };
   // In a business's conversation, the tools about that business only
   // (docs/spec/business-chat-tools.md §3); the rest are in Taskiem's.
-  const listed = toolsFor(can, query, me?.roles, me?.delivers).filter(
-    (t) => !scope || BUSINESS_TOOLS.includes(t.key),
-  );
+  const listed = builtIns
+    ? toolsFor(can, query, me?.roles, me?.delivers).filter(
+        (t) => !scope || BUSINESS_TOOLS.includes(t.key),
+      )
+    : [];
   const { rows: loaded } = useToolRows(listed);
   const ids = useScopeIds(scope);
   const rows: typeof loaded = Object.fromEntries(
@@ -339,7 +376,8 @@ export function ToolsPanel({
     if (leaving) return;
     const out = (e: PointerEvent) => {
       const t = e.target as Element | null;
-      if (t && !t.closest(".tk-tools, .composer")) onClose();
+      // A sheet over it (a menu row's form) is not outside.
+      if (t && !t.closest(".tk-tools, .composer, .tk-sheet, .tk-veil, .modal")) onClose();
     };
     document.addEventListener("pointerdown", out);
     return () => document.removeEventListener("pointerdown", out);
@@ -361,7 +399,19 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
-      {tools.length + more.length === 0 ? (
+      {menu && !slashed && !query && (
+        <div className="tk-chips tk-tools-view" role="group" aria-label="Show">
+          <button type="button" aria-pressed={!onMenu} onClick={() => show("tools")}>
+            Tools
+          </button>
+          <button type="button" aria-pressed={onMenu} onClick={() => show("menu")}>
+            What would you like to do?
+          </button>
+        </div>
+      )}
+      {onMenu ? (
+        <div className="tk-tools-menu">{menu}</div>
+      ) : tools.length + more.length + made.length + pages.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -425,9 +475,55 @@ export function ToolsPanel({
               </span>
             </button>
           ))}
+          {made.length > 0 && (
+            <p className="tk-tools-sub" data-testid="your-tools">
+              Your tools
+            </p>
+          )}
+          {made.map((t) => (
+            <button
+              key={`made:${t.command}`}
+              type="button"
+              className="tk-tile"
+              data-testid="made-tool-tile"
+              onClick={(e) =>
+                onOpenMade?.(t.command, e.currentTarget.getBoundingClientRect())
+              }
+            >
+              <span className="tk-tile-icon">
+                <Icon name={madeIcon(t.icon)} />
+              </span>
+              <span>
+                <span className="tk-tile-name">{t.name}</span>
+                <span className="tk-tile-line">{t.about || `/${t.command}`}</span>
+              </span>
+            </button>
+          ))}
+          {pages.length > 0 && (
+            <p className="tk-tools-sub" data-testid="your-pages">
+              Your pages
+            </p>
+          )}
+          {pages.map((p) => (
+            <button
+              key={`page:${p.name}`}
+              type="button"
+              className="tk-tile"
+              data-testid="page-tile"
+              onClick={() => onOpenPage?.(p.name)}
+            >
+              <span className="tk-tile-icon">
+                <Icon name="tables" />
+              </span>
+              <span>
+                <span className="tk-tile-name">{p.title}</span>
+                <span className="tk-tile-line">{p.about || `/${p.name}`}</span>
+              </span>
+            </button>
+          ))}
         </div>
       )}
-      {recent.length > 0 && !query && (
+      {recent.length > 0 && !query && !onMenu && (
         <div className="tk-tools-recent">
           Recent
           {recent.map((t) => (
@@ -503,6 +599,8 @@ function Detail({
       <InvoiceAdd onSaved={onSaved} onCancel={onCancel} />
     ) : tool === "money" ? (
       <MoneyAdd onSaved={onSaved} onCancel={onCancel} />
+    ) : tool === "stock" ? (
+      <CountAdd onSaved={onSaved} onCancel={onCancel} />
     ) : (
       <ProductAdd onSaved={onSaved} />
     );
@@ -607,6 +705,7 @@ const ADDS: Partial<Record<ToolKey, string>> = {
   services: "Add service",
   invoices: "New invoice",
   money: "Add cash or expense",
+  stock: "Add something to count",
 };
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's

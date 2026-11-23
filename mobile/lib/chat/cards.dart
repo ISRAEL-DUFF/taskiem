@@ -50,7 +50,7 @@ class CardFrame extends StatelessWidget {
     final line = [
       if (amount != null) breakAfterHyphens(title),
       if (card.wasKobo != null && card.wasKobo! > (amount ?? 0)) 'was ${naira(card.wasKobo!)}',
-      if ((card.note ?? '').isNotEmpty) '“${card.note}”',
+      if (cardNote(card).isNotEmpty) '“${cardNote(card)}”',
     ].join(' · ');
     final children = <Widget>[
       // The kind and reference small, the state as a capsule at the end.
@@ -311,7 +311,7 @@ class CardButton extends StatelessWidget {
 /// What a card's buttons do: a step taken from the card, as the web's
 /// CardActions takes it, and the document opened.
 class CardActs {
-  CardActs({required this.auth, required this.onDone, this.onOpen, this.ask, this.said});
+  CardActs({required this.auth, required this.onDone, this.onOpen, this.onPay, this.ask, this.said});
 
   final Auth auth;
 
@@ -320,6 +320,10 @@ class CardActs {
 
   /// A document of ours opened in the app (View order, View invoice, Pay).
   final void Function(LinkDocCard card)? onOpen;
+
+  /// Pay on a bill's card: the ways to pay it, in a sheet over the chat
+  /// (lib/chat/pay_transfer.dart); else its document opens.
+  final void Function(LinkDocCard card)? onPay;
 
   /// Asks first (the web's confirmation): true to go on.
   final Future<bool> Function(String title, String ok)? ask;
@@ -417,7 +421,7 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
             label: 'Pay${card.amountKobo != null ? ' ${naira(card.amountKobo!)}' : ''}',
             primary: true,
             semantics: 'Pay $ref',
-            onTap: acts.onOpen == null ? null : () => acts.onOpen!(card),
+            onTap: acts.onPay != null ? () => acts.onPay!(card) : (acts.onOpen == null ? null : () => acts.onOpen!(card)),
           ),
         ];
       }
@@ -465,6 +469,69 @@ class CardViewRow extends StatelessWidget {
                 Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, color: t.text))),
                 TkIcon('chevron', size: 16, color: t.muted),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Conversation.tsx TaskiemNote: what Taskiem answered a "@Taskiem" typed
+/// in a business's conversation, kept on our side only (the business never
+/// sees it): the words asked, the answer, and the way to the Taskiem chat.
+class TaskiemNote extends StatelessWidget {
+  const TaskiemNote({super.key, required this.asked, required this.answer, required this.at, this.onOpen});
+
+  final String asked;
+  final String answer;
+  final DateTime at;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final words = asked.replaceFirstMapped(RegExp(r'(^|\s)@taskiem\b[,:]?\s*', caseSensitive: false), (m) => m[1] ?? '').trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: LayoutBuilder(
+        builder: (context, box) => Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: box.maxWidth * 0.92),
+            child: Container(
+              key: const ValueKey('taskiem-note'),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+              decoration: BoxDecoration(
+                color: t.panel,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: t.border),
+                boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 2), blurRadius: 8)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(color: t.brand, shape: BoxShape.circle),
+                        child: Center(child: TkIcon('sparkle', size: 14, color: t.brandDark)),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Taskiem · only you see this', style: tkText(size: 12, weight: 600, color: t.muted))),
+                      Text(clock(at), style: tkText(size: 12, color: t.muted)),
+                    ],
+                  ),
+                  if (words.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('You asked: $words', style: tkText(size: 13, color: t.muted)),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(answer, style: tkText(size: 14, color: t.text)),
+                  if (onOpen != null) TkLink(label: 'Open Taskiem chat', bold: true, onTap: onOpen),
+                ],
+              ),
             ),
           ),
         ),

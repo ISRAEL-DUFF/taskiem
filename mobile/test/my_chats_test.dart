@@ -32,6 +32,7 @@ import 'package:taskiem/screens/chat_link.dart';
 import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart' show loadFonts;
 
@@ -182,6 +183,7 @@ void main() {
     api.routes['GET /v1/me/storefront-orders'] = (_) => {'orders': <Object>[], 'waiting': false, 'waiting_count': 0};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at)));
     await settle(t);
+    await looks(t, 'you-chats');
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
     expect(find.text('Yes! Big pack today.'), findsOneWidget);
     expect(find.text('2'), findsNWidgets(2), reason: 'two unread, on the row and on the Chats tab');
@@ -245,6 +247,7 @@ void main() {
       return answer({'id': 'm9', 'mine': true, 'kind': 'text', 'body': b['text'], 'read_at': null, 'created_at': '2026-11-16T10:29:00Z'}, 201);
     };
     await openChat(t, api);
+    await looks(t, 'business-chat');
     await t.enterText(find.byType(EditableText), 'Two packs please');
     await t.pump();
     expect(api.sent('POST', '/v1/me/chats/c1/typing'), hasLength(1));
@@ -640,7 +643,12 @@ void main() {
     expect(find.text('On its way to you'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Picked up: step 2 of 4')), findsOneWidget);
 
+    // Pay offers its ways (the payments flow, part 1): by transfer first,
+    // the invoice's page under it.
     await press(t, find.text('Pay'));
+    await t.pumpAndSettle();
+    expect(find.text('Pay by transfer'), findsOneWidget);
+    await press(t, find.text('Pay on the invoice’s page'));
     expect(opened, [Uri.parse('https://app.taskiem.com/i/xyz')]);
 
     await press(t, find.text('View delivery'));

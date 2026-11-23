@@ -3,8 +3,9 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   // .claude/ holds agent worktrees (other checkouts of this repository);
-  // site/ is the built docs site (make docs).
-  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**", "web/e2e/demo/**"] },
+  // site/ is the built docs site (make docs); web/public/ocr/ is Tesseract.js,
+  // copied from node_modules before dev and build (web/scripts/ocr-assets.mjs).
+  { ignores: ["**/dist/**", "**/node_modules/**", "web/test-results/**", "web/playwright-report/**", ".claude/**", "site/**", "web/e2e/demo/**", "web/public/ocr/**"] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   // Plain scripts the public host serves to browsers (docs/public-host.md).
@@ -17,7 +18,7 @@ export default tseslint.config(
   },
   // The phone app's fixture recorder (mobile/tool/capture.mjs) runs on Node.
   {
-    files: ["mobile/tool/*.mjs"],
+    files: ["mobile/tool/*.mjs", "docs/store/*/*.mjs", "web/scripts/ocr-assets.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
   },
   // The explainer's renderer, the recordings and the how-to videos

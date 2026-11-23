@@ -111,3 +111,17 @@ The founder's questions of 16 November 2026: what happens when a consumer downlo
 ## Amendment, 2026-11-17
 
 Point 11 (chats between people, a later stage with its own decisions) is answered by [0069](0069-people-chatting-with-people.md): people chats are kept by Taskiem, encrypted at rest and readable by its servers as business chats are, found by number, a person's link or opt-in contacts, strangers writing as requests, with businesses inside them (live cards, ordering together) and no money moved between people.
+
+## Amendment, 2026-11-19: what Taskiem is for
+
+Taskiem is not here to replace WhatsApp, Telegram or any other chat app. It is here to automate businesses, alongside their conversations, in the way that is most natural and easiest to use. The conversation is how the automation is reached; it is not the product.
+
+This is the founder's statement of 19 November 2026, made because this entry can be read otherwise. Its title says "a chat app for people and the businesses they deal with", its context says "in time a general chat app like WhatsApp and Telegram that anyone can use", and point 1 begins "Taskiem is a chat app for everyone". Read them with this:
+
+- **Why people are in the app:** so a business's customers can ask, order, book and pay in the conversation its workflows run in, without the business needing a verified WhatsApp number. Personal accounts, the customer door, Discover and a person's own orders serve that.
+- **Why people can chat with each other** ([0069](0069-people-chatting-with-people.md)): for what involves a business, such as sharing a product or an order and ordering together. People will not move their chats to Taskiem, and Taskiem does not ask them to.
+- **WhatsApp, Telegram and Slack stay ways in.** A business keeps its own WhatsApp number (point 6); the shared number and the bot stay as they are (point 7); a business is still signed up from those chats ([0058](0058-chat-as-a-way-in.md)).
+- **How to weigh new work:** by whether it makes a business's work run with less effort from its owner, staff and customers, not by whether it matches a chat app's features. A feature whose only case is "WhatsApp has it" is not a reason.
+
+Nothing agreed above is changed: no point is withdrawn and nothing built is undone. This says what the points are for. Words for the public (store listings, the website, the privacy notice) follow it: they describe a way to do business, not a replacement for a chat app.
+

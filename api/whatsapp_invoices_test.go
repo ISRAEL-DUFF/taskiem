@@ -23,7 +23,7 @@ func TestWhatsAppInvoice(t *testing.T) {
 	viewer := w.member(t, owner, "vic@adafoods.test", "viewer")
 	w.bind(t, viewer, vn)
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*invoice*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*invoice*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, vn, "help"); strings.Contains(r, "*invoice*") {
@@ -53,7 +53,8 @@ func TestWhatsAppInvoice(t *testing.T) {
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT data::text FROM chat_sessions ORDER BY updated_at DESC LIMIT 1`).Scan(&raw); err == nil && strings.Contains(raw, "8031234567") {
 		t.Errorf("the number is in the session: %s", raw)
 	}
-	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Bola Ade for ₦25,000.50") {
+	// Sent, and the customer typed offered as @name for next time.
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Bola Ade for ₦25,000.50") || !strings.Contains(r, "Save Bola Ade as @bola-ade for next time?") {
 		t.Fatalf("sent: %q", r)
 	}
 	x := owner.must(200, "GET", "/v1/invoices/INV-0001?reveal=true", nil)["invoice"].(map[string]any)
@@ -70,5 +71,137 @@ func TestWhatsAppInvoice(t *testing.T) {
 	}
 	if l := owner.must(200, "GET", "/v1/invoices", nil)["invoices"].([]any); len(l) != 1 {
 		t.Errorf("invoices %d", len(l))
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Errorf("an offer let go saved: %v", l)
+	}
+
+	// Taken: the business's saved person, with the number.
+	w.say(t, on, "invoice Tolu 5k")
+	w.say(t, on, "0803 765 4321")
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Save Tolu as @tolu") {
+		t.Fatalf("offered: %q", r)
+	}
+	if r := w.say(t, on, "save"); !strings.Contains(r, "Saved as @tolu") {
+		t.Fatalf("saved: %q", r)
+	}
+	if r := w.say(t, on, "@tolu"); !strings.Contains(r, "Tolu") || !strings.Contains(r, "4321") {
+		t.Errorf("@tolu: %q", r)
+	}
+
+}
+
+// "invoice @acme 250k for …" (saved objects S2): the saved person's name
+// and email (else phone) fill the invoice; the business's own is taken
+// over one's own of the name; a thing of another kind is not invoiced; a
+// name nothing has is said; a person with neither is asked for one.
+func TestWhatsAppInvoiceSaved(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Ada Foods", "ada@adafoods.test")
+	const on = "+2348010000029"
+	w.bind(t, owner, on)
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "acme", "title": "Acme Ltd", "kind": "person", "details": map[string]any{"email": "pay@acme.ng", "phone": "0803 123 4567"}})
+	owner.must(201, "POST", "/v1/me/saved", map[string]any{"name": "acme", "title": "My Acme contact", "kind": "person", "details": map[string]any{"phone": "0803 999 0000"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "warehouse", "title": "Warehouse", "kind": "place", "details": map[string]any{"line": "12 Herbert Macaulay Way"}})
+	owner.must(201, "POST", "/v1/saved", map[string]any{"name": "tolu", "title": "Tolu Bello", "kind": "person", "details": map[string]any{"address": "4 Allen Avenue"}})
+
+	// Two of the name: which, by number. A reply that is neither lets the
+	// command go; 1 is one's own, 2 the business's.
+	pick := func() {
+		t.Helper()
+		if r := w.say(t, on, "invoice @acme 250k for the October job"); !strings.Contains(r, "Which @acme?") || !strings.Contains(r, "1. Your own: My Acme contact") || !strings.Contains(r, "2. Ada Foods's: Acme Ltd") {
+			t.Fatalf("which: %q", r)
+		}
+	}
+	pick()
+	if r := w.say(t, on, "help"); strings.Contains(r, "Which @acme?") || strings.Contains(r, "Send ") {
+		t.Errorf("let go: %q", r)
+	}
+	pick()
+	if r := w.say(t, on, "1"); !strings.Contains(r, "Send My Acme contact (") {
+		t.Fatalf("one's own: %q", r)
+	}
+	w.say(t, on, "no")
+	pick()
+	if r := w.say(t, on, "2"); !strings.Contains(r, "Send Acme Ltd (") || !strings.Contains(r, "an invoice for ₦250,000: the October job?") {
+		t.Fatalf("confirm: %q", r)
+	}
+	if r := w.say(t, on, "yes"); !strings.Contains(r, "Sent INV-0001 to Acme Ltd") || strings.Contains(r, "for next time") {
+		t.Fatalf("sent: %q", r)
+	}
+	x := owner.must(200, "GET", "/v1/invoices/INV-0001?reveal=true", nil)["invoice"].(map[string]any)
+	if c := x["customer"].(map[string]any); c["name"] != "Acme Ltd" || c["email"] != "pay@acme.ng" {
+		t.Errorf("customer: %v", c)
+	}
+	if r := w.say(t, on, "invoice @warehouse 10k"); !strings.Contains(r, "@warehouse is a place") {
+		t.Errorf("a place: %q", r)
+	}
+	if r := w.say(t, on, "invoice @nobody 10k"); !strings.Contains(r, "nothing saved as @nobody") {
+		t.Errorf("nobody: %q", r)
+	}
+	if r := w.say(t, on, "invoice @tolu 5k"); !strings.Contains(r, "Tolu Bello's phone number or email") {
+		t.Fatalf("no contact: %q", r)
+	}
+	if r := w.say(t, on, "tolu@bello.ng"); !strings.Contains(r, "Send Tolu Bello (") {
+		t.Errorf("then confirmed: %q", r)
+	}
+}
+
+// Saving a customer typed by hand (saved objects S3): offered after the
+// first invoice to them; declined, nothing after the second; suggested
+// after the third (suggest, never surprise).
+func TestWhatsAppInvoiceSaveSuggested(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
+		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
+	owner := w.tenant(t, "Ada Foods", "ada@suggest.test")
+	const on = "+2348010000039"
+	w.bind(t, owner, on)
+
+	invoice := func(amount string) string {
+		t.Helper()
+		w.say(t, on, "invoice Kemi Ade "+amount)
+		w.say(t, on, "0803 555 0001")
+		return w.say(t, on, "yes")
+	}
+	if r := invoice("5k"); !strings.Contains(r, "Save Kemi Ade as @kemi-ade for next time?") {
+		t.Fatalf("first: %q", r)
+	}
+	w.say(t, on, "no")
+	if r := invoice("6k"); strings.Contains(r, "@kemi-ade") {
+		t.Errorf("second: %q", r)
+	}
+	if r := invoice("7k"); !strings.Contains(r, "You've invoiced Kemi Ade 3 times. Save them as @kemi-ade for next time?") {
+		t.Errorf("third: %q", r)
+	}
+	// A Send left on the invoice's card does not answer the offer; its own
+	// Save button does.
+	w.send(t, on, whatsapptest.ButtonReply("yes", "Yes"))
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Fatalf("saved by an old Send: %v", l)
+	}
+
+	// Someone who may send invoices but not manage saved things: theirs.
+	clerk := w.member(t, owner, "clerk@suggest.test", "operator")
+	const cn = "+2348010000038"
+	w.bind(t, clerk, cn)
+	w.say(t, cn, "invoice Tolu Bello 5k")
+	w.say(t, cn, "0803 555 0002")
+	if r := w.say(t, cn, "yes"); !strings.Contains(r, "Save Tolu Bello as @tolu-bello") {
+		t.Fatalf("clerk offered: %q", r)
+	}
+	if got := w.send(t, cn, whatsapptest.ButtonReply("offer:save", "Save")); len(got) == 0 || !strings.Contains(got[0].Text, "Saved as @tolu-bello") {
+		t.Fatalf("clerk saved: %+v", got)
+	}
+	if l := owner.must(200, "GET", "/v1/saved", nil)["saved"].([]any); len(l) != 0 {
+		t.Errorf("the business's: %v", l)
+	}
+	// The same phone again under another name: not offered a second time.
+	w.say(t, cn, "invoice Tolu B 5k")
+	w.say(t, cn, "0803 555 0002")
+	if r := w.say(t, cn, "yes"); strings.Contains(r, "for next time") {
+		t.Errorf("a duplicate offered: %q", r)
 	}
 }

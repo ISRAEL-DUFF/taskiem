@@ -49,7 +49,9 @@ jobs:
       # The parity test draws emoji as Chromium does here: Noto Color Emoji.
       - name: Emoji font
         run: sudo apt-get install -y --no-install-recommends fonts-noto-color-emoji
-      - name: Tests, with the app half of the parity test
+      # With the screenshot tests (test/looks.dart): the redesigned screens,
+      # light and dark, compared with their pictures in test/looks/.
+      - name: Tests, with the app half of the parity test and the screenshot tests
         working-directory: mobile
         run: flutter test
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -57,6 +59,14 @@ jobs:
         with:
           name: parity
           path: mobile/build/parity/
+      # A screen that looks different: its kept picture, the new one, and one
+      # with what differs in red.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: looks
+          path: mobile/build/looks/
+          if-no-files-found: ignore
       - name: Build for Android
         working-directory: mobile
         run: flutter build apk --debug
@@ -73,6 +83,8 @@ jobs:
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - working-directory: mobile
         run: flutter pub get --enforce-lockfile
+      # The parity test and the screenshot pictures are compared on Linux only:
+      # macOS draws text with its own engine.
       - name: Tests on macOS too (the parity test runs on Linux, where the web's pictures are taken)
         working-directory: mobile
         run: flutter test --exclude-tags parity

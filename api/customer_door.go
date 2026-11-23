@@ -66,6 +66,8 @@ func (s *Server) customerDoorRoutes(r chi.Router) {
 	r.Post("/me/chats/{id}/orders", s.doorPlaceOrder)
 	r.Post("/me/chats/{id}/bookings", s.doorBook)
 	r.Get("/me/chats/{id}/orders/{reference}/pay", s.doorPay)
+	r.Get("/me/chats/{id}/invoices/{invoice}/transfer", s.getCustomerTransfer)
+	r.Post("/me/chats/{id}/invoices/{invoice}/transfer", s.askCustomerTransfer)
 }
 
 // The door's refusals, in plain words.
@@ -765,7 +767,8 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line); err != nil {
 				return m, err
 			}
-			m.WarnTransfer = !m.Mine && m.Kind != "card" && warnTransfer(m.Body)
+			m.WarnTransfer = !m.Mine && ((m.Kind != "card" && warnTransfer(m.Body)) || savedNamesAccount(m.Card))
+			m.Card = maskCustomerCard(m.Mine, m.Card)
 			return m, nil
 		})
 		if err != nil {
@@ -786,8 +789,10 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"messages": out, "more": more})
 }
 
-// sendPersonMessage is POST /v1/me/chats/{id}/messages {text, client_id}:
-// the person writes to the business. Kept in both copies in one
+// sendPersonMessage is POST /v1/me/chats/{id}/messages {text, client_id}
+// or {card, client_id}: the person writes to the business, or shares one
+// of their own saved things as a card (saved objects S1, part 3; asked
+// first, as 409 confirm_share, before what is sensitive). Kept in both copies in one
 // transaction through the door; the business's people who handle orders
 // are told; a business closed by its hours answers once a day.
 func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
@@ -799,9 +804,17 @@ func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Text     string `json:"text"`
 		ClientID string `json:"client_id"`
+		Card     *struct {
+			Type  string      `json:"type"`
+			Saved *savedShare `json:"saved"`
+		} `json:"card"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if in.Card != nil {
+		s.sendPersonSaved(w, r, person, in.Card.Type, in.Card.Saved, in.ClientID)
 		return
 	}
 	in.Text = strings.TrimSpace(in.Text)
@@ -813,7 +826,7 @@ func (s *Server) sendPersonMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
 		return
 	}
-	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), in.Text, in.ClientID, nil)
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), in.Text, in.ClientID, nil, nil)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -854,7 +867,7 @@ func (s *Server) sendPersonFile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
 		return
 	}
-	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), text, clientID, f)
+	m, fresh, err := s.personSend(r.Context(), person, chi.URLParam(r, "id"), text, clientID, f, nil)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -878,16 +891,20 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
+	m.Card = maskCustomerCard(m.Mine, m.Card)
 	return &m, err
 }
 
-// personSend writes the person's message (and file) to both copies
-// through the door, in one transaction; fresh is false for a repeat of a
-// client_id.
-func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile) (personMessage, bool, error) {
+// personSend writes the person's message (and file, or card) to both
+// copies through the door, in one transaction; fresh is false for a repeat
+// of a client_id.
+func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile, card *customerCard) (personMessage, bool, error) {
 	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, Line: lineApp}
 	if f != nil {
 		out.Kind, out.Attachment = "media", f.view()
+	}
+	if card != nil {
+		out.Kind, out.Card = "card", card
 	}
 	var tenant uuid.UUID
 	var bizFile map[string]any
@@ -968,7 +985,7 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 		})
 
 		if out.CreatedAt, _, err = s.writeAppMessageTx(ctx, tx, appMessage{id: out.ID, tenant: tenant, thread: thread, subject: subject, person: person,
-			fromPerson: true, kind: out.Kind, text: text, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
+			fromPerson: true, kind: out.Kind, text: text, card: card, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
 			return err
 		}
 		// The bell, and the closed reply, each in a savepoint: if either
@@ -1004,6 +1021,68 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 		return out, false, err
 	}
 	return out, true, nil
+}
+
+// sendPersonSaved shares one of the person's own saved things with the
+// business as a card (saved objects S1, part 3): asked first before what
+// is sensitive, in the words "Share Mum's account details with Bola
+// Stores?"; the share in the person's own log.
+func (s *Server) sendPersonSaved(w http.ResponseWriter, r *http.Request, person uuid.UUID, kind string, sh *savedShare, clientID string) {
+	if kind != "saved" {
+		writeErr(w, http.StatusBadRequest, "Only a saved thing is shared as a card here.")
+		return
+	}
+	if sh == nil {
+		writeErr(w, http.StatusBadRequest, "Choose the saved thing to share.")
+		return
+	}
+	if sh.Owner == "" {
+		sh.Owner = "mine"
+	}
+	if sh.Owner != "mine" {
+		writeErr(w, http.StatusBadRequest, "Only your own saved things are shared here.")
+		return
+	}
+	if len(clientID) > 80 {
+		writeErr(w, http.StatusBadRequest, "client_id is up to 80 characters")
+		return
+	}
+	var chat personChat
+	err := db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
+		var err error
+		if chat, err = personChatTx(r.Context(), tx, person, chi.URLParam(r, "id")); err != nil {
+			return err
+		}
+		return nameOneTx(r.Context(), tx, &chat)
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	if chat.Blocked {
+		s.personFail(w, r, errDoorYouBlocked)
+		return
+	}
+	c, rec, err := s.savedCardFor(r, person, uuid.Nil, *sh, chat.Name)
+	if err != nil {
+		if !shareConfirmFail(w, err) {
+			s.personFail(w, r, err)
+		}
+		return
+	}
+	m, fresh, err := s.personSend(r.Context(), person, chat.ID.String(), c.Title, clientID, nil, &customerCard{Type: "saved", Title: c.Title, Saved: &c})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusCreated
+	if !fresh {
+		code = http.StatusOK
+	} else {
+		s.recordShare(r, rec)
+	}
+	m.Card = maskCustomerCard(true, m.Card)
+	writeJSON(w, code, m)
 }
 
 // savepoint runs fn in a savepoint of tx: what it did is kept when it

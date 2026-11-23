@@ -44,11 +44,20 @@ people.
 - **Permission:** sending to a business needs `chat.trade`, as before. Someone
   without it is told so, and nothing is sent.
 
-**`@Taskiem` in a business conversation, phase 1.** There is no message kind that
-only the sender sees inside a business conversation yet, so Taskiem's answer goes
-to the sender's own Taskiem conversation and comes back in the answer (`202`, the
-`TaskiemChat` messages). The web shows it beside the conversation. A message kind
-seen by one side only comes in a later phase.
+**`@Taskiem` in a business conversation.** Taskiem's answer goes to the
+sender's own Taskiem conversation, and is kept in the business conversation as a
+**note only this side sees** (kind `taskiem`, 21 November 2026, migration 00500):
+the words asked (`asked`), the answer as its body, and "Open Taskiem chat". The
+send answers `201` with the note as `message` and Taskiem's words as `messages`.
+The note keeps the send's `client_id`, so the same send repeated (the phone's
+outbox trying again) answers the note (`200`) and never asks Taskiem twice. A note
+cannot be replied to or reacted to, and the chats list shows it as "Taskiem: …".
+
+*Why:* the first version answered `202` with Taskiem's words only. The app could
+not read that as a sent message, so the send stayed in its outbox and was sent
+again at every refresh, and each time Taskiem was asked again (a loop seen on a
+phone, 21 November 2026). The app's outbox now also drops a send whose answer it
+cannot read, since the server took it.
 
 ## 2. The look and motion (phase 1, for all of Taskiem)
 

@@ -70,6 +70,8 @@ func TestDeleteAccount(t *testing.T) {
 	app := w.placeByPhone(t, w.biz, number, storefront.ChatPayLater, &toluID)
 	byPhone := w.placeByPhone(t, w.biz, number, storefront.ChatPayLater, nil)
 	tolu.must(201, "POST", "/v1/me/addresses", map[string]any{"label": "Home", "line": "12 Allen Avenue"})
+	tolu.must(201, "POST", "/v1/me/saved", map[string]any{"name": "mum", "title": "Mum", "bank_name": "Zenith Bank", "account_number": "2222222222"})
+	tolu.must(201, "POST", "/v1/me/saved-kinds", map[string]any{"name": "Car", "fields": []map[string]any{{"label": "Plate number", "type": "text"}}})
 	tolu.must(200, "PUT", "/v1/me/notifications", map[string]any{"offers": false})
 	thread := w.threadOf(t, toluID)
 
@@ -101,11 +103,16 @@ func TestDeleteAccount(t *testing.T) {
 	var deleted *time.Time
 	var phones, addresses, chats, messages, settings, sessions int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT name, email, status, deleted_at,
-		(SELECT count(*) FROM user_phones WHERE user_id = $1), (SELECT count(*) FROM person_addresses WHERE person_id = $1),
+		(SELECT count(*) FROM user_phones WHERE user_id = $1), (SELECT count(*) FROM saved_objects WHERE person_id = $1 AND kind = 'place'),
 		(SELECT count(*) FROM person_conversations WHERE person_id = $1), (SELECT count(*) FROM person_messages WHERE person_id = $1),
 		(SELECT count(*) FROM person_notify WHERE person_id = $1), (SELECT count(*) FROM sessions WHERE user_id = $1 AND revoked_at IS NULL)
 		FROM users WHERE id = $1`, toluID).Scan(&name, &email, &status, &deleted, &phones, &addresses, &chats, &messages, &settings, &sessions); err != nil {
 		t.Fatal(err)
+	}
+	var savedLeft int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM saved_objects WHERE person_id = $1) + (SELECT count(*) FROM saved_object_events WHERE person_id = $1) + (SELECT count(*) FROM saved_kinds WHERE person_id = $1)`,
+		toluID).Scan(&savedLeft); err != nil || savedLeft != 0 {
+		t.Fatalf("saved things left: %d %v", savedLeft, err)
 	}
 	if name != "" || !strings.HasSuffix(email, "@deleted.taskiem.invalid") || status != "disabled" || deleted == nil ||
 		phones+addresses+chats+messages+settings+sessions != 0 {

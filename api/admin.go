@@ -707,7 +707,23 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		}
 		erased = append(erased, x)
 	}
-	if len(erased) == 0 {
+	// The business's saved things holding the phone or email (saved
+	// objects: a person, a place, a field of its own kind), which are kept
+	// plain, not sealed under the subject: let go with what they held.
+	scrubbed, err := s.eraseSavedContacts(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// A customer's answers waiting to go back to their WhatsApp number
+	// (made tools T5) hold the number plain: they go too.
+	watched, err := s.eraseCustomerToolWatches(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	scrubbed += watched
+	if len(erased) == 0 && scrubbed == 0 {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
@@ -722,7 +738,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Warn("erasure: the customer's lines", "tenant", p.TenantID, "err", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased})
+	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased, "saved": scrubbed})
 }
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key

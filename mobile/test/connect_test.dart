@@ -119,7 +119,7 @@ void main() {
       );
       expect(keptWithoutLinks('status', 'status'), isFalse);
       expect(keptWithoutLinks('$_said\nConnect Paystack: $_link', 'Something else'), isFalse);
-      TaskiemChatMessagesItem m(String text) => TaskiemChatMessagesItem(id: 'a1', channel: 'web', inbound: false, kind: 'text', text: text, createdAt: DateTime.utc(2026, 11, 11, 13));
+      TaskiemMessage m(String text) => TaskiemMessage(id: 'a1', channel: 'web', inbound: false, kind: 'text', text: text, createdAt: DateTime.utc(2026, 11, 11, 13));
       final merged = mergeTaskiem(mergeTaskiem(const [], [m('$_said\nConnect Paystack: $_link')]), [m(_said)]);
       expect(merged.single.m.text, '$_said\nConnect Paystack: $_link');
     });

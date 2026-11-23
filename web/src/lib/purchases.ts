@@ -38,6 +38,10 @@ export interface SuppliersView {
 }
 
 export interface PurchaseLine {
+  id?: string;
+  position?: number;
+  /** How the order's steps name the line: the linked supplier's item, the
+   * stock item of a stock line, else the line's own id. */
   item_id: string;
   item: string;
   unit?: string;
@@ -46,6 +50,14 @@ export interface PurchaseLine {
   received: number;
   /** What a linked supplier says it delivered. */
   delivered?: number;
+  /** What happens when it arrives (what a business buys §5). */
+  treatment?: "record" | "stock" | "track";
+  stock_item_id?: string;
+  uses?: number;
+  label_id?: string;
+  seller_item_id?: string;
+  /** Taskiem's suggestion, not yet confirmed. */
+  unconfirmed?: boolean;
 }
 
 export type PurchaseStatus =
@@ -223,6 +235,26 @@ export function purchaseSub(
  * link's own steps (All came, Not all came), never by hand. */
 export const linkedOrder = (p: Pick<Purchase, "link_id" | "seller_status">) =>
   !!p.link_id && !!p.seller_status;
+
+/** Where one purchase is delivered (GET /v1/stock/purchases/{id}/deliver-to):
+ * its own place, or the business's (own false). */
+export interface PurchaseDeliverTo {
+  address: string;
+  phone: string;
+  own: boolean;
+}
+
+/** Whether where a purchase is delivered can still be changed: until the
+ * supplier has it (drafted, or sent and not yet seen by them). */
+export const deliverToOpen = (p: Pick<Purchase, "status" | "seller_status">) =>
+  p.status === "drafted" || (p.status === "sent" && !p.seller_status);
+
+/** The line under "Delivered to": whose place it is, or that it is picked
+ * up. */
+export function deliverToSub(d: PurchaseDeliverTo): string {
+  if (!d.address) return "Nowhere set: you pick it up.";
+  return d.own ? "This order's own place" : "Where your orders usually go";
+}
 
 /** Whether the buyer may say what came of a linked supplier's delivery:
  * All came, or Not all came (which stays open after the day, as a

@@ -60,7 +60,7 @@ var adapterKinds = map[string]string{"payments": "Payments & Banking", "messagin
 // The home page's picks: the templates it shows as cards, and the
 // services it names, by id. A build fails if one goes missing.
 var (
-	featuredTemplates  = []string{"debtor-reminder-table", "payment-thank-you-sms", "daily-sales-summary", "run-payroll", "stock-reorder-alert", "failed-transfer-alert"}
+	featuredTemplates  = []string{"debtor-reminder-table", "payment-thank-you-sms", "daily-sales-summary", "pay-a-list", "stock-reorder-alert", "failed-transfer-alert"}
 	featuredConnectors = []string{"paystack", "flutterwave", "moniepoint", "opay", "interswitch", "remita", "termii", "dojah", "mono", "googlesheets", "gmail", "slack", "telegram", "mpesa", "mtnmomo"}
 )
 

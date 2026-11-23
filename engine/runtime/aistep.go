@@ -121,7 +121,10 @@ func (w *Worker) aiEvent(ctx context.Context, p *plan, in any) history.Event {
 	q, _ := in.(map[string]any)
 	masker := pii.NewMasker(p.taint)
 	prompt := masker.Mask(q["prompt"])
-	input, _ := q["input"].(map[string]any)
+	// A location is never given to a model, not even in a field the step
+	// lets personal data through: only that it was answered, its state
+	// and its source (device fields §5).
+	input, _ := pii.HideLocations(q["input"], p.taint).(map[string]any)
 	masked := map[string]any{}
 	var through map[string]any
 	for k, v := range input {

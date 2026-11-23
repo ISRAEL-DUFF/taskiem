@@ -42,6 +42,9 @@ type chatRef struct {
 	When      time.Time `json:"when"`
 	TotalKobo *int64    `json:"total_kobo,omitempty"`
 	Status    string    `json:"status,omitempty"`
+	// find is the name a search matches, a person's in full though it
+	// is shown masked; never sent.
+	find string
 }
 
 // refFamily is the kind as both sides of a conversation say it: our
@@ -185,6 +188,13 @@ func (s *Server) allRefsTx(ctx context.Context, tx pgx.Tx, p *Principal) ([]chat
 // chatRefs is GET /v1/chat-refs: what the Taskiem chat may tag.
 func (s *Server) chatRefs(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if q, ok, err := refSearchOf(r); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if ok {
+		s.answerRefSearch(w, r, q, func(pgx.Tx) (map[string]refPage, error) { return s.allRefPages(p), nil })
+		return
+	}
 	var out []chatRef
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
@@ -205,6 +215,19 @@ func (s *Server) linkChatRefs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	if q, ok, err := refSearchOf(r); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if ok {
+		s.answerRefSearch(w, r, q, func(tx pgx.Tx) (map[string]refPage, error) {
+			l, err := links.GetTx(r.Context(), tx, link)
+			if err != nil {
+				return nil, linkMessageErr(err)
+			}
+			return linkRefPages(p, l), nil
+		})
+		return
+	}
 	var out []chatRef
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		l, err := links.GetTx(r.Context(), tx, link)

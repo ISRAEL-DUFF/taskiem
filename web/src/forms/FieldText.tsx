@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Source } from "../lib/plaincanvas";
 import { fieldWords, segmentsOf, valueOf, type Segment } from "../lib/fieldtext";
+import { SourceOptions } from "../canvas/PlainPickers";
 
 /** The drag type a field carries from "What came in". */
 export const FIELD_DRAG = "application/x-taskiem-field";
@@ -103,11 +104,7 @@ export function FieldText({ value, onChange, sources, label, multiline = false }
             }}
           >
             <option value="">Choose a field…</option>
-            {sources.map((s) => (
-              <option key={s.expr} value={s.expr}>
-                {s.label}
-              </option>
-            ))}
+            <SourceOptions sources={sources} />
           </select>
         ) : (
           <button type="button" className="link ftext-add" onClick={() => setMenu(true)}>

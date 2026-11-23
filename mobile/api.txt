@@ -59,6 +59,10 @@ taskiemHistory
 taskiemSay
 getChatBriefing
 chatRefs
+chatActions
+chatActionChoices
+closeChatMenu
+runChatAction
 
 # Customers' conversations (M3)
 getCustomerChat
@@ -97,6 +101,12 @@ myChatOrders
 placeMyChatOrder
 bookInMyChat
 payMyChatOrder
+# The business's tools for its customers (made tools T5).
+myChatTools
+startMyChatTool
+confirmMyChatTool
+myChatToolAnswer
+pressMyChatToolButton
 
 # Discover: the public finding businesses, and a business's listing
 # (taskiem-for-everyone §10, stage 3). Chat from a profile is startMyChat
@@ -125,6 +135,10 @@ searchCustomerChats
 linkChatItems
 getStorefrontServices
 getStock
+# The Stock page's stock items, and what a product is counted by (S2)
+listStockItems
+putCountedBy
+deleteCountedBy
 
 # Find a business (M3)
 explore
@@ -158,6 +172,8 @@ getSlack
 startSlackLink
 unlinkSlack
 putChatTools
+getAIPhotoReading
+putAIPhotoReading
 
 # Notifications on this phone (docs/spec/mobile-app-m4.md N4)
 listPush
@@ -309,3 +325,122 @@ handBasket
 placeBasket
 payBasketShare
 sendBasketShareCards
+
+# Saved accounts (saved objects S0): a business's and the person's own
+listSaved
+addSaved
+changeSaved
+removeSaved
+revealSaved
+savedStepUpOptions
+checkAllSaved
+savedProvider
+listBanks
+nameCheck
+listMySaved
+addMySaved
+changeMySaved
+removeMySaved
+revealMySaved
+mySavedStepUpOptions
+readSavedWords
+listMySavedKinds
+addMySavedKind
+changeMySavedKind
+removeMySavedKind
+listSavedKinds
+addSavedKind
+changeSavedKind
+removeSavedKind
+importSaved
+saveOrderCustomer
+listMyBanks
+
+# Pay one person (P1, docs/spec/chat-pay-people.md)
+listPayments
+listPayBanks
+readPayment
+payNameCheck
+createPayment
+getPayment
+confirmPayment
+cancelPayment
+getPayLimits
+putPayLimit
+# Where a staff member is paid, outside payroll (Pay on their page)
+putStaffPayAccount
+getMePin
+putMePin
+deleteMePin
+getPayCollection
+addPayCollection
+clearPayCollection
+payPayCollection
+patchPayCollection
+removePayCollection
+getPayroll
+getPayrollRun
+getPayrollStaff
+putStaffPayrolla
+
+# Pay several people (P3, docs/spec/chat-pay-people.md)
+listPaymentBatches
+createPaymentBatch
+readPaymentList
+getPaymentBatch
+confirmPaymentBatch
+approvePaymentBatch
+cancelPaymentBatch
+payBatchAgain
+
+# Pay a bill by transfer, in the chat (the payments flow, part 1;
+# docs/spec/chat-payments-flow.md), and a customer's invoice by transfer
+askBillTransfer
+getBillTransfer
+getMyInvoiceTransfer
+askMyInvoiceTransfer
+listTools
+readTool
+startTool
+confirmTool
+getRunAnswer
+setToolSettings
+# A code scanned from the home screen (device fields D2)
+scanOffers
+
+# Form steps for you (device fields D1, docs/spec/device-fields.md): the
+# app answers a form step, its location and photo read at the tap; a photo
+# goes as a multipart form through the transport upload.
+listFormRequests
+getFormRequest
+answerFormRequest
+pressToolButton
+
+# Pages (decision 0072, pages G1): the pages a person may open, drawn by
+# the server; making and changing them stays on the web
+listPages
+viewPage
+getPageBlock
+actOnPage
+refreshPage
+# What a business buys U2a: the question on each line and its memory,
+# labels in Money settings (docs/spec/what-a-business-buys.md §6)
+setPurchaseLine
+listItemLinks
+putItemLink
+deleteItemLink
+listSupplierItems
+putSupplierItem
+deleteSupplierItem
+listSpendLabels
+makeSpendLabel
+renameSpendLabel
+mergeSpendLabel
+
+# What a business buys U3: Things we have, spending by label
+# (docs/spec/what-a-business-buys.md §5.3, §5.4)
+listThings
+getThing
+addThing
+patchThing
+getMoneySpending

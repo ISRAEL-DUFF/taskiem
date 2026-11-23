@@ -49,6 +49,8 @@ func (s *Server) linkOrderRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/stock/suppliers/{id}/link", s.linkSupplier)
 	r.With(manage).Get("/stock/deliver-to", s.getDeliverTo)
 	r.With(manage, s.tenantWide).Put("/stock/deliver-to", s.putDeliverTo)
+	r.With(manage).Get("/stock/purchases/{id}/deliver-to", s.getPurchaseDeliverTo)
+	r.With(manage, s.tenantWide).Put("/stock/purchases/{id}/deliver-to", s.putPurchaseDeliverTo)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/accept-change", s.acceptPurchaseChange)
 	r.With(manage, s.tenantWide).Post("/stock/purchases/{id}/confirm-proposed", s.confirmProposed)
 	r.With(s.need(PermTableEdit), s.tenantWide).Post("/stock/purchases/{id}/all-came", s.allCame)
@@ -655,13 +657,11 @@ func (s *Server) receiptStep(w http.ResponseWriter, r *http.Request, short bool)
 
 // settleReceipt records what came of a delivered linked order (the
 // seller's count, or the buyer's when short is given) and settles the
-// receipt with the seller, in one transaction; then sends the stock
-// movements. audit writes the business's own record of who did it, before
+// receipt with the seller, with its stock movements, in one transaction.
+// audit writes the business's own record of who did it, before
 // the transaction enters the seller's side.
 func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short []int64, by links.Actor, actor string, audit func(tx pgx.Tx, ref string) error) (*links.Told, error) {
 	var told *links.Told
-	var moves []stock.Movement
-	var costs []stock.Cost
 	key := stock.LinkReceiptKey + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		got, ref, err := links.ToReceive(ctx, tx, id, short)
@@ -674,7 +674,7 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 			}
 		}
 		if len(got) > 0 {
-			if _, moves, costs, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
+			if _, _, err = stock.ReceiveTx(ctx, tx, tenant, id, got, actor, key); err != nil {
 				return err
 			}
 		}
@@ -684,7 +684,6 @@ func (s *Server) settleReceipt(ctx context.Context, tenant, id uuid.UUID, short 
 	if err != nil {
 		return nil, err
 	}
-	s.Purchases.Apply(ctx, tenant, moves, costs, key)
 	return told, nil
 }
 
@@ -970,7 +969,6 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 	if s.Purchases == nil {
 		return errors.New("purchases are not configured")
 	}
-	var moves []stock.Movement
 	key := "link-short-" + id.String()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{buyer}, func(tx pgx.Tx) error {
 		if err := links.Undue(ctx, tx, buyer, "adjust", id); err != nil {
@@ -989,13 +987,12 @@ func (s *Server) adjustShort(ctx context.Context, buyer, id uuid.UUID) error {
 		if err := json.Unmarshal(short, &counts); err != nil {
 			return err
 		}
-		_, moves, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
+		_, _, err = stock.AdjustShortTx(ctx, tx, buyer, id, counts, "system:link-orders", key)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	s.Purchases.Apply(ctx, buyer, moves, nil, key)
 	return nil
 }
 
@@ -1277,6 +1274,76 @@ func (s *Server) getDeliverTo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
+// getPurchaseDeliverTo is GET /v1/stock/purchases/{id}/deliver-to: where
+// one purchase is delivered, its own place (own true) or the business's
+// default (saved objects S2).
+func (s *Server) getPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	var own bool
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		var err error
+		d, own, err = links.PurchaseDeliverToTx(r.Context(), tx, s.Vault, principalFrom(r.Context()).TenantID, id)
+		return err
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"address": d.Address, "phone": d.Phone, "own": own})
+}
+
+// putPurchaseDeliverTo is PUT /v1/stock/purchases/{id}/deliver-to
+// {address, phone}: where one purchase from a linked supplier is delivered
+// (a saved place, on the web and in the app), only before the supplier has
+// it (409 after).
+func (s *Server) putPurchaseDeliverTo(w http.ResponseWriter, r *http.Request) {
+	if !s.purchasesReady(w) {
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var d links.DeliverTo
+	if err := decodeBody(r, &d); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	e164, err := s.Purchases.Book.Phone(d.Phone)
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: %s is not a mobile number Taskiem can reach (like 0803 123 4567)", errBadRequest, strings.TrimSpace(d.Phone)))
+		return
+	}
+	d.Phone = e164
+	p := principalFrom(r.Context())
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		if err := links.SetPurchaseDeliverToTx(r.Context(), tx, s.Vault, p.TenantID, id, d); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "purchase.deliver_to", id.String(), map[string]any{"own": true})
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.fail(w, r, orderErr(err))
+		return
+	}
+	s.getPurchaseDeliverTo(w, r)
+}
+
 func (s *Server) putDeliverTo(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -1448,8 +1515,12 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // confirmProposed is POST /v1/stock/purchases/{id}/confirm-proposed: an
-// order a linked supplier drafted for us, confirmed, each line said to be
-// one of our items (items, in order). It is then accepted on both sides.
+// order a linked supplier drafted for us, confirmed. How each line is
+// treated (what a business buys §6): lines, in order, each a treatment
+// (null: as remembered or suggested), or items, in order, each one of our
+// items whose stock the line adds to; neither: every line as it is. A
+// line we had no memory of is remembered as confirmed. It is then
+// accepted on both sides.
 func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
@@ -1460,26 +1531,27 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Items []string `json:"items"`
+		Items []string            `json:"items"`
+		Lines []*stock.LineChoice `json:"lines"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	p := principalFrom(r.Context())
-	byID, err := s.itemsByID(r.Context(), p.TenantID)
-	if err != nil {
-		s.stockFail(w, r, err)
-		return
-	}
-	items := make([]links.BuyerItem, len(in.Items))
-	for i, x := range in.Items {
-		it, ok := byID[x]
-		if !ok {
-			s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+	var byID map[string]stock.Item
+	if len(in.Items) > 0 {
+		var err error
+		if byID, err = s.itemsByID(r.Context(), p.TenantID); err != nil {
+			s.stockFail(w, r, err)
 			return
 		}
-		items[i] = links.BuyerItem{ID: it.ID, Name: it.Name, Unit: it.Unit}
+		for i, x := range in.Items {
+			if _, ok := byID[x]; !ok {
+				s.fail(w, r, fmt.Errorf("%w: line %d is not one of your items", errBadRequest, i+1))
+				return
+			}
+		}
 	}
 	var told *links.Told
 	var x stock.Purchase
@@ -1492,7 +1564,21 @@ func (s *Server) confirmProposed(w http.ResponseWriter, r *http.Request) {
 		if err := auditTx(r, tx, "purchase.confirm_proposed", x.Reference, map[string]any{"purchase_id": x.ID}); err != nil {
 			return err
 		}
-		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, items, p.Actor(), actorOf(p))
+		choices := in.Lines
+		if len(in.Items) > 0 {
+			if len(in.Items) != len(x.Lines) {
+				return fmt.Errorf("%w: say which of your items each of the %d lines is", links.ErrInvalid, len(x.Lines))
+			}
+			choices = make([]*stock.LineChoice, len(in.Items))
+			for i, item := range in.Items {
+				l, err := stock.LineOf(r.Context(), tx, p.TenantID, byID[item], x.Lines[i].Quantity, &x.Lines[i].CostKobo, p.Actor())
+				if err != nil {
+					return err
+				}
+				choices[i] = &stock.LineChoice{Treatment: l.Treatment, StockItemID: l.StockItemID, Uses: l.Uses, LabelID: x.Lines[i].LabelID}
+			}
+		}
+		told, err = links.ConfirmProposedTx(r.Context(), tx, s.Vault, p.TenantID, id, choices, p.Actor(), actorOf(p))
 		return err
 	}); err != nil {
 		s.purchaseOrOrderFail(w, r, err)

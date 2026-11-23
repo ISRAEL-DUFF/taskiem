@@ -221,7 +221,14 @@ test("an order a linked supplier drafted, confirmed by its buyer", async ({ page
   await signUp(page);
   const sent: { url: string; body: unknown }[] = [];
   const proposed = { ...purchase, status: "drafted", seller_status: "proposed", change: undefined, counter: null, counter_at: null, approved_by: null, sent_at: null,
-    lines: [{ item_id: "", item: "rice", unit: "bag", quantity: 4, cost_kobo: 4_500_000, received: 0 }], total_kobo: 18_000_000 };
+    lines: [{ item_id: "si1", position: 0, item: "rice", unit: "bag", quantity: 4, cost_kobo: 4_500_000, received: 0, treatment: "stock", stock_item_id: "si1", uses: 1, unconfirmed: true }], total_kobo: 18_000_000 };
+  // How each line is treated (what a business buys §6): Taskiem suggested
+  // our stock item of the name; no labels yet.
+  await page.route("**/v1/stock/stock-items", (route) =>
+    route.fulfill(json({ keeps_stock: true, value_kobo: 0, low: 0, items: [{ id: "si1", name: "Rice", unit: "bag", category: "", count: 3, cost_kobo: null, low_level: null, target_level: null, supplier_id: null, supplier: "", group_of: "", group_name: "", low: false, suggest: null, value_kobo: 0, retired: false, sold_as: [] }] })),
+  );
+  await page.route("**/v1/money/labels**", (route) => route.fulfill(json({ labels: [], suggestions: [] })));
+  await page.route("**/v1/things**", (route) => route.fulfill(json({ things: [] })));
   await page.route("**/v1/stock", (route) =>
     route.fulfill(json({ keeps_stock: true, catalogue: "products", items: [{ id: "9", name: "Garri", available: true, stock: 2 }, { id: "1", name: "Rice", available: true, stock: 3 }] })),
   );
@@ -233,9 +240,10 @@ test("an order a linked supplier drafted, confirmed by its buyer", async ({ page
   await page.goto("/purchases/p1");
   await expect(page.getByTestId("purchase-seller")).toContainText("Dangote Depot drafted this order for you.");
   const card = page.getByTestId("purchase-confirm");
-  await expect(card.getByLabel("Their rice")).toHaveValue("1");
+  await expect(card.getByTestId("treat")).toContainText("How should we treat it?");
+  await expect(card.getByLabel("Which stock item?")).toHaveValue("si1");
   await axeBoth(page, "a proposed order");
   await card.getByRole("button", { name: "Confirm the order" }).click();
   await expect.poll(() => sent.at(-1)?.url).toBe("/v1/stock/purchases/p1/confirm-proposed");
-  expect(sent.at(-1)?.body).toEqual({ items: ["1"] });
+  expect(sent.at(-1)?.body).toEqual({ lines: [{ treatment: "stock", stock_item_id: "si1" }] });
 });

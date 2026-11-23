@@ -69,11 +69,31 @@ String listTime(DateTime d, DateTime now) {
 bool isDelivery(LinkDocCard c) => c.doc == 'delivery' || c.doc == 'dispatch';
 
 /// linkchat.ts cardLine: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042".
-String cardLine(LinkDocCard card, bool mine, String other) {
+/// A transfer card says what became of its number: [paid], the transfer
+/// paid or part paid card after it, or its time past at [now].
+String cardLine(LinkDocCard card, bool mine, String other, {LinkDocCard? paid, DateTime? now}) {
   final who = mine ? 'You' : other;
   if (isDelivery(card)) {
     final verb = deliveryVerbs[card.event] ?? card.event.replaceAll('_', ' ');
     return '$who $verb ${card.reference}';
+  }
+  // Paying a bill by transfer (the payments flow, part 1): the buyer asked
+  // for an account number; the seller's card says who is paying, until it
+  // is paid or the number's time is up.
+  final ref = card.reference;
+  final amount = card.amountKobo == null ? '' : '${naira(card.amountKobo!)} ';
+  switch (card.event) {
+    case 'transfer':
+      return switch (paid?.event) {
+        'transfer_paid' => mine ? 'You paid $ref by transfer' : '$other paid by transfer',
+        'transfer_part' => mine ? 'You paid part of $ref by transfer' : '$other paid part by transfer',
+        _ when now != null && transferExpired(card, now) => mine ? 'The number to pay $ref by transfer expired' : 'The number $other was paying by transfer expired',
+        _ => mine ? 'You asked to pay $ref by transfer' : '$other is paying by transfer',
+      };
+    case 'transfer_paid':
+      return mine ? 'Paid ${amount}by transfer' : '$other paid ${amount}by transfer';
+    case 'transfer_part':
+      return mine ? 'Part paid by transfer: ${amount}so far' : '$other paid part by transfer';
   }
   final verb = cardVerbs[card.event] ?? '${card.event.replaceAll('_', ' ')} ${card.doc == 'invoice' || card.doc == 'bill' ? 'invoice' : 'order'}';
   return '$who $verb ${card.reference}';
@@ -91,6 +111,7 @@ String previewLine(LinkMessage m, String other) {
   final card = m.card;
   if (m.kind == 'card' && card != null) return cardLine(card, m.mine, other);
   if (m.kind == 'diary') return '✓ ${m.body ?? ''}';
+  if (m.kind == 'taskiem') return 'Taskiem: ${m.body ?? ''}';
   final a = m.attachment;
   final words = a != null ? [attachmentLabel(a), m.body ?? ''].where((s) => s.isNotEmpty).join(': ') : (m.body ?? '');
   return (m.mine ? 'You: ' : '') + words;
@@ -265,7 +286,24 @@ const Map<String, CardStatus> _invoice = {
   'queried': (word: 'Queried', tone: CardTone.warn, step: null),
   'resolved': (word: 'Settled', tone: CardTone.lime, step: null),
   'reminder': (word: 'Reminder', tone: CardTone.warn, step: null),
+  'transfer': (word: 'Paying', tone: CardTone.plain, step: null),
+  'transfer_paid': (word: 'Paid', tone: CardTone.lime, step: null),
+  'transfer_part': (word: 'Part paid', tone: CardTone.warn, step: null),
 };
+
+/// When a transfer card's number expires: its note (RFC 3339).
+DateTime? transferUntil(LinkDocCard c) => c.event == 'transfer' ? DateTime.tryParse(c.note ?? '') : null;
+
+/// A transfer card's number past its time: the seller's card goes back to
+/// To pay, the buyer's says Expired.
+bool transferExpired(LinkDocCard c, DateTime now) {
+  final until = transferUntil(c);
+  return until != null && !until.isAfter(now);
+}
+
+/// A card's note, as words: none for a transfer card (its note is when the
+/// number expires).
+String cardNote(LinkDocCard c) => c.event == 'transfer' ? '' : (c.note ?? '');
 
 /// cardframe.ts cardStatus: the pill and the progress.
 CardStatus cardStatus(LinkDocCard c, DateTime now) {
@@ -277,6 +315,7 @@ CardStatus cardStatus(LinkDocCard c, DateTime now) {
     return (word: 'Lapsed', tone: CardTone.plain, step: null);
   }
   if (order && c.event == 'change' && c.wasKobo != null) return (word: 'Counter', tone: CardTone.warn, step: 0);
+  if (transferExpired(c, now)) return c.doc == 'invoice' ? _invoice['bill']! : (word: 'Expired', tone: CardTone.plain, step: null);
   return (order ? _order : _invoice)[c.event] ?? plain();
 }
 
@@ -287,13 +326,13 @@ String cardKicker(LinkDocCard c) {
 }
 
 /// cardframe.ts isDiary: a change we made ourselves that needs nothing more.
-bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed'].contains(c.event);
+bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed', 'transfer', 'transfer_paid', 'transfer_part'].contains(c.event);
 
 /// linkchat.ts cardSub: the amount, and a word.
 String cardSub(LinkDocCard c) => [
   if (c.amountKobo != null) naira(c.amountKobo!),
   if (c.wasKobo != null && c.wasKobo! > (c.amountKobo ?? 0)) 'was ${naira(c.wasKobo!)}',
-  if ((c.note ?? '').isNotEmpty) '“${c.note}”',
+  if (cardNote(c).isNotEmpty) '“${cardNote(c)}”',
 ].join(' · ');
 
 /// Chrome breaks a line after a hyphen even before a digit ("P-" then

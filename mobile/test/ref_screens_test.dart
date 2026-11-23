@@ -3,6 +3,7 @@
 // docs/spec/mobile-app-m3-fixes.md).
 
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,10 +137,18 @@ void main() {
     await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
     await t.pumpAndSettle();
     expect(find.text('2 × Rice, 50kg bag'), findsOneWidget, reason: 'only the one pressed opens');
-    // Your own message in the light: its buttons white on the pine, not
-    // pine on pine (they looked as if they could not be pressed).
+    // Your own message in the light: its buttons' words stand out on your
+    // light green bubble (on the pine one, 16–20 November, they once did not).
+    double lum(Color c) {
+      double ch(double v) => v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+      return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+    }
+
+    final bubble = tkAppLight.chatOut;
     for (final b in ['Open', 'Give this to…']) {
-      expect(t.widget<Text>(find.descendant(of: cards.first, matching: find.text(b))).style!.color, const Color(0xFFFFFFFF), reason: b);
+      final ink = t.widget<Text>(find.descendant(of: cards.first, matching: find.text(b))).style!.color!;
+      final (x, y) = (lum(ink), lum(bubble));
+      expect((math.max(x, y) + 0.05) / (math.min(x, y) + 0.05), greaterThan(4.5), reason: b);
     }
     await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
     await t.pumpAndSettle();
@@ -244,6 +253,7 @@ void main() {
     expect(find.text('INVOICES AND BILLS'), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp(r'^INV-0001, ')));
     await t.pumpAndSettle();
+    // The message box (the picker's search box was another, now gone).
     expect(t.widget<EditableText>(find.byType(EditableText)).controller.text, 'Paid #INV-0001 ');
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);

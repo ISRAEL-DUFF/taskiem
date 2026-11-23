@@ -7,7 +7,6 @@ import { MAX_BREAKS, breaksProblem, priceAt, type Break } from "../lib/deals";
 import {
   lineProblem,
   priceWords,
-  type ItemLink,
   type PriceItem,
   type PriceList,
   type SupplierPrices,
@@ -15,6 +14,9 @@ import {
 import type { StockItem, StockView } from "../lib/stock";
 import { hasSizes, label, sizesOf, sizesWords } from "../lib/variants";
 import { soldInSizes } from "../lib/buyer";
+import type { Purchase } from "../lib/purchases";
+import { fromMemory, type Remembered } from "../lib/treat";
+import { TrackAskBox, TreatQuestion, useSheetTreat, type Choices } from "./TreatLine";
 import { formatPrice } from "../lib/storefront";
 import {
   EmptyState,
@@ -728,45 +730,66 @@ export function SupplierPricesPage() {
       ),
     [link],
   );
-  const stock = useLoad(() => get<StockView>("/v1/stock"), []);
   const linked = useLoad(
-    () => get<{ item_links: ItemLink[] }>(`/v1/item-links/${link}`),
+    () => get<{ item_links: Remembered[] }>(`/v1/item-links/${link}`),
     [link],
   );
   const [qty, setQty] = useState<Record<string, string>>({});
-  const [mine, setMine] = useState<Record<string, string>>({});
+  const treat = useSheetTreat();
   const act = useAction();
   const p = view.data?.suppliers[0];
-  const own = stock.data?.items ?? [];
-  const linkOf = (seller: string) =>
-    linked.data?.item_links.find((l) => l.seller_item_id === seller)?.item_id;
+  const memoryOf = (seller: string) => {
+    const m = linked.data?.item_links.find((x) => x.seller_item_id === seller);
+    return m ? fromMemory(m) : undefined;
+  };
   const lines = (p?.items ?? []).filter(
     (it) => (qty[it.item_id] ?? "").trim() !== "",
   );
   const problems = lines
     .map((it) => lineProblem(it, qty[it.item_id] ?? ""))
     .filter(Boolean);
-  const unlinked = lines.filter(
-    (it) => !linkOf(it.item_id) && !mine[it.item_id],
-  );
+  const answered =
+    !!linked.data &&
+    treat.ready(
+      lines.map((it) => ({ key: it.item_id, memory: memoryOf(it.item_id) })),
+    );
   const total = lines.reduce(
     (sum, it) =>
       sum + priceAt(it, Number(qty[it.item_id]) || 0) * (Number(qty[it.item_id]) || 0),
     0,
   );
-  const order = () =>
+  const [orderKey] = useState(() => crypto.randomUUID());
+  const order = (cs?: Choices) =>
     void act
       .run(async () => {
-        const out = await postOnce<{ purchase: { id: string } }>(
-          `/v1/supplier-prices/${link}/order`,
-          `prices-${link}-${lines.map((it) => `${it.item_id}:${qty[it.item_id]}`).join(",")}-${Date.now()}`,
-          {
-            lines: lines.map((it) => ({
-              seller_item_id: it.item_id,
-              quantity: Number(qty[it.item_id]),
-              item_id: mine[it.item_id] || undefined,
-            })),
-          },
+        const body = [];
+        for (const it of lines)
+          body.push({
+            seller_item_id: it.item_id,
+            quantity: Number(qty[it.item_id]),
+            ...(await treat.body(it.item_id, it.unit, cs)),
+          });
+        let out: { purchase: Purchase };
+        try {
+          out = await postOnce<{ purchase: Purchase }>(
+            `/v1/supplier-prices/${link}/order`,
+            `prices-${orderKey}-${JSON.stringify(body)}`,
+            { lines: body },
+          );
+        } catch (e) {
+          if (treat.refused(e, lines.map((it) => it.item_id))) return;
+          throw e;
+        }
+        await treat.remember(
+          out.purchase.id,
+          lines.map((it, i) => ({
+            key: it.item_id,
+            unit: it.unit,
+            position:
+              out.purchase.lines?.find((l) => l.seller_item_id === it.item_id)
+                ?.position ?? i,
+          })),
+          cs,
         );
         navigate(`/purchases/${out.purchase.id}`);
       }, false)
@@ -782,7 +805,7 @@ export function SupplierPricesPage() {
           </Link>
         }
       />
-      <ErrorBox error={view.error ?? stock.error ?? act.error} />
+      <ErrorBox error={view.error ?? linked.error ?? act.error} />
       {!view.data && !view.error && (
         <Skeleton rows={3} label="Loading their prices…" />
       )}
@@ -806,43 +829,9 @@ export function SupplierPricesPage() {
               <tbody>
                 {p.items.map((it) => {
                   const problem = lineProblem(it, qty[it.item_id] ?? "");
-                  const mineID = linkOf(it.item_id);
-                  const asking =
-                    (qty[it.item_id] ?? "").trim() !== "" && !mineID;
                   return (
                     <tr key={it.item_id} data-testid="supplier-price">
-                      <td>
-                        {it.name}
-                        {mineID && (
-                          <span className="block hint">
-                            Your{" "}
-                            {own.find((o) => o.id === mineID)?.name ?? "item"}
-                          </span>
-                        )}
-                        {asking && (
-                          <label className="block">
-                            <span className="hint">
-                              Which of your items is it?
-                            </span>
-                            <select
-                              value={mine[it.item_id] ?? ""}
-                              onChange={(e) =>
-                                setMine((cur) => ({
-                                  ...cur,
-                                  [it.item_id]: e.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Choose…</option>
-                              {own.map((o) => (
-                                <option key={o.id} value={o.id}>
-                                  {o.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                      </td>
+                      <td>{it.name}</td>
                       <td>{priceWords(it)}</td>
                       <td>
                         {soldInSizes(it) ? (
@@ -874,6 +863,38 @@ export function SupplierPricesPage() {
               </tbody>
             </table>
           </div>
+          {lines.length > 0 && (
+            <div className="treat-list" data-testid="treat-lines">
+              <h3>How should we treat each?</h3>
+              <p className="hint">
+                Said once for each item, it is remembered for your next order.
+              </p>
+              {lines.map((it) => (
+                <TreatQuestion
+                  key={it.item_id}
+                  item={it.name}
+                  supplier={p.business}
+                  category={it.category}
+                  data={treat.data}
+                  memory={memoryOf(it.item_id)}
+                  value={treat.choices[it.item_id]}
+                  onChange={treat.setter(it.item_id)}
+                />
+              ))}
+            </div>
+          )}
+          {treat.ask && (
+            <TrackAskBox
+              ask={treat.ask.ask}
+              busy={act.busy}
+              onYes={() =>
+                order(treat.answer(true, memoryOf(treat.ask?.key ?? "")))
+              }
+              onRecord={() =>
+                order(treat.answer(false, memoryOf(treat.ask?.key ?? "")))
+              }
+            />
+          )}
           <div className="toolbar" style={{ marginTop: 12 }}>
             <strong className="grow">Total {formatPrice(total)}</strong>
             <button
@@ -883,20 +904,13 @@ export function SupplierPricesPage() {
                 act.busy ||
                 lines.length === 0 ||
                 problems.length > 0 ||
-                unlinked.length > 0
+                !answered
               }
-              onClick={order}
+              onClick={() => order()}
             >
               Draft the order
             </button>
           </div>
-          {unlinked.length > 0 && (
-            <p className="hint">
-              Say which of your items{" "}
-              {unlinked.map((it) => it.name).join(" and ")} is, once: it is
-              remembered.
-            </p>
-          )}
         </section>
       )}
     </>

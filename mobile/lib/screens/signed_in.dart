@@ -4,6 +4,7 @@
 
 import '../chat/chat_link_page.dart' show ChatLinkPage;
 import '../chat/discover_settings.dart' show DiscoverSettingsPage;
+import '../chat/saved_accounts.dart' show SavedAccountsPage;
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -24,6 +25,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'settings_more.dart';
 import 'switcher.dart' show lockWords, showSwitcher;
+import 'you_pin.dart' show PinScreen;
 
 class SignedInScreen extends StatefulWidget {
   const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
@@ -49,6 +51,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
   TelegramLink? _tg;
   SlackLink? _slack;
   List<Map<String, dynamic>>? _keys;
+  AIPhotoReading? _aiPhoto;
 
   @override
   void initState() {
@@ -84,6 +87,11 @@ class _SignedInScreenState extends State<SignedInScreen> {
         final r = (await widget.auth.transport.send('GET', '/v1/me/passkeys') as Map)['passkeys'] as List;
         if (mounted) setState(() => _keys = [for (final k in r) (k as Map).cast<String, dynamic>()]);
       }),
+      if (!widget.auth.personal)
+        _quiet(() async {
+          final a = await widget.auth.api.getAIPhotoReading();
+          if (mounted) setState(() => _aiPhoto = a);
+        }),
     ]);
   }
 
@@ -214,6 +222,14 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   trailing: keys.isEmpty ? null : quiet('${keys.length}'),
                   onTap: () => _open(SettingsPage(title: 'Passkeys', children: [PasskeysCard(auth: widget.auth)])),
                 ),
+              // The person's one PIN: approves on WhatsApp, pays small amounts.
+              TkListRow(
+                title: 'PIN',
+                sub: 'Approves on WhatsApp and pays small amounts',
+                icon: 'b-lock',
+                square: look.violet,
+                onTap: () => _open(PinScreen(auth: widget.auth)),
+              ),
               if (phones != null)
                 TkListRow(
                   title: 'Your phones',
@@ -259,6 +275,22 @@ class _SignedInScreenState extends State<SignedInScreen> {
                 ),
             ],
           ),
+        // Saved accounts (saved objects S0): everyone in the business sees
+        // them, masked; those who manage them add and change them.
+        if (!widget.auth.personal)
+          TkSection(
+            title: 'Saved',
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'Saved things',
+                sub: 'Accounts, people, places and texts, by name',
+                icon: 'b-bank',
+                square: look.lime,
+                onTap: () => _open(SavedAccountsPage(auth: widget.auth, mine: false)),
+              ),
+            ],
+          ),
         // Customers chatting in the app (taskiem-for-everyone §8.2): the chat
         // link, its QR code and the chat settings, on a page of their own.
         if (widget.auth.can('storefront.manage|order.handle'))
@@ -287,6 +319,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
           ),
         // Owners and admins turn chat tools on for everyone.
         if (widget.auth.can('member.manage')) ChatToolsCard(auth: widget.auth),
+        // Reading photos with AI (I3): an owner turns it on; others see it.
+        if (!widget.auth.personal && (_aiPhoto?.available ?? false)) AIPhotoReadingCard(auth: widget.auth, start: _aiPhoto!, heading: !widget.auth.can('member.manage')),
         TkSection(
           inset: 56,
           children: [

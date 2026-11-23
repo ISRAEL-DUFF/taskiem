@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { ApiError, get, post, postOnce } from "../api";
+import { ApiError, get, post, postOnce, type JSONSchema } from "../api";
+import { SchemaForm } from "../forms/SchemaForm";
 import { Icon } from "../icons";
 import { KitEmpty, KitField, KitLoading, Pill, Sheet } from "../kit";
 import { dayLabel, lagosTime, whenLabel } from "../lib/bookings";
@@ -13,6 +14,7 @@ import {
   minutesWords,
   payWords,
   plainItem,
+  theirErrorWords,
   sizeWords,
   stateWords,
   type BasketLine,
@@ -23,19 +25,55 @@ import {
 } from "../lib/personchat";
 import { formatPrice } from "../lib/storefront";
 import { addressLine, addressProblem, chosenAddress, keepProblem, MAX_ADDRESSES, SAVED_LINE_MAX, type SavedAddress } from "../lib/youorders";
+import { type PressedButton, type ToolStart, type ToolValue } from "../lib/toolanswer";
 import { ErrorBox, useLoad } from "../ui";
+import { toast } from "../toast";
+import { AnswerView, useAnswer } from "./MadeToolSheet";
 
 // The tools of a person's chat with a business (docs/spec/taskiem-for-
 // everyone.md §8.3): Their shop, Book, Your orders with them and Pay,
-// behind the tools button, each a sheet. Everything goes through the
+// behind the tools button, each a sheet; and Their tools, the business's
+// tools for its customers (made tools T5): a form, Yes always, the answer
+// from what the business made public. Everything goes through the
 // customer door (GET/POST /v1/me/chats/{id}/…).
 
 export type PersonTool = "shop" | "book" | "orders" | "pay";
 
 const base = (chat: string) => `/v1/me/chats/${encodeURIComponent(chat)}`;
 
-/** The tools button's sheet: a tile for each tool. */
-export function ToolsMenu({ business, onPick, onClose }: { business: string; onPick: (t: PersonTool, from: DOMRect) => void; onClose: () => void }) {
+/** One of the business's tools for its customers (GET
+ * /v1/me/chats/{id}/tools): its form, never its care, roles or steps. */
+export interface CustomerTool {
+  command: string;
+  name: string;
+  about?: string;
+  icon?: string;
+  inputs?: Record<string, unknown>;
+  answer?: string;
+}
+
+/** The business's tools for its customers; none when it has none, or they
+ * could not be read. */
+export const loadTheirTools = (chat: string) =>
+  get<{ tools: CustomerTool[] }>(`${base(chat)}/tools`).then(
+    (r) => r.tools ?? [],
+    () => [] as CustomerTool[],
+  );
+
+/** The tools button's sheet: a tile for each tool, then their tools. */
+export function ToolsMenu({
+  business,
+  onPick,
+  onClose,
+  theirs = [],
+  onTheirs,
+}: {
+  business: string;
+  onPick: (t: PersonTool, from: DOMRect) => void;
+  onClose: () => void;
+  theirs?: CustomerTool[];
+  onTheirs?: (t: CustomerTool, from: DOMRect) => void;
+}) {
   const tiles: { key: PersonTool; icon: string; title: string; line: string }[] = [
     { key: "shop", icon: "store", title: "Their shop", line: `Order from ${business}` },
     { key: "book", icon: "calendar", title: "Book", line: "Choose a service and a time" },
@@ -59,7 +97,195 @@ export function ToolsMenu({ business, onPick, onClose }: { business: string; onP
           </li>
         ))}
       </ul>
+      {theirs.length > 0 && (
+        <>
+          <h3 className="pc-tools-head">Their tools</h3>
+          <ul className="pc-tiles" aria-label="Their tools" data-testid="their-tools">
+            {theirs.map((t) => (
+              <li key={t.command}>
+                <button
+                  type="button"
+                  className="tk-row pc-tile"
+                  onClick={(e) => onTheirs?.(t, e.currentTarget.getBoundingClientRect())}
+                  data-testid={`their-tool-${t.command}`}
+                >
+                  <span className="tk-row-tile" aria-hidden="true">
+                    <Icon name="bolt" />
+                  </span>
+                  <span className="tk-row-words">
+                    <span className="tk-row-name">{t.name}</span>
+                    {t.about && <span className="tk-row-sub">{t.about}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </Sheet>
+  );
+}
+
+type TheirPhase = { at: "form" } | { at: "yes"; start: ToolStart } | { at: "run"; run: string; values: ToolValue[] };
+
+/** One of their tools: its form, then what will run and Yes (a customer
+ * always says yes), then its answer, from what the business made public. A
+ * button on the answer opens another of their tools, filled in. */
+export function TheirToolSheet({
+  chat,
+  tools,
+  start,
+  from,
+  onClose,
+}: {
+  chat: string;
+  /** Their tools: a button opens one of these. */
+  tools: CustomerTool[];
+  start: { tool: CustomerTool; values?: Record<string, unknown> };
+  from?: DOMRect | null;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState({ ...start, n: 0 });
+  const tool = open.tool;
+  return (
+    <Sheet title={tool.name} sub={tool.about} from={from} onClose={onClose} testid="their-tool-sheet">
+      <TheirToolRunner
+        key={`${tool.command}:${open.n}`}
+        chat={chat}
+        tool={tool}
+        values={open.values}
+        onOpen={(command, values) => {
+          const t = tools.find((x) => x.command === command);
+          if (!t) {
+            toast("This isn't available any more.", "error");
+            return;
+          }
+          setOpen((o) => ({ tool: t, values, n: o.n + 1 }));
+        }}
+      />
+    </Sheet>
+  );
+}
+
+function TheirToolRunner({
+  chat,
+  tool,
+  values,
+  onOpen,
+}: {
+  chat: string;
+  tool: CustomerTool;
+  values?: Record<string, unknown>;
+  onOpen: (command: string, values: Record<string, unknown>) => void;
+}) {
+  const [input, setInput] = useState<Record<string, unknown> | undefined>(values);
+  const [phase, setPhase] = useState<TheirPhase>({ at: "form" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const schema = tool.inputs as JSONSchema | undefined;
+  const fields = Object.keys(schema?.properties ?? {}).length > 0;
+  const path = (what: string) => `${base(chat)}/tools/${encodeURIComponent(tool.command)}/${what}`;
+  const run = phase.at === "run" ? phase.run : undefined;
+  const { answer, error: answerError } = useAnswer(run, (r) => `${base(chat)}/runs/${encodeURIComponent(r)}/answer`);
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await fn();
+    } catch (e) {
+      setError(theirErrorWords(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const next = () =>
+    act(async () => {
+      const s = await post<ToolStart>(path("start"), { input: input ?? {} });
+      setPhase({ at: "yes", start: s });
+    });
+  const yes = (s: ToolStart) =>
+    act(async () => {
+      const r = await post<{ run_id: string }>(path("confirm"), { confirm: s.confirm, input: input ?? {} });
+      setPhase({ at: "run", run: r.run_id, values: s.values });
+    });
+  const press = (token: string) => post<PressedButton>(`${base(chat)}/tools/buttons/${encodeURIComponent(token)}`);
+
+  if (phase.at === "run")
+    return (
+      <div className="tk-sheet-list tk-form-body">
+        {answer ? (
+          <AnswerView
+            answer={answer}
+            run={phase.run}
+            name={tool.name}
+            customer={{ press }}
+            onOpenTool={(command, v) => onOpen(command, v ?? {})}
+          />
+        ) : answerError ? (
+          <ErrorBox error={answerError} />
+        ) : (
+          <div className="tk-answer-note" role="status" data-testid="tool-answer" data-status="running">
+            <p>Working on it…</p>
+          </div>
+        )}
+        <p className="tk-form-now">Your reference is {phase.run.slice(0, 8).toUpperCase()}.</p>
+      </div>
+    );
+
+  if (phase.at === "yes")
+    return (
+      <>
+        <div className="tk-sheet-list tk-form-body">
+          <p className="tk-form-now">Check what you're asking for, then say yes.</p>
+          {phase.start.values.length === 0 ? (
+            <p className="tk-form-now">Nothing to fill in.</p>
+          ) : (
+            <dl className="tk-tool-values" aria-label="What you're asking for">
+              {phase.start.values.map((v) => (
+                <div key={v.name}>
+                  <dt>{v.label}</dt>
+                  <dd>{v.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {error && (
+            <p className="tk-field-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="tk-sheet-foot tk-foot-two">
+          <button type="button" className="tk-btn ghost" disabled={busy} onClick={() => setPhase({ at: "form" })}>
+            Back
+          </button>
+          <button type="button" className="tk-cta" disabled={busy} onClick={() => void yes(phase.start)}>
+            Yes, go ahead
+          </button>
+        </div>
+      </>
+    );
+
+  return (
+    <>
+      <div className="tk-sheet-list tk-form-body">
+        {fields ? (
+          <SchemaForm schema={schema} value={input} expressions={false} onChange={setInput} />
+        ) : (
+          <p className="tk-form-now">Nothing to fill in. Next shows what will happen, and you say yes.</p>
+        )}
+        {error && (
+          <p className="tk-field-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="tk-sheet-foot">
+        <button type="button" className="tk-cta" disabled={busy} onClick={() => void next()}>
+          Next
+        </button>
+      </div>
+    </>
   );
 }
 

@@ -20,7 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
-	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -278,21 +278,17 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return s.syncServices(ctx, tenant, sf)
 	}
-	// A catalogue keeping stock: counts changed in the table by hand are
-	// recorded as outside movements, against the database's clock read
-	// before the rows (docs/spec/stock.md §4).
-	var mark *time.Time
-	if s.Stock.Ready() && sf.CatalogueColumns.Stock != "" {
-		if t, err := s.Stock.ReadMark(ctx); err == nil {
-			mark = &t
-		}
+	// Links made while the catalogue is read are newer than the read: the
+	// refresh drops only those made before it (productstock.DropGoneTx).
+	var start time.Time
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		start, err = productstock.RefreshStartTx(ctx, tx, tenant)
+		return err
+	}); err != nil {
+		return err
 	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
-	if rerr == nil && mark != nil {
-		if _, err := s.Stock.Outside(ctx, tenant, stock.SeenRows(rows, sf.CatalogueColumns), *mark); err != nil {
-			s.Logger.Warn("stock: recording changes made in the table", "tenant", tenant, "err", err)
-		}
-	}
 	var items []storefront.Item
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if rerr != nil {
@@ -302,9 +298,21 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 			return rerr
 		}
 		var err error
-		if items, err = storefront.Items(ctx, tx, tenant, rows, sf.CatalogueColumns); err != nil {
+		if items, err = storefront.CatalogueItems(ctx, tx, tenant, rows, sf.CatalogueColumns); err != nil {
 			_ = storefront.CatalogueFailed(ctx, tx, tenant, err)
 			return err
+		}
+		// The catalogue read whole: a product deleted from it is counted
+		// no longer, and its stock item stays, a material with its count
+		// and history (what-a-business-buys §4.1).
+		present := make([]string, 0, len(rows))
+		for _, r := range rows {
+			present = append(present, fmt.Sprint(r["id"]))
+		}
+		if n, err := productstock.DropGoneTx(ctx, tx, tenant, present, start); err != nil {
+			return err
+		} else if n > 0 {
+			s.Logger.Info("stock: products gone from the catalogue are no longer counted", "tenant", tenant, "links", n)
 		}
 		return nil
 	})
@@ -479,6 +487,11 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 		}
 		if err != nil && ctx.Err() == nil {
 			s.Logger.Error("storefront catalogue refreshes", "err", err)
+		}
+		// The old-columns check, once per business with a catalogue: a
+		// draft page's too, which the refresh above does not meet.
+		if cerr := s.checkOldColumnsAll(ctx); cerr != nil && ctx.Err() == nil {
+			s.Logger.Error("stock: checking workflows for the old columns", "err", cerr)
 		}
 		select {
 		case <-ctx.Done():

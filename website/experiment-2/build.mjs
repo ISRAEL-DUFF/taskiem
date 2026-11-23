@@ -138,7 +138,7 @@ const overrides = {
 // The home page's six cards, in the design's order.
 const byID = {};
 for (const g of facts.Templates) for (const t of g.Items) byID[t.ID] = t;
-const homeCards = ["chase-overdue-invoices", "payment-thank-you-sms", "run-payroll", "failed-transfer-alert", "daily-sales-summary", "sales-ledger-sheet"]
+const homeCards = ["chase-overdue-invoices", "payment-thank-you-sms", "pay-a-list", "failed-transfer-alert", "daily-sales-summary", "sales-ledger-sheet"]
   .map((id) => {
     if (!byID[id]) throw new Error(`template ${id} is not in templates/library`);
     return card(byID[id]);
@@ -148,6 +148,9 @@ const patches = {
   homeCards,
   homePrices: [pricing.monthly.prices.starter, pricing.monthly.prices.growing, pricing.monthly.prices.enterprise],
   email,
+  // The privacy notice and account deletion live in the app (web/src/pages/Legal.tsx);
+  // the footer links to them here, through the redirects written below.
+  legal: Boolean(app),
 };
 
 // ---------- Rendering ----------
@@ -301,6 +304,19 @@ function renderInPage({ name, sources, props, overrides, patches }) {
     const form = root.querySelector("form");
     if (form && patches.email) form.setAttribute("data-email", patches.email);
   }
+  if (patches.legal) {
+    const contact = [...root.querySelectorAll("footer a")].find((a) => a.getAttribute("href") === "/contact");
+    if (contact) {
+      let at = contact;
+      for (const [href, words] of [["/privacy", "Privacy"], ["/delete-account", "Delete your account"]]) {
+        const a = contact.cloneNode(false);
+        a.setAttribute("href", href);
+        a.textContent = words;
+        at.after(a);
+        at = a;
+      }
+    }
+  }
   return { title: doc.title, body: root.innerHTML };
 }
 
@@ -324,7 +340,13 @@ css += `\n@media (prefers-color-scheme:dark){\n${asAuto('html[data-force="auto"]
 css += await readFile(path.join(here, "site.css"), "utf8");
 await writeFile(path.join(dist, "tk.css"), css);
 await copyFile(path.join(here, "site.js"), path.join(dist, "site.js"));
-await copyFile(path.join(here, "vercel.json"), path.join(dist, "vercel.json"));
+// taskiem.ng/privacy and /delete-account are the addresses Google Play and
+// the App Store keep; they forward to the app's own pages, so the words live
+// in one place and the stores' links stay put when the app's address changes.
+// Temporary (307), so a browser never holds on to an old app address.
+const vercel = JSON.parse(await readFile(path.join(here, "vercel.json"), "utf8"));
+if (app) vercel.redirects = ["/privacy", "/delete-account"].map((p) => ({ source: p, destination: `${app}${p}`, permanent: false }));
+await writeFile(path.join(dist, "vercel.json"), JSON.stringify(vercel, null, 2) + "\n");
 
 const page = (title, description, body, extra = "") => `<!doctype html>
 <html lang="en">

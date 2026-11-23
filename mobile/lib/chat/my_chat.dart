@@ -14,6 +14,7 @@
 // WhatsApp chat with them is here too". What the person writes goes in the
 // app.
 
+import 'saved_picks.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -24,6 +25,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../app/notify.dart' show PhoneNotifications;
+import '../app/prefs.dart' show Prefs;
 import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -43,13 +45,22 @@ import 'chats.dart' show ChatRow;
 import 'composer.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
+import 'pay_transfer.dart' show payMyInvoice;
+import 'made_tools.dart' show MadeRun;
+import 'my_chat_their_tools.dart' show TheirAnswer, TheirRuns;
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
 import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
+import 'save_as.dart' show saveAsItems, saveNamed;
+import 'saved_card.dart' show askShare, saveSavedCard, sendSaved;
 import 'words.dart';
+import 'saved_files.dart' show attachSavedFile;
+import 'menu.dart' show showMessageMenu;
+import 'pay_collect.dart' show PayListBar;
+
 
 /// The words for a failure, as the chats say them.
 String sayFailure(Object e) => switch (e) {
@@ -471,10 +482,14 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
 /// A message of the conversation; one of yours on its way is [local], with
 /// its file, and [failed] with why when it could not go.
 class MyLine {
-  MyLine(this.m, {this.local = false, this.file});
+  MyLine(this.m, {this.local = false, this.file, this.run});
   final PersonMessage m;
   final bool local;
   final PickedFile? file;
+
+  /// One of their tools' runs started here: its answer, in its place
+  /// (my_chat_their_tools.dart).
+  final MadeRun? run;
   bool failed = false;
   String? error;
   String get id => m.id;
@@ -496,9 +511,13 @@ List<MyLine> _merge(List<MyLine> cur, List<MyLine> more) {
 /// seconds while it is seen (its screen polls: not while the app is put
 /// away or another screen covers it).
 class MyChatData extends ChangeNotifier {
-  MyChatData(this.auth, this.id, {this.follow = true, this.notice, DateTime Function()? now}) : now = now ?? DateTime.now;
+  MyChatData(this.auth, this.id, {this.follow = true, this.notice, this.prefs, DateTime Function()? now}) : now = now ?? DateTime.now;
   final Auth auth;
   final String id;
+
+  /// What this phone keeps: the way an invoice was last paid to this
+  /// business comes first on Pay.
+  final Prefs? prefs;
 
   /// Read again every few seconds while seen (the screen polls).
   final bool follow;
@@ -704,6 +723,34 @@ class MyChatData extends ChangeNotifier {
     _changed();
   }
 
+  /// One of the person's own saved things shared with the business as a
+  /// card (saved objects S1), with [ask]'s yes when the server wants one
+  /// before what is sensitive.
+  Future<void> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final client = '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendMyChatMessage(
+          id: id,
+          body: SendMyChatMessageRequest(card: SendMyChatMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client),
+        ),
+        ask,
+      );
+      if (sent == null || _disposed) return;
+      messages = _merge(messages ?? const [], [MyLine(sent)]);
+      error = null;
+    } on Object catch (e) {
+      if (_disposed) return;
+      if (e is ApiError && e.status == 409 && e.message.contains('erased')) {
+        closed = e.message;
+      } else {
+        error = e is ApiError && e.status == 429 ? 'You are sending too fast. Wait a moment and try again.' : sayFailure(e);
+      }
+      unawaited(_chat());
+    }
+    _changed();
+  }
+
   /// Your settings with them: mute, archive, offers, the offers question
   /// passed over. False if refused ([actionError] says why).
   Future<bool> put({bool? muted, bool? archived, bool? offers, bool? offersAsked}) async {
@@ -747,7 +794,25 @@ class MyChatData extends ChangeNotifier {
     _disposed = true;
     _back.close();
     files.dispose();
+    theirRuns.dispose();
     super.dispose();
+  }
+
+  /// Their tools' runs started here, their answers in the conversation.
+  late final theirRuns = TheirRuns(auth, id, now: now);
+
+  /// The messages, with their tools' answers in their places.
+  List<MyLine>? get lines {
+    final list = messages;
+    if (list == null || theirRuns.runs.isEmpty) return list;
+    final runs = [
+      for (final r in theirRuns.runs)
+        MyLine(PersonMessage(id: 'run:${r.id}', mine: false, kind: 'tool', body: r.name, createdAt: r.at), run: r),
+    ];
+    return [...list, ...runs]..sort((a, b) {
+      final t = a.m.createdAt.compareTo(b.m.createdAt);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
   }
 }
 
@@ -778,6 +843,21 @@ class MyChatScreen extends StatefulWidget {
 
 class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
+  // Saved things by @name (saved objects S1): a text's words into the box;
+  // the rest of one's own shared with the business as cards.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
+  );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
 
   MyChatData get d => widget.data;
@@ -806,6 +886,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     widget.notify?.show(d.tag, this);
     _text.addListener(() {
       if (_text.text.trim().isNotEmpty) d.typing();
+      _saved.typed();
     });
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
@@ -816,6 +897,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   void dispose() {
     widget.notify?.unshow(this);
     _back?.cancel();
+    _saved.dispose();
     _text.dispose();
     // The screen owns its conversation: closed, it stops reading.
     d.dispose();
@@ -873,13 +955,52 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
   /// A card's button: Pay opens its pay link (an invoice's page) in the
   /// app; Book, that service; a product, their shop; an order or a
   /// delivery, your orders with them.
+  /// A message's menu (saved objects S1): Copy and Save as… on its words,
+  /// Save as… on a photo or document.
+  Future<void> _hold(MyLine x, Rect at) async {
+    final m = x.m;
+    final a = m.attachment;
+    final words = m.card == null && !(a != null && {'Photo', 'Voice note', 'File', a.name}.contains(m.body)) ? m.body.trim() : '';
+    final file = a != null && a.kind != 'voice';
+    final items = saveAsItems(
+      context,
+      d.auth,
+      words: words,
+      filePath: file ? '/v1/me/chats/${d.id}/files/${m.id}' : '',
+      fileName: a?.name ?? 'File',
+      fileType: a?.type ?? '',
+      from: (kind: 'person', chat: d.id, message: m.id, from: m.mine ? '' : d.name),
+    );
+    if (items.isEmpty) return;
+    await showMessageMenu(context, bubble: at, mine: m.mine, what: (m.card?.title ?? m.body).split('\n').first, items: items);
+  }
+
   (String, VoidCallback)? _cardAction(CustomerCard c) => switch (c.type) {
     'pay' when (c.url ?? '').isNotEmpty => ('Pay', () => _openUrl(c.url!, 'The pay page didn’t open. Try again.')),
+    // Paying it by transfer, in the chat (the payments flow, part 1,
+    // settled 4): an account number for it, or the invoice's page.
+    'invoice' when (c.invoiceId ?? '').isNotEmpty && (c.totalKobo ?? 0) > 0 && c.status != 'paid' => (
+      'Pay',
+      () => payMyInvoice(
+        context,
+        auth: d.auth,
+        chat: d.id,
+        invoice: c.invoiceId!,
+        business: d.name,
+        seller: d.chat?.business ?? '',
+        prefs: d.prefs,
+        number: c.reference ?? '',
+        url: c.url,
+        dueKobo: c.totalKobo,
+        now: d.now,
+      ),
+    ),
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
     'booking' => ('Book', () => showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, service: c.serviceId, onBooked: (_) => d.refresh())),
     'product' => ('See in their shop', () => showShopSheet(context, d)),
     'order' => ('View order', () => showMyOrdersSheet(context, d)),
     'delivery' => ('View delivery', () => showMyOrdersSheet(context, d)),
+    'saved' when c.saved != null => ('Save this', () => saveSavedCard(context, d.auth, c.saved!)),
     _ => null,
   };
 
@@ -891,13 +1012,13 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: ListenableBuilder(
-        listenable: d,
+        listenable: Listenable.merge([d, d.theirRuns]),
         builder: (context, _) {
           final c = d.chat;
           final name = d.name;
           final canSend = c != null && !c.blocked && !c.blockedYou && d.closed == null;
           final proved = verifiedWords(c?.verified);
-          final list = d.messages;
+          final list = d.lines;
           final now = d.now();
           // The message after each: the last of a run has the tucked corner.
           final nextOf = <String, MyLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
@@ -910,8 +1031,9 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    // The head on the conversation's own ground.
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -958,6 +1080,14 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       empty: Text('Say hello to $name. Ask about what they sell, or order and book with the button by the box.', textAlign: TextAlign.center, style: tkHint(t)),
                       render: (x, prev) {
                         final m = x.m;
+                        // One of their tools' answers (my_chat_their_tools.dart).
+                        if (x.run != null) {
+                          return Padding(
+                            key: ValueKey(x.id),
+                            padding: const EdgeInsets.only(top: 6),
+                            child: TheirAnswer(d: d, run: x.run!),
+                          );
+                        }
                         final first = prev == null || prev.m.mine != m.mine || prev.m.card != null || m.card != null;
                         final next = nextOf[x.id];
                         final last = next == null || next.m.mine != m.mine || next.m.card != null || dayLabel(next.m.createdAt, now) != dayLabel(m.createdAt, now);
@@ -965,7 +1095,10 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                         final act = m.card == null ? null : _cardAction(m.card!);
                         return Padding(
                           padding: EdgeInsets.only(top: first ? 6 : 0),
-                          child: DoorBubble(
+                          child: BubbleHold(
+                            label: m.mine ? 'Your message' : 'Message from ${d.name}',
+                            onHold: x.local ? null : (at) => _hold(x, at),
+                            child: DoorBubble(
                             id: m.id,
                             mine: m.mine,
                             first: first,
@@ -992,7 +1125,7 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
                             ),
-                          ),
+                          )),
                         );
                       },
                     ),
@@ -1003,8 +1136,12 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                   if (c != null && c.blocked)
                     _Note(text: 'You blocked $name. They can’t write to you, and you can’t write to them.', action: 'Unblock', onAction: () => _say(d.block(false), 'Unblocked $name')),
                   if (c != null && !c.blocked && c.blockedYou) _Note(text: '$name is not taking messages from you.'),
+                  // The people to pay collected from messages (pay_collect.dart).
+                  PayListBar(auth: d.auth),
+                  if (canSend) _saved.plain(),
                   if (canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

@@ -46,11 +46,8 @@ func startServer(t *testing.T) server {
 	d := dbtest.New(t)
 	key := make([]byte, 32)
 	_, _ = rand.Read(key)
-	apiAddr, metricsAddr := freeAddr(t), freeAddr(t)
 	t.Setenv("TASKIEM_DATABASE_URL", d.DSN)
 	t.Setenv("TASKIEM_LOCAL_KMS_KEY", base64.StdEncoding.EncodeToString(key))
-	t.Setenv("TASKIEM_LISTEN", apiAddr)
-	t.Setenv("TASKIEM_METRICS_LISTEN", metricsAddr)
 	t.Setenv("TASKIEM_SECURE_COOKIES", "false")
 	t.Setenv("TASKIEM_ARCHIVE_DIR", t.TempDir())
 	t.Setenv("TASKIEM_BOOTSTRAP_PASSWORD", "correct horse battery")
@@ -58,7 +55,27 @@ func startServer(t *testing.T) server {
 	if err := run([]string{"bootstrap", "--tenant", "Smoke", "--email", "admin@smoke.test"}, &out, &out); err != nil {
 		t.Fatalf("%v: %s", err, out.String())
 	}
+	// A free port is free only until it is closed: another test may take
+	// it before serve binds it, so serve is started again, on new ports,
+	// when a bind fails.
+	for attempt := 1; ; attempt++ {
+		srv, err := tryServe(t)
+		if err == nil {
+			return srv
+		}
+		if attempt == 3 || !strings.Contains(err.Error(), "address already in use") {
+			t.Fatalf("serve: %v", err)
+		}
+	}
+}
 
+// tryServe starts serve on two new ports and waits until both answer; it
+// answers serve's error when serve stops before that.
+func tryServe(t *testing.T) (server, error) {
+	t.Helper()
+	apiAddr, metricsAddr := freeAddr(t), freeAddr(t)
+	t.Setenv("TASKIEM_LISTEN", apiAddr)
+	t.Setenv("TASKIEM_METRICS_LISTEN", metricsAddr)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, []string{"--role", "all"}) }()
@@ -74,18 +91,21 @@ func startServer(t *testing.T) server {
 		})
 		return result
 	}
-	t.Cleanup(func() {
-		cancel()
-		if err := wait(); err != nil {
-			t.Errorf("serve: %v", err)
-		}
-	})
 	base := "http://" + apiAddr
 	deadline := time.Now().Add(15 * time.Second)
 	// Both listeners: the API's, and the metrics one, which serve starts as
 	// a task of its own and may bind a moment later.
 	for _, url := range []string{base + "/readyz", "http://" + metricsAddr + "/healthz"} {
 		for {
+			select {
+			case err := <-done:
+				cancel()
+				if err == nil {
+					err = errors.New("serve stopped before it was ready")
+				}
+				return server{}, err
+			default:
+			}
 			resp, err := http.Get(url)
 			if err == nil {
 				_ = resp.Body.Close()
@@ -94,12 +114,19 @@ func startServer(t *testing.T) server {
 				}
 			}
 			if time.Now().After(deadline) {
+				cancel()
 				t.Fatalf("not ready: %s", url)
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	return server{base: base, metrics: metricsAddr, stop: cancel, wait: wait}
+	t.Cleanup(func() {
+		cancel()
+		if err := wait(); err != nil {
+			t.Errorf("serve: %v", err)
+		}
+	})
+	return server{base: base, metrics: metricsAddr, stop: cancel, wait: wait}, nil
 }
 
 // call makes an API request and decodes the JSON answer; it fails the test

@@ -336,7 +336,9 @@ img.tk-live-tile { object-fit: cover; }
 .composer > .send-button:disabled { opacity: 1; background: var(--brand); color: var(--brand-dark); }
 .composer > .send-button svg, .composer > .icon-button.primary svg { color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .composer > .send-button, :root[data-theme="dark"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button, :root[data-theme="system"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); } }
 :root[data-theme="dark"] .composer > .send-button svg, :root[data-theme="dark"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button svg, :root[data-theme="system"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); } }
 .composer-tools { background: var(--panel); color: var(--brand); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
 :root[data-theme="dark"] .composer-tools { color: var(--text); }
 /* The head: on a phone only search (the board), Order as a pine pill on a
@@ -347,6 +349,7 @@ img.tk-live-tile { object-fit: cover; }
 .chat-head .chat-sub { font-size: 13px; color: var(--muted); }
 .chat-head .chat-sub .typing { color: var(--brand); font-weight: 600; }
 :root[data-theme="dark"] .chat-head .chat-sub .typing { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .chat-head .chat-sub .typing { color: var(--brand-dark); } }
 /* Diary lines: the pill alone (when it was is for a screen reader). */
 .tk-diary-when:not(:has(button)) { display: contents; }
 
@@ -362,6 +365,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-row-tile[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
 .tk-cta svg { width: 20px; height: 20px; color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .tk-cta svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-cta svg { color: var(--brand-dark-text); } }
 .tk-sheet-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 14px auto 4px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
 .tk-sheet-more:hover { color: var(--text); text-decoration: none; }
 .tk-sheet-more svg { width: 16px; height: 16px; }
@@ -431,6 +435,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-share-box > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tk-share-change, .tk-share-change:hover:not(:disabled) { flex: none; min-height: 36px; padding: 0 4px; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 700; color: var(--brand); }
 :root[data-theme="dark"] .tk-share-change { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-share-change { color: var(--brand-dark); } }
 .tk-share-pick { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 0; padding: 6px 14px; border: 1px solid var(--border); border-radius: 14px; }
 .tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
 .tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
@@ -565,6 +570,7 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .pc-app-line a { color: var(--muted); }
 .pc-offers { margin: 8px auto; max-width: 420px; }
 .pc-tiles, .pc-items, .pc-orders, .pc-lines { list-style: none; margin: 0; padding: 0; }
+.pc-tools-head { margin: 14px 16px 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .pc-tile { width: 100%; text-align: left; background: none; border: 0; box-shadow: none; cursor: pointer; font: inherit; }
 .pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
 .pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
@@ -693,3 +699,157 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .group-added li { margin: 4px 0; overflow-wrap: anywhere; }
 .group-row-at { color: var(--accent); font-weight: 700; }
 .group-info .people-info .row-actions { flex-wrap: wrap; justify-content: center; }
+/* A saved thing shared in a chat (saved objects S1): its details, each with Copy. */
+.tk-ref-lines { list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.tk-ref-lines li { display: flex; align-items: center; gap: 10px; background: var(--tk-soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.tk-ref-line-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tk-ref-line-label { font-size: 12px; color: var(--muted); }
+.tk-ref-lines b { font-size: 15px; color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+.tk-ref-lines button { flex: none; }
+/* A saved card in a bubble: its top row stops short of the bubble's menu
+   chevron, so each keeps a 24px target of its own. */
+.bubble .tk-ref-saved > button.tk-ref-top, .bubble .tk-ref-saved > .tk-ref-row { width: calc(100% - 22px); }
+
+/* Menus in the Taskiem chat (pages/ChatMenu.tsx; docs/spec/chat-menus.md §6). */
+.tk-menu-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 4px 0; }
+.tk-menu { width: 100%; max-width: 380px; background: var(--panel); border-radius: 18px; box-shadow: 0 0 0 1px var(--border); overflow: hidden; }
+.tk-menu-loading { height: 120px; }
+.tk-menu-head { display: flex; gap: 11px; align-items: center; padding: 12px 14px 9px; }
+.tk-menu-head .tk-tile-icon, .tk-menu-row .tk-tile-icon { width: 36px; height: 36px; border-radius: 11px; flex: none; }
+.tk-menu-head .tk-tile-icon svg, .tk-menu-row .tk-tile-icon svg { width: 18px; height: 18px; }
+.tk-menu-title { display: block; font-weight: 700; font-size: 15.5px; }
+.tk-menu-line { display: block; font-size: 13px; color: var(--muted); line-height: 1.35; }
+.tk-menu-rows { display: grid; }
+.tk-menu-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 16px; gap: 11px; align-items: center; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--border);
+  background: transparent; color: var(--text); padding: 7px 14px; min-height: 52px; font: inherit; cursor: pointer; }
+.tk-menu-row:hover:not(:disabled) { background: var(--panel-2); }
+.tk-menu-row:focus-visible { box-shadow: var(--ring); outline: none; }
+.tk-menu-row.picked { background: var(--accent-soft); }
+.tk-menu-row-title { display: block; font-weight: 600; font-size: 14.5px; line-height: 1.25; }
+.tk-menu-val { color: var(--muted); font-weight: 600; }
+.tk-menu-row-line { display: block; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-menu-chev { width: 16px; height: 16px; color: var(--muted); }
+.tk-menu-foot { display: flex; border-top: 1px solid var(--border); }
+.tk-menu-foot button { flex: 1; border: 0; background: transparent; color: var(--accent); font: 600 13.5px var(--font); padding: 10px; min-height: 46px; cursor: pointer; }
+.tk-menu-foot button + button { border-left: 1px solid var(--border); }
+.tk-menu-foot button:focus-visible { box-shadow: var(--ring); outline: none; }
+.tk-menu-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px 8px 8px; }
+.tk-menu-tile { border: 0; background: transparent; color: var(--text); display: grid; justify-items: center; gap: 6px; padding: 6px 2px; border-radius: 14px; cursor: pointer; font: 500 11.5px/1.2 var(--font); min-height: 62px; text-align: center; }
+.tk-menu-tile:hover { background: var(--panel-2); }
+.tk-menu-tile:focus-visible { box-shadow: var(--ring); outline: none; }
+.tk-menu-tile .tk-tile-icon { width: 38px; height: 38px; border-radius: 12px; }
+.tk-menu-tile .tk-tile-icon svg { width: 18px; height: 18px; }
+.tk-menu-folded { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.tk-menu-icon-sm { width: 28px !important; height: 28px !important; border-radius: 9px !important; }
+.tk-menu-icon-sm svg { width: 15px; height: 15px; }
+.tk-menu-folded-words { flex: 1; min-width: 0; font-size: 13.5px; }
+.tk-menu-folded-words span { color: var(--muted); }
+.tk-menu-folded .link { min-height: 36px; }
+.tk-menu-tip { margin: 0; padding: 0 6px; font-size: 12.5px; color: var(--muted); max-width: 380px; }
+.tk-menu-tip b { color: var(--text); font-weight: 600; }
+.tk-form-chips { padding: 2px 0 8px; flex-wrap: wrap; }
+
+/* ---------- Your tools (made tools M1) ---------- */
+
+/* What will run, or what was read: label and value, one per line. */
+.tk-tool-values { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.tk-tool-values > div { display: flex; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
+.tk-tool-values dt { color: var(--muted); font-size: 14px; }
+.tk-tool-values dd { margin: 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; text-align: right; }
+.tk-tool-echo { display: flex; flex-direction: column; gap: 6px; }
+/* A sentence answers as a message from Taskiem. */
+.tk-answer-text { align-self: flex-start; max-width: 100%; padding: 10px 14px; border-radius: 4px 16px 16px 16px; background: var(--chat-in); color: var(--text); box-shadow: 0 0 0 1px var(--border); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; }
+.tk-answer-note { padding: 12px 14px; border-radius: 14px; background: var(--panel-2); color: var(--text); }
+.tk-answer-note p { margin: 0; }
+.tk-answer-note.bad { background: var(--tint-warn); color: var(--tint-warn-text); }
+.tk-answer-note a { color: inherit; text-decoration: underline; }
+/* A button someone else used first, or one gone: why, under its row. */
+.tk-answer-taken { display: block; color: var(--muted); font-size: 13.5px; }
+.tk-answer-card { background: var(--panel-2); box-shadow: 0 0 0 1px var(--border); }
+.tk-answer-amount { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tk-answer-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tk-answer-rows > li { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.tk-answer-rows > li:first-child { border-top: 0; }
+.tk-answer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.tk-answer-row .tk-row-words { min-width: 0; display: flex; flex-direction: column; }
+.tk-tool-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.tk-tool-head .tk-tile-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--tint); color: var(--tint-text); }
+.tk-tool-head .tk-tile-icon svg { width: 20px; height: 20px; }
+.tk-tool-head > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.tk-tool-care svg { width: 16px; height: 16px; flex: none; }
+/* Fill from words, at the top of a tool's form (made tools M3). */
+.tk-tool-words { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.tk-tool-words-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.tk-tool-words-row { display: flex; gap: 8px; min-width: 0; }
+.tk-tool-words-row input { flex: 1; min-width: 0; }
+.tk-tool-words-row .tk-btn { flex: none; min-height: 40px; padding: 0 16px; }
+.tk-tool-words-said { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.tk-tool-words-said p { margin: 0; }
+.tk-tool-words-note { color: var(--text); font-weight: 600; }
+.tk-answer-note a { display: inline-block; margin-top: 6px; font-weight: 600; }
+/* Your tools after the built-in ones, under their own heading. */
+.tk-tools-sub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+/* What Taskiem answered a "@Taskiem" typed in a business's conversation,
+   on our side only (Conversation.tsx TaskiemNote). */
+.tk-taskiem-note {
+  align-self: center; width: 92%; max-width: 520px; margin: 6px 0; padding: 12px 14px 6px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 2px 8px var(--chat-shadow);
+}
+.tk-taskiem-note-head { display: flex; align-items: center; gap: 8px; }
+.tk-taskiem-note-mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--brand); color: var(--brand-dark); }
+.tk-taskiem-note-mark svg { width: 14px; height: 14px; }
+.tk-taskiem-note-who { flex: 1; font-size: 12px; font-weight: 600; color: var(--muted); }
+.tk-taskiem-note-when { font-size: 12px; color: var(--muted); }
+.tk-taskiem-note-asked { margin: 8px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.tk-taskiem-note-answer { margin: 4px 0 0; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
+.tk-taskiem-note-open { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--tint-text); text-decoration: none; }
+.tk-taskiem-note-open:hover { text-decoration: underline; }
+.tk-menu-head > span:not(.tk-tile-icon) { flex: 1; min-width: 0; }
+.tk-menu-close { flex: none; align-self: flex-start; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -8px -8px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.tk-menu-close:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.tk-menu-close svg { width: 18px; height: 18px; }
+
+/* The picker's search box, kinds and Show more (menus-everywhere.md §7). */
+.tk-picker-search { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 2px 4px; padding: 0 14px; border-radius: 14px; background: var(--panel-2); color: var(--muted); }
+.tk-picker-search:focus-within { box-shadow: 0 0 0 2px var(--brand); }
+.tk-picker-search svg { width: 18px; height: 18px; flex: none; }
+.tk-picker-search input[type="search"] { flex: 1; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; background: none; padding: 10px 0; font: inherit; font-size: 15px; color: var(--text); outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+/* Over the global soft field (styles.css "Fields without outlines"): the
+   picker's box is the field, so the input inside has no fill of its own. */
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):hover,
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):focus { background: none; box-shadow: none; outline: none; }
+.tk-picker-chips { padding: 4px 2px 6px; }
+.tk-picker-note { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }
+.tk-picker-more { display: flex; justify-content: center; padding: 6px 0 2px; }
+
+/* The tools panel's other view, the topics' menu (menus-everywhere.md §4). */
+.tk-tools-view { padding: 0 0 10px; }
+.tk-tools-menu { overflow-y: auto; min-height: 0; }
+.tk-tools-menu .tk-menu { max-width: none; margin: 0; }
+/* What Taskiem said to a row pressed there, in a sheet. */
+.tk-action-answer { padding: 4px 20px 12px; }
+.tk-action-answer p { margin: 0; white-space: pre-line; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.tk-action-answer-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Today's "What would you like to do?" (menus-everywhere.md §5). */
+.home-actions { margin: 0 0 16px; }
+.home-actions > h2 { margin: 0 0 8px 4px; font-size: 20px; letter-spacing: -0.02em; }
+.home-actions .tk-menu { max-width: none; margin: 0; }
+
+/* Search everywhere (menus-everywhere.md §6). */
+.head-search { display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; color: var(--text); background: var(--panel); }
+.head-search:hover { background: var(--panel-2); }
+.head-search svg { width: 20px; height: 20px; }
+.greeting { position: relative; }
+.greeting-search { position: absolute; top: 0; right: 0; }
+.greeting:has(.greeting-search) > h1, .greeting:has(.greeting-search) > p { padding-right: 52px; }
+.search-everywhere { max-width: 720px; }
+.search-everywhere-box { margin: 0 0 10px; }
+.search-everywhere .tk-chips { padding: 0 0 12px; }
+.search-group { margin: 14px 0 0; }
+.search-group > h2 { margin: 0 0 8px 4px; font-size: 18px; }
+.search-group .item { width: 100%; text-align: left; }
+.search-more { display: flex; justify-content: center; padding: 8px 0 0; }
+.search-hint { margin: 8px 4px; }

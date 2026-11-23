@@ -483,6 +483,29 @@ func (s *Invoices) List(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status
 	return s.ListOf(ctx, tx, tenant, status, "", limit)
 }
 
+// ListPage is ListOf from offset on, newest first: a page of the list,
+// for a search that reads it a page at a time (chat refs).
+func (s *Invoices) ListPage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, kind string, limit, offset int) ([]Invoice, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := tx.Query(ctx, `SELECT `+cols+` FROM customer_invoices WHERE tenant_id = $1 AND ($2 = '' OR kind = $2)
+		ORDER BY created_at DESC, id LIMIT $3 OFFSET $4`, tenant, kind, limit, max(offset, 0))
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Invoice, error) { return scan(r) })
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if err := s.open(ctx, tx, tenant, &list[i]); err != nil {
+			return nil, err
+		}
+	}
+	return list, nil
+}
+
 // ListOf is List, optionally of one kind too (invoice, or credit: the
 // debtor book's notebook debts).
 func (s *Invoices) ListOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, status, kind string, limit int) ([]Invoice, error) {

@@ -129,6 +129,9 @@ type Words struct {
 	// Ada 25,000 fún ìrẹsì"), besides English's "for" and "on", which
 	// every language keeps.
 	ForWords []string `json:"for_words,omitempty"`
+	// Treat are the answers to how a purchase line is treated, in words
+	// (what-a-business-buys §6, In chat): each answer's words.
+	Treat map[TreatAnswer][]string `json:"treat,omitempty"`
 }
 
 // prefixIntents take what follows them; the others are whole messages.
@@ -180,6 +183,13 @@ func LoadWords() (map[Tag]*Words, error) {
 					return
 				}
 				w.Prefixes[i] = foldAll(ps)
+			}
+			for a, ps := range w.Treat {
+				if !slices.Contains(TreatAnswers, a) {
+					wordsErr = fmt.Errorf("lang: intents/%s: unknown treat answer %q", e.Name(), a)
+					return
+				}
+				w.Treat[a] = foldAll(ps)
 			}
 			w.Markers = foldAll(w.Markers)
 			w.Fillers = foldAll(w.Fillers)
@@ -357,4 +367,83 @@ var letterHints = map[Tag]string{
 	YO: "ẹṣ",
 	IG: "ịụṅ",
 	HA: "ɓɗƙƴ",
+}
+
+// Tags are every language's tag, English first.
+func Tags() []Tag {
+	out := []Tag{EN}
+	for _, i := range All() {
+		if i.Tag != EN {
+			out = append(out, i.Tag)
+		}
+	}
+	return out
+}
+
+// CommandWord reports whether a folded word is the first word of one of
+// Taskiem's own commands in any language's word lists: a business's own
+// tool may not take it (decision 0073).
+func CommandWord(word string) bool {
+	for _, w := range mustWords() {
+		for _, lists := range []map[Intent][]string{w.Phrases, w.Prefixes} {
+			for _, ps := range lists {
+				for _, p := range ps {
+					if first, _, _ := strings.Cut(p, " "); first == word {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// TreatAnswer is an answer to the chat's questions on a purchase line
+// (what-a-business-buys §6): a treatment, or a label's Another or No
+// label.
+type TreatAnswer string
+
+// The answers.
+const (
+	TreatRecord  TreatAnswer = "record"
+	TreatStock   TreatAnswer = "stock"
+	TreatTrack   TreatAnswer = "track"
+	TreatAnother TreatAnswer = "another"
+	TreatNoLabel TreatAnswer = "no_label"
+)
+
+// TreatAnswers are every answer, in a fixed order.
+var TreatAnswers = []TreatAnswer{TreatRecord, TreatStock, TreatTrack, TreatAnother, TreatNoLabel}
+
+// MatchTreat reads an answer to the questions on a purchase line in the
+// given languages (the person's first, then English), as yes and no are
+// read: without case, accents or tone marks. The answer's words start the
+// message; rest is what follows them, without a comma ("keep track of it,
+// machines" is track, "machines"). The longest words win.
+func MatchTreat(text string, tags []Tag) (TreatAnswer, string, bool) {
+	ws := mustWords()
+	fields := strings.Fields(Fold(text))
+	for i, f := range fields {
+		fields[i] = strings.Trim(f, ",;:.")
+	}
+	best, bestLen := TreatAnswer(""), 0
+	for _, t := range tags {
+		w := ws[t]
+		if w == nil {
+			continue
+		}
+		for _, a := range TreatAnswers {
+			for _, p := range w.Treat[a] {
+				pf := strings.Fields(p)
+				if len(pf) > len(fields) || len(pf) <= bestLen || !slices.Equal(fields[:len(pf)], pf) {
+					continue
+				}
+				best, bestLen = a, len(pf)
+			}
+		}
+	}
+	if bestLen == 0 {
+		return "", "", false
+	}
+	return best, strings.Trim(after(text, bestLen), " ,;:-"), true
 }

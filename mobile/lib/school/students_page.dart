@@ -14,6 +14,7 @@ import '../app/auth.dart';
 import '../chat/approve.dart' show TkTextBox;
 import '../chat/give_task.dart' show TkPillChoice;
 import '../chat/invoices_page.dart' show openInvoice;
+import '../chat/saved_fill.dart' show SavedButton, pickSavedPhone;
 import '../chat/words.dart' show naira;
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
@@ -22,11 +23,10 @@ import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkModalChoices;
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField, showTkSheet;
+import '../kit/sheet.dart' show TkKitField, TkPickBox, showTkSheet;
 import '../theme/look.dart';
 import '../chat/words.dart' show CardTone;
 import '../kit/forms.dart' show TkSwitch;
-import '../kit/icon.dart';
 import '../kit/list.dart' show TkPill;
 import '../theme/theme.dart';
 import 'school_chasing.dart' show PromiseSheet, RemindSheet, PlanSheet;
@@ -239,6 +239,20 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone as the guardian's (saved objects
+  /// §6.4): the phone only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _gPhone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   bool get _ready => _name.text.trim().isNotEmpty && _adm.text.trim().isNotEmpty && _classId.isNotEmpty;
 
   Future<void> _save() async {
@@ -285,7 +299,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
             TkKitField(
               label: 'Class',
               field: false,
-              child: _PickBox(
+              child: TkPickBox(
                 label: 'Class',
                 shown: className,
                 onTap: () async {
@@ -297,7 +311,7 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
             TkKitField(
               label: 'Date of birth (optional)',
               field: false,
-              child: _PickBox(
+              child: TkPickBox(
                 label: 'Date of birth',
                 shown: _born == null ? 'Not given' : dayWords(dayKey(_born!)),
                 onTap: () async {
@@ -313,7 +327,17 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
           title: 'Guardian',
           children: [
             TkKitField(label: 'Name', child: TkTextBox(controller: _gName, max: 120, size: 15, height: 46)),
-            TkKitField(label: 'Phone', hint: 'A family is the guardians with one phone.', child: TkTextBox(controller: _gPhone, phone: true, size: 15, height: 46)),
+            TkKitField(
+              label: 'Phone',
+              hint: 'A family is the guardians with one phone.',
+              child: Row(
+                children: [
+                  Expanded(child: TkTextBox(controller: _gPhone, phone: true, size: 15, height: 46)),
+                  const SizedBox(width: 8),
+                  SavedButton(semantics: 'Pick a saved phone number for the guardian', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+                ],
+              ),
+            ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -331,40 +355,6 @@ class _AddStudentSheetState extends State<AddStudentSheet> {
 }
 
 /// A field that opens a choice, with a chevron (as drawn).
-class _PickBox extends StatelessWidget {
-  const _PickBox({required this.label, required this.shown, required this.onTap});
-  final String label;
-  final String shown;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: label,
-      value: shown,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 46),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(14)),
-          child: Row(
-            children: [
-              Expanded(child: Text(shown, style: tkText(size: 15, color: t.text))),
-              TkIcon('chevron', size: 18, color: t.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // --- One student ---
 
 class StudentPage extends StatefulWidget {

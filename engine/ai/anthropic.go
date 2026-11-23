@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -84,7 +85,13 @@ func (a *Anthropic) Params(req Request) anthropic.BetaMessageNewParams {
 		if m.Role == "assistant" {
 			p.Messages = append(p.Messages, anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{block}})
 		} else {
-			p.Messages = append(p.Messages, anthropic.NewBetaUserMessage(block))
+			// A user turn's images first, then its words.
+			blocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(m.Images)+1)
+			for _, im := range m.Images {
+				blocks = append(blocks, anthropic.NewBetaImageBlock(anthropic.BetaBase64ImageSourceParam{
+					Data: base64.StdEncoding.EncodeToString(im.Data), MediaType: anthropic.BetaBase64ImageSourceMediaType(im.MediaType)}))
+			}
+			p.Messages = append(p.Messages, anthropic.NewBetaUserMessage(append(blocks, block)...))
 		}
 	}
 	if req.Effort != "" {

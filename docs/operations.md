@@ -110,6 +110,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve signup ([onboarding](onboarding.md)). Needs email (`TASKIEM_SMTP_URL`, `TASKIEM_ALERT_FROM`, a public URL) for confirmation links |
 | `TASKIEM_APP_MIN_VERSION` | `0.1.0` | The lowest phone app version this server serves (`GET /v1/app/config`, [the phone app](spec/mobile-app.md#51-s1-what-the-app-is-told-about-itself)); an older app asks to be updated |
+| `TASKIEM_SUPPORT_EMAIL` | — | Where people write to Taskiem: shown on the [privacy notice](../web/src/pages/Legal.tsx) (`/privacy`) and the page saying how to delete an account (`/delete-account`), and told by `GET /v1/app/config` (`support_email`). Google Play's listing needs both pages. Unset: the pages leave the address out |
 | `TASKIEM_APP_GET_URL` | — | Where people get the Taskiem app: a business's chat link page offers **Get the Taskiem app** there, and the shared number answers **I'm a customer** with it ([Taskiem for everyone §8.2, §12](spec/taskiem-for-everyone.md#82-the-chat-link)). Chat links, the phone index and the browser chat's SMS need `TASKIEM_MESSAGE_HASH_KEY` |
 | `TASKIEM_WA_UPDATE_CHAT_TEMPLATE` | `false` | Meta approved `taskiem_update_chat`: updates to people outside a business on the shared number carry its chat link outside WhatsApp's 24 hours too ([templates](whatsapp.md#templates)) |
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups per client address a day, across replicas; negative: no limit |
@@ -252,6 +253,8 @@ Every tenant has plan limits (spec 8.3, 16): the platform defaults below, change
 | `sms_monthly` | 0 (no limit) | SMS to customers per UTC month: beyond it only verification codes are sent. Plans: shop 100, shop plus 500, starter and above 1,000 |
 | `embed_sites` | 10 | Websites that may embed the storefront and forms ([embed sites](embed-sites.md)). Plans: shop 1, shop plus 3 |
 | `link_messages_daily` | 0 (no limit) | Messages to linked businesses per UTC day ([business links](spec/business-links.md#13-security)), counted against the business that sent them (text, photos, files and voice notes; not the cards Taskiem writes): beyond it a send gets 429 `limit_exceeded`. Plans: shop 200, shop plus 500, starter 1,000, growth 2,000, business 5,000 |
+| `max_saved_objects` | 2000 | Saved things a business keeps ([saved objects](spec/saved-objects.md#15-settled-19-november-2026): accounts, people, places, texts, files, things of its own kinds); beyond it a save gets 409. A person's own are capped apart at 500. Plans: shop 2,000, shop plus 3,000, starter 5,000, growth 10,000, business 25,000, enterprise 100,000 |
+| `max_pages` | 10 | Pages a business makes ([pages](spec/pages.md#12-storage-and-api)), drafts counted; beyond it making another gets 429 `limit_exceeded`. A business over it after a move to a lower plan keeps its pages. Plans: shop, shop plus and starter 10, growth 50, business and enterprise no limit |
 
 ```sh
 taskiem tenants limits 0190f0c2-... --set runs_per_month=100000 --set max_running_runs=25

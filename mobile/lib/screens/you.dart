@@ -22,6 +22,7 @@ import '../chat/approve.dart' show TkTextBox;
 import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
 import '../app/presence.dart';
 import '../chat/people_cards.dart' show PayoutAccountPage;
+import '../chat/saved_accounts.dart' show SavedAccountsPage;
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_contacts.dart' show ContactMatch, ContactsMatchScreen, DevicePhoneContacts, PeopleContactsScreen, PhoneContacts, contactsDay, recheckContacts;
 import '../chat/people_find.dart';
@@ -57,6 +58,7 @@ import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'you_links.dart';
+import 'you_pin.dart' show PinScreen;
 import 'you_account.dart';
 import '../chat/composer.dart' show Pickers;
 import '../app/route.dart' show youRouteOf;
@@ -356,7 +358,7 @@ class _YouHomeState extends State<YouHome> with Polling {
   /// A chat opened by its id (from Orders and Discover too), with a tool
   /// over it when asked; the list read again when it is closed.
   Future<void> _openId(String id, {String? notice, String draft = '', String? tool}) async {
-    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, id, notice: notice, now: widget.now), draft: draft, notify: widget.notify, tool: tool));
+    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, id, notice: notice, prefs: widget.prefs, now: widget.now), draft: draft, notify: widget.notify, tool: tool));
     await _chats.load();
   }
 
@@ -774,7 +776,7 @@ class YouSettingsScreen extends StatelessWidget {
   final DateTime Function() now;
 
   Future<void> _openChat(BuildContext context, String id, {String? notice, String draft = '', String? tool}) =>
-      tkPush<void>(context, MyChatScreen(data: MyChatData(auth, id, notice: notice, now: now), draft: draft, notify: notify, tool: tool));
+      tkPush<void>(context, MyChatScreen(data: MyChatData(auth, id, notice: notice, prefs: prefs, now: now), draft: draft, notify: notify, tool: tool));
 
   @override
   Widget build(BuildContext context) {
@@ -810,6 +812,13 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-phone',
                   square: look.teal,
                   onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: auth)),
+                ),
+                TkListRow(
+                  title: 'PIN',
+                  sub: 'Approves on WhatsApp and pays small amounts',
+                  icon: 'b-lock',
+                  square: look.violet,
+                  onTap: () => tkPush<void>(context, PinScreen(auth: auth, now: now)),
                 ),
               ],
             ),
@@ -899,6 +908,13 @@ class YouSettingsScreen extends StatelessWidget {
                   icon: 'b-alert',
                   square: look.orange,
                   onTap: () => tkPush<void>(context, YourStandingScreen(auth: auth, now: now)),
+                ),
+                TkListRow(
+                  title: 'Saved things',
+                  sub: 'Accounts, people, places and texts of your own, like @mum',
+                  icon: 'b-bank',
+                  square: look.teal,
+                  onTap: () => tkPush<void>(context, SavedAccountsPage(auth: auth, mine: true)),
                 ),
                 TkListRow(
                   title: 'Your bank account for shares',

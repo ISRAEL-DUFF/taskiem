@@ -13,7 +13,8 @@ import (
 func TestStockWatchStopsWhenStockIsOff(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 2})
-	w.s.Table = &catalogue{table: w.tb, reorder: map[string]int64{"rice": 5}}
+	w.levels(map[string]int64{"rice": 5})
+	w.s.Catalogue = &catalogue{w: w}
 	now := time.Now()
 	watch := &stock.Watch{Stock: w.s, Pool: w.env.DB.App, Now: func() time.Time { return now }}
 	if _, err := watch.Tenant(ctx, w.env.Tenant); err != nil {

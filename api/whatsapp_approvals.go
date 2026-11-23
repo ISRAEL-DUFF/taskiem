@@ -65,7 +65,7 @@ func (s *Server) RunWhatsApp(ctx context.Context) error {
 // bound number who have not had them, and how runs started from WhatsApp
 // ended.
 func (s *Server) WhatsAppTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants()`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_wa_tenants() UNION SELECT tenant_id FROM taskiem_tg_tenants() UNION SELECT tenant_id FROM taskiem_slack_tenants() UNION SELECT tenant_id FROM taskiem_web_watch_tenants() UNION SELECT tenant_id FROM taskiem_customer_tool_tenants()`)
 	if err != nil {
 		return err
 	}
@@ -87,6 +87,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 	if err := s.dormantSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("dormant bindings: %w", err))
 	}
+	// Saved uploads never claimed, a day on (saved_files.go).
+	if err := s.purgeSavedUploads(ctx); err != nil {
+		errs = append(errs, fmt.Errorf("saved uploads: %w", err))
+	}
 	// Slack installs no business took (slack_install.go).
 	if err := s.slackInstallSweep(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("slack installs: %w", err))
@@ -100,6 +104,10 @@ func (s *Server) WhatsAppTick(ctx context.Context) error {
 		}
 		if err := s.waNotifyRuns(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: runs: %w", t, err))
+		}
+		// Customers' answers on the business's own number (made tools T5).
+		if err := s.customerToolsNotify(ctx, t); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: customers' answers: %w", t, err))
 		}
 		if err := s.waDrainOutbox(ctx, t); err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: outbox: %w", t, err))
@@ -383,6 +391,8 @@ func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []wha
 			sendErr = s.sendSalesEveningItem(ctx, it)
 		case stock.OutboxSupplier:
 			sendErr = s.sendSupplierItem(ctx, it)
+		case outboxPayment, outboxPaymentBatch:
+			sendErr = s.sendPayResultItem(ctx, it)
 		default:
 			sendErr = fmt.Errorf("%w: unknown kind %q", whatsapp.ErrNothingToSend, it.Kind)
 		}
@@ -468,6 +478,32 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	title := tr(l, outcome, "workflow", wf, "env", env)
 	body := tr(l, "wa.outcome.body")
+	// A tool's run answers with its answer (tools_answer.go): the person
+	// who started it is the one it goes to.
+	var buttons []whatsapp.Button
+	var list *whatsapp.List
+	if status == "completed" {
+		if a, err := s.answerOf(ctx, it.Tenant, *it.Run, func(string, string) bool { return true }, chatRows); err == nil && a.Type != "outcome" {
+			if words := toolAnswerWords(l, a); words != "" {
+				title, body = words, ""
+			}
+			// A card's buttons as the chat's reply buttons (tools_buttons.go).
+			buttons = chatButtons(a.Buttons)
+			// A list's rows with their buttons (tools_rows.go): on WhatsApp a
+			// list message, a row chosen offers its buttons; elsewhere a
+			// button for each row's action.
+			if rowsPressable(a) {
+				if ch.Name() == "whatsapp" {
+					title, list = answerListHead(l, a), answerList(l, *it.Run, a)
+					if title == "" {
+						title = wf // a list message has words over it
+					}
+				} else {
+					buttons = rowButtons(a)
+				}
+			}
+		}
+	}
 	// Why, in plain words: the step that failed (N5).
 	if status == "failed" {
 		if why := s.runFailureText(ctx, it.Tenant, *it.Run); why != "" {
@@ -476,6 +512,7 @@ func (s *Server) waSendRunOutcome(ctx context.Context, it whatsapp.OutboxItem) e
 	}
 	m := whatsapp.AlertMessage(name, kind, title, body, link, map[string]any{"workflow": wf, "environment": env})
 	m.Tenant = it.Tenant
+	m.Buttons, m.List = buttons, list
 	if ch.OwnTenant() != uuid.Nil {
 		m.Text = strings.TrimPrefix(m.Text, "["+name+"] ")
 	}

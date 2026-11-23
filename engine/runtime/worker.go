@@ -1560,6 +1560,13 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		out = resp.Output
 		p.drift = drift.Check(p.conn.Manifest, p.action, out)
+		if p.conn.Manifest.ID == datatables.Connector {
+			// An open page over the table is told (pages §9); a failure
+			// here only leaves it to be pulled to refresh.
+			if err := datatables.MarkStepRowsChanged(ctx, w.Store.Pool, p.c.tenant, p.action, input); err != nil {
+				w.stepLogger(p).Warn("marking the table's rows changed", "err", err)
+			}
+		}
 	default:
 		out, err = w.doHTTP(ctx, p, in)
 		if err != nil {

@@ -15,25 +15,39 @@ import (
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
-// catalogue is the fake table read as rows, for the watch: each item's
-// count, with the reorder levels given.
-type catalogue struct {
-	*table
-	reorder map[string]int64
-}
+// catalogue is the business's catalogue read as rows, for the watch: a
+// product for each of the world's stock items.
+type catalogue struct{ w *world }
 
 func (c *catalogue) Rows(context.Context, uuid.UUID) ([]map[string]any, storefront.Columns, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	var rows []map[string]any
-	for id, n := range c.n {
-		r := map[string]any{"id": id, "name": strings.ToUpper(id[:1]) + id[1:], "stock": n}
-		if lvl, ok := c.reorder[id]; ok {
-			r["reorder_level"] = lvl
-		}
-		rows = append(rows, r)
+	for id := range c.w.items {
+		rows = append(rows, map[string]any{"id": id, "name": strings.ToUpper(id[:1]) + id[1:]})
 	}
-	return rows, storefront.Columns{Name: "name", Stock: "stock", ReorderLevel: "reorder_level"}, nil
+	return rows, storefront.Columns{Name: "name"}, nil
+}
+
+func (c *catalogue) Row(ctx context.Context, tenant uuid.UUID, id string) ([]map[string]any, storefront.Columns, error) {
+	rows, m, err := c.Rows(ctx, tenant)
+	for _, r := range rows {
+		if r["id"] == id {
+			return []map[string]any{r}, m, err
+		}
+	}
+	return nil, m, err
+}
+
+// levels sets the stock items' low levels, by product.
+func (w *world) levels(low map[string]int64) {
+	w.t.Helper()
+	w.in(func(tx pgx.Tx) error {
+		for row, lvl := range low {
+			if _, err := stock.SetItemTx(context.Background(), tx, w.env.Tenant, w.items[row], stock.ItemSet{Low: n(lvl)}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // A count posts its differences as count movements naming it, valued at
@@ -43,9 +57,9 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 0, "indomie": 0, "garri": 0})
 	cost := int64(4000000)
-	w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(20), CostKobo: &cost}).ID)
-	w.apply(w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(10)}).ID)
-	w.apply(w.record(stock.Move{ItemID: "garri", Item: "Garri", Reason: stock.Received, Delta: n(5)}).ID)
+	w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(20), CostKobo: &cost})
+	w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(10)})
+	w.record(stock.Move{ItemID: "garri", Item: "Garri", Reason: stock.Received, Delta: n(5)})
 	// A sale of more Indomie than there is.
 	x := w.sale(stock.SaleIn{PaidHow: stock.Cash, Key: "s-1", Lines: []stock.SaleLine{
 		{ItemID: "indomie", Item: "Indomie", Quantity: 12, PriceKobo: 100000, CostKobo: n(85000)},
@@ -87,13 +101,6 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 		return nil
 	})
 
-	// The table goes below zero by hand: seen on the next refresh.
-	mark, _ := w.s.ReadMark(ctx)
-	w.tb.n["garri"] = -2
-	if _, err := w.s.Outside(ctx, w.env.Tenant, []stock.Seen{{ItemID: "garri", Item: "Garri", Count: -2}}, mark); err != nil {
-		t.Fatal(err)
-	}
-
 	// Shrinkage: what came in, was sold, and was lost, at cost.
 	w.in(func(tx pgx.Tx) error {
 		sh, err := stock.ShrinkTx(ctx, tx, w.env.Tenant, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
@@ -106,9 +113,10 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 		return nil
 	})
 
-	// The three leaks: the sale beyond the stock (2 Indomie at ₦850), the
-	// count below zero, the count's loss above ₦5,000 (Rice; Garri has no
-	// cost, so it is a leak in units).
+	// The leaks: the sale beyond the stock (2 Indomie at ₦850), and the
+	// count's loss above ₦5,000 (Rice; Garri has no cost, so it is a leak
+	// in units). A count is never below zero now: counts change only by
+	// movements, and none takes one below it.
 	d := &leaks.Detector{Pool: w.env.DB.App}
 	if err := d.Tick(ctx); err != nil {
 		t.Fatal(err)
@@ -129,10 +137,9 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 4 || got[0].kind != "stock_count" || got[0].amount != 0 || !strings.Contains(got[0].detail, "a count found 1 Garri fewer") ||
+	if len(got) != 3 || got[0].kind != "stock_count" || got[0].amount != 0 || !strings.Contains(got[0].detail, "a count found 1 Garri fewer") ||
 		got[1].kind != "stock_count" || got[1].amount != 3*cost || !strings.Contains(got[1].detail, "3 Rice fewer than recorded ("+c.Reference+"), worth ₦120,000 at cost") ||
-		got[2].kind != "stock_negative" || !strings.Contains(got[2].detail, "Garri went below zero (-2)") ||
-		got[3].kind != "stock_short" || got[3].amount != 2*85000 || !strings.Contains(got[3].detail, "sold 2 more Indomie than the stock held ("+x.Reference+"), worth ₦1,700 at cost") {
+		got[2].kind != "stock_short" || got[2].amount != 2*85000 || !strings.Contains(got[2].detail, "sold 2 more Indomie than the stock held ("+x.Reference+"), worth ₦1,700 at cost") {
 		t.Fatalf("leaks: %+v", got)
 	}
 	// They stay until closed.
@@ -140,7 +147,7 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var open int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM money_leaks WHERE tenant_id = $1 AND kind LIKE 'stock_%' AND status = 'open'`, w.env.Tenant).Scan(&open); err != nil || open != 4 {
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM money_leaks WHERE tenant_id = $1 AND kind LIKE 'stock_%' AND status = 'open'`, w.env.Tenant).Scan(&open); err != nil || open != 3 {
 		t.Fatalf("open: %d %v", open, err)
 	}
 }
@@ -150,8 +157,8 @@ func TestCountsShrinkageAndLeaks(t *testing.T) {
 func TestStockWatch(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 2, "indomie": 40})
-	cat := &catalogue{table: w.tb, reorder: map[string]int64{"rice": 5, "indomie": 10}}
-	w.s.Table = cat
+	w.levels(map[string]int64{"rice": 5, "indomie": 10})
+	w.s.Catalogue = &catalogue{w: w}
 	now := time.Now()
 	watch := &stock.Watch{Stock: w.s, Pool: w.env.DB.App, Now: func() time.Time { return now }}
 	if n, err := watch.Tenant(ctx, w.env.Tenant); err != nil || n != 0 {
@@ -165,7 +172,7 @@ func TestStockWatch(t *testing.T) {
 		t.Fatalf("told once: %d %v", n, err)
 	}
 	// Back above, then low again: a new week.
-	w.tb.n["rice"] = 20
+	w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Count, SetTo: n(20)})
 	if _, err := watch.Tenant(ctx, w.env.Tenant); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +189,7 @@ func TestStockWatch(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if po, err = stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: s.ID, Lines: []stock.PurchaseLine{{ItemID: "rice", Item: "Rice", Quantity: 10}},
+		if po, err = stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: s.ID, Lines: []stock.PurchaseLine{{Item: "Rice", Quantity: 10, Treatment: stock.AddToStock, StockItemID: ref(w.items["rice"])}},
 			Actor: "user:owner", Key: "d"}); err != nil {
 			return err
 		}

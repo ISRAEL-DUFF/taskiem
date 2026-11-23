@@ -23,6 +23,7 @@ import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/applinks.dart';
 import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/passkey.dart' show PasskeyPlatform, passkeys;
 import 'package:taskiem/app/config.dart' show taskiemUrl;
 import 'package:taskiem/app/route.dart';
 import 'package:taskiem/app/session.dart';
@@ -37,6 +38,9 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
+import 'passkey_test.dart' show FakePasskeys;
+import 'saved_stub.dart' show savedThing;
 import 'support.dart' show loadFonts;
 
 /// A stand-in server: answers by "METHOD /path", every request kept.
@@ -317,6 +321,7 @@ void main() {
     phone(t);
     final api = adaChat();
     await openPeople(t, api);
+    await looks(t, 'people-chat');
     expect(find.text('Ada Obi'), findsWidgets);
     expect(find.text('last seen today at ${clock(DateTime.parse('2026-11-17T09:05:00Z'))}'), findsOneWidget);
     expect(find.text('Forwarded many times'), findsOneWidget);
@@ -818,6 +823,40 @@ void main() {
     await drain(t);
   });
 
+  testWidgets('the bank account for shares from a saved one: the number with a passkey; none on the phone, the bank only', (t) async {
+    phone(t);
+    final was = passkeys;
+    final fake = FakePasskeys();
+    passkeys = fake;
+    addTearDown(() => passkeys = was);
+    final api = adaChat();
+    api.routes['GET /v1/me/payout-account'] = (_) => {'account': null, 'checked': false, 'words': 'Taskiem does not check this account.'};
+    api.routes['GET /v1/me/saved'] = (_) => {
+      'saved': [
+        savedThing('A1', 'mine', 'bank_account', 'my-gt', 'My GTBank', 'GTBank ••6789', {'bank_name': 'GTBank', 'bank_code': '058', 'account_number': '••6789'}, accountName: 'TOLU ADE'),
+      ],
+      'limit': 200,
+    };
+    api.routes['POST /v1/me/saved/step-up/options'] = (_) => {'publicKey': {'challenge': 'abc', 'rpId': 'taskiem.test'}};
+    api.routes['POST /v1/me/saved/A1/reveal'] = (_) => {'account_number': '0123456789'};
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PayoutAccountPage(auth: api.auth())));
+    await settle(t);
+    await press(t, find.bySemanticsLabel('Fill from a saved bank account'));
+    expect(find.text('Saved accounts'), findsOneWidget);
+    expect(api.sent('GET', '/v1/saved'), isEmpty, reason: 'a person with no business has only their own');
+    await press(t, find.text('My GTBank'));
+    String box(String label) => t.widget<EditableText>(find.descendant(of: find.bySemanticsLabel(label), matching: find.byType(EditableText)).first).controller.text;
+    expect((box('Bank'), box('Account number'), box('Name on the account')), ('GTBank', '0123456789', 'TOLU ADE'));
+    expect(api.body(api.sent('POST', '/v1/me/saved/step-up/options').single), {'operation': 'saved.reveal', 'target': 'A1'});
+    // No passkey on this phone: the bank alone, and why.
+    passkeys = _NoPasskey();
+    await press(t, find.bySemanticsLabel('Fill from a saved bank account'));
+    await press(t, find.text('My GTBank'));
+    expect(find.text('This phone has no passkey for Taskiem. Only the bank is filled.'), findsOneWidget);
+    expect((box('Bank'), box('Account number')), ('GTBank', ''));
+    await drain(t);
+  });
+
   testWidgets('a link to a person’s chat, and to a request, opens it from You (as a push’s does)', (t) async {
     phone(t);
     final api = adaChat(c: peopleChat(request: true));
@@ -864,4 +903,14 @@ void main() {
     expect(api.body(api.sent('POST', '/v1/me/presence').last), {'online': false}, reason: 'away when You goes');
     await t.pump(const Duration(seconds: 5));
   });
+}
+
+/// A phone with no passkey for Taskiem.
+class _NoPasskey implements PasskeyPlatform {
+  @override
+  Future<bool> available() async => true;
+  @override
+  Future<Map<String, dynamic>> create(Map<String, dynamic> publicKey) => throw UnimplementedError();
+  @override
+  Future<Map<String, dynamic>> get(Map<String, dynamic> publicKey) async => throw ApiError(0, {'error': 'This phone has no passkey for Taskiem.'});
 }

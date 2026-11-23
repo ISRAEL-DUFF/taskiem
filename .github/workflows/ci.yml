@@ -187,11 +187,12 @@ jobs:
 
   # The web app in a real browser against the real binary (web/e2e), in
   # three steps: web-build makes the e2e binary and the web app once;
-  # web-e2e runs the browser tests in four shards side by side, each on
+  # web-e2e runs the browser tests in six shards side by side, each on
   # its own runner with its own Postgres and server, one test at a time
   # (web/playwright.config.ts); web is green only when every shard is, and
   # is the name the image job and branch protection wait on. One runner
-  # for all 305 tests took about 28 minutes; a shard takes about a quarter.
+  # for all 305 tests took about 28 minutes; there are some 700 now, and
+  # four shards ran up to 30 minutes each, so they are split six ways.
   web-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -224,13 +225,13 @@ jobs:
   web-e2e:
     needs: web-build
     runs-on: ubuntu-latest
-    # A shard takes about 7-10 minutes; a stuck one stops here instead of
+    # A shard takes about 10-15 minutes; a stuck one stops here instead of
     # at GitHub's six hours.
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:16
@@ -261,7 +262,7 @@ jobs:
       # The parity test's pictures were drawn with this release of the emoji
       # font; the runner's Ubuntu may have another (web/e2e/fonts/pin-emoji.sh).
       - run: sudo bash web/e2e/fonts/pin-emoji.sh
-      - run: pnpm --filter @taskiem/web exec playwright test --shard=${{ matrix.shard }}/4
+      - run: pnpm --filter @taskiem/web exec playwright test --shard=${{ matrix.shard }}/6
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:

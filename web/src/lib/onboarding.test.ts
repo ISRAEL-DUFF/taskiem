@@ -28,13 +28,13 @@ describe("getting started", () => {
     const list = [
       tpl("kyc-bvn-check", ["dojah@1", "notify@1", "gmail@1"]),
       tpl("zeta", ["notify@1"], false),
-      tpl("payroll-reminder", ["notify@1", "gmail@1"]),
+      tpl("send-invoice", ["notify@1", "gmail@1"]),
       { ...tpl("new-order-alert-sms", ["notify@1"]), needs_developer: true },
       tpl("alpha", ["notify@1"]),
       tpl("daily-reminder", ["notify@1"]),
     ];
     // Nothing to connect first; a developer's template last.
-    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "payroll-reminder", "alpha", "kyc-bvn-check", "new-order-alert-sms"]);
+    expect(starterTemplates(list).map((t) => t.id)).toEqual(["daily-reminder", "send-invoice", "alpha", "kyc-bvn-check", "new-order-alert-sms"]);
   });
 
   it("offers a product's templates first, and only to a business that connected it", () => {

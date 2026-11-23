@@ -1160,7 +1160,7 @@ func (r Replacements) By(holds map[string]bool) string {
 
 // The conditions a Replacement holds on.
 const (
-	WhenKeepsStock   = "keeps_stock"   // the catalogue keeps stock in a table
+	WhenKeepsStock   = "keeps_stock"   // the business keeps stock items
 	WhenRecordsSales = "records_sales" // sales are recorded by chat or the web
 	WhenNoSheets     = "no_sheets"     // no Google Sheets connection (decision 0060)
 	// WhenNoSheetsStock is no_sheets where Taskiem's stock is on, for the

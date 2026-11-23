@@ -24,6 +24,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/chat_link.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'customer_app_test.dart' show business, openThread, thread;
 import 'guidelines.dart';
 import 'my_chats_test.dart' show Api, answer, at, chat, conversation, drain, messages, openChat, press, settle, phone;
@@ -87,6 +88,7 @@ void main() {
     final chats = ChatsData(api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false), now: () => at);
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatsScreen(data: chats)));
     await settle(t);
+    await looks(t, 'customer-chats');
     expect(find.text('Tolu Ade'), findsOneWidget, reason: 'one row for the customer on both lines');
     expect(find.text('WhatsApp'), findsOneWidget);
     expect(find.text('App'), findsOneWidget);
@@ -264,6 +266,7 @@ void main() {
     final d = CustomerData(chats, 'cw1', follow: false);
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: d)));
     await settle(t);
+    await looks(t, 'customer-chat');
     expect(d.threadId, 'cc1');
     expect(find.text('Started in the list'), findsOneWidget, reason: 'the draft kept under the customer\'s own id');
     await t.enterText(find.byType(EditableText).first, 'Written by the other id');

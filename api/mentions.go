@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -224,6 +225,20 @@ func matchPriceItems(items []links.PriceItem, words string) []links.PriceItem {
 // conversation; false when the message names none (it is something
 // else).
 func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool, error) {
+	// "…, deliver to @warehouse": a saved place, where what it buys is
+	// delivered (saved objects S2); read off the order's words.
+	body := text
+	if m := deliverTail.FindStringSubmatch(text); m != nil && c.p != nil {
+		if n, err := saved.Name(m[1]); err == nil {
+			got, err := s.savedFind(ctx, c, n)
+			if err != nil {
+				return true, err
+			}
+			if len(got) > 0 {
+				body = deliverTail.ReplaceAllString(text, "")
+			}
+		}
+	}
 	var linked []links.Link
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		var err error
@@ -232,12 +247,31 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}); err != nil {
 		return true, err
 	}
-	mo := parseMentions(text, linked)
+	mo := parseMentions(body, linked)
 	if len(mo.Parts) == 0 && len(mo.Unknown) == 0 {
 		return false, nil
 	}
 	if len(mo.Unknown) > 0 {
-		return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(mo.Unknown[0])))
+		// A saved thing's name is not a business that is not linked: said
+		// for the names that are neither; when all are saved things, the
+		// words go on to what reads saved things (saved objects S2).
+		for _, u := range mo.Unknown {
+			if n, err := saved.Name(u); err == nil && c.p != nil {
+				got, err := s.savedFind(ctx, c, n)
+				if err != nil {
+					return true, err
+				}
+				if len(got) > 0 {
+					continue
+				}
+			}
+			return true, c.say(ctx, s, c.t("wa.mention.unlinked", "name", whatsapp.SafeText(u)))
+		}
+		if len(mo.Parts) == 0 {
+			return false, nil
+		}
+		// An order naming a saved place anywhere but at its end: said how.
+		return true, c.say(ctx, s, c.t("wa.mention.deliver_how", "name", whatsapp.SafeText(mo.Unknown[0])))
 	}
 	for _, part := range mo.Parts {
 		// Two businesses the mention names: never one picked in silence.
@@ -247,6 +281,16 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	}
 	if !c.p.Can(PermStorefrontManage) {
 		return true, c.say(ctx, s, c.t("wa.supplier.denied", "org", c.tenant.Name))
+	}
+	// Where it is delivered, when the words end with a saved place.
+	var to *links.DeliverTo
+	var place, address string
+	if body != text {
+		var ok bool
+		var err error
+		if _, to, place, address, ok, err = s.orderPlace(ctx, c, text); !ok || err != nil {
+			return true, err
+		}
 	}
 	// Each business's price list, and what is asked of it.
 	var prices []links.SupplierPrices
@@ -308,27 +352,17 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	var unlinked errUnlinkedItem
 	var unlinkedFrom string
 	err = chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		for _, d := range drafts {
-			known, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, d.link.ID)
-			if err != nil {
+		if to != nil {
+			if err := s.riderPhoneTx(ctx, tx, c, to); err != nil {
 				return err
 			}
+		}
+		for _, d := range drafts {
 			in := make([]orderLineIn, 0, len(d.lines))
 			for _, l := range d.lines {
-				line := orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity}
-				if !slices.ContainsFunc(known, func(k links.ItemLink) bool { return k.SellerItemID == l.Item.ItemID }) {
-					// The first time, an own item of the same name is the one.
-					var same []stock.Item
-					for _, o := range items {
-						if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(l.Item.Name)) {
-							same = append(same, o)
-						}
-					}
-					if len(same) == 1 {
-						line.ItemID = same[0].ID
-					}
-				}
-				in = append(in, line)
+				// Unremembered, an own item of the same name (a product, or
+				// a material) is suggested: added to its stock item.
+				in = append(in, orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity, suggest: sameNamed(items, l.Item.Name)})
 			}
 			x, err := s.draftFromPricesTx(ctx, tx, c.p, d.link.ID, in, own, "", "wa-"+uuid.NewString())
 			if errAs(err, &unlinked) {
@@ -337,11 +371,22 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 			if err != nil {
 				return err
 			}
+			if to != nil {
+				if err := links.SetPurchaseDeliverToTx(ctx, tx, s.Vault, c.tenant.ID, x.ID, *to); err != nil {
+					return err
+				}
+			}
 			made = append(made, x)
 		}
 		return nil
 	})
+	deliver := ""
+	if to != nil {
+		deliver = "\n" + c.t("wa.deliver.to", "name", place, "address", whatsapp.SafeText(address))
+	}
 	switch {
+	case errors.Is(err, errNoRiderPhone):
+		return true, c.say(ctx, s, c.t("wa.deliver.no_phone", "name", place))
 	case unlinkedFrom != "":
 		return true, c.say(ctx, s, c.t("wa.prices.unlinked", "item", whatsapp.SafeText(unlinked.Item.Name), "name", whatsapp.SafeText(unlinkedFrom)))
 	case errIsAny(err, links.ErrInvalid, links.ErrState):
@@ -351,21 +396,13 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	case err != nil:
 		return true, err
 	}
-	if len(made) == 1 {
-		x := made[0]
-		return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-			c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-				"total", storefront.FormatNaira(x.TotalKobo)))
-	}
+	// Each line not remembered is asked how to treat it; then the orders
+	// are shown for one Yes.
 	ids := make([]uuid.UUID, len(made))
-	lines := make([]string, len(made))
 	for i, x := range made {
 		ids[i] = x.ID
-		lines[i] = c.t("wa.mention.draft", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier), "items", whatsapp.SafeText(x.Words()),
-			"total", storefront.FormatNaira(x.TotalKobo))
 	}
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_orders", StockChat: &stockChat{Purchase: &purchaseChat{Drafted: ids}}},
-		c.t("wa.mention.confirm", "count", strconv.Itoa(len(made)), "orders", strings.Join(lines, "\n")))
+	return true, s.orderAsk(ctx, c, ids, deliver)
 }
 
 // sendDrafted sends each of the orders one yes answered: those above the
@@ -427,6 +464,9 @@ type mentionRef struct {
 	ServiceID string    `json:"service_id"`
 	// Ref is an invoice's or an order's id (from /link-chats/{link}/refs).
 	Ref string `json:"ref"`
+	// Saved is a saved thing shared as a card (kind saved; saved objects
+	// S1, part 3), checked by linkSavedMentions, not checkMentions.
+	Saved *savedShare `json:"saved"`
 }
 
 // conversationItems is what "#" names in a conversation with a link: the

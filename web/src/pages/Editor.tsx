@@ -6,6 +6,11 @@ import { useAdvanced, useAuth } from "../auth";
 import { Icon } from "../icons";
 import { SchedulePicker } from "../canvas/PlainPickers";
 import { FormTriggerEditor } from "../canvas/FormEditor";
+import { StartRolesPicker } from "../forms/RolePicker";
+import { UseFromChat } from "./UseFromChat";
+import { sourcesFor, type Source } from "../lib/plaincanvas";
+import { toolProblemWords } from "../lib/toolbuild";
+import { reloadMadeTools } from "../lib/useMadeTools";
 import { EmailAddressCard, EmailTriggerSettings } from "../canvas/EmailTrigger";
 import { WebhookListener, WebhookTriggerSettings } from "../canvas/WebhookTrigger";
 import { connectIn, definitionProblem, disconnectIn, emptyPaths, forSaving, insertStep, placed, removeAnywhere, renameAnywhere, updateAnywhere, type InsertAt } from "../lib/flow";
@@ -31,6 +36,7 @@ import { catalog, idFrom } from "../builder/catalog";
 import { TRIGGER_CHOICES } from "../builder/triggers";
 import { stepTitle } from "../builder/look";
 import { sourcesAnywhere, withStarted } from "../builder/sources";
+import { loadSavedSources } from "../lib/savedSources";
 import { useLeaveWarning } from "../lib/leave";
 import { dropDraft, keepDraft, keptDraft, type KeptDraft } from "../lib/keep";
 
@@ -48,6 +54,8 @@ interface VersionDoc {
   definition: WorkflowDefinition;
   layout?: Record<string, unknown>;
   problems: Problem[];
+  /** A published tool's care (made tools §8), worked out from its steps. */
+  tool_care?: { level: string; because?: string[] };
 }
 
 /** Maps validator paths (/steps/2/..., /steps/<id>) to top-level step ids. */
@@ -80,6 +88,9 @@ export function Editor() {
   const [def, setDef] = useState<WorkflowDefinition>();
   const [layout, setLayout] = useState<Record<string, unknown>>({});
   const [problems, setProblems] = useState<Problem[]>([]);
+  // A publish refused for a command another workflow has (made tools §12):
+  // kept apart, since the saved version's own problems are read again.
+  const [takenCommand, setTaken] = useState<Problem>();
   // A publish refused for what the version still needs.
   const [needs, setNeeds] = useState<{ version: number; needs: ReadyNeed[] }>();
   // A publish refused because the storefront form it starts on already
@@ -88,6 +99,13 @@ export function Editor() {
   const [held, setHeld] = useState<{ version: number; words: string; name: string; canReplace: boolean; canNewAction: boolean; refused: string }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // The business's saved things as values, read once when a step is first
+  // opened and kept while the editor is open.
+  const [savedWanted, setSavedWanted] = useState(false);
+  useEffect(() => {
+    if (open) setSavedWanted(true);
+  }, [open]);
+  const saved = useLoad(() => (savedWanted ? loadSavedSources(get) : Promise.resolve(undefined)), [savedWanted]);
   const [picking, setPicking] = useState<{ at: InsertAt; where: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   // What keeps the JSON tab's text from being a definition the builder can draw.
@@ -159,6 +177,7 @@ export function Editor() {
     future.current = [];
   };
   const edit = useCallback((next: WorkflowDefinition) => {
+    setTaken(undefined);
     setDef(next);
     setDirty(true);
     setOffer(undefined);
@@ -289,10 +308,16 @@ export function Editor() {
           return;
         }
         if (e instanceof ApiError && e.status === 422) setProblems(e.problems as Problem[]);
+        // A command another workflow has (made tools §12): said with the tool.
+        if (e instanceof ApiError && /the command \//.test(e.message)) {
+          setTaken({ path: "/tool/command", message: e.message, plain: toolProblemWords(e.message) });
+          throw new Error(toolProblemWords(e.message), { cause: e });
+        }
         throw e;
       }
       setNeeds(undefined);
       setHeld(undefined);
+      setTaken(undefined);
       // A new action is made with a new version that names it.
       if (typeof r.version === "number") v = r.version;
       const made = r.new_action
@@ -310,6 +335,7 @@ export function Editor() {
       toast("Published");
       wf.reload();
       doc.reload();
+      if (def?.tool) void reloadMadeTools();
     }, false);
 
   // Test with sample data: the draft as it is now, nothing sent.
@@ -324,6 +350,10 @@ export function Editor() {
 
   if (wf.error || doc.error) return <ErrorBox error={wf.error ?? doc.error} />;
   if (!wf.data || !def) return <Skeleton />;
+  const sourcesOf = (stepId: string) => [
+    ...withStarted(sourcesAnywhere(def, stepId, conns, [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])] as Parameters<typeof sourcesAnywhere>[3]), def.trigger, result),
+    ...(saved.data ?? []),
+  ];
   const current = wf.data.versions.find((v) => v.version === version);
   const managed = wf.data.workflow.git_path;
   const readOnly = !can("workflow.edit") || !!managed;
@@ -615,7 +645,15 @@ export function Editor() {
               </button>
             </p>
           )}
-          <SettingsTab workflow={id} def={def} onChange={change} connectors={conns} problems={problems} />
+          <SettingsTab
+            workflow={id}
+            def={def}
+            onChange={change}
+            connectors={conns}
+            problems={takenCommand ? [...problems, takenCommand] : problems}
+            stepSources={stepSources(def, conns, [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])])}
+            toolCare={current?.state === "published" && !dirty ? doc.data?.tool_care?.level : undefined}
+          />
           <Endpoints workflow={id} />
           {current && (
             <p className="hint">
@@ -678,7 +716,7 @@ export function Editor() {
           key={openStep.id}
           step={openStep}
           connectors={conns}
-          sources={withStarted(sourcesAnywhere(def, openStep.id, conns, [...(callables.data?.templates ?? []), ...(ownCallables.data?.workflows ?? [])] as Parameters<typeof sourcesAnywhere>[3]), def.trigger, result)}
+          sources={sourcesOf(openStep.id)}
           problems={stepProblemsOf(def, problems, openStep.id)}
           result={result}
           testing={testing.busy}
@@ -794,7 +832,31 @@ function stepProblemsOf(def: WorkflowDefinition, problems: Problem[], id: string
   return out;
 }
 
-function SettingsTab({ workflow, def, onChange, connectors, problems }: { workflow: string; def: WorkflowDefinition; onChange: (d: WorkflowDefinition) => void; connectors: ConnectorInfo[]; problems: Problem[] }) {
+/** What the workflow's steps give, for what it gives back: values of its
+ * top-level steps only (an output reads nothing else). */
+function stepSources(def: WorkflowDefinition, connectors: ConnectorInfo[], callables: unknown[]): Source[] {
+  const end = { id: "tool_end", type: "transform", needs: def.steps.map((s) => s.id) };
+  const all = sourcesFor({ trigger: def.trigger, inputs: def.inputs, steps: [...def.steps, end] as Parameters<typeof sourcesFor>[0]["steps"] }, "tool_end", connectors as Parameters<typeof sourcesFor>[2], callables as Parameters<typeof sourcesFor>[3]);
+  return all.filter((s) => s.expr.startsWith("=steps."));
+}
+
+function SettingsTab({
+  workflow,
+  def,
+  onChange,
+  connectors,
+  problems,
+  stepSources,
+  toolCare,
+}: {
+  workflow: string;
+  def: WorkflowDefinition;
+  onChange: (d: WorkflowDefinition) => void;
+  connectors: ConnectorInfo[];
+  problems: Problem[];
+  stepSources: Source[];
+  toolCare?: string;
+}) {
   const t = def.trigger;
   const cfg = (t.config ?? {}) as Record<string, unknown>;
   const setCfg = (patch: Record<string, unknown>) => onChange({ ...def, trigger: { ...t, config: merge(cfg, patch) } });
@@ -814,6 +876,11 @@ function SettingsTab({ workflow, def, onChange, connectors, problems }: { workfl
       <Field label="Description">
         <textarea rows={2} value={def.description ?? ""} onChange={(e) => onChange({ ...def, description: e.target.value || undefined } as WorkflowDefinition)} />
       </Field>
+      <StartRolesPicker
+        value={def.roles ?? []}
+        onChange={(roles) => onChange({ ...def, roles: roles.length ? roles : undefined } as WorkflowDefinition)}
+      />
+      <UseFromChat def={def} onChange={onChange} problems={problems} sources={stepSources} care={toolCare} />
       <h2>{advanced ? "Trigger" : "When it runs"}</h2>
       <Field label={advanced ? "Type" : "It runs"}>
         <select

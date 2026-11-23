@@ -52,6 +52,14 @@ const ENTRIES = [
   { id: "e3", kind: "payment", direction: "in", amount_kobo: 900_000, status: "settled", channel: "paystack", when: now, left_kobo: 0, towards: "invoice INV-0003", to_match: false },
 ];
 
+const REFS = (now: string) => [
+  { kind: "invoice", id: "i1", name: "INV-0001", party: "B•••", when: now, total_kobo: 4_500_000, status: "sent" },
+  { kind: "invoice", id: "i2", name: "INV-0002", party: "Tola's Kitchen", when: "2026-11-03T10:00:00Z", total_kobo: 1_200_000, status: "overdue" },
+  { kind: "bill", id: "b1", name: "INV-0420", party: "Dangote Stores", when: now, total_kobo: 7_800_000, status: "open" },
+  { kind: "order", id: "o1", name: "AK-7QX4KD", party: "A•••", when: now, total_kobo: 1_330_000, status: "paid" },
+  { kind: "customer", id: "c1", name: "Bisi Okafor", party: "•••0555", when: now },
+];
+
 async function answer(page: Page) {
   const sent: { path: string; body: unknown; key?: string }[] = [];
   const remember = async (r: Route, reply: unknown, status = 200) => {
@@ -67,15 +75,17 @@ async function answer(page: Page) {
     r.request().method() === "GET" ? r.fulfill(json({ entries: ENTRIES })) : remember(r, { entry_id: "e9", created: true }, 201),
   );
   await page.route(/\/v1\/money\/entries\/[^/]+\/match$/, (r) => remember(r, { ok: true }));
-  await page.route("**/v1/chat-refs", (r) =>
-    r.fulfill(json({ refs: [
-      { kind: "invoice", id: "i1", name: "INV-0001", party: "B•••", when: now, total_kobo: 4_500_000, status: "sent" },
-      { kind: "invoice", id: "i2", name: "INV-0002", party: "Tola's Kitchen", when: "2026-11-03T10:00:00Z", total_kobo: 1_200_000, status: "overdue" },
-      { kind: "bill", id: "b1", name: "INV-0420", party: "Dangote Stores", when: now, total_kobo: 7_800_000, status: "open" },
-      { kind: "order", id: "o1", name: "AK-7QX4KD", party: "A•••", when: now, total_kobo: 1_330_000, status: "paid" },
-      { kind: "customer", id: "c1", name: "Bisi Okafor", party: "•••0555", when: now },
-    ] })),
-  );
+  // The server's search (menus-everywhere.md §7): kinds, and words in a
+  // number or who it is with.
+  await page.route(/\/v1\/chat-refs(\?.*)?$/, (r) => {
+    const u = new URL(r.request().url()).searchParams;
+    const kinds = u.get("kind")?.split(",");
+    const words = (u.get("q") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    const refs = REFS(now).filter(
+      (x) => (!kinds || kinds.includes(x.kind)) && words.every((w) => `${x.name} ${x.party}`.toLowerCase().includes(w)),
+    );
+    return r.fulfill(json(u.size ? { refs, cursor: "" } : { refs }));
+  });
   await page.route(/\/v1\/chat-card\?/, (r) => {
     const q = new URL(r.request().url()).searchParams;
     if (q.get("kind") === "invoice")
@@ -168,8 +178,11 @@ for (const width of [390, 360]) {
     await box.click();
     await box.pressSequentially("Did they pay /invoice cat");
     const picker = page.getByTestId("mention-list");
-    // Nothing matches "cat" by number: no picker.
-    await expect(picker).toHaveCount(0);
+    // Nothing matches "cat": the picker says so, its search box and kinds
+    // to try (menus-everywhere.md §7).
+    await expect(picker.getByText('Nothing found for "cat"')).toBeVisible();
+    await expect(picker.getByRole("searchbox", { name: "Search what to tag" })).toHaveValue("cat");
+    await expect(picker.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "Invoices" })).toHaveAttribute("aria-pressed", "true");
     await box.press("Backspace");
     await box.press("Backspace");
     await box.press("Backspace");
@@ -233,11 +246,177 @@ for (const width of [390, 360]) {
     await box.click();
     await box.pressSequentially("/bill ");
     const picker = page.getByTestId("mention-list");
-    await expect(picker.getByRole("button")).toHaveCount(1);
+    await expect(picker.locator(".tk-pick")).toHaveCount(1);
     await expect(picker.getByRole("button", { name: /INV-0420/ })).toContainText("Dangote Stores");
     await box.fill("");
     await box.pressSequentially("/invoice ");
     // "/invoice" is invoices and bills.
-    await expect(picker.getByRole("button")).toHaveCount(3);
+    await expect(picker.locator(".tk-pick")).toHaveCount(3);
+    // The search box: its words go in the message box too; another kind's
+    // chip searches that kind; one picked goes in as "#".
+    await picker.getByRole("searchbox", { name: "Search what to tag" }).fill("tola");
+    await expect(box).toHaveValue("/invoice tola");
+    await expect(picker.locator(".tk-pick")).toHaveCount(1);
+    await picker.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "Customers" }).click();
+    await expect(picker.locator(".tk-pick")).toHaveCount(0);
+    await expect(picker.getByText('Nothing found for "tola"')).toBeVisible();
+    await picker.getByRole("searchbox", { name: "Search what to tag" }).fill("bisi");
+    await picker.getByRole("button", { name: /Bisi Okafor/ }).click();
+    await expect(box).toHaveValue("#Bisi Okafor ");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test(`the picker shows six, then Show more, at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await owner(page);
+    await answer(page);
+    // Forty invoices on the server, newest first: six, then six more.
+    await page.route(/\/v1\/chat-refs\?.+$/, (r) => {
+      const u = new URL(r.request().url()).searchParams;
+      const all = Array.from({ length: 40 }, (_, i) => ({
+        kind: "invoice", id: `i${i}`, name: `INV-${String(100 - i).padStart(4, "0")}`, party: "Tola's Kitchen",
+        when: new Date(Date.UTC(2026, 10, 20) - i * 86_400_000).toISOString(), total_kobo: 100_000, status: "sent",
+      }));
+      const from = Number((u.get("cursor") ?? "invoice:0").split(":")[1]);
+      return r.fulfill(json({ refs: all.slice(from, from + 20), cursor: from + 20 < all.length ? `invoice:${from + 20}` : "" }));
+    });
+    await page.goto("/chat?with=taskiem");
+    const box = page.getByTestId("taskiem-pane").locator("#taskiem-text");
+    await box.click();
+    await box.pressSequentially("/invoice ");
+    const picker = page.getByTestId("mention-list");
+    await expect(picker.locator(".tk-pick")).toHaveCount(6);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`the picker's search (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    for (const n of [12, 18, 24]) {
+      await picker.getByRole("button", { name: "Show more" }).click();
+      await expect(picker.locator(".tk-pick")).toHaveCount(n);
+    }
+    await expect(picker.getByRole("button", { name: /INV-0077/ })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (width === 390) await page.screenshot({ path: "test-results/picker-search-phone.png" });
+  });
+
+  // Saved objects S2 (docs/spec/saved-objects.md §6.4): a form's Saved
+  // button offers saved people for an invoice's customer and saved places
+  // for where linked suppliers deliver; picking one fills the fields. The
+  // lists are answered here (api/saved_test.go reads the real ones).
+  test(`Saved fills an invoice's customer and where suppliers deliver, at ${width} px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 844 });
+    await owner(page);
+    await answer(page);
+    const thing = (x: Record<string, unknown>) => ({
+      check: { state: "none", account_name: null, via: null, at: null, problem: null },
+      to_change: false, created_at: now, updated_at: now, ...x,
+    });
+    // The business's people come with their hint masked, their details whole.
+    // Each list is asked for one kind (?kind=).
+    const asked: string[] = [];
+    const ofKind = (r: Route, saved: Record<string, unknown>[]) => {
+      const kind = new URL(r.request().url()).searchParams.get("kind") ?? "";
+      asked.push(kind);
+      return r.fulfill(json({ limit: 500, saved: saved.filter((x) => !kind || x.kind === kind) }));
+    };
+    await page.route(/\/v1\/saved(\?.*)?$/, (r) =>
+      ofKind(r, [
+        thing({ id: "s1", owner: "business", kind: "person", name: "bisi", title: "Bisi Okafor", hint: "•••4567", details: { phone: "08031234567", email: "bisi@okafor.test" } }),
+        thing({ id: "s2", owner: "business", kind: "place", name: "shop", title: "The shop", hint: "Allen Avenue", details: { line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "08037654321" } }),
+        thing({ id: "s4", owner: "business", kind: "place", name: "farm", title: "The farm", hint: "Epe", details: { line: "Plot 7, Epe road", area: "Epe", landmark: "Past the second bridge, ".repeat(12) } }),
+        thing({ id: "s3", owner: "business", kind: "text", name: "thanks", title: "Thanks", hint: "", details: { body: "Thank you" } }),
+      ]),
+    );
+    await page.route(/\/v1\/me\/saved(\?.*)?$/, (r) =>
+      ofKind(r, [
+        thing({ id: "m1", owner: "mine", kind: "person", name: "tunde", title: "Tunde Bello", hint: "08030000000", details: { phone: "08030000000" } }),
+        thing({ id: "m2", owner: "mine", kind: "person", name: "kemi", title: "Kemi Ade", hint: "", details: {} }),
+      ]),
+    );
+    await page.route("**/v1/stock/deliver-to", (r) => r.fulfill(json({ address: "", phone: "" })));
+
+    // A new invoice: the business's person fills name, phone and email.
+    await page.goto("/invoices/new");
+    await page.getByRole("button", { name: "Saved people for the customer" }).click();
+    const picker = page.getByRole("dialog", { name: "Saved people" });
+    await expect(picker.getByTestId("saved-fill-row")).toHaveCount(3);
+    await expect(picker).toContainText("@bisi · •••4567");
+    expect(asked.filter((k) => k === "person")).toHaveLength(2);
+    await expect(picker).not.toContainText("The shop");
+    await axeBoth(page, "the Saved people picker");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await picker.getByRole("button", { name: "Use Bisi Okafor" }).click();
+    await expect(picker).toHaveCount(0);
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Bisi Okafor");
+    await expect(page.getByLabel("Phone number")).toHaveValue("08031234567");
+    await expect(page.getByLabel("Email")).toHaveValue("bisi@okafor.test");
+    // One's own person with no email: a pick replaces the whole customer,
+    // so Bisi's email does not stay with Tunde.
+    await page.getByRole("button", { name: "Saved people for the customer" }).click();
+    await picker.getByRole("button", { name: "Use Tunde Bello" }).click();
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Tunde Bello");
+    await expect(page.getByLabel("Phone number")).toHaveValue("08030000000");
+    await expect(page.getByLabel("Email")).toHaveValue("");
+
+    // Where linked suppliers deliver: a saved place fills the address and phone.
+    await page.goto("/storefront/suppliers");
+    await page.getByRole("button", { name: "Saved places for the address" }).click();
+    const places = page.getByRole("dialog", { name: "Saved places" });
+    await expect(places.getByTestId("saved-fill-row")).toHaveCount(2);
+    await axeBoth(page, "the Saved places picker");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await places.getByRole("button", { name: "Use The shop" }).click();
+    const deliver = page.getByTestId("deliver-to");
+    await expect(deliver.getByLabel("Address")).toHaveValue("12 Allen Avenue, Ikeja (By the blue gate)");
+    await expect(deliver.getByLabel("Number the rider calls at the door")).toHaveValue("08037654321");
+    await expect(deliver.getByTestId("saved-fill-note")).toHaveText("");
+    // A place too long for the 300 letters: its landmark is left out, and said so.
+    await page.getByRole("button", { name: "Saved places for the address" }).click();
+    await places.getByRole("button", { name: "Use The farm" }).click();
+    await expect(deliver.getByLabel("Address")).toHaveValue("Plot 7, Epe road, Epe");
+    await expect(deliver.getByTestId("saved-fill-note")).toHaveText("The landmark was left out to fit.");
+
+    // The chat's New invoice: the list opens in the sheet, under the button.
+    await page.goto("/chat?with=taskiem");
+    await page.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
+    await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Invoices/ }).click();
+    const sheet = page.getByTestId("tool-sheet");
+    await sheet.getByRole("button", { name: "New invoice" }).click();
+    const open = sheet.getByRole("button", { name: "Saved people for the customer" });
+    await open.click();
+    await expect(open).toHaveAttribute("aria-expanded", "true");
+    const list = await open.getAttribute("aria-controls");
+    expect(list).toBeTruthy();
+    await expect(page.locator(`[id="${list}"]`)).toHaveAttribute("data-testid", "saved-fill-list");
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(3);
+    await axeBoth(page, "the Saved people in the chat's new invoice");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Bisi Okafor" }).click();
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
+    await expect(sheet.getByLabel("Their phone number")).toHaveValue("08031234567");
+    // Focus goes to the customer's name, not lost to the page.
+    await expect(sheet.getByLabel("Customer's name")).toBeFocused();
+    // A person with no phone: the name is filled, the phone emptied, and
+    // the sheet says to type one.
+    await open.click();
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Kemi Ade" }).click();
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Kemi Ade");
+    await expect(sheet.getByLabel("Their phone number")).toHaveValue("");
+    await expect(sheet.getByRole("status").filter({ hasText: "no phone" })).toHaveText("Kemi Ade has no phone saved: type one.");
+    await sheet.getByLabel("Their phone number").fill("08035550000");
+    await expect(sheet.getByTestId("saved-fill-note")).toHaveText("");
+    await open.click();
+    await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Bisi Okafor" }).click();
+    // Esc closes the list only: the sheet and what was typed stay.
+    await open.click();
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(3);
+    await page.keyboard.press("Escape");
+    await expect(sheet.getByTestId("saved-fill-pick")).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByLabel("Customer's name")).toHaveValue("Bisi Okafor");
   });
 }

@@ -42,6 +42,12 @@ export function useOutbox(link: string): Outgoing[] {
   );
 }
 
+/** A message the server wrote in a conversation for us (a note Taskiem
+ * left): shown there at once, as one sent. */
+export function announce(link: string, m: LinkMessage) {
+  arrivals.forEach((fn) => fn(link, m));
+}
+
 /** Hears every message the server accepted, with its conversation. */
 export function onSent(fn: (link: string, m: LinkMessage) => void): () => void {
   arrivals.add(fn);

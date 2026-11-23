@@ -1660,12 +1660,16 @@ export interface NotifyMessageInput {
   email?: Val<string>;
   /** The message */
   message: Val<string>;
+  /** Payrolla's id of the employee it is about: a staff member an owner linked to that employee hears it on their own chat with the business (or by email) instead */
+  payrolla_employee?: Val<string>;
   /** Their phone number, in any form (0803 123 4567, +234…) */
   phone?: Val<string>;
   /** A first line, and an email's subject */
   title?: Val<string>;
 }
 export interface NotifyTellInput {
+  /** Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
+  buttons?: Value;
   /** With to: members, their sign-in emails */
   members?: Value;
   /** The message */
@@ -1846,6 +1850,41 @@ export const opay_business = {
   list_terminal_transactions: (input: OpayBusinessListTerminalTransactionsInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "list_terminal_transactions", input, extra),
   /** Ask a terminal to take a payment (idempotent_write) */
   request_payment: (input: OpayBusinessRequestPaymentInput, extra?: ConnectorExtra): StepSpec => connector("opay_business@1", "request_payment", input, extra),
+};
+
+// Payments (payments@1)
+export interface PaymentsCheckInput {
+  account_number: Val<string>;
+  amount_kobo: Val<number>;
+  bank_code: Val<string>;
+  needs_ok: Val<boolean>;
+  payment_id: Val<string>;
+}
+export interface PaymentsFinishInput {
+  /** The bank's name for the account */
+  account_name?: Val<string>;
+  fee_kobo?: Val<number>;
+  payment_id: Val<string>;
+  payout_id?: Val<string>;
+  reason?: Val<string>;
+  status: Val<"paid" | "failed" | "unknown" | "rejected">;
+}
+export interface PaymentsPrepareInput {
+  amount_kobo: Val<number>;
+  /** Sent with the transfer where the provider allows it */
+  note?: Val<string>;
+  /** The saved account's name, like landlord (no @) */
+  payee: Val<string>;
+  purpose: Val<"bill" | "wages" | "delivery" | "refund" | "stock" | "other">;
+  purpose_note?: Val<string>;
+}
+export const payments = {
+  /** Check a payment before it is paid (idempotent_write) */
+  check: (input: PaymentsCheckInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "check", input, extra),
+  /** Record a payment's outcome (idempotent_write) */
+  finish: (input: PaymentsFinishInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "finish", input, extra),
+  /** Prepare a payment (idempotent_write) */
+  prepare: (input: PaymentsPrepareInput, extra?: ConnectorExtra): StepSpec => connector("payments@1", "prepare", input, extra),
 };
 
 // Payrolla (payrolla@1)
@@ -2492,6 +2531,15 @@ export interface RidersPreparePayoutsInput {
   /** A batch Riders > Pay made; empty for this run's */
   batch_id?: Val<string>;
 }
+export interface RidersRecordProofInput {
+  /** A form step's photo answer: {state, source, id} */
+  photo?: Value;
+  reference: Val<string>;
+  /** A form step's signature answer: {state, source, id}; the customer's signature drawn on the rider's phone (D2), shown on the Confirm card */
+  signature?: Value;
+  /** A form step's location answer: {state, source, lat, lng, accuracy_m, coarse} */
+  where?: Value;
+}
 export interface RidersReleaseInput {
   reference: Val<string>;
 }
@@ -2511,6 +2559,8 @@ export const riders = {
   offer: (input: RidersOfferInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "offer", input, extra),
   /** Add up what each rider is due (idempotent_write) */
   prepare_payouts: (input?: RidersPreparePayoutsInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "prepare_payouts", input, extra),
+  /** Record a delivery's proof (idempotent_write) */
+  record_proof: (input: RidersRecordProofInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "record_proof", input, extra),
   /** Take an order back from its rider (idempotent_write) */
   release: (input: RidersReleaseInput, extra?: ConnectorExtra): StepSpec => connector("riders@1", "release", input, extra),
   /** Retire a rider (idempotent_write) */
@@ -3006,7 +3056,7 @@ export interface StockMovementsInput {
   /** An item's row id; empty for every item */
   id?: Val<string>;
   limit?: Val<number>;
-  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "outside">;
+  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "moved">;
   /** RFC 3339 */
   since?: Val<string>;
 }
@@ -3095,6 +3145,9 @@ export interface StorefrontPaymentLinkInput {
   amount_kobo?: Val<number>;
   reference: Val<string>;
 }
+export interface StorefrontRecentCustomersInput {
+  days?: Val<number>;
+}
 export interface StorefrontRefundInput {
   reference: Val<string>;
 }
@@ -3113,6 +3166,8 @@ export const storefront = {
   offer_place: (input: StorefrontOfferPlaceInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "offer_place", input, extra),
   /** Make the order's payment link (idempotent_write) */
   payment_link: (input: StorefrontPaymentLinkInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "payment_link", input, extra),
+  /** Customers who ordered lately (read) */
+  recent_customers: (input?: StorefrontRecentCustomersInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "recent_customers", input, extra),
   /** Refund the customer (idempotent_write) */
   refund: (input: StorefrontRefundInput, extra?: ConnectorExtra): StepSpec => connector("storefront@1", "refund", input, extra),
 };
@@ -3869,6 +3924,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "notify@1": "notify",
   "opay@1": "opay",
   "opay_business@1": "opay_business",
+  "payments@1": "payments",
   "payrolla@1": "payrolla",
   "paystack@1": "paystack",
   "postgres@1": "postgres",
@@ -3923,6 +3979,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "notify@1": ["message", "tell", "text"],
   "opay@1": ["close_payment", "create_bank_transfer_payment", "create_cashier_payment", "get_payment", "get_refund", "refund_payment", "verify_callback"],
   "opay_business@1": ["get_balance", "get_payment_request", "get_terminal", "get_transaction", "list_terminal_transactions", "request_payment"],
+  "payments@1": ["check", "finish", "prepare"],
   "payrolla@1": ["create_payslip_link", "get_approval_link", "get_company", "get_employee", "get_run", "get_run_lines", "list_employees", "list_events", "list_runs"],
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
@@ -3930,13 +3987,13 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
-  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "release", "retire_rider"],
+  "riders@1": ["add_rider", "finish_payouts", "get_rider", "list_riders", "offer", "prepare_payouts", "record_proof", "release", "retire_rider"],
   "s3@1": ["copy_object", "delete_object", "get_object", "head_object", "list_objects", "presign_url", "put_object"],
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
-  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "refund"],
+  "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "recent_customers", "refund"],
   "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
   "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],

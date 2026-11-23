@@ -15,8 +15,10 @@ import 'package:taskiem/chat/money_page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
+import 'things_fixture.dart' show spending;
 
 // Thursday 12 November 2026, 13:00 in Lagos.
 final _now = DateTime.utc(2026, 11, 12, 12);
@@ -164,6 +166,7 @@ void main() {
             sent.add('GET $p ${req.url.query}');
             return switch (p) {
               '/v1/money/summary' => ok(_summary),
+              '/v1/money/spending' => ok(spending),
               '/v1/money/unmatched' => ok({
                 'payments': [
                   {'entry_id': 'E1', 'amount_kobo': 300000},
@@ -217,6 +220,9 @@ void main() {
     handOffFile = (Uint8List bytes, String name, String type, Rect? from) async => shared.add('$name $type ${utf8.decode(bytes)}');
     addTearDown(() => handOffFile = was);
     final sent = await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
+    await settle(t); // the spending card reads after the period's money
+    expect(find.text('Spending by label'), findsOneWidget);
+    await looks(t, 'money');
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).first, 'GET /v1/money/summary from=2026-11-12&to=2026-11-12');
     expect(find.text('₦50,000'), findsWidgets);
     expect(find.text('₦1,000 more coming in'), findsOneWidget);
@@ -229,6 +235,7 @@ void main() {
     expect(find.textContaining('1.50% of the money they were taken on'), findsOneWidget);
     expect(find.textContaining('4 delivered · ₦8,500 paid at the door'), findsOneWidget);
     expect(find.text('owes ₦3,000'), findsOneWidget);
+    expect(sent, contains('GET /v1/money/spending from=2026-11-12&to=2026-11-12'));
     // The last bar that has begun is shown; another pressed.
     expect(find.text('11 am to noon  In ₦20,000 · Out ₦0'), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp('^9 am to 10 am')));

@@ -130,6 +130,29 @@ actions:
         reference: { type: string }
         status:    { type: string }
         rider:     { type: string }
+  record_proof:
+    title: Record a delivery's proof
+    description: "Records on an order's delivery the proof a form step asked its rider for (docs/spec/device-fields.md §6): the location answered (a form step's location field, as steps.<id>.output.<field>) and the photo (its photo field), each with the source Taskiem set. The delivery keeps the location only at its masked point (about 100 m) and is marked confirmed_at_door (read by the phone within 150 m of the customer's own pin), far_from_address, said_by_rider (a pin sent in a chat), read_by_phone (no pin from the customer to compare) or no_location. The business's Confirm card shows the pin, the photo and which was read by the phone and which was sent. A signature answer (a customer signing on the rider's phone) is kept beside them. Recording again replaces the location and the signature and adds the photo."
+    class: idempotent_write
+    idempotency:
+      field: idempotency_key
+      encoding: base32_lower
+      length: 32
+      prefix: "tsk_"
+      limits: { min_length: 16, max_length: 64, charset: "a-z0-9_-" }
+    input:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+        where:     { type: object, description: "A form step's location answer: {state, source, lat, lng, accuracy_m, coarse}" }
+        photo:     { type: object, description: "A form step's photo answer: {state, source, id}" }
+        signature: { type: object, description: "A form step's signature answer: {state, source, id}; the customer's signature drawn on the rider's phone (D2), shown on the Confirm card" }
+    output:
+      type: object
+      properties:
+        reference: { type: string }
+        mark:      { type: string, enum: [confirmed_at_door, far_from_address, said_by_rider, read_by_phone, no_location] }
   prepare_payouts:
     title: Add up what each rider is due
     description: Makes a payout batch once (the one named, or this run's) with each rider's fees for deliveries since their last payout, less the cash they owe; riders whose cash covers their fees are settled with nothing to pay, and riders with no bank account are named in not_paid. Each payout carries the rider's bank details for name enquiry and payment. The same batch again answers the same payouts.

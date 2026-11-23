@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/saved"
 )
 
 // The conversation (L3, docs/spec/business-links.md §5.5, §8): what two
@@ -27,6 +29,9 @@ const (
 	KindText  = "text"
 	KindCard  = "card"
 	KindDiary = "diary" // a change this side made, on this side only
+	// KindTaskiem is what Taskiem answered a "@Taskiem" typed here: on this
+	// side only, the words asked in Asked, the answer in Body.
+	KindTaskiem = "taskiem"
 )
 
 // MaxMessage is the most a message may say.
@@ -113,7 +118,7 @@ type Preview struct {
 // composer: a linked business ("@Dangote Stores") or an item of the
 // conversation's price list ("#Rice, 50 kg", with its unit and price).
 type Mention struct {
-	Kind      string    `json:"kind"` // business, item, service, invoice, bill, order or purchase
+	Kind      string    `json:"kind"` // business, item, service, invoice, bill, order, purchase or saved
 	Name      string    `json:"name"`
 	Link      uuid.UUID `json:"link,omitzero"` // a business, on our copy only
 	ItemID    string    `json:"item_id,omitempty"`
@@ -128,6 +133,9 @@ type Mention struct {
 	// when named, and our own id for it (Ref, on our copy only).
 	Ref    string `json:"ref,omitempty"`
 	Status string `json:"status,omitempty"`
+	// Saved is a saved thing shared (saved objects S1, part 3): a copy of
+	// it as it was when sent, its @name as Name, a card on both sides.
+	Saved *saved.Card `json:"saved,omitempty"`
 }
 
 // Quote is the message a reply quotes, as the reply shows it.
@@ -143,11 +151,13 @@ type Quote struct {
 
 // Message is one message of a conversation, as this side sees it.
 type Message struct {
-	PairID     uuid.UUID   `json:"id"`
-	LinkID     uuid.UUID   `json:"link"`
-	Mine       bool        `json:"mine"`
-	Kind       string      `json:"kind"`
-	Body       string      `json:"body,omitempty"`
+	PairID uuid.UUID `json:"id"`
+	LinkID uuid.UUID `json:"link"`
+	Mine   bool      `json:"mine"`
+	Kind   string    `json:"kind"`
+	Body   string    `json:"body,omitempty"`
+	// Asked is what was asked of Taskiem, on a note of kind taskiem.
+	Asked      string      `json:"asked,omitempty"`
 	SenderName string      `json:"sender_name,omitempty"`
 	Card       *DocCard    `json:"card,omitempty"`
 	Attachment *Attachment `json:"attachment,omitempty"`
@@ -182,7 +192,7 @@ type Conversation struct {
 	pinnedAt *time.Time
 }
 
-const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
+const messageCols = `m.pair_id, m.link_id, m.mine, m.kind, m.body, COALESCE(m.asked, ''), m.sender_name, m.card, m.attachment, m.forwarded, m.preview, m.mentions, m.read_at, m.created_at,
 	q.pair_id, q.mine, q.kind, q.body, q.card, q.attachment`
 
 const messageFrom = ` FROM link_messages m LEFT JOIN link_messages q ON q.tenant_id = m.tenant_id AND q.pair_id = m.reply_to`
@@ -193,7 +203,7 @@ func scanMessage(r pgx.Row) (Message, error) {
 	var qPair *uuid.UUID
 	var qMine *bool
 	var qKind, qBody *string
-	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
+	if err := r.Scan(&m.PairID, &m.LinkID, &m.Mine, &m.Kind, &m.Body, &m.Asked, &m.SenderName, &card, &att, &m.Forwarded, &prev, &ments, &m.ReadAt, &m.CreatedAt,
 		&qPair, &qMine, &qKind, &qBody, &qcard, &qatt); err != nil {
 		return m, err
 	}
@@ -212,6 +222,14 @@ func scanMessage(r pgx.Row) (Message, error) {
 	if ments != nil {
 		if err := json.Unmarshal(ments, &m.Mentions); err != nil {
 			return m, err
+		}
+		// A saved thing the sender shared is shown to them masked: the
+		// full values went to the other business (saved objects §6.2).
+		for i := range m.Mentions {
+			if m.Mine && m.Mentions[i].Saved != nil {
+				c := m.Mentions[i].Saved.Masked()
+				m.Mentions[i].Saved = &c
+			}
 		}
 	}
 	if prev != nil {
@@ -568,7 +586,7 @@ func SendWithTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body str
 	}
 	if replyTo != nil {
 		var ok bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND kind <> 'diary')`, tenant, link, *replyTo).Scan(&ok); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM link_messages WHERE tenant_id = $1 AND link_id = $2 AND pair_id = $3 AND kind NOT IN ('diary', 'taskiem'))`, tenant, link, *replyTo).Scan(&ok); err != nil {
 			return Message{}, uuid.Nil, err
 		}
 		if !ok {
@@ -738,6 +756,28 @@ func DiaryTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, body string
 	return scanMessage(row)
 }
 
+// TaskiemNoteTx keeps what Taskiem answered a "@Taskiem" typed in the
+// business in scope's conversation with a link: on this side only, never
+// seen by the other. client is the send's client id: a repeated send finds
+// this note (MessageByClientTx) rather than asking Taskiem again.
+func TaskiemNoteTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, asked, answer string, from Sender, client *uuid.UUID) (Message, error) {
+	asked, answer = cutRunes(strings.TrimSpace(asked), 1000), cutRunes(strings.TrimSpace(answer), 1000)
+	if asked == "" || answer == "" {
+		return Message{}, fmt.Errorf("%w: a note asks and answers something", ErrInvalid)
+	}
+	id := uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO link_messages (id, tenant_id, link_id, pair_id, mine, kind, body, asked, sender_name, sender_id, client_id)
+		VALUES ($1, $2, $3, $1, true, 'taskiem', $4, $5, $6, NULLIF($7, ''), $8)`, id, tenant, link, answer, asked, from.FirstName, from.ID, client); err != nil {
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "link_messages_client" {
+			return Message{}, ErrDuplicate
+		}
+		return Message{}, err
+	}
+	row := tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.id = $2`, tenant, id)
+	return scanMessage(row)
+}
+
 // ThreadTx is a document's thread in the business in scope: the cards of
 // the document (doc and reference, ours), and the messages quoting them,
 // oldest first.
@@ -789,6 +829,11 @@ func RecordSentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel stri
 	_, err := tx.Exec(ctx, `INSERT INTO link_chat_sent (tenant_id, channel, address_hash, message_id, link_id, pair_id) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING`, tenant, channel, addrHash, id, link, pair)
 	return err
+}
+
+// MessageTx is one message of a conversation, by its pair id.
+func MessageTx(ctx context.Context, tx pgx.Tx, tenant, link, pair uuid.UUID) (Message, error) {
+	return scanMessage(tx.QueryRow(ctx, `SELECT `+messageCols+messageFrom+` WHERE m.tenant_id = $1 AND m.link_id = $2 AND m.pair_id = $3`, tenant, link, pair))
 }
 
 // SentTx is the conversation's message a chat app's message to this

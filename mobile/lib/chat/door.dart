@@ -19,6 +19,7 @@ import 'attachments.dart';
 import 'bookings_page.dart' show orderStatus;
 import 'cards.dart' show CardButton, CardPill, CardProgress, CardViewRow, cardDecoration;
 import 'chats.dart' show ChatAvatar;
+import 'saved_card.dart' show SavedCardView;
 import 'thread.dart';
 import 'words.dart';
 
@@ -283,9 +284,7 @@ class DoorBubble extends StatelessWidget {
     final c = card;
     final words = a != null && _fileWords.contains(body) ? '' : (c != null && body == c.title ? '' : body);
     final name = (sender ?? '').isNotEmpty && first ? Text(sender!, style: tkText(size: 12, weight: 600, color: t.tintText)) : null;
-    // Your own words white on pine in the light (ownWords' ink): read here,
-    // outside the bubble, the theme's own ink would be dark on pine.
-    final ink = mine && TkTheme.of(context).mode != TkMode.dark ? const Color(0xFFFFFFFF) : t.text;
+    final ink = t.text;
     final Widget shown;
     if (c != null && a == null) {
       // A card is its own message, on the card's frame, not a bubble's.
@@ -302,7 +301,10 @@ class DoorBubble extends StatelessWidget {
               children: [
                 ?name,
                 if (offer) const OfferMark(),
-                DoorCard(card: c, action: cardAction, onAction: onCard),
+                if (c.type == 'saved' && c.saved != null)
+                  SavedCardView(card: c.saved!, mine: mine, onSave: onCard)
+                else
+                  DoorCard(card: c, action: cardAction, onAction: onCard),
                 if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
                 Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
               ],

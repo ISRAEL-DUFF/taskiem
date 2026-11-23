@@ -190,7 +190,14 @@ func TestLinkAutomation(t *testing.T) {
 	oil := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Oil", "quantity": 1, "unit": "keg", "cost_kobo": 3000000, "reorder_level": 5, "target_level": 12},
 		"Idempotency-Key", "o")["item"].(map[string]any)["id"].(string)
 	buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Garri", "quantity": 0, "unit": "bag", "reorder_level": 2, "target_level": 6}, "Idempotency-Key", "g")
-	buyer.must(200, "PUT", "/v1/item-links/"+link, map[string]any{"item_id": oil, "seller_item_id": sOil})
+	remembered := false
+	for _, l := range buyer.must(200, "PUT", "/v1/item-links/"+link, map[string]any{"item_id": oil, "seller_item_id": sOil})["item_links"].([]any) {
+		m := l.(map[string]any)
+		remembered = remembered || m["seller_item_id"] == sOil && m["treatment"] == "stock" && m["stock_item"] == "Oil"
+	}
+	if !remembered {
+		t.Fatal("their oil remembered as added to ours")
+	}
 	drainLinked(t, w.world)
 	buyer.must(201, "POST", "/v1/connections", map[string]any{"environment": "prod", "connector": "paystack@1", "name": "main", "mode": "test",
 		"credentials": map[string]string{"secret_key": "sk_test_good"}})

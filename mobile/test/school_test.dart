@@ -21,6 +21,8 @@ import 'package:taskiem/school/school_words.dart';
 import 'package:taskiem/school/students_page.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
+import 'saved_stub.dart';
 import 'school_fixture.dart';
 import 'support.dart';
 
@@ -61,12 +63,14 @@ void main() {
 
   testWidgets('the School tab: the term, what came in, what is owed, where to go', (t) async {
     await open(t, (c) => SchoolTab(auth: c.auth));
+    await looks(t, 'school');
     expect(find.text('FIRST TERM · 2026/2027'), findsOneWidget);
     expect(find.text('₦18,420,000'), findsOneWidget);
     expect(find.text('Tolu Adeyemi'), findsOneWidget, reason: 'owing the most');
     expect(find.text('Debtors and reminders'), findsOneWidget);
     await t.tap(find.text('Debtors and reminders'));
     await settle(t);
+    await looks(t, 'school-debtors');
     expect(find.text('Debtors'), findsWidgets);
     expect(find.text('Kemi Bello'), findsOneWidget);
   });
@@ -154,6 +158,20 @@ void main() {
     expect(find.text('418 students'), findsOneWidget);
     expect(find.text('Dami Ogun'), findsOneWidget);
     expect(find.text('Withdrawn'), findsWidgets);
+  });
+
+  testWidgets('a student added: the guardian’s phone from a saved person', (t) async {
+    final stub = SavedStub(mine: [savedThing('M1', 'mine', 'person', 'mrs-ogun', 'Mrs Ogun', '••4567', {'phone': '08031234567', 'email': 'ogun@example.com'})]);
+    await open(t, (c) => StudentsPage(auth: c.auth), also: (r) async => stub.answer(r));
+    await t.tap(find.bySemanticsLabel('Add a student'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number for the guardian'));
+    await settle(t);
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    await t.tap(find.text('Mrs Ogun'));
+    await settle(t);
+    expect(find.text('08031234567'), findsOneWidget);
+    expect(find.text('ogun@example.com'), findsNothing, reason: 'the phone only');
   });
 
   testWidgets('in the Taskiem chat: the school’s briefing, and cash waiting for this person', (t) async {

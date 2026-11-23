@@ -102,7 +102,7 @@ func TestStockSalesByChat(t *testing.T) {
 	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 10, "unit": "carton", "price_kobo": 1000000}, "Idempotency-Key", "i")
 	owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 5, "unit": "bag", "reorder_level": 5}, "Idempotency-Key", "r")
 
-	if r := w.say(t, on, "help"); !strings.Contains(r, "*sold 3 bags of rice 45,000 cash*") {
+	if r := w.say(t, on, "help all"); !strings.Contains(r, "*sold 3 bags of rice 45,000 cash*") {
 		t.Errorf("help: %q", r)
 	}
 	if r := w.say(t, on, "sold 3 cartons of indomie 30,000 cash"); !strings.Contains(r, "Sold 3 cartons Indomie for ₦30,000, in cash?") {

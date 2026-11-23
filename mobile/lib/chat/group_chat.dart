@@ -18,6 +18,7 @@
 // plainly (groups.dart, groupKeptWords) and nothing says they are
 // end-to-end encrypted.
 
+import 'saved_picks.dart';
 import 'dart:async';
 import 'dart:convert' show jsonEncode;
 
@@ -55,8 +56,12 @@ import 'people_place.dart';
 import 'people_search.dart' show PeopleSearchScreen;
 import 'people_standing.dart';
 import 'pick_problem.dart';
+import 'saved_card.dart';
 import 'thread.dart';
 import 'words.dart';
+import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
+import 'saved_files.dart' show attachSavedFile;
+import 'pay_collect.dart' show PayListBar;
 
 /// How often an open group reads again.
 const _poll = Duration(seconds: 4);
@@ -574,6 +579,31 @@ class GroupChatData extends ChangeNotifier {
     (client) => SendGroupMessageRequest(card: SendGroupMessageRequestCard.fromJson(card.toJson()), clientId: client),
   );
 
+  /// One of the person's own saved things, shared as a card (saved objects
+  /// S1), with [ask]'s yes when the server wants one first.
+  Future<bool> shareSaved(String saved, Future<bool> Function(String question) ask) async {
+    final what = 'saved:$saved';
+    final client = _clientFor(what);
+    try {
+      final sent = await sendSaved(
+        (confirm) => api.sendGroupMessage(id: id, body: SendGroupMessageRequest(card: SendGroupMessageRequestCard(type: 'saved', saved: SavedShare(id: saved, owner: 'mine', confirm: confirm)), clientId: client)),
+        ask,
+      );
+      if (sent == null || _disposed) return true;
+      messages = _merge(messages ?? const [], [GroupLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_group());
+      return true;
+    } on Object catch (e) {
+      _keepUnsure(e, what, client);
+      error = sendFailure(e);
+      toStanding = pointsToStanding(e);
+      _changed();
+      return false;
+    }
+  }
+
   void _replace(GroupMessage m) {
     if (_disposed) return;
     messages = _merge(messages ?? const [], [GroupLine(m)]);
@@ -817,6 +847,21 @@ class GroupChatScreen extends StatefulWidget {
 
 class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   final _text = TextEditingController();
+  // Saved texts by @name (saved objects S1): their words into the box.
+  late final _saved = savedTextBox(
+    text: _text,
+    auth: widget.data.auth,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    // Anything else of one's own: shared as a card (S1 part 3).
+    onShare: (s) => unawaited(d.shareSaved(s.id, askShare(context))),
+    mineOnly: true,
+    onSaveNamed: (name) => unawaited(saveNamed(context, d.auth, name)),
+    // A saved file: attached as itself, to send (S1).
+    onAttach: (s) => unawaited(attachSavedFile(context, d.auth, s, (f) => _composer.currentState?.choose(f))),
+  );
+  final _composer = GlobalKey<ComposerState>();
   StreamSubscription<String>? _back;
   GroupMessage? _reply;
   String? _paying;
@@ -847,6 +892,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       _text.text = w;
     });
     _text.addListener(_typed);
+    _text.addListener(_saved.typed);
     _life = AppLifecycleListener(
       onStateChange: (s) {
         if (s == AppLifecycleState.paused || s == AppLifecycleState.hidden) d.stopTyping();
@@ -886,6 +932,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     _back?.cancel();
     _life?.dispose();
     d.stopTyping();
+    _saved.dispose();
     _text.dispose();
     d.dispose();
     super.dispose();
@@ -1024,6 +1071,15 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       items: [
         if (write && live) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
         if (live && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (live && m.card == null && m.body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, d.auth, m.body)),
+        // A photo (reading account details from photos): read on the phone.
+        if (live && m.card == null && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/'))
+          ...photoAccountItems(
+            context,
+            d.auth,
+            '${d.base}/files/${Uri.encodeComponent(m.id)}',
+            from: (kind: 'group', chat: d.id, message: m.id, from: m.mine ? '' : m.sender),
+          ),
         if (live && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (live) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         if (m.mine && live) MenuItem('info', 'Info', () => showReadBy(context, d, m)),
@@ -1132,6 +1188,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       spans: (words, style) => mentionSpans(words, style, names: names, mine: _myNames, ink: look.limeInk, mark: look.lime.withValues(alpha: 0.35)),
       onOpenCard: m.card == null || m.card!.type == 'split'
           ? null
+          : m.card!.type == 'saved'
+          ? (m.card!.saved == null ? null : () => saveSavedCard(context, d.auth, m.card!.saved!))
           : m.card!.type == 'basket'
           ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
           : () => showPeopleCard(
@@ -1254,7 +1312,9 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
               child: Column(
                 children: [
                   ColoredBox(
-                    color: t.chatWallpaper,
+                    // The head on a bar of its own, as WhatsApp's (under the phone's
+                    // status bar too), apart from the wallpaper.
+                    color: t.panel,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
@@ -1264,7 +1324,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                         avatar: PersonFace(name: name, transport: d.auth.transport, photo: g?.photo, size: 40, letterSize: 15),
                         title: name,
                         subtitle: groupHeadLine(g, typing: d.offline ? const [] : typing, offline: d.offline),
-                        actions: [ChatHeadBar.iconButton('Search this group', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), g == null ? null : _search)],
+                        actions: [ChatHeadBar.headButton('Search this group', TkIcon('b-search', size: 22, stroke: 2.2, color: t.text), g == null ? null : _search)],
                       ),
                     ),
                   ),
@@ -1295,8 +1355,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
                     ),
                   ?notice,
                   if (suggest.isNotEmpty) _MentionPicker(members: suggest, transport: d.auth.transport, onPick: _mention),
+                  // The people to pay collected from messages (pay_collect.dart).
+                  PayListBar(auth: d.auth),
+                  if (d.canSend) _saved.plain(),
                   if (d.canSend)
                     Composer(
+                      key: _composer,
                       text: _text,
                       bottom: pad.bottom,
                       rules: doorFiles,

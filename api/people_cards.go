@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -48,9 +49,12 @@ func (a *payoutAccount) check() error {
 
 // peopleCard is a card in a people chat.
 type peopleCard struct {
-	// Type: product, business, order, delivery or split ("your share").
+	// Type: product, business, order, delivery, split ("your share"), basket
+	// or saved (a saved thing shared).
 	Type  string `json:"type"`
 	Title string `json:"title"`
+	// Saved is the saved thing shared, as it was when sent.
+	Saved *saved.Card `json:"saved,omitempty"`
 	// The business shared, or the business of the product, order or
 	// delivery.
 	BusinessID *uuid.UUID `json:"business_id,omitempty"`
@@ -91,6 +95,9 @@ type cardRequest struct {
 	AmountKobo int64          `json:"amount_kobo"`
 	What       string         `json:"what"`
 	PayTo      *payoutAccount `json:"pay_to"`
+	// Saved is one of the sender's own saved things (type saved; saved
+	// objects S1): shared as a copy of it now (saved_share.go).
+	Saved *savedShare `json:"saved"`
 }
 
 // enterCardTx goes through the card door into a business, as the person.

@@ -354,6 +354,15 @@ func (a *Alerter) record(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r *ru
 // dedup key, and queues it to every enabled channel. tx must have the
 // tenant in scope.
 func Notify(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, al Alert) (bool, error) {
+	// alerts has no unique index when rule_id IS NULL, so two transactions
+	// at once could each see none and both insert: they take a lock on the
+	// tenant, kind and dedup key first, and the second, once the first
+	// commits, sees its alert (each statement reads afresh under READ
+	// COMMITTED). PR review fix.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('alerts.notify ' || $1::text || ' ' || $2 || ' ' || $3, 0))`,
+		tenant, al.Kind, al.Dedup); err != nil {
+		return false, err
+	}
 	var exists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM alerts WHERE tenant_id = $1 AND rule_id IS NULL AND kind = $2 AND dedup_key = $3)`,
 		tenant, al.Kind, al.Dedup).Scan(&exists); err != nil || exists {

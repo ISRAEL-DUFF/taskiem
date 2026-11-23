@@ -89,6 +89,17 @@ type Limits struct {
 	// day (business links §13); 0: no limit.
 	LinkMessagesDaily int64 `json:"link_messages_daily"`
 
+	// MaxSavedObjects: the saved things a business may keep (saved objects
+	// §15 6): 2,000 by default, more on higher plans; 0: no limit. A
+	// person's own are capped apart (500).
+	MaxSavedObjects int `json:"max_saved_objects"`
+
+	// MaxPages: the pages a business may make (pages §12; decision 0072),
+	// drafts counted: 10 on the lowest plan, 50 on the middle, none above;
+	// 0: no limit. A business over it after a move to a lower plan keeps
+	// its pages and cannot add more.
+	MaxPages int `json:"max_pages"`
+
 	// The plan (when billing is on) and its subscription status: a
 	// sub-tenant's are its partner's. Set by the store.
 	plan, billing string
@@ -191,6 +202,8 @@ var LimitKeys = []struct{ Key, Help string }{
 	{"sms_monthly", "SMS to customers per UTC month; beyond it only verification codes are sent (0: no limit)"},
 	{"embed_sites", "websites that may embed the storefront and forms (0: no limit)"},
 	{"link_messages_daily", "messages to linked businesses per UTC day; more are refused (0: no limit)"},
+	{"max_saved_objects", "saved things a business keeps (accounts, people, places, texts, files); more are refused (0: no limit)"},
+	{"max_pages", "pages a business makes, drafts counted; more are refused (0: no limit)"},
 }
 
 // DefaultEmbedSites is the platform's default number of websites that
@@ -216,6 +229,14 @@ const (
 	DefaultMaxDataTableColumns = 50
 )
 
+// DefaultMaxSavedObjects is the platform's default number of saved things a
+// business keeps: the lowest plan's (saved objects §15 6).
+const DefaultMaxSavedObjects = 2000
+
+// DefaultMaxPages is the platform's default number of pages a business
+// makes: the lowest plan's (pages §16, 6).
+const DefaultMaxPages = 10
+
 // MaxPayload is the largest delivery any tenant may be allowed.
 const MaxPayload = 10 << 20
 
@@ -235,6 +256,8 @@ func DefaultLimits() Limits {
 		MaxDataTables:            DefaultMaxDataTables,
 		MaxDataTableColumns:      DefaultMaxDataTableColumns,
 		EmbedSites:               DefaultEmbedSites,
+		MaxSavedObjects:          DefaultMaxSavedObjects,
+		MaxPages:                 DefaultMaxPages,
 	}
 }
 

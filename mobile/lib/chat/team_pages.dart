@@ -1,8 +1,9 @@
 // The team (web Staff.tsx, StaffPerson.tsx, Tasks.tsx; lib/team.ts,
 // lib/tasks.ts): the people of the business, added by phone (they join from
 // a WhatsApp message), who is in today and who is late, the invitations
-// waiting, a person's job, hours, pay for the record and how they are
-// doing; and tasks: the person's own (I'll do it, Done, with a photo when
+// waiting, a person's job, hours, pay for the record, the account they are
+// paid to outside payroll (linked by an owner with a passkey; Pay on it) and
+// how they are doing; and tasks: the person's own (I'll do it, Done, with a photo when
 // asked, Can't), and for those who give them, everyone's (Remind, Give to
 // someone else, Call off) and those that repeat.
 
@@ -10,7 +11,9 @@ import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 
 import '../app/lock.dart' show stepOut;
-import '../api/api.g.dart' show ListStaffTasksResponsePeopleItem;
+import '../api/api.g.dart' show ListStaffTasksResponsePeopleItem, Payment, PutStaffPayAccountRequest, SavedObject;
+import '../api/transport.dart' show ApiError;
+import '../app/passkey.dart' show passkeyProof;
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
@@ -24,6 +27,9 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show dayLabel;
 import 'give_task.dart' show GiveTask, roleWords, weekdays, whoChoices;
+import 'groups.dart' show askSure, pickOneOf;
+import 'pay_sheet.dart' show PaySheet, paymentSentWords, staffPayAction;
+import 'payroll_page.dart' show PayrollStaffPage, maySeePayroll;
 import 'money_sheets.dart' show dateLabel;
 import 'words.dart' show CardTone, naira;
 import '../kit/icon.dart';
@@ -32,6 +38,7 @@ import '../kit/mobile.dart';
 import '../theme/look.dart';
 import 'storefront_orders_page.dart' show groupedPhone, whatsappLink;
 import 'pick_problem.dart';
+import 'saved_fill.dart' show SavedButton, pickSavedPhone;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -559,6 +566,20 @@ class _AddStaffState extends State<_AddStaff> {
     super.dispose();
   }
 
+  /// A saved person's or place's phone (saved objects §6.4): the phone
+  /// only, one picker at a time.
+  bool _picking = false;
+  Future<void> _phoneFromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final v = await pickSavedPhone(context, widget.auth);
+      if (v != null && mounted) _phone.text = v;
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -577,7 +598,13 @@ class _AddStaffState extends State<_AddStaff> {
         TkKitField(
           label: 'Their mobile number',
           hint: 'Taskiem sends them a WhatsApp message to join.',
-          child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
+          child: Row(
+            children: [
+              Expanded(child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567')),
+              const SizedBox(width: 8),
+              SavedButton(semantics: 'Pick a saved phone number', picking: _picking, busy: _busy, onPressed: _phoneFromSaved),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         TkKitField(
@@ -641,14 +668,22 @@ class _AddStaffState extends State<_AddStaff> {
   }
 }
 
+/// A staff member's linked account, masked: "Moniepoint ••1234".
+String payAccountWords(Map<String, dynamic> a) =>
+    [_str(a['bank_name']), if (_str(a['last4']).isNotEmpty) '••${_str(a['last4'])}'].where((w) => w.isNotEmpty).join(' ');
+
+/// The step-up operation for where a staff member is paid.
+const staffOpAccount = 'staff.account';
+
 // --- one person ---
 
 /// One person of the business: their job, usual hours and pay for the
 /// record, and how they are doing.
 class StaffPersonPage extends StatefulWidget {
-  const StaffPersonPage({super.key, required this.auth, required this.user, this.canRemove = false});
+  const StaffPersonPage({super.key, required this.auth, required this.user, this.canRemove = false, this.backLabel = 'Back to Team'});
   final Auth auth;
   final String user;
+  final String backLabel;
 
   /// Someone other than the person looking: Remove from the business.
   final bool canRemove;
@@ -663,6 +698,7 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
   String _period = 'week';
   Map<String, dynamic>? _figures;
   String? _figuresError;
+  bool _busy = false;
 
   String get _path => '/v1/staff/${Uri.encodeComponent(widget.user)}';
 
@@ -701,6 +737,164 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
     }
   }
 
+  bool get _owner => (widget.auth.me?.roles as List?)?.contains('owner') ?? false;
+
+  /// The account linked sent (null unlinks it): asked first with no
+  /// proof, so what stops it is said before the passkey is asked for;
+  /// then the passkey for the staff member (staff.account on their id).
+  Future<void> _putAccount(String? savedId) async {
+    Future<void> send(Map<String, dynamic>? passkey) =>
+        widget.auth.api.putStaffPayAccount(user: widget.user, body: PutStaffPayAccountRequest(savedId: savedId, passkey: passkey));
+    try {
+      await send(null);
+    } on ApiError catch (e) {
+      if (e.status != 403 || e.body['step_up'] == null) rethrow;
+      await send(await passkeyProof(widget.auth, _str(e.body['operation']).ifEmpty(staffOpAccount), _str(e.body['target']).ifEmpty(widget.user)));
+    }
+  }
+
+  /// Link an account (or change it): one of the business's saved bank
+  /// accounts, picked, asked, and confirmed with a passkey.
+  Future<void> _link(String name, Map<String, dynamic>? now) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final List<SavedObject> list;
+      try {
+        list = (await widget.auth.api.listSaved(kind: 'bank_account')).saved.where((x) => x.kind == 'bank_account').toList();
+      } on Object catch (e) {
+        if (mounted) showTkToast(context, errorWords(e), error: true);
+        return;
+      }
+      if (!mounted) return;
+      if (list.isEmpty) {
+        showTkToast(context, 'The business has no saved bank accounts yet: save theirs under Saved first.', error: true);
+        return;
+      }
+      String titleOf(SavedObject x) => x.title.isEmpty ? '@${x.name}' : x.title;
+      final was = now == null ? null : _str(now['saved_id']);
+      final id = await pickOneOf(
+        context,
+        title: 'Where we pay $name',
+        icon: 'b-bank',
+        searchHint: list.length > 8 ? 'Search saved accounts' : null,
+        choices: [
+          for (final x in list)
+            if (x.id != was) (x.id, titleOf(x), ['@${x.name}', x.hint].where((w) => w.isNotEmpty).join(' · ')),
+        ],
+      );
+      if (id == null || !mounted) return;
+      final x = list.firstWhere((x) => x.id == id);
+      final yes = await askSure(
+        context,
+        title: 'Pay $name here from now on?',
+        body: '${[titleOf(x), x.hint].where((w) => w.isNotEmpty).join(': ')}. Pay on their page goes there. You confirm with your passkey.',
+        ok: now == null ? 'Link it' : 'Change it',
+        cancel: 'Not now',
+      );
+      if (!yes || !mounted) return;
+      await _putAccount(id);
+      if (!mounted) return;
+      showTkToast(context, now == null ? 'Linked' : 'Changed');
+      await _load();
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _unlink(String name) async {
+    if (_busy) return;
+    final yes = await askSure(
+      context,
+      title: 'Unlink $name’s account?',
+      body: 'Pay on their page stops until an account is linked again. The saved account stays saved.',
+      ok: 'Unlink',
+      cancel: 'Keep it',
+      danger: true,
+    );
+    if (!yes || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await _putAccount(null);
+      if (!mounted) return;
+      showTkToast(context, 'Unlinked');
+      await _load();
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Pay on a staff member: the Pay sheet, to the account linked to them,
+  /// for wages unless changed.
+  Future<void> _pay(String name) async {
+    final paid = await showTkSheet<Payment>(
+      context,
+      (_) => PaySheet(auth: widget.auth, action: staffPayAction(name), staffId: widget.user, initial: const {'for': 'wages'}, from: 'tools'),
+    );
+    if (paid != null && mounted) showTkToast(context, '${paymentSentWords(paid)}: ${naira(paid.amountKobo)} to $name');
+  }
+
+  /// Where we pay them: the account linked (masked), Pay, and for owners
+  /// Link, Change, Unlink; salaries are Payrolla's.
+  Widget _whereWePay(TkLook look, Map<String, dynamic> p, String name) {
+    final a = p['pay_account'] is Map ? _map(p['pay_account']) : null;
+    final owner = _owner;
+    return TkSection(
+      title: 'Where we pay them',
+      inset: 56,
+      children: [
+        if (a != null)
+          TkListRow(
+            title: _str(a['title']).isNotEmpty ? _str(a['title']) : '@${_str(a['name'])}',
+            sub: [payAccountWords(a), _str(a['account_name'])].where((w) => w.isNotEmpty).join(' · '),
+            icon: 'b-bank',
+            square: look.teal,
+            chevron: false,
+          )
+        else
+          TkListRow(
+            title: 'No account linked',
+            sub: owner ? 'Link one of the business’s saved accounts' : 'An owner links one of the business’s saved accounts',
+            icon: 'b-bank',
+            square: look.violet,
+            chevron: false,
+          ),
+        if (a != null && widget.auth.can('money.pay'))
+          TkListRow(title: 'Pay $name', sub: 'To this account, outside payroll', icon: 'b-cash', square: look.lime, semanticsLabel: 'Pay $name', onTap: () => _pay(name)),
+        if (owner)
+          TkListRow(
+            title: a == null ? 'Link an account' : 'Change the account',
+            sub: 'Confirmed with your passkey',
+            icon: 'b-key',
+            square: look.blue,
+            semanticsLabel: a == null ? 'Link an account for $name' : 'Change where $name is paid',
+            onTap: _busy ? null : () => _link(name, a),
+          ),
+        if (owner && a != null)
+          TkListRow(title: 'Unlink', sub: 'The saved account stays saved', icon: 'b-x', square: look.red, semanticsLabel: 'Unlink $name’s account', onTap: _busy ? null : () => _unlink(name)),
+        if (maySeePayroll(widget.auth))
+          () {
+            final pr = p['payrolla'] is Map ? _map(p['payrolla']) : null;
+            final who = pr == null ? '' : _str(pr['name']);
+            return TkListRow(
+              title: pr == null ? 'In Payrolla' : 'In Payrolla: ${who.isEmpty ? 'linked' : who}',
+              sub: pr == null ? 'Not linked yet · salaries are paid through Payrolla' : 'Their salary is paid through Payrolla',
+              icon: 'b-calendar',
+              square: look.orange,
+              semanticsLabel: pr == null ? '$name is not linked in Payrolla. Staff in Payrolla' : '$name is $who in Payrolla. Staff in Payrolla',
+              onTap: () => _push(context, PayrollStaffPage(auth: widget.auth, backLabel: 'Back to $name')).then((_) => _load()),
+            );
+          }()
+        else
+          TkListRow(title: 'Salaries', sub: 'Paid through Payrolla, not here', icon: 'b-calendar', square: look.orange, chevron: false),
+      ],
+    );
+  }
+
   Future<void> _remove(Map<String, dynamic> p, String name) async {
     final yes = await showTkConfirm(
       context,
@@ -735,7 +929,7 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
     return TkPageScreen(
       title: p == null ? 'Staff' : name,
       titleSize: 22,
-      backLabel: 'Back to Team',
+      backLabel: widget.backLabel,
       onRefresh: () async {
         await _load();
         await _loadFigures();
@@ -795,6 +989,7 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
               if (_str(pr['note']).isNotEmpty) TkListRow(title: 'Note', sub: _str(pr['note']), icon: 'b-note', square: look.violet, onTap: () => _change(name, pr)),
             ],
           ),
+        if (p != null) _whereWePay(look, p, name),
         if (p != null && widget.canRemove)
           TkSection(
             inset: 56,

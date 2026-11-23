@@ -18,8 +18,10 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/spend"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -38,6 +40,8 @@ var (
 	ErrNoPurchase = errors.New("stock: no such purchase order")
 	// ErrPurchase: the order cannot do that now (its status, a line).
 	ErrPurchase = errors.New("stock: that does not fit the order")
+	// ErrKeyUsed: a payment's Idempotency-Key paid another order already.
+	ErrKeyUsed = errors.New("stock: key used already")
 	// ErrSecondApproval: the order is above the business's limit and was
 	// drafted by the person approving it.
 	ErrSecondApproval = errors.New("stock: a second person approves this order")
@@ -94,12 +98,9 @@ type Purchases struct {
 	// PageBase is the form host's address, where the business's tap-in
 	// page is; "" sends no link.
 	PageBase string
-	// Stock sends the received movements to the table.
+	// Stock reads the items for drafting.
 	Stock *Stock
-	// Cost sets an item's cost price in the catalogue after a receipt;
-	// nil leaves it.
-	Cost func(ctx context.Context, tenant uuid.UUID, row string, kobo int64, key string) error
-	Now  func() time.Time
+	Now   func() time.Time
 }
 
 func (p *Purchases) now() time.Time {
@@ -568,20 +569,6 @@ func PutSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, s Settings,
 
 // --- purchase orders ---
 
-// PurchaseLine is one item of an order.
-type PurchaseLine struct {
-	ItemID   string `json:"item_id"`
-	Item     string `json:"item"`
-	Unit     string `json:"unit,omitempty"`
-	Quantity int64  `json:"quantity"`
-	// CostKobo is the price of one, the item's last cost when drafted.
-	CostKobo int64 `json:"cost_kobo"`
-	Received int64 `json:"received"`
-	// Delivered is what a linked supplier says it delivered, mirrored
-	// from its order (docs/spec/business-links.md §7); nil otherwise.
-	Delivered *int64 `json:"delivered,omitempty"`
-}
-
 // Purchase is a purchase order.
 type Purchase struct {
 	ID           uuid.UUID      `json:"id"`
@@ -649,15 +636,15 @@ func (x Purchase) Words() string {
 	return strings.Join(parts, ", ")
 }
 
-const purchaseCols = `o.id, o.reference, o.supplier_id, s.name, o.lines, o.total_kobo, o.status, o.note, o.drafted_by, o.approved_by, o.sent_at,
+const purchaseCols = `o.id, o.reference, o.supplier_id, s.name, o.total_kobo, o.status, o.note, o.drafted_by, o.approved_by, o.sent_at,
 	o.confirmed_at, o.confirmed_how, o.counter, o.counter_at, o.received_at, o.cancelled_at, o.received_kobo, o.paid_kobo, o.created_at,
 	o.link_id, o.seller_status, o.seller_note, o.change, o.delivered_at, o.cancel_asked_at, o.short_at, o.short, o.invoiced_at,
 	o.offer, o.deal_history, o.deal_until`
 
 func scanPurchase(r pgx.Row) (Purchase, error) {
 	var x Purchase
-	var lines, change, short []byte
-	err := r.Scan(&x.ID, &x.Reference, &x.SupplierID, &x.Supplier, &lines, &x.TotalKobo, &x.Status, &x.Note, &x.DraftedBy, &x.ApprovedBy, &x.SentAt,
+	var change, short []byte
+	err := r.Scan(&x.ID, &x.Reference, &x.SupplierID, &x.Supplier, &x.TotalKobo, &x.Status, &x.Note, &x.DraftedBy, &x.ApprovedBy, &x.SentAt,
 		&x.ConfirmedAt, &x.ConfirmedHow, &x.Counter, &x.CounterAt, &x.ReceivedAt, &x.CancelledAt, &x.ReceivedKobo, &x.PaidKobo, &x.CreatedAt,
 		&x.LinkID, &x.SellerStatus, &x.SellerNote, &change, &x.DeliveredAt, &x.CancelAskedAt, &x.ShortAt, &short, &x.InvoicedAt,
 		&x.Offer, &x.DealHistory, &x.DealUntil)
@@ -678,7 +665,46 @@ func scanPurchase(r pgx.Row) (Purchase, error) {
 			return x, err
 		}
 	}
-	return x, json.Unmarshal(lines, &x.Lines)
+	return x, nil
+}
+
+// onePurchase reads an order and its lines.
+func onePurchase(ctx context.Context, tx pgx.Tx, r pgx.Row) (Purchase, error) {
+	x, err := scanPurchase(r)
+	if err != nil {
+		return x, err
+	}
+	x.Lines, err = LinesTx(ctx, tx, x.ID)
+	if x.Lines == nil {
+		x.Lines = []PurchaseLine{}
+	}
+	return x, err
+}
+
+// manyPurchases reads orders and their lines.
+func manyPurchases(ctx context.Context, tx pgx.Tx, rows pgx.Rows, err error) ([]Purchase, error) {
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Purchase, error) { return scanPurchase(r) })
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(list))
+	for i, x := range list {
+		ids[i] = x.ID
+	}
+	lines, err := linesOfTx(ctx, tx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].Lines = lines[list[i].ID]
+		if list[i].Lines == nil {
+			list[i].Lines = []PurchaseLine{}
+		}
+	}
+	return list, nil
 }
 
 // PurchaseTx is one order, by id; lock takes it for update.
@@ -687,12 +713,12 @@ func PurchaseTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, lock bool)
 	if lock {
 		q += ` FOR UPDATE OF o`
 	}
-	return scanPurchase(tx.QueryRow(ctx, q, tenant, id))
+	return onePurchase(ctx, tx, tx.QueryRow(ctx, q, tenant, id))
 }
 
 // PurchaseByReferenceTx is one order, by its reference (P-7QX4KD).
 func PurchaseByReferenceTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ref string) (Purchase, error) {
-	return scanPurchase(tx.QueryRow(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
+	return onePurchase(ctx, tx, tx.QueryRow(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND o.reference = upper($2)`, tenant, strings.TrimSpace(ref)))
 }
 
@@ -702,6 +728,8 @@ type PurchaseFilter struct {
 	// Open lists only those not received or cancelled.
 	Open  bool
 	Limit int
+	// Offset is where the page starts, newest first.
+	Offset int
 }
 
 // PurchasesTx lists orders, the newest first.
@@ -712,11 +740,8 @@ func PurchasesTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, f PurchaseFil
 	rows, err := tx.Query(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND ($2::uuid IS NULL OR o.supplier_id = $2)
 		  AND (NOT $3 OR o.status IN ('drafted', 'sent', 'confirmed', 'part_received'))
-		ORDER BY o.created_at DESC, o.id DESC LIMIT $4`, tenant, f.Supplier, f.Open, f.Limit)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Purchase, error) { return scanPurchase(r) })
+		ORDER BY o.created_at DESC, o.id DESC LIMIT $4 OFFSET $5`, tenant, f.Supplier, f.Open, f.Limit, max(f.Offset, 0))
+	return manyPurchases(ctx, tx, rows, err)
 }
 
 // MaxPurchaseKobo is the most an order, a payment or a limit may be:
@@ -730,16 +755,11 @@ func checkLines(lines []PurchaseLine) (int64, error) {
 	if len(lines) == 0 || len(lines) > MaxPurchaseLines {
 		return 0, fmt.Errorf("%w: an order has 1 to %d items", ErrPurchase, MaxPurchaseLines)
 	}
-	seen := map[string]bool{}
 	var total int64
 	for _, l := range lines {
-		if l.ItemID == "" || strings.TrimSpace(l.Item) == "" {
+		if strings.TrimSpace(l.Item) == "" {
 			return 0, fmt.Errorf("%w: each line names an item", ErrPurchase)
 		}
-		if seen[l.ItemID] {
-			return 0, fmt.Errorf("%w: %s is on the order twice", ErrPurchase, l.Item)
-		}
-		seen[l.ItemID] = true
 		if l.Quantity <= 0 || l.Quantity > MaxDelta {
 			return 0, fmt.Errorf("%w: how many %s is a whole number from 1", ErrPurchase, l.Item)
 		}
@@ -754,12 +774,91 @@ func checkLines(lines []PurchaseLine) (int64, error) {
 	return total, nil
 }
 
+// checkTwice refuses an item twice on an order: the same item of a
+// linked supplier, or two lines by hand into the same stock item.
+func checkTwice(lines []PurchaseLine) error {
+	seen := map[string]bool{}
+	for _, l := range lines {
+		k := ""
+		switch {
+		case l.SellerItemID != "":
+			k = "s:" + l.SellerItemID
+		case l.Treatment == AddToStock && l.StockItemID != nil:
+			k = "i:" + l.StockItemID.String()
+		default:
+			continue
+		}
+		if seen[k] {
+			return fmt.Errorf("%w: %s is on the order twice", ErrPurchase, l.Item)
+		}
+		seen[k] = true
+	}
+	return nil
+}
+
+// PutNewLinesTx writes a new order's lines (the order is written
+// already), each treated as said on it, else as remembered, else as
+// suggested (treatLinesTx). A remembered tracked line of more than
+// TrackAsk not said yes to (TrackMany) is a *TrackError for the caller to
+// ask.
+func PutNewLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string) error {
+	return putNewLinesTx(ctx, tx, tenant, order, supplier, lines, actor, true)
+}
+
+// PutPlacedLinesTx is PutNewLinesTx for an order someone else placed for
+// the business (a linked supplier), whom nothing about the business's
+// treatment of its items is asked or told (§7): a line that would ask
+// first is recorded and left unconfirmed, for the business to say.
+func PutPlacedLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string) error {
+	return putNewLinesTx(ctx, tx, tenant, order, supplier, lines, actor, false)
+}
+
+func putNewLinesTx(ctx context.Context, tx pgx.Tx, tenant, order, supplier uuid.UUID, lines []PurchaseLine, actor string, ask bool) error {
+	link, err := supplierLinkTx(ctx, tx, tenant, supplier, &order)
+	if err != nil {
+		return err
+	}
+	if link != nil {
+		// A line by hand into a stock item, to a linked supplier: the one
+		// item of theirs remembered as going into it, so the order reaches
+		// them as their own item.
+		for i := range lines {
+			l := &lines[i]
+			if l.SellerItemID != "" || l.Treatment != AddToStock || l.StockItemID == nil {
+				continue
+			}
+			rows, err := tx.Query(ctx, `SELECT seller_item_id FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND stock_item_id = $3 LIMIT 2`,
+				tenant, *link, *l.StockItemID)
+			if err != nil {
+				return err
+			}
+			ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return err
+			}
+			if len(ids) == 1 {
+				l.SellerItemID = ids[0]
+			}
+		}
+	}
+	if err := treatLinesTx(ctx, tx, tenant, supplier, link, lines, actor, ask); err != nil {
+		return err
+	}
+	if err := checkTwice(lines); err != nil {
+		return err
+	}
+	return insertLinesTx(ctx, tx, tenant, order, lines)
+}
+
 // DraftIn is an order to draft.
 type DraftIn struct {
 	Supplier uuid.UUID
-	Lines    []PurchaseLine
-	Note     string
-	Actor    string
+	// Lines: each its item's name, unit, quantity and price; on an order
+	// to a linked supplier its SellerItemID; and how it is treated, when
+	// said (else as remembered, else as suggested).
+	Lines []PurchaseLine
+	Note  string
+	Actor string
 	// Key drafts it once: the same key is the same order.
 	Key string
 }
@@ -779,7 +878,7 @@ func DraftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in DraftIn) (Purc
 	}
 	for i := range in.Lines {
 		in.Lines[i].Received = 0
-		in.Lines[i].Item = cut(strings.TrimSpace(in.Lines[i].Item), 120)
+		in.Lines[i].Item = cut(strings.Join(strings.Fields(in.Lines[i].Item), " "), 120)
 	}
 	total, err := checkLines(in.Lines)
 	if err != nil {
@@ -796,11 +895,13 @@ func DraftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in DraftIn) (Purc
 	if err != nil {
 		return Purchase{}, err
 	}
-	lines, _ := json.Marshal(in.Lines)
 	id = uuid.Must(uuid.NewV7())
 	ref := reference("P")
-	if _, err := tx.Exec(ctx, `INSERT INTO purchase_orders (id, tenant_id, reference, supplier_id, lines, total_kobo, note, drafted_by, key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, tenant, ref, in.Supplier, lines, total, strings.TrimSpace(in.Note), in.Actor, in.Key); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO purchase_orders (id, tenant_id, reference, supplier_id, total_kobo, note, drafted_by, key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, id, tenant, ref, in.Supplier, total, strings.TrimSpace(in.Note), in.Actor, in.Key); err != nil {
+		return Purchase{}, err
+	}
+	if err := PutNewLinesTx(ctx, tx, tenant, id, in.Supplier, in.Lines, in.Actor); err != nil {
 		return Purchase{}, err
 	}
 	if err := stockAudit(ctx, tx, tenant, "purchase.drafted", ref, map[string]any{"purchase_id": id, "supplier": supplier, "total_kobo": total, "by": in.Actor}); err != nil {
@@ -809,10 +910,36 @@ func DraftTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in DraftIn) (Purc
 	return PurchaseTx(ctx, tx, tenant, id, false)
 }
 
+// LineOf is a line adding to an item's stock: a product's (its stock
+// item, by its uses) or a material's, at its cost when cost is nil. A
+// product counted by nothing yet starts being counted (StartCountingTx).
+func LineOf(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, it Item, quantity int64, cost *int64, actor string) (PurchaseLine, error) {
+	l := PurchaseLine{Item: it.Name, Unit: it.SaleUnit(), Quantity: quantity, Treatment: AddToStock, Uses: max(it.Uses, 1)}
+	switch {
+	case cost != nil:
+		l.CostKobo = *cost
+	case it.CostKobo != nil:
+		// One of the line is one sale of the product: its uses.
+		l.CostKobo = *it.SaleCostKobo()
+	}
+	sid, err := uuid.Parse(it.StockItemID)
+	if err != nil {
+		if it.HasSizes() {
+			return l, fmt.Errorf("%w: %s comes in sizes and colours: order each one", ErrPurchase, it.Name)
+		}
+		if sid, err = StartCountingTx(ctx, tx, tenant, it.ID, it.Name, it.Unit, actor); err != nil {
+			return l, err
+		}
+		l.Uses = 1
+	}
+	l.StockItemID = &sid
+	return l, nil
+}
+
 // DraftLowTx drafts an order per supplier for the low items naming a
 // current supplier and on no open order, each for its suggested quantity
-// at its last cost. skipped names the low items with no supplier Taskiem
-// knows.
+// at its last cost, added to its stock item. skipped names the low items
+// with no supplier Taskiem knows.
 func (p *Purchases) DraftLowTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Item, actor, key string) (drafted []Purchase, skipped []string, err error) {
 	// Drafted already under this key: the same answer. Its orders are keyed
 	// "<key>:<supplier id>", matched exactly (a key's _ or % is no
@@ -841,38 +968,35 @@ func (p *Purchases) DraftLowTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	if err != nil {
 		return nil, nil, err
 	}
-	onOrder := map[string]bool{}
-	rows, err = tx.Query(ctx, `SELECT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
-		WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, tenant)
+	// The stock items on an open order: a low stock item counting two
+	// products is ordered once.
+	onOrder, err := OnOrderTx(ctx, tx, tenant)
 	if err != nil {
 		return nil, nil, err
-	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, id := range ids {
-		onOrder[id] = true
 	}
 	by := map[uuid.UUID][]PurchaseLine{}
 	var order []uuid.UUID
 	for _, it := range Low(items) {
-		if onOrder[it.ID] {
+		sid, perr := uuid.Parse(it.StockItemID)
+		if it.OnOrder(onOrder) || perr != nil {
 			continue
 		}
+		onOrder[it.StockItemID] = true
 		s, _, err := FindSupplier(suppliers, it.Supplier)
 		if it.Supplier == "" || err != nil || !strings.EqualFold(s.Name, strings.TrimSpace(it.Supplier)) {
 			skipped = append(skipped, it.Name)
 			continue
 		}
+		if _, ok := by[s.ID]; !ok {
+			order = append(order, s.ID)
+		}
+		// What is low is the stock item: its line is counted in it, one of
+		// the line one of the stock item, at its cost.
 		var cost int64
 		if it.CostKobo != nil {
 			cost = *it.CostKobo
 		}
-		if _, ok := by[s.ID]; !ok {
-			order = append(order, s.ID)
-		}
-		by[s.ID] = append(by[s.ID], PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: it.Suggest(), CostKobo: cost})
+		by[s.ID] = append(by[s.ID], PurchaseLine{Item: it.Name, Unit: it.Unit, Quantity: it.Suggest(), CostKobo: cost, Treatment: AddToStock, StockItemID: &sid, Uses: 1})
 	}
 	for _, sid := range order {
 		x, err := DraftTx(ctx, tx, tenant, DraftIn{Supplier: sid, Lines: by[sid], Actor: actor, Key: key + ":" + sid.String()})
@@ -1084,118 +1208,149 @@ var StatusWords = map[string]string{
 	Drafted: "a draft", Sent: "sent", Confirmed: "confirmed", PartReceived: "part received", FullReceived: "received", Cancelled: "cancelled",
 }
 
-// Cost is an item's cost price to set after a receipt.
-type Cost struct {
-	ItemID string
-	Kobo   int64
-}
-
-// ReceiveTx records goods received on an order: a received movement per
-// item naming the order, the lines' received quantities, the value
-// received (owed to the supplier until paid), and the status, received
-// once every line has come. got is how many came, by item id; key makes a
-// receipt once.
-func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, []Movement, []Cost, error) {
+// ReceiveTx records goods received on an order, each line by its
+// treatment (what a business buys §5, §8): a stock line moves its stock
+// item (a received movement naming the order) by how many came times its
+// uses and sets the stock item's cost to the line's over its uses; a
+// tracked line puts each unit that came on Things we have (kept_things,
+// numbered on the line, each written once); a recorded line moves
+// nothing. Then the lines' received quantities, the value received (owed
+// to the supplier until paid), and the status, received once every line
+// has come. got is how many came, by the lines' ItemID (or their own id,
+// or a product counted by a stock line's stock item); key makes a receipt
+// once: the same key again answers as it did, making nothing twice.
+func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, []Movement, error) {
 	x, err := PurchaseTx(ctx, tx, tenant, id, true)
 	if err != nil {
-		return x, nil, nil, err
+		return x, nil, err
 	}
 	if key == "" {
-		return x, nil, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
+		return x, nil, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
 	key = FitKey(key)
 	// A receipt already made answers as it did, whatever the order's
-	// status now (the receipt may have completed it): one of its movements,
-	// "po:<key>:<item id>", is there.
-	keys := make([]string, len(x.Lines))
-	for i, l := range x.Lines {
-		keys[i] = "po:" + key + ":" + l.ItemID
-	}
-	var done bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key = ANY ($2))`, tenant, keys).Scan(&done); err != nil {
-		return x, nil, nil, err
-	}
-	if done {
-		return x, nil, nil, nil
+	// status now (the receipt may have completed it).
+	if done, err := receiptMadeTx(ctx, tx, tenant, id, "received", key); err != nil || done {
+		return x, nil, err
 	}
 	if x.Status != Sent && x.Status != Confirmed && x.Status != PartReceived {
-		return x, nil, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
+		return x, nil, fmt.Errorf("%w: %s is %s", ErrPurchase, x.Reference, StatusWords[x.Status])
 	}
 	if x.LinkID != nil && x.SellerStatus != nil && !strings.HasPrefix(key, LinkReceiptKey) {
 		// An order in a linked supplier's business is received by the
 		// link's own steps (All came, Not all came, or the day's end from
 		// the supplier's count), never by hand (business links §7).
-		return x, nil, nil, ErrLinked
+		return x, nil, ErrLinked
 	}
-	known := map[string]bool{}
-	left, names := map[string]int64{}, map[string]string{}
-	for _, l := range x.Lines {
-		known[l.ItemID] = true
-		left[l.ItemID] += max(0, l.Quantity-l.Received)
-		names[l.ItemID] = l.Item
-	}
+	came := make([]int64, len(x.Lines))
 	for item, n := range got {
-		if !known[item] {
-			return x, nil, nil, fmt.Errorf("%w: that item is not on %s", ErrPurchase, x.Reference)
+		i, err := lineFor(ctx, tx, tenant, x.Lines, item)
+		if err != nil {
+			return x, nil, err
+		}
+		if i < 0 {
+			return x, nil, fmt.Errorf("%w: that item is not on %s", ErrPurchase, x.Reference)
 		}
 		if n < 0 || n > MaxDelta {
-			return x, nil, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
+			return x, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
 		}
+		came[i] += n
+	}
+	for i, l := range x.Lines {
 		// An order takes what it ordered and no more: what came beyond it
 		// would be owed to the supplier at the order's price with nobody
 		// having agreed to buy it. It is recorded as goods received on
 		// their own (or on a new order). A linked supplier's count is
 		// taken as it is: that order is received by the link's own steps.
-		if n > left[item] && !strings.HasPrefix(key, LinkReceiptKey) {
-			if left[item] == 0 {
-				return x, nil, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, names[item], x.Reference)
+		left := max(0, l.Quantity-l.Received)
+		if came[i] > left && !strings.HasPrefix(key, LinkReceiptKey) {
+			if left == 0 {
+				return x, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, l.Item, x.Reference)
 			}
-			return x, nil, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
-				ErrPurchase, left[item], names[item], x.Reference, left[item])
+			return x, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
+				ErrPurchase, left, l.Item, x.Reference, left)
 		}
 	}
 	var moves []Movement
-	var costs []Cost
 	var value int64
-	all := true
+	some, all := false, true
+	now := time.Now()
 	for i, l := range x.Lines {
-		n := got[l.ItemID]
+		n := came[i]
 		if n > 0 {
-			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Received, Delta: &n, Reference: x.Reference,
-				Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
-			if err != nil {
-				return x, nil, nil, err
+			some = true
+			switch l.Treatment {
+			case AddToStock:
+				// The line's stock item, by the line's quantity times its
+				// uses, at the cost of one of it.
+				uses := max(l.Uses, 1)
+				unit := l.CostKobo / uses
+				m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.StockItemID.String(), Item: l.Item, Reason: Received, Delta: &n, Uses: uses, Reference: x.Reference,
+					Note: "from " + x.Supplier, Actor: actor, Key: "po:" + key + ":" + l.ID.String(), CostKobo: positive(unit)})
+				if err != nil {
+					return x, nil, err
+				}
+				moves = append(moves, m)
+				if unit > 0 {
+					if _, err := tx.Exec(ctx, `UPDATE stock_items SET cost_kobo = $3 WHERE tenant_id = $1 AND id = $2`, tenant, *l.StockItemID, unit); err != nil {
+						return x, nil, err
+					}
+				}
+			case Track:
+				// One row per unit that came, numbered after those received
+				// before; a unit written already is not written again.
+				for u := l.Received + 1; u <= min(l.Received+n, l.Quantity, MaxTracked); u++ {
+					if _, err := tx.Exec(ctx, `INSERT INTO kept_things (id, tenant_id, name, label_id, supplier_id, purchase_order_id, purchase_line_id, unit_no,
+						cost_kobo, received_at, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+						ON CONFLICT (tenant_id, purchase_line_id, unit_no) DO NOTHING`,
+						uuid.Must(uuid.NewV7()), tenant, l.Item, l.LabelID, x.SupplierID, x.ID, l.ID, u, l.CostKobo, now, actor); err != nil {
+						return x, nil, err
+					}
+				}
 			}
-			moves = append(moves, m)
 			x.Lines[i].Received += n
-			value += n * l.CostKobo
-			if l.CostKobo > 0 {
-				costs = append(costs, Cost{ItemID: l.ItemID, Kobo: l.CostKobo})
+			if _, err := tx.Exec(ctx, `UPDATE purchase_lines SET received = $3 WHERE tenant_id = $1 AND id = $2`, tenant, l.ID, x.Lines[i].Received); err != nil {
+				return x, nil, err
 			}
+			value += n * l.CostKobo
 		}
 		if x.Lines[i].Received < l.Quantity {
 			all = false
 		}
 	}
-	if len(moves) == 0 {
-		return x, nil, nil, fmt.Errorf("%w: say how many came of at least one item", ErrPurchase)
+	if !some {
+		return x, nil, fmt.Errorf("%w: say how many came of at least one item", ErrPurchase)
 	}
 	status := PartReceived
 	if all {
 		status = FullReceived
 	}
-	lines, _ := json.Marshal(x.Lines)
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $3, status = $4, received_kobo = received_kobo + $5,
-		received_at = CASE WHEN $4 = 'received' THEN now() ELSE received_at END,
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = $3, received_kobo = received_kobo + $4,
+		received_at = CASE WHEN $3 = 'received' THEN now() ELSE received_at END,
 		confirmed_at = COALESCE(confirmed_at, now()), confirmed_how = COALESCE(confirmed_how, 'owner'), updated_at = now()
-		WHERE tenant_id = $1 AND id = $2`, tenant, id, lines, status, value); err != nil {
-		return x, nil, nil, err
+		WHERE tenant_id = $1 AND id = $2`, tenant, id, status, value); err != nil {
+		return x, nil, err
 	}
-	if err := stockAudit(ctx, tx, tenant, "purchase.received", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "status": status, "by": actor}); err != nil {
-		return x, nil, nil, err
+	if err := stockAudit(ctx, tx, tenant, "purchase.received", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "status": status, "by": actor,
+		"key": key}); err != nil {
+		return x, nil, err
 	}
 	out, err := PurchaseTx(ctx, tx, tenant, id, false)
-	return out, moves, costs, err
+	return out, moves, err
+}
+
+// receiptMadeTx keeps the key of a receipt (kind received) or an
+// adjustment (short_adjusted) of an order, in the transaction making it,
+// and reports whether one was made under that key already: then nothing
+// is kept, and the caller makes nothing. The row is the receipt's (it
+// rolls back with it), on purchase_receipts' key (migration 00504).
+func receiptMadeTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, kind, key string) (bool, error) {
+	tag, err := tx.Exec(ctx, `INSERT INTO purchase_receipts (tenant_id, purchase_order_id, kind, key) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+		tenant, order, kind, key)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 0, nil
 }
 
 // LinkReceiptKey starts the idempotency key of a receipt made by the
@@ -1205,9 +1360,11 @@ const LinkReceiptKey = "link-receipt-"
 
 // AdjustShortTx takes off an order what was received above the buyer's
 // count of a short delivery the linked supplier agreed (business links
-// §17): an adjustment movement per item for the difference, the lines'
-// received quantities and the value received brought down to the count.
-// counts is the buyer's count per line, in order; key makes it once.
+// §17): for a stock line an adjustment movement for the difference, for a
+// tracked line the rows of the units that did not come marked gone; the
+// lines' received quantities and the value received brought down to the
+// count. counts is the buyer's count per line, in order; key makes it
+// once.
 func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts []int64, actor, key string) (Purchase, []Movement, error) {
 	x, err := PurchaseTx(ctx, tx, tenant, id, true)
 	if err != nil {
@@ -1220,83 +1377,63 @@ func AdjustShortTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, counts 
 		return x, nil, fmt.Errorf("%w: a count for each of the %d items", ErrPurchase, len(x.Lines))
 	}
 	key = FitKey(key)
-	var done bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE tenant_id = $1 AND key LIKE $2)`, tenant, "po:"+key+":%").Scan(&done); err != nil {
+	if done, err := receiptMadeTx(ctx, tx, tenant, id, "short_adjusted", key); err != nil || done {
 		return x, nil, err
 	}
-	if done {
-		return x, nil, nil
-	}
 	var moves []Movement
+	changed := false
 	var value int64
 	for i, l := range x.Lines {
 		over := l.Received - max(counts[i], 0)
 		if over <= 0 {
 			continue
 		}
-		delta := -over
-		m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Adjustment, Delta: &delta, Reference: x.Reference,
-			Note: "not all came from " + x.Supplier + ", as agreed", Actor: actor, Key: "po:" + key + ":" + l.ItemID, CostKobo: positive(l.CostKobo)})
-		if err != nil {
+		switch l.Treatment {
+		case AddToStock:
+			delta := -over
+			uses := max(l.Uses, 1)
+			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.StockItemID.String(), Item: l.Item, Reason: Adjustment, Delta: &delta, Uses: uses, Reference: x.Reference,
+				Note: "not all came from " + x.Supplier + ", as agreed", Actor: actor, Key: "po:" + key + ":" + l.ID.String(), CostKobo: positive(l.CostKobo / uses)})
+			if err != nil {
+				return x, nil, err
+			}
+			moves = append(moves, m)
+		case Track:
+			if _, err := tx.Exec(ctx, `UPDATE kept_things SET status = 'gone', note = left(COALESCE(note || ' · ', '') || 'Did not come (short delivery agreed)', 500)
+				WHERE tenant_id = $1 AND purchase_line_id = $2 AND unit_no > $3 AND status = 'have'`, tenant, l.ID, l.Received-over); err != nil {
+				return x, nil, err
+			}
+		}
+		x.Lines[i].Received -= over
+		changed = true
+		if _, err := tx.Exec(ctx, `UPDATE purchase_lines SET received = $3 WHERE tenant_id = $1 AND id = $2`, tenant, l.ID, x.Lines[i].Received); err != nil {
 			return x, nil, err
 		}
-		moves = append(moves, m)
-		x.Lines[i].Received -= over
 		value += over * l.CostKobo
 	}
-	if len(moves) == 0 {
+	if !changed {
 		return x, nil, nil
 	}
-	lines, _ := json.Marshal(x.Lines)
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $3, received_kobo = GREATEST(0, received_kobo - $4), updated_at = now()
-		WHERE tenant_id = $1 AND id = $2`, tenant, id, lines, value); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET received_kobo = GREATEST(0, received_kobo - $3), updated_at = now()
+		WHERE tenant_id = $1 AND id = $2`, tenant, id, value); err != nil {
 		return x, nil, err
 	}
-	if err := stockAudit(ctx, tx, tenant, "purchase.short_adjusted", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "by": actor}); err != nil {
+	if err := stockAudit(ctx, tx, tenant, "purchase.short_adjusted", x.Reference, map[string]any{"purchase_id": id, "value_kobo": value, "by": actor, "key": key}); err != nil {
 		return x, nil, err
 	}
 	out, err := PurchaseTx(ctx, tx, tenant, id, false)
 	return out, moves, err
 }
 
-// Receive records goods received on an order, then sends the movements to
-// the table and sets the items' cost prices; what is not sent is left for
-// the sweep.
+// Receive records goods received on an order (ReceiveTx).
 func (p *Purchases) Receive(ctx context.Context, tenant, id uuid.UUID, got map[string]int64, actor, key string) (Purchase, error) {
 	var x Purchase
-	var moves []Movement
-	var costs []Cost
 	err := p.inTx(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
-		x, moves, costs, err = ReceiveTx(ctx, tx, tenant, id, got, actor, key)
+		x, _, err = ReceiveTx(ctx, tx, tenant, id, got, actor, key)
 		return err
 	})
-	if err != nil {
-		return x, err
-	}
-	p.after(ctx, tenant, moves, costs, key)
-	return x, nil
-}
-
-// Apply is after for a receipt made in a caller's own transaction
-// (ReceiveTx), once it commits.
-func (p *Purchases) Apply(ctx context.Context, tenant uuid.UUID, moves []Movement, costs []Cost, key string) {
-	p.after(ctx, tenant, moves, costs, key)
-}
-
-// after sends movements recorded and sets cost prices; failures are left
-// for the sweep (movements) or the next receipt (costs).
-func (p *Purchases) after(ctx context.Context, tenant uuid.UUID, moves []Movement, costs []Cost, key string) {
-	if p.Stock != nil && p.Stock.Ready() {
-		for _, m := range moves {
-			_, _ = p.Stock.Apply(ctx, tenant, m.ID)
-		}
-	}
-	if p.Cost != nil {
-		for _, c := range costs {
-			_ = p.Cost(ctx, tenant, c.ItemID, c.Kobo, "po-cost:"+FitKey(key)+":"+c.ItemID)
-		}
-	}
+	return x, err
 }
 
 // Paid ways for a purchase.
@@ -1346,19 +1483,18 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 	if how == Transfer {
 		channel = "bank"
 	}
-	now := time.Now()
-	entry, fresh, err := log.RecordTx(ctx, tx, tenant, moneylog.Entry{Direction: "out", Kind: "expense", Status: "settled", Channel: channel,
-		Reference: "purchase:" + key, AmountKobo: &amount, OccurredAt: &now, Source: "entered", Vendor: x.Supplier, Category: "stock",
-		Description: cut("Order "+x.Reference+": "+x.Words(), 300), EnteredBy: actor})
+	// One expense per label on the order, each with its payment row
+	// (engine/spend; what a business buys §8, The expense).
+	_, fresh, err := spend.RecordPurchaseTx(ctx, tx, log, tenant, spend.PurchasePay{Order: id, Reference: x.Reference, Supplier: x.Supplier,
+		AmountKobo: amount, How: how, Channel: channel, Key: key, Actor: actor, When: time.Now()})
+	if errors.Is(err, spend.ErrKeyUsed) {
+		return x, fmt.Errorf("%w: this Idempotency-Key paid another order already: send a new key for a new payment", ErrKeyUsed)
+	}
 	if err != nil {
 		return x, err
 	}
 	if !fresh {
 		return x, nil
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO purchase_payments (id, tenant_id, purchase_id, entry_id, amount_kobo, paid_how, paid_by) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		uuid.Must(uuid.NewV7()), tenant, id, entry, amount, how, actor); err != nil {
-		return x, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET paid_kobo = paid_kobo + $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, id, amount); err != nil {
 		return x, err
@@ -1370,12 +1506,20 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 }
 
 // OpenFromTx is a supplier's oldest order still to be received (sent,
-// confirmed or part received) holding item; ErrNoPurchase when none.
+// confirmed or part received) with a line adding to the stock item an
+// item is (a product's, or a material); ErrNoPurchase when none.
 func OpenFromTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, supplierName, itemID string) (Purchase, error) {
-	return scanPurchase(tx.QueryRow(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
+	c, ok, err := productstock.ItemOfTx(ctx, tx, tenant, itemID)
+	if err != nil {
+		return Purchase{}, err
+	}
+	if !ok {
+		return Purchase{}, ErrNoPurchase
+	}
+	return onePurchase(ctx, tx, tx.QueryRow(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND lower(s.name) = lower($2) AND o.status IN ('sent', 'confirmed', 'part_received')
-		  AND EXISTS (SELECT 1 FROM jsonb_array_elements(o.lines) l WHERE l->>'item_id' = $3)
-		ORDER BY o.created_at, o.id LIMIT 1`, tenant, strings.TrimSpace(supplierName), itemID))
+		  AND EXISTS (SELECT 1 FROM purchase_lines l WHERE l.tenant_id = o.tenant_id AND l.purchase_order_id = o.id AND l.stock_item_id = $3)
+		ORDER BY o.created_at, o.id LIMIT 1`, tenant, strings.TrimSpace(supplierName), c.StockItemID))
 }
 
 // UnpaidOfTx is a supplier's orders with something owed, the oldest
@@ -1384,10 +1528,7 @@ func UnpaidOfTx(ctx context.Context, tx pgx.Tx, tenant, supplier uuid.UUID) ([]P
 	rows, err := tx.Query(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND o.supplier_id = $2 AND o.status NOT IN ('drafted', 'cancelled')
 		ORDER BY (o.received_kobo > o.paid_kobo) DESC, o.created_at, o.id LIMIT 20`, tenant, supplier)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Purchase, error) { return scanPurchase(r) })
+	return manyPurchases(ctx, tx, rows, err)
 }
 
 // SupplierOrdersTx is the orders sent to the supplier whose phone hash is
@@ -1397,10 +1538,7 @@ func SupplierOrdersTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, phoneHas
 	rows, err := tx.Query(ctx, `SELECT `+purchaseCols+` FROM purchase_orders o JOIN suppliers s ON s.id = o.supplier_id
 		WHERE o.tenant_id = $1 AND s.phone_hash = $2 AND s.retired_at IS NULL AND o.status IN ('sent', 'confirmed')
 		ORDER BY o.sent_at DESC, o.id DESC LIMIT 5`, tenant, phoneHash)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Purchase, error) { return scanPurchase(r) })
+	return manyPurchases(ctx, tx, rows, err)
 }
 
 // SupplierPhoneHashTx is the phone hash of an order's supplier.

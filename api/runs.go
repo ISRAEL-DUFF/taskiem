@@ -118,6 +118,18 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if roles, name := startRolesOf(def); !mayStart(p, roles) {
+		// Decision 0070: the workflow's roles hold on the API and the
+		// web's and the app's Run.
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			return auditTx(r, tx, "run.start.refused", wf.String(), map[string]any{"why": "roles", "roles": roles, "version": version})
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.fail(w, r, errNotYours(name, roles))
+		return
+	}
 	if msgs := s.inputProblems(wf, version, def, req.Input); len(msgs) > 0 {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "input does not match the workflow's inputs schema", "problems": msgs})
 		return

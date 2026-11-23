@@ -16,6 +16,7 @@ import 'package:taskiem/chat/trade_orders_page.dart' show TradeOrderPage;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'guidelines.dart';
 import 'support.dart';
 
@@ -142,6 +143,7 @@ void main() {
   testWidgets('three kinds, waiting first; each row and See all lead to their screens', (t) async {
     final c = await chats();
     await show(t, c);
+    await looks(t, 'orders');
     expect(find.text('From customers'), findsOneWidget);
     expect(find.text('From businesses'), findsOneWidget);
     expect(find.text('To suppliers'), findsOneWidget);

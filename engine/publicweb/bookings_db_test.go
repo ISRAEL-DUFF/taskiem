@@ -53,7 +53,7 @@ func TestBookingThroughTheDatabase(t *testing.T) {
 	s := &Server{Lookup: func(context.Context, string) (Site, bool, error) {
 		return Site{Tenant: tn.ID, Kind: "storefront", ID: sf}, true, nil
 	},
-		Storefronts: func(context.Context, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
+		Storefronts: func(context.Context, uuid.UUID, uuid.UUID) (StorefrontPage, bool, error) { return p, true, nil },
 		Submit:      DBSubmit(pool), OrderStatus: DBOrderStatus(pool), Services: DBServices(pool), Busy: DBBusy(pool), Book: DBBook(pool),
 		Booking: DBBookingStatus(pool), Change: DBChange(pool), PriceChange: DBPriceChange(pool),
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Views: formguard.NewLimiter(rate.Inf, 1, 100, time.Hour),

@@ -25,7 +25,13 @@ export const TOAST_MS = 4000;
 export const MAX_TOASTS = 3;
 
 let push: ((t: Omit<Toast, "id">) => void) | null = null;
+let drop: ((text: string) => void) | null = null;
 let seq = 0;
+
+/** Takes a message away before its time (one that is no longer true). */
+export function untoast(text: string) {
+  drop?.(text);
+}
 
 /** Shows a message; nothing when no Toaster is mounted (tests, the embed). */
 export function toast(text: string, kind: ToastKind = "success", extra: Partial<Pick<Toast, "target" | "href" | "linkText">> = {}) {
@@ -46,8 +52,10 @@ export function Toaster() {
       setList((l) => addToast(l, { ...t, id }));
       if (t.kind !== "error") setTimeout(() => setList((l) => l.filter((x) => x.id !== id)), TOAST_MS);
     };
+    drop = (text) => setList((l) => l.filter((x) => x.text !== text));
     return () => {
       push = null;
+      drop = null;
     };
   }, []);
   const close = (id: number) => setList((l) => l.filter((x) => x.id !== id));

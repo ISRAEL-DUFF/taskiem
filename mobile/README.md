@@ -72,3 +72,58 @@ bash web/e2e/demo/serve-demo.sh &
 node web/e2e/demo/seed.ts
 node mobile/tool/capture.mjs chats /chat      # the chats, as Ada
 ```
+
+## Releasing to Google Play
+
+Play takes an **app bundle** (`.aab`) signed with the **upload key**. Google
+then signs what it gives phones with its own app signing key (Play App
+Signing). The upload key never goes in git (`key.properties`, `*.jks` and
+`*.keystore` are ignored).
+
+1. **Make the upload key once**, on your own computer, and keep it and its
+   password safe (a password manager, and a second copy offline). Losing it
+   means asking Google to reset it:
+
+   ```sh
+   keytool -genkeypair -v -keystore taskiem-upload.jks -alias upload \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. **Point the build at it** in `android/key.properties`:
+
+   ```properties
+   storeFile=/full/path/to/taskiem-upload.jks
+   storePassword=…
+   keyAlias=upload
+   keyPassword=…
+   ```
+
+   In CI the same four values come from `TASKIEM_UPLOAD_STORE_FILE`,
+   `TASKIEM_UPLOAD_STORE_PASSWORD`, `TASKIEM_UPLOAD_KEY_ALIAS` and
+   `TASKIEM_UPLOAD_KEY_PASSWORD`. Without them a release build is signed with
+   the debug key (a warning says so), which is fine on a phone and refused
+   by Play.
+
+3. **Build the bundle** for the production server, with a version code one
+   higher than the last one uploaded (Play refuses a code it has seen):
+
+   ```sh
+   flutter build appbundle --release \
+     --dart-define=TASKIEM_URL=https://<production host> \
+     --dart-define=TASKIEM_APP_VERSION=1.0.0 \
+     --build-name=1.0.0 --build-number=<version code>
+   ```
+
+   It is at `build/app/outputs/bundle/release/app-release.aab`.
+
+4. **After the first upload,** copy the **app signing** key's SHA-256 from
+   Play Console (Test and release › App integrity) into the server's
+   `TASKIEM_ANDROID_APP` ([operations](../docs/operations.md)), beside the
+   upload key's, so the server's links open the app and passkeys made in it
+   sign in.
+
+**The store listing** (its words, the Data safety answers and the pictures)
+is in [docs/store/google-play](../docs/store/google-play/listing.md). The
+screenshots are the app's own screens, taken by the screenshot tests at a
+phone's sharpness with `STORE_DIR` set, then framed by
+`docs/store/google-play/make.mjs` (its first lines say how).

@@ -220,7 +220,7 @@ func TestChatFronts(t *testing.T) {
 	if r := w.yes(t, an); !strings.Contains(r, "*Snacks* is off.") {
 		t.Fatalf("off: %q", r)
 	}
-	if r := w.say(t, an, "help"); !strings.Contains(r, "*add front Snacks*") {
+	if r := w.say(t, an, "help all"); !strings.Contains(r, "*add front Snacks*") {
 		t.Errorf("help: %q", r)
 	}
 }

@@ -846,3 +846,45 @@ class TkSheetFoot extends StatelessWidget {
     );
   }
 }
+
+/// A field that is chosen, not typed: what is chosen (or what to do) on the
+/// field's ground with a chevron; a tap opens the choices (a sheet, a
+/// date). Inside a [TkKitField] with `field: false`.
+class TkPickBox extends StatelessWidget {
+  const TkPickBox({super.key, required this.label, required this.shown, required this.onTap});
+
+  /// What a screen reader hears it as (the field's label).
+  final String label;
+
+  /// What is chosen, or "Choose…" while nothing is.
+  final String shown;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    // A finger's 48 px, as the boxes beside it (46 drawn).
+    return TapArea(child: Semantics(
+      button: true,
+      label: label,
+      value: shown,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            children: [
+              Expanded(child: Text(shown, style: tkText(size: 15, color: t.text))),
+              TkIcon('chevron', size: 18, color: t.muted),
+            ],
+          ),
+        ),
+      ),
+    ));
+  }
+}
