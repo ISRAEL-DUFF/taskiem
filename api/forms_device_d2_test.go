@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/connectors/riders"
 	"github.com/israel-duff/taskiem/engine/dispatch"
+	"github.com/israel-duff/taskiem/engine/media"
 )
 
 // Device fields D2 (docs/spec/device-fields.md §16): a customer signs for
@@ -24,6 +26,15 @@ import (
 
 // signPNG is a pad's drawing, enough of a PNG for the content check.
 var signPNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01\x00\x00\x00\x00\x80\x08\x06\x00\x00\x00 strokes")
+
+// sniffedFiles is the fake store, keeping each file's type as its content
+// says (as the real one does), so a signature is a PNG and a photo a JPEG.
+type sniffedFiles struct{ noFiles }
+
+func (sniffedFiles) PutFile(_ context.Context, _ uuid.UUID, data []byte) (media.File, error) {
+	t := http.DetectContentType(data)
+	return media.File{Path: "files/" + strings.ReplaceAll(t, "/", "."), Type: t, Size: int64(len(data))}, nil
+}
 
 const proveSigned = `{"schema":"wd/v1","id":"wf_signed","version":1,"name":"Prove a delivery, signed","trigger":{"type":"manual"},
  "inputs":{"schema":{"type":"object","required":["reference","rider"],"properties":{"reference":{"type":"string"},"rider":{"type":"string"}}}},
@@ -41,7 +52,7 @@ const proveSigned = `{"schema":"wd/v1","id":"wf_signed","version":1,"name":"Prov
 func TestCustomerSignsOnTheRidersPhone(t *testing.T) {
 	ctx := context.Background()
 	w, ada := newDispatchWorld(t, "Ada Stores")
-	w.forms.Files, w.forms.Scanner, w.forms.AppURL = noFiles{}, okScanner{}, "https://app.taskiem.test"
+	w.forms.Files, w.forms.Scanner, w.forms.AppURL = sniffedFiles{}, okScanner{}, "https://app.taskiem.test"
 	w.forms.Ask = w.srv.FormAsk
 	ops := &riders.Late{}
 	ops.Set(w.srv.Riders)
@@ -65,21 +76,31 @@ func TestCustomerSignsOnTheRidersPhone(t *testing.T) {
 	ada.must(200, "PATCH", "/v1/riders/"+m["id"].(string), map[string]any{"link_id": link})
 	ada.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
 
-	ref := w.order(t, "none")
-	ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
-	d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any)
-	for _, a := range []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived, dispatch.Delivered} {
-		if _, err := w.srv.Dispatch.Press(ctx, w.biz, uuid.MustParse(d["id"].(string)), a); err != nil {
-			t.Fatalf("%s: %v", a, err)
+	deliver := func() string {
+		t.Helper()
+		ref := w.order(t, "none")
+		ada.must(200, "POST", "/v1/storefront/orders/"+ref+"/offer", map[string]any{})
+		d := ada.must(200, "GET", "/v1/storefront/orders/"+ref+"/deliveries", nil)["deliveries"].([]any)[0].(map[string]any)
+		for _, a := range []string{dispatch.Accept, dispatch.PickedUp, dispatch.Arrived, dispatch.Delivered} {
+			if _, err := w.srv.Dispatch.Press(ctx, w.biz, uuid.MustParse(d["id"].(string)), a); err != nil {
+				t.Fatalf("%s: %v", a, err)
+			}
 		}
+		return ref
 	}
-	wf := publishFlow(t, ada, proveSigned)
-	run := ada.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"reference": ref, "rider": link}})["run_id"].(string)
-	w.env.Drain(t)
-	if err := w.forms.Tick(ctx); err != nil {
-		t.Fatal(err)
+	var rid string
+	ask := func(wf, ref string) string {
+		t.Helper()
+		run := ada.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"reference": ref, "rider": link}})["run_id"].(string)
+		w.env.Drain(t)
+		if err := w.forms.Tick(ctx); err != nil {
+			t.Fatal(err)
+		}
+		rid = musaBiz.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)[0].(map[string]any)["id"].(string)
+		return run
 	}
-	rid := musaBiz.must(200, "GET", "/v1/form-requests", nil)["requests"].([]any)[0].(map[string]any)["id"].(string)
+	ref := deliver()
+	run := ask(publishFlow(t, ada, proveSigned), ref)
 
 	answer := func(signed map[string]any, sig []byte) (int, map[string]any) {
 		var b bytes.Buffer
@@ -130,5 +151,17 @@ func TestCustomerSignsOnTheRidersPhone(t *testing.T) {
 	}
 	if !strings.Contains(detail, `"signed": "signature answered drawn"`) || !strings.Contains(detail, `"proof": "photo answered camera"`) || strings.Contains(detail, "Ngozi") {
 		t.Fatalf("audited: %s", detail)
+	}
+
+	// The rider's photo, answered to the same run, is never recorded as the
+	// customer's signature: only a signature field's own PNG is.
+	swapped := strings.NewReplacer(`"id":"wf_signed"`, `"id":"wf_swapped"`, `"signature":"=steps.handover.output.signed"`, `"signature":"=steps.handover.output.proof"`).Replace(proveSigned)
+	run = ask(publishFlow(t, ada, swapped), deliver())
+	if code, res := answer(map[string]any{"signed_by": "Ngozi Eze"}, signPNG); code != 201 {
+		t.Fatalf("answered: %d %v", code, res)
+	}
+	w.env.Drain(t)
+	if got := ada.must(200, "GET", "/v1/runs/"+run, nil); got["run"].(map[string]any)["status"] != "failed" || !strings.Contains(toJSON(got["events"]), "no such signature answered to this run") {
+		t.Fatalf("the photo recorded as the signature: %s", toJSON(got["run"]))
 	}
 }

@@ -169,10 +169,16 @@ func runFile(ctx context.Context, tx pgx.Tx, id string, run uuid.UUID, what stri
 	if err != nil {
 		return "", fmt.Errorf("%w: the %s is a form file's id", ErrInvalid, what)
 	}
+	// A signature is only a signature field's own drawing (a PNG): never
+	// the rider's photo or another file answered to the same run.
+	kind := ""
+	if what == "signature" {
+		kind = `AND f.type = 'image/png' AND q.schema #>> ARRAY['properties', f.field, 'type'] = 'signature'`
+	}
 	var path string
 	if err := tx.QueryRow(ctx, `SELECT f.storage_key FROM form_files f JOIN form_submissions s ON s.id = f.submission_id
 		LEFT JOIN form_requests q ON q.id = s.request_id
-		WHERE f.id = $1 AND s.status <> 'refused' AND (q.run_id = $2 OR s.run_id = $2)`, fid, run).Scan(&path); err != nil {
+		WHERE f.id = $1 AND s.status <> 'refused' AND (q.run_id = $2 OR s.run_id = $2) `+kind, fid, run).Scan(&path); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", fmt.Errorf("%w: no such %s answered to this run", ErrInvalid, what)
 		}
