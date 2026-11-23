@@ -153,3 +153,72 @@ audience is real, but **a public launch is not ready**.
    are the phone app's own look, so they need a screen recording of the real
    app, as in section 3. The customer's browser chat (`/m/{code}`) can be
    recorded from the web.
+
+## 9. Update, 23 November 2026: store listing, made tools, pages, saved things, payments
+
+Merged main again (407 more commits). Sources: `docs/store/google-play/listing.md`,
+`docs/spec/build-plan-saved-tools-payments.md`, decisions 0070 to 0073.
+
+### 9.1 What is new, and how real it is
+
+| Area | What it is | State | Film it? |
+| --- | --- | --- | --- |
+| **Google Play listing** | App "Taskiem: Run your business", category Business, free, package `app.taskiem.chat`; 8 store screenshots | **Draft for the founder.** Nothing published yet | Words and taglines: yes (section 9.3). "Download" calls to action: not yet |
+| **Made tools** (decision 0073, accepted 23 Nov) | Any workflow declares itself a **tool in the chat**: a tile, a `/` command, a form, cards and buttons, a question inside a run, tools for customers | M0 to M5 **built** (T0 to T5). M6 (recipes and the AI builder) **not built** | Yes, the built parts. It is the "automate the rest" story |
+| **Pages** (decision 0072, accepted) | A business's own screens, drawn from its tables (heading, figure, list, table, row detail card), with buttons | G0 to G3 **built** | Yes, as part of "automate the rest" |
+| **Saved objects** (decision 0071, proposed) | Things kept and called up by `@name`: bank accounts, people, places, text. "deliver to @warehouse", "invoice @acme 250k", "remind me when @car insurance is due"; shared as cards | S0 to S3 **built** (web, app, chat apps) | Yes |
+| **Payments** | Pay a bill by transfer in the chat; pay one person safely (limits, passkey); pay from a message; batches of up to 100; payroll (Payrolla) | Built **against fakes, not on a real wallet** | **No**, not as a working feature, until a real wallet is connected |
+| **Device fields** | Scan a barcode, sign, location and photo in a form; a stock item's barcode; the app reads text from a photo on the phone (account details) | D0 to D2 **built** | Yes (barcode scan suits shops) |
+| **Schools in the chat** | School figures in the briefing, approval cards, school tools | Built | In the Schools series |
+| **Stock apart from products** (decision 0070) | Count things a business buys but never sells (fabric, flour, diesel) | Accepted, **not built** | No |
+
+### 9.2 What it changes in the plan
+
+1. **The store launch is closer.** Episode 0 and the series calls to action stay
+   "Start your free trial" until the listing is published, then add the Play
+   link (iPhone later). The "store launch film" (slate item 7) becomes real: it
+   can reuse the listing's eight screenshots and taglines.
+2. **A new chapter for every series: "Automate the rest"** (made tools, saved
+   things, pages). It speaks to the original product, the workflow engine: a
+   business turns a routine into a tool in the chat. Film only the built
+   parts; leave out the AI builder until M6. Proposed as **Episode 11** of
+   Fashion, Food and Gadgets (an owner's own tool, a page of their tables,
+   `@warehouse`), not a new series.
+3. **Hero features gain real material:**
+   - **Gadgets** (Episode 2, 3): barcode scan at the counter and for stock counts.
+   - **Fashion and Food:** deliver to `@warehouse`, `@mum`'s address for a
+     customer's order; a signature on a delivery.
+   - **Every series:** a reminder "remind me when @car insurance is due".
+4. **Do not show payments as live.** "Pay Alhaja Sade in the chat" is built
+   against fakes. The series use matching incoming money (live) and approvals
+   (live); outgoing payments wait.
+5. **Positioning:** the founder's amendment to decision 0068 (19 November) says
+   exactly what you told me: Taskiem is not a chat-app replacement; it automates
+   businesses alongside their conversations. The store listing follows it, and
+   our rule in `series/README.md` section 0 already matches.
+
+### 9.3 Official words to reuse
+
+From the listing (draft): **"Orders, money, stock and staff, run from the chat
+your customers already use."** The store screenshots carry four taglines:
+*Your business, every morning* · *Buy and sell in the chat* · *No order slips
+through* · *One customer, any line*. Use these for titles, end cards and
+captions so the videos and the store say the same thing.
+
+### 9.4 The look has moved again
+
+The store screenshots show the app's real home: **Today** ("Good afternoon, Ada",
+a *Money in today* figure with a chart against a usual Thursday, Sales by hour,
+Orders today, Needs you), an **Orders** page (All, Customers, Businesses), and a
+conversation that shows which line a customer wrote on (the app or WhatsApp).
+Our chat film's scenes (a briefing card, a chat list) predate this. This
+reinforces `replan.md` section 7: **record the real app** for the film, and for
+Today, Orders and the like use the phone app, not the web.
+
+### 9.5 Open decisions
+
+1. Add **Episode 11, "Automate the rest"**, to the first three series?
+2. Should the **store launch film** be made now (for when the listing goes
+   live), reusing the screenshots?
+3. Do you want the chat film re-made from the real app now, or after the store
+   launch decides the look?
