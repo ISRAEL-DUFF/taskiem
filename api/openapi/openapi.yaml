@@ -39152,6 +39152,42 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/pages/import:
+    post:
+      operationId: importPage
+      tags:
+      - Pages
+      summary: Make a page from a file
+      description: >-
+        A page/v1 document read from a file (one `GET /v1/pages/{name}/export` wrote) becomes a new page's draft. It must read as a page, or nothing is saved (400 `page_problems`). A short name another page, a tool's command or one of Taskiem's own words has takes the next free one (`renamed_from` says what it asked for). It is held against this business's tables: `missing` says, in plain words, each table it shows that the business does not have and each column a table lacks; the rest is in `problems`, and publishing refuses it until they are put right. Counts against the plan's `max_pages` (429 `limit_exceeded`). Audited as `page.import`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageDocumentRequest'
+      responses:
+        '201':
+          description: Made, as a draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageImported'
+        '400':
+          description: >-
+            Not a page Taskiem can read (`code` `page_problems`, with `problems`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/pages/validate:
     post:
       operationId: validatePage
@@ -39457,6 +39493,143 @@ paths:
         '409':
           description: >-
             The page is not published yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/versions:
+    get:
+      operationId: listPageVersions
+      tags:
+      - Pages
+      summary: A page's published versions
+      description: >-
+        Every published version, newest first: who published it, when, who it let open the page, and what it changed on the one before in plain words (parts added, taken away and changed, the filters, who may open it).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageVersionList'
+        '404':
+          description: >-
+            No such page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/versions/{version}/bring-back:
+    post:
+      operationId: bringBackPageVersion
+      tags:
+      - Pages
+      summary: Bring back a version
+      description: >-
+        That version becomes the page's draft, in place of any draft, saved by the caller; people keep seeing the published page. Publishing it is the same as publishing any draft: checked against today's tables and the personal-column rules, and under four-eyes publishing another person publishes it. Audited as `page.bring_back`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: The version to bring back
+      responses:
+        '200':
+          description: The page, with the version as its draft and the draft's problems against today's tables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDetail'
+        '404':
+          description: >-
+            No such page or version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The version is the one people see now, and there is no draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/export:
+    get:
+      operationId: exportPage
+      tags:
+      - Pages
+      summary: A page as a file
+      description: >-
+        The page's page/v1 document as a file to keep or to make the page in another business (`POST /v1/pages/import`): the published version, or the draft with `draft=1` (or for a page never published). A page holds no rows; a condition on a personal column that carries a value is left out, and the `Taskiem-Left-Out` header says how many were. Audited as `page.export`.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit,table.read
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: draft
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+        description: '1: the draft'
+      responses:
+        '200':
+          description: The document, as an attachment (`<name>.page.json`)
+          headers:
+            Taskiem-Left-Out:
+              description: How many conditions on a personal column were left out.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageDocument'
+        '404':
+          description: >-
+            No such page.
           content:
             application/json:
               schema:
@@ -60387,6 +60560,65 @@ components:
           items:
             type: string
       additionalProperties: false
+    PageVersion:
+      type: object
+      required: [version, published_by, published_at, summary, changes, roles, who, current]
+      properties:
+        version:
+          type: integer
+        title:
+          type: string
+        published_by:
+          type: string
+          description: The person who published it, by name (or "An API key").
+        published_at:
+          type: string
+          format: date-time
+        summary:
+          type: string
+          description: What it changed on the version before, in a line.
+        changes:
+          type: array
+          items:
+            type: string
+        roles:
+          type: array
+          items:
+            type: string
+        who:
+          type: string
+          description: Who it let open the page, in words.
+        current:
+          type: boolean
+          description: Whether this is the version people see now.
+      additionalProperties: false
+    PageVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageVersion'
+      additionalProperties: false
+    PageImported:
+      type: object
+      description: The page made from the file, with what it names that the business lacks.
+      required: [page, missing, renamed_from]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageDetail'
+        missing:
+          type: array
+          items:
+            type: string
+          description: '"This business has no table called expenses.", "The table Tickets has no column priority."'
+        renamed_from:
+          type:
+          - string
+          - 'null'
+          description: The short name the file asked for, when it was taken.
+      additionalProperties: false
     PageFilter:
       type: object
       required: [id, type, label, value]
@@ -60539,7 +60771,7 @@ components:
           type: array
           items:
             type: object
-            required: [column, label, naira]
+            required: [column, label, naira, sortable]
             properties:
               column:
                 type: string
@@ -60547,6 +60779,9 @@ components:
                 type: string
               naira:
                 type: boolean
+              sortable:
+                type: boolean
+                description: Whether the rows may be put in this column's order (`order`) by this caller; never a personal column for a caller without table.read.
             additionalProperties: false
         order:
           type: object

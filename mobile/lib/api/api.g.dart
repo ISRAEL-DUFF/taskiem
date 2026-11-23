@@ -16561,22 +16561,27 @@ class PageBlockChange {
 }
 
 class PageBlockColumnsItem {
-  const PageBlockColumnsItem({required this.column, required this.label, required this.naira});
+  const PageBlockColumnsItem({required this.column, required this.label, required this.naira, required this.sortable});
 
   final String column;
   final String label;
   final bool naira;
+  /// Whether the rows may be put in this column's order (`order`) by this
+  /// caller; never a personal column for a caller without table.read.
+  final bool sortable;
 
   factory PageBlockColumnsItem.fromJson(Map<String, dynamic> j) => PageBlockColumnsItem(
         column: j['column'] as String,
         label: j['label'] as String,
         naira: j['naira'] as bool,
+        sortable: j['sortable'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'column': column,
         'label': label,
         'naira': naira,
+        'sortable': sortable,
       };
 }
 

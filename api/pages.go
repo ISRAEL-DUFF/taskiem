@@ -53,6 +53,7 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.With(s.need(PermPageEdit)).Delete("/pages/{name}", s.deletePage)
 	r.Get("/pages/{name}/view", s.viewPage)
 	r.Get("/pages/{name}/blocks/{block}", s.pageBlock)
+	s.pageVersionRoutes(r) // versions, export and import (pages_versions.go)
 }
 
 // pageRow is a page as stored.
@@ -958,7 +959,11 @@ func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, curs
 					label = c.Column
 				}
 			}
-			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira})
+			// sortable: a press on it puts the rows in its order; never a
+			// personal column for a viewer without table.read (pageBlock
+			// refuses it), so the web and the app do not offer it.
+			sortable := !columnNamed(t, c.Column).Personal || pc.values.Viewer.Personal
+			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira, "sortable": sortable})
 		}
 		out["columns"] = cols
 		if order != nil {
