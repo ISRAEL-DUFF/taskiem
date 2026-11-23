@@ -299,3 +299,97 @@ test("a page shows the business's orders, kept up to date on two screens", async
   await expect(staff.getByText("PG-1")).toHaveCount(0);
   await axeBoth(staff, "/pages/desk (staff)");
 });
+
+// Pages G2 (docs/pages.md, Buttons): the page's own buttons, a figure a
+// tool worked out and when, a run's status, each row's buttons; a signal
+// asks Yes before it is sent; a tool not this person's is greyed with why.
+// The acceptance fixture's shape (pages §17): today's deliveries, what is
+// owed to riders, Confirm on each row. Drawn from a stand-in for view and
+// act (the API's own tests press them for real: api/pages_g2_test.go,
+// api/pages_records_more_test.go), at phone width, both themes.
+const deliveries = {
+  page: { name: "deliveries", title: "Deliveries today", icon: "box", about: "", roles: [], pinned: false, published: true, has_draft: false, version: 1, updated_at: "2026-11-22T10:00:00Z" },
+  draft: false,
+  can_edit: false,
+  drawn_at: "2026-11-22T10:00:00Z",
+  filters: [],
+  blocks: [
+    {
+      id: "new",
+      type: "buttons",
+      actions: [
+        { index: 0, label: "New delivery", kind: "tool", tool: "new-delivery" },
+        { index: 1, label: "Pay riders", kind: "tool", tool: "pay-riders", disabled: "Only owners can use Pay riders." },
+      ],
+    },
+    { id: "owed", type: "figure", label: "Owed to riders", value: 150000, shown: "₦1,500", tone: "warn", lead: false, naira: true },
+    { id: "spent", type: "figure", label: "Fuel this week", value: 450000, shown: "₦4,500", tone: "plain", lead: false, naira: true, from_tool: true, worked_at: new Date(Date.now() - 180_000).toISOString() },
+    {
+      id: "today",
+      type: "list",
+      title: "Today's deliveries",
+      size: "full",
+      empty: "Nothing today",
+      has_detail: false,
+      count: 1,
+      more: null,
+      rows: [{ id: "d1", title: "AC-12 · Musa", sub: "B••• · Lekki", state: { text: "delivered", tone: "good" }, actions: [{ index: 0, label: "Confirm", kind: "signal" }] }],
+    },
+    { id: "state", type: "status", title: "Paying riders", run: "0192e2e0-0000-7000-8000-0000000000b1", status: "waiting", words: "Waiting", tone: "warn", started_at: "2026-11-22T09:00:00Z", waiting_for: [{ kind: "approval", who: "an owner" }] },
+  ],
+};
+
+test("a page's buttons: Confirm asks Yes, then is sent; a tool not yours is greyed", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: phone, reducedMotion: "reduce" })).newPage();
+  await signIn(page);
+  const acts: unknown[] = [];
+  await page.route("**/v1/pages/deliveries/view*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(deliveries) }));
+  await page.route("**/v1/pages/deliveries/live*", (r) => r.fulfill({ status: 404, body: "" }));
+  await page.route("**/v1/pages/deliveries/act*", (r) => {
+    const body = r.request().postDataJSON() as { yes?: boolean };
+    acts.push(body);
+    return r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body.yes ? { kind: "signal", sent: true, run: "0192e2e0-0000-7000-8000-0000000000b2", words: "Done: Confirm." } : { kind: "signal", asks: "Confirm?", sent: false }),
+    });
+  });
+  await page.goto("/pages/deliveries");
+  await expect(page.getByRole("button", { name: "New delivery" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Pay riders" })).toBeDisabled();
+  await expect(page.getByText("Pay riders: Only owners can use Pay riders.")).toBeVisible();
+  await expect(page.getByText("Worked out 3 minutes ago")).toBeVisible();
+  await expect(page.getByTestId("page-status")).toContainText("Waiting for an owner");
+  await noSideways(page);
+  await axeBoth(page, "/pages/deliveries (buttons)");
+
+  await page.getByTestId("page-row").getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByRole("dialog", { name: "Confirm?" })).toBeVisible();
+  await page.getByTestId("confirm-ok").click();
+  await expect.poll(() => acts.length).toBe(2);
+  expect(acts).toEqual([
+    { block: "today", row: "d1", action: 0 },
+    { block: "today", row: "d1", action: 0, yes: true },
+  ]);
+  await expect(page.getByText("Done: Confirm.")).toBeVisible();
+});
+
+// Pages G3: in Taskiem's conversation a pinned page is a tile, and "/" and
+// its name opens it over the chat.
+test("a pinned page is a tile in the chat's tools, and its name opens it", async ({ page }) => {
+  await signIn(page);
+  const list = { pages: [{ ...deliveries.page, pinned: true, about: "Who delivered what" }], can_edit: true, can_publish: true, max_pinned: 5, max_pages: 10 };
+  await page.route("**/v1/pages", (r) => (r.request().method() === "GET" ? r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(list) }) : r.continue()));
+  await page.route("**/v1/pages/deliveries/view*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(deliveries) }));
+  await page.goto("/chat?with=taskiem");
+  const box = page.getByLabel("Message to Taskiem");
+  await box.fill("/deli");
+  const panel = page.getByTestId("tools-panel");
+  await expect(panel.getByTestId("your-pages")).toHaveText("Your pages");
+  await expect(panel.getByTestId("page-tile")).toContainText("Deliveries today");
+  await box.fill("/deliveries");
+  await box.press("Enter");
+  const sheet = page.getByTestId("page-sheet");
+  await expect(sheet.getByText("Today's deliveries")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "New delivery" })).toBeVisible();
+});

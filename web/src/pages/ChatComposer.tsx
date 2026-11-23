@@ -483,6 +483,8 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     madeTool,
     setMadeTool,
     pagesShown,
+    // "/" and a page's whole name: Enter opens it, past the panel's tiles.
+    pageExact: !!pageCalled(pages, text) && madeReach?.by !== "command",
     pageOpen,
     setPageOpen,
     openPage,
@@ -783,7 +785,8 @@ export function ComposerView<R>({
                   c.toolsShown &&
                   (e.key === "Escape" ||
                     ((e.key === "Enter" || e.key === "ArrowUp") &&
-                      c.toolMatches > 0))
+                      c.toolMatches > 0 &&
+                      !(e.key === "Enter" && c.pageExact)))
                 ) {
                   // The tools panel takes the keys: Esc closes it, Enter
                   // or the up arrow goes to its first tile. With no tool
