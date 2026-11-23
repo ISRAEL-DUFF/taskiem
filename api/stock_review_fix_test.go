@@ -39,10 +39,10 @@ func TestCountingInAProductByItsUses(t *testing.T) {
 	const on = "+2348010000231"
 	w.bind(t, owner, on)
 
-	if r := w.say(t, on, "add 10 bags of Rice 1kg at 1,500"); !strings.Contains(r, "Add 10 × 1000 gs to *Rice 1kg* (500 gs → 10500 gs)") {
+	if r := w.say(t, on, "add 10 bags of Rice 1kg at 1,500"); !strings.Contains(r, "Add 10 × 1000 g to *Rice 1kg* (500 g → 10500 g)") {
 		t.Fatalf("asked: %q", r)
 	}
-	if r := w.yes(t, on); !strings.Contains(r, "10500 gs") {
+	if r := w.yes(t, on); !strings.Contains(r, "10500 g") {
 		t.Fatalf("done: %q", r)
 	}
 	x := stockItemByName(t, owner, "Rice")
@@ -50,7 +50,7 @@ func TestCountingInAProductByItsUses(t *testing.T) {
 		t.Fatalf("the rice after 10 bags: %v", x)
 	}
 	// received … with no open order counts in the same way.
-	if r := w.say(t, on, "received 1 bag of Rice 1kg at 1,500"); !strings.Contains(r, "(10500 gs → 11500 gs)") {
+	if r := w.say(t, on, "received 1 bag of Rice 1kg at 1,500"); !strings.Contains(r, "(10500 g → 11500 g)") {
 		t.Fatalf("received: %q", r)
 	}
 	w.yes(t, on)

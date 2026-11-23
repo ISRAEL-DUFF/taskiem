@@ -320,9 +320,21 @@ func (it Item) UnitName(n int64) string {
 	return Plural(u)
 }
 
-// Plural is a unit word for more than one: bag, bags; box, boxes.
+// measures are units written as symbols, which stay the same for more
+// than one: 1000 g, 2 kg, 5 l, never "gs".
+var measures = map[string]bool{
+	"g": true, "kg": true, "mg": true, "l": true, "ml": true, "cl": true,
+	"m": true, "cm": true, "mm": true, "km": true, "oz": true, "lb": true,
+	"ft": true, "in": true, "yd": true,
+}
+
+// Plural is a unit word for more than one: bag, bags; box, boxes; a
+// measure's symbol stays as it is (g, kg, ml).
 func Plural(u string) string {
 	l := strings.ToLower(u)
+	if measures[l] {
+		return u
+	}
 	switch {
 	case strings.HasSuffix(l, "s"), strings.HasSuffix(l, "x"), strings.HasSuffix(l, "ch"), strings.HasSuffix(l, "sh"):
 		if strings.HasSuffix(l, "s") && !strings.HasSuffix(l, "ss") {

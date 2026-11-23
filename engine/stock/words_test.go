@@ -77,7 +77,7 @@ func TestUnits(t *testing.T) {
 			t.Errorf("Singular(%q) = %q", in, got)
 		}
 	}
-	for in, want := range map[string]string{"bag": "bags", "box": "boxes", "battery": "batteries", "glass": "glasses", "day": "days"} {
+	for in, want := range map[string]string{"bag": "bags", "box": "boxes", "battery": "batteries", "glass": "glasses", "day": "days", "g": "g", "kg": "kg", "ml": "ml", "L": "L"} {
 		if got := stock.Plural(in); got != want {
 			t.Errorf("Plural(%q) = %q", in, got)
 		}
