@@ -24,6 +24,9 @@ import {
   showColumn,
   whoWords,
   withUses,
+  editorDoc,
+  recordTables,
+  type RecordView,
   type DrawnPage,
   type PageDetail,
   type PageDoc,
@@ -53,6 +56,8 @@ export function PageEditor() {
   const navigate = useNavigate();
   const detail = useLoad(() => get<PageDetail>(`/v1/pages/${name}`), [name]);
   const tables = useLoad(() => get<{ tables: Table[] }>("/v1/tables?counts=no"), []);
+  // Taskiem's own orders and invoices, offered next to the tables.
+  const records = useLoad(() => get<{ records: RecordView[] }>("/v1/page-records").catch(() => ({ records: [] as RecordView[] })), []);
   const roles = useLoad(() => get<{ roles: ApproverRole[] }>("/v1/approver-roles?for=start").catch(() => ({ roles: [] as ApproverRole[] })), []);
   const list = useLoad(() => get<{ can_publish: boolean; pages: { name: string; pinned: boolean }[] }>("/v1/pages"), []);
   const [doc, setDoc] = useState<PageDoc | null>(null);
@@ -68,7 +73,7 @@ export function PageEditor() {
   const act = useAction();
   useEffect(() => {
     const d = detail.data;
-    if (d && !doc) setDoc(d.draft ?? d.document);
+    if (d && !doc) setDoc(editorDoc(d.draft ?? d.document));
   }, [detail.data, doc]);
   const hasDraft = !!detail.data?.has_draft;
   useEffect(() => {
@@ -82,9 +87,9 @@ export function PageEditor() {
     };
   }, [name, hasDraft, previewKey, detail.data]);
   if (detail.error) return <ErrorBox error={detail.error} />;
-  if (!detail.data || !doc || !tables.data) return <Skeleton rows={4} label="Opening the page…" />;
+  if (!detail.data || !doc || !tables.data || !records.data) return <Skeleton rows={4} label="Opening the page…" />;
   const d = detail.data;
-  const all = tables.data.tables.filter((t) => !t.kept_by);
+  const all = [...tables.data.tables.filter((t) => !t.kept_by), ...recordTables(records.data.records)];
   const change = (next: PageDoc) => {
     setDoc(next);
     setDirty(true);
@@ -231,7 +236,7 @@ export function PageEditor() {
               ) &&
               void act.run(async () => {
                 const back = await post<PageDetail>(`/v1/pages/${name}/versions/${v.version}/bring-back`);
-                setDoc(back.draft ?? back.document);
+                setDoc(editorDoc(back.draft ?? back.document));
                 setDirty(false);
                 detail.reload();
                 setPreviewKey((k) => k + 1);
@@ -409,7 +414,7 @@ function AddPart({ tables, parts, onClose, onAdd }: { tables: Table[]; parts: Pa
           ))}
         </fieldset>
         {kind !== "heading" && (
-          <Field label="From which table?">
+          <Field label="From which table, or Taskiem's orders or invoices?">
             <select value={table} onChange={(e) => setTable(e.target.value)}>
               {tables.map((t) => (
                 <option key={t.name} value={t.name}>
@@ -574,7 +579,7 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
         <ColumnPick
           label="In order of"
           value={order ? `${order.column}:${order.desc ? "1" : ""}` : ""}
-          cols={any.flatMap((c) => [
+          cols={columnsFor(t, "pick").flatMap((c) => [
             { name: `${c.name}:1`, words: `${c.words}, newest or largest first` },
             { name: `${c.name}:`, words: `${c.words}, oldest or smallest first` },
           ])}
@@ -637,7 +642,7 @@ function PartForm({ part, tables, onChange }: { part: Part; tables: Table[]; onC
 /** "Only rows where": up to five conditions, each a column, how and a value. */
 function Conditions({ part, table, onChange }: { part: Part; table: Table | undefined; onChange: (p: Part) => void }) {
   const list = part.source?.filters ?? [];
-  const cols = columnsFor(table, "any");
+  const cols = columnsFor(table, "pick");
   const setList = (filters: typeof list) => onChange({ ...part, source: { table: part.source?.table ?? "", ...part.source, filters: filters.length ? filters : undefined } });
   return (
     <fieldset className="sf-choices pg-conditions">

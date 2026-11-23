@@ -21,7 +21,7 @@ const phone = { width: 390, height: 844 };
 function sql(text: string): string {
   const base = process.env.TASKIEM_TEST_DATABASE_URL;
   if (!base) throw new Error("set TASKIEM_TEST_DATABASE_URL");
-  return execFileSync("psql", [base.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
+  return execFileSync("psql", [base.replace(/\/[^/?]*(\?.*)?$/, `/${process.env.TASKIEM_E2E_DB ?? "taskiem_e2e"}$1`), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
 }
 
 async function signIn(page: Page, email = "owner@e2e.test") {
@@ -233,4 +233,69 @@ test("a table's columns are pressed to order it only where the viewer may", asyn
   await page.getByRole("button", { name: "Team", exact: true }).click();
   await ordered;
   await expect(page.getByRole("columnheader", { name: "Team" })).toHaveAttribute("aria-sort", "ascending");
+});
+
+// Taskiem's own records on a page, and a page kept up to date (pages §5,
+// §9): the editor offers the business's orders beside its tables; a page
+// over them is drawn by the real server (orders are Taskiem's, no Xenibase
+// needed); an order made elsewhere shows on two open pages without a
+// reload; a staff member without the orders' read permission is told so in
+// place of the part.
+test("a page shows the business's orders, kept up to date on two screens", async ({ page, browser }) => {
+  const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
+  sql(`DELETE FROM pages WHERE tenant_id = '${tenant}' AND name = 'desk'`);
+  await page.setViewportSize(phone);
+  await signIn(page);
+  // The editor offers Orders and Invoices next to the tables.
+  await page.goto("/pages/tickets/edit");
+  await page.getByRole("button", { name: "Add a part" }).click();
+  const from = page.getByLabel("From which table, or Taskiem's orders or invoices?");
+  await expect(from.locator("option", { hasText: "Orders (Taskiem's)" })).toHaveCount(1);
+  await expect(from.locator("option", { hasText: "Invoices (Taskiem's)" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  const doc = {
+    page: "page/v1",
+    name: "desk",
+    title: "Desk",
+    blocks: [
+      { id: "n", type: "figure", label: "Orders", value: "count", lead: true, source: { records: "orders" } },
+      { id: "list", type: "list", title: "Latest orders", source: { records: "orders" }, item: { title: "=row.number", sub: "=row.status" }, empty: "No orders yet" },
+    ],
+  };
+  expect((await page.request.post("/v1/pages", { headers: H, data: { document: doc } })).status()).toBe(201);
+  expect((await page.request.post("/v1/pages/desk/publish", { headers: H })).status()).toBe(200);
+
+  // Two screens open on the page.
+  const other = await (await browser.newContext({ viewport: phone, reducedMotion: "reduce" })).newPage();
+  expect((await other.request.post("/v1/auth/login", { headers: H, data: { email: "owner@e2e.test", password: PASSWORD } })).status()).toBe(200);
+  for (const p of [page, other]) {
+    await p.goto("/pages/desk");
+    await expect(p.getByRole("region", { name: "Orders" })).toContainText("0");
+    await expect(p.getByText("No orders yet")).toBeVisible();
+    await p.evaluate(() => ((window as unknown as { stillHere: boolean }).stillHere = true));
+  }
+  await noSideways(page);
+  await axeBoth(page, "/pages/desk (orders)");
+
+  // An order comes in (made elsewhere): both pages show it, unreloaded.
+  sql(
+    `INSERT INTO storefront_orders (id, tenant_id, kind, reference, status_hash, status, customer, subject_id, total_kobo, payment) VALUES (gen_random_uuid(), '${tenant}', 'trade', 'PG-1', '\\x01', 'received', 'null', 'e2e', 150000, 'none')`,
+  );
+  for (const p of [page, other]) {
+    await expect(p.getByRole("region", { name: "Orders" })).toContainText("1", { timeout: 15_000 });
+    await expect(p.getByRole("link", { name: /PG-1/ })).toHaveAttribute("href", "/storefront/orders/PG-1");
+    expect(await p.evaluate(() => (window as unknown as { stillHere?: boolean }).stillHere)).toBe(true);
+  }
+  // Refresh still reads the page.
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("link", { name: /PG-1/ })).toBeVisible();
+
+  // A staff member without the orders' read permission: told so.
+  const staff = await staffMember(browser, page);
+  await staff.goto("/pages/desk");
+  await expect(staff.getByTestId("page-unavailable")).toHaveCount(2);
+  await expect(staff.getByTestId("page-unavailable").first()).toHaveText("You cannot see orders.");
+  await expect(staff.getByText("PG-1")).toHaveCount(0);
+  await axeBoth(staff, "/pages/desk (staff)");
 });

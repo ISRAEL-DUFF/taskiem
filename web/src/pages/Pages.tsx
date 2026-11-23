@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, post } from "../api";
 import { Icon } from "../icons";
@@ -12,6 +12,8 @@ import {
   keptFilters,
   grouped,
   layout,
+  liveQueue,
+  type PageChanged,
   rowsWord,
   toneClass,
   viewWithFilters,
@@ -253,6 +255,25 @@ export function PageScreen() {
     if (JSON.stringify(kept) !== JSON.stringify(values)) keep(kept);
   }, [view.data]);
   const set = (id: string, v: string) => keep({ ...values, [id]: v });
+  // Kept up to date (pages §9): the parts a notice names are read again,
+  // in place. A figure from the page drawn again; a list or a table reads
+  // its own first rows again, in the order it is in (More's pages go).
+  const [fresh, setFresh] = useState<Record<string, DrawnPart>>({});
+  const [ticks, setTicks] = useState<Record<string, number>>({});
+  useEffect(() => setFresh({}), [view.data]);
+  const current = useRef({ q, draft, data: view.data, reload: view.reload });
+  current.current = { q, draft, data: view.data, reload: view.reload };
+  usePageLive(name, draft, async (ids, all) => {
+    const { q: query, draft: d, data, reload } = current.current;
+    if (all || !data) return reload();
+    const rows = new Set(data.blocks.filter((b) => b.type === "list" || b.type === "table").map((b) => b.id));
+    if (ids.some((id) => !rows.has(id))) {
+      const all = [query, d ? "draft=1" : ""].filter(Boolean).join("&");
+      const next = await get<DrawnPage>(`/v1/pages/${name}/view${all ? `?${all}` : ""}`);
+      setFresh((f) => ({ ...f, ...Object.fromEntries(next.blocks.filter((b) => ids.includes(b.id) && !rows.has(b.id)).map((b) => [b.id, b])) }));
+    }
+    setTicks((t) => ({ ...t, ...Object.fromEntries(ids.filter((id) => rows.has(id)).map((id) => [id, (t[id] ?? 0) + 1])) }));
+  });
   if (view.error) {
     return (
       <>
@@ -266,7 +287,43 @@ export function PageScreen() {
     );
   }
   if (!view.data) return <Skeleton rows={4} label="Drawing the page…" />;
-  return <DrawnPageView page={view.data} values={values} onFilter={set} onRefresh={view.reload} />;
+  const page = { ...view.data, blocks: view.data.blocks.map((b) => fresh[b.id] ?? b) };
+  return <DrawnPageView page={page} values={values} onFilter={set} onRefresh={view.reload} ticks={ticks} />;
+}
+
+/** Follows a page's live notices (GET /v1/pages/{name}/live) while it is
+ * open: the parts named are read (read), a burst at most once in two
+ * seconds. Without a live connection (refused, or no EventSource) the page
+ * is read on opening and on Refresh, as before. */
+function usePageLive(name: string, draft: boolean, read: (ids: string[], all: boolean) => Promise<void> | void) {
+  const reader = useRef(read);
+  reader.current = read;
+  useEffect(() => {
+    if (!name || typeof EventSource === "undefined") return;
+    const queue = liveQueue((ids, all) => reader.current(ids, all));
+    let es: EventSource | undefined;
+    let retry: number | undefined;
+    let stopped = false;
+    const open = () => {
+      es = new EventSource(`/v1/pages/${name}/live${draft ? "?draft=1" : ""}`);
+      es.addEventListener("changed", (ev) => queue.add(JSON.parse((ev as MessageEvent<string>).data) as PageChanged));
+      es.addEventListener("gone", () => es?.close());
+      es.onerror = () => {
+        // Refused (too many open) or gone: tried again later.
+        if (es?.readyState === EventSource.CLOSED && !stopped) {
+          es.close();
+          retry = window.setTimeout(open, 30000);
+        }
+      };
+    };
+    open();
+    return () => {
+      stopped = true;
+      queue.stop();
+      es?.close();
+      window.clearTimeout(retry);
+    };
+  }, [name, draft]);
 }
 
 /** A page as drawn (the page itself, and the editor's preview). */
@@ -276,12 +333,15 @@ export function DrawnPageView({
   onFilter,
   onRefresh,
   preview = false,
+  ticks = {},
 }: {
   page: DrawnPage;
   values: Record<string, string>;
   onFilter: (id: string, v: string) => void;
   onRefresh: () => void;
   preview?: boolean;
+  /** A count per list or table, raised when it is to read its first rows again. */
+  ticks?: Record<string, number>;
 }) {
   const [open, setOpen] = useState<DrawnRow | null>(null);
   const name = page.page.name;
@@ -329,7 +389,7 @@ export function DrawnPageView({
             ))}
           </div>
         ) : (
-          <Part key={`${p.id}:${page.drawn_at}:${filtersParam(values)}:${p.count ?? ""}`} part={p} name={name} draft={page.draft} values={values} onOpen={setOpen} />
+          <Part key={`${p.id}:${page.drawn_at}:${filtersParam(values)}`} part={p} name={name} draft={page.draft} values={values} onOpen={setOpen} tick={ticks[p.id] ?? 0} />
         ),
       )}
       {open?.detail && (
@@ -343,6 +403,7 @@ export function DrawnPageView({
             ))}
           </dl>
           <div className="toolbar">
+            {open.link && <Link to={open.link}>Open it</Link>}
             <button onClick={() => setOpen(null)}>Close</button>
           </div>
         </Modal>
@@ -409,6 +470,13 @@ function Filters({ filters, values, onFilter, page }: { filters: DrawnFilter[]; 
 }
 
 function Figure({ part }: { part: DrawnPart }) {
+  if (part.unavailable)
+    return (
+      <div className="stat" data-testid="page-figure">
+        <span className="stat-label">{part.label}</span>
+        <span className="stat-hint" data-testid="page-unavailable">{part.unavailable}</span>
+      </div>
+    );
   if (part.error) return <div className="stat" data-testid="page-figure"><span className="stat-label">{part.label}</span><span className="stat-hint">{part.error}</span></div>;
   return (
     <div className={`stat pg-figure ${toneClass(part.tone)}`} data-testid="page-figure">
@@ -420,12 +488,26 @@ function Figure({ part }: { part: DrawnPart }) {
   );
 }
 
-function Part({ part, name, draft, values, onOpen }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void }) {
+function Part({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void; tick: number }) {
   if (part.broken) {
     return (
       <div className="warning" role="note" data-testid="page-broken">
         {part.broken}
       </div>
+    );
+  }
+  if (part.unavailable) {
+    return (
+      <section className="card pg-part" data-testid="page-part">
+        {(part.title || part.label) && (
+          <div className="pg-part-head">
+            <h2>{part.title || part.label}</h2>
+          </div>
+        )}
+        <p className="hint" data-testid="page-unavailable">
+          {part.unavailable}
+        </p>
+      </section>
     );
   }
   switch (part.type) {
@@ -448,17 +530,27 @@ function Part({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
         </section>
       );
   }
-  return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} />;
+  return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} tick={tick} />;
 }
 
 /** A list or a table, with More and (a table) its order by a press on a column. */
-function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void }) {
+function Rows({ part, name, draft, values, onOpen, tick }: { part: DrawnPart; name: string; draft: boolean; values: Record<string, string>; onOpen: (r: DrawnRow) => void; tick: number }) {
   const [shown, setShown] = useState<DrawnPart>(part);
   const act = useAction();
   const fetchPart = (extra: string) => {
     const q = [filtersParam(values), draft ? "draft=1" : "", extra].filter(Boolean).join("&");
     return get<DrawnPart>(`/v1/pages/${name}/blocks/${part.id}?${q}`);
   };
+  // A live notice: its first rows read again, in the order it is in.
+  const order = useRef(shown.order);
+  order.current = shown.order;
+  useEffect(() => {
+    if (tick === 0) return;
+    const o = order.current;
+    fetchPart(o ? `order=${o.column}${o.desc ? "&desc=1" : ""}` : "")
+      .then(setShown)
+      .catch(() => undefined);
+  }, [tick]);
   const more = () =>
     void act.run(async () => {
       const ord = shown.order ? `order=${shown.order.column}${shown.order.desc ? "&desc=1" : ""}&` : "";
@@ -492,16 +584,17 @@ function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
             <Items label={g.label || shown.title || "Rows"}>
               {g.rows.map((r) => (
                 <li key={r.id} data-testid="page-row">
-                  <button type="button" className="item pg-row" disabled={!r.detail} onClick={() => onOpen(r)}>
-                    <span className="grow">
-                      <span className="item-top">
-                        <span className="title">{r.title || "—"}</span>
-                        {r.state && <span className={`badge sf-status ${toneClass(r.state.tone)}`}>{r.state.text}</span>}
-                      </span>
-                      {r.sub && <span className="sub">{r.sub}</span>}
-                    </span>
-                    {r.detail && <Icon name="chevron" className="go" />}
-                  </button>
+                  {r.link && !r.detail ? (
+                    <Link className="item pg-row" to={r.link}>
+                      <RowWords r={r} />
+                      <Icon name="chevron" className="go" />
+                    </Link>
+                  ) : (
+                    <button type="button" className="item pg-row" disabled={!r.detail} onClick={() => onOpen(r)}>
+                      <RowWords r={r} />
+                      {r.detail && <Icon name="chevron" className="go" />}
+                    </button>
+                  )}
                 </li>
               ))}
             </Items>
@@ -522,7 +615,7 @@ function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
                   )}
                 </th>
               ))}
-              {shown.has_detail && (
+              {(shown.has_detail || rows.some((r) => r.link)) && (
                 <th>
                   <span className="sr-only">Open</span>
                 </th>
@@ -537,12 +630,22 @@ function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
                     {cell || "—"}
                   </td>
                 ))}
-                {shown.has_detail && (
+                {shown.has_detail ? (
                   <td>
                     <button type="button" className="link" onClick={() => onOpen(r)}>
                       Open<span className="sr-only"> {r.cells?.[0]}</span>
                     </button>
                   </td>
+                ) : (
+                  rows.some((x) => x.link) && (
+                    <td>
+                      {r.link && (
+                        <Link to={r.link}>
+                          Open<span className="sr-only"> {r.cells?.[0]}</span>
+                        </Link>
+                      )}
+                    </td>
+                  )
                 )}
               </tr>
             ))}
@@ -556,6 +659,18 @@ function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
         </button>
       )}
     </section>
+  );
+}
+
+function RowWords({ r }: { r: DrawnRow }) {
+  return (
+    <span className="grow">
+      <span className="item-top">
+        <span className="title">{r.title || "—"}</span>
+        {r.state && <span className={`badge sf-status ${toneClass(r.state.tone)}`}>{r.state.text}</span>}
+      </span>
+      {r.sub && <span className="sub">{r.sub}</span>}
+    </span>
   );
 }
 

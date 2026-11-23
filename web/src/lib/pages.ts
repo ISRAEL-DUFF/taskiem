@@ -14,7 +14,10 @@ export interface Condition {
 }
 
 export interface Source {
-  table: string;
+  /** A data table; or, with records, none. */
+  table?: string;
+  /** One of Taskiem's own record views (orders, invoices), read only. */
+  records?: string;
   filters?: Condition[];
   order?: { column: string; desc?: boolean }[];
   uses?: string[];
@@ -104,6 +107,8 @@ export interface DrawnRow {
   group?: string;
   cells?: string[];
   detail?: { title: string; lines: { label: string; value: string }[] };
+  /** A row of Taskiem's own records: the record's own screen (/storefront/orders/AD-12). */
+  link?: string;
 }
 
 export interface DrawnPart {
@@ -132,6 +137,8 @@ export interface DrawnPart {
   order?: { column: string; desc: boolean };
   broken?: string;
   error?: string;
+  /** In place of a part over Taskiem's records: "You cannot see orders.", or its area is off. */
+  unavailable?: string;
 }
 
 export interface DrawnFilter {
@@ -263,14 +270,72 @@ export function columnWords(t: Table | undefined, name: string): string {
   return c?.title || c?.name || name.replace(/_/g, " ");
 }
 
+// --- Taskiem's own records (orders, invoices) as a part's source ---
+
+/** A view of Taskiem's own records, as GET /v1/page-records lists it. */
+export interface RecordView {
+  name: string;
+  title: string;
+  on: boolean;
+  may_read: boolean;
+  area: string;
+  columns: { name: string; title: string; type: string; personal: boolean }[];
+}
+
+/** The editor names a view as a table ("records:orders"), so its pickers
+ * offer Orders and Invoices next to the business's tables. */
+export const RECORDS = "records:";
+export const isRecords = (name: string | undefined) => !!name?.startsWith(RECORDS);
+
+/** The views whose area is on, as tables the editor picks from. */
+export function recordTables(views: RecordView[]): Table[] {
+  return views
+    .filter((v) => v.on)
+    .map((v) => ({
+      id: RECORDS + v.name,
+      name: RECORDS + v.name,
+      title: `${v.title} (Taskiem's)`,
+      description: "",
+      columns: v.columns.map((c) => ({ name: c.name, title: c.title, type: c.type as Column["type"], required: false, personal: c.personal })),
+      postgres_table: "",
+      connection: "",
+      created_by: "",
+      created_at: "",
+      updated_at: "",
+    }));
+}
+
+/** A source as the editor holds it: a view as "records:<view>" in table. */
+export function editorSource(s: Source | undefined): Source | undefined {
+  if (!s?.records) return s;
+  const { records, ...rest } = s;
+  return { ...rest, table: RECORDS + records };
+}
+
+/** A source as the page's document says it: {"records": "orders"}. */
+export function docSource(s: Source | undefined): Source | undefined {
+  if (!s || !isRecords(s.table)) return s;
+  const { table, ...rest } = s;
+  return { ...rest, records: (table ?? "").slice(RECORDS.length) };
+}
+
+/** A document as the editor holds it. */
+export function editorDoc(doc: PageDoc | null): PageDoc | null {
+  if (!doc) return doc;
+  return { ...doc, blocks: doc.blocks.map((b) => (b.source ? { ...b, source: editorSource(b.source) } : b)) };
+}
+
 const isNumber = (c: Column) => c.type === "integer" || c.type === "number";
 const isDate = (c: Column) => c.type === "date" || c.type === "datetime";
 
 /** The columns a part may group by, order by, add up or compare by. A
  * personal column is never added up, compared by, grouped by or chosen
  * by (sum and date leave it out): the server refuses it (pages §18). */
-export function columnsFor(t: Table | undefined, what: "any" | "number" | "sum" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
+export function columnsFor(t: Table | undefined, what: "any" | "pick" | "number" | "sum" | "date" | "group" | "text" | "email"): { name: string; words: string }[] {
   const cols = t?.columns ?? [];
+  // pick: what rows may be narrowed or ordered by; a personal column of
+  // Taskiem's records is masked for everyone, and never one of them.
+  if (what === "pick") return columnsFor(t, "any").filter((c) => !(isRecords(t?.name) && cols.find((x) => x.name === c.name)?.personal));
   const pick = cols.filter((c) => {
     switch (what) {
       case "number":
@@ -310,7 +375,7 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "heading", words: "A heading", hint: "A title and a line of words" },
 ];
 
-/** A new part of a kind over a table, filled in with sensible choices. */
+/** A new part of a kind over a table (or Taskiem's records), filled in with sensible choices. */
 export function newPart(kind: string, t: Table | undefined, parts: { id: string }[]): Part {
   const table = t?.name ?? "";
   const text = columnsFor(t, "text");
@@ -399,31 +464,34 @@ export function filterFits(f: PageFilterDef, t: Table | undefined): boolean {
   const col = t.columns.find((c) => c.name === f.column);
   switch (f.type) {
     case "search":
-      return (f.columns?.length ? t.columns.filter((c) => f.columns?.includes(c.name)) : t.columns.filter((c) => c.type === "text")).length > 0;
+      if (isRecords(t.name) && t.columns.some((c) => c.personal && f.columns?.includes(c.name))) return false;
+      return (f.columns?.length ? t.columns.filter((c) => f.columns?.includes(c.name)) : t.columns.filter((c) => c.type === "text" && !(isRecords(t.name) && c.personal))).length > 0;
     case "choice":
       return col?.type === "text" && !col.personal;
     case "dates":
       return f.column === "created_at" || (!!col && isDate(col) && !col.personal);
     case "mine":
-      return col?.type === "email";
+      return col?.type === "email" && !isRecords(t.name);
   }
   return false;
 }
 
 /** The document as it is saved: each list and table uses every filter
- * that fits its table (figures stay whole). */
+ * that fits its table (figures stay whole), and a part over Taskiem's
+ * records says so as {"records": "orders"}. */
 export function withUses(doc: PageDoc, tables: Table[]): PageDoc {
   const filters = doc.filters ?? [];
   return {
     ...doc,
     blocks: doc.blocks.map((b) => {
-      if (!b.source || (b.type !== "list" && b.type !== "table")) return b;
+      if (!b.source) return b;
+      if (b.type !== "list" && b.type !== "table") return { ...b, source: docSource(b.source) };
       const t = tables.find((x) => x.name === b.source?.table);
       const uses = filters.filter((f) => filterFits(f, t)).map((f) => f.id);
       const source = { ...b.source };
       if (uses.length) source.uses = uses;
       else delete source.uses;
-      return { ...b, source };
+      return { ...b, source: docSource(source) };
     }),
   };
 }
@@ -501,4 +569,58 @@ export function importWords(r: PageImported): string[] {
 /** A version's line in the list: who and when go beside it. */
 export function versionTitle(v: PageVersion): string {
   return v.current ? `Version ${v.version} (what people see now)` : `Version ${v.version}`;
+}
+
+// --- kept up to date (GET /v1/pages/{name}/live) ---
+
+/** What a page's live notice says: the parts that may have changed (every
+ * part, all, when the page itself changed). It carries no data. */
+export interface PageChanged {
+  page: string;
+  blocks: string[];
+  all?: boolean;
+}
+
+/** Gathers the parts named by notices and reads them once at most every
+ * wait ms: a burst of notices is one read, and a notice that comes while a
+ * read is under way is read after it. */
+export function liveQueue(read: (ids: string[], all: boolean) => Promise<void> | void, wait = 2000, now: () => number = Date.now) {
+  let pending = new Set<string>();
+  let all = false;
+  let last = -Infinity;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let busy = false;
+  const fire = async () => {
+    timer = undefined;
+    if (busy) return;
+    const ids = [...pending];
+    const every = all;
+    pending = new Set();
+    all = false;
+    if (ids.length === 0 && !every) return;
+    busy = true;
+    last = now();
+    try {
+      await read(ids, every);
+    } finally {
+      busy = false;
+      if (pending.size > 0 || all) schedule();
+    }
+  };
+  const schedule = () => {
+    if (timer !== undefined) return;
+    timer = setTimeout(() => void fire(), Math.max(0, last + wait - now()));
+  };
+  return {
+    add(e: PageChanged) {
+      e.blocks.forEach((b) => pending.add(b));
+      all = all || !!e.all;
+      schedule();
+    },
+    stop() {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      pending = new Set();
+    },
+  };
 }
