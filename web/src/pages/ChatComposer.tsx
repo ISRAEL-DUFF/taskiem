@@ -237,7 +237,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     closeTools();
     setMadeTool({ command, from, words });
   };
-  // Words that reach one of Your tools: "/expense 4500 diesel" opens its
+  // Words that reach one of Your tools: the command expense with "4500 diesel" opens its
   // form filled in from them when sent (made tools §6); a sentence that
   // starts with a phrase it says offers it as a chip, and is otherwise
   // sent to Taskiem, which reads it as the chat does.

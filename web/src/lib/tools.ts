@@ -722,9 +722,9 @@ export function madeToolsFor(tools: MadeTool[], query = ""): MadeTool[] {
 }
 
 /** A tool the words reach, and the words for its form (made tools §6,
- * "with words after it"): "/expense 4500 diesel" by its command, or a
+ * "with words after it"): a slash, the command expense and "4500 diesel", or a
  * sentence that starts with a phrase it says ("i bought fuel for 4500").
- * None for "/expense" alone (the panel opens it), for words that name no
+ * None for a slash command alone (the panel opens it), for words that name no
  * tool of the person's, or for a phrase two tools say (the chat asks). */
 export function madeToolWords(
   tools: MadeTool[],
