@@ -46,6 +46,8 @@ import 'composer.dart';
 import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
 import 'pay_transfer.dart' show payMyInvoice;
+import 'made_tools.dart' show MadeRun;
+import 'my_chat_their_tools.dart' show TheirAnswer, TheirRuns;
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
 import 'groups.dart' show groupListLine;
@@ -480,10 +482,14 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
 /// A message of the conversation; one of yours on its way is [local], with
 /// its file, and [failed] with why when it could not go.
 class MyLine {
-  MyLine(this.m, {this.local = false, this.file});
+  MyLine(this.m, {this.local = false, this.file, this.run});
   final PersonMessage m;
   final bool local;
   final PickedFile? file;
+
+  /// One of their tools' runs started here: its answer, in its place
+  /// (my_chat_their_tools.dart).
+  final MadeRun? run;
   bool failed = false;
   String? error;
   String get id => m.id;
@@ -788,7 +794,25 @@ class MyChatData extends ChangeNotifier {
     _disposed = true;
     _back.close();
     files.dispose();
+    theirRuns.dispose();
     super.dispose();
+  }
+
+  /// Their tools' runs started here, their answers in the conversation.
+  late final theirRuns = TheirRuns(auth, id, now: now);
+
+  /// The messages, with their tools' answers in their places.
+  List<MyLine>? get lines {
+    final list = messages;
+    if (list == null || theirRuns.runs.isEmpty) return list;
+    final runs = [
+      for (final r in theirRuns.runs)
+        MyLine(PersonMessage(id: 'run:${r.id}', mine: false, kind: 'tool', body: r.name, createdAt: r.at), run: r),
+    ];
+    return [...list, ...runs]..sort((a, b) {
+      final t = a.m.createdAt.compareTo(b.m.createdAt);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
   }
 }
 
@@ -988,13 +1012,13 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: ListenableBuilder(
-        listenable: d,
+        listenable: Listenable.merge([d, d.theirRuns]),
         builder: (context, _) {
           final c = d.chat;
           final name = d.name;
           final canSend = c != null && !c.blocked && !c.blockedYou && d.closed == null;
           final proved = verifiedWords(c?.verified);
-          final list = d.messages;
+          final list = d.lines;
           final now = d.now();
           // The message after each: the last of a run has the tucked corner.
           final nextOf = <String, MyLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
@@ -1056,6 +1080,14 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       empty: Text('Say hello to $name. Ask about what they sell, or order and book with the button by the box.', textAlign: TextAlign.center, style: tkHint(t)),
                       render: (x, prev) {
                         final m = x.m;
+                        // One of their tools' answers (my_chat_their_tools.dart).
+                        if (x.run != null) {
+                          return Padding(
+                            key: ValueKey(x.id),
+                            padding: const EdgeInsets.only(top: 6),
+                            child: TheirAnswer(d: d, run: x.run!),
+                          );
+                        }
                         final first = prev == null || prev.m.mine != m.mine || prev.m.card != null || m.card != null;
                         final next = nextOf[x.id];
                         final last = next == null || next.m.mine != m.mine || next.m.card != null || dayLabel(next.m.createdAt, now) != dayLabel(m.createdAt, now);

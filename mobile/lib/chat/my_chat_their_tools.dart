@@ -2,9 +2,11 @@
 // tools.md, "Customers' tools"), in a person's chat with it, behind the
 // tools button beside Their shop and Book. A tool opens its sheet: its
 // form, drawn from its inputs; then what will run and Yes (a customer
-// always says yes, whatever the tool does); then its answer, read until
-// its run ends, drawn from what the business made public. A button on the
-// answer opens another of their tools, filled in.
+// always says yes, whatever the tool does); then the sheet closes and its
+// answer goes into the conversation, read until its run ends (kept on the
+// phone with the conversation, as Your tools' answers are in Taskiem's),
+// drawn from what the business made public. A button on the answer opens
+// another of their tools, filled in.
 
 import 'dart:async';
 
@@ -12,6 +14,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/auth.dart';
 import '../kit/forms.dart' show TkSwitch, nairaKobo;
 import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/mobile.dart' show TkChips, TkFormGroup, TkFormSheet, TkListRow, TkSection;
@@ -64,9 +67,7 @@ class TheirToolsSection extends StatelessWidget {
 
 /// Opens one of their tools: its sheet, filled in with [initial].
 Future<void> showTheirToolSheet(BuildContext context, MyChatData d, CustomerTool tool, {List<CustomerTool> all = const [], Map<String, dynamic> initial = const {}}) async {
-  final next = await showTkSheet<({CustomerTool tool, Map<String, dynamic> values})>(context, (_) => TheirToolSheet(d: d, tool: tool, all: all, initial: initial));
-  // A button on the answer pressed: the tool it opens, filled in.
-  if (next != null && context.mounted) await showTheirToolSheet(context, d, next.tool, all: all, initial: next.values);
+  await showTkSheet<void>(context, (_) => TheirToolSheet(d: d, tool: tool, all: all, initial: initial));
 }
 
 String _shown(Object? v) => switch (v) {
@@ -83,9 +84,6 @@ class TheirToolSheet extends StatefulWidget {
   final List<CustomerTool> all;
   final Map<String, dynamic> initial;
 
-  /// How often an answer is read while its run goes on.
-  static Duration every = const Duration(milliseconds: 1500);
-
   @override
   State<TheirToolSheet> createState() => _TheirToolSheetState();
 }
@@ -99,12 +97,8 @@ class _TheirToolSheetState extends State<TheirToolSheet> {
   ToolStart? _start;
   Map<String, dynamic>? _sent;
 
-  /// Said yes: its run, and its answer as last read.
-  String? _run;
-  ToolAnswer? _answer;
   bool _busy = false;
   String? _error;
-  Timer? _timer;
 
   @override
   void initState() {
@@ -128,7 +122,6 @@ class _TheirToolSheetState extends State<TheirToolSheet> {
 
   @override
   void dispose() {
-    _timer?.cancel();
     for (final b in _boxes.values) {
       b.dispose();
     }
@@ -210,58 +203,19 @@ class _TheirToolSheetState extends State<TheirToolSheet> {
         command: widget.tool.command,
         body: ConfirmMyChatToolRequest(confirm: _start!.confirm!, input: _sent),
       );
-      if (!mounted) return;
-      setState(() => _run = r.runId);
-      unawaited(_read());
+      // Its answer goes into the conversation.
+      widget.d.theirRuns.add(
+        MadeRun(id: r.runId, command: widget.tool.command, name: widget.tool.name, values: [for (final v in _start!.values) (v.label, v.value)], at: widget.d.now()),
+      );
+      if (mounted) Navigator.of(context).pop();
     } on Object catch (e) {
-      if (mounted) setState(() => _error = _say(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  bool get _going => _answer == null || const {'running', 'queued', 'waiting', 'pending'}.contains(_answer!.status);
-
-  Future<void> _read() async {
-    if (!mounted || _run == null) return;
-    try {
-      final a = await widget.d.api.myChatToolAnswer(id: widget.d.id, run: _run!);
-      if (mounted) setState(() => _answer = a);
-    } on Object {
-      // Offline for a moment: read again.
-    }
-    if (mounted && _going) _timer = Timer(TheirToolSheet.every, _read);
-  }
-
-  Future<void> _press(MadeRun run, ToolButton b, String key) async {
-    final token = b.token;
-    if (token == null) return;
-    try {
-      final p = await widget.d.api.pressMyChatToolButton(id: widget.d.id, token: token);
-      final tool = widget.all.where((t) => t.command == p.command).firstOrNull;
-      if (!mounted) return;
-      if (tool == null) {
-        showTkToast(context, 'This isn’t available any more.', error: true);
-        return;
-      }
-      Navigator.of(context).pop((tool: tool, values: p.inputs));
-    } on Object catch (e) {
-      if (mounted) showTkToast(context, e is ApiError && e.status == 404 ? 'This button isn’t available any more.' : sayFailure(e), error: true);
+      if (mounted) setState(() => (_busy = false, _error = _say(e)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final tool = widget.tool;
-    if (_run != null) {
-      return TkFormSheet(
-        title: tool.name,
-        crumb: 'Their tools',
-        action: 'Done',
-        onAction: () => Navigator.of(context).pop(),
-        children: [_answerView(context)],
-      );
-    }
     if (_start != null) {
       final values = _start!.values;
       return TkFormSheet(
@@ -382,17 +336,139 @@ class _TheirToolSheetState extends State<TheirToolSheet> {
       ),
     );
   }
+}
 
-  Widget _answerView(BuildContext context) {
+// --- the answers, in the conversation ---
+
+/// The runs started from their tools in one conversation, kept on the
+/// phone with it, each read again gently until it ends.
+final _theirKept = Expando<Map<String, List<MadeRun>>>();
+
+class TheirRuns extends ChangeNotifier {
+  TheirRuns(this.auth, this.chat, {required this.now}) : runs = (_theirKept[auth] ??= {})[chat] ??= _restore(auth, chat) {
+    for (final r in runs.where((r) => r.going)) {
+      unawaited(_read(r));
+    }
+  }
+
+  final Auth auth;
+  final String chat;
+  final DateTime Function() now;
+  final List<MadeRun> runs;
+  final _timers = <String, Timer>{};
+  bool _disposed = false;
+
+  /// How often a run going on is read again, at first.
+  static Duration every = const Duration(milliseconds: 1500);
+
+  static String _key(String chat) => 'taskiem_their_tool_runs:$chat';
+
+  static List<MadeRun> _restore(Auth auth, String chat) {
+    try {
+      final j = auth.local?.read(_key(chat));
+      if (j is List) return j.map(MadeRun.fromJson).whereType<MadeRun>().toList();
+    } on Object {
+      // Kept by an older app: the conversation stands without them.
+    }
+    return <MadeRun>[];
+  }
+
+  void add(MadeRun r) {
+    if (runs.any((x) => x.id == r.id)) return;
+    runs.add(r);
+    if (runs.length > 30) runs.removeAt(0);
+    _keep();
+    _changed();
+    unawaited(_read(r));
+  }
+
+  void _keep() {
+    try {
+      auth.local?.write(_key(chat), [for (final r in runs) r.toJson()]);
+    } on Object {
+      // Kept only while the app runs.
+    }
+  }
+
+  Duration _after(MadeRun r) {
+    final s = now().difference(r.at).inSeconds;
+    if (r.answer?.status == 'waiting') return const Duration(seconds: 30);
+    if (s < 10) return every;
+    if (s < 60) return const Duration(seconds: 4);
+    return const Duration(seconds: 15);
+  }
+
+  Future<void> _read(MadeRun r) async {
+    _timers.remove(r.id)?.cancel();
+    if (_disposed) return;
+    try {
+      r.answer = await auth.api.myChatToolAnswer(id: chat, run: r.id);
+    } on ApiError catch (e) {
+      // Not this person's any more, or gone: no card for it.
+      if (e.status == 404 || e.status == 403) {
+        r.lost = true;
+        runs.remove(r);
+      }
+    } on Object {
+      // Offline: read again later.
+    }
+    if (_disposed) return;
+    if (!r.going) _keep();
+    _changed();
+    if (r.going) _timers[r.id] = Timer(_after(r), () => _read(r));
+  }
+
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final t in _timers.values) {
+      t.cancel();
+    }
+    _timers.clear();
+    super.dispose();
+  }
+}
+
+/// A button on an answer pressed: the tool it opens, filled in.
+Future<void> pressTheirButton(BuildContext context, MyChatData d, ToolButton b) async {
+  final token = b.token;
+  if (token == null) return;
+  try {
+    final p = await d.api.pressMyChatToolButton(id: d.id, token: token);
+    final all = await theirTools(d);
+    final tool = all.where((t) => t.command == p.command).firstOrNull;
+    if (!context.mounted) return;
+    if (tool == null) {
+      showTkToast(context, 'This isn’t available any more.', error: true);
+      return;
+    }
+    await showTheirToolSheet(context, d, tool, all: all, initial: p.inputs);
+  } on Object catch (e) {
+    if (context.mounted) showTkToast(context, e is ApiError && e.status == 404 ? 'This button isn’t available any more.' : sayFailure(e), error: true);
+  }
+}
+
+/// One run's answer in the conversation: working on it, its card or list
+/// (the chat's answer card), its words, or that it didn't go through.
+class TheirAnswer extends StatelessWidget {
+  const TheirAnswer({super.key, required this.d, required this.run});
+  final MyChatData d;
+  final MadeRun run;
+
+  @override
+  Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final a = _answer;
-    final tool = widget.tool;
-    final reference = _run!.substring(0, 8).toUpperCase();
-    if (a == null || _going) {
+    final a = run.answer;
+    final reference = run.id.substring(0, 8).toUpperCase();
+    if (a == null || run.going) {
       return _note(
         context,
         pill: const CardPill('Working on it', CardTone.warn),
-        title: a?.status == 'waiting' ? 'Waiting on ${widget.d.chat?.name ?? 'the business'}' : 'Working on it',
+        title: a?.status == 'waiting' ? '${run.name}: waiting on ${d.name}' : run.name,
         words: 'Your reference is $reference. The answer shows here when it’s ready.',
       );
     }
@@ -400,32 +476,41 @@ class _TheirToolSheetState extends State<TheirToolSheet> {
       return _note(
         context,
         pill: const CardPill('Didn’t go through', CardTone.danger),
-        title: '${tool.name} didn’t go through',
+        title: '${run.name} didn’t go through',
         words: 'Your reference is $reference. Try again, or ask them here in the chat.',
       );
     }
     if (a.type == 'card' || a.type == 'list') {
-      final run = MadeRun(id: _run!, command: tool.command, name: tool.name, values: const [], at: DateTime.now(), answer: a);
-      return MadeAnswerCard(run: run, auth: widget.d.auth, onButton: _press, shownRows: 10);
+      return MadeAnswerCard(run: run, auth: d.auth, onButton: (_, b, _) => unawaited(pressTheirButton(context, d, b)), shownRows: 10);
     }
     final words = a.type == 'text' && (a.text ?? '').isNotEmpty ? a.text! : 'Done. Your reference is $reference.';
-    return _note(context, pill: const CardPill('Done', CardTone.lime), title: tool.name, words: words, wordsColor: t.text);
+    return _note(context, pill: const CardPill('Done', CardTone.lime), title: run.name, words: words, wordsColor: t.text);
   }
 
   Widget _note(BuildContext context, {required Widget pill, required String title, required String words, Color? wordsColor}) {
     final t = TkTheme.tokens(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: cardDecoration(context, mine: false, first: true),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          pill,
-          const SizedBox(height: 8),
-          Text(title, style: tkText(size: 15.5, weight: 600, color: t.text)),
-          const SizedBox(height: 4),
-          Text(words, style: tkText(size: 14, lineHeight: 1.4, color: wordsColor ?? t.muted)),
-        ],
+    return LayoutBuilder(
+      builder: (context, box) => Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: (box.maxWidth * 0.86).clamp(0.0, 420.0),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: cardDecoration(context, mine: false, first: true),
+          child: Semantics(
+            container: true,
+            label: title,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                pill,
+                const SizedBox(height: 8),
+                Text(title, style: tkText(size: 15.5, weight: 600, color: t.text)),
+                const SizedBox(height: 4),
+                Text(words, style: tkText(size: 14, lineHeight: 1.4, color: wordsColor ?? t.muted)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

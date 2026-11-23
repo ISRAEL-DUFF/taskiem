@@ -42,7 +42,7 @@ const _track = {
 
 void main() {
   setUpAll(loadFonts);
-  setUp(() => TheirToolSheet.every = const Duration(milliseconds: 10));
+  setUp(() => TheirRuns.every = const Duration(milliseconds: 10));
 
   testWidgets('their tools: the form, Yes always, the answer from what they made public, a button to another tool', (t) async {
     phone(t);
@@ -107,15 +107,24 @@ void main() {
       'confirm': 'k1',
       'input': {'ref': 'MK-1042'},
     });
-    await t.pump(const Duration(milliseconds: 50));
-    await t.pumpAndSettle();
+    // The sheet closes; the answer goes into the conversation, read until
+    // the run ends.
+    expect(find.text('Yes, go ahead'), findsNothing);
+    for (var i = 0; i < 5 && find.text('On its way').evaluate().isEmpty; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+      await t.pump();
+    }
+    await t.pump(const Duration(milliseconds: 600));
+    expect(reads, greaterThanOrEqualTo(2));
     expect(find.text('On its way'), findsOneWidget);
+    expect(find.text('Hello, do you have jollof?'), findsOneWidget, reason: 'in the conversation, with its messages');
     expect(find.text('Musa'), findsOneWidget);
     await looks(t, 'their-tool-answer');
     await press(t, find.text('Track it'));
     expect(api.sent('POST', '/v1/me/chats/c1/tools/buttons/b1'), hasLength(1));
     expect(find.text('Track an order'), findsOneWidget);
-    expect(find.text('MK-1042'), findsOneWidget, reason: 'the button filled the form');
+    expect(find.descendant(of: find.ancestor(of: find.text('Order number'), matching: find.byType(TkKitField)), matching: find.text('MK-1042')), findsOneWidget,
+        reason: 'the button filled the form');
     await drain(t);
   });
 
@@ -140,6 +149,33 @@ void main() {
     await press(t, find.bySemanticsLabel('Chat tools'));
     expect(find.text('Their shop'), findsOneWidget);
     expect(find.text('Their tools'), findsNothing);
+    await drain(t);
+  });
+
+  testWidgets('their tools: a run that did not go through says so in the conversation, with its reference and never why', (t) async {
+    phone(t);
+    final api = conversation(c: chat(offers: 'no', ask: false));
+    api.routes['GET /v1/me/chats/c1/tools'] = (_) => {
+      'tools': [_track],
+    };
+    api.routes['POST /v1/me/chats/c1/tools/track/start'] = (_) => {
+      'care': 'yes',
+      'confirm': 'k2',
+      'values': [
+        {'name': 'ref', 'label': 'Order number', 'value': 'MK-9'},
+      ],
+    };
+    api.routes['POST /v1/me/chats/c1/tools/track/confirm'] = (_) => answer({'run_id': '9f1b2c3d-0000-4000-8000-000000000002', 'created': true}, 201);
+    api.routes['GET /v1/me/chats/c1/runs/9f1b2c3d-0000-4000-8000-000000000002/answer'] = (_) => {'status': 'failed', 'type': 'outcome'};
+    await openChat(t, api);
+    await press(t, find.bySemanticsLabel('Chat tools'));
+    await press(t, find.text('Track an order'));
+    await typeIn(t, find.ancestor(of: find.text('Order number'), matching: find.byType(TkKitField)), 'MK-9');
+    await press(t, find.text('Next'));
+    await press(t, find.text('Yes, go ahead'));
+    expect(find.text('Track an order didn’t go through'), findsOneWidget);
+    expect(find.textContaining('Your reference is 9F1B2C3D'), findsOneWidget);
+    await looks(t, 'their-tool-failed');
     await drain(t);
   });
 }
