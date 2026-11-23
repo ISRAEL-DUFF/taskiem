@@ -371,6 +371,9 @@ customer_messages.attachment
 customer_messages.expires_at
 customer_messages.id
 customer_messages.tenant_id
+customer_tool_watches.created_at
+customer_tool_watches.notified_at
+customer_tool_watches.tenant_id
 customer_typing.person_id
 customer_typing.side
 customer_typing.tenant_id
