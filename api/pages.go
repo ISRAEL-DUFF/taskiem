@@ -107,6 +107,15 @@ func mayOpenPage(p *Principal, pg pageRow) bool {
 	return pg.Version != nil && mayStart(p, pg.Roles)
 }
 
+// lockPageNames holds the business's page names and count for the rest of
+// the transaction: two pages made at once (a file read twice, Show as a
+// page pressed twice) cannot take the same free name, nor both pass
+// max_pages.
+func lockPageNames(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('page-names:' || $1::text, 0))`, tenant)
+	return err
+}
+
 // pageSummary is a page in the list.
 func pageSummary(pg pageRow) map[string]any {
 	about := ""
@@ -309,6 +318,9 @@ func (s *Server) createPage(w http.ResponseWriter, r *http.Request) {
 	var out map[string]any
 	var refused []pages.Problem
 	err := s.tx(r, func(tx pgx.Tx) error {
+		if err := lockPageNames(r.Context(), tx, p.TenantID); err != nil {
+			return err
+		}
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_pages"); err != nil {
 			return err
 		}
@@ -437,6 +449,12 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 	var refused []pages.Problem
 	var nothing bool
 	err := s.tx(r, func(tx pgx.Tx) error {
+		// The draft and who saved it are read under the row's lock, so a
+		// draft saved by someone else between the two reads cannot be
+		// published as another person's (four-eyes).
+		if _, err := tx.Exec(r.Context(), `SELECT 1 FROM pages WHERE name = $1 FOR UPDATE`, chi.URLParam(r, "name")); err != nil {
+			return err
+		}
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
 		if err != nil {
 			return err
@@ -858,6 +876,10 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "a list keeps its own order")
 			return
 		}
+		if c := columnNamed(pc.table(b), col); c.Type == "" || c.Type == "json" {
+			writeErr(w, http.StatusBadRequest, "the rows cannot be put in this column's order")
+			return
+		}
 		if columnNamed(pc.table(b), col).Personal && (!pc.values.Viewer.Personal || b.Source.Records != "") {
 			writeErr(w, http.StatusBadRequest, "this column is personal: only someone who may read the table can put the rows in order by it")
 			return
@@ -1072,9 +1094,12 @@ func partHead(pc *pageCtx, b pages.Block, t datatables.Table, order *pages.Order
 				}
 			}
 			// sortable: a press on it puts the rows in its order; never a
-			// personal column for a viewer without table.read (pageBlock
-			// refuses it), so the web and the app do not offer it.
-			sortable := !columnNamed(t, c.Column).Personal || pc.values.Viewer.Personal && b.Source.Records == ""
+			// personal column for a viewer without table.read, nor any of
+			// Taskiem's records' personal columns, nor a json column or one
+			// the table no longer has (pageBlock refuses them), so the web
+			// and the app do not offer it.
+			col := columnNamed(t, c.Column)
+			sortable := col.Type != "" && col.Type != "json" && (!col.Personal || pc.values.Viewer.Personal && b.Source.Records == "")
 			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira, "sortable": sortable})
 		}
 		out["columns"] = cols

@@ -62,3 +62,57 @@ func TestMissing(t *testing.T) {
 		t.Errorf("tables: %v", got)
 	}
 }
+
+// Nothing personal leaves in a file (review of the export): a gone table's
+// condition values, a choice filter's options on a personal column, a
+// group order and state colours by one, and words of an expression's own
+// beside one; each counted.
+func TestForExportLeavesNothingPersonal(t *testing.T) {
+	staff := datatables.Table{Name: "staff", Title: "Staff", Columns: []datatables.Column{
+		{Name: "name", Type: "text", Personal: true}, {Name: "team", Type: "text"}, {Name: "phone", Type: "phone", Personal: true}}}
+	doc := `{"page": "page/v1", "name": "team", "title": "Team",
+	  "filters": [{"id": "who", "type": "choice", "column": "name", "options": [{"value": "Ada Obi"}, {"value": "Bayo Ade"}]}, {"id": "q", "type": "search"}],
+	  "blocks": [
+	    {"id": "l", "type": "list", "title": "People", "source": {"table": "staff", "uses": ["who", "q"]},
+	     "item": {"title": "=row.name == 'Ada Obi' ? 'boss' : row.team", "sub": "=row.team + ' · ' + row.phone",
+	              "state": {"text": "=row.name", "tones": {"Ada Obi": "good"}}},
+	     "group": {"column": "name", "order": ["Ada Obi"]},
+	     "detail": {"title": "=row.phone == '08031234567' ? 'me' : 'them'", "lines": [{"label": "Team", "value": "=row.team + ' (A)'"}]}},
+	    {"id": "g", "type": "figure", "label": "Gone", "value": "count", "source": {"table": "gone", "filters": [{"column": "x", "op": "eq", "value": "Ada Obi"}, {"column": "y", "op": "not_null"}]}}
+	  ]}`
+	p, _ := Parse([]byte(doc))
+	if p == nil {
+		t.Fatal("not read")
+	}
+	out, left := ForExport(p, []datatables.Table{staff})
+	raw := string(out.Marshal())
+	for _, leak := range []string{"Ada Obi", "Bayo Ade", "08031234567"} {
+		if strings.Contains(raw, leak) {
+			t.Errorf("%q left in the file: %s", leak, raw)
+		}
+	}
+	// 2 options, 1 group value, 1 tone, the title and the detail's title,
+	// and the gone table's condition value.
+	if left != 7 {
+		t.Errorf("left out %d: %s", left, raw)
+	}
+	if !strings.Contains(raw, `"=row.team + ' · ' + row.phone"`) || !strings.Contains(raw, `"=row.team + ' (A)'"`) || !strings.Contains(raw, "not_null") {
+		t.Errorf("too much left out: %s", raw)
+	}
+	if len(out.Filters) != 1 || len(out.Blocks[0].Source.Uses) != 1 {
+		t.Errorf("the choice filter: %+v %+v", out.Filters, out.Blocks[0].Source.Uses)
+	}
+	if _, ps := Parse(out.Marshal()); len(ps) > 0 {
+		t.Errorf("the export does not read back: %v", ps)
+	}
+}
+
+// A choice filter no part uses is held to the tables the page reads too.
+func TestUnusedChoiceFilterOnAPersonalColumn(t *testing.T) {
+	p := parseOK(t, strings.Replace(good, `"uses": ["q", "st", "when", "mine"]`, `"uses": ["q", "when", "mine"]`, 1))
+	p.Filters[1].Column = "phone"
+	ps := Check(p, Env{Tables: []datatables.Table{tickets}})
+	if len(ps) != 1 || ps[0].Path != "/filters/1/column" || !strings.Contains(ps[0].Message, "Phone: it is personal") {
+		t.Errorf("problems: %v", ps)
+	}
+}

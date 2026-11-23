@@ -42,7 +42,7 @@ func (s *Server) listPageVersions(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		rows, err := tx.Query(r.Context(), `SELECT v.version, v.document, v.published_by, v.published_at,
-				COALESCE(NULLIF(u.name, ''), u.email, '')
+				COALESCE(NULLIF(u.name, ''), NULLIF(split_part(u.email, '@', 1), ''), '')
 			FROM page_versions v
 			LEFT JOIN users u ON u.id::text = taskiem_actor_human(v.published_by)
 			WHERE v.page_id = $1 ORDER BY v.version`, pg.ID)
@@ -231,6 +231,9 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		if len(ps) > 0 {
 			refused = ps
 			return nil
+		}
+		if err := lockPageNames(r.Context(), tx, p.TenantID); err != nil {
+			return err
 		}
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_pages"); err != nil {
 			return err

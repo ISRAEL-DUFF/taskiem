@@ -50,6 +50,24 @@ func Check(p *Page, env Env) []Problem {
 	for _, f := range p.Filters {
 		filters[f.ID] = f
 	}
+	// A choice or dates filter is held to every table the page reads, used
+	// or not (a part that uses it says so itself): its choices are values, shown at the page's top to everyone
+	// who opens it, so one on a column personal in any of them is refused.
+	for i, f := range p.Filters {
+		if f.Type != "choice" && f.Type != "dates" || slices.ContainsFunc(p.Blocks, func(b Block) bool { return b.Source != nil && slices.Contains(b.Source.Uses, f.ID) }) {
+			continue // a part that uses it says why it cannot
+		}
+		for _, name := range p.UsesTables() {
+			t, ok := Lookup(env.Tables, name)
+			if !ok {
+				continue
+			}
+			if col, ok := columnOf(t, f.Column); ok && col.Personal {
+				ps.add(fmt.Sprintf("/filters/%d/column", i), "The filter %s cannot pick by %s: it is personal, and its choices would show what is hidden.", f.word(), columnTitle(col))
+				break
+			}
+		}
+	}
 	for i, b := range p.Blocks {
 		if b.Source == nil {
 			continue

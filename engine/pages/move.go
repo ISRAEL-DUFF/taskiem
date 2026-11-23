@@ -3,8 +3,10 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/israel-duff/taskiem/engine/datatables"
 )
@@ -118,35 +120,160 @@ func andList(words []string) string {
 }
 
 // ForExport is the page as written to a file: its document only (a page
-// holds no rows), with nothing personal. A condition on a personal column
-// that carries a value (a phone number a part is narrowed to) is left
-// out; left says how many were, so the person exporting is told.
+// holds no rows), with nothing personal left in it. What could carry a
+// value of a personal column is left out, and left says how much was, so
+// the person exporting is told:
+//
+//   - a condition on a personal column that carries a value (a phone a part
+//     is narrowed to); every such value of a part whose table the business
+//     no longer has (its columns cannot be told apart);
+//   - a choice filter on a column personal in a table the page reads (its
+//     choices are values): the filter goes, and the parts stop using it;
+//   - a list's group order by a personal column (the values in order), and
+//     a state's colours by its words when its words read a personal column;
+//   - an expression that reads a personal column and holds words of its
+//     own (row.phone == '0803…' ? …): it becomes that column alone.
+//
+// A draft is written the same way: what it holds is left out alike.
 func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 	var cp Page
 	_ = json.Unmarshal(p.Marshal(), &cp)
-	for i, b := range cp.Blocks {
-		if b.Source == nil || len(b.Source.Filters) == 0 {
+	// personal says whether a column is personal in t (any column, when
+	// the table is not the business's: nothing tells them apart).
+	personal := func(t datatables.Table, known bool, col string) bool {
+		if !known {
+			return true
+		}
+		c, ok := columnOf(t, col)
+		return ok && c.Personal
+	}
+	// A choice filter on a column personal in a table the page reads.
+	var dropped []string
+	var keptFilters []Filter
+	for _, f := range cp.Filters {
+		drop := false
+		if f.Type == "choice" {
+			for _, name := range cp.UsesTables() {
+				t, ok := Lookup(tables, name)
+				if ok && personal(t, true, f.Column) {
+					drop = true
+				}
+			}
+		}
+		if drop {
+			left += len(f.Options)
+			dropped = append(dropped, f.ID)
 			continue
 		}
-		t, ok := Lookup(tables, b.Source.From())
-		if !ok {
+		keptFilters = append(keptFilters, f)
+	}
+	cp.Filters = keptFilters
+	for i := range cp.Blocks {
+		b := &cp.Blocks[i]
+		if b.Source == nil {
 			continue
 		}
-		kept := b.Source.Filters[:0:0]
+		if len(dropped) > 0 {
+			uses := b.Source.Uses[:0:0]
+			for _, u := range b.Source.Uses {
+				if !slices.Contains(dropped, u) {
+					uses = append(uses, u)
+				}
+			}
+			if len(uses) == 0 {
+				uses = nil
+			}
+			b.Source.Uses = uses
+		}
+		t, known := Lookup(tables, b.Source.From())
+		if known && b.Source.Records == "" && t.Name != b.Source.Table {
+			known = false
+		}
+		var kept []Condition
 		for _, c := range b.Source.Filters {
-			col, found := columnOf(t, c.Column)
-			if found && col.Personal && c.Value != nil {
+			if c.Value != nil && personal(t, known, c.Column) {
 				left++
 				continue
 			}
 			kept = append(kept, c)
 		}
-		if len(kept) == 0 {
-			kept = nil
+		b.Source.Filters = kept
+		if g := b.Group; g != nil && len(g.Order) > 0 && personal(t, known, g.Column) {
+			left += len(g.Order)
+			g.Order = nil
 		}
-		cp.Blocks[i].Source.Filters = kept
+		reads := func(v string) bool {
+			src, ok := strings.CutPrefix(v, "=")
+			if !ok {
+				return false
+			}
+			paths, err := engine.Paths(src, "row")
+			if err != nil {
+				return !known
+			}
+			for _, pth := range paths {
+				if len(pth) > 1 && pth[0] == "row" && personal(t, known, pth[1]) {
+					return true
+				}
+			}
+			return false
+		}
+		clean := func(v *string) {
+			src, ok := strings.CutPrefix(*v, "=")
+			if !ok || !hasWordsOfItsOwn(src) || !reads(*v) {
+				return
+			}
+			left++
+			col := ""
+			if paths, err := engine.Paths(src, "row"); err == nil {
+				for _, pth := range paths {
+					if len(pth) > 1 && pth[0] == "row" && personal(t, known, pth[1]) {
+						col = pth[1]
+						break
+					}
+				}
+			}
+			if col == "" {
+				*v = "-"
+				return
+			}
+			*v = "=row." + col
+		}
+		if it := b.Item; it != nil {
+			if it.State != nil && len(it.State.Tones) > 0 && reads(it.State.Text) {
+				left += len(it.State.Tones)
+				it.State.Tones = nil
+			}
+			clean(&it.Title)
+			if it.Sub != "" {
+				clean(&it.Sub)
+			}
+			if it.State != nil {
+				clean(&it.State.Text)
+			}
+		}
+		if d := b.Detail; d != nil {
+			clean(&d.Title)
+			for j := range d.Lines {
+				clean(&d.Lines[j].Value)
+			}
+		}
 	}
 	return &cp, left
+}
+
+// literalRe finds words of an expression's own: a quoted string.
+var literalRe = regexp.MustCompile(`'[^']*'|"[^"]*"`)
+
+// hasWordsOfItsOwn says whether an expression holds a quoted string with a
+// letter or a digit in it (a separator like ' · ' carries nothing).
+func hasWordsOfItsOwn(src string) bool {
+	for _, lit := range literalRe.FindAllString(src, -1) {
+		if strings.IndexFunc(lit, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Missing says, in plain words, what a page names that the business does
