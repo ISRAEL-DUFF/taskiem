@@ -3,7 +3,9 @@
 // person may open, pinned first; and a page drawn from what the server
 // worked out for them (GET /v1/pages/{name}/view): its filters, its
 // figures (the main one on the top card), lists in their groups, tables
-// as rows, and a row's card in a sheet. Nothing here reads a table itself.
+// as rows (put in a column's order from the part's Order button, among the
+// columns the server says this person may order by), and a row's card in a
+// sheet. Nothing here reads a table itself.
 // Making and changing pages is on the web.
 
 import 'dart:async';
@@ -24,6 +26,7 @@ import '../kit/sheet.dart' show TkFormBody, TkLines, TkSheet, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
+import 'groups.dart' show pickOneOf;
 import 'words.dart' show CardTone;
 
 Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
@@ -70,6 +73,22 @@ List<({String label, List<PageRow> rows})> groupedRows(PageBlock b) {
       if (rows.any((r) => (r.group ?? '') == g.key)) (label: g.label, rows: rows.where((r) => (r.group ?? '') == g.key).toList()),
   ];
 }
+
+/// The columns of a table part this person may put its rows in order by
+/// (the server's `sortable`: never a personal column for someone who may
+/// not read the table).
+List<PageBlockColumnsItem> sortableColumns(PageBlock b) => [for (final c in b.columns ?? const <PageBlockColumnsItem>[]) if (c.sortable) c];
+
+/// The words of a table part's Order button: what it is in order by now.
+String orderLabel(PageBlock b) {
+  final o = b.order;
+  if (o == null) return 'Order';
+  final c = (b.columns ?? const <PageBlockColumnsItem>[]).where((c) => c.column == o.column).firstOrNull;
+  return 'By ${c?.label ?? o.column}';
+}
+
+/// Which way a column's order goes, in words.
+String orderWay(bool desc) => desc ? 'Z to A, largest or latest first' : 'A to Z, smallest or earliest first';
 
 /// The filters param a page is drawn with: only those set.
 String? filtersParam(Map<String, String> values) {
@@ -227,7 +246,15 @@ class _PageScreenState extends State<PageScreen> {
     if (cursor is! String || _loadingMore != null) return;
     setState(() => _loadingMore = b.id);
     try {
-      final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, cursor: cursor, filters: filtersParam(_values));
+      final o = b.order;
+      final next = await widget.auth.api.getPageBlock(
+        name: widget.name,
+        block: b.id,
+        cursor: cursor,
+        order: o?.column,
+        desc: o?.desc == true ? '1' : null,
+        filters: filtersParam(_values),
+      );
       final groups = [...?b.groups];
       for (final g in next.groups ?? const <PageBlockGroupsItem>[]) {
         if (!groups.any((x) => x.key == g.key)) groups.add(g);
@@ -240,6 +267,44 @@ class _PageScreenState extends State<PageScreen> {
               'more': next.more,
             }));
       }
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    } finally {
+      if (mounted) setState(() => _loadingMore = null);
+    }
+  }
+
+  /// Puts a table part's rows in a column's order: the columns this
+  /// person may order by, the one in use ticked (picked again, the other
+  /// way round), and the page's own order. The part is read again from
+  /// the server in that order.
+  Future<void> _order(PageBlock b) async {
+    final cols = sortableColumns(b);
+    final now = b.order;
+    final picked = await pickOneOf(
+      context,
+      title: 'Put ${b.title ?? 'the rows'} in order',
+      value: now?.column ?? '',
+      choices: [
+        ('', 'As the page puts them', 'The order the page was made with'),
+        for (final c in cols)
+          (
+            c.column,
+            c.label,
+            now?.column == c.column ? 'Now ${orderWay(now!.desc)}. Pick again for ${orderWay(!now.desc)}' : orderWay(false),
+          ),
+      ],
+    );
+    if (picked == null || !mounted || _loadingMore != null) return;
+    if (picked.isEmpty) {
+      if (now != null) setState(() => _more.remove(b.id));
+      return;
+    }
+    final desc = now?.column == picked ? !now!.desc : false;
+    setState(() => _loadingMore = b.id);
+    try {
+      final next = await widget.auth.api.getPageBlock(name: widget.name, block: b.id, order: picked, desc: desc ? '1' : null, filters: filtersParam(_values));
+      if (mounted) setState(() => _more[b.id] = next);
     } on Object catch (e) {
       if (mounted) showTkToast(context, errorWords(e), error: true);
     } finally {
@@ -387,10 +452,21 @@ class _PageScreenState extends State<PageScreen> {
       // A table on a phone: a row each, its first column the title and the
       // others under it with their names.
       final cols = b.columns ?? const <PageBlockColumnsItem>[];
+      final o = b.order;
       out.add(TkSection(
         title: b.title,
         count: b.count,
         inset: 16,
+        trailing: sortableColumns(b).isEmpty
+            ? null
+            : TkSmallButton(
+                label: orderLabel(b),
+                icon: 'b-sort',
+                semantics: o == null
+                    ? 'Put ${b.title ?? 'the rows'} in order'
+                    : '${b.title ?? 'The rows'} in order ${orderLabel(b).toLowerCase()}, ${orderWay(o.desc)}. Change the order',
+                onPressed: _loadingMore != null ? null : () => unawaited(_order(b)),
+              ),
         children: [
           for (final r in rows)
             () {

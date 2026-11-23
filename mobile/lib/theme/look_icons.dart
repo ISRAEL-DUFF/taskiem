@@ -28,6 +28,7 @@ const tkLookIcons = <String, String>{
   'b-phone': 'M6 3h3l2 5-2.5 1.5a11 11 0 0 0 5 5L15 12l5 2v3a2 2 0 0 1-2 2A15 15 0 0 1 4 5a2 2 0 0 1 2-2z',
   'b-plus': 'M12 5v14M5 12h14',
   'b-up': 'M12 4.5l8.5 14h-17z',
+  'b-sort': 'M8 4v16M4.5 16.5L8 20l3.5-3.5M16 20V4M12.5 7.5L16 4l3.5 3.5',
   'b-send': 'M21 3L10 14M21 3l-7 18-4-7-7-4z',
   'b-arrow': 'M5 12h14M13 6l6 6-6 6',
   'b-caret': 'M7 10l5 5 5-5',

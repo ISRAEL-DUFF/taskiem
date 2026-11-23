@@ -2,7 +2,8 @@
 // first; a page drawn from the server's view (the count on the top card,
 // figures beside each other, a list in its groups, a table as rows), a
 // row's card in a sheet, a search and a choice sent to the server as the
-// page's filters, Show more; a part that needs fixing; /pages links.
+// page's filters, Show more; a part that needs fixing; /pages links; a
+// table put in a column's order, only by the columns the server allows.
 // Pictured light and dark.
 
 import 'dart:convert';
@@ -138,8 +139,8 @@ Map<String, dynamic> _view({String? more = 'c2'}) => {
       'count': 1,
       'more': null,
       'columns': [
-        {'column': 'title', 'label': 'Title', 'naira': false},
-        {'column': 'amount_kobo', 'label': 'Amount', 'naira': true},
+        {'column': 'title', 'label': 'Title', 'naira': false, 'sortable': true},
+        {'column': 'amount_kobo', 'label': 'Amount', 'naira': true, 'sortable': true},
       ],
       'rows': [
         {'id': '1', 'cells': ['Printer jam', '₦2,500']},
@@ -247,6 +248,104 @@ void main() {
     expect(find.text('Show more'), findsNothing);
   });
 
+  testWidgets('A table is put in a column’s order, only by the columns this person may', (t) async {
+    phone(t, 800);
+    final api = _Api();
+    Map<String, dynamic> people({Map<String, dynamic>? order, List<List<String>>? rows}) => {
+      'id': 'people',
+      'type': 'table',
+      'title': 'Staff',
+      'size': 'full',
+      'empty': 'Nothing to show',
+      'has_detail': false,
+      'count': 3,
+      'more': null,
+      'columns': [
+        {'column': 'name', 'label': 'Name', 'naira': false, 'sortable': false}, // personal: no order for this person
+        {'column': 'team', 'label': 'Team', 'naira': false, 'sortable': true},
+        {'column': 'started', 'label': 'Started', 'naira': false, 'sortable': true},
+      ],
+      'order': ?order,
+      'rows': [
+        for (final (i, r) in (rows ?? [['•••ola', 'Floor', '3 Mar 2024'], ['•••ayo', 'Desk', '1 Jun 2025'], ['•••chi', 'Kitchen', '9 Jan 2023']]).indexed)
+          {'id': '$i', 'cells': r},
+      ],
+    };
+    api.routes['GET /v1/pages/staff/view'] = (_) => {
+      'page': _summary('staff', 'Staff'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-22T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [people()],
+    };
+    api.routes['GET /v1/pages/staff/blocks/people'] = (r) {
+      final desc = r.url.queryParameters['desc'] == '1';
+      final rows = [['•••ayo', 'Desk', '1 Jun 2025'], ['•••ola', 'Floor', '3 Mar 2024'], ['•••chi', 'Kitchen', '9 Jan 2023']];
+      return people(order: {'column': r.url.queryParameters['order'], 'desc': desc}, rows: desc ? rows.reversed.toList() : rows);
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'staff', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('Order'), findsOneWidget);
+    expect(find.bySemanticsLabel('Put Staff in order'), findsOneWidget);
+    await looks(t, 'page-order');
+    await snap(t, 'page-order');
+
+    // The sheet offers the columns the server allows: never the personal one.
+    await t.tap(find.text('Order'));
+    await settle(t);
+    expect(find.text('Put Staff in order'), findsOneWidget);
+    expect(find.text('As the page puts them'), findsOneWidget);
+    expect(find.text('Team'), findsWidgets);
+    expect(find.text('Started'), findsOneWidget);
+    expect(find.text('Name'), findsNothing);
+    await looks(t, 'page-order-sheet');
+    await snap(t, 'page-order-sheet');
+    await t.tap(find.text('Team').last);
+    await settle(t);
+    var asked = api.calls.where((c) => c.url.path == '/v1/pages/staff/blocks/people').last.url.queryParameters;
+    expect(asked['order'], 'team');
+    expect(asked['desc'], isNull);
+    expect(find.text('By Team'), findsOneWidget);
+    expect(find.text('•••ayo'), findsOneWidget);
+    expect(tester(t).dy(find.text('•••ayo')) < tester(t).dy(find.text('•••chi')), isTrue);
+
+    // Picked again, the other way round.
+    await t.tap(find.text('By Team'));
+    await settle(t);
+    expect(find.textContaining('Pick again for Z to A'), findsOneWidget);
+    await t.tap(find.text('Team').last);
+    await settle(t);
+    asked = api.calls.where((c) => c.url.path == '/v1/pages/staff/blocks/people').last.url.queryParameters;
+    expect(asked['desc'], '1');
+    expect(tester(t).dy(find.text('•••chi')) < tester(t).dy(find.text('•••ayo')), isTrue);
+
+    // Back to the page's own order: no call, the rows as drawn.
+    final before = api.calls.length;
+    await t.tap(find.text('By Team'));
+    await settle(t);
+    await t.tap(find.text('As the page puts them'));
+    await settle(t);
+    expect(api.calls.length, before);
+    expect(find.text('Order'), findsOneWidget);
+  });
+
+  test('A table part’s order in words', () {
+    final b = PageBlock.fromJson({
+      'id': 'x',
+      'type': 'table',
+      'columns': [
+        {'column': 'name', 'label': 'Name', 'naira': false, 'sortable': false},
+        {'column': 'team', 'label': 'Team', 'naira': false, 'sortable': true},
+      ],
+      'order': {'column': 'team', 'desc': true},
+    });
+    expect(sortableColumns(b).map((c) => c.column), ['team']);
+    expect(orderLabel(b), 'By Team');
+    expect(orderLabel(PageBlock.fromJson({'id': 'x', 'type': 'table'})), 'Order');
+    expect(orderWay(true), 'Z to A, largest or latest first');
+  });
+
   test('/pages links open the list and a page', () {
     expect(routeOf('/pages').screen, RouteScreen.pages);
     expect(routeOf('/pages').id, '');
@@ -257,3 +356,6 @@ void main() {
     expect(filtersParam({}), isNull);
   });
 }
+
+/// Where a widget sits, to say which row comes first.
+({double Function(Finder) dy}) tester(WidgetTester t) => (dy: (f) => t.getTopLeft(f.first).dy);
