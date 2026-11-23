@@ -309,1324 +309,1324 @@
       "reviewed": false
     },
     "menu.about": {
-      "text": "About {topic}. What would you like to do?",
+      "text": "Game da {topic}. Me kake son yi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Heads a topic's menu when Taskiem's model could tell the topic but not the action"
+      "context": "Draft, not reviewed: Heads a topic's menu when Taskiem's model could tell the topic but not the action"
     },
     "menu.account.lang": {
-      "text": "Language",
+      "text": "Harshe",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.account.lang.line": {
-      "text": "The language I answer in",
+      "text": "Harshen da nake amsawa da shi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.account.plan": {
-      "text": "Your plan",
+      "text": "Tsarinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.account.plan.line": {
-      "text": "What you pay, what you get",
+      "text": "Abin da kake biya, abin da kake samu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.account.signin": {
-      "text": "Sign in on the web",
+      "text": "Shiga a yanar gizo",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.account.signin.line": {
-      "text": "A link for your computer",
+      "text": "Hanyar haɗi don kwamfutarka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.account.switch": {
-      "text": "Switch business",
+      "text": "Canza kasuwanci",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.account.switch.line": {
-      "text": "Work in another one",
+      "text": "Yi aiki a wani daban",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.anything_else": {
-      "text": "Anything else?",
+      "text": "Akwai wani abu kuma?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under a topic's menu shown after that topic's command was answered"
+      "context": "Draft, not reviewed: Under a topic's menu shown after that topic's command was answered"
     },
     "menu.auto.build": {
-      "text": "Automate something new",
+      "text": "Sabon aiki kai tsaye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.auto.build.ask.goal": {
-      "text": "What should happen, and when? Like every Friday text my customers who owe me.",
+      "text": "Me ya kamata ya faru, kuma yaushe? Kamar every Friday text my customers who owe me.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.auto.build.line": {
-      "text": "Say it, Taskiem sets it up",
+      "text": "Faɗa shi, Taskiem zai shirya shi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.auto.run": {
-      "text": "Run an automation",
+      "text": "Fara wani aiki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.auto.run.ask.name": {
-      "text": "Which one? Its name.",
+      "text": "Wanne? Sunansa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.auto.run.line": {
-      "text": "One you already have",
+      "text": "Wanda kake da shi tuni",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.auto.status": {
-      "text": "What ran today",
+      "text": "Abin da ya gudana yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.auto.status.line": {
-      "text": "And anything that failed",
+      "text": "Da duk abin da ya gaza",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.bookings.cancel": {
-      "text": "Cancel a booking",
+      "text": "Soke alƙawari",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.bookings.cancel.ask.ref": {
-      "text": "Which booking?",
+      "text": "Wane alƙawari?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.bookings.cancel.line": {
-      "text": "The customer is told",
+      "text": "Za a sanar da abokin ciniki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.bookings.move": {
-      "text": "Move a booking",
+      "text": "Matsar da alƙawari",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.bookings.move.ask.ref": {
-      "text": "Which booking?",
+      "text": "Wane alƙawari?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.bookings.move.ask.when": {
-      "text": "To when? Like Sat 11:00.",
+      "text": "Zuwa yaushe? Kamar Sat 11:00.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.bookings.move.line": {
-      "text": "A new day or time",
+      "text": "Sabuwar rana ko lokaci",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.bookings.off": {
-      "text": "Take a day off",
+      "text": "Ɗauki hutun rana",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.bookings.off.ask.day": {
-      "text": "Which day? Like 25 Dec.",
+      "text": "Wace rana? Kamar 25 Dec.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.bookings.off.line": {
-      "text": "No bookings that day",
+      "text": "Babu alƙawari a ranar",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.bookings.today": {
-      "text": "Today's bookings",
+      "text": "Alƙawuran yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.bookings.today.line": {
-      "text": "Who is coming, and when",
+      "text": "Wanda zai zo, da lokacin",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.add": {
-      "text": "Add a supplier",
+      "text": "Ƙara mai kawowa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.add.ask.for": {
-      "text": "What do you buy from them? Send skip if many things.",
+      "text": "Me kake saya daga gare su? Aika skip idan abubuwa da yawa ne.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.add.ask.name": {
-      "text": "What's the supplier called?",
+      "text": "Menene sunan mai kawowar?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.add.ask.phone": {
-      "text": "What's their phone number?",
+      "text": "Menene lambar wayarsu?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.add.line": {
-      "text": "Name, phone, what they sell",
+      "text": "Suna, waya, abin da suke sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.bills": {
-      "text": "Your bills",
+      "text": "Bashin da ake binka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.bills.line": {
-      "text": "What you owe suppliers",
+      "text": "Abin da masu kawowa ke binka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.got": {
-      "text": "Goods received",
+      "text": "Kaya sun iso",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.got.ask.what": {
-      "text": "What came? Say how many, like 50 cartons of Indomie.",
+      "text": "Me ya zo? Faɗi nawa, kamar 50 cartons of Indomie.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.got.line": {
-      "text": "Counted into your stock",
+      "text": "An ƙara su cikin kayanka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.list": {
-      "text": "Your suppliers",
+      "text": "Masu kawo maka kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.list.line": {
-      "text": "Who you buy from",
+      "text": "Waɗanda kake saya daga gare su",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.order": {
-      "text": "Order from a supplier",
+      "text": "Yi oda daga mai kawowa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.order.ask.who": {
-      "text": "From which supplier?",
+      "text": "Daga wane mai kawowa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.order.line": {
-      "text": "What you need, sent to them",
+      "text": "Abin da kake buƙata, a aika musu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.buying.pay": {
-      "text": "Pay a supplier",
+      "text": "Biya mai kawowa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.buying.pay.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.pay.ask.how": {
-      "text": "How did you pay?",
+      "text": "Ta yaya ka biya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.pay.ask.who": {
-      "text": "Which supplier?",
+      "text": "Wane mai kawowa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.pay.line": {
-      "text": "Against their bill",
+      "text": "A kan kuɗin da suke binka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.check.long": {
-      "text": "That's too long. Say it in fewer words.",
+      "text": "Wannan ya yi tsawo. Faɗe shi a taƙaice.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer over 150 characters"
+      "context": "Draft, not reviewed: A question's answer over 150 characters"
     },
     "menu.check.money": {
-      "text": "Send an amount, like 12,000 or 12k.",
+      "text": "Aika adadin kuɗi, kamar 12,000 ko 12k.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not an amount"
+      "context": "Draft, not reviewed: A question's answer that is not an amount"
     },
     "menu.check.number": {
-      "text": "Send a number, like 30.",
+      "text": "Aika lamba, kamar 30.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a number"
+      "context": "Draft, not reviewed: A question's answer that is not a number"
     },
     "menu.check.phone": {
-      "text": "That doesn't look like a phone number. Try one like 0803 123 4567.",
+      "text": "Wannan bai yi kama da lambar waya ba. Gwada kamar 0803 123 4567.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a phone number"
+      "context": "Draft, not reviewed: A question's answer that is not a phone number"
     },
     "menu.check.ref": {
-      "text": "That isn't an order's number. It looks like TK-A1B2C3.",
+      "text": "Wannan ba lambar oda ba ce. Tana kama da TK-A1B2C3.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not an order's or booking's number"
+      "context": "Draft, not reviewed: A question's answer that is not an order's or booking's number"
     },
     "menu.buying.deliver": {
-      "text": "Deliver to a saved place",
+      "text": "Kai wurin da aka ajiye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.buying.deliver.ask.place": {
-      "text": "Where to? A saved place's name, like warehouse.",
+      "text": "Zuwa ina? Sunan wurin da aka ajiye, kamar warehouse.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.deliver.ask.ref": {
-      "text": "Which order? Its number, like P-7QX4KD.",
+      "text": "Wace oda? Lambarta, kamar P-7QX4KD.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.buying.deliver.line": {
-      "text": "Where one order goes, like @warehouse",
+      "text": "Inda oda ɗaya za ta je, kamar @warehouse",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.check.saved": {
-      "text": "That isn't a saved thing's name. Names are letters, numbers and -, like mum or our-account.",
+      "text": "Wannan ba sunan abin da aka ajiye ba ne. Sunaye haruffa ne, lambobi da -, kamar mum ko our-account.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a saved thing's name"
+      "context": "Draft, not reviewed: A question's answer that is not a saved thing's name"
     },
     "menu.saved.ask": {
-      "text": "Ask about a saved thing",
+      "text": "Tambaya kan abin ajiya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.saved.ask.ask.name": {
-      "text": "Which saved thing? Its name, like mum.",
+      "text": "Wane abin da aka ajiye? Sunansa, kamar mum.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.ask.ask.what": {
-      "text": "What do you want to know? Like phone, or the insurance date. Send skip for all of it.",
+      "text": "Me kake son sani? Kamar phone, ko ranar insurance. Aika skip don duka.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.ask.line": {
-      "text": "A detail, like @mum's phone",
+      "text": "Wani bayani, kamar wayar @mum",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.import": {
-      "text": "Import from a file",
+      "text": "Shigo da shi daga fayil",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.saved.import.line": {
-      "text": "A spreadsheet of accounts, people, places",
+      "text": "Takardar lissafi ta asusu, mutane, wurare",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.saved.remind": {
-      "text": "Remind me of a date",
+      "text": "Tuna mini da wata rana",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.saved.remind.ask.name": {
-      "text": "Which saved thing? Its name, like car.",
+      "text": "Wane abin da aka ajiye? Sunansa, kamar car.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.remind.ask.what": {
-      "text": "Which of its dates? Like insurance or birthday. Send skip if it has one.",
+      "text": "Wace daga cikin ranakunsa? Kamar insurance ko birthday. Aika skip idan ɗaya ce kawai.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.remind.line": {
-      "text": "A saved date, told on its day",
+      "text": "Ranar da aka ajiye, a faɗa maka a ranarta",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.saved.reminders": {
-      "text": "Your reminders",
+      "text": "Tunatarwarka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.saved.reminders.line": {
-      "text": "The dates you asked to be told of",
+      "text": "Ranakun da ka ce a sanar da kai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.saved.share": {
-      "text": "Share a saved thing",
+      "text": "Raba abin ajiya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.saved.share.ask.name": {
-      "text": "Which saved thing? Its name, like our-account.",
+      "text": "Wane abin da aka ajiye? Sunansa, kamar our-account.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.share.ask.to": {
-      "text": "Who with? A linked business or a customer, by name.",
+      "text": "Da wa? Kasuwancin da aka haɗa ko abokin ciniki, da suna.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.share.line": {
-      "text": "With a linked business or a customer",
+      "text": "Da kasuwancin da aka haɗa ko abokin ciniki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.check.signed": {
-      "text": "Send a number, like -2 or 3.",
+      "text": "Aika lamba, kamar -2 ko 3.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not a number up or down"
+      "context": "Draft, not reviewed: A question's answer that is not a number up or down"
     },
     "menu.choose": {
-      "text": "Choose",
+      "text": "Zaɓi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The button that opens a menu's list on WhatsApp; at most 20 characters"
+      "context": "Draft, not reviewed: The button that opens a menu's list on WhatsApp; at most 20 characters"
     },
     "menu.choose_one": {
-      "text": "Choose one of: {choices}.",
+      "text": "Zaɓi ɗaya daga cikin: {choices}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An answer that is not one of a question's fixed choices"
+      "context": "Draft, not reviewed: An answer that is not one of a question's fixed choices"
     },
     "menu.form_missing": {
-      "text": "Fill in: {fields}",
+      "text": "Cika: {fields}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A form sent without a value it needs; {fields} are the questions left"
+      "context": "Draft, not reviewed: A form sent without a value it needs; {fields} are the questions left"
     },
     "menu.here_help": {
-      "text": "Here is what I can help with.",
+      "text": "Ga abin da zan iya taimakawa da shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under the topics menu, after the model said Taskiem cannot do something"
+      "context": "Draft, not reviewed: Under the topics menu, after the model said Taskiem cannot do something"
     },
     "menu.leave": {
-      "text": "Let's leave it for now.",
+      "text": "Mu bar shi a yanzu.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question answered wrongly three times: it is dropped"
+      "context": "Draft, not reviewed: A question answered wrongly three times: it is dropped"
     },
     "menu.lists.add": {
-      "text": "Add to a list",
+      "text": "Ƙara cikin jeri",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.lists.add.ask.list": {
-      "text": "To which list?",
+      "text": "Zuwa wane jeri?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.lists.add.line": {
-      "text": "One new entry",
+      "text": "Sabon abu ɗaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.lists.all": {
-      "text": "Your lists",
+      "text": "Jerinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.lists.all.line": {
-      "text": "Customers, members, anything you keep",
+      "text": "Abokan ciniki, membobi, duk abin da kake ajiyewa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.lists.find": {
-      "text": "Look something up",
+      "text": "Nemo wani abu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.lists.find.ask.list": {
-      "text": "In which list?",
+      "text": "A wane jeri?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.lists.find.ask.words": {
-      "text": "What should I look for?",
+      "text": "Me zan nema?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.lists.find.line": {
-      "text": "In one of your lists",
+      "text": "A cikin ɗaya daga jerinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.lists.new": {
-      "text": "Make a new list",
+      "text": "Yi sabon jeri",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.lists.new.line": {
-      "text": "Anything you want to keep",
+      "text": "Duk abin da kake son ajiyewa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.money.cash": {
-      "text": "Cash in or out",
+      "text": "Kuɗi shiga ko fita",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.money.cash.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.cash.ask.dir": {
-      "text": "Cash in, or cash out?",
+      "text": "Kuɗi ya shigo, ko ya fita?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.cash.ask.what": {
-      "text": "What for? Send skip if nothing.",
+      "text": "Don me? Aika skip idan babu.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.cash.line": {
-      "text": "The till, the safe",
+      "text": "Akwatin kuɗi, ma'ajiya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.money.invoice": {
-      "text": "Send an invoice",
+      "text": "Aika invoice",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.money.invoice.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.ask.for": {
-      "text": "For what?",
+      "text": "Don me?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.ask.who": {
-      "text": "Who is it for? A name, or a saved person like @acme.",
+      "text": "Na wane ne? Suna, ko wani da aka ajiye kamar @acme.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.line": {
-      "text": "To a customer, from the chat",
+      "text": "Zuwa ga abokin ciniki, daga hira",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.money.invoices": {
-      "text": "Your invoices",
+      "text": "Invoice ɗinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.money.invoices.line": {
-      "text": "Sent, paid, and late",
+      "text": "Waɗanda aka aika, aka biya, da masu jinkiri",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.money.spent": {
-      "text": "Record money spent",
+      "text": "Rubuta kuɗin da ka kashe",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.money.spent.ask.amount": {
-      "text": "How much did you spend?",
+      "text": "Nawa ka kashe?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.spent.ask.what": {
-      "text": "On what?",
+      "text": "A kan me?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.spent.line": {
-      "text": "Diesel, rent, transport",
+      "text": "Dizal, haya, sufuri",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.money.week": {
-      "text": "Your money",
+      "text": "Kuɗinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.money.week.line": {
-      "text": "In, out, and what is left",
+      "text": "Shiga, fita, da abin da ya rage",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.more": {
-      "text": "More…",
+      "text": "Ƙari…",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
+      "context": "Draft, not reviewed: The last row of the topics list on WhatsApp, for the rest; at most 24 characters"
     },
     "menu.more_line": {
-      "text": "The other topics",
+      "text": "Sauran batutuwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under the More… row, and heading the rest of the topics"
+      "context": "Draft, not reviewed: Under the More… row, and heading the rest of the topics"
     },
     "menu.need_answer": {
-      "text": "I need an answer to go on. Send *cancel* to stop.",
+      "text": "Ina buƙatar amsa don ci gaba. Aika *cancel* don tsayawa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An empty answer to a question"
+      "context": "Draft, not reviewed: An empty answer to a question"
     },
     "menu.not_yours": {
-      "text": "That isn't something you can do here. Send *help* to see what you can.",
+      "text": "Ba za ka iya yin wannan a nan ba. Aika *help* don ganin abin da za ka iya yi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row the person may not use"
+      "context": "Draft, not reviewed: A menu row the person may not use"
     },
     "menu.open_web": {
-      "text": "{title}: open it in Taskiem on the web.",
+      "text": "{title}: buɗe shi a Taskiem a yanar gizo.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row with no form or page on this channel"
+      "context": "Draft, not reviewed: A menu row with no form or page on this channel"
     },
     "menu.orders.move": {
-      "text": "Mark ready or delivered",
+      "text": "Sa shirye ko an kai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.orders.move.ask.ref": {
-      "text": "Which order?",
+      "text": "Wace oda?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.orders.move.ask.to": {
-      "text": "Ready, or delivered?",
+      "text": "Shirye, ko an kai?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.orders.move.line": {
-      "text": "Move an order on",
+      "text": "Ci gaba da oda",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.orders.one": {
-      "text": "One order",
+      "text": "Oda ɗaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.orders.one.ask.ref": {
-      "text": "Which order?",
+      "text": "Wace oda?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.orders.one.line": {
-      "text": "Find it by its number",
+      "text": "Nemo ta da lambarta",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.orders.open": {
-      "text": "Open orders",
+      "text": "Odojin da ke buɗe",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.orders.open.line": {
-      "text": "Waiting, being made, on the way",
+      "text": "Suna jira, ana yi, suna kan hanya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.orders.refund": {
-      "text": "Refund an order",
+      "text": "Mayar da kuɗin oda",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.orders.refund.ask.ref": {
-      "text": "Which order?",
+      "text": "Wace oda?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.orders.refund.line": {
-      "text": "Money back to the customer",
+      "text": "Kuɗi ya koma ga abokin ciniki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.owe.add": {
-      "text": "Someone owes you",
+      "text": "Sabon bashi a kan wani",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.owe.add.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.add.ask.for": {
-      "text": "For what? Send skip if nothing.",
+      "text": "Don me? Aika skip idan babu.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.add.ask.who": {
-      "text": "Who owes you?",
+      "text": "Wane ne ya ci bashin?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.add.line": {
-      "text": "Write it in the book",
+      "text": "Rubuta shi a littafi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.owe.list": {
-      "text": "Who owes you",
+      "text": "Waɗanda kake bi bashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.owe.list.line": {
-      "text": "Everyone, biggest first",
+      "text": "Kowa, mafi girma da farko",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.owe.paid": {
-      "text": "Someone paid",
+      "text": "Wani ya biya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.owe.paid.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.paid.ask.how": {
-      "text": "Cash, or transfer?",
+      "text": "Tsabar kuɗi, ko transfer?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.paid.ask.who": {
-      "text": "Who paid?",
+      "text": "Wa ya biya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.paid.line": {
-      "text": "Counted against what they owe",
+      "text": "An cire daga bashin da ake binsa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.owe.send": {
-      "text": "Send a customer their balance",
+      "text": "Tuna wa mai bashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.owe.send.ask.who": {
-      "text": "Which customer?",
+      "text": "Wane abokin ciniki?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.owe.send.line": {
-      "text": "A friendly reminder",
+      "text": "Tunatarwa ta abokantaka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.page.fronts": {
-      "text": "Other pages",
+      "text": "Wasu shafuka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.page.fronts.line": {
-      "text": "A menu, a snacks page",
+      "text": "Shafin menu, shafin kayan ciye-ciye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.page.hours": {
-      "text": "Opening hours",
+      "text": "Lokutan buɗewa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.page.hours.ask.hours": {
-      "text": "When do you open? Like mon-sat 8-6.",
+      "text": "Yaushe kake buɗewa? Kamar mon-sat 8-6.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.page.hours.line": {
-      "text": "Days and times you open",
+      "text": "Kwanaki da lokutan da kake buɗewa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.page.see": {
-      "text": "See your page",
+      "text": "Duba shafinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.page.see.line": {
-      "text": "What customers see, and its QR code",
+      "text": "Abin da abokan ciniki ke gani, da lambar QR ɗinsa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.page.shut": {
-      "text": "Close or open the shop",
+      "text": "Rufe ko buɗe shago",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.page.shut.ask.do": {
-      "text": "Close the shop, or open it?",
+      "text": "A rufe shagon, ko a buɗe shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.page.shut.line": {
-      "text": "Stop orders for a while, or start again",
+      "text": "Dakatar da oda na ɗan lokaci, ko sake farawa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.pick_topic": {
-      "text": "Pick a topic, or just tell me what you want in your own words.",
+      "text": "Zaɓi batu, ko kawai ka faɗa mini abin da kake so da kalmominka.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under the topics menu, after help"
+      "context": "Draft, not reviewed: Under the topics menu, after help"
     },
     "menu.products.add": {
-      "text": "Add a product",
+      "text": "Ƙara kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.products.add.ask.name": {
-      "text": "What's the product called?",
+      "text": "Menene sunan kayan?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.add.ask.price": {
-      "text": "What's its price?",
+      "text": "Nawa ne farashinsa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.add.line": {
-      "text": "Name, price, photo, sizes",
+      "text": "Suna, farashi, hoto, girma",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.products.hide": {
-      "text": "Hide or show a product",
+      "text": "Ɓoye ko nuna kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.products.hide.ask.do": {
-      "text": "Hide it, or show it again?",
+      "text": "A ɓoye shi, ko a sake nuna shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.hide.ask.name": {
-      "text": "Which product?",
+      "text": "Wane kaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.hide.line": {
-      "text": "Off your page for now, or back",
+      "text": "Cire daga shafinka na ɗan lokaci, ko mayar da shi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.products.price": {
-      "text": "Change a price",
+      "text": "Canza farashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.products.price.ask.name": {
-      "text": "Which product?",
+      "text": "Wane kaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.price.ask.price": {
-      "text": "What's the new price?",
+      "text": "Menene sabon farashin?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.price.line": {
-      "text": "A new price for one product",
+      "text": "Sabon farashi na kaya ɗaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.products.prices": {
-      "text": "Price lists",
+      "text": "Jerin farashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.products.prices.line": {
-      "text": "Prices for your trade buyers",
+      "text": "Farashi ga masu sari",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.products.service": {
-      "text": "Add a service",
+      "text": "Ƙara sabis",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.products.service.ask.minutes": {
-      "text": "How many minutes does it take?",
+      "text": "Minti nawa yake ɗauka?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.service.ask.name": {
-      "text": "What's the service called?",
+      "text": "Menene sunan sabis ɗin?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.service.ask.price": {
-      "text": "What's its price?",
+      "text": "Nawa ne farashinsa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.products.service.line": {
-      "text": "A haircut, a fitting, a session",
+      "text": "Aski, gwajin ɗinki, zama ɗaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.reply_number": {
-      "text": "Reply with a number:",
+      "text": "Amsa da lamba:",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. After a numbered menu's head, on the chat apps without menus of their own"
+      "context": "Draft, not reviewed: After a numbered menu's head, on the chat apps without menus of their own"
     },
     "menu.reply_or_type": {
-      "text": "Reply with a number, or type it.",
+      "text": "Amsa da lamba, ko ka rubuta shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under a question's numbered choices"
+      "context": "Draft, not reviewed: Under a question's numbered choices"
     },
     "menu.riders.add": {
-      "text": "Add a rider",
+      "text": "Ƙara mai kai kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.add.ask.areas": {
-      "text": "Which areas does {name} cover? Send skip for anywhere.",
+      "text": "Waɗanne unguwanni ne {name} ke zuwa? Aika skip don ko'ina.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.add.ask.name": {
-      "text": "What's the rider's name?",
+      "text": "Menene sunan mai kai kayan?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.add.ask.phone": {
-      "text": "What's {name}'s phone number?",
+      "text": "Menene lambar wayar {name}?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.add.line": {
-      "text": "Name, phone, and the areas they cover",
+      "text": "Suna, waya, da unguwannin da yake zuwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.riders.auto": {
-      "text": "Offer every order to riders",
+      "text": "Oda ga duk masu kai kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.auto.line": {
-      "text": "Riders take them as they come",
+      "text": "Za su ɗauka yadda suka zo",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.riders.back": {
-      "text": "Take an order back",
+      "text": "Karɓe oda baya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.back.ask.ref": {
-      "text": "Which order?",
+      "text": "Wace oda?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.back.line": {
-      "text": "From a rider who can't go",
+      "text": "Daga mai kai kaya da ba zai iya zuwa ba",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.riders.give": {
-      "text": "Give an order to a rider",
+      "text": "Ba mai kai kaya oda",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.give.ask.ref": {
-      "text": "Which order?",
+      "text": "Wace oda?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.give.ask.rider": {
-      "text": "Which rider?",
+      "text": "Wane mai kai kaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.riders.give.line": {
-      "text": "Pick the order, then the rider",
+      "text": "Zaɓi odar, sannan mai kai kayan",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.riders.list": {
-      "text": "Your riders, and who's free",
+      "text": "Masu kai kayanka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.list.line": {
-      "text": "Who is out, who can go now",
+      "text": "Wa ke waje, wa zai iya tafiya yanzu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.riders.today": {
-      "text": "Today's deliveries",
+      "text": "Kayan da za a kai yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.riders.today.line": {
-      "text": "Out, done, and waiting",
+      "text": "A hanya, an gama, da masu jira",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.sales.handover": {
-      "text": "Hand over a shift",
+      "text": "Miƙa canjin aiki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.sales.handover.line": {
-      "text": "Cash and stock at the change",
+      "text": "Kuɗi da kaya lokacin canji",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.sales.sell": {
-      "text": "Record a sale",
+      "text": "Rubuta sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.sales.sell.ask.amount": {
-      "text": "For how much in all?",
+      "text": "Nawa gaba ɗaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.sales.sell.ask.paid": {
-      "text": "How did they pay?",
+      "text": "Ta yaya suka biya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.sales.sell.ask.what": {
-      "text": "What did you sell? Say how many, like 3 bags of rice.",
+      "text": "Me ka sayar? Faɗi nawa, kamar 3 bags of rice.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.sales.sell.line": {
-      "text": "Items, amount, and how they paid",
+      "text": "Kaya, adadin kuɗi, da yadda suka biya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.sales.today": {
-      "text": "Today's sales",
+      "text": "Sayarwar yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.sales.today.line": {
-      "text": "What came in today",
+      "text": "Abin da ya shigo yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.sales.week": {
-      "text": "How we did this week",
+      "text": "Yadda makon nan ya tafi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.sales.week.line": {
-      "text": "Sales, money in and out",
+      "text": "Sayarwa, kuɗi shiga da fita",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.saved.add": {
-      "text": "Save something",
+      "text": "Ajiye wani abu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.saved.add.ask.name": {
-      "text": "What name should it have? Like mum.",
+      "text": "Wane suna za a ba shi? Kamar mum.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.add.ask.what": {
-      "text": "What should I keep? Like GTBank 0123456789.",
+      "text": "Me zan ajiye? Kamar GTBank 0123456789.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.saved.add.line": {
-      "text": "Call it up later by its name",
+      "text": "Kira shi daga baya da sunansa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.saved.all": {
-      "text": "Your saved things",
+      "text": "Abubuwan da ka ajiye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.saved.all.line": {
-      "text": "Accounts, addresses, notes",
+      "text": "Asusu, adireshi, bayanai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.say_another": {
-      "text": "Pick a topic, or say it another way.",
+      "text": "Zaɓi batu, ko ka faɗe shi ta wata hanya.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under the topics menu, after a message nothing understood"
+      "context": "Draft, not reviewed: Under the topics menu, after a message nothing understood"
     },
     "menu.school.clear": {
-      "text": "Clearance",
+      "text": "Izinin jarrabawa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.school.clear.line": {
-      "text": "Who may sit exams",
+      "text": "Waɗanda za su iya rubuta jarrabawa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.school.debtors": {
-      "text": "Who owes, by how late",
+      "text": "Masu bashi, ta jinkiri",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.school.debtors.line": {
-      "text": "With reminders to send",
+      "text": "Tare da tunatarwar da za a aika",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.school.pay": {
-      "text": "Record a payment",
+      "text": "Rubuta biyan kuɗi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.school.pay.line": {
-      "text": "Cash or transfer at the desk",
+      "text": "Tsabar kuɗi ko transfer a tebur",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.school.students": {
-      "text": "Students",
+      "text": "Ɗalibai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.school.students.line": {
-      "text": "By class, with what they owe",
+      "text": "Ta aji, da bashin da ake binsu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.shall": {
-      "text": "{title}: *{command}*\nShall I do it?",
+      "text": "{title}: *{command}*\nIn yi shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The command a menu's questions made, waiting for Yes"
+      "context": "Draft, not reviewed: The command a menu's questions made, waiting for Yes"
     },
     "menu.staff.approvals": {
-      "text": "Waiting for your approval",
+      "text": "Suna jiran amincewarka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.staff.approvals.line": {
-      "text": "Cash, discounts, payments",
+      "text": "Kuɗi, rangwame, biyan kuɗi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.staff.give": {
-      "text": "Give someone a task",
+      "text": "Ba wani aiki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.staff.give.ask.what": {
-      "text": "What should they do, and by when? Like count the float by 7am.",
+      "text": "Me ya kamata su yi, kuma kafin yaushe? Kamar count the float by 7am.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.staff.give.ask.who": {
-      "text": "Who is it for? Their name as on the team.",
+      "text": "Na wane ne? Sunansa kamar yadda yake a ƙungiya.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.staff.give.line": {
-      "text": "With a time it should be done by",
+      "text": "Tare da lokacin da za a gama",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.staff.mine": {
-      "text": "Your tasks",
+      "text": "Ayyukanka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.staff.mine.line": {
-      "text": "What is on you today",
+      "text": "Abin da ke kanka yau",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.add": {
-      "text": "Add stock that came in",
+      "text": "Ƙara kayan da suka iso",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.add.ask.cost": {
-      "text": "What did each cost? Send skip if you'd rather not say.",
+      "text": "Nawa kowanne ya kai? Aika skip idan ba ka son faɗa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.add.ask.what": {
-      "text": "What came in? Say how many, like 50 cartons of Indomie.",
+      "text": "Me ya shigo? Faɗi nawa, kamar 50 cartons of Indomie.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.add.line": {
-      "text": "What came, how many, at what cost",
+      "text": "Me ya zo, nawa, a wane farashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.adjust": {
-      "text": "Correct a count",
+      "text": "Gyara ƙidaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.adjust.ask.by": {
-      "text": "By how many? Use a minus for less, like -2.",
+      "text": "Da nawa? Sa - don ragi, kamar -2.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.adjust.ask.item": {
-      "text": "Which item?",
+      "text": "Wane kaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.adjust.ask.why": {
-      "text": "Why? Send skip if you'd rather not say.",
+      "text": "Me ya sa? Aika skip idan ba ka son faɗa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.adjust.line": {
-      "text": "Spoilt, missing, or counted wrong",
+      "text": "Ya lalace, ya ɓace, ko an ƙirga ba daidai ba",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.count": {
-      "text": "Count the shelf",
+      "text": "Ƙirga kan shiryayye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.count.line": {
-      "text": "Item by item, what is really there",
+      "text": "Kaya bayan kaya, abin da ke nan da gaske",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.low": {
-      "text": "See what's low",
+      "text": "Duba abin da ya yi ƙasa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.low.line": {
-      "text": "Items about to run out",
+      "text": "Kayan da ke gab da ƙarewa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.one": {
-      "text": "How many of an item",
+      "text": "Adadin wani kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.one.ask.item": {
-      "text": "Which item?",
+      "text": "Wane kaya?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.one.line": {
-      "text": "One item's count",
+      "text": "Ƙidayar kaya ɗaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.taken": {
       "text": "{title}: {values}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Before a menu's next question, what Taskiem already took from the message (its model)"
+      "context": "Draft, not reviewed: Before a menu's next question, what Taskiem already took from the message (its model)"
     },
     "menu.tip": {
-      "text": "Next time you can type: *{command}*",
+      "text": "Nan gaba za ka iya rubuta: *{command}*",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under a menu: the typed command for the row Taskiem picked"
+      "context": "Draft, not reviewed: Under a menu: the typed command for the row Taskiem picked"
     },
     "menu.topic.account": {
-      "text": "Your account",
+      "text": "Asusunka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.auto": {
-      "text": "Automations",
+      "text": "Ayyuka kai tsaye",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.bookings": {
-      "text": "Bookings",
+      "text": "Alƙawura",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.buying": {
-      "text": "Suppliers",
+      "text": "Masu kawowa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.lists": {
-      "text": "Your lists",
+      "text": "Jerinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.money": {
-      "text": "Money",
+      "text": "Kuɗi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.orders": {
-      "text": "Orders",
+      "text": "Odoji",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.owe": {
-      "text": "Who owes you",
+      "text": "Waɗanda kake bi bashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.page": {
-      "text": "Your page",
+      "text": "Shafinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.products": {
-      "text": "Products",
+      "text": "Kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.riders": {
-      "text": "Riders",
+      "text": "Masu kai kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.sales": {
-      "text": "Sales",
+      "text": "Sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.saved": {
-      "text": "Saved things",
+      "text": "Abubuwan ajiya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.school": {
-      "text": "School",
+      "text": "Makaranta",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.staff": {
-      "text": "Staff and tasks",
+      "text": "Ma'aikata da ayyuka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topic.stock": {
-      "text": "Stock",
+      "text": "Kayan ajiya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.topics": {
-      "text": "Topics",
+      "text": "Batutuwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The title over the topics in a WhatsApp list; at most 24 characters"
+      "context": "Draft, not reviewed: The title over the topics in a WhatsApp list; at most 24 characters"
     },
     "menu.what_do": {
-      "text": "What would you like to do?",
+      "text": "Me kake son yi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Heads a menu of the chat (docs/spec/chat-menus.md)"
+      "context": "Draft, not reviewed: Heads a menu of the chat (docs/spec/chat-menus.md)"
     },
     "money.channel.cash": {
       "text": "tsabar kuɗi",
@@ -3977,79 +3977,79 @@
       "reviewed": false
     },
     "wa.tool.yours": {
-      "text": "Your business's tools (type the word):",
+      "text": "Kayan aikin kasuwancinka (rubuta kalmar):",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Heading over the business's own tools listed by tools"
+      "context": "Draft, not reviewed: Heading over the business's own tools listed by tools"
     },
     "wa.tool.taken": {
-      "text": "Already done: {who} took it at {when}.",
+      "text": "An riga an yi: {who} ya ɗauka a {when}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A once button on a tool's answer or a message, pressed after someone else's press started its run"
+      "context": "Draft, not reviewed: A once button on a tool's answer or a message, pressed after someone else's press started its run"
     },
     "wa.tool.button_gone": {
-      "text": "This button is not available any more.",
+      "text": "Wannan maɓallin ba ya nan kuma.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A button whose tool is gone, or which is more than seven days old"
+      "context": "Draft, not reviewed: A button whose tool is gone, or which is more than seven days old"
     },
     "wa.tool.echo": {
-      "text": "Starting {tool}.",
+      "text": "Ana fara {tool}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool that only reads, started at once with nothing to show back"
+      "context": "Draft, not reviewed: A tool that only reads, started at once with nothing to show back"
     },
     "wa.tool.echo_values": {
-      "text": "Starting {tool} with:\n{values}",
+      "text": "Ana fara {tool} da:\n{values}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
+      "context": "Draft, not reviewed: A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
     },
     "wa.tool.step_up": {
-      "text": "{tool} moves money, so it is confirmed with your passkey in the app or on the web, not here.",
+      "text": "{tool} yana motsa kuɗi, don haka ana tabbatar da shi da passkey ɗinka a manhaja ko a yanar gizo, ba a nan ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool whose steps move money, called from a chat app"
+      "context": "Draft, not reviewed: A tool whose steps move money, called from a chat app"
     },
     "wa.tool.list_empty": {
-      "text": "Nothing to show.",
+      "text": "Babu abin da za a nuna.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool's list answer with no rows and no empty text of its own"
+      "context": "Draft, not reviewed: A tool's list answer with no rows and no empty text of its own"
     },
     "wa.tool.row_not_yours": {
-      "text": "That list was sent to someone else, or is not available any more.",
+      "text": "An aika wannan jerin ga wani, ko ba ya nan kuma.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
+      "context": "Draft, not reviewed: Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
     },
     "wa.tool.list_more": {
-      "text": "\u2026and {count} more: see them all in the app.",
+      "text": "…da ƙarin {count}: duba su duka a manhaja.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool's list answer with more than ten rows"
+      "context": "Draft, not reviewed: A tool's list answer with more than ten rows"
     },
     "wa.tool.which": {
-      "text": "Which did you mean? Send its number:\n{list}",
+      "text": "Wanne kake nufi? Aika lambarsa:\n{list}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Two of the business's own tools fit a message (made tools M3): a numbered pick; {list} is one tool a line, with its command"
+      "context": "Draft, not reviewed: Two of the business's own tools fit a message (made tools M3): a numbered pick; {list} is one tool a line, with its command"
     },
     "wa.tool.read": {
-      "text": "For {tool} I read:\n{values}\n\n{prompt}",
+      "text": "Don {tool} na karanta:\n{values}\n\n{prompt}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The reader filled some of a tool's inputs from the message (made tools M3): every value read, masked, then the next input to give"
+      "context": "Draft, not reviewed: The reader filled some of a tool's inputs from the message (made tools M3): every value read, masked, then the next input to give"
     },
     "wa.tool.saved_none": {
-      "text": "Nothing the business saved is called @{name}.",
+      "text": "Babu abin da kasuwancin ya ajiye mai suna @{name}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool's input given as @name of no saved thing of the business (a person's own saved things are never a tool's)"
+      "context": "Draft, not reviewed: A tool's input given as @name of no saved thing of the business (a person's own saved things are never a tool's)"
     },
     "wa.tool.saved_kind": {
-      "text": "@{name} is {kind}: it cannot fill {label}.",
+      "text": "@{name} {kind} ne: ba zai iya cika {label} ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool's input given as @name of a saved thing that cannot fill it (a bank account, a file); {kind} is what it is, {label} the input"
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing that cannot fill it (a bank account, a file); {kind} is what it is, {label} the input"
     },
     "wa.tool.saved_not_fit": {
-      "text": "@{name} does not fit {label}.",
+      "text": "@{name} bai dace da {label} ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A tool's input given as @name of a saved thing whose words do not fit the input (an address for a number)"
+      "context": "Draft, not reviewed: A tool's input given as @name of a saved thing whose words do not fit the input (an address for a number)"
     },
     "wa.run.not_yours": {
-      "text": "Only {roles} can start {workflow}. Ask an owner if you need it.",
+      "text": "{roles} ne kaɗai za su iya fara {workflow}. Tambayi mai shi idan kana buƙata.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. run <workflow> by a member whose roles the workflow does not allow (decision 0070); {roles} are role names"
+      "context": "Draft, not reviewed: run <workflow> by a member whose roles the workflow does not allow (decision 0070); {roles} are role names"
     },
     "wa.run.does_not_fit": {
       "text": "Wannan bai dace ba: {reason}.\n\n{prompt}",
@@ -7755,104 +7755,104 @@
       "reviewed": false
     },
     "menu.pay.account": {
-      "text": "Pay an account number",
+      "text": "Biya lambar asusu",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.pay.account.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.account.ask.bank": {
-      "text": "Which bank is it with?",
+      "text": "A wane banki yake?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.account.ask.for": {
-      "text": "What is it for?",
+      "text": "Don me ne?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.account.ask.number": {
-      "text": "What is the account number? 10 digits.",
+      "text": "Menene lambar asusun? Lambobi 10.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.account.line": {
-      "text": "Any bank: its name is checked first",
+      "text": "Kowane banki: ana duba sunansa da farko",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.pay.list": {
-      "text": "Your payments",
+      "text": "Biyan kuɗinka",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.pay.list.line": {
-      "text": "Sent, waiting for an OK, and paid",
+      "text": "An aika, ana jiran amincewa, da an biya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.pay.payees": {
-      "text": "Your payees",
+      "text": "Waɗanda kake biya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.pay.payees.line": {
-      "text": "The accounts you pay, by name",
+      "text": "Asusun da kake biya, da suna",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.pay.payroll": {
-      "text": "Payroll",
+      "text": "Albashi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.pay.payroll.line": {
-      "text": "Payrolla's runs: who was paid, and who was not and why",
+      "text": "Ayyukan Payrolla: wa aka biya, wa ba a biya ba da dalili",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.pay.person": {
-      "text": "Pay someone",
+      "text": "Biya wani",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go)"
     },
     "menu.pay.person.ask.amount": {
-      "text": "How much?",
+      "text": "Nawa?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.person.ask.for": {
-      "text": "What is it for?",
+      "text": "Don me ne?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.person.ask.note": {
-      "text": "A few words for their bank statement? Send skip for none.",
+      "text": "'Yan kalmomi don bayanin bankinsu? Aika skip idan babu.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.person.ask.who": {
-      "text": "Who are you paying? One of your saved accounts, like @chidi.",
+      "text": "Wa kake biya? Ɗaya daga asusun da ka ajiye, kamar @chidi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
     },
     "menu.pay.person.line": {
-      "text": "From your balance, checked with the bank",
+      "text": "Daga kuɗin asusunka, an duba da banki",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's line under its title (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A menu row's line under its title (api/chat_actions.go)"
     },
     "menu.topic.pay": {
-      "text": "Pay",
+      "text": "Biya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A topic of the chat's menus (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A topic of the chat's menus (api/chat_actions.go)"
     },
     "menu.check.account": {
-      "text": "An account number is 10 digits, like 0123456789.",
+      "text": "Lambar asusu lambobi 10 ce, kamar 0123456789.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question's answer that is not an account number"
+      "context": "Draft, not reviewed: A question's answer that is not an account number"
     },
     "wa.pay.which_bank": {
       "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
@@ -7887,99 +7887,99 @@
       "reviewed": false
     },
     "wa.pay.list.how": {
-      "text": "Send the list under pay these, one person a line, like:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
+      "text": "Aika jerin a ƙarƙashin pay these, mutum ɗaya a layi, kamar:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Paying several people from the chat: \"pay these\" came with no list under it"
+      "context": "Draft, not reviewed: Paying several people from the chat: \"pay these\" came with no list under it"
     },
     "wa.pay.list.person": {
-      "text": "1 person",
+      "text": "Mutum 1",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How many people a batch from the chat pays: one"
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: one"
     },
     "wa.pay.list.people": {
-      "text": "{count} people",
+      "text": "Mutane {count}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How many people a batch from the chat pays: more than one"
+      "context": "Draft, not reviewed: How many people a batch from the chat pays: more than one"
     },
     "wa.pay.list.ready_link": {
-      "text": "{people}, {amount}. Nothing is sent yet: open to check and pay with your passkey: {link}",
+      "text": "{people}, {amount}. Ba a aika komai ba tukuna: buɗe don dubawa da biya da passkey ɗinka: {link}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
     },
     "wa.pay.list.ready_app": {
-      "text": "{people}, {amount}. Nothing is sent yet: open Pay several in the Taskiem app to check and pay with your passkey.",
+      "text": "{people}, {amount}. Ba a aika komai ba tukuna: buɗe Pay several a manhajar Taskiem don dubawa da biya da passkey ɗinka.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat, not sent, when there is no link"
+      "context": "Draft, not reviewed: A batch prepared from the chat, not sent, when there is no link"
     },
     "wa.pay.list.held": {
-      "text": "Held out, {who}: {problem}",
+      "text": "An dakatar, {who}: {problem}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A row of a batch from the chat held out before anything moves, with why"
+      "context": "Draft, not reviewed: A row of a batch from the chat held out before anything moves, with why"
     },
     "wa.pay.list.unread": {
-      "text": "Line {line} not read ({text}): {problem}",
+      "text": "Ba a karanta layi {line} ba ({text}): {problem}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
+      "context": "Draft, not reviewed: A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
     },
     "wa.pay.list.none": {
-      "text": "Nothing was prepared to pay.",
+      "text": "Ba a shirya komai don biya ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A list pasted in the chat where no line could be prepared; why follows"
+      "context": "Draft, not reviewed: A list pasted in the chat where no line could be prepared; why follows"
     },
     "wa.pay.result.paid": {
-      "text": "Paid {to} {amount}. Received by the bank.",
+      "text": "An biya {to} {amount}. Banki ya karɓa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A payment prepared from the chat was paid: who and how much"
+      "context": "Draft, not reviewed: A payment prepared from the chat was paid: who and how much"
     },
     "wa.pay.result.failed": {
-      "text": "Not paid: {to} {amount}. {reason}",
+      "text": "Ba a biya ba: {to} {amount}. {reason}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A payment prepared from the chat failed: who, how much, and why"
+      "context": "Draft, not reviewed: A payment prepared from the chat failed: who, how much, and why"
     },
     "wa.pay.result.let_go": {
-      "text": "let go, not sent",
+      "text": "an bar shi, ba a aika ba",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Why a row of a batch was not paid: it was let go before it was sent"
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was let go before it was sent"
     },
     "wa.pay.result.rejected": {
-      "text": "Not paid: the payment of {amount} to {to} was declined.",
+      "text": "Ba a biya ba: an ƙi biyan {amount} ga {to}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A payment prepared from the chat was declined at its approval"
+      "context": "Draft, not reviewed: A payment prepared from the chat was declined at its approval"
     },
     "wa.pay.result.no_reason": {
-      "text": "The bank did not say why.",
+      "text": "Banki bai faɗi dalili ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Why a payment failed, when the bank gave no reason"
+      "context": "Draft, not reviewed: Why a payment failed, when the bank gave no reason"
     },
     "wa.pay.result.declined": {
-      "text": "declined",
+      "text": "an ƙi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Why a row of a batch was not paid: it was declined at its approval"
+      "context": "Draft, not reviewed: Why a row of a batch was not paid: it was declined at its approval"
     },
     "wa.pay.result.batch": {
-      "text": "Paid {paid} of {count} people, {amount}.",
+      "text": "An biya {paid} daga cikin mutane {count}, {amount}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
     },
     "wa.pay.result.batch_all": {
-      "text": "Paid all {count} people, {amount}.",
+      "text": "An biya duka mutane {count}, {amount}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat has ended with everyone paid"
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with everyone paid"
     },
     "wa.pay.result.batch_not": {
-      "text": "{count} not paid: {who}",
+      "text": "Ba a biya {count} ba: {who}",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Who in a batch from the chat was not paid, each with why"
+      "context": "Draft, not reviewed: Who in a batch from the chat was not paid, each with why"
     },
     "wa.pay.result.batch_one": {
-      "text": "Paid 1 person, {amount}.",
+      "text": "An biya mutum 1, {amount}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A batch prepared from the chat has ended with its one person paid"
+      "context": "Draft, not reviewed: A batch prepared from the chat has ended with its one person paid"
     },
     "wa.pay.pin_form": {
-      "text": "Or pay it now with your PIN in this form, within 10 minutes: {amount} to {to}.",
+      "text": "Ko ka biya yanzu da PIN ɗinka a wannan fom, cikin minti 10: {amount} ga {to}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+      "context": "Draft, not reviewed: The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
     },
     "bill.transfer.send": {
       "text": "Send exactly {amount} to {to}, for {reference}.",
