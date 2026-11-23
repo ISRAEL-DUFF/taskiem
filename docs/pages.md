@@ -34,7 +34,7 @@ They are counted, added up (Total, Paid, Owed, in naira), listed and narrowed as
 
 ## Kept up to date
 
-An open page keeps itself up to date: when a row of a table it shows is changed in Taskiem (on the web, in the app, in the chat, by a workflow), or an order or invoice changes, the parts that show it are read again within a few seconds, on every screen it is open on, without a reload. A list keeps the order you put it in. Pulling down (or **Refresh**) still reads the whole page. Rows written to a table from outside Taskiem show on the next pull.
+An open page keeps itself up to date: when a row of a table it shows is changed in Taskiem (on the web, in the app, in the chat, by a workflow), or an order or invoice changes, the parts that show it are read again within a few seconds, on every screen it is open on, without a reload. A list keeps the order you put it in. Pulling down (or **Refresh**) still reads the whole page. Rows written to a table from outside Taskiem show on the next pull. A page published again is read again whole; pinning it or saving a draft does not disturb anyone who has it open. Someone who loses the right to open the page, or to see orders or invoices, stops being told within half a minute. A person may keep five pages up to date at once (a business, forty); past that, pull to refresh.
 
 ## Who sees what
 

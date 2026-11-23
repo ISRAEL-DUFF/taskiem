@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"time"
@@ -24,8 +25,10 @@ import (
 // the phone without a reload. It follows the change notices the chat
 // tools and the Chat page use (chat_changes.go's lines reach the Chat
 // page's stream, chat_stream.go): each connection asks, from indexes
-// (migration 00555), in the business's own transaction, what changed
-// since it last looked; nothing is pushed through the database.
+// (migrations 00555 to 00557), what changed since it last looked; nothing
+// is pushed through the database. The looks go to the read replica when
+// there is one keeping up (Store.ReadTx), as other views that may be
+// seconds stale do.
 //
 // A notice carries no data: only the page's name and the parts that read
 // what changed. The client reads those parts again (GET .../view, or a
@@ -33,10 +36,12 @@ import (
 // streams its rows.
 //
 //	ready    on connecting: {"page", "blocks": [the parts watched]}
-//	changed  some parts may have changed: {"page", "blocks": [ids]}; every
-//	         part when the page itself changed (published again, its draft)
-//	gone     the viewer may no longer open the page (its roles changed, or
-//	         it was deleted); the stream ends
+//	changed  some parts may have changed: {"page", "blocks": [ids], "all"};
+//	         every part, all, when the page was published again or who may
+//	         open it changed (for a draft's preview, when the draft changed)
+//	gone     the viewer may no longer open the page (its roles changed, it
+//	         was deleted, or the viewer's session, membership or key ended);
+//	         the stream ends
 //	ping     at least every ten seconds
 //
 // Debounced: a connection asks every two seconds (pageLiveEvery), and all
@@ -45,22 +50,30 @@ import (
 //
 // What is watched: a data table's rows written through Taskiem (the API,
 // the chat's tools, a workflow's step, the shop's stock: table_row_changes),
-// and the business's orders and invoices (updated_at), for the parts the
-// viewer may see (a record view needs the area's read permission). Only
-// a page the viewer may open, and only their business's rows: the stream
-// opens as the page's view does (mayOpenPage) and reads in the
-// business's scope.
+// and the business's orders and invoices (changed_at, never updated_at,
+// which the shop's retention reads), for the parts the viewer may see (a
+// record view needs the area's read permission). Only a page the viewer
+// may open, and only their business's rows: the stream opens as the
+// page's view does (mayOpenPage) and reads in the business's scope. Every
+// thirty seconds the viewer is signed in again from the request's own
+// session or key: a session ended, a membership or key taken away, or the
+// page's roles no longer letting them in ends the stream (gone); a
+// permission lost (order.handle) stops that view's notices.
 const (
 	pageLiveEvery = 2 * time.Second
 	// A record changed by a transaction that commits a little after it
-	// wrote (its statement's clock) is read again within this look-back;
-	// what was told is remembered, so it is told once.
-	pageLiveLookBack = 10 * time.Second
+	// wrote (its statement's clock), or seen late on the replica, is read
+	// again within this look-back, by the database's clock; what was told
+	// is remembered, so it is told once.
+	pageLiveLookBack = 15 * time.Second
 	pageLiveMax      = 30 * time.Minute
 	pageLivePing     = 10 * time.Second
-	// How many page streams one business may hold open (its people's open
-	// pages); the server's cap is the Chat page's (chatStreamsTotal).
+	// pageLiveRecheck is how often the viewer is signed in again.
+	pageLiveRecheck = 30 * time.Second
+	// How many page streams one business, and one person or key, may hold
+	// open; the server's cap is the Chat page's (chatStreamsTotal).
 	pageLivePerTenant = 40
+	pageLivePerActor  = 5
 	// How many changed records one look reads; past it, everything the
 	// view feeds is told and the look-back moves on.
 	pageLiveBatch = 200
@@ -100,7 +113,39 @@ func newPageWatch(page *pages.Page, p *Principal, areaOn func(string) bool) *pag
 	return w
 }
 
-// blocks are every part watched, in the page's order of first mention.
+// clone is the watch to look with: a look may be run twice (on the
+// replica, then the primary), so what it sees is kept only once it is done.
+func (w *pageWatch) clone() *pageWatch {
+	c := *w
+	c.tableAt = maps.Clone(w.tableAt)
+	c.seen = map[string]map[string]time.Time{}
+	for k, v := range w.seen {
+		c.seen[k] = maps.Clone(v)
+	}
+	return &c
+}
+
+// adopt carries what an earlier watch of the same page had seen to this
+// one (the viewer signed in again, the page read again), so nothing is
+// told twice and nothing between the two is missed.
+func (w *pageWatch) adopt(old *pageWatch) {
+	if old == nil || !old.started {
+		return
+	}
+	for n := range w.tables {
+		if t, ok := old.tableAt[n]; ok {
+			w.tableAt[n] = t
+		}
+	}
+	for n := range w.records {
+		if s, ok := old.seen[n]; ok {
+			w.seen[n] = maps.Clone(s)
+		}
+	}
+	w.started = true
+}
+
+// blocks are every part watched, sorted.
 func (w *pageWatch) blocks() []string {
 	var out []string
 	for _, ids := range w.tables {
@@ -114,8 +159,9 @@ func (w *pageWatch) blocks() []string {
 }
 
 // poll is the parts whose sources changed since the last look (none on
-// the first, which only sees where things are). tx is the business's.
-func (w *pageWatch) poll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, now time.Time) ([]string, error) {
+// the first, which only sees where things are). tx is the business's. The
+// look-back is by the database's own clock, never this host's.
+func (w *pageWatch) poll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]string, error) {
 	first := !w.started
 	w.started = true
 	var changed []string
@@ -137,45 +183,50 @@ func (w *pageWatch) poll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, now t
 			}
 		}
 	}
-	since := now.Add(-pageLiveLookBack)
-	for name, ids := range w.records {
-		v, _ := pages.RecordViewNamed(name)
-		alias := v.Tenant[:len(v.Tenant)-len(".tenant_id")]
-		rows, err := tx.Query(ctx, fmt.Sprintf(`SELECT %s.id::text, %s FROM %s WHERE %s = $1 AND %s >= $2 ORDER BY %s LIMIT %d`,
-			alias, v.Updated, v.From, v.Tenant, v.Updated, v.Updated, pageLiveBatch), tenant, since)
-		if err != nil {
+	if len(w.records) > 0 {
+		var since time.Time
+		if err := tx.QueryRow(ctx, `SELECT clock_timestamp() - make_interval(secs => $1)`, pageLiveLookBack.Seconds()).Scan(&since); err != nil {
 			return nil, err
 		}
-		seen := w.seen[name]
-		if seen == nil {
-			seen = map[string]time.Time{}
-			w.seen[name] = seen
-		}
-		fresh, n := false, 0
-		for rows.Next() {
-			var id string
-			var at time.Time
-			if err := rows.Scan(&id, &at); err != nil {
-				rows.Close()
+		for name, ids := range w.records {
+			v, _ := pages.RecordViewNamed(name)
+			alias := v.Tenant[:len(v.Tenant)-len(".tenant_id")]
+			rows, err := tx.Query(ctx, fmt.Sprintf(`SELECT %s.id::text, %s FROM %s WHERE %s = $1 AND %s >= $2 ORDER BY %s LIMIT %d`,
+				alias, v.Changed, v.From, v.Tenant, v.Changed, v.Changed, pageLiveBatch), tenant, since)
+			if err != nil {
 				return nil, err
 			}
-			n++
-			if t, ok := seen[id]; ok && t.Equal(at) {
-				continue
+			seen := w.seen[name]
+			if seen == nil {
+				seen = map[string]time.Time{}
+				w.seen[name] = seen
 			}
-			seen[id] = at
-			fresh = true
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-		if (fresh || n == pageLiveBatch) && !first {
-			changed = append(changed, ids...)
-		}
-		for id, at := range seen {
-			if at.Before(since) {
-				delete(seen, id)
+			fresh, n := false, 0
+			for rows.Next() {
+				var id string
+				var at time.Time
+				if err := rows.Scan(&id, &at); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				n++
+				if t, ok := seen[id]; ok && t.Equal(at) {
+					continue
+				}
+				seen[id] = at
+				fresh = true
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				return nil, err
+			}
+			if (fresh || n == pageLiveBatch) && !first {
+				changed = append(changed, ids...)
+			}
+			for id, at := range seen {
+				if at.Before(since) {
+					delete(seen, id)
+				}
 			}
 		}
 	}
@@ -183,15 +234,38 @@ func (w *pageWatch) poll(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, now t
 	return slices.Compact(changed), nil
 }
 
+// pageLiveKey is what of a page, changed, has every part told: the
+// version people see and who may open it (and, for a draft's preview, the
+// draft). A pin or a draft saved does not change what the page shows.
+type pageLiveKey struct {
+	version *int
+	roles   string
+	draftAt *time.Time
+}
+
+func (a pageLiveKey) same(b pageLiveKey) bool {
+	eqi := (a.version == nil) == (b.version == nil) && (a.version == nil || *a.version == *b.version)
+	eqt := (a.draftAt == nil) == (b.draftAt == nil) && (a.draftAt == nil || a.draftAt.Equal(*b.draftAt))
+	return eqi && eqt && a.roles == b.roles
+}
+
 // pageLiveState is the page as the stream last read it.
 type pageLiveState struct {
-	updated time.Time
-	page    *pages.Page
-	watch   *pageWatch
+	key   pageLiveKey
+	page  *pages.Page
+	watch *pageWatch
 }
 
 // errPageGone ends a page's stream: the viewer may no longer open it.
 var errPageGone = errors.New("pages: the page cannot be opened")
+
+func pageKeyOf(pg pageRow, draft bool) pageLiveKey {
+	k := pageLiveKey{version: pg.Version, roles: fmt.Sprint(pg.Roles)}
+	if draft {
+		k.draftAt = pg.DraftAt
+	}
+	return k
+}
 
 // loadPageLive reads the page for its stream: what the viewer may open,
 // and what it watches.
@@ -203,8 +277,9 @@ func loadPageLive(ctx context.Context, tx pgx.Tx, p *Principal, name string, dra
 	if err != nil {
 		return pageLiveState{}, err
 	}
+	draft = draft && p.Can(PermPageEdit) && pg.Draft != nil
 	doc := pg.Published
-	if draft && p.Can(PermPageEdit) && pg.Draft != nil {
+	if draft {
 		doc = pg.Draft
 	}
 	if doc == nil {
@@ -214,11 +289,11 @@ func loadPageLive(ctx context.Context, tx pgx.Tx, p *Principal, name string, dra
 	if page == nil {
 		return pageLiveState{}, errPageGone
 	}
-	areaOn, err := pageAreas(ctx, tx)
+	st, err := pageAreas(ctx, tx)
 	if err != nil {
 		return pageLiveState{}, err
 	}
-	return pageLiveState{updated: pg.UpdatedAt, page: page, watch: newPageWatch(page, p, areaOn)}, nil
+	return pageLiveState{key: pageKeyOf(pg, draft), page: page, watch: newPageWatch(page, p, st)}, nil
 }
 
 func (s *Server) pageLiveEvery() time.Duration {
@@ -226,6 +301,22 @@ func (s *Server) pageLiveEvery() time.Duration {
 		return s.PageLiveEvery
 	}
 	return pageLiveEvery
+}
+
+func (s *Server) pageLiveRecheck() time.Duration {
+	if s.PageLiveRecheck > 0 {
+		return s.PageLiveRecheck
+	}
+	return pageLiveRecheck
+}
+
+// liveActor is who holds a stream, for the per-person cap: the person, or
+// the API key.
+func liveActor(p *Principal) uuid.UUID {
+	if p.UserID != uuid.Nil {
+		return p.UserID
+	}
+	return p.KeyID
 }
 
 // pageLive is GET /v1/pages/{name}/live.
@@ -252,6 +343,13 @@ func (s *Server) pageLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer release()
+	releaseActor, ok := s.pageActorGate.acquireN(liveActor(p), pageLivePerActor, "person")
+	if !ok {
+		w.Header().Set("Retry-After", "30")
+		writeErr(w, http.StatusTooManyRequests, "you have too many pages open that are kept up to date: pull to refresh this one")
+		return
+	}
+	defer releaseActor()
 	ping := s.ChatStreamPing
 	if ping <= 0 {
 		ping = pageLivePing
@@ -273,40 +371,65 @@ func (s *Server) pageLive(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Fprint(w, "retry: 2000\n\n"); err != nil {
 		return
 	}
-	// The first look only sees where things are.
-	poll := func() ([]string, bool, error) {
+	// reread reads the page again for p (signed in again, or the page
+	// changed), keeping what was seen.
+	reread := func() error {
+		return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+			next, err := loadPageLive(ctx, tx, p, name, draft)
+			if err != nil {
+				return err
+			}
+			next.watch.adopt(st.watch)
+			st = next
+			return nil
+		})
+	}
+	// look asks what changed: on the replica when it keeps up. The first
+	// look only sees where things are.
+	look := func() ([]string, bool, error) {
 		var changed []string
-		all := false
-		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-			var updated time.Time
-			err := tx.QueryRow(ctx, `SELECT updated_at FROM pages WHERE name = $1`, name).Scan(&updated)
+		var key pageLiveKey
+		var w2 *pageWatch
+		err := s.Store.ReadTx(ctx, p.TenantID, func(tx pgx.Tx) error {
+			var version *int
+			var roles []string
+			var draftAt *time.Time
+			err := tx.QueryRow(ctx, `SELECT published_version, roles, draft_at FROM pages WHERE name = $1`, name).Scan(&version, &roles, &draftAt)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return errPageGone
 			}
 			if err != nil {
 				return err
 			}
-			if !updated.Equal(st.updated) {
-				// The page itself changed (published, its roles, its
-				// draft): read again, and every part told.
-				next, err := loadPageLive(ctx, tx, p, name, draft)
-				if err != nil {
-					return err
-				}
-				st, all = next, true
+			key = pageLiveKey{version: version, roles: fmt.Sprint(roles)}
+			if st.key.draftAt != nil || draft {
+				key.draftAt = draftAt
 			}
-			changed, err = st.watch.poll(ctx, tx, p.TenantID, time.Now())
+			w2 = st.watch.clone()
+			changed, err = w2.poll(ctx, tx, p.TenantID)
 			return err
 		})
-		return changed, all, err
+		if err != nil {
+			return nil, false, err
+		}
+		if !key.same(st.key) {
+			// Published again, or who may open it changed: read again, and
+			// every part told.
+			if err := reread(); err != nil {
+				return nil, false, err
+			}
+			return nil, true, nil
+		}
+		st.watch = w2
+		return changed, false, nil
 	}
-	if _, _, err := poll(); err != nil {
+	if _, _, err := look(); err != nil {
 		return
 	}
 	if write("ready", map[string]any{"page": name, "blocks": nonNil(st.watch.blocks())}) != nil {
 		return
 	}
-	lastWrite := time.Now()
+	lastWrite, checked := time.Now(), time.Now()
 	deadline := time.Now().Add(pageLiveMax)
 	tick := time.NewTicker(s.pageLiveEvery())
 	defer tick.Stop()
@@ -318,7 +441,25 @@ func (s *Server) pageLive(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-tick.C:
 		}
-		changed, all, err := poll()
+		if time.Since(checked) >= s.pageLiveRecheck() {
+			// The viewer signed in again from the request's own session or
+			// key: ended, or no longer in this business, is gone; their
+			// permissions now decide what is watched.
+			checked = time.Now()
+			np, err := s.resolve(r)
+			if err != nil || np == nil || np.TenantID != p.TenantID || liveActor(np) != liveActor(p) {
+				_ = write("gone", map[string]any{"page": name})
+				return
+			}
+			p = np
+			if err := reread(); err != nil {
+				if errors.Is(err, errPageGone) {
+					_ = write("gone", map[string]any{"page": name})
+				}
+				return
+			}
+		}
+		changed, all, err := look()
 		if errors.Is(err, errPageGone) {
 			_ = write("gone", map[string]any{"page": name})
 			return

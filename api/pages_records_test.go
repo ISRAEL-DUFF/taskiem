@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -220,4 +221,35 @@ func problemsOf(out map[string]any) []any {
 		msgs = append(msgs, p.(map[string]any)["message"])
 	}
 	return msgs
+}
+
+// A records part is put in order only by one of its view's own columns,
+// and with no order of its own comes newest first (an invoice's id is
+// random), even past the tie-breaker.
+func TestPagesRecordsOrder(t *testing.T) {
+	w := recordsWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	for i, name := range []string{"Ada", "Bola", "Chi", "Dele"} {
+		addInvoice(t, owner, name, int64(1000*(i+1)), "k-"+name)
+		time.Sleep(5 * time.Millisecond)
+	}
+	owner.must(201, "POST", "/v1/pages", map[string]any{"document": map[string]any{"page": "page/v1", "name": "inv-desk", "title": "Invoices",
+		"blocks": []any{map[string]any{"id": "inv", "type": "table", "title": "Invoices", "source": map[string]any{"records": "invoices"},
+			"columns": []any{map[string]any{"column": "number"}, map[string]any{"column": "updated_at"}, map[string]any{"column": "total", "naira": true}}}}}})
+	owner.must(200, "POST", "/v1/pages/inv-desk/publish", nil)
+	b := blockOf(t, viewOf(t, owner, "inv-desk", nil), "inv")
+	var totals []string
+	for _, r := range b["rows"].([]any) {
+		totals = append(totals, r.(map[string]any)["cells"].([]any)[2].(string))
+	}
+	if fmt.Sprint(totals) != "[₦40 ₦30 ₦20 ₦10]" {
+		t.Errorf("newest first: %v", totals)
+	}
+	if b["columns"].([]any)[1].(map[string]any)["sortable"] != false || b["columns"].([]any)[2].(map[string]any)["sortable"] != true {
+		t.Errorf("sortable: %v", b["columns"])
+	}
+	if s, out := owner.do("GET", "/v1/pages/inv-desk/blocks/inv?order=updated_at", nil); s != 400 {
+		t.Errorf("ordered by updated_at: %d %v", s, out)
+	}
+	owner.must(200, "GET", "/v1/pages/inv-desk/blocks/inv?order=total", nil)
 }

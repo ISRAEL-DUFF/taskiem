@@ -876,7 +876,7 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "a list keeps its own order")
 			return
 		}
-		if c := columnNamed(pc.table(b), col); c.Type == "" || c.Type == "json" {
+		if c := columnNamed(pc.table(b), col); c.Type == "" || c.Type == "json" || !recordsOrderable(b, col) {
 			writeErr(w, http.StatusBadRequest, "the rows cannot be put in this column's order")
 			return
 		}
@@ -1099,7 +1099,7 @@ func partHead(pc *pageCtx, b pages.Block, t datatables.Table, order *pages.Order
 			// the table no longer has (pageBlock refuses them), so the web
 			// and the app do not offer it.
 			col := columnNamed(t, c.Column)
-			sortable := col.Type != "" && col.Type != "json" && (!col.Personal || pc.values.Viewer.Personal && b.Source.Records == "")
+			sortable := col.Type != "" && col.Type != "json" && recordsOrderable(b, c.Column) && (!col.Personal || pc.values.Viewer.Personal && b.Source.Records == "")
 			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira, "sortable": sortable})
 		}
 		out["columns"] = cols

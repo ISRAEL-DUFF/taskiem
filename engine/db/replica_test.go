@@ -172,6 +172,7 @@ func TestReadReplicaCallers(t *testing.T) {
 	want := map[string]int{
 		"api/runs.go":             1, // listRuns
 		"api/dashboard.go":        1, // dashboard
+		"api/pages_live.go":       1, // an open page asks what changed (notices only; it reads the page again on the primary)
 		"api/server.go":           1, // readTx -> Store.ReadTx
 		"engine/runtime/pools.go": 1, // Store.ReadTx -> db.ReadTx
 	}

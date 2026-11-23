@@ -116,3 +116,21 @@ func TestUnusedChoiceFilterOnAPersonalColumn(t *testing.T) {
 		t.Errorf("problems: %v", ps)
 	}
 }
+
+// A number written in an expression is a value of its own too, and a
+// choice filter on a page over a table that is gone leaves its choices out.
+func TestForExportNumbersAndGoneTables(t *testing.T) {
+	if !hasWordsOfItsOwn("row.phone == 2348031234567 ? 'x' : ''") || hasWordsOfItsOwn("row.amount_kobo / 100") || hasWordsOfItsOwn("row.a1234 + ' · '") {
+		t.Error("numbers")
+	}
+	doc := `{"page": "page/v1", "name": "team", "title": "Team",
+	  "filters": [{"id": "who", "type": "choice", "column": "x", "options": [{"value": "Ada Obi"}]}],
+	  "blocks": [{"id": "l", "type": "list", "title": "People", "source": {"table": "gone", "uses": ["who"]},
+	     "item": {"title": "=row.phone == 2348031234567 ? 'me' : row.team"}}]}`
+	p, _ := Parse([]byte(doc))
+	out, left := ForExport(p, nil)
+	raw := string(out.Marshal())
+	if strings.Contains(raw, "Ada Obi") || strings.Contains(raw, "2348031234567") || left != 2 {
+		t.Errorf("left %d: %s", left, raw)
+	}
+}

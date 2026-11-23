@@ -2,6 +2,7 @@ package pages
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -120,8 +121,8 @@ func TestRecordsReadAndSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"FROM storefront_orders o WHERE o.tenant_id = $1", "(o.reference)::text ILIKE $2", "(o.status)::text ILIKE $", "o.created_at >= $", "::text::timestamptz",
-		"ORDER BY o.created_at DESC NULLS LAST, o.id DESC NULLS LAST LIMIT 25 OFFSET 25"} {
+	for _, want := range []string{"FROM storefront_orders o WHERE o.tenant_id = $1", "(o.reference)::text ILIKE $2", "o.status = $", "o.created_at >= $", "::text::timestamptz",
+		"ORDER BY o.created_at DESC, o.id DESC LIMIT 25 OFFSET 25"} {
 		if !strings.Contains(sql, want) {
 			t.Errorf("sql lacks %q:\n%s", want, sql)
 		}
@@ -177,3 +178,48 @@ func TestRecordsReadAndSQL(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// Review of the records' reads: newest first when a part gives no order
+// (an invoice's id is random), no NULLS LAST where an index orders by a
+// column that always has a value, a status picked by equality, the count
+// stopped past 10,000, and an order only by a column of the view's own.
+func TestRecordsOrderAndCount(t *testing.T) {
+	inv, _ := RecordViewNamed("invoices")
+	tb := inv.Table()
+	p := parseOK(t, ordersPage)
+	vals, _ := p.FilterValues(map[string]string{"st": "accepted"}, Viewer{}, time.Now())
+	read, err := p.ReadFor(p.Blocks[3], tb, vals, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql, _, _ := inv.RecordsSelect(read, RowsShown, 0)
+	if !strings.Contains(sql, "ORDER BY i.created_at DESC, i.id DESC LIMIT") {
+		t.Errorf("the tie-breaker alone: %s", sql)
+	}
+	read, _ = p.ReadFor(p.Blocks[3], tb, vals, &Order{Column: "due_on"})
+	if sql, _, _ = inv.RecordsSelect(read, RowsShown, 0); !strings.Contains(sql, "ORDER BY i.due_on ASC NULLS LAST, i.created_at DESC, i.id DESC") {
+		t.Errorf("a column with no value: %s", sql)
+	}
+	ord, _ := RecordViewNamed("orders")
+	read, _ = p.ReadFor(p.Blocks[2], ord.Table(), vals, nil)
+	sql, args, _ := ord.RecordsSelect(read, RowsShown, 0)
+	if !strings.Contains(sql, "o.status = $") || !strings.Contains(fmt.Sprint(args), "accepted") {
+		t.Errorf("a choice on the status: %s %v", sql, args)
+	}
+	if _, args, _ := ord.RecordsSelect(Read{Filters: []any{map[string]any{"column": "status", "op": "ilike", "value": "Accepted"}}}, 1, 0); args[1] != "accepted" {
+		t.Errorf("a status in capitals: %v", args)
+	}
+	contains, _, _ := ord.RecordsSelect(Read{Filters: []any{map[string]any{"column": "status", "op": "ilike", "value": "%acc%"}}}, 1, 0)
+	if !strings.Contains(contains, "(o.status)::text ILIKE $2") {
+		t.Errorf("contains: %s", contains)
+	}
+	count, _, _ := ord.RecordsCount(Read{})
+	if count != "SELECT count(*) FROM (SELECT 1 FROM storefront_orders o WHERE o.tenant_id = $1 LIMIT 10001) c" {
+		t.Errorf("count: %s", count)
+	}
+	for col, want := range map[string]bool{"total": true, "created_at": true, "updated_at": false, "id": false, "customer": false, "nope": false} {
+		if ord.Orderable(col) != want {
+			t.Errorf("orderable %s: %v", col, !want)
+		}
+	}
+}

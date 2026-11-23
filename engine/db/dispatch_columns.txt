@@ -336,6 +336,7 @@ customer_invoice_requests.order_id
 customer_invoice_requests.reply_to
 customer_invoice_requests.tenant_id
 customer_invoices.allow_part_payments
+customer_invoices.changed_at
 customer_invoices.connection
 customer_invoices.created_at
 customer_invoices.created_by

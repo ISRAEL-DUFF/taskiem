@@ -41,6 +41,18 @@ func pageAreas(ctx context.Context, tx pgx.Tx) (func(string) bool, error) {
 	return func(a string) bool { return st.On(areas.Area(a)) }, nil
 }
 
+// recordsOrderable says whether a part's rows may be put in a column's
+// order: always for a table's (its own checks hold); for Taskiem's records,
+// only by one of the view's own columns that is not personal, or when a
+// row was made (never updated_at or id, which a view does not offer).
+func recordsOrderable(b pages.Block, col string) bool {
+	if b.Source == nil || b.Source.Records == "" {
+		return true
+	}
+	v, ok := pages.RecordViewNamed(b.Source.Records)
+	return ok && v.Orderable(col)
+}
+
 // recordsOf is the view a part reads ("" for a table or none).
 func recordsOf(b pages.Block) string {
 	if b.Source == nil {

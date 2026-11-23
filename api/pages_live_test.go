@@ -141,3 +141,62 @@ func TestPagesLive(t *testing.T) {
 		t.Error("the page published again was not told")
 	}
 }
+
+// An open page's viewer is signed in again every so often: a permission
+// lost stops that view's notices, a membership ended ends the stream; a
+// pin or a draft saved tells no part; one person holds five streams.
+func TestPagesLiveRechecks(t *testing.T) {
+	w := recordsWorld(t)
+	w.srv.PageLiveEvery = 200 * time.Millisecond
+	w.srv.PageLiveRecheck = 500 * time.Millisecond
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	cash := addMember(t, w.world, owner, "cas", "cashier", "viewer")
+	cashID := cash.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	addOrder(t, w, owner, "AC-1", "received", "Bola Ade", "+2348031234567", 150000)
+	doc := map[string]any{"page": "page/v1", "name": "desk", "title": "Desk",
+		"blocks": []any{map[string]any{"id": "n", "type": "figure", "label": "Orders", "value": "count", "source": map[string]any{"records": "orders"}},
+			map[string]any{"id": "h", "type": "heading", "title": "Hi"}}}
+	owner.must(201, "POST", "/v1/pages", map[string]any{"document": doc})
+	owner.must(200, "POST", "/v1/pages/desk/publish", nil)
+
+	live, stop := pageLive(t, cash, "desk")
+	defer stop()
+	if ev := next(live, "ready", 5*time.Second, nil); ev == nil || fmt.Sprint(ev.Data["blocks"]) != "[n]" {
+		t.Fatalf("ready: %+v", ev)
+	}
+	setOrderStatus(t, w, owner, "AC-1", "accepted")
+	if ev := next(live, "changed", 5*time.Second, nil); ev == nil {
+		t.Fatal("not told of the order")
+	}
+	// A pin and a draft saved: no part told.
+	owner.must(200, "PUT", "/v1/pages/desk/pin", map[string]any{"pinned": true})
+	owner.must(200, "PUT", "/v1/pages/desk/draft", map[string]any{"document": doc})
+	if ev := next(live, "changed", 1500*time.Millisecond, nil); ev != nil {
+		t.Errorf("told of a pin or a draft: %+v", ev)
+	}
+	// order.handle taken away: the orders are no longer watched.
+	owner.must(204, "DELETE", "/v1/members/"+cashID+"/roles/cashier", nil)
+	time.Sleep(1200 * time.Millisecond)
+	setOrderStatus(t, w, owner, "AC-1", "completed")
+	if ev := next(live, "changed", 1500*time.Millisecond, nil); ev != nil {
+		t.Errorf("told of an order after order.handle was taken away: %+v", ev)
+	}
+	// No membership left: gone.
+	owner.must(204, "DELETE", "/v1/members/"+cashID+"/roles/viewer", nil)
+	if ev := next(live, "gone", 5*time.Second, nil); ev == nil {
+		t.Error("the stream outlived the membership")
+	}
+
+	// Five streams a person.
+	var stops []func()
+	for range 5 {
+		_, s := pageLive(t, owner, "desk")
+		stops = append(stops, s)
+	}
+	if s, _ := owner.do("GET", "/v1/pages/desk/live", nil); s != 429 {
+		t.Errorf("a sixth stream: %d", s)
+	}
+	for _, s := range stops {
+		s()
+	}
+}

@@ -147,7 +147,9 @@ func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 		c, ok := columnOf(t, col)
 		return ok && c.Personal
 	}
-	// A choice filter on a column personal in a table the page reads.
+	// A choice filter on a column personal in a table the page reads, or
+	// on any column when the page reads a table the business no longer has
+	// (nothing tells its columns apart, as for a condition).
 	var dropped []string
 	var keptFilters []Filter
 	for _, f := range cp.Filters {
@@ -155,7 +157,8 @@ func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 		if f.Type == "choice" {
 			for _, name := range cp.UsesTables() {
 				t, ok := Lookup(tables, name)
-				if ok && personal(t, true, f.Column) {
+				known := ok && (IsRecords(name) || t.Name == name)
+				if personal(t, known, f.Column) {
 					drop = true
 				}
 			}
@@ -265,15 +268,20 @@ func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 // literalRe finds words of an expression's own: a quoted string.
 var literalRe = regexp.MustCompile(`'[^']*'|"[^"]*"`)
 
+// numberRe finds a number of four digits or more written in an expression
+// (row.phone == 2348031234567): a value of its own as a quoted one is.
+var numberRe = regexp.MustCompile(`(^|[^A-Za-z0-9_.])[0-9]{4,}`)
+
 // hasWordsOfItsOwn says whether an expression holds a quoted string with a
-// letter or a digit in it (a separator like ' · ' carries nothing).
+// letter or a digit in it (a separator like ' · ' carries nothing), or a
+// number of four digits or more outside its quotes.
 func hasWordsOfItsOwn(src string) bool {
 	for _, lit := range literalRe.FindAllString(src, -1) {
 		if strings.IndexFunc(lit, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
 			return true
 		}
 	}
-	return false
+	return numberRe.MatchString(literalRe.ReplaceAllString(src, "''"))
 }
 
 // Missing says, in plain words, what a page names that the business does

@@ -109,6 +109,11 @@ type Server struct {
 	liveGate chatStreamGate
 	// pageGate caps the open pages kept up to date (pages_live.go).
 	pageGate chatStreamGate
+	// pageActorGate caps them per person or API key.
+	pageActorGate chatStreamGate
+	// PageLiveRecheck is how often an open page signs its viewer in again
+	// (zero: thirty seconds; tests set it shorter).
+	PageLiveRecheck time.Duration
 	// PageLiveEvery is how often an open page asks what changed (zero: two
 	// seconds; tests set it shorter).
 	PageLiveEvery time.Duration
