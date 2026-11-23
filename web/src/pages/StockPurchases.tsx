@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, get, post, postOnce } from "../api";
 import { ErrorBox, Field, Items, Modal, Row, useAction, useLoad } from "../ui";
+import { toast } from "../toast";
+import { keyFor } from "../lib/things";
 import {
   STATUS,
   payProblem,
@@ -22,6 +24,7 @@ import {
   handProblem,
   nameKey,
   toAnswer,
+  type Choice,
   type HandLine,
   type Remembered,
 } from "../lib/treat";
@@ -347,7 +350,9 @@ function PayModal({
 }) {
   const [amount, setAmount] = useState(() => feeInput(purchase.owed_kobo));
   const [how, setHow] = useState<"cash" | "transfer">("transfer");
-  const [key] = useState(() => crypto.randomUUID());
+  // One key for one order's payment tried again; a new one for another
+  // order or amount (the server refuses a key used on another order).
+  const key = useRef<{ body: string; key: string }>(undefined);
   const act = useAction();
   const problem = payProblem(amount);
   return (
@@ -356,13 +361,16 @@ function PayModal({
         onSubmit={(e) => {
           e.preventDefault();
           void act.run(
-            async () => (
-              await postOnce(`/v1/stock/purchases/${purchase.id}/pay`, key, {
-                amount_kobo: feeKobo(amount),
-                paid_how: how,
-              }),
-              onSaved()
-            ),
+            async () => {
+              const body = { amount_kobo: feeKobo(amount), paid_how: how };
+              key.current = keyFor(key.current, { order: purchase.id, ...body });
+              await postOnce(
+                `/v1/stock/purchases/${purchase.id}/pay`,
+                key.current.key,
+                body,
+              );
+              onSaved();
+            },
             "Payment recorded",
           );
         }}
@@ -449,20 +457,48 @@ function OrderByHandModal({
   const treat = useSheetTreat();
   const act = useAction();
   const name = suppliers.data?.find((s) => s.id === supplier)?.name ?? "";
+  // A name is asked about once it settles (on leaving its field, or once
+  // typing stops), not from half of it ("Ny").
+  const typed = lines.map((l) => l.item.trim()).join("\n");
+  const [settledKey, setSettledKey] = useState(typed);
+  useEffect(() => {
+    const t = setTimeout(() => setSettledKey(typed), 600);
+    return () => clearTimeout(t);
+  }, [typed]);
+  const settled = settledKey.split("\n");
+  // Taskiem's own answer, not touched by the person, goes with the name it
+  // was worked out for: a new name is asked afresh (or as remembered).
+  const [auto, setAuto] = useState<Record<string, { name: string; c: Choice }>>({});
+  const [seen, setSeen] = useState(settledKey);
+  if (seen !== settledKey) {
+    setSeen(settledKey);
+    const gone = Object.entries(auto).filter(
+      ([k, a]) => nameKey(settled[Number(k)] ?? "") !== a.name,
+    );
+    for (const [k, a] of gone)
+      if (treat.choices[k] === a.c) treat.setter(k)(undefined);
+    if (gone.length > 0)
+      setAuto(
+        Object.fromEntries(
+          Object.entries(auto).filter(([k]) => !gone.some(([g]) => g === k)),
+        ),
+      );
+  }
   const filled = lines
-    .map((l, i) => ({ l, k: String(i) }))
-    .filter(({ l }) => l.item.trim() !== "");
+    .map((l, i) => ({ l, k: String(i), name: settled[i] ?? "" }))
+    .filter(({ name }) => name !== "");
   const memoryOf = (item: string) => {
     const m = memory.data?.find((x) => x.name_key === nameKey(item));
     return m ? fromMemory(m) : undefined;
   };
   const memoryAt = (k: string | undefined) =>
-    memoryOf(lines[Number(k)]?.item ?? "");
+    memoryOf(settled[Number(k)] ?? "");
   const problem = handProblem(supplier, lines);
   const answered =
     !!memory.data &&
+    typed === settledKey &&
     treat.ready(
-      filled.map(({ l, k }) => ({ key: k, memory: memoryOf(l.item) })),
+      filled.map(({ name, k }) => ({ key: k, memory: memoryOf(name) })),
     );
   const set = (i: number, patch: Partial<HandLine>) =>
     setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -490,8 +526,11 @@ function OrderByHandModal({
         filled.map(({ k }, i) => ({ key: k, position: i })),
         cs,
       );
+      // Said here, not by run: a many-to-track question returns with
+      // nothing drafted.
+      toast("Order drafted");
       onSaved();
-    }, "Order drafted");
+    }, false);
   return (
     <Modal title="A new order" onClose={onClose}>
       <p className="hint">
@@ -516,6 +555,7 @@ function OrderByHandModal({
               value={l.item}
               maxLength={200}
               onChange={(e) => set(i, { item: e.target.value })}
+              onBlur={() => setSettledKey(typed)}
             />
           </Field>
           <Field label={`How many ${i + 1}`}>
@@ -546,15 +586,19 @@ function OrderByHandModal({
       {supplier && memory.data && filled.length > 0 && (
         <div className="treat-list" data-testid="treat-lines">
           <h3>How should we treat each?</h3>
-          {filled.map(({ l, k }) => (
+          {filled.map(({ name: item, k }) => (
             <TreatQuestion
-              key={`${k}-${nameKey(l.item)}`}
-              item={l.item.trim()}
+              key={`${k}-${nameKey(item)}`}
+              item={item}
               supplier={name}
               data={treat.data}
-              memory={memoryOf(l.item)}
+              memory={memoryOf(item)}
               value={treat.choices[k]}
-              onChange={treat.setter(k)}
+              onChange={(c, seeded) => {
+                if (seeded && c)
+                  setAuto((cur) => ({ ...cur, [k]: { name: nameKey(item), c } }));
+                treat.setter(k)(c);
+              }}
             />
           ))}
         </div>

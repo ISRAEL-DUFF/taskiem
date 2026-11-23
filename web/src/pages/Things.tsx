@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, sendWith } from "../api";
 import { useAuth } from "../auth";
@@ -13,6 +13,7 @@ import {
   detailsRequest,
   emptyThing,
   hadOf,
+  keyFor,
   priceProblem,
   rowsOf,
   statusRequest,
@@ -78,9 +79,19 @@ export function ThingsPage() {
   const [params, setParams] = useSearchParams();
   const all = params.get("all") === "true";
   const line = params.get("line");
-  const view = useLoad(() => get<ThingsView>(thingsPath(all, line)), [all, line]);
+  const read = can("table.read");
+  const path = thingsPath(all, line);
+  // Only for those who may see them; each answer kept with what it is of,
+  // so the totals of the last filter are not shown while the next loads.
+  const view = useLoad(
+    () =>
+      read
+        ? get<ThingsView>(path).then((v) => ({ path, v }))
+        : Promise.resolve(undefined),
+    [read, path],
+  );
   const [adding, setAdding] = useState(false);
-  const v = view.data;
+  const v = view.data?.path === path ? view.data.v : undefined;
   const rows = v ? rowsOf(v.things, line) : [];
   // One order line's: its sections and hero of its own rows still had.
   const groups = v ? byLabel(rows, line ? undefined : v.groups) : [];
@@ -99,7 +110,7 @@ export function ThingsPage() {
         }
       />
       <MoneyTabs />
-      {!can("table.read") ? (
+      {!read ? (
         <p className="notice">Someone who may see your stock can see Things we have.</p>
       ) : (
         <>
@@ -267,10 +278,29 @@ function AddThingModal({ onClose, onAdded }: { onClose: () => void; onAdded: () 
 export function ThingPage() {
   const { id = "" } = useParams();
   const { can } = useAuth();
-  const view = useLoad(() => get<{ thing: Thing }>(`${THINGS_PATH}/${encodeURIComponent(id)}`), [id]);
+  const read = can("table.read");
+  const view = useLoad(
+    () =>
+      read
+        ? get<{ thing: Thing }>(`${THINGS_PATH}/${encodeURIComponent(id)}`)
+        : Promise.resolve(undefined),
+    [read, id],
+  );
   const [editing, setEditing] = useState(false);
   const t = view.data?.thing;
   const edit = can("table.edit");
+  if (!read)
+    return (
+      <>
+        <p className="crumbs">
+          <Link to="/money/things" aria-label="Back to Things we have">
+            Things we have
+          </Link>
+        </p>
+        <PageHeader title="Something we have" />
+        <p className="notice">Someone who may see your stock can see Things we have.</p>
+      </>
+    );
   return (
     <>
       <p className="crumbs">
@@ -359,24 +389,32 @@ function StatusCard({ thing: t, onSaved }: { thing: Thing; onSaved: () => void }
   const [status, setStatus] = useState<ThingStatus>(t.status);
   const [price, setPrice] = useState("");
   const [how, setHow] = useState<"cash" | "transfer">("cash");
-  const [key] = useState(() => crypto.randomUUID());
+  // Kept for the same change tried again; new when the change differs.
+  const key = useRef<{ body: string; key: string }>(undefined);
   const act = useAction();
   const navigate = useNavigate();
   const priceId = useId();
   // A sale recorded already is not recorded again.
   const pricing = status === "sold" && !t.sale_entry_id;
+  // Sold with its money recorded: it stays sold (the server refuses).
+  const soldWithMoney = t.status === "sold" && !!t.sale_entry_id;
   const problem = pricing ? priceProblem(price, money) : "";
   const kobo = pricing && price.trim() ? feeKobo(price) : undefined;
   return (
     <section className="card" aria-labelledby="thing-status-h" data-testid="thing-change">
       <h2 id="thing-status-h">What happened to it</h2>
-      <div role="radiogroup" aria-label="What happened to it">
+      <div
+        role="radiogroup"
+        aria-label="What happened to it"
+        aria-describedby={soldWithMoney ? `${priceId}-kept` : undefined}
+      >
         {STATUSES.map((s) => (
           <label key={s.value} className="sf-radio">
             <input
               type="radio"
               name="thing-status"
               checked={status === s.value}
+              disabled={soldWithMoney && s.value !== "sold"}
               onChange={() => setStatus(s.value)}
             />
             {s.label}
@@ -415,8 +453,13 @@ function StatusCard({ thing: t, onSaved }: { thing: Thing; onSaved: () => void }
           )}
         </>
       )}
-      {status === "sold" && t.sale_entry_id && (
-        <p className="hint">What it sold for is recorded, as money in.</p>
+      {soldWithMoney ? (
+        <p className="hint" id={`${priceId}-kept`} data-testid="sold-kept">
+          What it sold for is recorded, as money in, so it stays sold.
+        </p>
+      ) : (
+        status === "sold" &&
+        t.sale_entry_id && <p className="hint">What it sold for is recorded, as money in.</p>
       )}
       {problem && price.trim() !== "" && (
         <div className="error" role="alert">
@@ -431,8 +474,10 @@ function StatusCard({ thing: t, onSaved }: { thing: Thing; onSaved: () => void }
           disabled={act.busy || !!problem || !statusSavable(t, status, price, money)}
           onClick={() =>
             void act.run(async () => {
-              await sendWith("PATCH", `${THINGS_PATH}/${t.id}`, statusRequest(status, pricing ? price : "", how), {
-                "Idempotency-Key": key,
+              const body = statusRequest(status, pricing ? price : "", how);
+              key.current = keyFor(key.current, body);
+              await sendWith("PATCH", `${THINGS_PATH}/${t.id}`, body, {
+                "Idempotency-Key": key.current.key,
               }).catch(plain);
               onSaved();
             }, statusSaid(t.name, status, kobo))

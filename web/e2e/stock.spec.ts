@@ -781,6 +781,42 @@ test("suppliers and orders to them", async ({ page }) => {
   });
 });
 
+test("paying an order: a new key for a different amount, the same one tried again", async ({ page }) => {
+  await signUp(page);
+  const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  const pays: { body: unknown; key?: string }[] = [];
+  await page.route("**/v1/stock", (route) => route.fulfill(json(stock)));
+  await page.route("**/v1/stock/movements?**", (route) => route.fulfill(json(movements)));
+  await page.route("**/v1/stock/purchases**", async (route) => {
+    const r = route.request();
+    if (r.method() === "POST" && r.url().endsWith("/pay")) {
+      pays.push({ body: r.postDataJSON(), key: r.headers()["idempotency-key"] });
+      // The first two are refused; the third goes.
+      if (pays.length < 3) return route.fulfill(json({ error: "try again in a moment" }, 409));
+      return route.fulfill(json({ purchase: purchases.purchases[1] }));
+    }
+    await route.fulfill(json(purchases));
+  });
+  await page.goto("/storefront/stock");
+  await page.getByRole("button", { name: "Record a payment for P-K2M9PA" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Amount paid (₦)").fill("500,000");
+  const pay = dialog.getByRole("button", { name: "Record the payment" });
+  await pay.click();
+  await expect.poll(() => pays.length).toBe(1);
+  await expect(dialog.getByRole("alert")).toContainText("try again in a moment");
+  await pay.click();
+  await expect.poll(() => pays.length).toBe(2);
+  await dialog.getByLabel("Amount paid (₦)").fill("400,000");
+  await pay.click();
+  await expect(dialog).toBeHidden();
+  expect(pays.map((p) => (p.body as { amount_kobo: number }).amount_kobo)).toEqual([50_000_000, 50_000_000, 40_000_000]);
+  expect(pays[0]?.key).toBeTruthy();
+  expect(pays[1]?.key).toBe(pays[0]?.key);
+  expect(pays[2]?.key).toBeTruthy();
+  expect(pays[2]?.key).not.toBe(pays[0]?.key);
+});
+
 test("count the shelf: a sheet, a CSV, the month's losses", async ({
   page,
 }) => {

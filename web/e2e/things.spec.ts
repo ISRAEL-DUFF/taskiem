@@ -283,7 +283,9 @@ test("a row sold without a price gets its price later from someone who manages m
   await save.click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]?.body).toEqual({ status: "sold", sale_price_kobo: 30_000_000, sale_paid_how: "cash" });
-  await expect(page.getByText("What it sold for is recorded, as money in.")).toBeVisible();
+  // Its money recorded: it stays sold.
+  await expect(change.getByTestId("sold-kept")).toHaveText("What it sold for is recorded, as money in, so it stays sold.");
+  await expect(change.getByRole("radio", { name: "Have" })).toBeDisabled();
   await expect(change.getByRole("button", { name: "See money in" })).toBeVisible();
 });
 
@@ -388,4 +390,116 @@ test("spending by label in the money overview: Bought to keep apart, out of prof
   await expect(card.getByTestId("spending-profit")).toContainText("₦127,000 profit");
   await expect(card.getByTestId("spending-profit")).toContainText("Bought to keep is left out");
   await axeAt(page, "spending by label");
+});
+
+test("a sale refused and changed goes with a new Idempotency-Key; the same one tried again keeps its key", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  const { sent } = thingsServer(page, [generator]);
+  // The first two tries are refused.
+  let refusals = 2;
+  await page.route("**/v1/things/t1", async (route) => {
+    const r = route.request();
+    if (r.method() === "PATCH" && refusals > 0) {
+      refusals--;
+      sent.push({ method: "PATCH", path: "/v1/things/t1", body: r.postDataJSON(), key: r.headers()["idempotency-key"] });
+      return route.fulfill(json({ error: "try again in a moment" }, 409));
+    }
+    return route.fallback();
+  });
+  await page.goto("/money/things/t1");
+  const change = page.getByTestId("thing-change");
+  await change.getByRole("radio", { name: "Sold" }).check();
+  await change.getByLabel("What it sold for (optional)").fill("300,000");
+  const save = change.getByRole("button", { name: "Save" });
+  await save.click();
+  await expect.poll(() => sent.length).toBe(1);
+  await expect(change.getByRole("alert")).toContainText("try again in a moment");
+  // The same sale again: the same key.
+  await save.click();
+  await expect.poll(() => sent.length).toBe(2);
+  // A different price: a new key, and it is saved.
+  await change.getByLabel("What it sold for (optional)").fill("250,000");
+  await save.click();
+  await expect.poll(() => sent.length).toBe(3);
+  await expect(page.getByTestId("thing-status")).toHaveText("Sold");
+  expect(sent.map((s) => (s.body as { sale_price_kobo: number }).sale_price_kobo)).toEqual([30_000_000, 30_000_000, 25_000_000]);
+  expect(sent[0]?.key).toBeTruthy();
+  expect(sent[1]?.key).toBe(sent[0]?.key);
+  expect(sent[2]?.key).toBeTruthy();
+  expect(sent[2]?.key).not.toBe(sent[0]?.key);
+});
+
+test("a row sold with its money recorded stays sold", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  const { sent } = thingsServer(page, [{ ...generator, status: "sold", sale_entry_id: "e1" }]);
+  await page.goto("/money/things/t1");
+  await expect(page.getByTestId("thing-status")).toHaveText("Sold");
+  const change = page.getByTestId("thing-change");
+  await expect(change.getByTestId("sold-kept")).toHaveText("What it sold for is recorded, as money in, so it stays sold.");
+  await expect(change.getByRole("radio", { name: "Sold" })).toBeChecked();
+  for (const other of ["Have", "Broken", "Given away", "Gone"])
+    await expect(change.getByRole("radio", { name: other, exact: true })).toBeDisabled();
+  await expect(change.getByRole("radiogroup")).toHaveAccessibleDescription("What it sold for is recorded, as money in, so it stays sold.");
+  await expect(change.getByRole("button", { name: "Save" })).toBeDisabled();
+  await axeAt(page, "a row sold with its money recorded");
+  expect(sent).toEqual([]);
+});
+
+test("without table.read, Things we have is not asked for", async ({ page }) => {
+  await signUp(page);
+  await without(page, "table.read");
+  labels(page);
+  thingsServer(page, [generator]);
+  const asked: string[] = [];
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname.startsWith("/v1/things")) asked.push(r.url());
+  });
+  // Anything the page asked before a request of our own is seen before it.
+  const drawnAndAsked = async () => {
+    await Promise.all([
+      page.waitForRequest((r) => r.url().includes("after-the-page")),
+      page.evaluate(() => fetch("/favicon.ico?after-the-page").catch(() => undefined)),
+    ]);
+  };
+  const words = page.getByText("Someone who may see your stock can see Things we have.");
+  await page.goto("/money/things");
+  await expect(words).toBeVisible();
+  await drawnAndAsked();
+  await page.goto("/money/things/t1");
+  await expect(words).toBeVisible();
+  await expect(page.getByTestId("thing-hero")).toHaveCount(0);
+  await drawnAndAsked();
+  expect(asked).toEqual([]);
+});
+
+test("the totals of the last filter are not shown while the next loads", async ({ page }) => {
+  await signUp(page);
+  labels(page);
+  thingsServer(page, [generator, overlock, fan]);
+  // All of them held back until let go.
+  let letGo: () => void = () => undefined;
+  const held = new Promise<void>((r) => (letGo = r));
+  let holding = 0;
+  await page.route("**/v1/things?**", async (route) => {
+    if (!new URL(route.request().url()).searchParams.get("line")) {
+      holding++;
+      await held;
+    }
+    return route.fallback();
+  });
+  await page.goto("/money/things?line=c");
+  const hero = page.getByTestId("things-hero");
+  await expect(hero).toContainText("1 thing");
+  await expect(hero).toContainText("₦450,000");
+  await page.getByRole("link", { name: "See them all" }).click();
+  await expect(page).toHaveURL(/\/money\/things$/);
+  await expect.poll(() => holding).toBe(1);
+  // Loading, not the order line's totals.
+  await expect(page.locator(".skeleton")).toBeVisible();
+  await expect(hero).toHaveCount(0);
+  letGo();
+  await expect(hero).toContainText("3 things");
+  await expect(hero).toContainText("₦615,000");
 });

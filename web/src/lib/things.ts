@@ -235,6 +235,18 @@ export function priceProblem(price: string, canEnterMoney: boolean): string {
   return "";
 }
 
+/** A change's Idempotency-Key: the same for the same change tried again
+ * (sent once), a new one for a different change (a price typed after a
+ * refusal is not answered with the first try's result). */
+export function keyFor(
+  prev: { body: string; key: string } | undefined,
+  body: unknown,
+  make: () => string = () => crypto.randomUUID(),
+): { body: string; key: string } {
+  const b = JSON.stringify(body);
+  return prev?.body === b ? prev : { body: b, key: make() };
+}
+
 /** Whether Save can go: a new status, or, on a row sold already without
  * its sale recorded, a price typed now by someone who manages money. */
 export function statusSavable(

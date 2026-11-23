@@ -13,6 +13,7 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { get, post, postOnce, put, whenOff } from "../api";
 import { useAuth } from "../auth";
+import { toast } from "../toast";
 import { naira, toKobo } from "../lib/invoices";
 import { daysValue } from "../lib/statements";
 import {
@@ -1143,8 +1144,11 @@ function ConfirmProposed({ p, onDone }: { p: Purchase; onDone: () => void }) {
         if (treat.refused(e, orderLineKeys(p).map((x) => x.key))) return;
         throw e;
       }
+      // Said here, not by run: a many-to-track question returns with
+      // nothing confirmed.
+      toast("Confirmed, and the supplier is told");
       onDone();
-    }, "Confirmed, and the supplier is told");
+    }, false);
   return (
     <section
       className="card"
@@ -1189,8 +1193,11 @@ function LinesTreatCard({ p, onDone }: { p: Purchase; onDone: () => void }) {
   const answered = treat.ready(orderLineKeys(p));
   const save = (cs?: Choices) =>
     void act.run(async () => {
-      if (await saveOrderLines(p, treat, cs)) onDone();
-    }, "Saved");
+      // A many-to-track question stops part way: not "Saved".
+      if (!(await saveOrderLines(p, treat, cs))) return;
+      toast("Saved");
+      onDone();
+    }, false);
   return (
     <section
       className="card"
