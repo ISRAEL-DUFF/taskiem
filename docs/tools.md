@@ -65,7 +65,7 @@ A tool with `"for": "customers"` is for the people who buy from you (made tools 
 
 | | |
 | --- | --- |
-| **Where** | Your own WhatsApp number (**menu**, then a number, with the menu switched on), and a person's chat with you in the app, under the tools button as **Their tools**. Not Telegram or Slack (one bot for everyone), never the shared number |
+| **Where** | Your own WhatsApp number (**menu**, then a number, with the menu switched on), and a person's chat with you in the app and on the web, under the tools button as **Their tools**. Not Telegram or Slack (one bot for everyone), never the shared number |
 | **Which** | Your customers' tools deployed in prod, and the menu's entries whose workflow is deployed there. Never one whose steps move money (refused when published, and again when listed and at every start, whatever was deployed), one whose workflow names roles (a customer holds none), or one whose inputs no form carries (nested, or more than ten) |
 | **Asking** | A form only: WhatsApp's form, the app's sheet; never questions in the chat, never words read by the model |
 | **Yes** | Always: what will run, then **yes**, whatever the tool's care. Nothing starts before it |
@@ -74,9 +74,11 @@ A tool with `"for": "customers"` is for the people who buy from you (made tools 
 | **The answer** | Drawn from the outputs your workflow marks `public` and nothing else: the rest are dropped before the answer is worked out, so an answer that names one (at any depth, in a row, in a button's values) shows nothing of it. Masked as messages are. How a run that failed failed, and who it waits for, are never said to a customer: they get "didn't go through" and the reference |
 | **Buttons** | Only to your other customers' tools (one to a members' tool is left out), and only for the customer the answer went to, as long as it lasts (seven days). A button fills the tool's form; it never starts it |
 
-**On WhatsApp.** **menu** lists the customers' tools by name; a number sends the form (`taskiem_inputs`); then the summary and **yes**. A tool with an answer says *{tool} has started. Your reference is …; the answer comes here when it is ready*, and the answer comes from your number when the run ends: a card's buttons as reply buttons, a list's first ten rows as words (*…and 4 more.*). Outside WhatsApp's 24-hour window it is not sent. A menu entry with no answer says *has started* and its reference, as before. A button pressed opens that tool: straight to **yes** when it carries every value, else the form.
+**On WhatsApp.** **menu** lists the customers' tools by name; a number sends the form (`taskiem_inputs`); then the summary and **yes**. A tool with an answer says *{tool} has started. Your reference is …; the answer comes here when it is ready*, and the answer comes from your number when the run ends: a card's buttons as reply buttons; a list whose rows have buttons as a list message (**Choose**, its first ten rows, *…and 4 more.* over it), a row chosen answering with that row's buttons, for the customer it went to only (anyone else is told the list was sent to someone else); a list without buttons as words. Outside WhatsApp's 24-hour window it is not sent. A menu entry with no answer says *has started* and its reference, as before. A button pressed opens that tool: straight to **yes** when it carries every value, else the form.
 
-**In the app.** A person's chat with you, the tools button: **Their tools** under Their shop, Book and Pay. A tool's sheet: its form, **Next**, what will run and **Yes, go ahead**, then the answer, read until the run ends.
+**In the app.** A person's chat with you, the tools button: **Their tools** under Their shop, Book and Pay. A tool's sheet: its form, **Next**, what will run and **Yes, go ahead**; then the sheet closes and the answer goes into the conversation, read until the run ends and kept on the phone with it (working on it, the card or list, its words, or that it didn't go through with its reference).
+
+**On the web.** A person's chat with you (You > chats), the tools button: **Their tools** after Their shop, Book, Your orders and Pay. A tool's sheet: its form, **Next**, **Yes, go ahead**, then the answer in the sheet with its reference; a button on it opens the other tool in the same sheet, filled in.
 
 | Call (the person's own, through the customer door) | What |
 | --- | --- |
