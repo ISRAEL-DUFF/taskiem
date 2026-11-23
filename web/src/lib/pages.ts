@@ -126,7 +126,9 @@ export interface DrawnPart {
   rows?: DrawnRow[];
   more?: string | null;
   groups?: { key: string; label: string }[];
-  columns?: { column: string; label: string; naira: boolean }[];
+  /** sortable: whether this viewer may put the rows in the column's order
+   * (never a personal column for someone without table.read). */
+  columns?: { column: string; label: string; naira: boolean; sortable?: boolean }[];
   order?: { column: string; desc: boolean };
   broken?: string;
   error?: string;
@@ -438,3 +440,65 @@ export const DATE_CHOICES = [
   { value: "week", words: "This week" },
   { value: "month", words: "This month" },
 ];
+
+// --- versions, and a page to and from a file ---
+
+/** One published version, as GET /v1/pages/{name}/versions lists it. */
+export interface PageVersion {
+  version: number;
+  title?: string;
+  published_by: string;
+  published_at: string;
+  summary: string;
+  changes: string[];
+  roles: string[];
+  who: string;
+  current: boolean;
+}
+
+/** A page made from a file (POST /v1/pages/import). */
+export interface PageImported {
+  page: PageDetail;
+  missing: string[];
+  renamed_from: string | null;
+}
+
+/** Whether this viewer may put a table's rows in a column's order. */
+export const canSort = (c: { sortable?: boolean }) => c.sortable !== false;
+
+/** The file a page is saved as. */
+export const pageFileName = (name: string) => `${name}.page.json`;
+
+/** How many conditions a page's parts have (to say how many the file left out). */
+export function conditionCount(doc: PageDoc | null | undefined): number {
+  return (doc?.blocks ?? []).reduce((n, b) => n + (b.source?.filters?.length ?? 0), 0);
+}
+
+/** A file read as a page, or why it is not one, in plain words. The server
+ * checks it fully; this only stops what is plainly not a page. */
+export function readPageFile(text: string): { document: PageDoc } | { error: string } {
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return { error: "This file is not a page saved from Taskiem: it could not be read." };
+  }
+  if (!doc || typeof doc !== "object" || Array.isArray(doc) || (doc as { page?: unknown }).page !== "page/v1") {
+    return { error: "This file is not a page saved from Taskiem." };
+  }
+  return { document: doc as PageDoc };
+}
+
+/** What making a page from a file says: its new name, and what this
+ * business lacks of what it shows. */
+export function importWords(r: PageImported): string[] {
+  const out: string[] = [];
+  if (r.renamed_from) out.push(`Another page was called ${r.renamed_from}, so this one is ${r.page.name}.`);
+  if (r.missing.length) out.push("Some of what it shows is not here yet:", ...r.missing);
+  return out;
+}
+
+/** A version's line in the list: who and when go beside it. */
+export function versionTitle(v: PageVersion): string {
+  return v.current ? `Version ${v.version} (what people see now)` : `Version ${v.version}`;
+}

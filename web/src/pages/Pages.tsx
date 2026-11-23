@@ -5,6 +5,9 @@ import { Icon } from "../icons";
 import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import {
   DATE_CHOICES,
+  canSort,
+  importWords,
+  readPageFile,
   filtersParam,
   keptFilters,
   grouped,
@@ -18,6 +21,7 @@ import {
   type DrawnPart,
   type DrawnRow,
   type PageDetail,
+  type PageImported,
   type PageList,
 } from "../lib/pages";
 import type { Table } from "../lib/tables";
@@ -42,10 +46,13 @@ export function Pages() {
         description="Screens your business makes for itself from its tables: figures, lists and tables, for a phone first."
         actions={
           data?.can_edit && (
-            <button className="primary" onClick={() => setMaking(true)}>
-              <Icon name="plus" />
-              New page
-            </button>
+            <>
+              <button className="primary" onClick={() => setMaking(true)}>
+                <Icon name="plus" />
+                New page
+              </button>
+              <FromFile />
+            </>
           )
         }
       />
@@ -82,6 +89,50 @@ export function Pages() {
         </Items>
       )}
       {making && <NewPage onClose={() => setMaking(false)} />}
+    </>
+  );
+}
+
+/** Makes a page from a file another page was saved as (Save as a file in
+ * the editor): a draft, opened in the editor with what this business lacks
+ * of what it shows. */
+function FromFile() {
+  const act = useAction();
+  const navigate = useNavigate();
+  const [said, setSaid] = useState<string | null>(null);
+  return (
+    <>
+      <label className="button">
+        <Icon name="file" />
+        Make from a file
+        <input
+          type="file"
+          className="sr-only"
+          accept=".json,application/json"
+          disabled={act.busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            setSaid(null);
+            void act.run(async () => {
+              const read = readPageFile(await file.text());
+              if ("error" in read) {
+                setSaid(read.error);
+                return;
+              }
+              const made = await post<PageImported>("/v1/pages/import", { document: read.document });
+              navigate(`/pages/${made.page.name}/edit`, { state: { imported: importWords(made) } });
+            }, false);
+          }}
+        />
+      </label>
+      {said && (
+        <div className="warning" role="alert">
+          {said}
+        </div>
+      )}
+      <ErrorBox error={act.error} />
     </>
   );
 }
@@ -462,9 +513,13 @@ function Rows({ part, name, draft, values, onOpen }: { part: DrawnPart; name: st
             <tr>
               {(shown.columns ?? []).map((c) => (
                 <th key={c.column} aria-sort={shown.order?.column === c.column ? (shown.order.desc ? "descending" : "ascending") : undefined}>
-                  <button type="button" className="link" onClick={() => sort(c.column)}>
-                    {c.label}
-                  </button>
+                  {canSort(c) ? (
+                    <button type="button" className="link" onClick={() => sort(c.column)}>
+                      {c.label}
+                    </button>
+                  ) : (
+                    c.label
+                  )}
                 </th>
               ))}
               {shown.has_detail && (

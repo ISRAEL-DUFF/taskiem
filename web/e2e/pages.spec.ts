@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
@@ -157,4 +158,79 @@ test("an owner turns the tickets table into a page, and staff open it on a phone
   await staff.getByLabel("Search", { exact: true }).fill("ink");
   await staff.getByRole("button", { name: "Search: go" }).click();
   await asked;
+});
+
+// Pages' follow-ups (docs/spec/pages.md §18): the versions with Bring back,
+// the page saved as a file and made again from it, and a table's columns
+// offered for ordering only where the server says the viewer may.
+test("an owner brings back a version, and saves a page as a file and makes it again", async ({ page }) => {
+  await page.setViewportSize(phone);
+  await signIn(page);
+  await page.goto("/pages/tickets/edit");
+  await expect(page.getByRole("heading", { level: 1, name: "Change Tickets" })).toBeVisible();
+  // One version published; the draft moved a part since.
+  const versions = page.getByTestId("page-version");
+  await expect(versions).toHaveCount(1);
+  await expect(versions.first()).toContainText("Version 1 (what people see now)");
+  await expect(versions.first()).toContainText("First published, with 3 parts. Opened by everyone in the business.");
+  await noSideways(page);
+  await axeBoth(page, "/pages/tickets/edit (versions)");
+  page.once("dialog", (d) => void d.accept());
+  await versions.first().getByRole("button", { name: "Bring back version 1" }).click();
+  await expect(page.getByText("Version 1 is your draft now")).toBeVisible();
+  const parts = page.getByTestId("editor-part");
+  await expect(parts.nth(0)).toContainText("How many in Tickets");
+
+  // Saved as a file: the page's document, no rows.
+  const saving = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save as a file" }).click();
+  const file = await saving;
+  expect(file.suggestedFilename()).toBe("tickets.page.json");
+  const doc = JSON.parse(readFileSync(await file.path(), "utf8")) as { page: string; name: string };
+  expect(doc.page).toBe("page/v1");
+  await expect(page.getByTestId("page-exported")).toHaveText("Saved.");
+
+  // Made again from the file: its name is taken, so tickets-2, a draft.
+  await page.goto("/pages");
+  await page.getByLabel("Make from a file").setInputFiles({ name: "tickets.page.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(doc)) });
+  await expect(page).toHaveURL(/\/pages\/tickets-2\/edit$/);
+  await expect(page.getByTestId("page-imported")).toContainText("Another page was called tickets, so this one is tickets-2.");
+  await expect(page.getByTestId("page-state")).toContainText("Not published yet");
+  // A file that is no page is refused in plain words.
+  await page.goto("/pages");
+  await page.getByLabel("Make from a file").setInputFiles({ name: "notes.json", mimeType: "application/json", buffer: Buffer.from('{"hello":1}') });
+  await expect(page.getByRole("alert")).toHaveText("This file is not a page saved from Taskiem.");
+  await noSideways(page);
+  await axeBoth(page, "/pages (a file refused)");
+});
+
+test("a table's columns are pressed to order it only where the viewer may", async ({ page }) => {
+  // A computer's width: on a phone the table's rows are cards.
+  await signIn(page);
+  const part = {
+    id: "people",
+    type: "table",
+    title: "People",
+    size: "full",
+    empty: "Nothing here yet",
+    has_detail: false,
+    count: 1,
+    more: null,
+    columns: [
+      { column: "name", label: "Name", naira: false, sortable: false },
+      { column: "team", label: "Team", naira: false, sortable: true },
+    ],
+    rows: [{ id: "1", cells: ["•••", "Desk"] }],
+  };
+  await page.route("**/v1/pages/tickets/view*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...drawn, blocks: [part] }) }));
+  await page.route("**/v1/pages/tickets/blocks/people*", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...part, order: { column: "team", desc: false } }) }),
+  );
+  const ordered = page.waitForRequest((r) => r.url().includes("/v1/pages/tickets/blocks/people") && r.url().includes("order=team"));
+  await page.goto("/pages/tickets");
+  await expect(page.getByRole("columnheader", { name: "Name" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Name", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  await ordered;
+  await expect(page.getByRole("columnheader", { name: "Team" })).toHaveAttribute("aria-sort", "ascending");
 });

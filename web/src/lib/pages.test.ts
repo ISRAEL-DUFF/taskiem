@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnOf, filterFits, filtersParam, freeId, grouped, keptFilters, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, viewWithFilters, whoWords, withUses, type DrawnFilter, type DrawnPage, type DrawnPart, type PageDoc } from "./pages";
+import { canSort, columnOf, conditionCount, filterFits, importWords, pageFileName, readPageFile, versionTitle, filtersParam, freeId, grouped, keptFilters, layout, move, newPart, partWords, publishWords, rowsWord, toneClass, viewWithFilters, whoWords, withUses, type DrawnFilter, type DrawnPage, type DrawnPart, type PageDoc, type PageDetail, type PageVersion } from "./pages";
 import type { Table } from "./tables";
 
 const tickets: Table = {
@@ -135,5 +135,33 @@ describe("pages", () => {
     const out = withUses(doc, [tickets]);
     expect(out.blocks[0]?.source?.uses).toBeUndefined();
     expect(out.blocks[1]?.source?.uses).toEqual(["q", "d"]);
+  });
+
+  it("reads a page's file, says what making it found, and names versions", () => {
+    expect(readPageFile("not json")).toEqual({ error: "This file is not a page saved from Taskiem: it could not be read." });
+    expect(readPageFile('{"wd":"wd/v1"}')).toEqual({ error: "This file is not a page saved from Taskiem." });
+    expect(readPageFile("[]")).toHaveProperty("error");
+    const ok = readPageFile('{"page":"page/v1","name":"desk","title":"Desk","blocks":[]}');
+    expect("document" in ok && ok.document.name).toBe("desk");
+    expect(pageFileName("desk")).toBe("desk.page.json");
+    const page = { name: "desk-2" } as PageDetail;
+    expect(importWords({ page, missing: [], renamed_from: null })).toEqual([]);
+    expect(importWords({ page, missing: ["This business has no table called tickets."], renamed_from: "desk" })).toEqual([
+      "Another page was called desk, so this one is desk-2.",
+      "Some of what it shows is not here yet:",
+      "This business has no table called tickets.",
+    ]);
+    const doc: PageDoc = { page: "page/v1", name: "x", title: "X", blocks: [{ id: "a", type: "figure", source: { table: "t", filters: [{ column: "a", op: "eq", value: 1 }, { column: "b", op: "is_null" }] } }, { id: "h", type: "heading" }] };
+    expect(conditionCount(doc)).toBe(2);
+    expect(conditionCount(null)).toBe(0);
+    const v: PageVersion = { version: 3, published_by: "Ada", published_at: "", summary: "", changes: [], roles: [], who: "", current: true };
+    expect(versionTitle(v)).toBe("Version 3 (what people see now)");
+    expect(versionTitle({ ...v, current: false })).toBe("Version 3");
+  });
+
+  it("offers a column's order only where the server says this viewer may", () => {
+    expect(canSort({ sortable: false })).toBe(false);
+    expect(canSort({ sortable: true })).toBe(true);
+    expect(canSort({})).toBe(true);
   });
 });

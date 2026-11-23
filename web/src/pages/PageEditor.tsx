@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { del, get, post, put } from "../api";
 import type { ApproverRole } from "../forms/RolePicker";
 import { Icon } from "../icons";
-import { ErrorBox, Field, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Items, Modal, PageHeader, Row, Skeleton, fmtTime, useAction, useLoad } from "../ui";
+import { saveFile } from "../lib/saveFile";
 import {
   PART_KINDS,
+  conditionCount,
+  pageFileName,
+  versionTitle,
   columnOf,
   columnWords,
   columnsFor,
@@ -24,6 +28,7 @@ import {
   type PageDetail,
   type PageDoc,
   type PageFilterDef,
+  type PageVersion,
   type Part,
   type Tone,
 } from "../lib/pages";
@@ -57,6 +62,9 @@ export function PageEditor() {
   const [publishing, setPublishing] = useState(false);
   const [preview, setPreview] = useState<DrawnPage | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
+  const [exported, setExported] = useState<string | null>(null);
+  const imported = (useLocation().state as { imported?: string[] } | null)?.imported ?? [];
+  const versions = useLoad(() => get<{ versions: PageVersion[] }>(`/v1/pages/${name}/versions`), [name, previewKey]);
   const act = useAction();
   useEffect(() => {
     const d = detail.data;
@@ -117,6 +125,14 @@ export function PageEditor() {
         }
       />
       <ErrorBox error={act.error} />
+      {imported.length > 0 && (
+        <div className="notice" role="note" data-testid="page-imported">
+          <p>Made from the file as a draft.</p>
+          {imported.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      )}
       <p className="hint" data-testid="page-state">
         {d.published ? (d.has_draft || dirty ? "Published, with changes not published yet." : `Published.`) : "Not published yet: only people who change pages can see it."}
       </p>
@@ -201,6 +217,57 @@ export function PageEditor() {
           </section>
 
           <FiltersForm doc={doc} tables={all} onChange={change} />
+
+          <Versions
+            versions={versions.data?.versions}
+            error={versions.error}
+            busy={act.busy}
+            dirty={dirty || d.has_draft}
+            onBringBack={(v) =>
+              confirm(
+                d.has_draft || dirty
+                  ? `Bring back version ${v.version}? It takes the place of your changes not published yet.`
+                  : `Bring back version ${v.version}? It becomes your draft: people keep seeing the published page until you publish it.`,
+              ) &&
+              void act.run(async () => {
+                const back = await post<PageDetail>(`/v1/pages/${name}/versions/${v.version}/bring-back`);
+                setDoc(back.draft ?? back.document);
+                setDirty(false);
+                detail.reload();
+                setPreviewKey((k) => k + 1);
+              }, `Version ${v.version} is your draft now`)
+            }
+          />
+
+          <section className="card">
+            <h2>Save as a file</h2>
+            <p className="hint">
+              Keep the page as a file, or use it to make the same page in another business. The file has what the page shows and how, never your rows or anyone&apos;s details.
+            </p>
+            <button
+              disabled={act.busy}
+              onClick={() =>
+                void act.run(async () => {
+                  const file = await get<PageDoc>(`/v1/pages/${name}/export`);
+                  saveFile(new Blob([JSON.stringify(file, null, 2) + "\n"], { type: "application/json" }), pageFileName(name));
+                  const left = conditionCount(d.document ?? d.draft) - conditionCount(file);
+                  setExported(
+                    left > 0
+                      ? `Saved. ${left === 1 ? "A condition on a personal column was" : `${left} conditions on personal columns were`} left out of the file: add ${left === 1 ? "it" : "them"} again where you use it.`
+                      : "Saved.",
+                  );
+                }, false)
+              }
+            >
+              <Icon name="file" />
+              Save as a file
+            </button>
+            {exported && (
+              <p className="hint" role="status" data-testid="page-exported">
+                {exported}
+              </p>
+            )}
+          </section>
 
           <section className="card">
             <h2>Delete the page</h2>
@@ -701,6 +768,59 @@ function FiltersForm({ doc, tables, onChange }: { doc: PageDoc; tables: Table[];
               </button>
             ))}
         </div>
+      )}
+    </section>
+  );
+}
+
+/** The versions people have seen, newest first, each with who published
+ * it, when and what it changed; Bring back makes one the draft. */
+function Versions({
+  versions,
+  error,
+  busy,
+  dirty,
+  onBringBack,
+}: {
+  versions: PageVersion[] | undefined;
+  error: unknown;
+  busy: boolean;
+  dirty: boolean;
+  onBringBack: (v: PageVersion) => void;
+}) {
+  return (
+    <section className="card" data-testid="page-versions">
+      <h2>Earlier versions</h2>
+      <p className="hint">Each time the page was published. Bringing one back makes it your draft: people see it only once you publish it again.</p>
+      {error ? (
+        <ErrorBox error={error} />
+      ) : !versions ? (
+        <Skeleton rows={2} label="Loading the versions…" />
+      ) : versions.length === 0 ? (
+        <p className="hint">Not published yet.</p>
+      ) : (
+        <Items label="Earlier versions">
+          {versions.map((v) => (
+            <Row
+              key={v.version}
+              icon="clock"
+              tone={v.current ? "ok" : undefined}
+              title={versionTitle(v)}
+              sub={
+                <span className="sub">
+                  {`${v.published_by}, ${fmtTime(v.published_at)}. ${v.summary}`}
+                </span>
+              }
+              testid="page-version"
+            >
+              {(!v.current || dirty) && (
+                <button type="button" className="small" disabled={busy} onClick={() => onBringBack(v)}>
+                  Bring back<span className="sr-only"> version {v.version}</span>
+                </button>
+              )}
+            </Row>
+          ))}
+        </Items>
       )}
     </section>
   );
