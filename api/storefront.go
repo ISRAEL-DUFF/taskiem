@@ -278,6 +278,16 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return s.syncServices(ctx, tenant, sf)
 	}
+	// Links made while the catalogue is read are newer than the read: the
+	// refresh drops only those made before it (productstock.DropGoneTx).
+	var start time.Time
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		start, err = productstock.RefreshStartTx(ctx, tx, tenant)
+		return err
+	}); err != nil {
+		return err
+	}
 	rows, rerr := s.readAllRows(ctx, tenant, table, storefront.MaxItems+1)
 	var items []storefront.Item
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -299,7 +309,7 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		for _, r := range rows {
 			present = append(present, fmt.Sprint(r["id"]))
 		}
-		if n, err := productstock.DropGoneTx(ctx, tx, tenant, present); err != nil {
+		if n, err := productstock.DropGoneTx(ctx, tx, tenant, present, start); err != nil {
 			return err
 		} else if n > 0 {
 			s.Logger.Info("stock: products gone from the catalogue are no longer counted", "tenant", tenant, "links", n)

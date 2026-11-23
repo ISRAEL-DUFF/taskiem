@@ -13,6 +13,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -561,7 +562,12 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 		return c.say(ctx, s, c.t(key, "name", whatsapp.SafeText(sh.Name), "qty", qty, "cost", cost)+"\n\n"+c.t("wa.stock.sell_how"), sellButtons(c)...)
 	}
 	sh.Row, sh.Name = it.ID, it.Name
-	if in.Unit == "" || it.Unit != "" {
+	// A product using more than one of its stock item ("Rice 1kg" uses
+	// 1000 g) is counted in as a purchase line of it is (stock.ReceiveTx):
+	// its stock item moves by the quantity times the uses, in the stock
+	// item's own unit, which the pack's word ("bags") does not change.
+	uses := max(it.Uses, 1)
+	if in.Unit == "" || it.Unit != "" || uses > 1 {
 		in.Unit = ""
 	}
 	unitItem := *it
@@ -569,11 +575,15 @@ func (s *Server) stockAskAdd(ctx context.Context, c *chat, sh *chatShop, it *sto
 		unitItem.Unit = in.Unit
 	}
 	in.Shown = unitItem.Unit
+	qty := unitItem.Quantity(in.Quantity)
+	if uses > 1 {
+		qty = strconv.FormatInt(in.Quantity, 10) + " × " + unitItem.Quantity(uses)
+	}
 	from, to := "?", "?"
 	if it.Stock != nil {
-		from, to = unitItem.Quantity(*it.Stock), unitItem.Quantity(*it.Stock+in.Quantity)
+		from, to = unitItem.Quantity(*it.Stock), unitItem.Quantity(*it.Stock+in.Quantity*uses)
 	}
-	return s.shopAsk(ctx, c, sh, c.t("wa.stock.confirm_topup", "name", whatsapp.SafeText(it.Name), "qty", whatsapp.SafeText(unitItem.Quantity(in.Quantity)),
+	return s.shopAsk(ctx, c, sh, c.t("wa.stock.confirm_topup", "name", whatsapp.SafeText(it.Name), "qty", whatsapp.SafeText(qty),
 		"from", whatsapp.SafeText(from), "to", whatsapp.SafeText(to), "cost", cost))
 }
 
@@ -717,14 +727,36 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
+		// A product using more than one of its stock item is counted in as
+		// a purchase line of it is (stock.ReceiveTx): the stock item moves
+		// by the quantity times the uses, at the price paid over the uses
+		// (whole kobo), and keeps its unit.
+		var uses int64 = 1
+		if err := db.InTenantTx(tctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			x, ok, err := productstock.ItemOfTx(tctx, tx, c.tenant.ID, sh.Row)
+			if ok {
+				uses = max(x.Uses, 1)
+			}
+			return err
+		}); err != nil {
+			return s.stockChatFail(ctx, c, err)
+		}
+		cost := in.CostKobo
+		if cost != nil && uses > 1 {
+			unit := *cost / uses
+			cost = &unit
+			if unit <= 0 {
+				cost = nil
+			}
+		}
 		// Its unit and the price paid go on its stock item.
-		if in.Unit != "" || in.CostKobo != nil {
+		if (in.Unit != "" && uses == 1) || cost != nil {
 			it, err := s.stockItem(tctx, c.tenant.ID, shop, sh.Row)
 			if err != nil {
 				return s.stockChatFail(ctx, c, err)
 			}
-			d := stockDetails{CostKobo: in.CostKobo}
-			if u := in.Unit; u != "" {
+			d := stockDetails{CostKobo: cost}
+			if u := in.Unit; u != "" && uses == 1 {
 				d.Unit = &u
 			}
 			if err := db.InTenantTx(tctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
@@ -735,8 +767,8 @@ func (s *Server) waStockApply(ctx context.Context, c *chat) error {
 			}
 		}
 		q := in.Quantity
-		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Actor: c.p.Actor(),
-			Key: key, CostKobo: in.CostKobo}, audit)
+		m, err := s.stockMove(tctx, c.tenant.ID, stock.Move{ItemID: sh.Row, Item: sh.Name, Reason: stock.Received, Delta: &q, Uses: uses, Actor: c.p.Actor(),
+			Key: key, CostKobo: cost}, audit)
 		if err != nil {
 			return s.stockChatFail(ctx, c, err)
 		}
