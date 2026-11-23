@@ -134,7 +134,7 @@ func (s *Server) waToolRow(ctx context.Context, c *chat, ref string) error {
 	}
 	r := a.Rows[i]
 	bs := chatButtons(r.Actions)
-	if len(bs) == 0 {
+	if len(bs) == 0 && len(r.Actions) > 0 {
 		// Its buttons' seven days are over, or their tools are gone.
 		return c.say(ctx, s, c.t("wa.tool.button_gone"))
 	}

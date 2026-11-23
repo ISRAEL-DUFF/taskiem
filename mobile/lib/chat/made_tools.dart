@@ -66,7 +66,11 @@ List<MadeTool> madeMatching(List<MadeTool> tools, String query) {
   final m = RegExp(r'^/([a-z][a-z0-9-]*)\s+(\S[\s\S]*)$').firstMatch(text.trim());
   if (m == null) return null;
   final tool = tools.where((t) => t.command == m.group(1)).firstOrNull;
-  return tool == null ? null : (tool: tool, words: m.group(2)!.replaceAll(RegExp(r'\s+'), ' ').trim());
+  if (tool == null) return null;
+  // The reader takes at most 300 characters (POST …/read): more is cut
+  // rather than refused, so the form still opens filled in.
+  final words = m.group(2)!.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return (tool: tool, words: String.fromCharCodes(words.runes.take(300)));
 }
 
 /// Whether the tool asks before it runs: its steps say so, or an owner
@@ -569,7 +573,7 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
   /// The words in the box read into the form: the values only fill it;
   /// its own Run it or Next starts anything.
   Future<void> _read() async {
-    final words = _words.text.trim();
+    final words = String.fromCharCodes(_words.text.trim().runes.take(300));
     if (words.isEmpty || _reading) return;
     setState(() => (_reading = true, _readSaid = null, _readNotes = const []));
     try {

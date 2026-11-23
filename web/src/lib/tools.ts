@@ -734,7 +734,10 @@ export function madeToolWords(
   const cmd = /^\/([a-z][a-z0-9-]*) (.+)$/.exec(t);
   if (cmd) {
     const tool = tools.find((x) => x.command === cmd[1]);
-    return tool ? { tool, words: (cmd[2] ?? "").trim(), by: "command" } : undefined;
+    // The reader takes at most 300 characters (POST …/read); more is cut
+    // rather than refused, so the form still opens filled in.
+    const words = [...(cmd[2] ?? "").trim()].slice(0, 300).join("");
+    return tool ? { tool, words, by: "command" } : undefined;
   }
   const folded = t.toLowerCase();
   let best: { tool: MadeTool; len: number } | undefined;
@@ -750,5 +753,5 @@ export function madeToolWords(
       }
     }
   if (!best || tie) return undefined;
-  return { tool: best.tool, words: t.slice(best.len).trim(), by: "phrase" };
+  return { tool: best.tool, words: [...t.slice(best.len).trim()].slice(0, 300).join(""), by: "phrase" };
 }
