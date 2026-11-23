@@ -2,6 +2,7 @@ package stock
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -86,14 +87,45 @@ func ParseAdd(text string) (Added, bool) {
 // ParseCountIn reads words that count something in: "add 20 yards of
 // ankara fabric", "add 50 cartons of Indomie at 8,500" (a cost, what one
 // was bought for) and the same after "stock in". A quantity comes first, so
-// "add product …", "add item …" and "add rider …" are never this; ok is
-// false when the words are not one.
+// "add product …", "add item …" and "add rider …" are never this. Goods
+// bought in a unit are counted in too: "we bought 10 bags of rice at
+// 1,500", "bought 5 cartons of Indomie" (ParseBought); "bought snacks for
+// 8,000" is an expense, which the money words read. ok is false when the
+// words are not one.
 func ParseCountIn(text string) (Added, bool) {
 	t := strings.TrimSpace(text)
+	if m := boughtRe.FindStringSubmatch(t); m != nil {
+		return ParseBought(m[1])
+	}
 	if rest, ok := cutPrefixFold(t, "stock in "); ok {
 		t = "add " + rest
 	}
 	return ParseAdd(t)
+}
+
+var (
+	boughtRe = regexp.MustCompile(`(?i)^\s*(?:(?:i|we)\s+)?bought\s+(.+?)\s*$`)
+	// fromRe is who it was bought from, which counting in does not keep:
+	// "rice from Dangote at 1,500".
+	fromRe = regexp.MustCompile(`(?i)\s+from\s+.+?(\s+(?:at|@|for)\s+|$)`)
+)
+
+// notUnits are words before "of" that say money, not a unit: "15,000
+// worth of fuel" is spending.
+var notUnits = []string{"worth", "naira", "kobo"}
+
+// ParseBought reads what follows a word for buying ("bought", "buy" and
+// the other languages' words) when it is a quantity in a unit: "10 bags
+// of rice at 1,500", "5 cartons of Indomie". That is stock, not an
+// expense (what a business buys §5.4); ok is false for anything else
+// ("snacks for 8,000", "5 snacks"), which the money words read.
+func ParseBought(rest string) (Added, bool) {
+	rest = fromRe.ReplaceAllString(strings.TrimSpace(rest), "$1")
+	a, ok := ParseAdd("add " + rest)
+	if !ok || a.Unit == "" || slices.Contains(notUnits, strings.ToLower(a.Unit)) {
+		return Added{}, false
+	}
+	return a, true
 }
 
 // unitAndName splits "cartons of Indomie" or "bags rice" into the unit

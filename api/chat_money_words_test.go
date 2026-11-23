@@ -18,7 +18,7 @@ func TestChatMoneyWordsInOtherLanguages(t *testing.T) {
 	w := newWAWorld(t)
 	w.srv.Invoices = &invoicing.Invoices{Pool: w.env.DB.App, Vault: w.env.Vault, PageBase: "https://forms.taskiem.test",
 		Messages: &sender.Queue{Vault: w.env.Vault, HashKey: bytes.Repeat([]byte{8}, 32)}, Signal: w.env.Store.DeliverSignalOnce}
-	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.YO, lang.HA}}
+	w.srv.Languages = &api.LanguageSettings{Enabled: []lang.Tag{lang.EN, lang.YO, lang.HA, lang.PCM}}
 	ctx := context.Background()
 	owner := w.tenant(t, "Ada Foods", "ada@adafoods.test")
 	const yn, hn = "+2348010000041", "+2348010000043"
@@ -69,11 +69,28 @@ func TestChatMoneyWordsInOtherLanguages(t *testing.T) {
 	if r := w.say(t, hn, "na kashe kudi da yawa"); strings.Contains(r, ha("wa.money.how")) {
 		t.Errorf("ha ordinary chat read as a command: %q", r)
 	}
+	// Bought in a draft word: Pidgin's "i buy … for <amount>", and
+	// Yoruba's "mo rà".
+	const pn = "+2348010000045"
+	pidgin := w.member(t, owner, "bisi@adafoods.test", "operator")
+	w.bind(t, pidgin, pn)
+	w.say(t, pn, "language pidgin")
+	pcm := func(id string, kv ...string) string { return lang.Default().Text(lang.PCM, id, kv...) }
+	if r := w.say(t, pn, "I buy snacks for 8,000"); !strings.Contains(r, pcm("wa.money.confirm_expense", "amount", "₦8,000", "what", "snacks", "category", "Snacks")) {
+		t.Fatalf("pcm bought: %q", r)
+	}
+	if r := w.say(t, pn, "yes"); !strings.Contains(r, pcm("wa.money.recorded_out", "amount", "₦8,000", "category", "Snacks")) {
+		t.Fatalf("pcm recorded: %q", r)
+	}
+	if r := w.say(t, yn, "mo rà epo fún 5,000"); !strings.Contains(r, yo("wa.money.confirm_expense", "amount", "₦5,000", "what", "epo", "category", "Epo")) {
+		t.Fatalf("yo bought: %q", r)
+	}
+	w.say(t, yn, "rárá")
 	var n int
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM money_entries WHERE source = 'entered'`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
+	if n != 3 {
 		t.Errorf("entries: %d", n)
 	}
 }

@@ -78,10 +78,21 @@ func parseKobo(tok string) (int64, bool) {
 // "expense <amount> [on|for] <what> [at <vendor>]" and "cash in|out
 // <amount> [<what>]". command is false for text that is none of them;
 // ok is false for one of them that cannot be read.
+//
+// "bought|I bought|we bought|buy <what> [for] <amount>" (or the amount
+// first) is an expense too, labelled as paid's is: "I bought snacks for
+// 8,000" is ₦8,000 labelled Snacks; "we bought from Dangote 425,000" is
+// asked about Dangote's open order (waMoneyOwed). Only an amount makes
+// one a command; a quantity in a unit ("bought 10 bags of rice at 1,500")
+// is stock counted in (stock.ParseCountIn), never an expense.
 func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return m, false, false
+	}
+	if rest, bought := boughtWords(fields); bought {
+		m.Kind, m.Direction = "expense", "out"
+		return parseBoughtArgs(m, rest, nil)
 	}
 	var rest []string
 	switch w := strings.ToLower(fields[0]); {
@@ -112,7 +123,10 @@ func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 func parseMoneyWords(mm lang.Match) (m chatMoney, command, ok bool) {
 	switch mm.Intent {
 	case lang.IntentExpense:
+		// Spent and bought alike ("i buy snacks for 8,000"): the amount
+		// first or last, and a quantity in a unit is not spending.
 		m.Kind, m.Direction = "expense", "out"
+		return parseBoughtArgs(m, strings.Fields(mm.Arg), lang.ForWords(mm.Language))
 	case lang.IntentCashIn:
 		m.Kind, m.Direction = "cash", "in"
 	case lang.IntentCashOut:
@@ -146,18 +160,122 @@ func parseMoneyArgs(m chatMoney, rest, forWords []string) (_ chatMoney, isAmount
 		}
 	}
 	m.Description = strings.TrimSpace(strings.Join(rest, " "))
+	m, ok = finishMoney(m)
+	return m, true, ok
+}
+
+// finishMoney labels an expense read and checks what it says; false when
+// it cannot be recorded.
+func finishMoney(m chatMoney) (chatMoney, bool) {
 	if m.Kind == "expense" {
 		if m.Description == "" {
-			return m, true, false
+			return m, false
 		}
-		m.Label = spend.NameFrom(m.Description)
+		m.Label = labelFrom(m.Description)
 	} else if m.Description == "" {
 		m.Description = "Cash " + m.Direction
 	}
 	if len(m.Description) > 200 || len(m.Vendor) > 120 {
-		return m, true, false
+		return m, false
 	}
-	return m, true, true
+	return m, true
+}
+
+// labelFrom is the label what an expense was for reads as: its words
+// with a capital, less a leading "a", "an", "the", "some" or "worth of"
+// ("a birthday gift for Ada" is labelled Birthday gift for Ada; "15,000
+// worth of fuel", Fuel).
+func labelFrom(what string) string {
+	f := strings.Fields(what)
+	if len(f) > 2 && strings.EqualFold(f[0], "worth") && strings.EqualFold(f[1], "of") {
+		f = f[2:]
+	}
+	if len(f) > 1 && slices.Contains([]string{"a", "an", "the", "some"}, strings.ToLower(f[0])) {
+		f = f[1:]
+	}
+	return spend.NameFrom(strings.Join(f, " "))
+}
+
+// boughtWords is what follows "bought", "I bought", "we bought" or "buy";
+// false when the words start with none of them.
+func boughtWords(fields []string) ([]string, bool) {
+	switch w := strings.ToLower(fields[0]); {
+	case w == "bought" || w == "buy":
+		return fields[1:], true
+	case (w == "i" || w == "we") && len(fields) > 1 && strings.EqualFold(fields[1], "bought"):
+		return fields[2:], true
+	}
+	return nil, false
+}
+
+// parseBoughtArgs reads what was bought and for how much: the amount
+// first, as parseMoneyArgs reads it ("8,000 snacks"), or last ("snacks for
+// 8,000", "a birthday gift for Ada 15,000", "rice at Shoprite 5,000", "from
+// Dangote 425,000"); who it was bought from ("from Dangote") is the
+// vendor. command is false with no amount at either end, and for a
+// quantity in a unit ("10 bags of rice at 1,500"), which is stock counted
+// in (stock.ParseBought), not spending.
+func parseBoughtArgs(m chatMoney, rest, forWords []string) (_ chatMoney, command, ok bool) {
+	if len(rest) == 0 {
+		return m, false, false
+	}
+	if _, isStock := stock.ParseBought(strings.Join(rest, " ")); isStock {
+		return m, false, false
+	}
+	words, vendor := rest, ""
+	if _, isAmount := parseKobo(words[len(words)-1]); !isAmount {
+		// "rice for 5,000 from Dangote": who from, after the amount.
+		if i := lastFold(words, "from"); i > 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		}
+	}
+	kobo, last := parseKobo(words[len(words)-1])
+	if !last || len(words) < 2 {
+		if k, isAmount := parseKobo(words[0]); isAmount && k < 100*100 && len(words) > 1 && strings.Trim(words[0], "0123456789") == "" {
+			// "bought 5 snacks": a count, not ₦5.
+			return m, false, false
+		}
+		m, isAmount, ok := parseMoneyArgs(m, words, forWords)
+		if isAmount && m.Vendor == "" && vendor != "" {
+			m.Vendor = vendor
+			m, ok = finishMoney(m)
+		}
+		return m, isAmount, ok
+	}
+	m.AmountKobo, words = kobo, words[:len(words)-1]
+	// "snacks for 8,000", "rice at 1,500".
+	if k := len(words) - 1; k >= 0 && (slices.Contains([]string{"for", "on", "at", "@", "=", "-", "of"}, strings.ToLower(words[k])) || isForWord(words[k], forWords)) {
+		words = words[:k]
+	}
+	if vendor == "" {
+		if i := lastFold(words, "from"); i >= 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		} else if i := lastFold(words, "at"); i > 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		}
+	}
+	if len(words) > 0 && (strings.EqualFold(words[0], "on") || isForWord(words[0], forWords)) {
+		words = words[1:]
+	}
+	m.Vendor, m.Description = vendor, strings.TrimSpace(strings.Join(words, " "))
+	if m.Description == "" {
+		// "we bought from Dangote 425,000": what for is who from, as in
+		// "paid 425,000 Dangote".
+		m.Description, m.Vendor = m.Vendor, ""
+	}
+	m, ok = finishMoney(m)
+	return m, true, ok
+}
+
+// lastFold is the index of the last of words that is w, without case; -1
+// when none is.
+func lastFold(words []string, w string) int {
+	for i := len(words) - 1; i >= 0; i-- {
+		if strings.EqualFold(words[i], w) {
+			return i
+		}
+	}
+	return -1
 }
 
 // waMoneyCommand starts cash or an expense from an idle chat; false when

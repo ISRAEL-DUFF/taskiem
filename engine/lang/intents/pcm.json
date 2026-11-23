@@ -151,7 +151,11 @@
     ],
     "expense": [
       "i spend",
-      "i don spend"
+      "i don spend",
+      "i buy",
+      "i don buy",
+      "we buy",
+      "we don buy"
     ],
     "cash_in": [
       "cash enter",

@@ -190,7 +190,10 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 	// "spent 100,000 on cement at Dangote") pay its order, not an expense
 	// of their own that the order's payment would count again (PR review
 	// fix).
-	for _, text := range []string{"paid 100,000 Dangote", "spent 100,000 on cement at dangote"} {
+	// So do the bought words ("we bought from Dangote 100,000").
+	w.srv.ResetLimiters()
+	for _, text := range []string{"paid 100,000 Dangote", "spent 100,000 on cement at dangote", "we bought from Dangote 100,000",
+		"I bought cement from dangote for 100,000"} {
 		if r := w.say(t, on, text); !strings.Contains(r, "Paid *Dangote Depot* ₦100,000 by transfer, for "+ref+"?") {
 			t.Fatalf("%s: %q", text, r)
 		}
@@ -205,6 +208,15 @@ func TestPurchaseOrdersByChat(t *testing.T) {
 		t.Fatalf("paid up, an expense: %q", r)
 	}
 	w.say(t, on, "no")
+	if r := w.say(t, on, "we bought from Dangote 15,000"); !strings.HasSuffix(r, "Record ₦15,000 spent on Dangote (Dangote)?") {
+		t.Fatalf("bought, paid up, an expense: %q", r)
+	}
+	w.say(t, on, "no")
+	// Bought in a unit is stock counted in, not an expense.
+	if r := w.say(t, on, "we bought 10 bags of rice at 1,500"); strings.Contains(r, "Record ₦") || !strings.Contains(r, "Add 10 bags to *Rice* (20 bags → 30 bags) at ₦1,500 each?") {
+		t.Fatalf("bought in a unit: %q", r)
+	}
+	w.say(t, on, "cancel")
 
 	// Above the limit, the one who drafts it does not send it.
 	owner.must(200, "PUT", "/v1/stock/settings", map[string]any{"purchase_limit_kobo": 100000}, "Idempotency-Key", "set")

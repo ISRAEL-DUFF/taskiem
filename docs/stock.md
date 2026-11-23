@@ -123,6 +123,7 @@ On WhatsApp and Telegram (each change shown first, written on **yes**):
 | `order from Dangote` | Their low items as an order, sent on **yes** (or left for a second person above the limit: `send P-7QX4KD`) |
 | `order 1 sewing machine from Singer Ltd` | From a linked supplier's price list (and `@`/`#` mentions). Each line Taskiem does not remember for that supplier is asked first, one at a time: **Just record it**, **Add to stock** (which stock item, or a new one) or **Keep track of it** (more than 50 asks first; more than 200 is just recorded), then its label (three, **Another**, **No label**). Typed works too: `keep track of it, machines`. The answer is remembered; then **yes** sends it |
 | `received 10 bags of rice` | Goods received on the open order from the item's supplier; with none, goods received as `add` |
+| `we bought 10 bags of rice at 1,500` | Counted in as `add` is (`bought 5 cartons of Indomie`, `I bought …`; who from, `from Dangote`, is left out): a quantity in a unit bought is stock, not an expense. Bought with an amount and no unit (`bought snacks for 8,000`) is an expense ([WhatsApp](whatsapp.md)); `buy 10 bags of rice` is neither, as it has not come yet |
 | `paid Dangote 425,000 transfer` | A payment on the supplier's oldest order with something owed |
 | `confirmed P-7QX4KD` | The supplier said yes by phone |
 | `count rice 12, indomie 40: rats` | A count, with its reason; `count` alone asks item by item |

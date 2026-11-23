@@ -108,4 +108,31 @@ func TestWhatsAppMoney(t *testing.T) {
 	if n := entries(); n != 3 {
 		t.Errorf("entries after the viewer: %d", n)
 	}
+
+	// Bought and buy with an amount are expenses, labelled as paid's are.
+	for _, c := range []struct{ text, confirm, recorded string }{
+		{"I bought snacks for 8,000", "Record ₦8,000 spent on snacks (Snacks)?", "Recorded. ₦8,000 out, Snacks."},
+		{"we bought a birthday gift for Ada 15,000", "Record ₦15,000 spent on a birthday gift for Ada (Birthday gift for Ada)?", "Recorded. ₦15,000 out, Birthday gift for Ada."},
+		{"buy 3,000 diesel", "Record ₦3,000 spent on diesel (DIESEL)?", "Recorded. ₦3,000 out, DIESEL."},
+	} {
+		if r := w.say(t, on, c.text); !strings.HasSuffix(r, c.confirm) {
+			t.Fatalf("%s: %q", c.text, r)
+		}
+		if r := w.say(t, on, "yes"); !strings.HasSuffix(r, c.recorded) {
+			t.Fatalf("%s recorded: %q", c.text, r)
+		}
+	}
+	if n := entries(); n != 6 {
+		t.Errorf("entries after bought: %d", n)
+	}
+	// Bought with no amount, or a quantity in a unit where no stock is
+	// kept, is not a command: nothing is asked or recorded.
+	for _, text := range []string{"bought", "I bought new shoes for Ada", "bought 5 cartons of Indomie"} {
+		if r := w.say(t, on, text); strings.Contains(r, "Record ₦") || strings.Contains(r, "spent 12,000 on diesel at Total") {
+			t.Errorf("%s: %q", text, r)
+		}
+	}
+	if n := entries(); n != 6 {
+		t.Errorf("entries after not commands: %d", n)
+	}
 }
