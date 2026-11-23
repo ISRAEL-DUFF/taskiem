@@ -4,18 +4,25 @@
 -- * Each entry of a public menu (whatsapp_public_workflows, up to nine a
 --   business) is carried over as a customers' tool of its workflow, named
 --   by its label, with a command made from the label here (unique in the
---   business, and never a command a deployed prod tool of another workflow
---   has), so WhatsApp and the app reach it as they reach a tool. A
---   workflow that declares tool with for "customers" is that tool instead
---   of its menu entry. Only entries with no command are given one.
+--   business, never a command a deployed prod tool has, and never one of
+--   Taskiem's own words in any language: the reserved words below are
+--   wdcheck.ReservedCommand's as this migration was written, with the
+--   routes' "buttons"; the application's menuCommand reads the live lists),
+--   so WhatsApp and the app reach it as they reach a tool. A workflow that
+--   declares a tool is that tool instead of its menu entry (for customers),
+--   or its members' alone. Only entries with no command are given one.
 -- * customer_tool_watches: a run a customer started on a business's own
 --   WhatsApp number, whose answer goes back to that number when it ends
 --   (the number is the customer's address there, as the public sessions
---   keep it).
--- * The customer door gains customer.tools (the list) and customer.tool
---   (a start, its yes, its answer, a button on it), of no area: a
---   person's chat with the business is enough. Otherwise the body of
---   00462, unchanged.
+--   keep it). A row is deleted once its answer went, or could not, and
+--   after a day whatever happened (WhatsApp's window is shut by then);
+--   erasing the number deletes its rows.
+-- * The customer door gains customer.tools (the list), customer.tool (a
+--   start, its yes, a button on an answer) and customer.answer (reading an
+--   answer of the person's own run, which the app asks for again until the
+--   run ends: checked as every entry is, but not written to the chain), of
+--   no area: a person's chat with the business is enough. Otherwise the
+--   body of 00462, unchanged.
 -- +goose Up
 ALTER TABLE whatsapp_public_workflows ADD COLUMN command text;
 -- +goose StatementBegin
@@ -25,6 +32,38 @@ DECLARE
   base text;
   c text;
   n int;
+  reserved text[] := ARRAY[
+    'abeg', 'achoro', 'add', 'adila', 'aguru', 'aika', 'akosile', 'akwukwo', 'alert', 'all', 'amincewa', 'an',
+    'anatala', 'anatara', 'approval', 'approvals', 'approve', 'arerela', 'asusu', 'attendance', 'atumatu',
+    'automate', 'automatically', 'awon', 'baje', 'balance', 'bawo', 'bayanan', 'bee', 'beeko', 'beeni', 'bere',
+    'bill', 'bills', 'bincika', 'biputa', 'biyan', 'bookings', 'briefing', 'bring', 'bude', 'buga', 'build',
+    'buttons', 'can', 'cancel', 'canza', 'cash', 'change', 'check', 'choo', 'chota', 'cire', 'clear',
+    'clearance', 'clock', 'close', 'collected', 'comot', 'confirm', 'connect', 'correct', 'count', 'create',
+    'customer', 'customers', 'daily', 'data', 'debanye', 'debtors', 'delete', 'delivered', 'dem', 'do', 'don',
+    'done', 'dozie', 'duro', 'each', 'ede', 'edit', 'ee', 'ego', 'eh', 'ehen', 'elo', 'email', 'emefuru',
+    'emela', 'enyemaka', 'erere', 'eruola', 'eto', 'every', 'expense', 'expenses', 'fagile', 'failed',
+    'failures', 'fara', 'fasa', 'fees', 'fi', 'find', 'forget', 'forukosile', 'fronts', 'gaa', 'gayyaci',
+    'gbakwunye', 'gbanwee', 'gbanwuo', 'gbanyuo', 'gina', 'gini', 'go', 'goge', 'gosi', 'guda', 'gudanar',
+    'gyara', 'ha', 'hada', 'handover', 'hapu', 'harshe', 'hello', 'help', 'hi', 'hichapu', 'how', 'ifipamo',
+    'ihe', 'ikwu', 'ina', 'inawo', 'invite', 'invoice', 'invoices', 'ipo', 'iranlowo', 'isanwo', 'iwe', 'iwu',
+    'jerin', 'jikoo', 'join', 'kada', 'kagbuo', 'kar', 'kara', 'kashe', 'kashewa', 'kedu', 'keep', 'ki',
+    'kirkiro', 'ko', 'koma', 'koodu', 'kpochapu', 'kpoo', 'kudi', 'kunna', 'kwusi', 'lang', 'language', 'leave',
+    'link', 'list', 'lo', 'look', 'lookup', 'ma', 'make', 'malite', 'matsayi', 'mba', 'me', 'mebiri', 'mechie',
+    'mee', 'melo', 'meloo', 'menu', 'mepee', 'mepere', 'meputa', 'message', 'mezie', 'mmefu', 'mo', 'money',
+    'monthly', 'my', 'na', 'nawa', 'ndeputa', 'ndewo', 'nemi', 'nemo', 'new', 'nkwado', 'no', 'notify', 'nuna',
+    'nyere', 'oda', 'odar', 'off', 'oja', 'oju-iwe', 'ole', 'on', 'once', 'onodu', 'open', 'order', 'orders',
+    'organisations', 'organizations', 'owe', 'owes', 'owo', 'oya', 'pa', 'paid', 'pay', 'payment', 'payments',
+    'pe', 'peeji', 'pin', 'plan', 'price', 'prices', 'product', 'products', 'publish', 'purchases', 'put', 'qr',
+    'rara', 'ready', 'receipt', 'receipts', 'receive', 'received', 'refund', 'register', 'reject', 'remind',
+    'reminder', 'remove', 'reopen', 'riders', 'rufe', 'run', 'sabon', 'safikun', 'saka', 'sale', 'sales',
+    'sannu', 'satunse', 'sauya', 'save', 'saved', 'sawari', 'schools', 'se', 'search', 'seda', 'sell', 'send',
+    'services', 'shafina', 'shagona', 'share', 'show', 'si', 'sign', 'signup', 'sms', 'so', 'soke', 'sold',
+    'soobu', 'spend', 'spent', 'staff', 'start', 'status', 'stock', 'stop', 'students', 'subscription', 'switch',
+    'tabili', 'tables', 'taimako', 'takardar', 'take', 'tan', 'tasks', 'te', 'tebul', 'teburori', 'teburorina',
+    'tell', 'tenants', 'text', 'ti', 'tinye', 'to', 'tool', 'tools', 'transfer', 'trial', 'tsarina', 'tsaya',
+    'tun', 'turn', 'ulo', 'wa', 'weekly', 'wepu', 'wetin', 'what', 'whatsapp', 'when', 'whenever', 'which',
+    'won', 'wuo', 'ya', 'yaya', 'yes', 'yi', 'yo', 'ziga'
+  ];
 BEGIN
   FOR r IN SELECT tenant_id, workflow_id, label FROM whatsapp_public_workflows WHERE command IS NULL ORDER BY tenant_id, created_at, label LOOP
     base := trim(both '-' from regexp_replace(lower(r.label), '[^a-z0-9]+', '-', 'g'));
@@ -33,12 +72,13 @@ BEGIN
     END IF;
     base := trim(both '-' from left(base, 21));
     IF length(base) < 2 THEN
-      base := 'menu';
+      base := 'item';
     END IF;
     c := base;
     n := 1;
-    WHILE EXISTS (SELECT 1 FROM whatsapp_public_workflows WHERE tenant_id = r.tenant_id AND command = c)
-       OR EXISTS (SELECT 1 FROM workflow_tools WHERE tenant_id = r.tenant_id AND environment = 'prod' AND command = c AND workflow_id <> r.workflow_id) LOOP
+    WHILE c = ANY (reserved)
+       OR EXISTS (SELECT 1 FROM whatsapp_public_workflows WHERE tenant_id = r.tenant_id AND command = c)
+       OR EXISTS (SELECT 1 FROM workflow_tools WHERE tenant_id = r.tenant_id AND environment = 'prod' AND command = c) LOOP
       n := n + 1;
       c := base || '-' || n;
     END LOOP;
@@ -71,15 +111,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON customer_tool_watches TO taskiem_app;
 -- The chat tick visits a business with a customer's answer waiting, even
 -- when none of its members linked a chat app. The dispatch role reads
 -- which businesses those are, and nothing else of them.
-CREATE POLICY dispatch_waiting ON customer_tool_watches TO taskiem_dispatch USING (notified_at IS NULL);
-GRANT SELECT (tenant_id, notified_at) ON customer_tool_watches TO taskiem_dispatch;
+CREATE POLICY dispatch_waiting ON customer_tool_watches TO taskiem_dispatch USING (true);
+GRANT SELECT (tenant_id, notified_at, created_at) ON customer_tool_watches TO taskiem_dispatch;
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_customer_tool_tenants()
 RETURNS TABLE (tenant_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT DISTINCT w.tenant_id FROM customer_tool_watches w
     JOIN tenants t ON t.id = w.tenant_id AND t.status = 'active'
-   WHERE w.notified_at IS NULL
+   WHERE w.notified_at IS NULL OR w.created_at < now() - interval '1 day'
 $$;
 -- +goose StatementEnd
 ALTER FUNCTION taskiem_customer_tool_tenants() OWNER TO taskiem_dispatch;
@@ -114,6 +154,7 @@ BEGIN
     -- Customers' tools (made tools T5): workflows, of no area.
     WHEN 'customer.tools' THEN ARRAY[]::text[]
     WHEN 'customer.tool' THEN ARRAY[]::text[]
+    WHEN 'customer.answer' THEN ARRAY[]::text[]
   END;
   IF v_area IS NULL THEN
     RAISE EXCEPTION 'the customer door has no action %', p_action USING ERRCODE = '22023';
@@ -158,8 +199,12 @@ BEGIN
     PERFORM taskiem_customer_signup_charge(p_person, p_tenant);
   END IF;
   PERFORM set_config('app.tenant_scope', '{' || p_tenant::text || '}', true);
-  PERFORM taskiem_audit_append(p_tenant, 'person', p_person::text, p_action, p_person::text,
-    (CASE WHEN jsonb_typeof(p_detail) = 'object' THEN p_detail - 'code_hash' - 'index_key' ELSE COALESCE(p_detail, '{}') END) || jsonb_build_object('door', 'customer'));
+  -- Reading an answer of one's own run is asked again and again: checked,
+  -- not written to the chain (its start was).
+  IF p_action <> 'customer.answer' THEN
+    PERFORM taskiem_audit_append(p_tenant, 'person', p_person::text, p_action, p_person::text,
+      (CASE WHEN jsonb_typeof(p_detail) = 'object' THEN p_detail - 'code_hash' - 'index_key' ELSE COALESCE(p_detail, '{}') END) || jsonb_build_object('door', 'customer'));
+  END IF;
   PERFORM set_config('app.person_business', p_tenant::text, true);
 END
 $$;

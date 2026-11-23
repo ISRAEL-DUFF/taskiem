@@ -45,6 +45,17 @@ func (s *Server) customerToolRoutes(r chi.Router) {
 	r.Get("/me/chats/{id}/runs/{run}/answer", s.doorToolAnswer)
 }
 
+// doorToolLimited answers 429 when the person has asked too much of one
+// chat's tools of late (what: start, answer, button), each its own limit:
+// the door's checks and its chain are not for every tap. True when it did.
+func (s *Server) doorToolLimited(w http.ResponseWriter, person uuid.UUID, chat, what string, every time.Duration, burst int) bool {
+	if s.limiter("cust-tool-"+what+":"+person.String()+"/"+chat, every, burst).Allow() {
+		return false
+	}
+	writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Too many tries just now. Try again in a while."})
+	return true
+}
+
 // customerTool is a customers' tool as a customer sees it: no care, no
 // roles, nothing of its steps.
 type customerTool struct {
@@ -69,7 +80,7 @@ func (s *Server) customerToolsFit(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	out := []toolRow{}
 	for _, t := range all {
 		_, d, err := s.customerDefinition(ctx, tx, tenant, t)
-		if errors.Is(err, errCustomerMoney) || errors.Is(err, errCustomerForm) {
+		if notOffered(err) {
 			continue
 		}
 		if err != nil {
@@ -89,7 +100,7 @@ func (s *Server) doorToolFail(w http.ResponseWriter, r *http.Request, err error)
 	switch {
 	case errors.As(err, &bad):
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "the values do not fit the tool's form", "problems": []string(bad)})
-	case errors.Is(err, errCustomerMoney), errors.Is(err, errCustomerForm):
+	case notOffered(err):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "This can't be done from here. Ask the business in the chat.", "not_offered": true})
 	case errors.Is(err, errNotFound):
 		writeErr(w, http.StatusNotFound, strings.TrimPrefix(err.Error(), errNotFound.Error()+": "))
@@ -146,6 +157,9 @@ func (s *Server) doorToolStart(w http.ResponseWriter, r *http.Request) {
 		req.Input = map[string]any{}
 	}
 	command := chi.URLParam(r, "command")
+	if s.doorToolLimited(w, person, chi.URLParam(r, "id"), "start", 6*time.Second, 10) {
+		return
+	}
 	var out toolStart
 	err = s.doorOnce(ctx, person, chi.URLParam(r, "id"), "customer.tool", map[string]any{"tool": command, "step": "start"}, func(tx pgx.Tx, c personChat) error {
 		t, err := customerToolTx(ctx, tx, command)
@@ -275,8 +289,13 @@ func (s *Server) doorToolAnswer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+	// Asked again until the run ends: checked by the door (a block, the
+	// chat), not written to the business's chain each time.
+	if s.doorToolLimited(w, person, chi.URLParam(r, "id"), "answer", time.Second, 20) {
+		return
+	}
 	var business uuid.UUID
-	if err := s.doorOnce(ctx, person, chi.URLParam(r, "id"), "customer.tool", map[string]any{"run": run, "step": "answer"}, func(_ pgx.Tx, c personChat) error {
+	if err := s.doorOnce(ctx, person, chi.URLParam(r, "id"), "customer.answer", map[string]any{"run": run}, func(_ pgx.Tx, c personChat) error {
 		business = c.Business
 		return nil
 	}); err != nil {
@@ -304,6 +323,9 @@ func (s *Server) doorToolButton(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "token"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "this button is not available any more")
+		return
+	}
+	if s.doorToolLimited(w, person, chi.URLParam(r, "id"), "button", 6*time.Second, 10) {
 		return
 	}
 	var out pressed

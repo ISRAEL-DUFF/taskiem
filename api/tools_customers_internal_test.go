@@ -87,7 +87,7 @@ func TestMenuCommand(t *testing.T) {
 	for label, want := range map[string]string{
 		"Pay a supplier":           "pay-a-supplier-2",
 		"24/7 help":                "menu-24-7-help",
-		"Ọ̀rọ̀":                    "menu",
+		"Ọ̀rọ̀":                    "item",
 		"Check where my parcel is": "check-where-my-parcel",
 		"  Book!  ":                "book",
 	} {

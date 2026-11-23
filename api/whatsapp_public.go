@@ -59,27 +59,31 @@ type pubSession struct {
 func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) (bool, error) {
 	tenant := wa.Tenant
 	var on bool
-	var items []toolRow
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `SELECT public_menu FROM whatsapp_numbers WHERE tenant_id = $1 AND phone_number_id = $2 AND status = 'active'`,
 			tenant, wa.Config.PhoneNumberID).Scan(&on)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		if err != nil || !on {
-			return err
-		}
-		items, err = s.customerToolsFit(ctx, tx, tenant)
 		return err
 	})
-	if err != nil || !on || len(items) == 0 {
+	if err != nil || !on {
 		return false, err
 	}
 	// Strict limits: a few messages per number, and a ceiling for the
-	// tenant's whole menu. Beyond them messages are dropped unanswered.
+	// tenant's whole menu, before any tool is looked at. Beyond them
+	// messages are dropped unanswered.
 	key := tenant.String() + "/" + number
 	if !s.limiter("wa-pub:"+key, 10*time.Second, 6).Allow() || !s.limiter("wa-pub-tenant:"+tenant.String(), 200*time.Millisecond, 50).Allow() {
 		return true, nil
+	}
+	var items []toolRow
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		items, err = s.customerToolsFit(ctx, tx, tenant)
+		return err
+	}); err != nil || len(items) == 0 {
+		return false, err
 	}
 	say := func(text string, buttons ...whatsapp.Button) error {
 		_, err := wa.Send(ctx, number, whatsapp.Message{Text: text, Buttons: buttons})
@@ -264,7 +268,7 @@ func (s *Server) waPublicChoose(ctx context.Context, wa *whatsapp.Platform, numb
 		return nil
 	})
 	switch {
-	case errors.Is(err, errCustomerMoney):
+	case errors.Is(err, errCustomerMoney), errors.Is(err, errCustomerRoles):
 		return say(tr(l, "wa.public.not_offered", "label", label))
 	case errors.Is(err, errCustomerForm), errors.Is(err, whatsapp.ErrInputsUnsupported):
 		return say(tr(l, "wa.public.not_here", "label", label))
@@ -419,7 +423,7 @@ func (s *Server) waPublicStart(ctx context.Context, wa *whatsapp.Platform, numbe
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return say(tr(l, "wa.public.changed", "label", data.Label))
-	case errors.Is(err, errCustomerMoney):
+	case errors.Is(err, errCustomerMoney), errors.Is(err, errCustomerRoles):
 		return say(tr(l, "wa.public.not_offered", "label", data.Label))
 	case errors.Is(err, errCustomerForm):
 		return say(tr(l, "wa.public.not_here", "label", data.Label))
@@ -496,6 +500,11 @@ func (s *Server) customerToolsNotify(ctx context.Context, tenant uuid.UUID) erro
 	}
 	var done []ended
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		// A day on, WhatsApp's window is shut whatever happened: the
+		// number is let go.
+		if _, err := tx.Exec(ctx, `DELETE FROM customer_tool_watches WHERE created_at < now() - interval '1 day'`); err != nil {
+			return err
+		}
 		rows, err := tx.Query(ctx, `UPDATE customer_tool_watches w SET notified_at = now() FROM runs r
 			WHERE r.id = w.run_id AND w.notified_at IS NULL AND r.status IN ('completed', 'failed', 'cancelled', 'needs_reconciliation')
 			RETURNING w.run_id, w.phone_number_id, w.number, w.label, w.attempts, r.status`)
@@ -508,25 +517,33 @@ func (s *Server) customerToolsNotify(ctx context.Context, tenant uuid.UUID) erro
 		})
 		return err
 	})
-	if err != nil || len(done) == 0 || s.WhatsApp == nil {
+	if err != nil || len(done) == 0 {
 		return err
 	}
-	wa, err := s.WhatsApp.ForTenant(ctx, tenant)
-	if err != nil {
-		return err
+	var wa *whatsapp.Platform
+	if s.WhatsApp != nil {
+		if wa, err = s.WhatsApp.ForTenant(ctx, tenant); err != nil {
+			return err
+		}
 	}
 	var errs []error
 	for _, e := range done {
-		if !wa.Own() || wa.Config.PhoneNumberID != e.pnid {
-			continue // the business's number changed: nowhere to answer
+		var err error
+		if wa != nil && wa.Own() && wa.Config.PhoneNumberID == e.pnid {
+			err = s.sendCustomerAnswer(ctx, wa, e.run, e.number, e.label, e.status)
+		} // else the business's number changed: nowhere to answer
+		again := err != nil && !errors.Is(err, whatsapp.ErrWindowClosed) && e.attempts < 4
+		if again {
+			errs = append(errs, err)
 		}
-		err := s.sendCustomerAnswer(ctx, wa, e.run, e.number, e.label, e.status)
-		if err == nil || errors.Is(err, whatsapp.ErrWindowClosed) || e.attempts >= 4 {
-			continue
+		// Told, or never to be: the row and its number go. Else tried
+		// again on a later tick.
+		q := `DELETE FROM customer_tool_watches WHERE run_id = $1`
+		if again {
+			q = `UPDATE customer_tool_watches SET notified_at = NULL, attempts = attempts + 1 WHERE run_id = $1`
 		}
-		errs = append(errs, err)
 		if rerr := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE customer_tool_watches SET notified_at = NULL, attempts = attempts + 1 WHERE run_id = $1`, e.run)
+			_, err := tx.Exec(ctx, q, e.run)
 			return err
 		}); rerr != nil {
 			errs = append(errs, rerr)

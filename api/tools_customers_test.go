@@ -133,7 +133,11 @@ func TestCustomerToolsWhatsApp(t *testing.T) {
 	}
 	// A member who may read runs sees all of it; the customer did not.
 	var run string
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT run_id::text FROM customer_tool_watches`).Scan(&run); err != nil {
+	// Told, the waiting row and its number are gone.
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM customer_tool_watches`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("watches kept: %d %v", n, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id::text FROM runs WHERE started_by = $1`, "whatsapp_public:"+tolu).Scan(&run); err != nil {
 		t.Fatal(err)
 	}
 	if a := alpha.must(200, "GET", "/v1/runs/"+run+"/answer", nil); a["title"] != "On its way" {
@@ -286,8 +290,12 @@ func TestCustomerToolsInTheApp(t *testing.T) {
 	w.env.Drain(t)
 
 	a := tolu.must(200, "GET", "/v1/me/chats/"+id+"/runs/"+run+"/answer", nil)
-	if a["status"] != "completed" || a["type"] != "card" || a["title"] != "On its way" || strings.Contains(toJSON(a), "SECRET") {
+	if a["status"] != "completed" || a["type"] != "card" || a["title"] != "On its way" || strings.Contains(toJSON(a), "SECRET") || a["tool"] != nil {
 		t.Fatalf("answer: %v", a)
+	}
+	// Reading an answer is checked by the door, not written to the chain.
+	if n := w.audits(t, "customer.answer", toluID); n != 0 {
+		t.Errorf("answer reads audited: %d", n)
 	}
 	bs := a["buttons"].([]any)
 	if len(bs) != 1 || bs[0].(map[string]any)["tool"] != "track" {
@@ -358,8 +366,22 @@ func TestCustomerToolsWhatsAppList(t *testing.T) {
 	}
 	say(tolu, "yes")
 	w.env.Drain(t)
+	// Another customer's answer waits; their number is erased: its row
+	// goes, and nothing is sent to it.
+	say(ada, "menu")
+	say(ada, "1")
+	say(ada, "yes")
+	w.env.Drain(t)
+	secret := enrol(t, alpha)
+	if out := alpha.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "phone", "value": ada, "totp": codeAfter(secret, 1)}); out["saved"] != float64(1) {
+		t.Errorf("erased: %v", out)
+	}
+	adaBefore := len(w.graph.Sent(ada))
 	before := len(w.graph.Sent(tolu))
 	w.tick(t)
+	if n := len(w.graph.Sent(ada)) - adaBefore; n != 0 {
+		t.Errorf("an erased number was told: %d", n)
+	}
 	got := w.graph.Sent(tolu)[before:]
 	if len(got) != 1 || len(got[0].List) != 10 || !strings.Contains(got[0].Text, "*Your orders*") || !strings.Contains(got[0].Text, "…and 2 more.") ||
 		strings.Contains(got[0].Text, "app") || strings.Contains(toJSON(got[0]), "SECRET") {
@@ -384,3 +406,86 @@ func TestCustomerToolsWhatsAppList(t *testing.T) {
 		t.Fatalf("pressed: %+v", got)
 	}
 }
+
+// The roles rule holds for customers (made tools T5): a menu entry whose
+// workflow names roles is never listed or started for a customer; a menu
+// entry whose workflow declares a members' tool is that tool's members'
+// alone; a menu entry never takes a tool's command, nor Taskiem's own
+// words or the routes' "buttons"; answers are read without a chain row,
+// and not without a limit.
+func TestCustomerToolsRolesAndCommands(t *testing.T) {
+	w := newDoorShopWorld(t)
+	owner := w.owner
+	ctx := context.Background()
+	roled := strings.Replace(waPayFlow, `"trigger":{"type":"manual"},`, `"trigger":{"type":"manual"},"roles":["manager"],`, 1)
+	roled = strings.Replace(roled, `"wf_pay"`, `"wf_roled"`, 1)
+	staffOnly := publishFlow(t, owner, roled)
+	members := publishFlow(t, owner, custRefundDef) // a members' tool, /give-back
+	open := publishFlow(t, owner, strings.Replace(waPayFlow, `"wf_pay"`, `"wf_open"`, 1))
+	track := publishFlow(t, owner, custTrackDef)
+	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
+	owner.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
+	v := owner.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{
+		map[string]any{"workflow_id": staffOnly, "label": "Managers"},
+		map[string]any{"workflow_id": members, "label": "Give back"},
+		map[string]any{"workflow_id": open, "label": "Buttons"},
+	}})
+	got := toJSON(v["public_workflows"])
+	// "give-back" is the members' tool's: the entry takes the next; Buttons
+	// is a route's word.
+	if !strings.Contains(got, `"command":"give-back-2"`) || !strings.Contains(got, `"command":"buttons-2"`) || !strings.Contains(got, `"command":"managers"`) {
+		t.Fatalf("commands: %s", got)
+	}
+	// And a menu entry never takes one of Taskiem's own words.
+	owner.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{
+		map[string]any{"workflow_id": staffOnly, "label": "Managers"},
+		map[string]any{"workflow_id": members, "label": "Give back"},
+		map[string]any{"workflow_id": open, "label": "Buttons"},
+		map[string]any{"workflow_id": track, "label": "Order"},
+	}})
+	var cmd string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT command FROM whatsapp_public_workflows WHERE label = 'Order'`).Scan(&cmd); err != nil || cmd != "order-2" {
+		t.Errorf("a reserved word: %q %v", cmd, err)
+	}
+	// A tool may not be called buttons either.
+	if v := owner.must(200, "POST", "/v1/validate", map[string]any{"definition": json.RawMessage(strings.Replace(custTrackDef, `"command":"track"`, `"command":"buttons"`, 1))}); v["valid"] != false {
+		t.Errorf("a tool called buttons: %v", v)
+	}
+
+	tolu, _ := w.personIn(t, "+2348031110201")
+	toluID := personID(t, tolu)
+	id := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz, "from": "shop"})["id"].(string)
+	tools := toJSON(tolu.must(200, "GET", "/v1/me/chats/"+id+"/tools", nil)["tools"])
+	// Only the open entry, and the customers' tool; never the one with
+	// roles, nor the one whose workflow is a members' tool.
+	if !strings.Contains(tools, `"command":"buttons-2"`) || !strings.Contains(tools, `"command":"track"`) || strings.Contains(tools, "managers") || strings.Contains(tools, "give-back") {
+		t.Fatalf("tools: %s", tools)
+	}
+	if e := tolu.must(409, "POST", "/v1/me/chats/"+id+"/tools/managers/start", map[string]any{"input": map[string]any{"amount": 5, "account_number": "0123456789", "currency": "NGN"}}); e["not_offered"] != true {
+		t.Errorf("roles at start: %v", e)
+	}
+	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/give-back-2/start", map[string]any{"input": map[string]any{}})
+	tolu.must(404, "POST", "/v1/me/chats/"+id+"/tools/give-back/start", map[string]any{"input": map[string]any{}})
+	// The menu entry called buttons-2 starts as itself, not as a button.
+	if st := tolu.must(200, "POST", "/v1/me/chats/"+id+"/tools/buttons-2/start", map[string]any{"input": map[string]any{"amount": 5, "account_number": "0123456789", "currency": "NGN"}}); st["confirm"] == nil {
+		t.Errorf("buttons-2: %v", st)
+	}
+
+	// Reading an answer: no chain row, and a limit.
+	run := uuidLike()
+	limited := false
+	for range 30 {
+		if st, _ := tolu.do("GET", "/v1/me/chats/"+id+"/runs/"+run+"/answer", nil); st == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("answer reads are not limited")
+	}
+	if n := w.audits(t, "customer.answer", toluID); n != 0 {
+		t.Errorf("answer reads audited: %d", n)
+	}
+}
+
+func uuidLike() string { return "0193aaaa-0000-7000-8000-000000000001" }

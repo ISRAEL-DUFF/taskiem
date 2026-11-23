@@ -12,7 +12,8 @@ import (
 // Migration 00560 carries each public menu's entries over as customers'
 // tools: a command made from each label, unique in its business (another
 // business may have the same), starting with a letter, at most 24
-// characters; then down and up again.
+// characters, never one of Taskiem's own words or the routes' "buttons";
+// then down and up again.
 func TestCustomersToolsMigration(t *testing.T) {
 	dsn := emptyDatabase(t)
 	ctx := context.Background()
@@ -52,6 +53,8 @@ func TestCustomersToolsMigration(t *testing.T) {
 	entry(a, "00000000-0000-0000-0000-0000000000b4", "Ọ̀rọ̀", 4)
 	entry(a, "00000000-0000-0000-0000-0000000000b5", "Check where my parcel is", 5)
 	entry(b, "00000000-0000-0000-0000-0000000000b6", "Pay a supplier", 1)
+	entry(b, "00000000-0000-0000-0000-0000000000b7", "Order", 2)
+	entry(b, "00000000-0000-0000-0000-0000000000b8", "Buttons", 3)
 	if _, err := p.UpTo(ctx, 560); err != nil {
 		t.Fatal(err)
 	}
@@ -72,9 +75,11 @@ func TestCustomersToolsMigration(t *testing.T) {
 		a + "/Pay a supplier":           "pay-a-supplier",
 		a + "/Pay a supplier!":          "pay-a-supplier-2",
 		a + "/24/7 help":                "menu-24-7-help",
-		a + "/Ọ̀rọ̀":                    "menu",
+		a + "/Ọ̀rọ̀":                    "item",
 		a + "/Check where my parcel is": "check-where-my-parcel",
 		b + "/Pay a supplier":           "pay-a-supplier",
+		b + "/Order":                    "order-2",
+		b + "/Buttons":                  "buttons-2",
 	}
 	for k, v := range want {
 		if got[k] != v {

@@ -149,6 +149,9 @@ var extraReserved = []string{
 	// The built-in tools' own "/" words.
 	"products", "sell", "handover", "services", "purchases", "students", "payment", "payments", "debtors", "clearance",
 	"receipts", "money", "riders", "staff", "tasks", "schools", "fees", "attendance", "bookings", "clock", "briefing",
+	// A route's own word: /v1/tools/buttons/{token} and its customers'
+	// twin would take a tool called buttons.
+	"buttons",
 }
 
 // ReservedCommand reports whether word starts one of Taskiem's own

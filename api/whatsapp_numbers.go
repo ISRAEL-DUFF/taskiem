@@ -358,8 +358,8 @@ func (s *Server) putWhatsAppPublicMenu(w http.ResponseWriter, r *http.Request) {
 			c, ok := had[x.WorkflowID]
 			if !ok {
 				c = menuCommand(x.Label, func(c string) bool {
-					wf, tool := toolCommands[c]
-					return used[c] || tool && wf != x.WorkflowID
+					_, tool := toolCommands[c]
+					return used[c] || tool
 				})
 				used[c] = true
 			}

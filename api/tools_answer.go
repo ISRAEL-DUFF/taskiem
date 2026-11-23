@@ -185,7 +185,10 @@ func (s *Server) answerAs(ctx context.Context, tenant, id uuid.UUID, may func(st
 	if err != nil || d.Tool == nil {
 		return a, nil //nolint:nilerr // a run of no tool answers with its outcome
 	}
-	a.Tool = d.Tool.Command
+	if !customer {
+		// A customer is not told the business's own words for its tools.
+		a.Tool = d.Tool.Command
+	}
 	if a.Status != "completed" || d.Tool.Answer == nil {
 		return a, nil
 	}

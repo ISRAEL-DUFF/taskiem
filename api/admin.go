@@ -715,6 +715,14 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// A customer's answers waiting to go back to their WhatsApp number
+	// (made tools T5) hold the number plain: they go too.
+	watched, err := s.eraseCustomerToolWatches(r, req.Category, req.Value)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	scrubbed += watched
 	if len(erased) == 0 && scrubbed == 0 {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
