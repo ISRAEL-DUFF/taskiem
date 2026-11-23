@@ -2,6 +2,8 @@
 
 Status: request to the Payrolla team, 22 November 2026. Tracked as partner item P7 ([partner tracker](../partner-tracker.md)). Plan: [build plan](../spec/build-plan-saved-tools-payments.md) P4.
 
+**Answered, 23 November 2026.** Payrolla shipped all of it in three phases ([A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md), [C](payrolla-reference/07-phase-c-response.md)), deciding one thing differently: approving and paying are confirmed with Payrolla's own one-time code, not Taskiem's signed passkey approval (section 4 below). What Taskiem builds on it: [decision 0074](../decisions/0074-payroll-run-from-taskiem.md) and P4b. Our answers to Payrolla's questions: [08-taskiem-answers](payrolla-reference/08-taskiem-answers.md). This request is kept as it was sent.
+
 ## Why
 
 Payroll in Taskiem is Payrolla. Taskiem does not calculate, approve or pay a payroll itself (Run payroll is deleted; [decision 0044](../decisions/0044-rails-and-products.md) and its note of 22 November 2026). But a business should not feel it is using two products: it should run its payroll in Taskiem, in Taskiem's own screens and chat, while Payrolla does the work behind them.

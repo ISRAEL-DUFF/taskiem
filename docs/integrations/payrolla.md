@@ -63,9 +63,30 @@ A refused key says what to do: `scope_required` (make a key with Read payroll an
 
 ## What is not here yet
 
-- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Taskiem will not embed Payrolla's screens (22 November 2026): it asks Payrolla for an approve API that accepts Taskiem's signed passkey approval, with the rest of running payroll from Taskiem ([the request](payrolla-api-requests.md)).
-- **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet; Payrolla retries a failed delivery for about two days, and the owner can resend one.
-- **Connecting by OAuth.** Payrolla issues keys by hand only.
+Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), proposed; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). None is built yet:
+
+1. **Connecting in one step** (P4b-1):
+   - OAuth 2.0 with PKCE, with sign-up in the same step;
+   - key connections keep working, and **Reconnect Payrolla** moves them;
+   - Taskiem people linked to Payrolla users with one code.
+
+   Payrolla registers Taskiem first, from [our answers](payrolla-reference/08-taskiem-answers.md), drafted for the founder to send.
+2. **Staff and pay from Taskiem** (P4b-2):
+   - adding, changing and ending employees;
+   - bank changes held for a second approver;
+   - an employee's own salary account change.
+3. **This month's run in Taskiem** (P4b-3):
+   - prepare it, add a bonus or a deduction, leave someone out;
+   - approve and **Lock and pay**, confirmed with **Payrolla's own one-time code**, typed into Taskiem.
+
+   Approving is no longer a link into Payrolla, and there is no Taskiem-signed approval: Payrolla chose its own code instead.
+4. **After locking** (P4b-4): the payment's progress, the wallet's shortfall, **Pay now**, **Pay the failed ones again**, and payslips as Taskiem's own cards.
+5. **Settings and the tax and pension schedules** (P4b-5).
+
+**Also not here yet:**
+
+- **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet. Payrolla retries a failed delivery for about two days, and the owner can resend one.
+- **An up-to-date OpenAPI file.** The copy in `payrolla-reference/api/` is from 23 October and has none of Phases A to C. It is fetched again before P4b-1.
 
 ## Templates
 
