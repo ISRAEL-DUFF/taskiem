@@ -189,7 +189,7 @@ test("a list's Assign to me opens its tool filled in, once: the next person is t
   const token = (await pressed).url().split("/v1/tools/buttons/")[1] ?? "";
   // The assign tool, filled in from the row.
   await expect(sheet.getByRole("heading", { name: "Assign a ticket" })).toBeVisible();
-  await expect(sheet.getByLabel("Ticket")).toHaveValue("T-2");
+  await expect(sheet.getByLabel("Ticket", { exact: true })).toHaveValue("T-2");
   const started = page.waitForRequest((q) => q.url().endsWith("/v1/tools/assign-ticket/start"));
   await sheet.getByRole("button", { name: "Go" }).click();
   expect((await started).postDataJSON()).toMatchObject({ input: { ref: "T-2" }, button: token });
@@ -220,7 +220,7 @@ test("a list's Assign to me opens its tool filled in, once: the next person is t
   expect(await axe(bo)).toEqual([]);
   // The other row's button still opens the tool.
   await sheet.getByRole("button", { name: /^Assign to me\s*: Printer jam$/ }).click();
-  await expect(sheet.getByLabel("Ticket")).toHaveValue("T-1");
+  await expect(sheet.getByLabel("Ticket", { exact: true })).toHaveValue("T-1");
   await ctx.close();
 });
 

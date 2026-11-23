@@ -399,6 +399,8 @@ function world() {
     if (path === "/v1/me/chats/c1/messages") return route.fulfill(json({ id: `m${messages.length + 1}`, mine: true, kind: "text", body: (body as { text: string }).text, read_at: null, created_at: new Date().toISOString() }, 201));
     if (path.endsWith("/read") || path.endsWith("/typing")) return route.fulfill({ status: 204 });
     if (path === "/v1/me/chats/c1/shop") return route.fulfill(json(shop));
+    // Their tools (made tools T5): this business offers none.
+    if (path === "/v1/me/chats/c1/tools") return route.fulfill(json({ tools: [] }));
     if (path === "/v1/me/chats/c1/orders" && method === "GET") return route.fulfill(json({ orders: [order] }));
     if (path === "/v1/me/chats/c1/orders") return route.fulfill(json({ order: { ...order, reference: "MK-9", status: "sent", summary: "2 × Jollof rice, 1 × Ankara shirt", total_kobo: 1_400_000, due_kobo: 1_400_000 } }, 201));
     if (/\/orders\/MK-\d\/pay$/.test(path)) return route.fulfill(json({ reference: "MK-9", url: "https://pay.example.test/MK-9", due_kobo: 1_400_000 }));
