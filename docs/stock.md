@@ -18,6 +18,7 @@ Stock is a feature of the catalogue, not an area to turn on. A business keeps st
 | `reorder_level` | `reorder_level` | At or below this, the item is low |
 | `target_level` | `target_level` | What a low item is ordered back up to |
 | `supplier` | `supplier` | Who the business buys it from |
+| `barcode` | `code` | The barcode on its pack, for a count by scanning in the app; added the first time an item is given one (`PATCH /v1/stock/items/{id}` with `code`), as `category` is |
 
 None of these but `stock` is on the public page; a sold-out item shows as before. An item added for stock with no selling price is not shown on the page until it has one (`available` false).
 
@@ -85,7 +86,7 @@ An order can be cancelled until anything is received on it. A supplier that is a
 
 ## Counts, shrinkage and leaks
 
-A **count** is how many of each item are on the shelf: `count rice 12, indomie 40` (a reason after a colon: `count rice 12: rats`), `count` to be asked item by item (a number, *skip*, or *done*), or **Count the shelf** on the Stock page (a sheet to fill, or a CSV of names and counts it reads into the sheet). Shown first and written on **yes**: each item whose count differs gets a `count` movement naming the count (`C-7QX4KD`), with the reason as its note and the item's cost price. A count of every item holding a count is a full count, closing a counting period. `stock rice 12` is still a count of one item.
+A **count** is how many of each item are on the shelf: `count rice 12, indomie 40` (a reason after a colon: `count rice 12: rats`), `count` to be asked item by item (a number, *skip*, or *done*), or **Count the shelf** on the Stock page (a sheet to fill, or a CSV of names and counts it reads into the sheet). Shown first and written on **yes**: each item whose count differs gets a `count` movement naming the count (`C-7QX4KD`), with the reason as its note and the item's cost price. A count of every item holding a count is a full count, closing a counting period. `stock rice 12` is still a count of one item. In the phone app, **Count the shelf** also has **Scan to count**: each scan of an item's barcode adds one to its count, and a code no item has yet is said which item and kept on it ([device fields D2](spec/device-fields.md#16-as-built-d2)).
 
 **A count stands.** The shelf already shows every sale, receipt and adjustment made before the count, so a change of an item's that had not reached the table when its shelf was counted lands first, as what it was, and the count then sets the number: the table ends on the number counted, and the count books only the difference those changes do not explain (a sale still on its way is sold, not lost). While such a change cannot reach the table, the count waits behind it.
 
