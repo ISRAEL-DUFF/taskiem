@@ -96,6 +96,10 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	if token, ok := strings.CutPrefix(in.Reply, buttonReplyPrefix); ok {
 		return true, s.waPublicButton(ctx, wa, number, token, say)
 	}
+	// A row of a list answer the customer was sent.
+	if ref, ok := strings.CutPrefix(in.Reply, rowReplyPrefix); ok {
+		return true, s.waPublicRow(ctx, wa, number, ref, say)
+	}
 	// A tapped Yes is for the summary it was shown under.
 	if yes, stale := staleYes(in.Reply, pubAsk(sess.data)); yes {
 		if stale || sess.state != stateConfirming {
@@ -162,7 +166,7 @@ const stateMenu = "menu"
 // shown (a number, or cancel), or a step of a workflow under way. All
 // else is the customer's conversation with the business.
 func (s *Server) waPublicAsked(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) bool {
-	if in.Flow != "" || strings.HasPrefix(in.Reply, buttonReplyPrefix) {
+	if in.Flow != "" || strings.HasPrefix(in.Reply, buttonReplyPrefix) || strings.HasPrefix(in.Reply, rowReplyPrefix) {
 		return true
 	}
 	text := in.Text
@@ -547,9 +551,66 @@ func (s *Server) sendCustomerAnswer(ctx context.Context, wa *whatsapp.Platform, 
 			m.Text = tr(l, "wa.public.done", "label", label, "reference", reference)
 		}
 		m.Buttons = chatButtons(a.Buttons)
+		// A list whose rows have buttons: a list message; a row chosen
+		// offers its buttons (waPublicRow), to this customer only.
+		if rowsPressable(a) {
+			m.Text, m.List = customerListHead(l, a), answerList(l, run, a)
+			if m.Text == "" {
+				m.Text = whatsapp.SafeText(label)
+			}
+		}
 	}
 	_, err := wa.Send(ctx, number, m)
 	return err
+}
+
+// customerListHead is a customer's list answer's words over its list
+// message: its title, and how many more rows there are.
+func customerListHead(l lang.Tag, a madeAnswer) string {
+	var lines []string
+	if a.Title != "" {
+		lines = append(lines, "*"+a.Title+"*")
+	}
+	if n := len(a.Rows) - chatRows; n > 0 {
+		lines = append(lines, tr(l, "wa.public.list_more", "count", strconv.Itoa(n)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// waPublicRow is a row of a list answer chosen by a customer: that row's
+// buttons, as reply buttons, for the customer the answer went to only,
+// while they last.
+func (s *Server) waPublicRow(ctx context.Context, wa *whatsapp.Platform, number, ref string, say func(string, ...whatsapp.Button) error) error {
+	l := s.chooseLang(ctx, wa.Tenant, number, "").Tag
+	runID, idx, _ := strings.Cut(ref, ":")
+	run, err := uuid.Parse(runID)
+	i, ierr := strconv.Atoi(idx)
+	if err != nil || ierr != nil || i < 0 || i >= chatRows {
+		return say(tr(l, "wa.public.button_gone"))
+	}
+	a, err := s.customerAnswer(ctx, wa.Tenant, run, customerWAActor(number), chatRows)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return say(tr(l, "wa.tool.row_not_yours"))
+	}
+	if err != nil {
+		return err
+	}
+	if a.Type != "list" || i >= len(a.Rows) {
+		return say(tr(l, "wa.public.button_gone"))
+	}
+	r := a.Rows[i]
+	bs := chatButtons(r.Actions)
+	if len(bs) == 0 {
+		return say(tr(l, "wa.public.button_gone"))
+	}
+	text := "*" + whatsapp.SafeText(r.Title) + "*"
+	if r.Sub != "" {
+		text += " · " + whatsapp.SafeText(r.Sub)
+	}
+	if r.State != nil && r.State.Text != "" {
+		text += "\n" + whatsapp.SafeText(r.State.Text)
+	}
+	return say(text, bs...)
 }
 
 // customerAnswerWords is a customer's answer as a chat message: as a

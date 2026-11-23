@@ -318,3 +318,69 @@ func TestCustomerToolsInTheApp(t *testing.T) {
 		t.Errorf("blocked: %v", e)
 	}
 }
+
+// custOrdersDef is a customers' tool that answers with a list of twelve
+// orders, each row with a button to the track tool.
+const custOrdersDef = `{"schema":"wd/v1","id":"wf_orders","version":1,"name":"My orders","trigger":{"type":"manual"},
+	"inputs":{"schema":{"type":"object","properties":{}}},
+	"outputs":[{"name":"orders","type":"list","title":"Orders","description":"Open orders","value":"=steps.look.output.orders","public":true},
+	  {"name":"cost","type":"string","title":"Cost","description":"For staff","value":"=steps.look.output.cost"}],
+	"tool":{"name":"My orders","command":"my-orders","about":"Your open orders","for":"customers",
+	  "answer":{"type":"list","from":"orders","title":"Your orders","item":{"title":"=item.ref","sub":"=item.state"},
+	    "actions":[{"label":"Track","tool":"track","inputs":{"ref":"=item.ref"}}]}},
+	"steps":[{"id":"look","type":"transform","config":{"output":{"cost":"SECRET-COST","orders":[
+	  {"ref":"A-1","state":"Packed"},{"ref":"A-2","state":"Packed"},{"ref":"A-3","state":"Packed"},{"ref":"A-4","state":"Packed"},
+	  {"ref":"A-5","state":"Packed"},{"ref":"A-6","state":"Packed"},{"ref":"A-7","state":"Packed"},{"ref":"A-8","state":"Packed"},
+	  {"ref":"A-9","state":"Packed"},{"ref":"A-10","state":"Packed"},{"ref":"A-11","state":"Packed"},{"ref":"A-12","state":"Packed"}]}}}]}`
+
+// A customer's list answer on WhatsApp is a list message: its first ten
+// rows, how many more, and a row chosen offers its buttons, to the
+// customer it went to only.
+func TestCustomerToolsWhatsAppList(t *testing.T) {
+	w := newWAWorld(t)
+	w.flows()
+	w.graph.AddNumber(pnA, tokA, "+234 800 000 0001")
+	alpha := w.tenant(t, "Alpha", "owner@custlist.test")
+	publishFlow(t, alpha, custOrdersDef)
+	publishFlow(t, alpha, custTrackDef)
+	alpha.must(200, "PUT", "/v1/whatsapp/number", map[string]any{"phone_number_id": pnA, "waba_id": "300000000000001", "access_token": tokA, "own_app": false})
+	alpha.must(200, "PUT", "/v1/whatsapp/public-menu", map[string]any{"enabled": true, "workflows": []any{}})
+	const tolu, ada = "+2348099990201", "+2348099990202"
+	say := func(from, text string) []whatsapptest.Sent {
+		return w.sendTo(t, "/channels/whatsapp", pnA, waSecret, from, whatsapptest.Text(text))
+	}
+	if got := say(tolu, "menu"); len(got) != 1 || !strings.Contains(got[0].Text, "1. My orders") {
+		t.Fatalf("menu: %+v", got)
+	}
+	// No inputs: straight to yes.
+	if got := say(tolu, "1"); len(got) != 1 || !strings.Contains(got[0].Text, "Reply *yes*") {
+		t.Fatalf("summary: %+v", got)
+	}
+	say(tolu, "yes")
+	w.env.Drain(t)
+	before := len(w.graph.Sent(tolu))
+	w.tick(t)
+	got := w.graph.Sent(tolu)[before:]
+	if len(got) != 1 || len(got[0].List) != 10 || !strings.Contains(got[0].Text, "*Your orders*") || !strings.Contains(got[0].Text, "…and 2 more.") ||
+		strings.Contains(got[0].Text, "app") || strings.Contains(toJSON(got[0]), "SECRET") {
+		t.Fatalf("list: %+v", got)
+	}
+	row := got[0].List[2]
+	if row.Title != "A-3" || row.Description != "Packed" || !strings.HasPrefix(row.ID, "tr:") {
+		t.Fatalf("row: %+v", row)
+	}
+	// Another customer choosing it is told it is not theirs.
+	if got := w.sendTo(t, "/channels/whatsapp", pnA, waSecret, ada, whatsapptest.ListReply(row.ID, row.Title)); len(got) != 1 || !strings.Contains(got[0].Text, "sent to someone else") {
+		t.Errorf("another's row: %+v", got)
+	}
+	// Its customer: the row's button.
+	got = w.sendTo(t, "/channels/whatsapp", pnA, waSecret, tolu, whatsapptest.ListReply(row.ID, row.Title))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "*A-3* · Packed") || len(got[0].Buttons) != 1 || got[0].Buttons[0].Title != "Track" {
+		t.Fatalf("row chosen: %+v", got)
+	}
+	// Pressed: the track tool, filled in, to yes.
+	got = w.sendTo(t, "/channels/whatsapp", pnA, waSecret, tolu, whatsapptest.ButtonReply(got[0].Buttons[0].ID, "Track"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "A-3") || len(got[0].Buttons) != 2 {
+		t.Fatalf("pressed: %+v", got)
+	}
+}
