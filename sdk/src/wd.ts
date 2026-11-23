@@ -150,7 +150,8 @@ export interface WaitStep extends StepBase {
 
 export interface SignalStep extends StepBase {
   type: "signal";
-  config: { event: string; correlation: Expression; timeout?: Duration };
+  /** pages: a page's button may send this signal to a run waiting here (docs/spec/pages.md §7). */
+  config: { event: string; correlation: Expression; timeout?: Duration; pages?: boolean };
 }
 
 /** Waits for another system to call the run back at run.callbacks.<id> (docs/contracts/wd-v1.md, callback steps). */

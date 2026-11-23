@@ -246,7 +246,7 @@ export function wait(config: { duration: Duration } | { until: Expr<string> }): 
   return { type: "wait", config };
 }
 
-export function signal(config: { event: string; correlation: Expr; timeout?: Duration }): StepSpec {
+export function signal(config: { event: string; correlation: Expr; timeout?: Duration; pages?: boolean }): StepSpec {
   return { type: "signal", config };
 }
 
