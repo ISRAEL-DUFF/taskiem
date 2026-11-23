@@ -168,6 +168,20 @@ export function workedWords(at: string | undefined, now: number = Date.now()): s
   return hours === 1 ? "Worked out an hour ago" : `Worked out ${hours} hours ago`;
 }
 
+/** The pages the chat's tools panel shows (pages G3): the pinned ones with
+ * nothing after "/", else those whose name or title starts with it. */
+export function pagesFor(pages: PageSummary[], query: string): PageSummary[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return pages.filter((p) => p.pinned);
+  return pages.filter((p) => p.name.startsWith(q) || p.title.toLowerCase().startsWith(q));
+}
+
+/** The page "/" and its name opens, exactly (pages §9). */
+export function pageCalled(pages: PageSummary[], text: string): PageSummary | undefined {
+  const m = /^\/([a-z][a-z0-9-]{1,23})$/.exec(text.trim().toLowerCase());
+  return m ? pages.find((p) => p.name === m[1]) : undefined;
+}
+
 /** Whether a page has a part a tool is still working out (read again soon). */
 export const stillWorking = (page: { blocks: DrawnPart[] }) => page.blocks.some((b) => !!b.working);
 

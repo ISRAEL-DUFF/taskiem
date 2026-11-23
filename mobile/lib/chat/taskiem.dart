@@ -50,7 +50,7 @@ import 'menu_card.dart';
 import 'money_page.dart' show MoneyPage;
 import 'payments_page.dart' show SentPaymentsPage;
 import 'payroll_page.dart' show PayrollPage;
-import 'pages_page.dart' show PagesPage;
+import 'pages_page.dart' show PagesPage, openPage;
 import 'saved_accounts.dart' show SavedAccountsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -645,6 +645,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   /// A button's press on its way: one at a time.
   bool _pressing = false;
 
+  /// One of the business's pages, over the chat (its tile, or "/" and its name).
+  void _openOnePage(String name) {
+    _tools.close();
+    unawaited(openPage(context, widget.data.chats.auth, name, backLabel: 'Back to Taskiem'));
+  }
+
   /// A menu row's page, where the app has it as a screen.
   bool _openPage(String path) {
     final auth = widget.data.chats.auth;
@@ -803,6 +809,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     // The business's own tools, read now: the tools button shows for them
     // even with the built-in tools off.
     unawaited(_tools.loadMade().then((_) => _openGiven()));
+    unawaited(_tools.loadPages());
     _runs.addListener(_runsChanged);
     // The menus' catalogue, read now, so a menu is drawn whole at once.
     unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));
@@ -871,6 +878,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                     tools: _tools,
                     onOpen: _openTool,
                     onMade: (x) => unawaited(_openMade(x)),
+                    onPage: (p) => _openOnePage(p.name),
                     // Taskiem's own tiles come with the built-in tools.
                     lead: d.chats.chatTools ? _schoolTiles(d) : const [],
                     extras: d.chats.chatTools ? _extras(d) : const [],
@@ -900,7 +908,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   listenable: _tools,
                   builder: (context, _) => Composer(
                     key: _composer,
-                    tools: d.chats.chatTools || _tools.made.isNotEmpty ? _tools : null,
+                    tools: d.chats.chatTools || _tools.made.isNotEmpty || _tools.pages.isNotEmpty ? _tools : null,
                     text: _text,
                     // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
                     // tag"; a phone shows the words before the comma.
@@ -915,8 +923,13 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       // Tags name things for Taskiem in the words alone.
                       _tags.take(words);
                       final made = file == null ? madeByCommand(_tools.made, words) : null;
+                      final page = file == null && made == null ? _tools.pageCalled(words) : null;
                       if (file != null) {
                         d.sendFile(file, words);
+                      } else if (page != null) {
+                        // "/tickets": the page opens over the chat (pages §9).
+                        _text.clear();
+                        _openOnePage(page.name);
                       } else if (made != null) {
                         // "/expense 4500 diesel": its form, filled in from
                         // the words; nothing starts before its own button.

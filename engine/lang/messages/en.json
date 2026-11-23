@@ -4709,6 +4709,16 @@
       "reviewed": true,
       "context": "A tool whose steps move money, called from a chat app"
     },
+    "wa.page.more": {
+      "text": "…and {count} more on the page.",
+      "reviewed": true,
+      "context": "A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Open the page: {link}",
+      "reviewed": true,
+      "context": "A page's short form in a chat app: the link to open the page"
+    },
     "wa.tool.list_empty": {
       "text": "Nothing to show.",
       "reviewed": true,

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
-import { getBlob } from "../api";
+import { get, getBlob } from "../api";
 import { savedFileURL } from "../lib/saved";
 import type { Suggestion } from "../lib/mentions";
 import { toast } from "../toast";
@@ -35,6 +35,8 @@ import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
 import { madeToolWords, madeToolsFor, toolsFor, type ToolKey } from "../lib/tools";
 import { useMadeTools } from "../lib/useMadeTools";
+import { pageCalled, pagesFor, type PageList, type PageSummary } from "../lib/pages";
+import { PageSheet } from "./Pages";
 import { MadeToolSheet } from "./MadeToolSheet";
 import type { Prefill, Request } from "../lib/intents";
 import { RequestChip } from "./RequestChip";
@@ -209,9 +211,13 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     /** Words typed after its command: read into its form. */
     words?: string;
   }>();
+  // The business's pages (pages G3), where Your tools are offered: a tile
+  // for each pinned one, and "/" and a page's name opens it over the chat.
+  const pages = usePagesForChat(!!o.madeTools);
+  const [pageOpen, setPageOpen] = useState<string>();
   // The panel: the built-in tools when chat tools are on, Your tools when
-  // the person has any.
-  const panelOn = !!o.tools || made.length > 0;
+  // the person has any, and their pages.
+  const panelOn = !!o.tools || made.length > 0 || pages.length > 0;
   // "/invoice/" and the like pick a thing to tag, not a tool; "/" and a
   // saved thing's name pick that thing, when one has it (else "/" searches tools).
   const tagging = mentions.q?.mark === "/" && (!!mentions.q.kind || mentions.shown.length > 0);
@@ -219,11 +225,12 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const toolsShown = panelOn && (toolsOpen || !!slash);
   // How many tools what follows "/" names: none, and Enter sends it.
   const madeShown = madeToolsFor(made, slash?.[1] ?? "");
+  const pagesShown = pagesFor(pages, slash?.[1] ?? "");
   const toolMatches = toolsShown
     ? (o.tools
         ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length +
           extrasFor(o.extras, slash?.[1] ?? "").length
-        : 0) + madeShown.length
+        : 0) + madeShown.length + pagesShown.length
     : 0;
   const closeTools = () => {
     setToolsOpen(false);
@@ -236,6 +243,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const openMade = (command: string, from?: DOMRect, words?: string) => {
     closeTools();
     setMadeTool({ command, from, words });
+  };
+  const openPage = (name: string) => {
+    closeTools();
+    setPageOpen(name);
   };
   // Words that reach one of Your tools: the command expense with "4500 diesel" opens its
   // form filled in from them when sent (made tools §6); a sentence that
@@ -292,6 +303,13 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const f = held ?? file;
     const body = held ? "" : text.trim();
     if (!body && !f) return;
+    const page = !f ? pageCalled(pages, body) : undefined;
+    if (page && !madeReach) {
+      // "/" and a page's name: the page opens over the chat; nothing is sent.
+      setText("");
+      openPage(page.name);
+      return;
+    }
     if (!f && madeReach?.by === "command") {
       // Nothing starts from the words: its form opens, filled in.
       openMadeWords(madeReach);
@@ -464,6 +482,10 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     madeShown,
     madeTool,
     setMadeTool,
+    pagesShown,
+    pageOpen,
+    setPageOpen,
+    openPage,
     openMade,
     madeReach,
     openMadeWords,
@@ -631,6 +653,7 @@ export function ComposerView<R>({
             }}
           />
         )}
+      {c.pageOpen && <PageSheet name={c.pageOpen} onClose={() => c.setPageOpen(undefined)} />}
       {c.madeTool && (
         <MadeToolSheet
           command={c.madeTool.command}
@@ -684,6 +707,8 @@ export function ComposerView<R>({
               builtIns={!!c.o.tools}
               made={c.madeShown}
               onOpenMade={c.openMade}
+              pages={c.pagesShown}
+              onOpenPage={c.openPage}
             />
           )}
           {c.panelOn && (
@@ -847,4 +872,21 @@ export function ComposerView<R>({
  * ("Ask Taskiem", "Message"); with room, all of it. */
 export function hint(words: string, roomy: boolean): string {
   return roomy ? words : (words.split(",")[0] ?? words).trim();
+}
+
+/** The published pages the person may open (GET /v1/pages), for the chat's
+ * tools panel and "/" with a page's name (pages G3); none until read. */
+function usePagesForChat(on: boolean): PageSummary[] {
+  const [pages, setPages] = useState<PageSummary[]>([]);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    get<PageList>("/v1/pages")
+      .then((l) => live && setPages(l.pages.filter((p) => p.published)))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [on]);
+  return pages;
 }

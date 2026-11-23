@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, type Approval } from "../api";
 import { Icon } from "../icons";
+import { Sheet } from "../kit";
 import { toast } from "../toast";
 import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad } from "../ui";
 import { Decide } from "./Approvals";
@@ -299,6 +300,30 @@ export function PageScreen() {
   return <DrawnPageView page={page} values={values} onFilter={set} onRefresh={view.reload} ticks={ticks} />;
 }
 
+/** A page over the chat (pages G3): its tile in the tools panel, or "/" and
+ * its name. Drawn from the same view as the page, with its buttons. */
+export function PageSheet({ name, onClose }: { name: string; onClose: () => void }) {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const q = filtersParam(values);
+  const view = useLoad(() => get<DrawnPage>(`/v1/pages/${name}/view${q ? `?${q}` : ""}`), [name, q]);
+  return (
+    <Sheet title={view.data?.page.title ?? `/${name}`} sub={`/${name}`} onClose={onClose} testid="page-sheet">
+      <div className="tk-sheet-list">
+        {view.error ? (
+          <ErrorBox error={view.error} />
+        ) : !view.data ? (
+          <Skeleton rows={3} label="Drawing the page…" />
+        ) : (
+          <DrawnPageView page={view.data} values={values} onFilter={(id, v) => setValues({ ...values, [id]: v })} onRefresh={view.reload} sheet />
+        )}
+        <p className="hint">
+          <Link to={`/pages/${name}`}>Open the whole page</Link>
+        </p>
+      </div>
+    </Sheet>
+  );
+}
+
 /** Follows a page's live notices (GET /v1/pages/{name}/live) while it is
  * open: the parts named are read (read), a burst at most once in two
  * seconds. Without a live connection (refused, or no EventSource) the page
@@ -342,6 +367,7 @@ export function DrawnPageView({
   onRefresh,
   preview = false,
   ticks = {},
+  sheet = false,
 }: {
   page: DrawnPage;
   values: Record<string, string>;
@@ -350,6 +376,8 @@ export function DrawnPageView({
   preview?: boolean;
   /** A count per list or table, raised when it is to read its first rows again. */
   ticks?: Record<string, number>;
+  /** Drawn in a sheet over the chat (pages G3): the sheet has the title. */
+  sheet?: boolean;
 }) {
   const [open, setOpen] = useState<(DrawnRow & { part: string }) | null>(null);
   const name = page.page.name;
@@ -367,7 +395,7 @@ export function DrawnPageView({
     void (page.blocks.some((b) => b.from_tool) ? post(`/v1/pages/${name}/refresh`).catch(() => undefined) : Promise.resolve()).then(onRefresh);
   return (
     <div className="pg" data-testid={preview ? "page-preview" : "page"}>
-      {!preview && (
+      {!preview && !sheet && (
         <p className="crumbs">
           <Link to="/pages" aria-label="Back to Pages">
             Pages
@@ -375,9 +403,7 @@ export function DrawnPageView({
         </p>
       )}
       <div className="page-header">
-        <div className="page-heading">
-          <Heading>{page.page.title}</Heading>
-        </div>
+        <div className="page-heading">{!sheet && <Heading>{page.page.title}</Heading>}</div>
         {!preview && (
           <div className="page-actions">
             <button onClick={refresh}>

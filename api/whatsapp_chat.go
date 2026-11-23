@@ -950,6 +950,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
 			return err
 		}
+		// A business's page by "/name": its short form (pages_chat.go).
+		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			return err
+		}
 	}
 	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
 	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
@@ -1294,6 +1298,11 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	// (tools_chat.go).
 	if !matched {
 		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			return err
+		}
+		// A business's page by its name ("tickets"): its short form, after
+		// Taskiem's own words and the business's tools (pages_chat.go).
+		if done, err := s.waPage(ctx, c, text); done || err != nil {
 			return err
 		}
 	}

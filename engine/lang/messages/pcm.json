@@ -4046,6 +4046,16 @@
       "reviewed": false,
       "context": "Draft, not reviewed: A tool whose steps move money, called from a chat app"
     },
+    "wa.page.more": {
+      "text": "…plus {count} more for the page.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Open the page: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
     "wa.tool.list_empty": {
       "text": "Nothing dey to show.",
       "reviewed": false,

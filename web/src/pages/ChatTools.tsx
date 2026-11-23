@@ -25,6 +25,7 @@ import type { Service } from "../lib/bookings";
 import { bookLine, useLinkServices } from "../lib/linkbook";
 import type { PriceList } from "../lib/pricelists";
 import type { StockItem } from "../lib/stock";
+import type { PageSummary } from "../lib/pages";
 import type { Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
@@ -236,6 +237,8 @@ export function ToolsPanel({
   builtIns = true,
   made = [],
   onOpenMade,
+  pages = [],
+  onOpenPage,
 }: {
   /** What follows "/" in the box, when it was typed. */
   query: string;
@@ -255,6 +258,9 @@ export function ToolsPanel({
   /** Your tools (made tools M1) that what follows "/" names. */
   made?: MadeTool[];
   onOpenMade?: (command: string, from: DOMRect) => void;
+  /** The business's pages (pages G3): pinned ones, or those "/" names. */
+  pages?: PageSummary[];
+  onOpenPage?: (name: string) => void;
 }) {
   const more = extrasFor(extras, query);
   const { can, me } = useAuth();
@@ -374,7 +380,7 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
-      {tools.length + more.length + made.length === 0 ? (
+      {tools.length + more.length + made.length + pages.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -459,6 +465,28 @@ export function ToolsPanel({
               <span>
                 <span className="tk-tile-name">{t.name}</span>
                 <span className="tk-tile-line">{t.about || `/${t.command}`}</span>
+              </span>
+            </button>
+          ))}
+          {pages.length > 0 && (
+            <p className="tk-tools-sub" data-testid="your-pages">
+              Your pages
+            </p>
+          )}
+          {pages.map((p) => (
+            <button
+              key={`page:${p.name}`}
+              type="button"
+              className="tk-tile"
+              data-testid="page-tile"
+              onClick={() => onOpenPage?.(p.name)}
+            >
+              <span className="tk-tile-icon">
+                <Icon name="tables" />
+              </span>
+              <span>
+                <span className="tk-tile-name">{p.title}</span>
+                <span className="tk-tile-line">{p.about || `/${p.name}`}</span>
               </span>
             </button>
           ))}

@@ -4046,6 +4046,16 @@
       "reviewed": false,
       "context": "Draft, not reviewed: A tool whose steps move money, called from a chat app"
     },
+    "wa.page.more": {
+      "text": "…na {count} ndị ọzọ na peeji ahụ.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Mepee peeji ahụ: {link}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A page's short form in a chat app: the link to open the page"
+    },
     "wa.tool.list_empty": {
       "text": "Ọ dịghị ihe a ga-egosi.",
       "reviewed": false,

@@ -9,7 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show MadeTool;
+import '../api/api.g.dart' show MadeTool, PageSummary;
 import '../api/transport.dart' show ApiError, Offline;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
@@ -21,6 +21,14 @@ import '../theme/theme.dart';
 import 'chats.dart';
 import 'made_tools.dart';
 import 'tools.dart';
+
+/// The pages a panel shows for what follows "/": the pinned ones with
+/// nothing typed, else those whose name or title starts with it.
+List<PageSummary> pagesMatching(List<PageSummary> pages, String q) {
+  final w = q.trim().toLowerCase();
+  if (w.isEmpty) return [for (final p in pages) if (p.pinned) p];
+  return [for (final p in pages) if (p.name.startsWith(w) || p.title.toLowerCase().startsWith(w)) p];
+}
 
 /// A tile that does something instead of opening a tool's sheet (Make an
 /// offer, Statement, Clock in).
@@ -45,7 +53,37 @@ class ToolsController extends ChangeNotifier {
 
   /// Open: from the button, or "/" and a word as the whole message. With
   /// the built-in tools off, the business's own tools still open it.
-  bool get shown => (chats.chatTools || made.isNotEmpty) && (_open || _slash != null);
+  bool get shown => (chats.chatTools || made.isNotEmpty || pages.isNotEmpty) && (_open || _slash != null);
+
+  // --- the business's pages (pages G3), in Taskiem's conversation only ---
+
+  /// The published pages the person may open; none until read.
+  List<PageSummary> pages = const [];
+  DateTime? _pagesAt;
+
+  /// Reads the pages the person may open (GET /v1/pages), as loadMade.
+  Future<void> loadPages({bool again = false}) async {
+    if (scope != null) return;
+    final at = _pagesAt;
+    if (at != null && !(again && DateTime.now().difference(at) > fresh)) return;
+    _pagesAt = DateTime.now();
+    try {
+      pages = [for (final p in (await chats.api.listPages()).pages) if (p.published) p];
+    } on Object {
+      // None shown.
+    }
+    _notify();
+  }
+
+  /// The pages a tile shows: the pinned ones, or those what follows "/"
+  /// names (any the person may open).
+  List<PageSummary> pagesHere([String? q]) => scope != null ? const [] : pagesMatching(pages, q ?? query);
+
+  /// The page "/name" opens, exactly.
+  PageSummary? pageCalled(String words) {
+    final m = RegExp(r'^/([a-z][a-z0-9-]{1,23})$').firstMatch(words.trim().toLowerCase());
+    return m == null || scope != null ? null : pages.where((p) => p.name == m.group(1)).firstOrNull;
+  }
 
   // --- your tools (made tools M1), in Taskiem's conversation only ---
 
@@ -256,6 +294,7 @@ class ToolsPanel extends StatefulWidget {
     this.recent = const [],
     this.maxHeight,
     this.onMade,
+    this.onPage,
   });
 
   final ToolsController tools;
@@ -276,6 +315,9 @@ class ToolsPanel extends StatefulWidget {
   /// built-in ones); null where they are not offered.
   final ValueChanged<MadeTool>? onMade;
 
+  /// A page's tile pressed (pages G3): the page opens over the chat.
+  final ValueChanged<PageSummary>? onPage;
+
   @override
   State<ToolsPanel> createState() => _ToolsPanelState();
 }
@@ -287,6 +329,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
     // Opened: the lists read again, for the tiles' lines and badges now.
     widget.tools.load(widget.tools.toolsHere(), again: true);
     if (widget.onMade != null) unawaited(widget.tools.loadMade(again: true));
+    if (widget.onPage != null) unawaited(widget.tools.loadPages(again: true));
   }
 
   @override
@@ -308,7 +351,8 @@ class _ToolsPanelState extends State<ToolsPanel> {
     ];
     final made = widget.onMade == null ? const <MadeTool>[] : c.madeHere();
     final builtIn = lead.isNotEmpty || listed.isNotEmpty || more.isNotEmpty;
-    final none = !builtIn && made.isEmpty;
+    final pages = widget.onPage == null ? const <PageSummary>[] : c.pagesHere();
+    final none = !builtIn && made.isEmpty && pages.isEmpty;
     // The last used, as tiles of this panel.
     final recent = [
       for (final k in widget.recent)
@@ -403,6 +447,23 @@ class _ToolsPanelState extends State<ToolsPanel> {
                         _Grid(
                           children: [
                             for (final x in made) _Tile(keyName: madeKey(x), title: x.name, icon: madeIcon(x), line: x.about, onTap: () => widget.onMade!(x)),
+                          ],
+                        ),
+                      ],
+                      // The business's pages (pages §9): pinned ones, or
+                      // those "/" and a word names; a page opens over the chat.
+                      if (pages.isNotEmpty) ...[
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(4, builtIn || made.isNotEmpty ? 14 : 0, 4, 8),
+                          child: Semantics(
+                            header: true,
+                            child: Text('Your pages', style: tkText(size: 13, weight: 700, color: t.muted)),
+                          ),
+                        ),
+                        _Grid(
+                          children: [
+                            for (final p in pages)
+                              _Tile(keyName: 'page:${p.name}', title: p.title, icon: 'b-table', line: p.about.isEmpty ? '/${p.name}' : p.about, onTap: () => widget.onPage!(p)),
                           ],
                         ),
                       ],
