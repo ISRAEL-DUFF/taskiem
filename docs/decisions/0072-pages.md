@@ -30,7 +30,7 @@ Taskiem has screens for what it built: orders, stock, money, staff. A business a
 
 ## Left to later phases
 
-A page as a tab under an area, and deliveries, customers and staff as record views, are G1 items not in this first build (the versions list with bring-back, a page as a file, the app's ordering of a table, Taskiem's orders and invoices as record views, and the change notices that update an open page followed on 23 November 2026, [§18](../spec/pages.md#18-as-built-g0-and-g1)); actions, tools as sources, the status block, alerts and **Pin as a page** are G2; the chat (G3); board and chart (G4); starters and **Describe it** (G5).
+The G1 items not in the first build followed on 23 November 2026 ([§18](../spec/pages.md#18-as-built-g0-and-g1)): the versions list with bring-back, a page as a file, the app's ordering of a table, Taskiem's orders, invoices, deliveries, customers and staff as record views, the change notices that update an open page, a page as a tab under an area, and the SDK. G2 (actions: tools, signals a workflow declares for pages, approvals; tools as sources; the status block; alerts; changing a row in place; **Pin as a page**) and G3 (the tile, `/name`, the short form on WhatsApp, Telegram and Slack) were built the same day ([§18a](../spec/pages.md#18a-as-built-g2-and-g3)): a page still runs nothing itself; a button is the tool, the signal or the approval, held to their own rules as the person who pressed. Left: making G2's parts in the editor, a page opened from a notification; board and chart (G4); starters and **Describe it** (G5).
 
 ## Alternatives considered
 

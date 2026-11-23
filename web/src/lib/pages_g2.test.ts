@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layout, pageCalled, pagesFor, placedPages, stillWorking, workedWords, type DrawnPart, type PageSummary } from "./pages";
+import { layout, pageCalled, pagesFor, partWords, placedPages, stillWorking, workedWords, type DrawnPart, type PageSummary } from "./pages";
 
 // Pages G2: when a tool worked a part out, a part still being worked out,
 // and the page's buttons and a status kept apart from a row of figures.
@@ -17,6 +17,11 @@ describe("pages with tools", () => {
     const parts: DrawnPart[] = [{ id: "a", type: "figure" }, { id: "b", type: "list", working: "Still working…" }];
     expect(stillWorking({ blocks: parts })).toBe(true);
     expect(stillWorking({ blocks: parts.slice(0, 1) })).toBe(false);
+  });
+  it("names G2's parts in plain words in the editor", () => {
+    expect(partWords({ id: "b", type: "buttons", actions: [{ label: "New ticket", tool: "new-ticket" }] }, [])).toBe("Buttons: New ticket");
+    expect(partWords({ id: "s", type: "status", workflow: "Deliveries" }, [])).toBe("Where a run of Deliveries is");
+    expect(partWords({ id: "f", type: "figure", label: "Spent", value: "output", source: { tool: "spend", output: "total" } }, [])).toBe("Spent worked out by /spend");
   });
   it("keeps buttons and a status on their own rows", () => {
     const parts: DrawnPart[] = [

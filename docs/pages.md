@@ -1,6 +1,6 @@
 # Your pages
 
-A **page** is a screen your business makes for itself: "Tickets" with how many are open and the open ones as a list, "Expenses this month", "Generators". You pick the parts and what feeds them from your [data tables](data-tables.md), or from your orders and invoices; Taskiem lays them out for a phone first and draws them on the web and in the phone app. A page is not code and runs nothing ([decision 0072](decisions/0072-pages.md), [the plan](spec/pages.md), [the contract](contracts/page-v1.md)).
+A **page** is a screen your business makes for itself: "Tickets" with how many are open and the open ones as a list, **New ticket** at its top and **Assign to me** on each row, "Expenses this month", "Generators". You pick the parts and what feeds them from your [data tables](data-tables.md), your orders, invoices, deliveries, customers and staff, or your [tools](tools.md) that only read; Taskiem lays them out for a phone first and draws them on the web and in the phone app. A page is not code and runs nothing ([decision 0072](decisions/0072-pages.md), [the plan](spec/pages.md), [the contract](contracts/page-v1.md)).
 
 ## The quickest start: Show as a page
 
@@ -13,24 +13,55 @@ On a table's page, **Show as a page** makes a page from it in one tap: a figure 
 | **Heading** | A title and a line of words |
 | **Figure** | One number: how many rows, or a column added up (an amount in kobo drawn as naira), with its colour; optionally only this day, week or month's, with the change on the one before ("up 12% on last week"). Up to four sit side by side; one may be the page's main figure, drawn large |
 | **List** | Rows, each a title, a line under it and a state; may be put in groups by a column (Open, Doing, Done). A press opens the row as a card |
-| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order |
+| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order. A yes or no column you mark **can be changed here** is a tick for those who may change the table's rows |
+| **Buttons** | Up to three buttons for the whole page (**New ticket**) |
+| **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest |
 
 Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email column is the person's own). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
 
-## Your orders and invoices
+## Your orders, invoices, deliveries, customers and staff
 
-A part can show your **orders** or your **invoices** as Taskiem keeps them, read only: in **Add a part**, pick **Orders (Taskiem's)** or **Invoices (Taskiem's)** where you pick a table. Each has a fixed set of columns:
+A part can show your **orders**, **invoices**, **deliveries**, **customers** or **staff** as Taskiem keeps them, read only: in **Add a part**, pick **Orders (Taskiem's)** and the like where you pick a table. Each has a fixed set of columns:
 
 | | Columns |
 | --- | --- |
 | **Orders** | Number, Customer, Phone, Email, Status, Kind, Came from (shop, app or business), Total, Paid, Pickup or delivery, Delivery area, Delivery (its latest delivery), Placed, Paid on |
 | **Invoices** | Number, Customer, Phone, Email, Status, Kind, Total, Paid, Owed, Due, Sent, Paid on |
+| **Deliveries** | Order, Customer, Phone, Rider, Status, Delivery area, Rider's fee, Owed to the rider (delivered, not confirmed yet), Paid at the door, Offered, Delivered, Confirmed |
+| **Customers** | Customer, Phone, Email, Invoices, Owed, Added (the customers of your book, under Money) |
+| **Staff** | Name, Email, Roles, Joined |
 
 They are counted, added up (Total, Paid, Owed, in naira), listed and narrowed as a table is: "orders received this week", "invoices overdue", the sum of what is owed. A row opens the order or invoice on its own screen.
 
-- **Who sees them:** besides the page's roles, a person needs what the Orders screen needs (`storefront.manage` or `order.handle`) to see orders, and what the Invoices screen needs (`invoice.read`) to see invoices. Others see "You cannot see orders." where the part would be; the rest of the page shows.
-- **The customer** (name, phone, email) is shown masked to everyone, as the Orders and Invoices lists show it (B•••, •••5678); to see a customer, open the order or invoice. So a page never searches, picks, groups, adds up or puts rows in order by the customer.
+- **Who sees them:** besides the page's roles, a person needs what that screen needs: orders and deliveries `storefront.manage` or `order.handle`, invoices and customers `invoice.read`, staff `member.manage`. Others see "You cannot see orders." where the part would be; the rest of the page shows.
+- **The customer** (name, phone, email) is shown masked to everyone, as the Orders and Invoices lists show it (B•••, •••5678); to see a customer, open the order or invoice. So a page never searches, picks, groups, adds up or puts rows in order by the customer. A delivery's rider is shown by name, but never searched, picked or put in order by: it is kept sealed, and opened only for the rows shown.
 - **A part over an area you turned off** (Settings, areas) cannot be published, and shows that it is turned off until you turn the area back on.
+
+## Buttons
+
+A button on a page (in a **Buttons** part) or on each row of a list or table (shown on the row and on its card) is one of three things:
+
+- **A tool**: pressing it opens one of your [tools](tools.md) with its form filled in from the row (`"inputs": {"ref": "=row.id"}`), exactly as a button on a tool's answer does: it runs as the person who pressed, held to the tool's roles and its care (yes, or a passkey where it moves money); someone who may not use it sees it greyed with why. A value the person sees masked (a phone, for someone without `table.read`) is asked, never filled in. A **once** button is spent by the first run it starts.
+- **A signal to a run**: tells a run of one of your workflows something it waits for (**Confirm** on a delivery), after **Yes**. Only to a run of the workflow the button names, waiting at a step that says a page may send it (`"pages": true` on the signal step), held to that workflow's roles; to no other run. A run that has moved on says so.
+- **An approval**: opens the approval sheet of a run waiting at that step, with its PIN and rules, when it waits for the person.
+
+**When** hides a button for the rows it does not fit (`"when": "=row.status == 'delivered'"`). Pressing a button reads the row again on the server: nothing the screen sends is taken for a row's value.
+
+## Parts a tool works out
+
+A figure or a list can be fed by one of your tools that **answers at once** (only reads): "Expenses this month" shows a total a workflow worked out. The part names the tool, its values (fixed words, or the page's filters: `"=filters.month"`) and the answer it shows (one of the tool's outputs: a number or words for a figure, a list for a list, its rows read as `item`). Its run is a run like any other, counted on your plan, as the person who opened the page; what it answered is kept for a minute (so opening the page again does not run it again) and shows when it was worked out ("Worked out 3 minutes ago"). **Refresh** works it out again; so does pressing any button on the page. A tool still running shows **Still working** and fills in when it answers. At most three parts a page are worked out by tools. A tool that changes anything, or that asks before it runs, cannot feed a page.
+
+**Pin as a page:** a tool's list or card answer (in its sheet, on the web) has **Pin as a page**, which makes a draft page fed by that tool with the values it was given: a list keeps the answer's rows, words and buttons; a card becomes a figure for each of its first four lines that shows one of the tool's answers.
+
+## A page as an alert, and as a tab
+
+- **An alert:** a figure that counts (a table's or a view's rows), marked **alert**, shows in the alerts at the end of your Taskiem chat while it is above zero: the page's name and the count, with **Open the page**. Only to those who may open the page.
+- **A tab under an area** (`"place": {"area": "orders"}`): the published page shows as a tab after Taskiem's own on that area's screens (Online shop and Orders, Money, Schools on the web; a **Your pages** section on the app's Money and Orders), while that area is on.
+
+## In the chat
+
+- **In your Taskiem chat** (web and app), a pinned page is a tile in the tools panel, under **Your pages**; "/" and a word finds any page you may open, and "/" and a page's name (`/tickets`) opens it over the chat, with its buttons.
+- **On WhatsApp, Telegram and Slack** a page cannot be drawn: its name (`tickets`, or `/tickets`) answers with its **short form**: its figures on a line ("Open 7 · Waiting 2"), the first five rows of its first list, how many more, and **Open the page** with its link. Taskiem's own words always win; a page's name is never one of them nor a tool's. Only for a published page whose roles let you open it, masked as on the page; anyone else is answered as if there were none. Its buttons are reached as tools there, by their own words.
 
 ## Kept up to date
 
@@ -71,7 +102,7 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | Call | What |
 | --- | --- |
 | `GET /v1/pages` | The pages you may open, pinned first |
-| `POST /v1/pages` | Make a page as a draft: `{"document": …}` or `{"from_table": "<table id>"}` |
+| `POST /v1/pages` | Make a page as a draft: `{"document": …}`, `{"from_table": "<table id>"}` or `{"from_tool": {"command", "inputs"}}` (Pin as a page) |
 | `GET /v1/pages/{name}` | A page; its draft, the draft's problems and what it shows, for `page.edit` holders |
 | `PUT /v1/pages/{name}/draft` | Save the draft |
 | `POST /v1/pages/{name}/publish` | Publish the draft, once it has no problem left |
@@ -81,7 +112,9 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `GET /v1/pages/{name}/view?filters=` | The page as drawn for you: every part's figures and rows worked out on the server, masked for you (`draft=1` for the draft) |
 | `GET /v1/pages/{name}/blocks/{id}?cursor=` | More rows of a list or table, or a table in a column's order (`order`, `desc=1`) |
 | `GET /v1/pages/{name}/live` | Server-sent events while the page is open: `changed` names the parts to read again (no data), at most once in two seconds |
-| `GET /v1/page-records` | Your orders and invoices as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
+| `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open |
+| `POST /v1/pages/{name}/refresh` | What tools worked out on the page for you is let go, so it is worked out again |
+| `GET /v1/page-records` | Your orders, invoices, deliveries, customers and staff as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |
 | `GET /v1/pages/{name}/export` | The page as a file: its document, no rows, nothing personal (`draft=1` for the draft) |
@@ -89,6 +122,8 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 
 The web and the app both draw from `view`: neither reads a table for a page itself. Reads are recorded in the connection reads (`GET /v1/secrets/reads`, purpose `pages.view`). Making, saving, publishing, pinning and deleting are audited (`page.create`, `page.draft`, `page.publish` with who may open it and what it shows, `page.pin` when it changes, `page.delete`, `page.bring_back`, `page.export`, `page.import`), never with a row's values.
 
+In code, `@taskiem/sdk` (`sdk/src/page.ts`) writes a page: `page({ name, title }, figure(…), list(…, { actions: [toolAction(…), signalAction(…)] }))`, its values words, CEL or arrow functions over `row`, `item`, `outputs` and `filters`.
+
 ## Not yet
 
-Buttons and actions on a page and its rows, tools feeding a page, deliveries, customers and staff as parts, a page as a tab under an area or as an alert, pages in the chat (`/tickets`, the short form on WhatsApp), boards and charts come in later phases ([the plan](spec/pages.md#14-phases)).
+Making buttons, tool parts, a status and a tab in the editor (they are written in the page's file or the SDK, and drawn and pressed everywhere), a page opened from a notification, boards and charts, starters and **Describe it** come in later phases ([the plan](spec/pages.md#14-phases)).

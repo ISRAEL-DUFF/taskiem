@@ -190,7 +190,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **G0 and G1. Pages: the format, and pages from tables** ([pages](pages.md) G0, G1). Needs: nothing but data tables; started once M2 is under way.
 - The decision record and `page/v1`; figures, grouped lists, tables, details and filters; the Pages area, pinning, roles, draft and publish; **Show as a page**.
 - Done when: an owner turns the tickets table into a page with a count and a list in under two minutes, and staff open it on a phone.
-- **Status (22 November 2026): built** ([As built](pages.md#18-as-built-g0-and-g1)), decision 0072 accepted 23 November 2026, migration 00530. `page/v1` with its schema, contract and validator; storage with drafts and published versions, roles, pinning and `max_pages`; the API drawing every part on the server, masked for the viewer; the web's Pages, page and editor with **Show as a page**; the app's Pages and page. **Since (23 November 2026):** a page's versions listed with who published each and what changed, and **Bring back** (a draft, published through the same checks); a page saved as a file and made from one in another business (no rows, nothing personal; what it names that the business lacks said in plain words; `max_pages`); the app orders a table part by a column, among those the server says the viewer may; **Taskiem's own orders and invoices as a part's source** (`"source": {"records": "orders"}`, a view of fixed columns, the area's read permission, the customer masked for everyone, indexes in migrations 00556 to 00558); **pages kept up to date** (`GET /v1/pages/{name}/live`, a notice naming the parts to read again, at most one in two seconds, on the web and in the app, migration 00555). **Left:** deliveries, customers and staff as record views, a tab under an area, the SDK.
+- **Status (22 November 2026): built** ([As built](pages.md#18-as-built-g0-and-g1)), decision 0072 accepted 23 November 2026, migration 00530. `page/v1` with its schema, contract and validator; storage with drafts and published versions, roles, pinning and `max_pages`; the API drawing every part on the server, masked for the viewer; the web's Pages, page and editor with **Show as a page**; the app's Pages and page. **Since (23 November 2026):** a page's versions listed with who published each and what changed, and **Bring back** (a draft, published through the same checks); a page saved as a file and made from one in another business (no rows, nothing personal; what it names that the business lacks said in plain words; `max_pages`); the app orders a table part by a column, among those the server says the viewer may; **Taskiem's own orders and invoices as a part's source** (`"source": {"records": "orders"}`, a view of fixed columns, the area's read permission, the customer masked for everyone, indexes in migrations 00556 to 00558); **pages kept up to date** (`GET /v1/pages/{name}/live`, a notice naming the parts to read again, at most one in two seconds, on the web and in the app, migration 00555). **Since (23 November 2026):** deliveries, customers and staff as record views (migrations 00571, 00572), a page as a tab under an area, the SDK's `page()`. **Left:** nothing of G1 but the e2e test's stand-in for `view` (no Xenibase in the e2e server).
 
 ### Stage 7: customers, and pages with buttons
 
@@ -207,6 +207,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **G2 and G3. Pages with tools, and in the chat** (pages G2, G3). Needs: G1, M2 (G3 also M1).
 - Buttons, row actions, tools feeding a page, **Pin as a page**; the tile, `/name`, and the short form on WhatsApp, Telegram and Slack.
 - Done when: "Tickets" has **New ticket** and **Assign to me**, and "tickets" on WhatsApp answers with the figures, five rows and a link.
+- **Status (23 November 2026): built** ([As built](pages.md#18a-as-built-g2-and-g3)), migration 00570. Buttons on a page and its rows: a tool's form filled in (roles, care, once, masked values asked), a signal to one run of a workflow that declares it for pages (after Yes), an approval; `when`; tools that answer at once as a figure's or a list's source (kept a minute, Refresh, when worked out); the status part; a page as an alert; a yes/no column ticked in place; **Pin as a page**; the acceptance fixture as an API test. G3: the tile and `/name` in the web's and the app's Taskiem chat, and the short form on WhatsApp, Telegram and Slack. **Left:** making G2's parts in the editor's plain-words path; a page opened from a notification; the app ticking in place.
 
 ### Stage 8: the builder, boards and charts
 
@@ -249,7 +250,7 @@ Each phase adds an **As built** section to its own plan (saved objects, made too
 - [ ] P2 (built, in review) · [ ] P3 (built, in review) · [ ] P4
 - [ ] M0 · [ ] M1 · [ ] D0
 - [ ] M2 · [x] M3 · [ ] M4 · [ ] G0 · [ ] G1 · [ ] D1
-- [ ] M5 · [ ] G2 · [ ] G3 · [ ] D2
+- [ ] M5 · [ ] G2 (built, in review) · [ ] G3 (built, in review) · [ ] D2
 - [ ] M6 · [ ] G4 · [ ] G5
 
 ## 7. Risks

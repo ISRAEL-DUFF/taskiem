@@ -510,9 +510,14 @@ export function partWords(p: Part, tables: Table[]): string {
   const t = tables.find((x) => x.name === p.source?.table);
   const from = t ? t.title || t.name : p.source?.table ?? "";
   const where = (p.source?.filters ?? []).length ? `, only some rows` : "";
+  if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : "A list"} worked out by /${p.source.tool}`;
   switch (p.type) {
     case "heading":
       return `Heading: ${p.title ?? ""}`;
+    case "buttons":
+      return `Buttons: ${(p.actions ?? []).map((a) => a.label).join(", ")}`;
+    case "status":
+      return `Where a run of ${p.workflow ?? ""} is`;
     case "figure":
       return p.value === "sum"
         ? `Total of ${columnWords(t, p.of ?? "")} from ${from}${where}`
