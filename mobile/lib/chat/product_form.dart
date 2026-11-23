@@ -31,6 +31,7 @@ import 'attachments.dart' show PickedFile;
 import 'chats.dart' show toneColours;
 import 'composer.dart' show Pickers;
 import 'sizes_forms.dart';
+import 'stock_items.dart' show CountedByRow;
 import 'tags.dart' show quantity;
 import 'tools.dart' show tileLetters;
 import 'words.dart' show naira, toneOf;
@@ -812,6 +813,10 @@ class _ProductFormState extends State<ProductForm> {
   final _floor = TextEditingController();
   bool _floorTyped = false;
   late int? _count = _int(_it['stock']);
+
+  /// The count as it was read, or as Counted by changed it: a count
+  /// different from it is recorded on Save.
+  late int? _countWas = _int(_it['stock']);
   late bool _shown = _it['available'] == true;
 
   List<Map<String, dynamic>>? _lists;
@@ -916,7 +921,7 @@ class _ProductFormState extends State<ProductForm> {
       await _t.send('PUT', '/v1/trade-floors', body: {'item_id': _id, 'floor_kobo': floorKobo});
       said.add('Lowest price set');
     }
-    if (_count != null && _count != _int(_it['stock'])) {
+    if (_count != null && _count != _countWas) {
       await _t.send(
         'POST',
         '/v1/stock/movements',
@@ -1082,6 +1087,16 @@ class _ProductFormState extends State<ProductForm> {
                     ),
             ),
         ],
+        // What a sale of it lowers (S2, what-a-business-buys.md §4.5): its
+        // stock item, how many one sale uses, its count; chosen here.
+        CountedByRow(
+          auth: widget.auth,
+          product: _id,
+          name: _it['name'] as String? ?? '',
+          sizes: sizes,
+          canEdit: widget.canEdit,
+          onChanged: (n) => setState(() => _count = _countWas = n),
+        ),
         if (!sizes)
           TkFormRow(
             title: 'In stock',

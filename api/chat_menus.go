@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -412,6 +413,14 @@ func stepsCheck(kind, v string) string {
 		if !refAnswer.MatchString(v) {
 			return "menu.check.ref"
 		}
+	case "saved", "saved_place", "payee":
+		if _, err := saved.Name(v); err != nil {
+			return "menu.check.saved"
+		}
+	case "account":
+		if _, err := saved.AccountNumber(v); err != nil {
+			return "menu.check.account"
+		}
 	}
 	if utf8.RuneCountInString(v) > 150 {
 		return "menu.check.long"
@@ -598,7 +607,7 @@ func (s *Server) formDone(ctx context.Context, c *chat, rest string) error {
 			values[f.Key] = ""
 			continue
 		}
-		label, _ := formLabel(word(c.lang.Tag, askWordID(a, f), f.Ask))
+		label, _ := askLabel(c.lang.Tag, a, f)
 		missing = append(missing, label)
 	}
 	if len(missing) > 0 {

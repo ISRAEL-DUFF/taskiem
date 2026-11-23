@@ -30,6 +30,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/notify"
 	"github.com/israel-duff/taskiem/connectors/opay"
 	"github.com/israel-duff/taskiem/connectors/opaybusiness"
+	"github.com/israel-duff/taskiem/connectors/payments"
 	"github.com/israel-duff/taskiem/connectors/payrolla"
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
@@ -112,6 +113,9 @@ type Options struct {
 	// Bills binds the bills platform connector (business links, paying a
 	// linked supplier's bill); nil: its action fails plainly.
 	Bills bills.Ops
+	// Payments binds the payments platform connector (paying people, P1);
+	// nil: its actions fail plainly.
+	Payments payments.Ops
 	// Link binds the link platform connector (business links, L6); nil:
 	// its actions fail plainly.
 	Link linkconn.Ops
@@ -181,6 +185,7 @@ func Register(r *connector.Registry, o Options) error {
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
 		bills.New(o.Bills),
+		payments.New(o.Payments),
 		linkconn.New(o.Link),
 		stock.New(o.Stock),
 		invoices.New(o.Invoices),

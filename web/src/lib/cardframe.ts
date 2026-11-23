@@ -1,7 +1,7 @@
 // The card frame (docs/spec/chat-tools.md §3): what a document card shows
 // on its top line and its progress, from the event it carries.
 
-import { isDelivery, type DocCard } from "./linkchat";
+import { isDelivery, transferExpired, type DocCard } from "./linkchat";
 
 export type Tone = "lime" | "warn" | "danger" | "plain";
 
@@ -75,6 +75,11 @@ const INVOICE: Record<string, CardStatus> = {
   queried: { word: "Queried", tone: "warn" },
   resolved: { word: "Settled", tone: "lime" },
   reminder: { word: "Reminder", tone: "warn" },
+  // A number given to pay it by transfer (the payments flow, part 1).
+  transfer: { word: "By transfer", tone: "warn" },
+  // The number paid into, in full or in part.
+  transfer_paid: { word: "Paid", tone: "lime" },
+  transfer_part: { word: "Part paid", tone: "warn" },
 };
 
 /** The card's pill and progress. */
@@ -98,6 +103,12 @@ export function cardStatus(card: DocCard, now = Date.now()): CardStatus {
   // A change that answers an offer is the seller's counter.
   if (order && card.event === "change" && card.was_kobo !== undefined)
     return { word: "Counter", tone: "warn", step: 0 };
+  // A number that ran out with nothing landed: the seller's invoice is
+  // to pay again; the buyer's number is expired.
+  if (!order && transferExpired(card, now))
+    return card.doc === "invoice"
+      ? { word: "To pay", tone: "lime" }
+      : { word: "Expired", tone: "plain" };
   const s = (order ? ORDER : INVOICE)[card.event];
   return s ?? { word: card.event.replaceAll("_", " "), tone: "plain" };
 }
@@ -120,6 +131,9 @@ export function isDiary(card: DocCard, mine: boolean): boolean {
     card.event !== "ordered" &&
     card.event !== "offered" &&
     card.event !== "bill" &&
+    card.event !== "transfer" &&
+    card.event !== "transfer_paid" &&
+    card.event !== "transfer_part" &&
     card.event !== "proposed"
   );
 }

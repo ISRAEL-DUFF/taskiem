@@ -46,6 +46,41 @@ func (d *decider) formBegin(sc scope, s *wd.Step, inst string, act map[string]an
 	if f.To.Role != "" {
 		to["role"] = f.To.Role
 	}
+	if f.To.Member != "" {
+		// One member, by id: their request opens in the app and the web
+		// (device fields §2).
+		r, err := engine.Resolve(f.To.Member, act, false)
+		if err != nil {
+			d.fail(inst, "expression", err)
+			return d.onError(sc, s, inst, true)
+		}
+		id, err := uuid.Parse(stringify(r))
+		if err != nil {
+			d.fail(inst, "form", fmt.Errorf("the form step's member is not a member's id: %q", stringify(r)))
+			return d.onError(sc, s, inst, true)
+		}
+		to["member"] = id.String()
+	}
+	if f.To.Link != "" {
+		// The person working a business link (device fields D1): a link's
+		// id, or the linked business's; the api role finds the link.
+		r, err := engine.Resolve(f.To.Link, act, false)
+		if err != nil {
+			d.fail(inst, "expression", err)
+			return d.onError(sc, s, inst, true)
+		}
+		id, err := uuid.Parse(stringify(r))
+		if err != nil {
+			d.fail(inst, "form", fmt.Errorf("the form step's link is not a link's or a business's id: %q", stringify(r)))
+			return d.onError(sc, s, inst, true)
+		}
+		to["link"] = id.String()
+	}
+	if f.To.Starter {
+		// Whoever started the run (made tools M4): found by the runtime
+		// from the run when it records the request.
+		to["starter"] = true
+	}
 	if len(to) == 0 {
 		d.fail(inst, "form", fmt.Errorf("the form step's recipient is empty"))
 		return d.onError(sc, s, inst, true)

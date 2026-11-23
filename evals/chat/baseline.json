@@ -4,14 +4,15 @@
   "provider": "fake",
   "model": "heuristic",
   "summary": {
-    "cases": 44,
+    "cases": 58,
     "errors": 0,
     "route_accuracy": 0.9286,
     "spec_accuracy": 1,
     "refusal_accuracy": 0.75,
+    "tool_accuracy": 1,
     "usage": {
-      "input_tokens": 23878,
-      "output_tokens": 829,
+      "input_tokens": 36343,
+      "output_tokens": 1210,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
     },
@@ -19,14 +20,15 @@
   },
   "by_language": {
     "en": {
-      "cases": 11,
+      "cases": 19,
       "errors": 0,
       "route_accuracy": 0.5,
       "spec_accuracy": 1,
       "refusal_accuracy": 0.5,
+      "tool_accuracy": 1,
       "usage": {
-        "input_tokens": 6124,
-        "output_tokens": 275,
+        "input_tokens": 13235,
+        "output_tokens": 491,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       },
@@ -38,6 +40,7 @@
       "route_accuracy": 1,
       "spec_accuracy": 1,
       "refusal_accuracy": 1,
+      "tool_accuracy": 0,
       "usage": {
         "input_tokens": 4282,
         "output_tokens": 125,
@@ -52,6 +55,7 @@
       "route_accuracy": 1,
       "spec_accuracy": 1,
       "refusal_accuracy": 0,
+      "tool_accuracy": 0,
       "usage": {
         "input_tokens": 4280,
         "output_tokens": 127,
@@ -61,14 +65,15 @@
       "cost_usd": null
     },
     "pcm": {
-      "cases": 9,
+      "cases": 15,
       "errors": 0,
       "route_accuracy": 1,
       "spec_accuracy": 1,
       "refusal_accuracy": 1,
+      "tool_accuracy": 1,
       "usage": {
-        "input_tokens": 4887,
-        "output_tokens": 171,
+        "input_tokens": 10241,
+        "output_tokens": 336,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       },
@@ -80,6 +85,7 @@
       "route_accuracy": 1,
       "spec_accuracy": 1,
       "refusal_accuracy": 0,
+      "tool_accuracy": 0,
       "usage": {
         "input_tokens": 4305,
         "output_tokens": 131,
@@ -970,6 +976,295 @@
       "usage": {
         "input_tokens": 525,
         "output_tokens": 8,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-tool-fuel-spent",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "fuel-log amount=4500 what=diesel",
+      "got": "fuel-log amount=4500 what=diesel",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 887,
+        "output_tokens": 36,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-tool-fuel-bought",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "fuel-log amount=12000",
+      "got": "fuel-log amount=12000 what=the",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 891,
+        "output_tokens": 35,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-tool-rider-saved",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "saved",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "rider-fee to=@warehouse",
+      "got": "rider-fee to=@warehouse",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 895,
+        "output_tokens": 28,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-tool-leave",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "leave-left who=musa",
+      "got": "leave-left who=Musa",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 892,
+        "output_tokens": 27,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-tool-fuel",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "fuel-log amount=4500 what=diesel",
+      "got": "fuel-log amount=4500 what=diesel",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 892,
+        "output_tokens": 36,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-tool-rider-saved",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "saved",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "rider-fee to=@warehouse",
+      "got": "rider-fee to=@warehouse",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 897,
+        "output_tokens": 28,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-tool-leave",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "leave-left who=musa",
+      "got": "leave-left who=Musa",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 893,
+        "output_tokens": 27,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-own-send",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "own",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 886,
+        "output_tokens": 22,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-own-owes",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "own",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 888,
+        "output_tokens": 24,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-own-invoice",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "own",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 889,
+        "output_tokens": 25,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "en-own-help",
+      "kind": "tool",
+      "language": "en",
+      "tags": [
+        "tool",
+        "own",
+        "en"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 883,
+        "output_tokens": 19,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-own-send",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "own",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 890,
+        "output_tokens": 24,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-own-owes",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "own",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 891,
+        "output_tokens": 25,
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0
+      }
+    },
+    {
+      "id": "pcm-own-status",
+      "kind": "tool",
+      "language": "pcm",
+      "tags": [
+        "tool",
+        "own",
+        "pcm"
+      ],
+      "status": "ok",
+      "expected": "taskiem",
+      "got": "taskiem:command",
+      "correct": true,
+      "model": "heuristic",
+      "usage": {
+        "input_tokens": 891,
+        "output_tokens": 25,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }

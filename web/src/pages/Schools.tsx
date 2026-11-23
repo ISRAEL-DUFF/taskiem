@@ -1,3 +1,4 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, get, patch, post, put } from "../api";
@@ -91,6 +92,7 @@ export function SchoolTabs() {
       <NavLink to="/schools/debtors">Debtors</NavLink>
       <NavLink to="/schools/clearance">Clearance</NavLink>
       {me?.roles.includes("owner") && <NavLink to="/settings/schools">Settings</NavLink>}
+      <AreaPageTabs areas={["schools"]} />
     </nav>
   );
 }

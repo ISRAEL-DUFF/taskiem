@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import { ocrBase } from "./scripts/ocr-version.mjs";
 
 // The embeddable bundle (docs/embedding.md): one self-contained classic
 // script, /embed/v1/taskiem.js, with its styles inlined (they go into each
@@ -8,7 +9,7 @@ import { fileURLToPath } from "node:url";
 // which the server serves with its own cache policy (api/embedframe.go).
 export default defineConfig({
   plugins: [react()],
-  define: { "process.env.NODE_ENV": JSON.stringify("production") },
+  define: { "process.env.NODE_ENV": JSON.stringify("production"), __OCR_BASE__: JSON.stringify(ocrBase()) },
   build: {
     outDir: "dist/embed/v1",
     emptyOutDir: true,

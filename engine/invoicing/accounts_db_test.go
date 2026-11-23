@@ -109,7 +109,7 @@ func TestAccountsIssuedAndPaid(t *testing.T) {
 	}
 	in := rails.ins[0]
 	cust, _ := in["customer"].(map[string]any)
-	if in["amount_kobo"] != int64(2500000) || in["expires_minutes"] != 30 || in["description"] != "Invoice "+x.Number ||
+	if in["amount_kobo"] != int64(2500000) || in["expires_minutes"] != 60 || in["description"] != "Invoice "+x.Number ||
 		cust["email"] != "invoices+inv0001@forms.test" {
 		t.Errorf("rail was asked %+v", in)
 	}

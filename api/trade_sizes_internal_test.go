@@ -76,11 +76,11 @@ func TestLowByProduct(t *testing.T) {
 	items := []stock.Item{
 		{ID: "rice", Name: "Rice", Stock: low(1), Reorder: low(5)},
 		{ID: "am", Name: "Air Max 90"},
-		{ID: "a42", Name: "Air Max 90 – 42", VariantOf: "am", Stock: low(0), Reorder: low(2)},
-		{ID: "a43", Name: "Air Max 90 – 43", VariantOf: "am", Stock: low(1), Reorder: low(2)},
+		{ID: "a42", Name: "Air Max 90 – 42", VariantOf: "am", Available: true, Stock: low(0), Reorder: low(2)},
+		{ID: "a43", Name: "Air Max 90 – 43", VariantOf: "am", Available: true, Stock: low(1), Reorder: low(2)},
 		{ID: "rn", Name: "Runner"},
-		{ID: "r40", Name: "Runner – 40", VariantOf: "rn", Stock: low(0), Reorder: low(1)},
-		{ID: "r41", Name: "Runner – 41", VariantOf: "rn", Stock: low(9), Reorder: low(1)},
+		{ID: "r40", Name: "Runner – 40", VariantOf: "rn", Available: true, Stock: low(0), Reorder: low(1)},
+		{ID: "r41", Name: "Runner – 41", VariantOf: "rn", Available: true, Stock: low(9), Reorder: low(1)},
 	}
 	got := lowByProduct(items)
 	want := []string{"Rice", "Air Max 90 (2 sizes and colours)", "Runner – 40"}

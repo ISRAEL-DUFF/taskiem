@@ -92,6 +92,7 @@ type decider struct {
 	started               history.RunStartedPayload
 	trigger               any
 	env                   map[string]any
+	saved                 map[string]any
 	runInfo               map[string]any
 	policies              map[string]snapshot
 	terminal              bool
@@ -152,6 +153,10 @@ func (d *decider) apply(typ, inst string, attempt int, raw json.RawMessage, seq 
 		d.env, _ = m["env"].(map[string]any)
 		if d.env == nil {
 			d.env = map[string]any{}
+		}
+		d.saved, _ = m["saved"].(map[string]any)
+		if d.saved == nil {
+			d.saved = map[string]any{}
 		}
 		d.runInfo, _ = m["run"].(map[string]any)
 		d.policies = map[string]snapshot{}
@@ -1401,6 +1406,7 @@ func (d *decider) activation(sc scope, _ map[string]any) map[string]any {
 		"steps":   steps,
 		"run":     d.runRoot(sc),
 		"env":     d.env,
+		"saved":   d.saved,
 	}
 	if sc.iter != nil {
 		act["item"] = sc.iter.item

@@ -1009,6 +1009,9 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 				}
 			}
 			if len(revoked) > 0 {
+				if err := dropLeaverLinksTx(ctx, tx, c.tenant, user); err != nil {
+					return err
+				}
 				if err := push.DropOrphansTx(ctx, tx, user); err != nil {
 					return err
 				}

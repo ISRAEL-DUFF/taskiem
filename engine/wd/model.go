@@ -31,6 +31,13 @@ type Definition struct {
 	// step using it gets back, each an expression over its top-level
 	// steps.
 	Outputs []Output `json:"outputs,omitempty"`
+	// Roles are who may start the workflow by hand (decision 0073):
+	// members holding one of them, beside run.start; owners always may.
+	// Empty: everyone with run.start.
+	Roles []string `json:"roles,omitempty"`
+	// Tool declares the workflow a tool in the chat (decision 0073): its
+	// name, command and answer. Not part of what a run does.
+	Tool *Tool `json:"tool,omitempty"`
 
 	byID   map[string]*Step
 	parent map[string]*Step // nested step id -> enclosing control (or on_error owner) step
@@ -245,6 +252,9 @@ type SignalConfig struct {
 	Event       string `json:"event"`
 	Correlation string `json:"correlation"`
 	Timeout     string `json:"timeout,omitempty"`
+	// Pages: a page's button may send this signal to a run waiting here
+	// (docs/spec/pages.md §7), as whoever pressed it, after a Yes.
+	Pages bool `json:"pages,omitempty"`
 }
 
 type ApprovalConfig struct {
@@ -263,8 +273,8 @@ type ApprovalConfig struct {
 type FormConfig struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
-	// To is who is asked: a phone or email expression, or a role of
-	// members (whose link opens in the app).
+	// To is who is asked: a phone or email expression, a role of members
+	// or one member (whose request opens in the app), or a link's person.
 	To FormTo `json:"to"`
 	// Via are the channels, in order: sms, email.
 	Via []string `json:"via,omitempty"`
@@ -283,11 +293,61 @@ type FormConfig struct {
 	OnTimeout string `json:"on_timeout,omitempty"`
 }
 
-// FormTo is a form step's recipient: exactly one of the three.
+// FormTo is a form step's recipient, a person (docs/spec/device-fields.md
+// §2): exactly one of a phone or an email (expressions over the run, asked
+// by a one-time link), a role of members, one member (an id, or an
+// expression giving one), or the person working a business link. Starter
+// is the string "starter" written as `to` (made tools M4), parsed so the
+// validator can refuse it in plain words.
 type FormTo struct {
-	Phone string `json:"phone,omitempty"`
-	Email string `json:"email,omitempty"`
-	Role  string `json:"role,omitempty"`
+	Phone   string `json:"phone,omitempty"`
+	Email   string `json:"email,omitempty"`
+	Role    string `json:"role,omitempty"`
+	Member  string `json:"member,omitempty"`
+	Link    string `json:"link,omitempty"`
+	Starter bool   `json:"-"`
+}
+
+type formToFields FormTo
+
+// UnmarshalJSON reads an object, or the string "starter".
+func (t *FormTo) UnmarshalJSON(b []byte) error {
+	var s string
+	if json.Unmarshal(b, &s) == nil {
+		*t = FormTo{Starter: s == "starter"}
+		return nil
+	}
+	return json.Unmarshal(b, (*formToFields)(t))
+}
+
+// MarshalJSON writes "starter", or the object.
+func (t FormTo) MarshalJSON() ([]byte, error) {
+	if t.Starter {
+		return json.Marshal("starter")
+	}
+	return json.Marshal(formToFields(t))
+}
+
+// Kind is which of the recipient's shapes is set: phone, email, role,
+// member, link or starter; "" for none and "several" for more than one.
+func (t FormTo) Kind() string {
+	kind := ""
+	for _, kv := range [][2]string{{"phone", t.Phone}, {"email", t.Email}, {"role", t.Role}, {"member", t.Member}, {"link", t.Link}} {
+		if kv[1] == "" {
+			continue
+		}
+		if kind != "" {
+			return "several"
+		}
+		kind = kv[0]
+	}
+	if t.Starter {
+		if kind != "" {
+			return "several"
+		}
+		return "starter"
+	}
+	return kind
 }
 
 type TransformConfig struct {
@@ -588,11 +648,20 @@ func (d *Definition) ValidateInputs(body []byte) []string {
 		if len(d.RawTypes) > 0 {
 			root["types"] = d.RawTypes
 		}
+		if name, _, ok := ScanInput(d); ok {
+			// A scan input takes the code typed, or as the phone read it.
+			if props, ok := root["properties"].(map[string]any); ok {
+				props[name] = scanInputSchema()
+			}
+		}
 		raw, _ := json.Marshal(root)
 		d.inputs = schemacheck.New("https://schemas.taskiem.dev/inputs/"+d.ID+".json", raw)
 	})
 	if d.inputs == nil {
 		return nil
 	}
-	return d.inputs.Validate(body)
+	if msgs := d.inputs.Validate(body); len(msgs) > 0 {
+		return msgs
+	}
+	return d.scanInputProblems(body)
 }

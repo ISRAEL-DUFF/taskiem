@@ -3,8 +3,9 @@
 // **Their shop** (their items at their shop's prices, in sizes and
 // colours, few left, pickup or delivery, and ordering), **Book** (their
 // services and free times), **Your orders with them**, and **Pay** (an
-// order's pay link, opened in the app). Orders and bookings carry an
-// Idempotency-Key, so a second press places nothing twice.
+// order's pay link, opened in the app), then **Their tools**, the
+// business's tools for its customers (my_chat_their_tools.dart). Orders and
+// bookings carry an Idempotency-Key, so a second press places nothing twice.
 
 import 'dart:async';
 
@@ -32,14 +33,21 @@ import 'chats.dart' show ChatAvatar;
 import 'door.dart';
 import 'addresses.dart' show addressLine, maxSavedAddresses, maxSavedLine;
 import 'my_chat.dart';
+import 'my_chat_their_tools.dart';
 import 'order_sheet.dart' show BagBar, QtyStepper;
 import 'people_cards.dart' show shareWithPeople;
 import 'words.dart';
 
 /// The tools button: what a customer can do with the business.
 Future<void> showMyChatTools(BuildContext context, MyChatData d) async {
-  final pick = await showTkSheet<String>(context, (_) => _ToolsSheet(name: d.name));
+  final tools = <CustomerTool>[];
+  final pick = await showTkSheet<String>(context, (_) => _ToolsSheet(d: d, tools: tools));
   if (pick == null || !context.mounted) return;
+  if (pick.startsWith('tool:')) {
+    final tool = tools.where((t) => 'tool:${t.command}' == pick).firstOrNull;
+    if (tool != null) await showTheirToolSheet(context, d, tool, all: tools);
+    return;
+  }
   switch (pick) {
     case 'shop':
       await showShopSheet(context, d);
@@ -52,12 +60,34 @@ Future<void> showMyChatTools(BuildContext context, MyChatData d) async {
   }
 }
 
-class _ToolsSheet extends StatelessWidget {
-  const _ToolsSheet({required this.name});
-  final String name;
+class _ToolsSheet extends StatefulWidget {
+  const _ToolsSheet({required this.d, required this.tools});
+  final MyChatData d;
+
+  /// Their tools, as read for this sheet (the caller opens the one picked).
+  final List<CustomerTool> tools;
+
+  @override
+  State<_ToolsSheet> createState() => _ToolsSheetState();
+}
+
+class _ToolsSheetState extends State<_ToolsSheet> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      theirTools(widget.d).then((got) {
+        if (!mounted) return;
+        setState(() => widget.tools
+          ..clear()
+          ..addAll(got));
+      }),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final name = widget.d.name;
     final look = TkLook.of(context);
     Widget row(String key, String icon, Color colour, String title, String sub) => TkListRow(
       title: title,
@@ -85,6 +115,10 @@ class _ToolsSheet extends StatelessWidget {
                 row('pay', 'b-card', look.orange, 'Pay', 'What’s due on your orders'),
               ],
             ),
+            if (widget.tools.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              TheirToolsSection(tools: widget.tools, onPick: (t) => Navigator.of(context).pop('tool:${t.command}')),
+            ],
           ],
         ),
       ),

@@ -336,7 +336,7 @@ test("a product's trade price list price and who it is shared with, saved from c
   await expect(sheet.getByTestId("shared-with")).toHaveText("No one yet");
   await expect(sheet).toContainText("updates the price for every business on the Trade price list");
   await sheet.getByLabel("Trade price list in naira").fill("74,000");
-  await sheet.getByRole("button", { name: /^Change/ }).click();
+  await sheet.getByRole("button", { name: /^Change who sees/ }).click();
   await sheet.getByRole("checkbox", { name: /Rivers Foods/ }).check();
   await expect(sheet.getByTestId("shared-with")).toContainText("Rivers Foods");
   await axeBoth(owner, "a product's price list and sharing");

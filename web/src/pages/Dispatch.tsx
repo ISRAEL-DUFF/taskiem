@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import {
   EmptyState,
@@ -46,7 +46,12 @@ import {
   type SettingsForm,
 } from "../lib/dispatch";
 import { StorefrontTabs } from "./Storefront";
+import { SavedFill } from "./SavedFill";
+import { bankCodeFor } from "../lib/saved";
 import { useStepUp, type StepUpProof } from "../stepup";
+import { useAuth } from "../auth";
+import { PaySheet } from "./PaySheet";
+import { RIDER_PAY_FIELDS, riderFill } from "../lib/paymessage";
 
 // Deliveries by the business's riders (dispatch D2 to D5; docs/dispatch.md):
 // an order's delivery on its page, the day's deliveries with how they are
@@ -637,6 +642,12 @@ export function RidersPayPage() {
   const pay = useLoad(() => get<RidersPay>("/v1/riders/pay"), []);
   const [remitting, setRemitting] = useState<Owed | null>(null);
   const [banking, setBanking] = useState<PayLine | null>(null);
+  // Pay one rider now, to the bank account kept for their pay (the Pay
+  // sheet, checked with the bank and confirmed with a passkey).
+  const { can } = useAuth();
+  const mayPay = can("money.pay");
+  const [paying, setPaying] = useState<{ line: PayLine; from: DOMRect }>();
+  const navigate = useNavigate();
   // A rider's bank account is where their money goes: changing it asks the
   // person to confirm it is them.
   const step = useStepUp();
@@ -705,6 +716,15 @@ export function RidersPayPage() {
             >
               Pay riders now
             </button>
+            {mayPay && p.lines.some((l) => l.bank && l.net_kobo > 0) && (
+              <button
+                type="button"
+                onClick={() => navigate("/payments/several?riders=1")}
+                data-testid="riders-pay-all"
+              >
+                Pay all riders
+              </button>
+            )}
             <button type="button" onClick={() => setSetup(true)}>
               {p.workflow_id ? "Change the weekly pay" : "Set up weekly pay"}
             </button>
@@ -771,6 +791,21 @@ export function RidersPayPage() {
                   }
                   testid="rider-due"
                 >
+                  {mayPay && l.bank && (
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={(e) =>
+                        setPaying({
+                          line: l,
+                          from: e.currentTarget.getBoundingClientRect(),
+                        })
+                      }
+                      data-testid="rider-pay"
+                    >
+                      Pay<span className="sr-only"> {l.rider}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="small"
@@ -785,8 +820,8 @@ export function RidersPayPage() {
           )}
           {p.payouts.length > 0 && (
             <details open={p.payouts.some((x) => x.status === "pending")}>
-              <summary>Recent payouts</summary>
-              <Items label="Recent payouts">
+              <summary>Recent payments to riders</summary>
+              <Items label="Recent payments to riders">
                 {p.payouts.map((x) => (
                   <Row
                     key={x.payout_id}
@@ -848,6 +883,24 @@ export function RidersPayPage() {
         />
       )}
       {step.modal}
+      {paying && (
+        <PaySheet
+          title={`Pay ${paying.line.rider}`}
+          actionId="pay.person"
+          fields={RIDER_PAY_FIELDS}
+          initial={riderFill(paying.line.rider_id, paying.line.net_kobo)}
+          from="tools"
+          rect={paying.from}
+          lead={
+            <p className="pay-lead" data-testid="pay-rider-lead">
+              To {paying.line.rider}'s bank account, the one kept for their
+              pay: {paying.line.bank}
+            </p>
+          }
+          onClose={() => setPaying(undefined)}
+          onPaid={reload}
+        />
+      )}
       {setup && (
         <PaySetupModal
           onClose={() => setSetup(false)}
@@ -942,6 +995,7 @@ function BankModal({
   );
   const [code, setCode] = useState("");
   const [number, setNumber] = useState("");
+  const [fillProblem, setFillProblem] = useState("");
   const act = useAction();
   const problem = bankProblem(code, number);
   return (
@@ -971,6 +1025,22 @@ function BankModal({
           authenticator code. Their bank confirms the name before the first
           payout, and you see it when you approve.
         </p>
+        <div className="saved-fill-line">
+          <SavedFill
+            kind="bank_account"
+            label={`${line.rider}'s bank account`}
+            onPick={(x, n, why) => {
+              setCode(list.length > 0 ? bankCodeFor(list, x.details) : (x.details.bank_code ?? ""));
+              setNumber(n.replace(/\D/g, "").slice(0, 10));
+              setFillProblem(why ?? "");
+            }}
+          />
+        </div>
+        {fillProblem && (
+          <p className="error-text saved-fill-note" role="alert" data-testid="saved-fill-note">
+            {fillProblem}
+          </p>
+        )}
         {list.length > 0 ? (
           <Field label="Bank">
             <select value={code} onChange={(e) => setCode(e.target.value)}>

@@ -145,9 +145,11 @@ function stockRows(data: unknown): ToolRow[] {
       const shown: StockItem = sizes
         ? { ...it, stock: sizes.stock, low: sizes.low > 0 }
         : it;
-      const price =
-        it.price_kobo !== undefined
-          ? `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}`
+      // A material is counted, never sold (what a business buys §4.1).
+      const price = it.material
+        ? "Not sold"
+        : it.price_kobo !== undefined
+          ? `${formatPrice(it.price_kobo)}${it.unit && (it.uses ?? 1) <= 1 ? ` a ${it.unit}` : ""}`
           : "No price yet";
       return {
         id: it.id,
@@ -272,7 +274,8 @@ export const TOOLS: Tool[] = [
     perm: "table.read",
     url: "/v1/stock",
     page: "/storefront/stock",
-    rows: stockRows,
+    // What is sold: a material is on Stock only.
+    rows: (data) => stockRows(data).filter((r) => !(r.data as StockItem).material),
     line: (r) => count(r.length, "item"),
     chips: [
       { label: "Low stock", tag: "low" },
@@ -652,4 +655,106 @@ export function filterRows(
       ),
   );
   return [...named, ...rest];
+}
+
+// ---------------------------------------------------------------------
+// Your tools (made tools M1, decision 0073): a workflow the business made
+// into a tool, called by its command. GET /v1/tools lists those the person
+// may use; they show as tiles after the built-in ones, and "/" with their
+// command or the start of their name finds them.
+
+/** How much a tool asks before it runs: answers at once, yes, or yes and
+ * a passkey. */
+export type Care = "answers" | "yes" | "step_up";
+
+/** One of the business's tools (MadeTool). */
+export interface MadeTool {
+  workflow_id: string;
+  environment: string;
+  version: number;
+  command: string;
+  name: string;
+  about: string;
+  says: string[];
+  icon?: string;
+  care: { level: Care; because?: string[] };
+  /** text, card or list; none when it answers with how its run ended. */
+  answer?: string;
+  always_ask: boolean;
+  /** Its form's fields. */
+  inputs?: Record<string, unknown>;
+}
+
+/** The care a person meets: an owner's "always ask" makes one that would
+ * answer at once ask yes first. */
+export const madeCare = (t: Pick<MadeTool, "care" | "always_ask">): Care =>
+  t.always_ask && t.care.level === "answers" ? "yes" : t.care.level;
+
+// A tool's icon is one of a fixed set (wd-v1's tool.icon); each is drawn
+// with the app's own icon closest to it.
+const MADE_ICONS: Record<string, string> = {
+  receipt: "invoices",
+  cart: "orders",
+  people: "members",
+  person: "members",
+  truck: "package",
+  list: "tables",
+  chart: "reports",
+  wrench: "settings",
+  server: "connections",
+};
+
+/** The app's icon for a tool's. */
+export const madeIcon = (icon?: string): string =>
+  !icon ? "bolt" : (MADE_ICONS[icon] ?? icon);
+
+/** The tools what follows "/" names: by the start of their command, or of
+ * their name or a word of it (slash and exp, log or expense). */
+export function madeToolsFor(tools: MadeTool[], query = ""): MadeTool[] {
+  const q = query.trim().toLowerCase().replace(/^\//, "");
+  if (q === "") return tools;
+  return tools.filter(
+    (t) =>
+      t.command.startsWith(q) ||
+      t.name.toLowerCase().startsWith(q) ||
+      t.name
+        .toLowerCase()
+        .split(/\s+/)
+        .some((w) => w.startsWith(q)),
+  );
+}
+
+/** A tool the words reach, and the words for its form (made tools §6,
+ * "with words after it"): a slash, the command expense and "4500 diesel", or a
+ * sentence that starts with a phrase it says ("i bought fuel for 4500").
+ * None for a slash command alone (the panel opens it), for words that name no
+ * tool of the person's, or for a phrase two tools say (the chat asks). */
+export function madeToolWords(
+  tools: MadeTool[],
+  text: string,
+): { tool: MadeTool; words: string; by: "command" | "phrase" } | undefined {
+  const t = text.trim().replace(/\s+/g, " ");
+  const cmd = /^\/([a-z][a-z0-9-]*) (.+)$/.exec(t);
+  if (cmd) {
+    const tool = tools.find((x) => x.command === cmd[1]);
+    // The reader takes at most 300 characters (POST …/read); more is cut
+    // rather than refused, so the form still opens filled in.
+    const words = [...(cmd[2] ?? "").trim()].slice(0, 300).join("");
+    return tool ? { tool, words, by: "command" } : undefined;
+  }
+  const folded = t.toLowerCase();
+  let best: { tool: MadeTool; len: number } | undefined;
+  let tie = false;
+  for (const tool of tools)
+    for (const ph of tool.says ?? []) {
+      const p = ph.trim().toLowerCase().replace(/\s+/g, " ");
+      if (!p || !(folded === p || folded.startsWith(`${p} `))) continue;
+      if (best && best.len === p.length && best.tool.command !== tool.command) tie = true;
+      else if (!best || p.length > best.len) {
+        best = { tool, len: p.length };
+        tie = false;
+      }
+    }
+  if (!best || tie) return undefined;
+  return { tool: best.tool, words: [...t.slice(best.len).trim()].slice(0, 300).join(""), by: "phrase" };
 }

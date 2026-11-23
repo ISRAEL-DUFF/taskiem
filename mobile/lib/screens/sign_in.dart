@@ -447,10 +447,13 @@ class _ChatSignInState extends State<_ChatSignIn> with AuthActing {
 
 /// The code as drawn: six boxes, a digit in each. One field under them
 /// takes the typing, a paste and the phone's offer of the code from a
-/// message; read as one field, "Code".
+/// message; read as one field, "Code". [obscure] shows a dot for each
+/// digit (a PIN), and the field is read as [hint].
 class CodeBoxes extends StatefulWidget {
-  const CodeBoxes({super.key, required this.controller, this.onChanged, this.onSubmitted, this.length = 6});
+  const CodeBoxes({super.key, required this.controller, this.onChanged, this.onSubmitted, this.length = 6, this.obscure = false, this.hint = 'Code'});
   final TextEditingController controller;
+  final bool obscure;
+  final String hint;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final int length;
@@ -501,7 +504,7 @@ class _CodeBoxesState extends State<CodeBoxes> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: focused && i == text.length.clamp(0, widget.length - 1) ? t.ring : const [],
                       ),
-                      child: Text(i < text.length ? text[i] : '', style: tkDisplay(size: 22, color: t.text)),
+                      child: Text(i < text.length ? (widget.obscure ? '•' : text[i]) : '', style: tkDisplay(size: 22, color: t.text)),
                     ),
                   ),
                 ],
@@ -518,13 +521,14 @@ class _CodeBoxesState extends State<CodeBoxes> {
                   focusNode: _focus,
                   autofocus: true,
                   keyboardType: TextInputType.number,
-                  autofillHints: const [AutofillHints.oneTimeCode],
+                  autofillHints: widget.obscure ? null : const [AutofillHints.oneTimeCode],
+                  obscureText: widget.obscure,
                   showCursor: false,
                   enableInteractiveSelection: false,
                   onChanged: widget.onChanged,
                   onSubmitted: widget.onSubmitted,
                   style: tkText(size: 1, color: t.text),
-                  decoration: const InputDecoration.collapsed(hintText: 'Code'),
+                  decoration: InputDecoration.collapsed(hintText: widget.hint),
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.length)],
                 ),
               ),

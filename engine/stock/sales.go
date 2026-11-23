@@ -197,10 +197,9 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		return CounterSale{}, err
 	}
 	var x CounterSale
-	var moves []uuid.UUID
 	fresh := false
 	record := func(tx pgx.Tx) error {
-		moves, fresh = nil, false
+		fresh = false
 		var err error
 		x, err = scanSale(tx.QueryRow(ctx, `SELECT `+saleCols+` FROM stock_sales WHERE tenant_id = $1 AND key = $2`, tenant, in.Key))
 		if err == nil {
@@ -285,12 +284,11 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 		for _, id := range order {
 			l := each[id]
 			d := -l.Quantity
-			m, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
-				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo})
-			if err != nil {
+			// A product counted by no stock item moves nothing.
+			if _, err := RecordTx(ctx, tx, tenant, Move{ItemID: l.ItemID, Item: l.Item, Reason: Sale, Delta: &d, Reference: x.Reference, Actor: in.Actor,
+				Key: "sale:" + x.ID.String() + ":" + l.ItemID, CostKobo: l.CostKobo}); err != nil && !errors.Is(err, ErrNotCounted) {
 				return err
 			}
-			moves = append(moves, m.ID)
 		}
 		return nil
 	}
@@ -309,11 +307,6 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 	if !fresh {
 		x.Replayed = true
 		return s.withShort(ctx, tenant, x)
-	}
-	for _, id := range moves {
-		if _, err := s.Apply(ctx, tenant, id); err != nil {
-			break // recorded: the sweep sends it again
-		}
 	}
 	if x.Status == "waiting" {
 		if _, err := s.MatchSales(ctx, tenant); err != nil {

@@ -77,11 +77,17 @@ func (p *Purchases) DraftPurchase(ctx context.Context, tenant uuid.UUID, a Draft
 			if !ok {
 				return ErrNoItem
 			}
-			cost := l.CostKobo
-			if cost == 0 && it.CostKobo != nil {
-				cost = *it.CostKobo
+			var cost *int64
+			if l.CostKobo != 0 {
+				cost = &l.CostKobo
 			}
-			lines = append(lines, PurchaseLine{ItemID: it.ID, Item: it.Name, Unit: it.Unit, Quantity: l.Quantity, CostKobo: cost})
+			// A workflow's line names one of the items it counts: it adds
+			// to that item's stock.
+			line, err := LineOf(ctx, tx, tenant, it, l.Quantity, cost, a.Actor)
+			if err != nil {
+				return err
+			}
+			lines = append(lines, line)
 		}
 		x, err := DraftTx(ctx, tx, tenant, DraftIn{Supplier: who.ID, Lines: lines, Note: a.Note, Actor: a.Actor, Key: a.Key})
 		out = []Purchase{x}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -168,7 +167,10 @@ func (s *Server) waFlowChatPin(ctx context.Context, row flowRow, req whatsapp.Fl
 		if pinNow, err := s.waPinInfo(ctx, user); err != nil {
 			s.Logger.Error("whatsapp: a chat PIN", "err", err)
 			return screen(wrong)
-		} else if pinNow.Set {
+		} else if removed, err := s.pinWasRemoved(ctx, user); err != nil {
+			s.Logger.Error("whatsapp: a chat PIN", "err", err)
+			return screen(wrong)
+		} else if pinNow.Set || removed {
 			const m = "You have a chat PIN already. To change it, sign in on the web (send sign in for a link), add a passkey or an authenticator, then change it on your Account page."
 			return finish("refused", m)
 		}
@@ -179,28 +181,19 @@ func (s *Server) waFlowChatPin(ctx context.Context, row flowRow, req whatsapp.Fl
 		audit("whatsapp.pin.set", map[string]any{"via": "chat"})
 		return finish("done", "Your chat PIN is set. Keep it to yourself: it proves this chat is yours.")
 	}
-	var hash string
-	var locked *time.Time
-	err := s.Store.Pool.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_state($1)`, user).Scan(&hash, &locked)
+	t, err := s.tryPin(ctx, user, pin)
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case err != nil:
+		s.Logger.Error("whatsapp: checking a PIN", "err", err)
+		return screen(wrong)
+	case t.None:
 		const m = "You have no chat PIN. Link this number again from the web app."
 		return finish("refused", m)
-	case err != nil:
-		s.Logger.Error("whatsapp: reading a PIN", "err", err)
-		return screen(wrong)
-	case locked != nil:
-		m := "Your PIN is locked after too many wrong tries, until " + locked.UTC().Format("15:04") + " UTC."
+	case t.LockedUntil != nil:
+		m := "Your PIN is locked after too many wrong tries, until " + t.LockedUntil.UTC().Format("15:04") + " UTC."
 		return finish("refused", m)
 	}
-	ok := validPin(pin) && checkPassword(hash, pin)
-	var failures int
-	var nowLocked bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, user, ok, waPinMaxFailures, waPinWindow.String()).
-		Scan(&failures, &nowLocked); err != nil {
-		s.Logger.Error("whatsapp: recording a PIN check", "err", err)
-		return screen(wrong)
-	}
+	ok, failures, nowLocked := t.Right, t.Failures, t.NowLocked
 	if !ok {
 		audit("whatsapp.pin.fail", map[string]any{"failures": failures, "via": "wake"})
 		if nowLocked {

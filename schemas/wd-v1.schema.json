@@ -61,6 +61,17 @@
     "settings": {
       "$ref": "#/$defs/settings"
     },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "description": "Who may start the workflow by hand (decision 0073): members holding one of these roles, beside run.start; owners always may. Held on every way a person starts it: the web and app's Run, the API, and run in the chat apps. Left out: everyone with run.start.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,47}$"
+      }
+    },
     "outputs": {
       "type": "array",
       "minItems": 1,
@@ -103,9 +114,21 @@
           },
           "value": {
             "$ref": "#/$defs/expr"
+          },
+          "public": {
+            "type": "boolean",
+            "description": "A tool may show this output to customers and linked businesses (decision 0073); others are never shown to them."
+          },
+          "x-pii": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]{0,31}$",
+            "description": "The output is personal data of this category: masked in a tool's answer whatever its name."
           }
         }
       }
+    },
+    "tool": {
+      "$ref": "#/$defs/tool"
     }
   },
   "$defs": {
@@ -1226,6 +1249,10 @@
             "correlation": {
               "$ref": "#/$defs/expr"
             },
+            "pages": {
+              "type": "boolean",
+              "description": "A page's button may send this signal to a run waiting here (docs/spec/pages.md §7)"
+            },
             "timeout": {
               "$ref": "#/$defs/duration"
             }
@@ -2286,23 +2313,38 @@
               "maxLength": 1000
             },
             "to": {
-              "type": "object",
-              "additionalProperties": false,
-              "minProperties": 1,
-              "maxProperties": 1,
-              "description": "Who is asked: a phone or email from the run (expressions), or a role of members",
-              "properties": {
-                "phone": {
-                  "type": "string"
+              "description": "Who is asked, a person (docs/spec/device-fields.md §2): a phone or email from the run (expressions, by a one-time link), a role of members, one member (an id or an expression), or the person working a business link (its id, the linked business's id, or an expression giving one; device fields D1). \"starter\" is made tools M4 and refused until then.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "properties": {
+                    "phone": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                    },
+                    "member": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "link": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
                 },
-                "email": {
-                  "type": "string"
-                },
-                "role": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                {
+                  "const": "starter"
                 }
-              }
+              ]
             },
             "via": {
               "type": "array",
@@ -2533,6 +2575,254 @@
       "allOf": [
         {
           "$ref": "#/$defs/stepCommon"
+        }
+      ]
+    },
+    "tool": {
+      "description": "The workflow as a tool in the chat (decision 0073, docs/spec/made-tools.md): its name, command, who it is for and what it answers with. Not part of what a run does. Who may use it is the workflow's roles.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "command",
+        "about"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "command": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,23}$"
+        },
+        "about": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "says": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          }
+        },
+        "icon": {
+          "enum": [
+            "receipt",
+            "box",
+            "cart",
+            "money",
+            "people",
+            "person",
+            "calendar",
+            "clock",
+            "truck",
+            "list",
+            "search",
+            "chat",
+            "bell",
+            "check",
+            "chart",
+            "wrench",
+            "server",
+            "tag",
+            "store",
+            "file"
+          ]
+        },
+        "for": {
+          "enum": [
+            "members",
+            "customers",
+            "linked"
+          ],
+          "default": "members"
+        },
+        "answer": {
+          "$ref": "#/$defs/answer"
+        }
+      }
+    },
+    "answerValue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1500,
+      "description": "Words, or an expression (=...) over outputs (and item, in a list's rows)."
+    },
+    "answerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/answerValue"
+        },
+        "tone": {
+          "enum": [
+            "plain",
+            "good",
+            "warn",
+            "bad"
+          ]
+        }
+      }
+    },
+    "toolButton": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "tool"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,23}$"
+        },
+        "inputs": {
+          "type": "object"
+        },
+        "once": {
+          "type": "boolean"
+        }
+      }
+    },
+    "answer": {
+      "description": "What a tool's run says when it ends (made tools §7): a text, a card or a list, drawn by the API from the run's outputs.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "$ref": "#/$defs/answerValue"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "title"
+          ],
+          "properties": {
+            "type": {
+              "const": "card"
+            },
+            "title": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "ref": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "state": {
+              "$ref": "#/$defs/answerState"
+            },
+            "lines": {
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "value": {
+                    "$ref": "#/$defs/answerValue"
+                  }
+                }
+              }
+            },
+            "amount": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "buttons": {
+              "type": "array",
+              "maxItems": 3,
+              "items": {
+                "$ref": "#/$defs/toolButton"
+              }
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "from",
+            "item"
+          ],
+          "properties": {
+            "type": {
+              "const": "list"
+            },
+            "from": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,39}$"
+            },
+            "title": {
+              "$ref": "#/$defs/answerValue"
+            },
+            "item": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "title": {
+                  "$ref": "#/$defs/answerValue"
+                },
+                "sub": {
+                  "$ref": "#/$defs/answerValue"
+                },
+                "state": {
+                  "$ref": "#/$defs/answerState"
+                }
+              }
+            },
+            "empty": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "actions": {
+              "type": "array",
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/toolButton"
+              }
+            }
+          }
         }
       ]
     }

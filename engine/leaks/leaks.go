@@ -183,14 +183,14 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 			// only where it has none). They stay until closed.
 			{"stock_short", `SELECT m.id::text, NULL::uuid, NULL::uuid, m.short * ` + stockCostSQL + `,
 				'sold ' || m.short || ' more ' || m.item || ' than the stock held' || COALESCE(' (' || m.reference || ')', '') || ', worth ' || ` + nairaSQL("(m.short * "+stockCostSQL+")") + ` || ' at cost'
-				FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.short > 0`},
+				FROM stock_movements m WHERE m.tenant_id = $1 AND m.short > 0`},
 			{"stock_negative", `SELECT m.id::text, NULL::uuid, NULL::uuid, -m.count_after * ` + stockCostSQL + `,
 				m.item || ' went below zero (' || m.count_after || ') in your table, worth ' || ` + nairaSQL("(-m.count_after * "+stockCostSQL+")") + ` || ' at cost'
-				FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.count_after < 0`},
+				FROM stock_movements m WHERE m.tenant_id = $1 AND m.count_after < 0`},
 			{"stock_count", `SELECT m.id::text, NULL::uuid, NULL::uuid, -m.change * ` + stockCostSQL + `,
 				'a count found ' || -m.change || ' ' || m.item || ' fewer than recorded' || COALESCE(' (' || m.reference || ')', '') || ', worth ' || ` + nairaSQL("(-m.change * "+stockCostSQL+")") + ` || ' at cost'
 				FROM stock_movements m LEFT JOIN stock_settings ss ON ss.tenant_id = m.tenant_id
-				WHERE m.tenant_id = $1 AND m.status = 'done' AND m.reason = 'count' AND m.change < 0
+				WHERE m.tenant_id = $1 AND m.reason = 'count' AND m.change < 0
 				  AND (` + stockCostSQL + ` = 0 OR -m.change * ` + stockCostSQL + ` > COALESCE(ss.count_limit_kobo, 500000))`},
 		}
 		current := map[string]map[string]bool{}

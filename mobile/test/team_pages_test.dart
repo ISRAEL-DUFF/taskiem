@@ -9,13 +9,17 @@ import 'package:flutter/services.dart';
 import 'package:taskiem/chat/pick_problem.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
+import 'package:taskiem/app/passkey.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/team_pages.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
+import 'passkey_test.dart' show FakePasskeys;
 import 'guidelines.dart';
+import 'saved_stub.dart';
 import 'support.dart';
 
 final _now = DateTime.utc(2026, 11, 12, 12);
@@ -173,7 +177,7 @@ void main() {
     expect(repeatWords({'every': 'week', 'day': 'mon', 'at': '09:00'}), 'Every Monday at 09:00');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home) async {
+  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {SavedStub? stub}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -185,6 +189,7 @@ void main() {
       f.auth(
         also: (req) async {
           final p = req.url.path;
+          if (stub?.answer(req) case final r?) return r;
           if (req.method == 'GET') {
             return switch (p) {
               '/v1/staff' => ok(_staff),
@@ -250,6 +255,20 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('staff: their number from a saved place’s phone', (t) async {
+    final stub = SavedStub(business: [savedThing('B1', 'business', 'place', 'kitchen', 'The kitchen', 'Yaba', {'line': '3 Herbert Macaulay Way', 'phone': '08035551234'})]);
+    await open(t, (c) => StaffPage(auth: c.auth), stub: stub);
+    await t.tap(find.bySemanticsLabel('Add staff'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number'));
+    await t.pumpAndSettle();
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    expect(find.text('@kitchen · Yaba'), findsOneWidget);
+    await t.tap(find.text('The kitchen'));
+    await t.pumpAndSettle();
+    expect(find.text('08035551234'), findsOneWidget);
+  });
+
   testWidgets('a person: their hours and pay; this month’s figures; a Saturday taken off', (t) async {
     final sent = await open(t, (c) => StaffPersonPage(auth: c.auth, user: 'U2'));
     expect(find.text('Mon to Tue, 08:00 to 16:00; Sat, 10:00 to 18:00'), findsOneWidget);
@@ -272,6 +291,143 @@ void main() {
       'PUT /v1/staff/U2/profile {"title":"Cashier","started_on":"2026-01-05","note":"","pay_kobo":8000000,"pay_per":"month","rota":[{"day":"mon","start":"08:00","end":"16:00"},{"day":"tue","start":"08:00","end":"16:00"}]}',
     );
     await t.pump(const Duration(seconds: 5));
+  });
+
+  /// A staff member's page at 360 wide, with [account] linked (or none)
+  /// and the business's saved bank accounts; PUT …/pay-account asks for
+  /// a passkey first, then links what it was sent. [owner]: an owner
+  /// looking; [pay]: with money.pay.
+  Future<({List<String> sent, FakePasskeys keys})> openPerson(WidgetTester t, {Map<String, dynamic>? account, bool owner = true, bool pay = true}) async {
+    await t.pumpWidget(const SizedBox());
+    t.view.physicalSize = const Size(360, 1300);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final was = passkeys;
+    final keys = FakePasskeys();
+    passkeys = keys;
+    addTearDown(() => passkeys = was);
+    final f = Fixture('chats');
+    final sent = <String>[];
+    var linked = account;
+    final stub = SavedStub(
+      business: [
+        savedThing('A1', 'business', 'bank_account', 'tunde_bank', 'Tunde (Moniepoint)', 'Moniepoint ••4821', {'bank_name': 'Moniepoint', 'account_number': '••4821'}, accountName: 'TUNDE BAKARE'),
+        savedThing('A2', 'business', 'bank_account', 'tunde_gtb', 'Tunde (GTBank)', 'Guaranty Trust Bank ••1190', {'bank_name': 'Guaranty Trust Bank', 'account_number': '••1190'}),
+      ],
+    );
+    http.Response ok(Object? b, [int status = 200]) => http.Response(jsonEncode(b), status, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(
+        also: (req) async {
+          final p = req.url.path;
+          if (stub.answer(req) case final r?) return r;
+          if (req.method == 'GET') {
+            return switch (p) {
+              '/v1/staff/U2' => ok({..._person, 'pay_account': linked}),
+              '/v1/staff/U2/figures' => ok({..._figures, 'period': req.url.queryParameters['period']}),
+              '/v1/payments/banks' => ok({'banks': <Object>[], 'from': 'test'}),
+              _ => null,
+            };
+          }
+          sent.add('${req.method} $p ${req.body}');
+          if (p == '/v1/me/step-up/options') return ok({'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.test'}});
+          if (p == '/v1/staff/U2/pay-account') {
+            final b = jsonDecode(req.body) as Map<String, dynamic>;
+            if (b['passkey'] == null) {
+              return ok({'error': 'confirm with your passkey or authenticator code', 'step_up': 'required', 'methods': ['passkey'], 'operation': 'staff.account', 'target': 'U2'}, 403);
+            }
+            linked = b['saved_id'] == 'A1'
+                ? {'saved_id': 'A1', 'name': 'tunde_bank', 'title': 'Tunde (Moniepoint)', 'bank_name': 'Moniepoint', 'last4': '4821', 'account_name': 'TUNDE BAKARE', 'linked_by': 'Ada Obi', 'linked_at': '2026-11-22T09:00:00Z'}
+                : null;
+            return ok({'pay_account': linked});
+          }
+          if (p == '/v1/payments') return ok({'error': 'stop here', 'code': 'no_provider'}, 409);
+          return ok({'ok': true});
+        },
+      ),
+      now: () => f.at,
+    );
+    final me = chats.auth.me!.toJson();
+    chats.auth.me = Me.fromJson({
+      ...me,
+      'roles': [if (owner) 'owner' else 'shift_manager'],
+      'permissions': [...(me['permissions'] as List).where((x) => x != 'money.pay'), if (pay) 'money.pay'],
+    });
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: StaffPersonPage(auth: chats.auth, user: 'U2')));
+    await settle(t);
+    return (sent: sent, keys: keys);
+  }
+
+  final linkedAccount = {'saved_id': 'A1', 'name': 'tunde_bank', 'title': 'Tunde (Moniepoint)', 'bank_name': 'Moniepoint', 'last4': '4821', 'account_name': 'TUNDE BAKARE'};
+
+  testWidgets('where we pay them: none linked; an owner links a saved account with a passkey, then unlinks it', (t) async {
+    final (:sent, :keys) = await openPerson(t);
+    await t.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+    await settle(t);
+    expect(find.text('Where we pay them'), findsOneWidget);
+    expect(find.text('No account linked'), findsOneWidget);
+    expect(find.text('Paid through Payrolla, not here'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Pay Tunde')), findsNothing, reason: 'nowhere to pay them');
+    await looks(t, 'staff-pay-none');
+    await t.tap(find.bySemanticsLabel(RegExp('^Link an account for Tunde')));
+    await t.pumpAndSettle();
+    expect(find.text('Where we pay Tunde'), findsOneWidget);
+    await snap(t, 'staff-pay-pick');
+    await t.tap(find.text('Tunde (Moniepoint)'));
+    await t.pumpAndSettle();
+    expect(find.text('Pay Tunde here from now on?'), findsOneWidget);
+    await snap(t, 'staff-pay-sure');
+    await t.tap(find.text('Link it'));
+    await settle(t);
+    final puts = sent.where((s) => s.startsWith('PUT /v1/staff/U2/pay-account')).toList();
+    expect(puts, hasLength(2), reason: 'asked first, then with the passkey');
+    expect(puts.first, 'PUT /v1/staff/U2/pay-account {"saved_id":"A1"}');
+    expect(jsonDecode(puts.last.split(' ').skip(2).join(' ')), {'saved_id': 'A1', 'passkey': isA<Map<String, dynamic>>()});
+    expect(sent, contains('POST /v1/me/step-up/options {"operation":"staff.account","target":"U2"}'));
+    expect(keys.asked, hasLength(1));
+    await t.pumpAndSettle();
+    expect(find.text('Tunde (Moniepoint)'), findsOneWidget);
+    expect(find.text('Moniepoint ••4821 · TUNDE BAKARE'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Pay Tunde')), findsOneWidget);
+    // Unlinked, after yes: saved_id null.
+    await t.tap(find.bySemanticsLabel(RegExp('^Unlink Tunde’s account')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Unlink').last);
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PUT /v1/staff/U2/pay-account')).last, contains('"passkey"'));
+    await t.pumpAndSettle();
+    expect(find.text('No account linked'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where we pay them: linked; Pay opens the Pay sheet to the staff member, for wages; not an owner: no Link', (t) async {
+    final (:sent, keys: _) = await openPerson(t, account: linkedAccount, owner: false);
+    await t.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+    await settle(t);
+    expect(find.text('Moniepoint ••4821 · TUNDE BAKARE'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Change where Tunde is paid')), findsNothing, reason: 'owners only');
+    expect(find.bySemanticsLabel(RegExp('^Unlink Tunde’s account')), findsNothing);
+    await t.tap(find.bySemanticsLabel(RegExp('^Pay Tunde')));
+    await settle(t);
+    expect(find.text('Pay Tunde'), findsWidgets);
+    await snap(t, 'staff-pay-sheet');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^How much')), matching: find.byType(EditableText)), '20000');
+    await settle(t);
+    await t.tap(find.text('Next'));
+    await settle(t);
+    final body = jsonDecode(sent.firstWhere((s) => s.startsWith('POST /v1/payments ')).substring('POST /v1/payments '.length)) as Map<String, dynamic>;
+    expect(body['staff_id'], 'U2');
+    expect(body['purpose'], 'wages');
+    expect(body['amount_kobo'], 2000000);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('where we pay them, an owner, linked: pictured', (t) async {
+    await openPerson(t, account: linkedAccount);
+    await t.drag(find.byType(Scrollable).first, const Offset(0, -2000));
+    await settle(t);
+    expect(find.bySemanticsLabel(RegExp('^Change where Tunde is paid')), findsOneWidget);
+    await looks(t, 'staff-pay-linked');
   });
 
   testWidgets('tasks: done; taken from a role and done with a photo; can’t with why; everyone’s, reminded and stopped', (t) async {

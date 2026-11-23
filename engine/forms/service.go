@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -59,8 +60,11 @@ type Service struct {
 	// the web app's, where members' forms open.
 	FormHost string
 	AppURL   string
-	Logger   *slog.Logger
-	Now      func() time.Time
+	// Ask puts a form step to people in their chat apps once its request
+	// is recorded as sent (device fields §2); nil asks in the app alone.
+	Ask    func(ctx context.Context, a ChatAsk)
+	Logger *slog.Logger
+	Now    func() time.Time
 }
 
 // Errors a submission is refused with; the respondent was told before it
@@ -69,6 +73,11 @@ var (
 	ErrRefused   = errors.New("forms: submission refused")
 	ErrNoRequest = errors.New("forms: no such form request")
 )
+
+// NoLongerTaking is the note of a submission refused because its form,
+// or its form step, takes no more answers: answered by another meanwhile,
+// withdrawn or expired.
+const NoLongerTaking = "the form is no longer taking answers"
 
 func (s *Service) now() time.Time {
 	if s.Now != nil {
@@ -261,7 +270,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	})
 	if err != nil || done {
 		if errors.Is(err, ErrNoRequest) {
-			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, "the form is no longer taking answers")
+			return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, nil, nil, NoLongerTaking)
 		}
 		return err
 	}
@@ -269,6 +278,15 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	if err != nil {
 		// Files stored before the error are stored again on the retry.
 		return errors.Join(err, s.discard(ctx, in.Tenant, files))
+	}
+	received := in.Submission.Submitted
+	if received.IsZero() {
+		received = s.now()
+	}
+	device := deviceMeta(in.Submission, received)
+	if why == "" {
+		deviceAt, _ := time.Parse(time.RFC3339, device["at"].(string))
+		why = deviceAnswers(tg.schema, answers, in.Submission, deviceAt)
 	}
 	if why == "" {
 		why = s.check(tg, answers, files)
@@ -303,6 +321,31 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 		if ch == "" {
 			ch = "direct"
 		}
+		if tg.request != nil {
+			// Answered now, in this transaction: the step's run may end as
+			// soon as the signal arrives, which withdraws pending requests.
+			// Taken once: of two answers arriving together, the second
+			// waits on the row and finds it answered; only this same
+			// submission, whose signal did not get through, goes on.
+			tag, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request)
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() != 1 {
+				var mine bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM form_submissions WHERE reference = $1 AND request_id = $2 AND status <> 'refused')`,
+					in.Reference, *tg.request).Scan(&mine); err != nil {
+					return err
+				}
+				if !mine {
+					return ErrNoRequest
+				}
+			}
+			// What a chat held towards it, anyone's, goes with the answer.
+			if _, err := tx.Exec(ctx, `DELETE FROM form_chat_answers WHERE request_id = $1`, *tg.request); err != nil {
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO form_submissions (id, tenant_id, endpoint_id, request_id, reference, status_hash, answers, respondent, channel)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (reference) DO NOTHING`,
 			id, in.Tenant, tg.endpoint, tg.request, in.Reference, in.StatusHash, a, rr, ch); err != nil {
@@ -320,20 +363,21 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 			}
 		}
 		if tg.request != nil {
-			// Answered now, in this transaction: the step's run may end as
-			// soon as the signal arrives, which withdraws pending requests.
-			if _, err := tx.Exec(ctx, `UPDATE form_requests SET status = 'answered', answered_at = now() WHERE id = $1 AND status = 'pending'`, *tg.request); err != nil {
-				return err
-			}
 			payload := map[string]any{}
 			for k, v := range sealedAnswers.(map[string]any) {
 				payload[k] = v
 			}
 			payload["respondent"] = resp
+			payload["device"] = device
 			signal = payload
 		}
-		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch})
+		return audit(ctx, tx, in.Tenant, "form.submitted", in.Reference, map[string]any{"files": len(files), "channel": ch, "device": deviceAudit(tg.schema, answers)})
 	})
+	if errors.Is(err, ErrNoRequest) {
+		// Answered by another submission meanwhile: refused, its files
+		// discarded.
+		return s.refuse(ctx, in.Tenant, in.Endpoint, in.Request, in.Reference, in.StatusHash, in.Submission, tg.def, files, NoLongerTaking)
+	}
 	if err != nil {
 		// Not recorded: the retry stores its files again.
 		return errors.Join(err, s.discard(ctx, in.Tenant, files))
@@ -341,7 +385,7 @@ func (s *Service) Process(ctx context.Context, in Incoming) error {
 	if tg.request != nil {
 		return s.answerStep(ctx, in, tg, id, signal)
 	}
-	return s.startRun(ctx, in, tg, id, answers)
+	return s.startRun(ctx, in, tg, id, answers, device)
 }
 
 // roundTrip makes v plain JSON values (file references become maps).
@@ -436,8 +480,23 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 	var out []storedFile
 	for _, u := range in.Uploads {
 		p, _ := props[u.Meta.Field].(map[string]any)
-		if f, _ := p["format"].(string); f != "file" {
+		kind := wd.DeviceKind(p)
+		if f, _ := p["format"].(string); f != "file" && kind != wd.DevicePhoto && kind != wd.DeviceSignature {
 			return nil, out, fmt.Sprintf("%q takes no file", u.Meta.Field), nil
+		}
+		switch kind {
+		case wd.DevicePhoto:
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/jpeg", "image/png"}}}
+		case wd.DeviceSignature:
+			// A pad's drawing: a PNG by its content, not only its name,
+			// and small (device fields §5, D2).
+			if len(u.Data) > MaxSignatureBytes {
+				return nil, out, fmt.Sprintf("the signature %q is larger than 1 MB", clipName(u.Meta.Name)), nil
+			}
+			if http.DetectContentType(u.Data) != "image/png" {
+				return nil, out, fmt.Sprintf("a signature is a PNG drawing; %q is not one", clipName(u.Meta.Name)), nil
+			}
+			p = map[string]any{"x-form": map[string]any{"accept": []any{"image/png"}}}
 		}
 		if why := fileRule(p, u); why != "" {
 			return nil, out, why, nil
@@ -461,6 +520,14 @@ func (s *Service) files(ctx context.Context, in Incoming, tg target) (map[string
 		ref := FileRef{ID: uuid.Must(uuid.NewV7()).String(), Name: clipName(u.Meta.Name), Type: f.Type, Size: f.Size, SHA256: hex.EncodeToString(sum[:])}
 		out = append(out, storedFile{field: u.Meta.Field, path: f.Path, ref: ref})
 		answers[u.Meta.Field] = ref
+		if kind == wd.DeviceSignature {
+			// The signer's name, given beside the pad in the answers.
+			if m, ok := in.Submission.Answers[u.Meta.Field].(map[string]any); ok {
+				if who, ok := m["signed_by"].(string); ok {
+					answers[u.Meta.Field] = signedFile{FileRef: ref, SignedBy: who}
+				}
+			}
+		}
 	}
 	return answers, out, "", nil
 }
@@ -567,8 +634,11 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 	for k, v := range answers {
 		probe[k] = v
 	}
+	props, _ := tg.schema["properties"].(map[string]any)
 	for _, f := range files {
-		probe[f.field] = f.ref.ID
+		if wd.DeviceKind(props[f.field]) == "" {
+			probe[f.field] = f.ref.ID
+		}
 	}
 	var msgs []string
 	if tg.def != nil {
@@ -585,7 +655,8 @@ func (s *Service) check(tg target, answers map[string]any, files []storedFile) s
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/"+tg.def.ID+".json", raw).Validate(body)
 	} else {
 		body, _ := json.Marshal(probe)
-		raw, _ := json.Marshal(tg.schema)
+		// Device fields as the answers the server made of them.
+		raw, _ := json.Marshal(wd.AnswerSchema(tg.schema))
 		msgs = schemacheck.New("https://schemas.taskiem.dev/forms/request.json", raw).Validate(body)
 	}
 	if len(msgs) > 0 {
@@ -598,6 +669,9 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	out := map[string]any{"kind": r.Kind}
 	if r.MemberID != "" {
 		out["member_id"] = r.MemberID
+	}
+	if r.Business != "" {
+		out["business"] = r.Business
 	}
 	for k, v := range map[string]string{"phone": r.Phone, "email": r.Email} {
 		if v == "" {
@@ -612,10 +686,10 @@ func (s *Service) sealRespondent(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 	return out, nil
 }
 
-func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers map[string]any) error {
+func (s *Service) startRun(ctx context.Context, in Incoming, tg target, id uuid.UUID, answers, device map[string]any) error {
 	sub := in.Submission
 	form := map[string]any{"submission_id": id.String(), "reference": in.Reference, "submitted_at": sub.Submitted.UTC().Format(time.RFC3339),
-		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents)}
+		"respondent": respondentMap(sub.Respondent), "channel": channelOf(sub), "consents": consentsOf(sub.Consents), "device": device}
 	if sub.Site != "" {
 		form["site"] = sub.Site
 	}
@@ -724,6 +798,9 @@ func respondentMap(r Respondent) map[string]any {
 	}
 	if r.MemberID != "" {
 		m["member_id"] = r.MemberID
+	}
+	if r.Business != "" {
+		m["business"] = r.Business
 	}
 	return m
 }

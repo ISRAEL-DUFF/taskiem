@@ -133,7 +133,10 @@
     ],
     "expense": [
       "emefuru m",
-      "mmefu"
+      "mmefu",
+      "azụrụ m",
+      "m zụrụ",
+      "anyị zụrụ"
     ],
     "cash_in": [
       "ego batara"
@@ -226,5 +229,27 @@
   ],
   "for_words": [
     "maka"
-  ]
+  ],
+  "treat": {
+    "record": [
+      "naanị dee ya",
+      "dee ya ede"
+    ],
+    "stock": [
+      "tinye ya na ngwaahịa",
+      "tinye na ngwaahịa"
+    ],
+    "track": [
+      "soro ya",
+      "debe ya otu otu"
+    ],
+    "another": [
+      "ọzọ",
+      "akara ọzọ"
+    ],
+    "no_label": [
+      "enweghị akara",
+      "akara ọ dịghị"
+    ]
+  }
 }

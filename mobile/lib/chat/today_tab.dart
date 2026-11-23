@@ -11,7 +11,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show Approval, ChatAlert, ChatTopic;
+import '../api/api.g.dart' show Approval, ChatAlert, ChatTopic, PageSummary;
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -30,8 +30,10 @@ import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'bookings_page.dart' show addDays;
 import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
+import 'pages_page.dart' show pinnedPageRows;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
+import 'form_request.dart' show FormRequestScreen, sendKeptFormAnswers;
 import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
 import '../theme/look.dart';
 
@@ -277,6 +279,8 @@ class _TodayTabState extends State<TodayTab> with Polling {
   Map<String, dynamic>? _setup;
   Map<String, dynamic>? _clock;
   List<Map<String, dynamic>>? _tasks;
+  // The business's own pages (pages_page.dart): pinned ones, and All pages.
+  List<PageSummary> _pages = const [];
   String? _runsError;
 
   Auth get _auth => widget.auth;
@@ -354,6 +358,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         }(),
       () async {
         try {
+          await sendKeptFormAnswers(_auth);
           final f = await _get('/v1/form-requests');
           if (mounted) setState(() => _forms = _maps(f?['requests']));
         } on Object {
@@ -367,6 +372,15 @@ class _TodayTabState extends State<TodayTab> with Polling {
             if (mounted) setState(() => _workflows = _maps(w?['workflows']));
           } on Object {
             // Not shown.
+          }
+        }(),
+      if (_auth.me?.personal != true)
+        () async {
+          try {
+            final r = await _auth.api.listPages();
+            if (mounted) setState(() => _pages = r.pages);
+          } on Object {
+            // No Your pages.
           }
         }(),
       if (_auth.can('member.manage'))
@@ -701,10 +715,10 @@ class _TodayTabState extends State<TodayTab> with Polling {
             for (final f in _forms.take(3))
               TkListRow(
                 title: _str(f['title']),
-                sub: 'To fill in · ${shortWhen(_str(f['created_at']), now)}',
+                sub: '${_str(f['from']).isEmpty ? 'To fill in' : 'Asked by ${_str(f['from'])}'} · ${shortWhen(_str(f['created_at']), now)}',
                 icon: 'forms',
                 square: look.blue,
-                onTap: () => _web('/forms/requests/${Uri.encodeComponent(_str(f['id']))}'),
+                onTap: () => _go(FormRequestScreen(auth: _auth, id: _str(f['id']), now: widget.now)),
               ),
             for (final p in toMatch.take(3))
               TkListRow(
@@ -749,6 +763,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 ),
             ],
           ),
+        if (_pages.isNotEmpty) TkSection(title: 'Your pages', inset: 56, children: pinnedPageRows(context, _auth, _pages, backLabel: 'Back to Today')),
         if (_clock != null || (_tasks != null && _tasks!.any((x) => x['state'] == 'open')))
           TkSection(
             title: 'Your team',

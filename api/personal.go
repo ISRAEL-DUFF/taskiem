@@ -32,10 +32,11 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	// A person's chats with businesses (customer_door.go, stage 2).
 	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
 	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|` +
+	`(GET|POST) /v1/me/chats/[^/]+/invoices/[^/]+/transfer|` +
 	// The person's own devices for pushes on You (push.go, 00460).
 	`GET /v1/me/push(/key)?|(PUT|DELETE) /v1/me/push|(PATCH|DELETE) /v1/me/push/[^/]+|` +
 	// Orders on You and saved addresses (person_orders.go, person_addresses.go, stage 3).
-	`GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
+	`(GET|PUT|DELETE) /v1/me/pin|GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
 	// The person's own saved things (saved.go, saved objects S0).
 	`(GET|POST) /v1/me/saved|GET /v1/me/saved/resolve|POST /v1/me/saved/step-up/options|(GET|PUT|DELETE) /v1/me/saved/[^/]+|POST /v1/me/saved/[^/]+/reveal|GET /v1/me/banks|POST /v1/me/saved/read|POST /v1/me/saved/uploads|GET /v1/me/saved/[^/]+/file|(GET|POST) /v1/me/saved-kinds|(PUT|DELETE) /v1/me/saved-kinds/[^/]+|` +
 	// The person's account: deleting it, their photo, pushes, privacy (person_account.go).
@@ -57,7 +58,8 @@ var peoplePersonRoutes = regexp.MustCompile(`^(POST /v1/people/lookup|GET /v1/pe
 
 func personalAllowed(method, path string) bool {
 	route := method + " " + strings.TrimSuffix(path, "/")
-	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route) || peoplePersonRoutes.MatchString(route) || peopleChatPersonRoutes.MatchString(route) || groupPersonRoutes.MatchString(route) || basketPersonRoutes.MatchString(route) || safetyPersonRoutes.MatchString(route)
+	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route) || peoplePersonRoutes.MatchString(route) || peopleChatPersonRoutes.MatchString(route) || groupPersonRoutes.MatchString(route) || basketPersonRoutes.MatchString(route) || safetyPersonRoutes.MatchString(route) ||
+		customerToolPersonRoutes.MatchString(route)
 }
 
 // deviceCookie names a browser, so a second proof made there holds for it

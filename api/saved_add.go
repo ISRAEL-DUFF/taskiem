@@ -30,6 +30,9 @@ func (s *Server) readSavedWords(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Text string `json:"text"`
+		// From is "photo" for text the phone read from a photo: letters
+		// read in place of digits are put right first.
+		From string `json:"from"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -38,6 +41,10 @@ func (s *Server) readSavedWords(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(in.Text) == "" || len([]rune(in.Text)) > saved.MaxText {
 		writeErr(w, http.StatusBadRequest, "Give the words to read.")
 		return
+	}
+	// After the length check: a text too long is refused unread.
+	if in.From == "photo" {
+		in.Text = saved.PhotoText(in.Text)
 	}
 	writeJSON(w, http.StatusOK, saved.Read(in.Text))
 }
@@ -255,6 +262,9 @@ func (s *Server) eraseSavedContacts(r *http.Request, category string, value any)
 		}
 		for _, id := range ids {
 			if _, err := tx.Exec(ctx, `UPDATE saved_objects SET `+savedScrub+`, updated_by = $3 WHERE tenant_id = $1 AND id = $2`, p.TenantID, id, o.by); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `DELETE FROM saved_reminders WHERE object_id = $1`, id); err != nil {
 				return err
 			}
 			paths, err := dropObjectFilesTx(ctx, tx, o, id)

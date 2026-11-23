@@ -45,9 +45,6 @@ func TestTheSameSaleAtOnceIsOneSale(t *testing.T) {
 			t.Fatalf("round %d: %d callers were told the sale was new", round, fresh)
 		}
 	}
-	if err := w.s.ApplyPending(ctx, w.env.Tenant); err != nil {
-		t.Fatal(err)
-	}
 	if got := w.tb.count("rice"); got != 90 {
 		t.Fatalf("rice is %d after five sales of 2", got)
 	}

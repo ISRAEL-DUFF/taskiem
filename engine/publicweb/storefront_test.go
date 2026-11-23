@@ -39,7 +39,7 @@ func storefrontServer(t *testing.T, p StorefrontPage, ok bool) (*Server, *fakeHo
 	id := uuid.New()
 	f := &fakeHosts{sites: map[string]Site{"ada-kitchen.shops.test": {Tenant: uuid.New(), Kind: "storefront", ID: id}}}
 	s, _ := newServer(f)
-	s.Storefronts = func(_ context.Context, got uuid.UUID) (StorefrontPage, bool, error) {
+	s.Storefronts = func(_ context.Context, _, got uuid.UUID) (StorefrontPage, bool, error) {
 		if got != id {
 			t.Errorf("asked for storefront %s", got)
 		}

@@ -22,6 +22,7 @@ import 'package:taskiem/school/students_page.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'looks.dart';
+import 'saved_stub.dart';
 import 'school_fixture.dart';
 import 'support.dart';
 
@@ -157,6 +158,20 @@ void main() {
     expect(find.text('418 students'), findsOneWidget);
     expect(find.text('Dami Ogun'), findsOneWidget);
     expect(find.text('Withdrawn'), findsWidgets);
+  });
+
+  testWidgets('a student added: the guardian’s phone from a saved person', (t) async {
+    final stub = SavedStub(mine: [savedThing('M1', 'mine', 'person', 'mrs-ogun', 'Mrs Ogun', '••4567', {'phone': '08031234567', 'email': 'ogun@example.com'})]);
+    await open(t, (c) => StudentsPage(auth: c.auth), also: (r) async => stub.answer(r));
+    await t.tap(find.bySemanticsLabel('Add a student'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Pick a saved phone number for the guardian'));
+    await settle(t);
+    expect(find.text('Saved phone numbers'), findsOneWidget);
+    await t.tap(find.text('Mrs Ogun'));
+    await settle(t);
+    expect(find.text('08031234567'), findsOneWidget);
+    expect(find.text('ogun@example.com'), findsNothing, reason: 'the phone only');
   });
 
   testWidgets('in the Taskiem chat: the school’s briefing, and cash waiting for this person', (t) async {

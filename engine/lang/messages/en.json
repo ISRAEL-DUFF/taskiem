@@ -139,6 +139,46 @@
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
     },
+    "button.treat_label_another": {
+      "text": "Another",
+      "reviewed": true,
+      "context": "A purchase line's label in chat: a label not offered, typed next"
+    },
+    "button.treat_label_none": {
+      "text": "No label",
+      "reviewed": true,
+      "context": "A purchase line's label in chat: none (shown as Not labelled)"
+    },
+    "button.treat_many_record": {
+      "text": "Just record them",
+      "reviewed": true,
+      "context": "Keeping track of more than 50 of something bought: no, just record them"
+    },
+    "button.treat_many_yes": {
+      "text": "Yes, one row each",
+      "reviewed": true,
+      "context": "Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+    },
+    "button.treat_new_item": {
+      "text": "A new one",
+      "reviewed": true,
+      "context": "Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+    },
+    "button.treat_record": {
+      "text": "Just record it",
+      "reviewed": true,
+      "context": "A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+    },
+    "button.treat_stock": {
+      "text": "Add to stock",
+      "reviewed": true,
+      "context": "A purchase line's treatment in chat: counted into a stock item when it comes"
+    },
+    "button.treat_track": {
+      "text": "Keep track of it",
+      "reviewed": true,
+      "context": "A purchase line's treatment in chat: each one a row on Things we have"
+    },
     "button.yes": {
       "text": "Yes",
       "reviewed": true,
@@ -148,6 +188,16 @@
       "text": "Yes, add it",
       "reviewed": true,
       "context": "Reply button, at most 20 characters"
+    },
+    "button.yes_sell": {
+      "text": "Yes, I sell it",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters: Do you sell it?"
+    },
+    "button.no_sell": {
+      "text": "No, I don't",
+      "reviewed": true,
+      "context": "Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Yes, publish",
@@ -659,6 +709,111 @@
       "reviewed": true,
       "context": "A question's answer that is not an order's or booking's number"
     },
+    "menu.buying.deliver": {
+      "text": "Deliver to a saved place",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.place": {
+      "text": "Where to? A saved place's name, like warehouse.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.ask.ref": {
+      "text": "Which order? Its number, like P-7QX4KD.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.buying.deliver.line": {
+      "text": "Where one order goes, like @warehouse",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.check.saved": {
+      "text": "That isn't a saved thing's name. Names are letters, numbers and -, like mum or our-account.",
+      "reviewed": true,
+      "context": "A question's answer that is not a saved thing's name"
+    },
+    "menu.saved.ask": {
+      "text": "Ask about a saved thing",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.name": {
+      "text": "Which saved thing? Its name, like mum.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.ask.what": {
+      "text": "What do you want to know? Like phone, or the insurance date. Send skip for all of it.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.ask.line": {
+      "text": "A detail, like @mum's phone",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.import": {
+      "text": "Import from a file",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.import.line": {
+      "text": "A spreadsheet of accounts, people, places",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.remind": {
+      "text": "Remind me of a date",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.name": {
+      "text": "Which saved thing? Its name, like car.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.ask.what": {
+      "text": "Which of its dates? Like insurance or birthday. Send skip if it has one.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.remind.line": {
+      "text": "A saved date, told on its day",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders": {
+      "text": "Your reminders",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.reminders.line": {
+      "text": "The dates you asked to be told of",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.saved.share": {
+      "text": "Share a saved thing",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.name": {
+      "text": "Which saved thing? Its name, like our-account.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.ask.to": {
+      "text": "Who with? A linked business or a customer, by name.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.saved.share.line": {
+      "text": "With a linked business or a customer",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
     "menu.check.signed": {
       "text": "Send a number, like -2 or 3.",
       "reviewed": true,
@@ -785,7 +940,7 @@
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.money.invoice.ask.who": {
-      "text": "Who is it for?",
+      "text": "Who is it for? A name, or a saved person like @acme.",
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
@@ -1164,6 +1319,11 @@
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
     },
+    "menu.riders.add.ask.areas.label": {
+      "text": "Which areas do they cover?",
+      "reviewed": true,
+      "context": "A form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
+    },
     "menu.riders.add.ask.name": {
       "text": "What's the rider's name?",
       "reviewed": true,
@@ -1173,6 +1333,11 @@
       "text": "What's {name}'s phone number?",
       "reviewed": true,
       "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.riders.add.ask.phone.label": {
+      "text": "What's their phone number?",
+      "reviewed": true,
+      "context": "A form's label for the rider's question above, before the rider's name is known: the name as a pronoun"
     },
     "menu.riders.add.line": {
       "text": "Name, phone, and the areas they cover",
@@ -1481,6 +1646,21 @@
     },
     "menu.stock.low.line": {
       "text": "Items about to run out",
+      "reviewed": true,
+      "context": "The line under a menu row (api/chat_actions.go), at most 72 characters"
+    },
+    "menu.stock.new": {
+      "text": "Add something to count",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go), at most 24 characters"
+    },
+    "menu.stock.new.ask.what": {
+      "text": "What is it, and how many? Like 20 yards of ankara fabric.",
+      "reviewed": true,
+      "context": "A question a menu row asks in the chat (api/chat_actions.go)"
+    },
+    "menu.stock.new.line": {
+      "text": "Something new, sold or used: fabric, thread, bags",
       "reviewed": true,
       "context": "The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
@@ -1803,6 +1983,16 @@
       "text": "Add the private value {name}.",
       "reviewed": true,
       "context": "Readiness: a secret the workflow reads is not stored"
+    },
+    "ready.saved_invalid": {
+      "text": "The workflow reads saved.{name}, which no saved thing can be called: names are letters, numbers and -, written with _ for -.",
+      "reviewed": true,
+      "context": "Readiness: the workflow reads a saved thing by a name that is not valid"
+    },
+    "ready.saved": {
+      "text": "Save @{name} on the Saved page: the workflow reads it.",
+      "reviewed": true,
+      "context": "Readiness: a business saved thing the workflow reads (saved.<name>) does not exist"
     },
     "ready.table": {
       "text": "Make the table {name}.",
@@ -2964,6 +3154,36 @@
       "reviewed": true,
       "context": "A table a chat draft uses exists already but lacks columns the draft reads; the owner adds them in the web app"
     },
+    "wa.public.button_gone": {
+      "text": "This button is not available any more. Send *menu* to see what you can do here.",
+      "reviewed": true,
+      "context": "Customers' tools: a button on an answer that is not this customer's, has expired, or opens nothing now"
+    },
+    "wa.public.done": {
+      "text": "Done: {label} has finished. Your reference is {reference}.",
+      "reviewed": true,
+      "context": "Customers' tools: a run ended well but its answer had no words"
+    },
+    "wa.public.failed": {
+      "text": "Sorry, {label} did not go through. Your reference is {reference}. Send *menu* to try again, or write to us here.",
+      "reviewed": true,
+      "context": "Customers' tools: the run failed or was stopped; nothing of why is said to a customer"
+    },
+    "wa.public.list_more": {
+      "text": "…and {count} more.",
+      "reviewed": true,
+      "context": "Customers' tools: a list answer with more than ten rows; {count} is how many more"
+    },
+    "wa.public.not_offered": {
+      "text": "{label} can't be done from here. Write to us here and we'll help.",
+      "reviewed": true,
+      "context": "Customers' tools: a tool that moves money is never started for a customer"
+    },
+    "wa.public.working": {
+      "text": "{label} has started. Your reference is {reference}. The answer comes here when it is ready.",
+      "reviewed": true,
+      "context": "Customers' tools: a tool with an answer has started; the answer follows"
+    },
     "wa.saved.bank": {
       "text": "{bank}, account number {number}",
       "reviewed": true,
@@ -2988,6 +3208,21 @@
       "text": "Its name is not checked with the bank yet.",
       "reviewed": true,
       "context": "A saved bank account whose name has not been checked"
+    },
+    "wa.saved.pick": {
+      "text": "Which @{name}?\n1. Your own: {mine}\n2. {org}'s: {theirs}\nReply 1 or 2.",
+      "reviewed": true,
+      "context": "A command acting on @name when the person's own and their business's both have the name: which, by number"
+    },
+    "wa.saved.offer": {
+      "text": "Save {title} as @{name} for next time?",
+      "reviewed": true,
+      "context": "After an invoice to a customer typed by hand: offers to save them as a business's saved person"
+    },
+    "wa.saved.suggest": {
+      "text": "You've invoiced {title} {count} times. Save them as @{name} for next time?",
+      "reviewed": true,
+      "context": "After the third invoice to a customer typed by hand: suggests saving them as a saved person"
     },
     "wa.saved.two": {
       "text": "You have two things called @{name}:",
@@ -3068,6 +3303,106 @@
       "text": "Share",
       "reviewed": true,
       "context": "A button: share the saved thing (at most 20 characters)"
+    },
+    "wa.saved.field": {
+      "text": "@{name}: {label}: {value}",
+      "reviewed": true,
+      "context": "A question about a saved thing's field, answered: its name, the field's label and value (masked when sensitive)"
+    },
+    "wa.saved.field_empty": {
+      "text": "@{name} has no {label} saved.",
+      "reviewed": true,
+      "context": "A question about a saved thing's field that holds nothing"
+    },
+    "wa.saved.in_full": {
+      "text": "In full on the Saved page.",
+      "reviewed": true,
+      "context": "After a saved thing's masked detail in the chat: where to see it in full"
+    },
+    "wa.invoice.saved_kind": {
+      "text": "@{name} is {kind}: an invoice goes to a person or a business. Write: invoice @someone 25k for \u2026",
+      "reviewed": true,
+      "context": "An invoice was asked for a saved thing that is not a person (a place, an account\u2026); {kind} is what it is"
+    },
+    "wa.deliver.to": {
+      "text": "Delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "An order to linked businesses ended with a saved place: where it will be delivered"
+    },
+    "wa.mention.deliver_how": {
+      "text": "To have it delivered to @{name}, end the order with \"deliver to @{name}\".",
+      "reviewed": true,
+      "context": "An order to linked businesses named a saved thing in the middle: how to say where it goes"
+    },
+    "wa.deliver.set": {
+      "text": "{reference} will be delivered to @{name}: {address}.",
+      "reviewed": true,
+      "context": "A purchase's delivery place was set from a saved place: its reference, the place's name and address"
+    },
+    "wa.deliver.saved_kind": {
+      "text": "@{name} is {kind}: an order is delivered to a place. Write: deliver P-7QX4KD to @warehouse",
+      "reviewed": true,
+      "context": "Delivering to a saved thing that is not a place; {kind} is what it is"
+    },
+    "wa.deliver.no_phone": {
+      "text": "@{name} has no phone for the rider. Add one to it on the Saved page, then try again.",
+      "reviewed": true,
+      "context": "A saved place has no phone, and the business has no delivery number"
+    },
+    "wa.deliver.not": {
+      "text": "Not changed: {reason}",
+      "reviewed": true,
+      "context": "Where a purchase is delivered could not be set; the reason follows"
+    },
+    "wa.remind.set": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due, and each year after. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, yearly"
+    },
+    "wa.remind.set_once": {
+      "text": "I'll remind you on {date} that @{name}'s {label} is due. Say *my reminders* to see them.",
+      "reviewed": true,
+      "context": "A reminder was set on a saved thing's date field, once"
+    },
+    "wa.remind.no_dates": {
+      "text": "@{name} holds no date to remind you of. Give its kind a date field on the Saved page.",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing that holds no dates"
+    },
+    "wa.remind.which": {
+      "text": "Which of @{name}'s dates? {list}. Say it again with one, like: remind me when @{name} insurance is due",
+      "reviewed": true,
+      "context": "A reminder was asked on a saved thing with several dates and the words named none; {list} is their labels"
+    },
+    "wa.remind.passed": {
+      "text": "@{name}'s {label} was {date}, which has passed. Change it on the Saved page, or ask for a reminder each year.",
+      "reviewed": true,
+      "context": "A once-only reminder's date has passed"
+    },
+    "wa.remind.none": {
+      "text": "You have no reminders. Say, for example: remind me when @car insurance is due",
+      "reviewed": true,
+      "context": "The person has no reminders"
+    },
+    "wa.remind.list": {
+      "text": "Your reminders:\n{list}\nTo stop one: stop reminding me about @car",
+      "reviewed": true,
+      "context": "The person's reminders, one a line"
+    },
+    "wa.remind.every_year": {
+      "text": ", each year",
+      "reviewed": true,
+      "context": "After a reminder's date in the list: it repeats yearly"
+    },
+    "wa.remind.none_for": {
+      "text": "You have no reminders about @{name}.",
+      "reviewed": true,
+      "context": "Stopping reminders on a saved thing that has none"
+    },
+    "wa.remind.stopped": {
+      "text": "No more reminders about @{name}.",
+      "reviewed": true,
+      "context": "The person's reminders on a saved thing were stopped"
     },
     "wa.saved.not_saved": {
       "text": "Not saved: {reason}",
@@ -3393,6 +3728,86 @@
       "text": "Cancelled.",
       "reviewed": true,
       "context": "cancel dropped what was in progress"
+    },
+    "wa.treat.ask": {
+      "text": "*{item}* ({count}) from *{supplier}*: how should we treat it?",
+      "reviewed": true,
+      "context": "An order drafted in chat: a line the business has not said how to treat before"
+    },
+    "wa.treat.how": {
+      "text": "*Just record it*: no stock moves. *Add to stock*: counted in when it comes. *Keep track of it*: each one on Things we have. Or type it, like _keep track of it, Machines_.",
+      "reviewed": true,
+      "context": "Under how should we treat it?: what each answer does, and how to type one with its label"
+    },
+    "wa.treat.item_reminder": {
+      "text": "Pick the stock item *{item}* goes into, or type its name. *A new one* makes it.",
+      "reviewed": true,
+      "context": "Which stock item? was answered with something else"
+    },
+    "wa.treat.label": {
+      "text": "Label for *{item}*? Pick one, or type it.",
+      "reviewed": true,
+      "context": "A purchase line's label in chat: the business's most used labels, Another, No label"
+    },
+    "wa.treat.label_reminder": {
+      "text": "Pick a label for *{item}*, type one, or press *No label*.",
+      "reviewed": true,
+      "context": "The label question was answered with something else"
+    },
+    "wa.treat.label_type": {
+      "text": "Type the label for *{item}*, like _Machines_.",
+      "reviewed": true,
+      "context": "Another was pressed: the label typed"
+    },
+    "wa.treat.many": {
+      "text": "Put {count} {item} on Things we have, one row each?",
+      "reviewed": true,
+      "context": "Keep track of it for more than 50: asked first"
+    },
+    "wa.treat.new_item": {
+      "text": "*{name}* will be a new stock item. Do you sell it?",
+      "reviewed": true,
+      "context": "A new stock item for a purchase line: one question before it is made"
+    },
+    "wa.treat.no_item": {
+      "text": "None of your stock items is called *{name}*.",
+      "reviewed": true,
+      "context": "A stock item typed for a purchase line is not one of the business's"
+    },
+    "wa.treat.not_labelled": {
+      "text": "Not labelled",
+      "reviewed": true,
+      "context": "A purchase line with no label, said back"
+    },
+    "wa.treat.not_saved": {
+      "text": "*{item}* could not be changed: {reason}.",
+      "reviewed": true,
+      "context": "A purchase line's answer could not be saved (the order moved on meanwhile)"
+    },
+    "wa.treat.reminder": {
+      "text": "How should we treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* leaves it.",
+      "reviewed": true,
+      "context": "How should we treat it? was answered with something else"
+    },
+    "wa.treat.saved": {
+      "text": "*{item}*: {how}.",
+      "reviewed": true,
+      "context": "A purchase line's answer saved and remembered: how it is treated, and its label"
+    },
+    "wa.treat.to_stock": {
+      "text": "Add to stock ({item})",
+      "reviewed": true,
+      "context": "How a purchase line is treated, said back: into which stock item"
+    },
+    "wa.treat.too_many": {
+      "text": "{count} {item} are too many to keep track of one by one (at most {max}), so it is just recorded. You can add one row for the lot on Things we have.",
+      "reviewed": true,
+      "context": "Keep track of it for more than 200: it cannot be, and is just recorded"
+    },
+    "wa.treat.which_item": {
+      "text": "Which stock item does *{item}* go into? Pick one, or type its name.",
+      "reviewed": true,
+      "context": "Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "I think you mean: *{command}*\nShall I do it?",
@@ -3789,6 +4204,11 @@
       "reviewed": true,
       "context": "Help: first line"
     },
+    "wa.help.saved": {
+      "text": "\u2022 *@* and a saved thing's name: tells it (*@mum*); ask about it (*what's @car insurance due?*); *save mum: GTBank 0123456789*; *remind me when @car insurance is due*; *my reminders*",
+      "reviewed": true,
+      "context": "Help line for saved things, for everyone; keep @, save, remind me and my reminders in English"
+    },
     "wa.help.invoice": {
       "text": "• *invoice* with a name, an amount and what it is for (*invoice Ada 25,000 for 5 bags of rice*): sends your customer an invoice",
       "reviewed": true,
@@ -4047,12 +4467,12 @@
     "wa.money.confirm_expense": {
       "text": "Record {amount} spent on {what} ({category})?",
       "reviewed": true,
-      "context": "an expense shown before it is recorded; {category} is an English word such as fuel"
+      "context": "an expense shown before it is recorded; {category} is its label, in the business's own words, such as Diesel"
     },
     "wa.money.confirm_expense_at": {
       "text": "Record {amount} spent on {what} at {vendor} ({category})?",
       "reviewed": true,
-      "context": "an expense with where it was spent, shown before it is recorded; {category} is an English word such as fuel"
+      "context": "an expense with where it was spent, shown before it is recorded; {category} is its label, in the business's own words, such as Diesel"
     },
     "wa.money.confirm_reminder": {
       "text": "Reply *yes* to record it or *no* to leave it.",
@@ -4082,7 +4502,7 @@
     "wa.money.recorded_out": {
       "text": "Recorded. {amount} out, {category}.",
       "reviewed": true,
-      "context": "cash out or an expense was recorded; {category} is an English word such as fuel or cash"
+      "context": "cash out or an expense was recorded; {category} is cash, or the expense's label in the business's own words, such as Diesel"
     },
     "wa.money.refused": {
       "text": "I could not record that: {reason}",
@@ -4403,6 +4823,91 @@
       "text": "You cannot start runs in {org} any more.",
       "reviewed": true,
       "context": "run.start lost while confirming"
+    },
+    "wa.tool.yours": {
+      "text": "Your business's tools (type the word):",
+      "reviewed": true,
+      "context": "Heading over the business's own tools listed by tools"
+    },
+    "wa.tool.taken": {
+      "text": "Already done: {who} took it at {when}.",
+      "reviewed": true,
+      "context": "A once button on a tool's answer or a message, pressed after someone else's press started its run"
+    },
+    "wa.tool.button_gone": {
+      "text": "This button is not available any more.",
+      "reviewed": true,
+      "context": "A button whose tool is gone, or which is more than seven days old"
+    },
+    "wa.tool.echo": {
+      "text": "Starting {tool}.",
+      "reviewed": true,
+      "context": "A tool that only reads, started at once with nothing to show back"
+    },
+    "wa.tool.echo_values": {
+      "text": "Starting {tool} with:\n{values}",
+      "reviewed": true,
+      "context": "A tool that only reads, started at once: every value read, masked, so a wrong reading is seen"
+    },
+    "wa.tool.step_up": {
+      "text": "{tool} moves money, so it is confirmed with your passkey in the app or on the web, not here.",
+      "reviewed": true,
+      "context": "A tool whose steps move money, called from a chat app"
+    },
+    "wa.page.more": {
+      "text": "…and {count} more on the page.",
+      "reviewed": true,
+      "context": "A page's short form in a chat app: how many of its list's rows are not shown"
+    },
+    "wa.page.open": {
+      "text": "Open the page: {link}",
+      "reviewed": true,
+      "context": "A page's short form in a chat app: the link to open the page"
+    },
+    "wa.tool.list_empty": {
+      "text": "Nothing to show.",
+      "reviewed": true,
+      "context": "A tool's list answer with no rows and no empty text of its own"
+    },
+    "wa.tool.row_not_yours": {
+      "text": "That list was sent to someone else, or is not available any more.",
+      "reviewed": true,
+      "context": "Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
+    },
+    "wa.tool.list_more": {
+      "text": "\u2026and {count} more: see them all in the app.",
+      "reviewed": true,
+      "context": "A tool's list answer with more than ten rows"
+    },
+    "wa.tool.which": {
+      "text": "Which did you mean? Send its number:\n{list}",
+      "reviewed": true,
+      "context": "Two of the business's own tools fit a message (made tools M3): a numbered pick; {list} is one tool a line, with its command"
+    },
+    "wa.tool.read": {
+      "text": "For {tool} I read:\n{values}\n\n{prompt}",
+      "reviewed": true,
+      "context": "The reader filled some of a tool's inputs from the message (made tools M3): every value read, masked, then the next input to give"
+    },
+    "wa.tool.saved_none": {
+      "text": "Nothing the business saved is called @{name}.",
+      "reviewed": true,
+      "context": "A tool's input given as @name of no saved thing of the business (a person's own saved things are never a tool's)"
+    },
+    "wa.tool.saved_kind": {
+      "text": "@{name} is {kind}: it cannot fill {label}.",
+      "reviewed": true,
+      "context": "A tool's input given as @name of a saved thing that cannot fill it (a bank account, a file); {kind} is what it is, {label} the input"
+    },
+    "wa.tool.saved_not_fit": {
+      "text": "@{name} does not fit {label}.",
+      "reviewed": true,
+      "context": "A tool's input given as @name of a saved thing whose words do not fit the input (an address for a number)"
+    },
+    "wa.run.not_yours": {
+      "text": "Only {roles} can start {workflow}. Ask an owner if you need it.",
+      "reviewed": true,
+      "context": "run <workflow> by a member whose roles the workflow does not allow (decision 0073); {roles} are role names"
     },
     "wa.run.does_not_fit": {
       "text": "That does not fit: {reason}.\n\n{prompt}",
@@ -5204,15 +5709,30 @@
       "reviewed": true,
       "context": "In an add's confirmation: the price paid for one"
     },
-    "wa.stock.confirm_new": {
-      "text": "Add *{name}* with {qty}{cost}?",
+    "wa.stock.ask_sell": {
+      "text": "*{name}* is new: {qty}{cost}. Do you sell it?",
       "reviewed": true,
-      "context": "Confirming add <n> <item> for a new item"
+      "context": "Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
-    "wa.stock.confirm_first": {
-      "text": "Start keeping stock with *{name}*: {qty}{cost}? Taskiem makes a products table for your items.",
+    "wa.stock.ask_sell_first": {
+      "text": "Start keeping stock with *{name}*: {qty}{cost}. Do you sell it?",
       "reviewed": true,
-      "context": "Confirming the first add, which starts keeping stock"
+      "context": "The first thing counted in, which starts keeping stock: the same question"
+    },
+    "wa.stock.sell_how": {
+      "text": "*Yes* adds it to your products too. *No* only keeps count of it: something you use, not sell.",
+      "reviewed": true,
+      "context": "Under Do you sell it?: what each answer does"
+    },
+    "wa.stock.sell_reminder": {
+      "text": "Do you sell *{name}*? Reply *yes* or *no*, or *cancel* to leave it.",
+      "reviewed": true,
+      "context": "Do you sell it? was answered with something else"
+    },
+    "wa.stock.added_material": {
+      "text": "It is counted only: it is not one of your products.",
+      "reviewed": true,
+      "context": "After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",
@@ -5248,11 +5768,6 @@
       "text": "It shows on your page once it has a price: send *price {name} 9500*.",
       "reviewed": true,
       "context": "After adding an item with no selling price"
-    },
-    "wa.stock.waiting": {
-      "text": "Recorded for *{name}*. It reaches your products table shortly.",
-      "reviewed": true,
-      "context": "A stock change recorded that has not reached the table yet"
     },
     "wa.stock.now": {
       "text": "Done: *{name}* is {count} now.",
@@ -9033,6 +9548,266 @@
       "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
       "reviewed": true,
       "context": "The person tapped I'm a customer, on a Taskiem with no app link set"
+    },
+    "menu.pay.account": {
+      "text": "Pay an account number",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.amount": {
+      "text": "How much?",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.bank": {
+      "text": "Which bank is it with?",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.for": {
+      "text": "What is it for?",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.ask.number": {
+      "text": "What is the account number? 10 digits.",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.account.line": {
+      "text": "Any bank: its name is checked first",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.list": {
+      "text": "Your payments",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.list.line": {
+      "text": "Sent, waiting for an OK, and paid",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payees": {
+      "text": "Your payees",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payees.line": {
+      "text": "The accounts you pay, by name",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll": {
+      "text": "Payroll",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.payroll.line": {
+      "text": "Payrolla's runs: who was paid, and who was not and why",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.pay.person": {
+      "text": "Pay someone",
+      "reviewed": true,
+      "context": "A menu row's title (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.amount": {
+      "text": "How much?",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.for": {
+      "text": "What is it for?",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.note": {
+      "text": "A few words for their bank statement? Send skip for none.",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.ask.who": {
+      "text": "Who are you paying? One of your saved accounts, like @chidi.",
+      "reviewed": true,
+      "context": "A question the chat asks for a menu action, and a form's label (api/chat_actions.go)"
+    },
+    "menu.pay.person.line": {
+      "text": "From your balance, checked with the bank",
+      "reviewed": true,
+      "context": "A menu row's line under its title (api/chat_actions.go)"
+    },
+    "menu.topic.pay": {
+      "text": "Pay",
+      "reviewed": true,
+      "context": "A topic of the chat's menus (api/chat_actions.go)"
+    },
+    "menu.check.account": {
+      "text": "An account number is 10 digits, like 0123456789.",
+      "reviewed": true,
+      "context": "A question's answer that is not an account number"
+    },
+    "wa.pay.which_bank": {
+      "text": "Which bank is the account with? Send it again with the bank, like: send 45k to 0123456789 gtbank for stock bought.",
+      "reviewed": true,
+      "context": "Paying an account number from the chat: the bank was not named"
+    },
+    "wa.pay.not": {
+      "text": "Not prepared: {reason}",
+      "reviewed": true,
+      "context": "A payment could not be prepared from the chat; the reason follows"
+    },
+    "wa.pay.prepared": {
+      "text": "Ready to pay {amount} to {to}, {bank} {account}, for {for}.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat, not yet sent: amount, payee (with the bank's name for the account), bank, masked account, what for"
+    },
+    "wa.pay.first": {
+      "text": "This is the first payment to this account.",
+      "reviewed": true,
+      "context": "A prepared payment's warning: never paid before"
+    },
+    "wa.pay.changed": {
+      "text": "This account changed since it was last paid: the owner's OK is asked.",
+      "reviewed": true,
+      "context": "A prepared payment's warning: the saved account's number changed"
+    },
+    "wa.pay.again": {
+      "text": "The same amount went to them in the last day: check it is not paid twice.",
+      "reviewed": true,
+      "context": "A prepared payment's warning: a possible double payment"
+    },
+    "wa.pay.confirm_link": {
+      "text": "Nothing is sent yet. To pay, confirm with your passkey: {link}",
+      "reviewed": true,
+      "context": "Where to confirm a prepared payment; nothing pays on a yes in the chat"
+    },
+    "wa.pay.confirm_app": {
+      "text": "Nothing is sent yet. To pay, confirm it with your passkey in Taskiem, under Pay.",
+      "reviewed": true,
+      "context": "Where to confirm a prepared payment when there is no link"
+    },
+    "wa.pay.list.how": {
+      "text": "Send the list under pay these, one person a line, like:\npay these for wages\nChidi 0123456789 GTBank 45k\n@bayo 30k",
+      "reviewed": true,
+      "context": "Paying several people from the chat: \"pay these\" came with no list under it"
+    },
+    "wa.pay.list.person": {
+      "text": "1 person",
+      "reviewed": true,
+      "context": "How many people a batch from the chat pays: one"
+    },
+    "wa.pay.list.people": {
+      "text": "{count} people",
+      "reviewed": true,
+      "context": "How many people a batch from the chat pays: more than one"
+    },
+    "wa.pay.list.ready_link": {
+      "text": "{people}, {amount}. Nothing is sent yet: open to check and pay with your passkey: {link}",
+      "reviewed": true,
+      "context": "A batch prepared from the chat, not sent: how many people, the total, and the link to check and pay it"
+    },
+    "wa.pay.list.ready_app": {
+      "text": "{people}, {amount}. Nothing is sent yet: open Pay several in the Taskiem app to check and pay with your passkey.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat, not sent, when there is no link"
+    },
+    "wa.pay.list.held": {
+      "text": "Held out, {who}: {problem}",
+      "reviewed": true,
+      "context": "A row of a batch from the chat held out before anything moves, with why"
+    },
+    "wa.pay.list.unread": {
+      "text": "Line {line} not read ({text}): {problem}",
+      "reviewed": true,
+      "context": "A line of a list pasted in the chat that could not be read: its number, the line as sent, and why"
+    },
+    "wa.pay.list.none": {
+      "text": "Nothing was prepared to pay.",
+      "reviewed": true,
+      "context": "A list pasted in the chat where no line could be prepared; why follows"
+    },
+    "wa.pay.result.paid": {
+      "text": "Paid {to} {amount}. Received by the bank.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was paid: who and how much"
+    },
+    "wa.pay.result.failed": {
+      "text": "Not paid: {to} {amount}. {reason}",
+      "reviewed": true,
+      "context": "A payment prepared from the chat failed: who, how much, and why"
+    },
+    "wa.pay.result.let_go": {
+      "text": "let go, not sent",
+      "reviewed": true,
+      "context": "Why a row of a batch was not paid: it was let go before it was sent"
+    },
+    "wa.pay.result.rejected": {
+      "text": "Not paid: the payment of {amount} to {to} was declined.",
+      "reviewed": true,
+      "context": "A payment prepared from the chat was declined at its approval"
+    },
+    "wa.pay.result.no_reason": {
+      "text": "The bank did not say why.",
+      "reviewed": true,
+      "context": "Why a payment failed, when the bank gave no reason"
+    },
+    "wa.pay.result.declined": {
+      "text": "declined",
+      "reviewed": true,
+      "context": "Why a row of a batch was not paid: it was declined at its approval"
+    },
+    "wa.pay.result.batch": {
+      "text": "Paid {paid} of {count} people, {amount}.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat has ended: how many were paid of how many, and how much was paid"
+    },
+    "wa.pay.result.batch_all": {
+      "text": "Paid all {count} people, {amount}.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat has ended with everyone paid"
+    },
+    "wa.pay.result.batch_not": {
+      "text": "{count} not paid: {who}",
+      "reviewed": true,
+      "context": "Who in a batch from the chat was not paid, each with why"
+    },
+    "wa.pay.result.batch_one": {
+      "text": "Paid 1 person, {amount}.",
+      "reviewed": true,
+      "context": "A batch prepared from the chat has ended with its one person paid"
+    },
+    "wa.pay.pin_form": {
+      "text": "Or pay it now with your PIN in this form, within 10 minutes: {amount} to {to}.",
+      "reviewed": true,
+      "context": "The message carrying a PIN form bound to one prepared payment (the passkey link was said just before): amount, who is paid"
+    },
+    "bill.transfer.send": {
+      "text": "Send exactly {amount} to {to}, for {reference}.",
+      "reviewed": true,
+      "context": "Paying a bill by transfer in a chat: the exact amount, the account (number, bank, name) and the bill's number"
+    },
+    "bill.transfer.good_for": {
+      "text": "Good for {minutes} minutes.",
+      "reviewed": true,
+      "context": "How long the account number for a bill is good for"
+    },
+    "bill.transfer.next": {
+      "text": "I'll say here when it lands.",
+      "reviewed": true,
+      "context": "After an account number to pay a bill: the person is told when the payment arrives"
+    },
+    "bill.transfer.asking": {
+      "text": "Getting an account number for {reference}: it comes here in a moment.",
+      "reviewed": true,
+      "context": "A bill's account number was asked of the supplier and follows shortly"
+    },
+    "bill.transfer.off": {
+      "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
+      "reviewed": true,
+      "context": "The supplier has Money turned off, so no account number can be had"
     }
   }
 }

@@ -144,7 +144,8 @@ type Item struct {
 	// Unit is what one is (bag, carton), where the catalogue says: for a
 	// linked business ordering from the storefront, never on the page.
 	Unit string `json:"unit,omitempty"`
-	// Stock is how many are left, when the catalogue tracks it.
+	// Stock is how many are left (whole sales its stock item covers), when
+	// a stock item counts it: read with the copy, never kept in it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
 	DurationMinutes int `json:"duration_minutes,omitempty"`
@@ -619,6 +620,17 @@ type Rows func(ctx context.Context, tenant uuid.UUID, table string, limit int) (
 // photos through the tenant's media. Rows without a name are left out;
 // rejected or unknown photos are dropped, never the item.
 func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, false)
+}
+
+// CatalogueItems is Items for the catalogue's own table: each product
+// counted by a stock item also says how many are left of it
+// (engine/productstock), read in tx.
+func CatalogueItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns) ([]Item, error) {
+	return mapItems(ctx, tx, tenant, rows, m, true)
+}
+
+func mapItems(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]any, m Columns, withCounts bool) ([]Item, error) {
 	if len(rows) > MaxItems {
 		return nil, fmt.Errorf("%w: the catalogue has more than %d items", ErrInvalid, MaxItems)
 	}
@@ -639,18 +651,9 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		if m.Category != "" {
 			it.Category = str(r[m.Category])
 		}
-		if m.Unit != "" {
-			it.Unit = str(r[m.Unit])
-		}
 		if m.Available != "" {
 			if b, ok := r[m.Available].(bool); ok {
 				it.Available = b
-			}
-		}
-		if m.Stock != "" {
-			if f, ok := num(r[m.Stock]); ok {
-				n := max(0, int64(f))
-				it.Stock = &n
 			}
 		}
 		if m.Options != "" {
@@ -733,6 +736,12 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 	items := make([]Item, len(out))
 	for i, s := range out {
 		items[i] = s.item
+	}
+	// How many are left of each product counted by a stock item.
+	if withCounts && tx != nil {
+		if err := counted(ctx, tx, tenant, items); err != nil {
+			return nil, err
+		}
 	}
 	rollUpVariants(items)
 	return items, nil
@@ -849,7 +858,9 @@ func SyncCatalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, items []Ite
 	if _, err := tx.Exec(ctx, `DELETE FROM storefront_catalogue WHERE storefront_id = $1 AND table_name = $2`, s.ID, table); err != nil {
 		return err
 	}
-	for i, it := range items {
+	// The copy holds no count: how many are left is read with it (LeftTx,
+	// WithLeft).
+	for i, it := range withoutCounts(items) {
 		raw, _ := json.Marshal(it)
 		if _, err := tx.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (storefront_id, table_name, row_id) DO NOTHING`, s.ID, table, it.ID, tenant, i, raw); err != nil {
@@ -870,7 +881,10 @@ func CatalogueFailed(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, cause err
 	return err
 }
 
-// Catalogue reads the copy, for the owner's preview.
+// Catalogue reads the copy, in the business's scope, with how many are
+// left of each product read from its stock item (LeftTx): for the owner's
+// preview, their shop, the price lists a linked business is offered, and
+// the business's own chat and orders.
 func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error) {
 	// The catalogue's own copy: a front's list from another table is read
 	// with ListItems.
@@ -879,7 +893,7 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Item, error) {
+	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Item, error) {
 		var raw []byte
 		var it Item
 		if err := r.Scan(&raw); err != nil {
@@ -887,6 +901,10 @@ func Catalogue(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) ([]Item, error)
 		}
 		return it, json.Unmarshal(raw, &it)
 	})
+	if err != nil {
+		return nil, err
+	}
+	return items, LeftTx(ctx, tx, tenant, items)
 }
 
 // parseStarts reads a date or a date and time cell; a date alone starts
@@ -954,10 +972,3 @@ func FormatNaira(kobo int64) string {
 	}
 	return "₦" + s
 }
-
-// CatalogueTableSQL is the name of the table a catalogue copy row c of the
-// storefront is kept by, as SyncCatalogue names it (” when the table is
-// not found): stock is kept on the catalogue's table only (fronts §5.2).
-const CatalogueTableSQL = `COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`
-
-const catalogueTableSQL = CatalogueTableSQL

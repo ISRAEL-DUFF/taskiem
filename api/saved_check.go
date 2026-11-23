@@ -94,6 +94,9 @@ func railTitle(rl invoicing.Rail) string {
 type bankItem struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
+	// Likely: an account number asked about can be at this bank (its
+	// check digit fits), or the business pays it most (payments' list).
+	Likely bool `json:"likely,omitempty"`
 }
 
 // savedBanks are the banks the connection rl itself (its connector and
@@ -226,6 +229,9 @@ func builtInBanks() []bankItem {
 type savedProblem struct {
 	Words   string
 	Lasting bool
+	// Limited: not asked at all, the business having checked too many
+	// accounts in the last minute.
+	Limited bool
 }
 
 // checkSavedAccount asks the business's payments connection for the bank's
@@ -243,7 +249,9 @@ func (s *Server) checkSavedAccount(ctx context.Context, tenant uuid.UUID, acct s
 func (s *Server) checkWithRail(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, acct saved.BankAccount) (*savedCheckResult, savedProblem, error) {
 	later := savedProblem{Words: fmt.Sprintf("%s did not check the name just now; it is checked again later.", upperFirst(railTitle(rl)))}
 	if !s.limiter("name-check:"+tenant.String(), time.Minute/30, 30).Allow() {
-		return nil, later, nil
+		limited := later
+		limited.Limited = true
+		return nil, limited, nil
 	}
 	code := acct.BankCode
 	if code == "" || acct.CodeFrom != rl.Channel() {

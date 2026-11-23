@@ -851,6 +851,9 @@ button.small:focus-visible { box-shadow: var(--ring); } /* the ring, which the l
 .choice input { margin-top: 3px; }
 .field-error { color: var(--danger); font-size: 12.5px; margin-top: 4px; }
 .form-view input[aria-invalid="true"], .form-view textarea[aria-invalid="true"], .form-view select[aria-invalid="true"] { border-color: var(--danger); }
+.form-view .device-field .toolbar { margin: 4px 0 6px; }
+/* The pad is paper in both themes: ink on white, so a signature kept reads the same wherever it is shown (device fields D2). */
+.form-view .signature-pad { --paper: #ffffff; --paper-ink: #14201b; display: block; width: 100%; max-width: 420px; height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--paper); touch-action: none; }
 .money-input { display: flex; align-items: center; gap: 6px; }
 .money-input > span { font-weight: 600; color: var(--muted); }
 .form-buttons { margin-top: 8px; }
@@ -2004,6 +2007,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .new-chat:hover:not(:disabled) { background: var(--brand); filter: brightness(1.12); }
 .new-chat svg { width: 20px; height: 20px; stroke-width: 2.2; }
 :root[data-theme="dark"] .new-chat { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .new-chat { background: var(--brand-dark); color: var(--brand-dark-text); } }
 .new-chat .fab-label { display: none; }
 .chat-mode .filters { padding: 0; }
 .chat-mode .filters .search input { background: var(--panel-2); border-color: transparent; min-height: 42px; border-radius: 999px; font-size: 15px; }
@@ -2472,3 +2476,201 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .bank-field { display: grid; grid-template-columns: 1fr; gap: 8px; }
 @media (min-width: 480px) { .bank-field { grid-template-columns: 3fr 2fr; } }
 .file-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* A form's Saved button (saved objects §6.4): beside the heading of the
+   fields it fills; in a chat tool's sheet, its list opens under it. */
+.saved-fill-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 32px 0 12px; }
+.saved-fill-head h2 { margin: 0; min-width: 0; }
+.card > .saved-fill-head:first-child { margin-top: 0; }
+.saved-fill-button { flex: none; }
+.saved-fill-group { margin: 12px 0 8px; font-size: 13px; color: var(--muted); }
+.saved-fill-sheet { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
+.saved-fill-sheet .saved-fill-button { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.saved-fill-sheet .saved-fill-list { align-self: stretch; padding: 4px 0 8px; border-bottom: 1px solid var(--border); }
+.saved-fill-sheet .saved-fill-list ul { list-style: none; margin: 0; padding: 0; }
+.saved-fill-row, .saved-fill-row:hover:not(:disabled) { width: 100%; min-height: 0; border: 0; box-shadow: none; background: none; text-align: left; font: inherit; font-weight: inherit; color: var(--text); }
+.saved-fill-row:hover:not(:disabled), .saved-fill-row:focus-visible { background: var(--tk-soft); }
+/* Above a single field (a phone, an account, a date): the button at the
+   field's end, on its own line. */
+.saved-fill-line { display: flex; justify-content: flex-end; margin: 0 0 4px; }
+/* What a pick left out or could not fill; empty, it takes no room. */
+.saved-fill-note:empty { margin: 0; }
+.saved-fill-note.error-text:not(:empty) { margin: 0 0 12px; }
+/* Saving after an action (SaveAfter): another name, under its row. */
+.items > li.save-after-name { padding: 4px 18px 14px 72px; border-top: 0; }
+.save-after-name .hint { margin: 0 0 8px; }
+.save-after-name .error-text { margin: 0 0 8px; font-size: 13px; }
+.save-after-name .toolbar { margin-top: 4px; }
+@media (max-width: 860px) { .items > li.save-after-name { padding: 4px 16px 14px; } }
+.sub .import-warning { color: var(--tint-warn-text); font-weight: 500; }
+/* Big enough to tap on a touch screen. */
+@media (pointer: coarse) {
+  .saved-fill-button, .saved-fill-use { min-height: 44px; padding-left: 14px; padding-right: 14px; }
+}
+/* Paying one person (pages/PaySheet.tsx, pages/Payments.tsx): the bank's
+   name for the account large, then the facts, then what to know first. */
+.pay-check { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pay-check-label { font-size: 13px; color: var(--muted); }
+.pay-check-name { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; color: var(--text); }
+.pay-check-sub { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.pay-check-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.pay-check-facts dt { font-size: 12px; color: var(--muted); }
+.pay-check-facts dd { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.pay-warns { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pay-warn { padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.45; }
+.pay-warn.warn { color: color-mix(in srgb, var(--warn) 70%, var(--text)); background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.pay-warn.danger { color: color-mix(in srgb, var(--danger) 82%, var(--text)); background: color-mix(in srgb, var(--danger) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); font-weight: 600; }
+.pay-code { display: flex; flex-direction: column; gap: 10px; }
+.pay-sent { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.pay-sent p { margin: 0; }
+.pay-foot-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+.card .pay-check + .pay-warn, .card .pay-check ~ .toolbar { margin-top: 14px; }
+
+/* Pay several people (pages/PayBatch.tsx): a row's fields, a row's
+   problem, the picks and the list's foot. */
+.batch-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-top: 10px; }
+.batch-fields label.field { margin: 0; min-width: 0; }
+.batch-fields input, .batch-fields select { width: 100%; min-width: 0; }
+.sub .batch-problem { margin-top: 6px; padding: 6px 10px; font-size: 13px; }
+.batch-held-why { color: color-mix(in srgb, var(--warn) 70%, var(--text)); }
+.batch-picks { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.batch-pick { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.batch-pick input { margin-top: 3px; flex: none; }
+.batch-pick .sub { font-size: 13px; color: var(--muted); }
+.batch-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.batch-foot-sum { margin: 0; display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.batch-foot-sum strong { font-size: 18px; }
+.batch-foot .error { flex-basis: 100%; margin: 0; }
+@media (max-width: 400px) { .batch-fields { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .pay-check-name { font-size: 24px; } }
+/* Paying from a message (P2): the chip under a message, the likely banks
+   and their answers in the Pay sheet, who a rider's payment goes to. */
+.pay-chip-line { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 1px; }
+.pay-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 100%; padding: 0 12px; border-radius: 999px; border: 0; box-shadow: none; background: var(--tint); color: var(--tint-text); font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.pay-chip svg { width: 15px; height: 15px; flex: none; }
+button.pay-chip:hover { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.pay-chip.paid { color: color-mix(in srgb, var(--ok) 75%, var(--text)); background: color-mix(in srgb, var(--ok) 12%, var(--panel)); }
+.pay-chip.muted { background: var(--panel-2); color: var(--muted); font-weight: 500; }
+.pay-chip.save { background: var(--panel); color: var(--accent); box-shadow: inset 0 0 0 1px var(--border-strong); }
+button.pay-chip.save:hover { background: var(--panel-2); }
+/* "From a photo" (reading account details from photos, I2): the picker as a
+   small button, and beside it (under it when there is no room) that the
+   photo is read on this device and not sent. */
+.photo-read { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.photo-read-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.photo-read-pick:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.photo-read-pick.off { cursor: default; opacity: 0.7; }
+.photo-read-note { font-size: 13px; line-height: 1.4; color: var(--muted); min-width: 0; overflow-wrap: anywhere; }
+.toolbar + .photo-read, .photo-read + .notice { margin-top: 10px; }
+/* "Read it with AI" (I3): after this device found nothing in a photo,
+   where an owner turned it on; the photo goes only on that tap. */
+.photo-ai { display: grid; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--tint); color: var(--text); }
+.photo-read + .photo-ai, .photo-ai + .notice { margin-top: 10px; }
+.card > .photo-ai { margin-bottom: 14px; }
+.photo-ai p { margin: 0; overflow-wrap: anywhere; }
+.photo-ai-said { font-size: 14px; font-weight: 600; }
+.photo-ai-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-ai-row button { display: inline-flex; align-items: center; gap: 6px; }
+.photo-ai-row svg { width: 16px; height: 16px; flex: none; }
+.photo-ai-note { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.photo-ai-error { font-size: 14px; color: var(--danger); }
+.modal .photo-ai { background: none; padding: 0; }
+.save-as-value { display: block; min-height: 40px; padding: 9px 12px; border-radius: 12px; background: var(--panel-2); color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.save-as-done { margin: 0 0 8px; font-size: 15px; overflow-wrap: anywhere; }
+.pay-likely .tk-chips { flex-wrap: wrap; padding: 0; overflow: visible; }
+.pay-likely-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
+.pay-answers { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pay-answers button { width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 12px; text-align: left; font-weight: 600; overflow-wrap: anywhere; }
+.pay-answers button[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.pay-answer-none { display: block; padding: 8px 12px; border-radius: 12px; background: var(--panel-2); color: var(--muted); font-size: 14px; }
+.pay-likely .pay-warn { margin-top: 8px; }
+.pay-lead { margin: 0 0 4px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* "3 to pay" at the foot of a chat (collecting from several messages, P3). */
+.pay-list-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--border); }
+.pay-list-sum { flex: 1; min-width: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; row-gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pay-list-needs { font-size: 13px; font-weight: 600; color: var(--tint-warn-text); }
+.pay-list-waiting { font-size: 13px; }
+.pay-list-acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.pay-list-acts .button.small, .pay-list-acts button.small { min-height: 36px; display: inline-flex; align-items: center; padding: 6px 14px; font-size: 14px; }
+.pay-list-acts button.small { padding: 6px 8px; }
+.pay-list-acts button.small svg { width: 18px; height: 18px; }
+.pay-list-more { position: relative; }
+.pay-list-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; }
+.collect-from { display: block; font-size: 13px; }
+
+/* Pages (pages/Pages.tsx, PageEditor.tsx): a business's own screens. */
+.pg-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0 0 14px; }
+.pg-figure.warn .stat-value { color: var(--warn); }
+.pg-figure.danger .stat-value { color: var(--danger); }
+.pg-figure.ok .stat-value { color: var(--ok); }
+.pg-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+.pg-filters > select { width: auto; min-width: 0; max-width: 100%; }
+.pg-search { display: flex; gap: 4px; flex: 1 1 200px; min-width: 0; }
+.pg-search input { flex: 1; min-width: 0; }
+.pg-heading { margin: 8px 0 12px; }
+.pg-heading h2 { margin: 0; }
+.pg-part { margin: 0 0 14px; }
+.pg-buttons { margin: 0 0 14px; }
+.pg-buttons h2 { margin: 0 0 8px; }
+.pg-row-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.pg-table .pg-row-actions { padding: 0; }
+.pg-part-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.pg-part-head h2 { margin: 0; }
+.pg-group h3 { margin: 12px 0 8px; font-size: 14px; }
+.pg-row { width: 100%; border: 0; border-radius: 0; background: none; box-shadow: none; font: inherit; text-align: left; cursor: pointer; }
+.pg-row:disabled { cursor: default; opacity: 1; }
+.pg-lines { display: grid; gap: 10px; margin: 0 0 16px; }
+.pg-lines dt { font-size: 12px; color: var(--muted); }
+.pg-lines dd { margin: 0; overflow-wrap: anywhere; }
+.pg-table th button.link { font-weight: 600; }
+.pg-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.pg-editor-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.pg-editor-preview { min-width: 0; }
+.pg-phone { border: 1px solid var(--border-strong); border-radius: 24px; padding: 16px; background: var(--bg); max-width: 390px; }
+.pg-parts { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-part-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.pg-part-row .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pg-part-row .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.pg-part-row .pg-problem { color: var(--danger); }
+.pg-part-form { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.pg-conditions .toolbar { flex-wrap: wrap; }
+.pg-conditions .toolbar > * { min-width: 0; max-width: 100%; }
+.pg-filter-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--border); }
+.pg-filter-row > button { align-self: flex-start; }
+@media (min-width: 1100px) {
+  .pg-editor { grid-template-columns: minmax(0, 1fr) 390px; align-items: start; }
+  .pg-editor-preview { position: sticky; top: 16px; }
+}
+
+/* The question on a line bought (what a business buys §6, TreatLine.tsx). */
+fieldset.treat, div.treat { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 4px; margin: 0 0 12px; min-width: 0; background: var(--panel); color: var(--text); text-align: left; }
+/* The heading inside the box, at its top (a float takes a legend off the border). */
+fieldset.treat > legend { float: left; width: 100%; padding: 0; margin: 0 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+fieldset.treat > legend + * { clear: both; }
+.treat .block { display: block; }
+.treat .treat-ask { display: block; font-weight: 600; margin-top: 2px; }
+div.treat-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 12px; }
+.treat-compact p { margin: 0; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.treat-now { display: block; color: var(--muted); font-size: 13px; }
+.treat-compact .hint { display: flex; align-items: center; gap: 4px; }
+.treat-compact .hint svg, .treat-went svg { width: 14px; height: 14px; }
+.treat-more { margin-top: 6px; }
+.treat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -8px 0 12px; }
+.treat-chips button { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font-size: 13px; font-weight: 600; box-shadow: none; }
+.treat-chips button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #ffffff; }
+:root[data-theme="dark"] .treat-chips button[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .treat-chips button[aria-pressed="true"] { background: var(--brand-dark); border-color: var(--brand-dark); color: var(--brand-dark-text); }
+}
+.treat > button.small { margin: 0 0 10px; }
+.treat-problem { color: var(--warn); }
+.treat-ask-box p { margin: 0 0 8px; }
+.treat-mark { display: block; color: var(--muted); font-size: 12.5px; }
+.treat-went { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
+.things-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 18px 0 8px; font-size: 16px; }
+.things-head .hint { font-weight: 500; font-size: 13px; }
+.spending-sum { margin-bottom: 12px; }
+.spending-sum .hint { display: block; font-size: 12.5px; }
+.spending-profit { margin: 12px 0 0; }
+.spending-profit .hint { display: block; }

@@ -3,6 +3,7 @@
 // when Taskiem's conversation was last seen (web/src/lib/taskiemSeen.ts).
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -42,6 +43,12 @@ class Prefs extends ChangeNotifier {
   /// allows it. Nothing else of the contacts or the answer is kept.
   String? contactsChecked;
 
+  /// The way a bill was last paid to each seller (the payments flow,
+  /// settled 2): transfer, taskiem or checkout, by the seller's id. It
+  /// comes first on Pay next time. The person's own: forgotten on
+  /// signing out.
+  Map<String, String> payWays = const {};
+
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
 
@@ -61,6 +68,8 @@ class Prefs extends ChangeNotifier {
       lockAfter = secs == null || secs < 0 ? null : Duration(seconds: secs);
       recentTools = (await keys.read('tools-recent') ?? '').split(',').where((k) => k.isNotEmpty).toList();
       contactsChecked = await keys.read('contacts-checked');
+      final ways = jsonDecode(await keys.read('pay-ways') ?? '{}');
+      if (ways is Map) payWays = {for (final e in ways.entries) if (e.value is String) '${e.key}': e.value as String};
     } on Object {
       // The phone's storage not read: the defaults.
     }
@@ -76,8 +85,9 @@ class Prefs extends ChangeNotifier {
     taskiemSeen = null;
     lockAfter = null;
     contactsChecked = null;
+    payWays = const {};
     notifyListeners();
-    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after', 'contacts-checked']) {
+    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after', 'contacts-checked', 'pay-ways']) {
       try {
         await keys.write(k, null);
       } on Object {
@@ -102,6 +112,17 @@ class Prefs extends ChangeNotifier {
     recentTools = [key, ...recentTools.where((k) => k != key)].take(2).toList();
     try {
       await keys.write('tools-recent', recentTools.join(','));
+    } on Object {
+      // Kept only while the app runs.
+    }
+  }
+
+  /// A bill paid to [seller] by [way]: that way first next time.
+  Future<void> rememberPayWay(String seller, String way) async {
+    if (seller.isEmpty || payWays[seller] == way) return;
+    payWays = {...payWays, seller: way};
+    try {
+      await keys.write('pay-ways', jsonEncode(payWays));
     } on Object {
       // Kept only while the app runs.
     }

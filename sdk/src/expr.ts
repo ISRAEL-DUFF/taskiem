@@ -509,10 +509,10 @@ const MACROS: Record<string, string> = { filter: "filter", map: "map", some: "ex
  * Compiles an expression function's source (Function.prototype.toString())
  * to a CEL expression string, without the leading "=".
  */
-export function compileFunction(source: string): string {
+export function compileFunction(source: string, roots: readonly string[] = ROOTS): string {
   const fn = parseWith(source.trim(), "js");
   if (fn.k !== "arrow") throw new ExpressionError("an expression must be an arrow function, such as ({ trigger }) => trigger.body.amount");
-  const scope = new Scope(fn.params);
+  const scope = new Scope(fn.params, roots);
   return printCel(lower(fn.body, scope));
 }
 
@@ -532,9 +532,12 @@ function number(v: number): Node {
 
 class Scope {
   vars = new Set<string>();
-  constructor(readonly param: Param) {}
+  constructor(
+    readonly param: Param,
+    readonly roots: readonly string[] = ROOTS,
+  ) {}
   with(v: string): Scope {
-    const s = new Scope(this.param);
+    const s = new Scope(this.param, this.roots);
     s.vars = new Set(this.vars).add(v);
     return s;
   }
@@ -551,7 +554,7 @@ function lower(n: Node, s: Scope): Node {
       if (s.param.kind === "destructure") {
         const root = s.param.names.get(n.name);
         if (root !== undefined) {
-          checkRoot(root);
+          checkRoot(root, s.roots);
           return { k: "ident", name: root };
         }
       }
@@ -559,11 +562,11 @@ function lower(n: Node, s: Scope): Node {
         throw new ExpressionError(`"${n.name}" on its own is not an expression value; read a field, such as ${n.name}.trigger.body`);
       }
       if (n.name === "cel") throw new ExpressionError("cel is only for calls such as cel.has(...)");
-      throw new ExpressionError(`"${n.name}" is not available in an expression (only ${ROOTS.join(", ")}); compute it in a code step`);
+      throw new ExpressionError(`"${n.name}" is not available in an expression (only ${s.roots.join(", ")}); compute it in a code step`);
     }
     case "member":
       if (s.param.kind === "name" && n.obj.k === "ident" && n.obj.name === s.param.name && !s.vars.has(n.obj.name)) {
-        checkRoot(n.name);
+        checkRoot(n.name, s.roots);
         return { k: "ident", name: n.name };
       }
       if (n.name === "length") throw new ExpressionError(".length is ambiguous in CEL; use cel.size(x)");
@@ -641,8 +644,8 @@ function isCelRef(n: Node, s: Scope): boolean {
   return n.k === "member" && n.name === "cel" && n.obj.k === "ident" && !bound(n.obj.name) && !(ROOTS as readonly string[]).includes(n.obj.name);
 }
 
-function checkRoot(name: string) {
-  if (!(ROOTS as readonly string[]).includes(name)) throw new ExpressionError(`the context has no "${name}" (only ${ROOTS.join(", ")})`);
+function checkRoot(name: string, roots: readonly string[] = ROOTS) {
+  if (!roots.includes(name)) throw new ExpressionError(`the context has no "${name}" (only ${roots.join(", ")})`);
 }
 
 // Precedence for printing, lowest first. CEL and the JavaScript we print

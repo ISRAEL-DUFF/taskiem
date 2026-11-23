@@ -332,7 +332,7 @@ func TestHeadlessFlow(t *testing.T) {
 	w := newWorld(t)
 	p := w.partner(t, "Wagely", "owner@wagely.test")
 	sub := p.sub(t, "Customer", nil)
-	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{}, "allowed_templates": []string{"payroll-reminder"},
+	app, _ := p.app(t, map[string]any{"name": "api", "headless": true, "allowed_connectors": []string{}, "allowed_templates": []string{"daily-reminder"},
 		"end_user_permissions": []string{"workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start", "run.cancel"}})
 	u := p.endUser(t, w, app, sub, "cust-42", "", "workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start")
 
@@ -365,7 +365,7 @@ func TestHeadlessFlow(t *testing.T) {
 	}
 
 	// Create (from an allowed template), validate, save, lay out, publish.
-	created := u.call(201, "POST", "/workflows", map[string]any{"name": "hello", "template": "payroll-reminder", "definition": json.RawMessage(transformFlow)})
+	created := u.call(201, "POST", "/workflows", map[string]any{"name": "hello", "template": "daily-reminder", "definition": json.RawMessage(transformFlow)})
 	wf := created["id"].(string)
 	if probs := created["problems"].([]any); len(probs) != 0 {
 		t.Fatalf("problems: %v", probs)

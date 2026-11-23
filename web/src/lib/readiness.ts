@@ -4,13 +4,14 @@
 // this decides how the web app offers each one.
 
 export interface ReadyNeed {
-  kind: "connection" | "variable" | "secret" | "table" | "role" | "field";
+  kind: "connection" | "variable" | "secret" | "table" | "role" | "field" | "saved";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
   service?: string;
-  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); never blocking. */
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot" | "support";
+  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); never blocking.
+   * invalid: a saved thing's name no saved thing can have; the message says so. */
+  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot" | "support" | "invalid";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -44,7 +45,10 @@ export type Fix =
   | { kind: "make_table"; name: string; table?: TableSpec }
   | { kind: "give_role"; role: string }
   | { kind: "ask_phone"; field: string }
-  | { kind: "ask_support"; service: string };
+  | { kind: "save_thing"; name: string }
+  | { kind: "ask_support"; service: string }
+  /** Nothing to do here but what the message says. */
+  | { kind: "none" };
 
 /** The connection name a new connection takes for a need. */
 export const DEFAULT_CONNECTION = "main";
@@ -67,6 +71,11 @@ export function fixFor(n: ReadyNeed): Fix {
       return { kind: "give_role", role: n.name };
     case "field":
       return { kind: "ask_phone", field: n.name };
+    case "saved":
+      // A business's saved thing the workflow reads (saved.price_list is
+      // @price-list); a name no saved thing can have is the workflow's to fix.
+      if (n.problem === "invalid") return { kind: "none" };
+      return { kind: "save_thing", name: n.name };
   }
 }
 

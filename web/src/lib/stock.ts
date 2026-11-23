@@ -38,8 +38,13 @@ export interface StockItem {
   low?: boolean;
   /** How many to order, when low. */
   suggest?: number;
-  /** Its movements not yet in the table. */
-  waiting?: number;
+  /** A stock item no product is counted by (what a business buys §4.1):
+   * its id is the stock item's. */
+  material?: boolean;
+  /** A product's: the stock item it is counted by, and how many of it one
+   * sale uses. */
+  stock_item_id?: string;
+  uses?: number;
 }
 
 export type MovementReason =
@@ -48,7 +53,6 @@ export type MovementReason =
   | "received"
   | "adjustment"
   | "count"
-  | "outside"
   | "moved";
 
 export interface Movement {
@@ -56,7 +60,6 @@ export interface Movement {
   item_id: string;
   item: string;
   reason: MovementReason;
-  status: "pending" | "done" | "void";
   delta?: number;
   set_to?: number;
   before: number | null;
@@ -66,7 +69,6 @@ export interface Movement {
   note?: string;
   reference?: string;
   by: string;
-  error?: string;
   created_at: string;
   done_at: string | null;
 }
@@ -76,7 +78,8 @@ export interface StockView {
   catalogue: string | null;
   items: StockItem[];
   low?: number;
-  stuck?: Movement[];
+  /** What the counted items are worth at cost. */
+  value_kobo?: number;
   /** The page is published (items without a price are hidden from it). */
   published?: boolean;
 }
@@ -101,28 +104,6 @@ export function quantity(n: number, unit?: string): string {
 export const stockLine = (it: StockItem) =>
   it.stock === null ? "No count" : quantity(it.stock, it.unit);
 
-/** An item underneath its name: its levels, cost and supplier. */
-export function itemSub(it: StockItem): string {
-  const parts: string[] = [];
-  if (it.reorder_level !== undefined)
-    parts.push(`reorder at ${it.reorder_level}`);
-  if (it.target_level !== undefined) parts.push(`up to ${it.target_level}`);
-  if (it.cost_kobo !== undefined)
-    parts.push(`cost ${formatPrice(it.cost_kobo)}`);
-  if (it.price_kobo !== undefined)
-    parts.push(`sells at ${formatPrice(it.price_kobo)}`);
-  if (it.supplier) parts.push(it.supplier);
-  if (it.low && it.suggest)
-    parts.push(`order ${quantity(it.suggest, it.unit)}`);
-  if (it.waiting)
-    parts.push(
-      it.waiting === 1
-        ? "1 change on its way"
-        : `${it.waiting} changes on their way`,
-    );
-  return parts.join(" · ") || "No levels yet";
-}
-
 /** Why a movement was made, in a word or two. */
 export const REASON: Record<MovementReason, string> = {
   order: "Order",
@@ -130,7 +111,6 @@ export const REASON: Record<MovementReason, string> = {
   received: "Received",
   adjustment: "Adjusted",
   count: "Counted",
-  outside: "Changed in the table",
   moved: "Moved",
 };
 
@@ -146,13 +126,7 @@ export function movementTitle(m: Movement): string {
 /** A movement underneath its title: when, the count it left, what it came from, who, and why. */
 export function movementSub(m: Movement): string {
   const parts = [whenLabel(m.done_at ?? m.created_at)];
-  if (m.status === "pending")
-    parts.push(
-      m.error
-        ? "not in the table yet: it is sent again"
-        : "on its way to the table",
-    );
-  else if (m.before !== null && m.after !== null)
+  if (m.before !== null && m.after !== null)
     parts.push(`${m.before} → ${m.after}`);
   if (m.short) parts.push(`${m.short} more asked for than there was`);
   if (m.reference)
@@ -183,17 +157,6 @@ export const emptyItem = (): ItemForm => ({
   reorder: "",
   target: "",
   supplier: "",
-});
-
-export const itemForm = (it: StockItem): ItemForm => ({
-  name: it.name,
-  quantity: "",
-  unit: it.unit ?? "",
-  cost: it.cost_kobo === undefined ? "" : feeInput(it.cost_kobo),
-  price: it.price_kobo === undefined ? "" : feeInput(it.price_kobo),
-  reorder: it.reorder_level === undefined ? "" : String(it.reorder_level),
-  target: it.target_level === undefined ? "" : String(it.target_level),
-  supplier: it.supplier ?? "",
 });
 
 const whole = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : NaN);
@@ -236,26 +199,29 @@ export function itemProblem(f: ItemForm, adding: boolean): string | null {
 const opt = (v: string, conv: (s: string) => number) =>
   v.trim() === "" ? undefined : conv(v);
 
-/** The POST /v1/stock/items body. */
-export const addRequest = (f: ItemForm) => ({
+/** The POST /v1/stock/items body for Add something to count: sold, it
+ * is a product counted by a new stock item; not sold, a material (no
+ * price). */
+export const addRequest = (f: ItemForm, sells: boolean) => ({
   name: f.name.trim(),
   quantity: f.quantity.trim() === "" ? 0 : whole(f.quantity),
   unit: f.unit.trim(),
   cost_kobo: opt(f.cost, feeKobo),
-  price_kobo: opt(f.price, feeKobo),
+  ...(sells ? { price_kobo: opt(f.price, feeKobo) } : { material: true }),
   reorder_level: opt(f.reorder, whole),
   target_level: opt(f.target, whole),
   supplier: f.supplier.trim(),
 });
 
-/** The PATCH /v1/stock/items/{id} body: what changed only. */
+/** The PATCH /v1/stock/items/{id} body: what changed from before only
+ * (a field cleared is left as it was). */
 export function changeRequest(
-  it: StockItem,
+  before: ItemForm,
   f: ItemForm,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  const before = itemForm(it);
-  if (f.name.trim() !== it.name) out.name = f.name.trim();
+  if (f.name.trim() !== "" && f.name.trim() !== before.name)
+    out.name = f.name.trim();
   if (f.unit.trim() !== before.unit) out.unit = f.unit.trim();
   if (f.supplier.trim() !== before.supplier) out.supplier = f.supplier.trim();
   if (f.cost.trim() !== before.cost && f.cost.trim() !== "")
@@ -293,8 +259,12 @@ export function moveProblem(f: MoveForm): string | null {
   return null;
 }
 
+/** What a stock change is made on: a stock item's id (or a product's),
+ * its count and unit. */
+export type Counted = { id: string; stock: number | null; unit?: string };
+
 /** The POST /v1/stock/movements body. */
-export function moveRequest(it: StockItem, f: MoveForm) {
+export function moveRequest(it: Counted, f: MoveForm) {
   const n = whole(f.amount);
   const body: Record<string, unknown> = {
     item_id: it.id,
@@ -307,7 +277,7 @@ export function moveRequest(it: StockItem, f: MoveForm) {
 }
 
 /** What the stock will be after a change, as the form shows it ("48 → 45 cartons"). */
-export function movePreview(it: StockItem, f: MoveForm): string | null {
+export function movePreview(it: Counted, f: MoveForm): string | null {
   const n = whole(f.amount);
   if (Number.isNaN(n) || it.stock === null) return null;
   const to =
@@ -615,4 +585,201 @@ export function shrinkLine(s: Shrink): string {
       ? "nothing lost"
       : `${s.lost} lost${s.lost_kobo ? ` (${formatPrice(s.lost_kobo)} at cost)` : ""}`;
   return `${s.received} in, ${s.sold} sold, ${lost}`;
+}
+
+// --- stock items (what a business buys §4.5; GET /v1/stock/stock-items) ---
+
+/** A product a stock item is sold as: one sale of it takes uses of it. */
+export interface SoldAs {
+  product_id: string;
+  name: string;
+  uses: number;
+  price_kobo: number | null;
+  variant: Record<string, string> | null;
+  available: boolean;
+}
+
+/** A row of the Stock page: something counted, with what it is sold as
+ * (none: a material, Not sold). */
+export interface StockItemRow {
+  id: string;
+  name: string;
+  unit: string;
+  category: string;
+  count: number;
+  cost_kobo: number | null;
+  low_level: number | null;
+  target_level: number | null;
+  supplier_id: string | null;
+  supplier: string;
+  /** A size's or colour's: the product it is one of, and its name. */
+  group_of: string;
+  group_name: string;
+  low: boolean;
+  suggest: number | null;
+  value_kobo: number;
+  retired: boolean;
+  sold_as: SoldAs[];
+}
+
+export type StockShow = "all" | "sold" | "not_sold";
+
+/** The Stock page's filter, in words. */
+export const SHOW: Record<StockShow, string> = {
+  all: "All",
+  sold: "Sold",
+  not_sold: "Not sold",
+};
+
+export interface StockItemsView {
+  keeps_stock: boolean;
+  /** Of those listed: what they are worth at cost, and how many are low. */
+  value_kobo: number;
+  low: number;
+  items: StockItemRow[];
+}
+
+/** A stock item's count as a row's side says it: "48 cartons". */
+export const rowCount = (r: Pick<StockItemRow, "count" | "unit">) =>
+  quantity(r.count, r.unit);
+
+/** What one sale of a product takes of its stock item, when more than
+ * one: "uses 6 bottles". */
+export const usesWords = (uses: number, unit?: string) =>
+  `uses ${quantity(uses, unit)}`;
+
+/** What a stock item is sold as: "Sold as Malt, pack of 6 (uses 6
+ * bottles) and Malt bottle", or "Not sold". */
+export function soldAsLine(r: Pick<StockItemRow, "sold_as" | "unit">): string {
+  if (r.sold_as.length === 0) return "Not sold";
+  const names = r.sold_as.map((s) =>
+    s.uses > 1 ? `${s.name} (${usesWords(s.uses, r.unit)})` : s.name,
+  );
+  const last = names.pop();
+  return `Sold as ${names.length ? `${names.join(", ")} and ${last}` : last}`;
+}
+
+/** A stock item underneath what it is sold as: its levels, cost, supplier
+ * and what to order. */
+export function rowSub(r: StockItemRow): string {
+  const parts: string[] = [];
+  if (r.low_level !== null) parts.push(`reorder at ${r.low_level}`);
+  if (r.target_level !== null) parts.push(`up to ${r.target_level}`);
+  if (r.cost_kobo !== null) parts.push(`cost ${formatPrice(r.cost_kobo)}`);
+  if (r.supplier) parts.push(r.supplier);
+  if (r.low && r.suggest) parts.push(`order ${quantity(r.suggest, r.unit)}`);
+  return parts.join(" · ") || "No levels yet";
+}
+
+/** The list's line: how many, what they are worth at cost, how many are low. */
+export function worthLine(v: StockItemsView, show: StockShow): string {
+  const n = v.items.length;
+  const what =
+    show === "sold"
+      ? `${n} sold`
+      : show === "not_sold"
+        ? `${n} not sold`
+        : `${n} counted`;
+  const parts = [what, `worth ${formatPrice(v.value_kobo)} at cost`];
+  if (v.low > 0) parts.push(`${v.low} low`);
+  return parts.join(" · ");
+}
+
+/** The Stock page's rows: a stock item of its own, or a product sold in
+ * sizes and colours (group_of) with theirs under it, the group's line
+ * first. */
+export type StockListRow =
+  | { kind: "item"; row: StockItemRow; group?: string }
+  | {
+      kind: "group";
+      id: string;
+      name: string;
+      count: number;
+      sizes: number;
+      low: number;
+    };
+
+export function stockList(items: StockItemRow[]): StockListRow[] {
+  const groups = new Map<string, StockItemRow[]>();
+  for (const r of items)
+    if (r.group_of) groups.set(r.group_of, [...(groups.get(r.group_of) ?? []), r]);
+  const out: StockListRow[] = [];
+  const done = new Set<string>();
+  for (const r of items) {
+    if (!r.group_of) {
+      out.push({ kind: "item", row: r });
+      continue;
+    }
+    if (done.has(r.group_of)) continue;
+    done.add(r.group_of);
+    const g = groups.get(r.group_of) ?? [];
+    const name = r.group_name || r.name;
+    out.push({
+      kind: "group",
+      id: r.group_of,
+      name,
+      count: g.reduce((a, x) => a + Math.max(0, x.count), 0),
+      sizes: g.length,
+      low: g.filter((x) => x.low).length,
+    });
+    for (const x of g) out.push({ kind: "item", row: x, group: name });
+  }
+  return out;
+}
+
+/** How a stock item is changed from the Stock page: the id PATCH
+ * /v1/stock/items/{id} takes (a material's own; else the product it is
+ * sold as, whose stock item it is), and whether its name and price can be
+ * changed here. A name and a price are a product's: only a stock item sold
+ * as one product, one for one, changes them here; a size's follow its
+ * product. */
+export function rowEdit(r: StockItemRow): {
+  id: string;
+  name: boolean;
+  price: boolean;
+} {
+  const first = r.sold_as[0];
+  if (!first) return { id: r.id, name: true, price: false };
+  const only = r.sold_as.length === 1 && first.uses === 1 && !r.group_of;
+  return { id: first.product_id, name: only, price: only };
+}
+
+/** The change form of a stock item, as it is. */
+export function rowForm(r: StockItemRow): ItemForm {
+  const p = rowEdit(r).price ? (r.sold_as[0]?.price_kobo ?? null) : null;
+  return {
+    name: r.name,
+    quantity: "",
+    unit: r.unit,
+    cost: r.cost_kobo === null ? "" : feeInput(r.cost_kobo),
+    price: p === null ? "" : feeInput(p),
+    reorder: r.low_level === null ? "" : String(r.low_level),
+    target: r.target_level === null ? "" : String(r.target_level),
+    supplier: r.supplier,
+  };
+}
+
+/** A stock item as a stock change and its history name it: by its own id,
+ * which the movements take for either kind. */
+export const rowCounted = (r: StockItemRow): Counted => ({
+  id: r.id,
+  stock: r.count,
+  unit: r.unit,
+});
+
+/** What a product's form says it is counted by: "Malt bottle · uses 6
+ * bottles · 20 bottles left", or why it is not. */
+export function countedByLine(
+  it: Pick<StockItem, "stock_item_id" | "uses" | "choices">,
+  rows: StockItemRow[] | undefined,
+): string {
+  if ((it.choices?.length ?? 0) > 0)
+    return "Sold in sizes and colours: each is counted by its own";
+  if (!it.stock_item_id) return "Not counted: selling it changes no count";
+  const r = rows?.find((x) => x.id === it.stock_item_id);
+  if (!r) return "Loading…";
+  const parts = [r.name];
+  if ((it.uses ?? 1) > 1) parts.push(`one sale ${usesWords(it.uses ?? 1, r.unit)}`);
+  parts.push(`${rowCount(r)} now`);
+  return parts.join(" · ");
 }

@@ -50,7 +50,7 @@ class CardFrame extends StatelessWidget {
     final line = [
       if (amount != null) breakAfterHyphens(title),
       if (card.wasKobo != null && card.wasKobo! > (amount ?? 0)) 'was ${naira(card.wasKobo!)}',
-      if ((card.note ?? '').isNotEmpty) '“${card.note}”',
+      if (cardNote(card).isNotEmpty) '“${cardNote(card)}”',
     ].join(' · ');
     final children = <Widget>[
       // The kind and reference small, the state as a capsule at the end.
@@ -311,7 +311,7 @@ class CardButton extends StatelessWidget {
 /// What a card's buttons do: a step taken from the card, as the web's
 /// CardActions takes it, and the document opened.
 class CardActs {
-  CardActs({required this.auth, required this.onDone, this.onOpen, this.ask, this.said});
+  CardActs({required this.auth, required this.onDone, this.onOpen, this.onPay, this.ask, this.said});
 
   final Auth auth;
 
@@ -320,6 +320,10 @@ class CardActs {
 
   /// A document of ours opened in the app (View order, View invoice, Pay).
   final void Function(LinkDocCard card)? onOpen;
+
+  /// Pay on a bill's card: the ways to pay it, in a sheet over the chat
+  /// (lib/chat/pay_transfer.dart); else its document opens.
+  final void Function(LinkDocCard card)? onPay;
 
   /// Asks first (the web's confirmation): true to go on.
   final Future<bool> Function(String title, String ok)? ask;
@@ -417,7 +421,7 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
             label: 'Pay${card.amountKobo != null ? ' ${naira(card.amountKobo!)}' : ''}',
             primary: true,
             semantics: 'Pay $ref',
-            onTap: acts.onOpen == null ? null : () => acts.onOpen!(card),
+            onTap: acts.onPay != null ? () => acts.onPay!(card) : (acts.onOpen == null ? null : () => acts.onOpen!(card)),
           ),
         ];
       }

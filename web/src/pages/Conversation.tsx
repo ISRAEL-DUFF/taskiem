@@ -5,6 +5,8 @@ import { SavedCardView } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
 import { docMentions, refSources, type ChatRef } from "../lib/refs";
 import { RefCard } from "./ChatRefCard";
+import { BillTransferLive } from "./PayByTransfer";
+import { PayChip, PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import {
   useCallback,
   useEffect,
@@ -25,6 +27,7 @@ import {
   dayLabel,
   fileSize,
   fileURL,
+  isTransferPaid,
   merge,
   previewLine,
   REACTIONS,
@@ -363,6 +366,15 @@ function CardActions({
   );
 }
 
+/** A bill's newest card, once an account number was given for it: the
+ * number as it is now, for those who may pay bills (the payments flow,
+ * part 1). */
+function ChatTransfer({ seller, reference }: { seller: string; reference: string }) {
+  const { can } = useAuth();
+  if (!can("invoice.manage")) return null;
+  return <BillTransferLive seller={seller} reference={reference} />;
+}
+
 /** A message's photo, voice note or PDF: this business's own copy, from
  * the API (the console shows files from its own origin only). */
 function AttachmentView({
@@ -626,9 +638,11 @@ function Bubble({
   canReply,
   latest = false,
   current,
+  settled,
   onDone = () => undefined,
   onForward,
   onSaveAs,
+  onSavePhoto,
   onHide,
   onJump,
   flash = false,
@@ -651,10 +665,15 @@ function Bubble({
   latest?: boolean;
   /** The newest card of the same document: where it is now. */
   current?: DocCard;
+  /** A number given for a bill: the later card saying it was paid into. */
+  settled?: DocCard;
   onDone?: () => void;
   onForward?: (m: LinkMessage) => void;
   /** Save as… on its words (saved objects S1, part 4). */
   onSaveAs?: (text: string) => void;
+  /** Save the account on a photo (reading account details from photos):
+   * given where the conversation fetches it. */
+  onSavePhoto?: (url: string) => void;
   onHide?: (m: LinkMessage) => void;
   /** Goes to the message a quote quotes. */
   onJump?: (id: string) => void;
@@ -689,13 +708,20 @@ function Bubble({
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
   const local = m.local;
+  // A photo has Pay this account (from the other side, as the chip under
+  // words is) and Save the account: fetched with the session, read on
+  // this device.
+  const photo = !card && !local && m.attachment?.kind === "photo" && !!onSavePhoto;
   const hasMenu =
     !local &&
     (!!(onReact || onStar || onInfo) ||
       canReply ||
+      photo ||
       (!card && !!(onForward || onHide || m.body)));
   const mineEmoji = m.reactions?.find((r) => r.mine)?.emoji;
-  const what = card ? cardLine(card, m.mine, other) : previewLine(m, other);
+  const what = card
+    ? cardLine(card, m.mine, other, { settled })
+    : previewLine(m, other);
   // The time and ticks sit in the corner of the last line of text (the text
   // keeps room for them); with a photo only, a link preview or a card they
   // have a row of their own.
@@ -760,6 +786,15 @@ function Bubble({
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
                   {!card && m.body && onSaveAs && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
+                  {photo && onSavePhoto && (
+                    <PhotoAccountItems
+                      url={fileURL(m)}
+                      message={m.id}
+                      close={close}
+                      saveAccount={onSavePhoto}
+                      payable={!m.mine}
+                    />
+                  )}
                   {!card && onForward && (
                     <PopItem
                       icon="forward"
@@ -907,7 +942,7 @@ function Bubble({
         <CardFrame
           card={card}
           now={current}
-          title={cardLine(card, m.mine, other)}
+          title={what}
         >
           {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
             <button
@@ -941,7 +976,11 @@ function Bubble({
               <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
             )}
         </CardFrame>
-      ) : (
+      ) : null}
+      {card && latest && card.doc === "bill" && card.event === "transfer" && (
+        <ChatTransfer seller={other} reference={card.reference} />
+      )}
+      {card ? null : (
         <>
           {m.attachment && (
             <AttachmentView m={m} a={m.attachment} other={other} />
@@ -968,6 +1007,7 @@ function Bubble({
               )}
             </span>
           )}
+          {!m.mine && !local && m.body && <PayChip text={m.body} message={m.id} />}
           {refs &&
             docMentions(m.mentions).map((x) => (
               <RefCard
@@ -1857,14 +1897,23 @@ export function ConversationPane({
   // status): an order accepted since it arrived no longer reads "New".
   const newest = new Set<string>();
   const now = new Map<string, DocCard>();
+  // A number given for a bill stops reading "paying" once a later card
+  // says it was paid into (in full or in part).
+  const paidLater = new Map<string, DocCard>();
+  const settled = new Map<string, DocCard>();
   for (const m of [...(messages ?? [])].reverse()) {
     if (m.kind !== "card" || !m.card) continue;
     const key = `${m.card.doc}:${m.card.reference}`;
+    if (isTransferPaid(m.card) && !paidLater.has(key))
+      paidLater.set(key, m.card);
+    const paid = paidLater.get(key);
+    if (m.card.event === "transfer" && paid) settled.set(m.id, paid);
     if (now.has(key)) continue;
     now.set(key, m.card);
     newest.add(m.id);
   }
   return (
+    <PayFromMessages chat={{ kind: "link", id: conv.link, name: conv.name }}>
     <section
       className={`chat-pane${searchOpen ? " with-side" : ""}`}
       aria-label={`Conversation with ${conv.name}`}
@@ -2011,11 +2060,13 @@ export function ConversationPane({
               onDiscard={discard}
               onReply={setReply}
               onSaveAs={saveAs.fromWords}
+              onSavePhoto={saveAs.fromPhoto}
               onJump={jump}
               first={first}
               flash={flashId === m.id}
               latest={newest.has(m.id)}
               current={m.card && now.get(`${m.card.doc}:${m.card.reference}`)}
+              settled={settled.get(m.id)}
               onDone={() => pull(last).catch(setError)}
               onForward={
                 write && others.some((o) => o.state === "active")
@@ -2060,6 +2111,7 @@ export function ConversationPane({
           />
         </Sheet>
       )}
+      <PayListBar />
       {write ? (
         <ComposerView
           c={c}
@@ -2137,6 +2189,7 @@ export function ConversationPane({
       {confirmNode}
       {saveAs.node}
     </section>
+    </PayFromMessages>
   );
 }
 

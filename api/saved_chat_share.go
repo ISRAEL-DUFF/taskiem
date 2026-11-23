@@ -48,33 +48,18 @@ func (s *Server) waShareSaved(ctx context.Context, c *chat, text string) (bool, 
 		return false, nil
 	}
 	name, whom := strings.ToLower(m[1]), strings.TrimSpace(strings.TrimRight(m[2], ".!?"))
-	// The business's first; one's own too, but not on a business's own app
-	// (ownAppChat).
-	owners := []savedOwner{{tenant: c.tenant.ID, by: c.p.UserID}}
-	if !ownAppChat(c) {
-		owners = append(owners, savedOwner{person: c.p.UserID, by: c.p.UserID})
+	got, err := s.savedFind(ctx, c, name)
+	if err != nil {
+		return true, err
 	}
-	var x savedRow
-	var o savedOwner
-	for _, try := range owners {
-		err := s.savedTx(ctx, try, func(tx pgx.Tx) error {
-			where, owner := ownerWhere(try)
-			var err error
-			x, err = scanSaved(tx.QueryRow(ctx, `SELECT `+savedCols+` FROM saved_objects WHERE `+where+` AND name = $2`, owner, name))
-			return err
-		})
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			return true, err
-		}
-		o = try
-		break
-	}
-	if x.ID == uuid.Nil {
+	if len(got) == 0 {
 		return true, c.say(ctx, s, c.t("wa.saved.share_none", "name", name))
 	}
+	one, ok, err := s.savedPickOne(ctx, c, chatSavedPick{Kind: "share", Text: text, Name: name}, got)
+	if !ok || err != nil {
+		return true, err
+	}
+	x, o := one.row, foundOwner(c, one)
 	sh := &chatShare{ID: x.ID, Owner: o.label(), Name: x.Name}
 	to, names, err := s.shareRecipient(ctx, c, whom)
 	if err != nil {

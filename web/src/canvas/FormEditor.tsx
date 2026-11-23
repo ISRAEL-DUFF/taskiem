@@ -605,9 +605,23 @@ export function FormStepEditor({
   const schema = cfg.schema;
   const { fields } = useMemo(() => loadFields(schema), [schema]);
   const set = (patch: Record<string, unknown>) => onChange(merge(cfg as Record<string, unknown>, patch) as FormStepConfig);
-  const to = cfg.to ?? {};
-  const kind: "phone" | "email" | "role" = to.role !== undefined ? "role" : to.email !== undefined ? "email" : "phone";
-  const toValue = to[kind] ?? "";
+  const to = typeof cfg.to === "object" ? cfg.to : {};
+  const kind: "starter" | "phone" | "email" | "role" =
+    cfg.to === "starter" ? "starter" : to.role !== undefined ? "role" : to.email !== undefined ? "email" : "phone";
+  const toValue = kind === "starter" ? "" : (to[kind] ?? "");
+  // One text question asked of whoever started it may offer the business's
+  // saved places as its choices (x-saved: place, made tools M4).
+  const only = fields.length === 1 ? fields[0] : undefined;
+  const placeField = kind === "starter" && only?.type === "text" ? only.name : undefined;
+  const placeProp = placeField ? (schema?.properties?.[placeField] as Record<string, unknown> | undefined) : undefined;
+  const offersPlaces = placeProp?.["x-saved"] === "place";
+  const setPlaces = (on: boolean) => {
+    if (!placeField || !schema || !placeProp) return;
+    const prop: Record<string, unknown> = { ...placeProp };
+    if (on) prop["x-saved"] = "place";
+    else delete prop["x-saved"];
+    set({ schema: { ...schema, properties: { ...schema.properties, [placeField]: prop } } });
+  };
   const all = mergeProblems(stepProblems(cfg), problems);
   const fieldProblems = all.filter((p) => p.path.startsWith("/schema/properties/")).map((p) => ({ ...p, path: p.path.slice("/schema".length) }));
   const rest = all.filter((p) => !p.path.startsWith("/schema/properties/"));
@@ -628,14 +642,24 @@ export function FormStepEditor({
             value={kind}
             onChange={(e) => {
               const k = e.target.value;
+              if (k === "starter") {
+                set({ to: "starter", via: undefined, verify: undefined });
+                return;
+              }
               set({ to: { [k]: k === "role" ? "" : toValue.startsWith("=") ? toValue : "" }, ...(k === "role" && { via: undefined, verify: undefined }) });
             }}
           >
             <option value="phone">A phone number</option>
             <option value="email">An email address</option>
             <option value="role">Members with a role</option>
+            <option value="starter">The person who started it</option>
           </select>
         </Field>
+        {kind === "starter" ? (
+          <p className="hint fe-starter" data-testid="form-step-starter">
+            Asked in the chat they started it from; else in the app, under To fill in.
+          </p>
+        ) : (
         <Field
           label={kind === "role" ? "Role" : advanced ? (kind === "phone" ? "Phone (expression)" : "Email (expression)") : kind === "phone" ? "Whose phone" : "Whose email"}
           hint={kind === "role" ? "They find it under To fill in" : advanced ? `e.g. =trigger.body.${kind}` : "A number or address from earlier in the workflow"}
@@ -648,8 +672,9 @@ export function FormStepEditor({
             <input className="mono" value={toValue} onChange={(e) => set({ to: { [kind]: e.target.value } })} />
           )}
         </Field>
+        )}
       </div>
-      {kind !== "role" && (
+      {kind !== "role" && kind !== "starter" && (
         <>
           <fieldset className="fe-via">
             <legend>Send the link by</legend>
@@ -685,6 +710,12 @@ export function FormStepEditor({
         }}
         problems={fieldProblems}
       />
+      {placeField && (
+        <label className="inline">
+          <input type="checkbox" checked={offersPlaces} onChange={(e) => setPlaces(e.target.checked)} /> Offer “Our saved places” as the answers
+          <span className="hint"> They choose one of the business’s saved places.</span>
+        </label>
+      )}
       {fields.length > 0 && (
         <details open={Object.keys(prefill).length > 0}>
           <summary>Fill in answers from the run</summary>

@@ -62,6 +62,7 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | See what's low | show | show | *stock* |
 | How many of an item | show | show | *stock rice* |
 | Add stock that came in | changes | form: Stock in | *add 50 cartons of Indomie at 8,500* |
+| Add something to count | asks | questions (Do you sell it?) | *add 20 yards of ankara fabric* |
 | Correct a count | changes | questions | *adjust rice -2 spoilt* |
 | Count the shelf | changes | questions (item by item, as now) | *count rice 12, indomie 40* |
 | Record a sale | changes | form: Sell | (as in Sales) |
@@ -165,7 +166,13 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | --- | --- | --- | --- |
 | Your saved things | show | page | none yet |
 | Save something | asks | questions | *save mum: GTBank 0123456789* |
+| Ask about a saved thing | show | questions | *what's @mum's phone?* |
+| Remind me of a date | changes | questions | *remind me when @car insurance is due* |
+| Your reminders | show | show | *my reminders* |
 | Share a saved thing | asks | questions | *share @our-account with Ada's Kitchen* |
+| Import from a file | changes | page | none (the Saved page) |
+
+The saved things' rows came with saved objects S2 and S3 (built-plan stage 2); Suppliers has **Deliver to a saved place** (*deliver P-7QX4KD to @warehouse*) too. A field may take a saved thing (`saved`, any kind, by its name; `saved_place`, a place) or a person (`person`: a name typed, or a saved person): its chips are the person's own and the business's saved things of that kind, most recently changed first, as `@name`. "Send an invoice" takes its customer so. The model is told the person's saved things by `@name` and kind, never what they hold, so a message about one in any language picks these rows.
 
 **School** (for those who read the school, as the tools panel's school tiles)
 | Action | Does | Opens | Shortcut |
@@ -351,3 +358,11 @@ Not done: two buttons to a row on Telegram for the topics (one to a row for now)
 - Its button sends the values to Taskiem as `form:<id>:<values>`, with the words the person sees ("Add a rider: Musa Bello, 0803 123 4567, Yaba"). The values are checked as the questions check them; with every one needed, the command is made and read as typed, the form's button being the person's yes; else Taskiem says what to fill in.
 - The actions that had a form of their own (record a sale, stock in, a product, a service, a price list, the handover) keep it.
 - When the model knows the action but not every value (M2), the app and the web get its topic's menu with that row first and filled in; the row opens the form with those values in it. WhatsApp, Telegram and Slack keep the questions.
+
+## What S1b added (22 November 2026)
+
+- **Add something to count** (`stock.new`, under Stock; [what a business buys](what-a-business-buys.md) §4.5): *add 20 yards of ankara fabric* asks **Do you sell it?** for something new, on every channel. It asks by itself, so the model's action and its form are read as typed, with no Yes before the question.
+
+## What U2b added (22 November 2026)
+
+- **The question on what is bought** ([what a business buys](what-a-business-buys.md) §6, In chat): an order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) asks, before its Yes and one line at a time, about each line the business's memory does not know: **How should we treat it?** (Just record it, Add to stock, Keep track of it), for Add to stock **Which stock item?** (five items, materials included, and **A new one**, which asks Do you sell it?), then **Label** (three, **Another** to type one, **No label**). Buttons on Telegram, Slack and in the Taskiem chat; on WhatsApp reply buttons for three, a list beyond. A number, or the words typed or spoken, answer too (`keep track of it, machines`, `add to stock, lace`, `just record it`, in the person's language and English). It is not an action of the catalogue: the order's own command asks it.

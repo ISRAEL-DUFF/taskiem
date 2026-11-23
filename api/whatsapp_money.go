@@ -3,19 +3,28 @@ package api
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/spend"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // Cash and expenses from chat (spec 7.4, T6): "spent 12,000 on diesel at
-// Total", "expense 5000 fuel", "cash in 20,000 till", "cash out 3,000
-// float". Members with invoice.manage only, as for the API's
+// Total", "paid 15,000 diesel", "expense 5000 fuel", "cash in 20,000
+// till", "cash out 3,000 float". An expense is labelled by what it was
+// for, in the business's own words (what a business buys §5.4, §6):
+// "paid 15,000 diesel" is labelled Diesel, the label found (without
+// case) or made when it is recorded. Members with invoice.manage only, as for the API's
 // POST /v1/money/entries. The entry is shown and recorded on Yes, once:
 // its key is the confirmation's nonce, so a Yes delivered twice records
 // one entry. Money moves through "cash" (the log's default channel).
@@ -29,29 +38,9 @@ type chatMoney struct {
 	AmountKobo  int64  `json:"amount_kobo"`
 	Description string `json:"description"`
 	Vendor      string `json:"vendor,omitempty"`
-	Category    string `json:"category,omitempty"`
-}
-
-// expenseCategories is the small keyword map an expense's category comes
-// from: the first word of its description found here, else "other".
-// Deliberately short; the web app's form takes any category.
-var expenseCategories = map[string]string{
-	"diesel": "fuel", "petrol": "fuel", "fuel": "fuel", "pms": "fuel", "gas": "fuel",
-	"rent":   "rent",
-	"salary": "salary", "salaries": "salary", "wage": "salary", "wages": "salary",
-	"transport": "transport", "fare": "transport", "fares": "transport", "taxi": "transport", "bus": "transport", "okada": "transport", "keke": "transport",
-	"food": "food", "lunch": "food", "breakfast": "food", "dinner": "food",
-	"data": "phone", "airtime": "phone", "recharge": "phone",
-}
-
-// expenseCategory is the category of an expense's description.
-func expenseCategory(what string) string {
-	for _, w := range strings.FieldsFunc(strings.ToLower(what), func(r rune) bool { return r == ' ' || r == ',' || r == '.' || r == '/' || r == '-' }) {
-		if c, ok := expenseCategories[w]; ok {
-			return c
-		}
-	}
-	return "other"
+	// Label is an expense's label: what it was for, with a capital
+	// (spend.NameFrom), or the business's own spelling of a label it has.
+	Label string `json:"label,omitempty"`
 }
 
 // parseKobo reads an amount as chat writes it: "12,000", "₦12,000.50",
@@ -85,18 +74,29 @@ func parseKobo(tok string) (int64, bool) {
 	return kobo, true
 }
 
-// parseMoneyCommand reads "spent <amount> [on] <what> [at <vendor>]",
+// parseMoneyCommand reads "spent|paid <amount> [on|for] <what> [at <vendor>]",
 // "expense <amount> [on|for] <what> [at <vendor>]" and "cash in|out
 // <amount> [<what>]". command is false for text that is none of them;
 // ok is false for one of them that cannot be read.
+//
+// "bought|I bought|we bought|buy <what> [for] <amount>" (or the amount
+// first) is an expense too, labelled as paid's is: "I bought snacks for
+// 8,000" is ₦8,000 labelled Snacks; "we bought from Dangote 425,000" is
+// asked about Dangote's open order (waMoneyOwed). Only an amount makes
+// one a command; a quantity in a unit ("bought 10 bags of rice at 1,500")
+// is stock counted in (stock.ParseCountIn), never an expense.
 func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
 		return m, false, false
 	}
+	if rest, bought := boughtWords(fields); bought {
+		m.Kind, m.Direction = "expense", "out"
+		return parseBoughtArgs(m, rest, nil)
+	}
 	var rest []string
 	switch w := strings.ToLower(fields[0]); {
-	case w == "spent" || w == "expense":
+	case w == "spent" || w == "paid" || w == "expense":
 		m.Kind, m.Direction, rest = "expense", "out", fields[1:]
 	case w == "cash" && len(fields) > 1 && (strings.EqualFold(fields[1], "in") || strings.EqualFold(fields[1], "out")):
 		m.Kind, m.Direction, rest = "cash", strings.ToLower(fields[1]), fields[2:]
@@ -109,6 +109,8 @@ func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 	m, isAmount, ok := parseMoneyArgs(m, rest, nil)
 	if !isAmount {
 		// "expense report every Friday" is not an expense.
+		// Nor is "paid Ada's invoice": "paid" is an expense only with
+		// an amount.
 		return m, m.Kind != "expense" || strings.ToLower(fields[0]) == "spent", false
 	}
 	return m, true, ok
@@ -121,7 +123,10 @@ func parseMoneyCommand(text string) (m chatMoney, command, ok bool) {
 func parseMoneyWords(mm lang.Match) (m chatMoney, command, ok bool) {
 	switch mm.Intent {
 	case lang.IntentExpense:
+		// Spent and bought alike ("i buy snacks for 8,000"): the amount
+		// first or last, and a quantity in a unit is not spending.
 		m.Kind, m.Direction = "expense", "out"
+		return parseBoughtArgs(m, strings.Fields(mm.Arg), lang.ForWords(mm.Language))
 	case lang.IntentCashIn:
 		m.Kind, m.Direction = "cash", "in"
 	case lang.IntentCashOut:
@@ -155,18 +160,122 @@ func parseMoneyArgs(m chatMoney, rest, forWords []string) (_ chatMoney, isAmount
 		}
 	}
 	m.Description = strings.TrimSpace(strings.Join(rest, " "))
+	m, ok = finishMoney(m)
+	return m, true, ok
+}
+
+// finishMoney labels an expense read and checks what it says; false when
+// it cannot be recorded.
+func finishMoney(m chatMoney) (chatMoney, bool) {
 	if m.Kind == "expense" {
 		if m.Description == "" {
-			return m, true, false
+			return m, false
 		}
-		m.Category = expenseCategory(m.Description)
+		m.Label = labelFrom(m.Description)
 	} else if m.Description == "" {
 		m.Description = "Cash " + m.Direction
 	}
 	if len(m.Description) > 200 || len(m.Vendor) > 120 {
-		return m, true, false
+		return m, false
 	}
-	return m, true, true
+	return m, true
+}
+
+// labelFrom is the label what an expense was for reads as: its words
+// with a capital, less a leading "a", "an", "the", "some" or "worth of"
+// ("a birthday gift for Ada" is labelled Birthday gift for Ada; "15,000
+// worth of fuel", Fuel).
+func labelFrom(what string) string {
+	f := strings.Fields(what)
+	if len(f) > 2 && strings.EqualFold(f[0], "worth") && strings.EqualFold(f[1], "of") {
+		f = f[2:]
+	}
+	if len(f) > 1 && slices.Contains([]string{"a", "an", "the", "some"}, strings.ToLower(f[0])) {
+		f = f[1:]
+	}
+	return spend.NameFrom(strings.Join(f, " "))
+}
+
+// boughtWords is what follows "bought", "I bought", "we bought" or "buy";
+// false when the words start with none of them.
+func boughtWords(fields []string) ([]string, bool) {
+	switch w := strings.ToLower(fields[0]); {
+	case w == "bought" || w == "buy":
+		return fields[1:], true
+	case (w == "i" || w == "we") && len(fields) > 1 && strings.EqualFold(fields[1], "bought"):
+		return fields[2:], true
+	}
+	return nil, false
+}
+
+// parseBoughtArgs reads what was bought and for how much: the amount
+// first, as parseMoneyArgs reads it ("8,000 snacks"), or last ("snacks for
+// 8,000", "a birthday gift for Ada 15,000", "rice at Shoprite 5,000", "from
+// Dangote 425,000"); who it was bought from ("from Dangote") is the
+// vendor. command is false with no amount at either end, and for a
+// quantity in a unit ("10 bags of rice at 1,500"), which is stock counted
+// in (stock.ParseBought), not spending.
+func parseBoughtArgs(m chatMoney, rest, forWords []string) (_ chatMoney, command, ok bool) {
+	if len(rest) == 0 {
+		return m, false, false
+	}
+	if _, isStock := stock.ParseBought(strings.Join(rest, " ")); isStock {
+		return m, false, false
+	}
+	words, vendor := rest, ""
+	if _, isAmount := parseKobo(words[len(words)-1]); !isAmount {
+		// "rice for 5,000 from Dangote": who from, after the amount.
+		if i := lastFold(words, "from"); i > 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		}
+	}
+	kobo, last := parseKobo(words[len(words)-1])
+	if !last || len(words) < 2 {
+		if k, isAmount := parseKobo(words[0]); isAmount && k < 100*100 && len(words) > 1 && strings.Trim(words[0], "0123456789") == "" {
+			// "bought 5 snacks": a count, not ₦5.
+			return m, false, false
+		}
+		m, isAmount, ok := parseMoneyArgs(m, words, forWords)
+		if isAmount && m.Vendor == "" && vendor != "" {
+			m.Vendor = vendor
+			m, ok = finishMoney(m)
+		}
+		return m, isAmount, ok
+	}
+	m.AmountKobo, words = kobo, words[:len(words)-1]
+	// "snacks for 8,000", "rice at 1,500".
+	if k := len(words) - 1; k >= 0 && (slices.Contains([]string{"for", "on", "at", "@", "=", "-", "of"}, strings.ToLower(words[k])) || isForWord(words[k], forWords)) {
+		words = words[:k]
+	}
+	if vendor == "" {
+		if i := lastFold(words, "from"); i >= 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		} else if i := lastFold(words, "at"); i > 0 && i+1 < len(words) {
+			words, vendor = words[:i], strings.Join(words[i+1:], " ")
+		}
+	}
+	if len(words) > 0 && (strings.EqualFold(words[0], "on") || isForWord(words[0], forWords)) {
+		words = words[1:]
+	}
+	m.Vendor, m.Description = vendor, strings.TrimSpace(strings.Join(words, " "))
+	if m.Description == "" {
+		// "we bought from Dangote 425,000": what for is who from, as in
+		// "paid 425,000 Dangote".
+		m.Description, m.Vendor = m.Vendor, ""
+	}
+	m, ok = finishMoney(m)
+	return m, true, ok
+}
+
+// lastFold is the index of the last of words that is w, without case; -1
+// when none is.
+func lastFold(words []string, w string) int {
+	for i := len(words) - 1; i >= 0; i-- {
+		if strings.EqualFold(words[i], w) {
+			return i
+		}
+	}
+	return -1
 }
 
 // waMoneyCommand starts cash or an expense from an idle chat; false when
@@ -192,11 +301,103 @@ func (s *Server) waMoneyStart(ctx context.Context, c *chat, m chatMoney, command
 	if !ok {
 		return true, c.say(ctx, s, c.t("wa.money.how"))
 	}
+	if m.Kind == "expense" {
+		// "paid 425,000 Dangote": money owed to a supplier is paid on its
+		// order or bill, not as an expense of its own, which the order's
+		// payment would count again.
+		if done, err := s.waMoneyOwed(ctx, c, m); done || err != nil {
+			return true, err
+		}
+	}
+	if m.Kind == "expense" {
+		// A label the business has already reads in its own spelling.
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			l, err := spend.FindTx(ctx, tx, c.tenant.ID, m.Label)
+			if err == nil {
+				m.Label = l.Name
+			} else if errors.Is(err, spend.ErrNoLabel) || errors.Is(err, spend.ErrLabel) {
+				err = nil
+			}
+			return err
+		}); err != nil {
+			return true, err
+		}
+	}
 	data := chatData{Money: &m, Nonce: uuid.NewString()}
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return true, err
 	}
 	return true, c.say(ctx, s, moneyConfirmText(c, m), moneyButtons(c)...)
+}
+
+// waMoneyOwed answers an expense whose words name a supplier owed money
+// (PR review fix): its vendor ("at Dangote"), else what it was for ("paid
+// 425,000 Dangote"). A supplier with an order not paid up is asked about
+// paying the oldest, as "paid Dangote 425,000" is (waPaidSupplier); a
+// linked supplier with an open bill is shown the bill, which is paid from
+// Bills. false when the words name neither: the expense goes on.
+func (s *Server) waMoneyOwed(ctx context.Context, c *chat, m chatMoney) (bool, error) {
+	names := []string{}
+	for _, n := range []string{m.Vendor, m.Description} {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		return false, nil
+	}
+	if s.Purchases.Ready() && s.Stock.Ready() {
+		list, err := s.chatSuppliers(ctx, c)
+		if err != nil {
+			return true, err
+		}
+		for _, n := range names {
+			sup, _, ferr := stock.FindSupplier(list, n)
+			if ferr != nil {
+				continue
+			}
+			var orders []stock.Purchase
+			if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+				var err error
+				orders, err = stock.UnpaidOfTx(ctx, tx, c.tenant.ID, sup.ID)
+				return err
+			}); err != nil {
+				return true, err
+			}
+			i := slices.IndexFunc(orders, func(x stock.Purchase) bool { return x.TotalKobo > x.PaidKobo })
+			if i < 0 {
+				continue
+			}
+			if !c.p.Can(PermStorefrontManage) {
+				return true, c.say(ctx, s, c.t("wa.supplier.denied", "org", c.tenant.Name))
+			}
+			return true, s.askPaySupplier(ctx, c, sup, orders[i], m.AmountKobo, stock.Transfer)
+		}
+	}
+	if !c.p.Can(PermInvoiceRead) {
+		return false, nil
+	}
+	var bills []links.Bill
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		bills, err = links.ListBillsTx(ctx, tx, "open", 50)
+		return err
+	}); err != nil {
+		return true, err
+	}
+	for _, n := range names {
+		n = strings.ToLower(strings.Join(strings.Fields(n), " "))
+		for _, test := range []func(string) bool{
+			func(x string) bool { return x == n },
+			func(x string) bool { return strings.HasPrefix(x, n) },
+			func(x string) bool { return strings.Contains(x, n) },
+		} {
+			if i := slices.IndexFunc(bills, func(b links.Bill) bool { return b.DueKobo > 0 && test(strings.ToLower(b.SupplierName)) }); i >= 0 {
+				return true, c.say(ctx, s, billDetail(c.lang.Tag, bills[i]))
+			}
+		}
+	}
+	return false, nil
 }
 
 func moneyConfirmText(c *chat, m chatMoney) string {
@@ -207,9 +408,9 @@ func moneyConfirmText(c *chat, m chatMoney) string {
 	case m.Kind == "cash":
 		return c.t("wa.money.confirm_cash_out", "amount", amount, "what", what)
 	case m.Vendor != "":
-		return c.t("wa.money.confirm_expense_at", "amount", amount, "what", what, "vendor", whatsapp.SafeText(m.Vendor), "category", m.Category)
+		return c.t("wa.money.confirm_expense_at", "amount", amount, "what", what, "vendor", whatsapp.SafeText(m.Vendor), "category", whatsapp.SafeText(m.Label))
 	}
-	return c.t("wa.money.confirm_expense", "amount", amount, "what", what, "category", m.Category)
+	return c.t("wa.money.confirm_expense", "amount", amount, "what", what, "category", whatsapp.SafeText(m.Label))
 }
 
 func moneyButtons(c *chat) []whatsapp.Button {
@@ -233,11 +434,26 @@ func (s *Server) waMoneyReply(ctx context.Context, c *chat, cmd string) error {
 		_ = s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 		return c.say(ctx, s, c.t("wa.money.denied", "org", c.tenant.Name))
 	}
-	_, _, err := s.moneyLog().Enter(ctx, c.tenant.ID, c.p.Actor(), moneylog.Entered{Kind: m.Kind, Direction: m.Direction, AmountKobo: m.AmountKobo,
-		Description: m.Description, Vendor: m.Vendor, Category: m.Category, Key: "chat:" + c.data.Nonce})
-	if errors.Is(err, moneylog.ErrInvalid) {
+	in := moneylog.Entered{Kind: m.Kind, Direction: m.Direction, AmountKobo: m.AmountKobo, Description: m.Description, Vendor: m.Vendor,
+		Key: "chat:" + c.data.Nonce}
+	category := "cash"
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+		if m.Kind == "expense" && m.Label != "" {
+			// The label found or made at Yes: one typed by someone else
+			// in between is the same label.
+			l, _, err := spend.FindOrMakeTx(ctx, tx, c.tenant.ID, m.Label, c.p.Actor())
+			if err != nil {
+				return err
+			}
+			in.LabelID, in.Category, category = &l.ID, l.Name, l.Name
+		}
+		_, _, err := s.moneyLog().EnterTx(ctx, tx, c.tenant.ID, c.p.Actor(), in)
+		return err
+	})
+	if errors.Is(err, moneylog.ErrInvalid) || errors.Is(err, spend.ErrLabel) {
 		_ = s.saveSession(ctx, c, stateIdle, chatData{}, 0)
-		return c.say(ctx, s, c.t("wa.money.refused", "reason", strings.TrimPrefix(err.Error(), "moneylog: invalid entry: ")))
+		reason := strings.TrimPrefix(strings.TrimPrefix(err.Error(), "moneylog: invalid entry: "), "spend: label: ")
+		return c.say(ctx, s, c.t("wa.money.refused", "reason", reason))
 	}
 	if err != nil {
 		return err
@@ -245,13 +461,9 @@ func (s *Server) waMoneyReply(ctx context.Context, c *chat, cmd string) error {
 	if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
 		return err
 	}
-	category := m.Category
-	if m.Kind == "cash" {
-		category = "cash"
-	}
 	id := "wa.money.recorded_out"
 	if m.Direction == "in" {
 		id = "wa.money.recorded_in"
 	}
-	return c.say(ctx, s, c.t(id, "amount", invoicing.Naira(m.AmountKobo), "category", category))
+	return c.say(ctx, s, c.t(id, "amount", invoicing.Naira(m.AmountKobo), "category", whatsapp.SafeText(category)))
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/engine/wdcheck"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -222,6 +223,10 @@ type chat struct {
 	// tools is the business's chat tools switch (chat_tools.go), and
 	// toTaskiem that this message called Taskiem with "@Taskiem".
 	tools, toTaskiem bool
+	// savedChoice is which of two saved things of one name the person
+	// picked, "mine" or "business", while the command waiting for it is
+	// read again (saved_pick.go).
+	savedChoice string
 	// understood is that this message is a command the model gave
 	// (chat_understand.go): read once, never put to the model again.
 	understood bool
@@ -242,6 +247,12 @@ type chatData struct {
 	Index       int            `json:"index,omitempty"`
 	Inputs      map[string]any `json:"inputs,omitempty"` // personal fields sealed
 	Nonce       string         `json:"nonce,omitempty"`  // the start's idempotency key
+	// Tool is the command of the tool being called (tools_chat.go): the
+	// run is the tool's, at its care.
+	Tool string `json:"tool,omitempty"`
+	// Button is the button pressed to open the tool (tools_buttons.go): a
+	// once button is spent by the run it starts.
+	Button uuid.UUID `json:"button,omitempty"`
 	// Ask names what is waiting for an answer, new each time the session
 	// is saved: a Yes button carries it (yesButton), so a Yes shown under
 	// an earlier summary confirms nothing.
@@ -296,6 +307,12 @@ type chatData struct {
 	// Direct is when a lone "..." was sent: the next message goes to the
 	// linked businesses it mentions (chat_direct.go).
 	Direct *time.Time `json:"direct,omitempty"`
+	// SavedPick is a command waiting for which of two saved things of one
+	// name (saved_pick.go).
+	SavedPick *chatSavedPick `json:"saved_pick,omitempty"`
+	// ToolPick is two of the business's tools that fit a message, waiting
+	// for a number (tools_read.go).
+	ToolPick *chatToolPick `json:"tool_pick,omitempty"`
 	// Understand is the model's help waiting on the person: a command to
 	// confirm, or a question it asked (chat_understand.go).
 	Understand *chatUnderstand `json:"understand,omitempty"`
@@ -547,6 +564,16 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 				return s.waDirectFile(ctx, c, strings.TrimSpace(in.Text))
 			}
 		}
+	}
+	// A location or a photo answering a form step, or "send" for one
+	// waiting on its require_source (forms_chat.go).
+	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
+		return err
+	}
+	// A run's question of one choice answered by its button or its words
+	// (forms_starter.go).
+	if done, err := s.formChoiceAnswer(ctx, c, in.Text); done || err != nil {
+		return err
 	}
 	// A completed WhatsApp form carries its flow token.
 	if in.Flow != "" {
@@ -832,6 +859,14 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if code, ok := strings.CutPrefix(text, linkOfferPrefix); ok {
 		return s.waLinkOffer(ctx, c, code)
 	}
+	// A button on a tool's answer or a Tell me message (tools_buttons.go).
+	if id, ok := strings.CutPrefix(text, buttonReplyPrefix); ok {
+		return s.waToolButton(ctx, c, id)
+	}
+	// A row chosen from a tool's list answer (tools_rows.go).
+	if ref, ok := strings.CutPrefix(text, rowReplyPrefix); ok {
+		return s.waToolRow(ctx, c, ref)
+	}
 	// Pay on a bill's reminder (link_credit.go).
 	if ref, ok := strings.CutPrefix(text, billPayPrefix); ok {
 		return s.waBillPayPress(ctx, c, ref)
@@ -846,6 +881,25 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.Task != nil && c.state != stateIdle {
 		return s.waTaskReply(ctx, c, cmd)
+	}
+	// A save offered after an action: words that answer none of it let it
+	// go (saved_offer.go).
+	if c.data.Save != nil && c.data.Save.Offer && c.state != stateIdle {
+		switch {
+		case c.in.Reply == offerSave:
+			cmd = "yes"
+		case c.in.Reply == offerMine:
+			cmd = "mine"
+		case c.in.Reply != "" && cmd != "cancel":
+			// Another card's button (an earlier invoice's Send): not this.
+			cmd = ""
+		}
+		if !saveOfferWord(cmd) {
+			if err := s.saveSession(ctx, c, stateIdle, chatData{}, 0); err != nil {
+				return err
+			}
+			c.state, c.data = stateIdle, chatData{}
+		}
 	}
 	// A menu's row pressed, a number for a numbered menu, an answer to a
 	// question, and help (chat_menus.go).
@@ -877,10 +931,29 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if done, err := s.waDirect(ctx, c); done || err != nil {
 		return err
 	}
+	// A question about a saved thing ("what's @generator's last service
+	// date?"): read before the words to linked businesses, since it starts
+	// with its question word, not a business (saved_question.go).
+	if c.state == stateIdle && c.in.Reply == "" {
+		if done, err := s.waSavedQuestion(ctx, c, c.in.Text); done || err != nil {
+			return err
+		}
+	}
 	// With chat tools, a message naming linked businesses is for them,
 	// unless it calls Taskiem (chat_tools.go).
 	if done, err := s.toolsDirect(ctx, c); done || err != nil {
 		return err
+	}
+	// A business's own tool by "/command" (tools_chat.go), before the
+	// built-in tools' "/" links.
+	if strings.HasPrefix(strings.TrimSpace(text), "/") {
+		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			return err
+		}
+		// A business's page by "/name": its short form (pages_chat.go).
+		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			return err
+		}
 	}
 	// "tools", "/products": links to the tools on the web (chat_tool_requests.go).
 	if done, err := s.waToolsCommand(ctx, c, cmd); done || err != nil {
@@ -936,6 +1009,18 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	}
 	if c.data.File != nil && c.state != stateIdle {
 		return s.waFileReply(ctx, c, text, cmd)
+	}
+	if c.data.SavedPick != nil && c.state != stateIdle {
+		if done, err := s.waSavedPickReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
+	}
+	if c.data.ToolPick != nil && c.state != stateIdle {
+		// A number picks a tool; anything else lets the pick go
+		// (tools_read.go).
+		if done, err := s.waToolPickReply(ctx, c, cmd); done || err != nil {
+			return err
+		}
 	}
 	if c.data.Found != nil && c.state != stateIdle {
 		// A message that is not about the rows found lets them go and is
@@ -1006,9 +1091,32 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		if done, err := s.waShareSaved(ctx, c, text); done || err != nil {
 			return err
 		}
+		// "remind me when @car insurance is due", "my reminders": before a
+		// workflow is built from "remind me" (saved_reminders.go).
+		if done, err := s.waSavedReminders(ctx, c, text); done || err != nil {
+			return err
+		}
+		// "pay my list", and a list pasted under "pay these": a batch
+		// prepared, to check and pay with a passkey (payments_chat_list.go).
+		if done, err := s.waPayList(ctx, c, text); done || err != nil {
+			return err
+		}
+		// "send 45k to @bayo for a delivery": a payment prepared, to
+		// confirm with a passkey (payments_chat.go).
+		if done, err := s.waPayCommand(ctx, c, text); done || err != nil {
+			return err
+		}
 		// "save this as @name" with no message replied to: said how.
 		if done, err := s.waSaveQuoted(ctx, c, text); done || err != nil {
 			return err
+		}
+		// "deliver order P-7QX4KD to @warehouse": a saved place, whichever
+		// areas the business uses, since a purchase from a linked supplier
+		// is made from the links too (saved_deliver.go).
+		if s.Purchases.Ready() && s.Stock.Ready() {
+			if done, err := s.waDeliverToSaved(ctx, c, text); done || err != nil {
+				return err
+			}
 		}
 		if !on.On(areas.Storefront) {
 			// no booking words
@@ -1185,6 +1293,19 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if goal, ok := waBuildGoal(text, cmd); ok && c.state == stateIdle {
 		return s.waStartBuild(ctx, c, goal)
 	}
+	// A business's own tool by its plain command or a phrase it says,
+	// after Taskiem's own words, building included, which always win
+	// (tools_chat.go).
+	if !matched {
+		if done, err := s.waMadeTool(ctx, c, text); done || err != nil {
+			return err
+		}
+		// A business's page by its name ("tickets"): its short form, after
+		// Taskiem's own words and the business's tools (pages_chat.go).
+		if done, err := s.waPage(ctx, c, text); done || err != nil {
+			return err
+		}
+	}
 	if c.state == stateStepUp {
 		return c.say(ctx, s, c.t("wa.stepup_waiting", "step", c.data.Step))
 	}
@@ -1203,8 +1324,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 		}
 	}
 	// In a language other than English, the model may route it
-	// (engine/ai/intent); it never confirms anything.
-	if c.state == stateIdle && !matched && !c.understood {
+	// (engine/ai/intent); it never confirms anything. With tools of the
+	// business's own, the model below, which is told them beside every
+	// command, reads it instead (tools_read.go).
+	if c.state == stateIdle && !matched && !c.understood && !s.hasModelTools(ctx, c) {
 		if m := s.waModelIntent(ctx, c, text); m.Intent != lang.IntentNone {
 			if done, err := s.waIntent(ctx, c, m); done || err != nil {
 				return err
@@ -1406,6 +1529,8 @@ func (s *Server) waHelp(c *chat) string {
 	if c.p.Can(PermChatTrade) {
 		lines = append(lines, c.t("wa.help.direct"))
 	}
+	// Saved things by @name, for everyone (saved objects S1, S2).
+	lines = append(lines, c.t("wa.help.saved"))
 	if c.p.Can(PermInvoiceManage) {
 		lines = append(lines, c.t("wa.help.money"))
 	}
@@ -1625,10 +1750,33 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 			partial = append(partial, x)
 		}
 	}
+	// Only workflows the person may start (decision 0073); one they may
+	// not, when nothing else matches, is said with who may.
+	var refused *runnable
+	mine := func(list []runnable) []runnable {
+		var out []runnable
+		for _, x := range list {
+			if roles, _ := startRolesOf(x.def); mayStart(c.p, roles) {
+				out = append(out, x)
+			} else if refused == nil {
+				refused = &x
+			}
+		}
+		return out
+	}
+	exact, partial = mine(exact), mine(partial)
 	if len(exact) == 0 {
 		exact = partial
 	}
 	switch {
+	case len(exact) == 0 && refused != nil:
+		roles, _ := startRolesOf(refused.def)
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, refused.id.String(), roles)
+		}); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", refused.name, "roles", startRolesWords(roles)))
 	case len(exact) == 0:
 		return c.say(ctx, s, c.t("wa.run.no_match", "env", env, "name", fmt.Sprintf("%q", name)))
 	case len(exact) > 1:
@@ -1714,13 +1862,25 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 		return s.waAskConfirm(ctx, c, c.data)
 	}
 	f := fields[c.data.Index]
-	v, perr := f.ParseIn(text, c.lang.Tag)
-	if perr != nil {
-		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.PromptIn(c.lang.Tag)))
-	}
 	data := c.data
 	if data.Inputs == nil {
 		data.Inputs = map[string]any{}
+	}
+	if data.Tool != "" && savedRef(text) != "" {
+		// A tool's input answered with a saved thing's @name: its own
+		// words for it, looked up here (tools_read.go).
+		v, note, err := s.toolValueOf(ctx, c.tenant.ID, c.p, c.lang.Tag, f, text)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return c.say(ctx, s, note+"\n\n"+f.PromptIn(c.lang.Tag))
+		}
+		return s.waCollected(ctx, c, data, fields, v)
+	}
+	v, perr := f.ParseIn(text, c.lang.Tag)
+	if perr != nil {
+		return c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", perr.Error(), "prompt", f.PromptIn(c.lang.Tag)))
 	}
 	// Personal data waits sealed, like run history.
 	if f.PII != "" {
@@ -1733,8 +1893,22 @@ func (s *Server) waCollect(ctx context.Context, c *chat, text string) error {
 			return err
 		}
 	}
-	data.Inputs[f.Name] = v
+	return s.waCollected(ctx, c, data, fields, v)
+}
+
+// waCollected keeps the answer for the field being asked and asks the next
+// one not yet given (a tool's reader may have filled some), or shows what
+// will run.
+func (s *Server) waCollected(ctx context.Context, c *chat, data chatData, fields []whatsapp.Field, v any) error {
+	data.Inputs[fields[data.Index].Name] = v
 	data.Index++
+	// Fields a button filled in are not asked again.
+	for data.Index < len(fields) {
+		if _, filled := data.Inputs[fields[data.Index].Name]; !filled {
+			break
+		}
+		data.Index++
+	}
 	if data.Index < len(fields) {
 		if err := s.saveSession(ctx, c, stateCollecting, data, waPendingTTL); err != nil {
 			return err
@@ -1753,6 +1927,12 @@ func confirmButtonsIn(l lang.Tag) []whatsapp.Button {
 // waAskConfirm summarises exactly what will run (spec 11.5) and waits for
 // an explicit yes.
 func (s *Server) waAskConfirm(ctx context.Context, c *chat, data chatData) error {
+	if data.Tool != "" {
+		// A tool that only reads starts at once, with the echo.
+		if done, err := s.waToolReady(ctx, c, data); done || err != nil {
+			return err
+		}
+	}
 	data.Nonce = uuid.NewString()
 	if err := s.saveSession(ctx, c, stateConfirming, data, waPendingTTL); err != nil {
 		return err
@@ -1790,6 +1970,18 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	if !c.p.Can(PermRunStart) {
 		return c.say(ctx, s, c.t("wa.run.denied_now", "org", c.tenant.Name))
 	}
+	if data.Tool != "" {
+		// A tool's run, held to its care and the workflow's roles as it is
+		// deployed now (tools_chat.go).
+		t, err := s.chatToolNow(ctx, c, data)
+		if err != nil || t == nil {
+			return err
+		}
+		if t.Asks() == wdcheck.CareStepUp {
+			return c.say(ctx, s, c.t("wa.tool.step_up", "tool", t.Name))
+		}
+		return s.waToolRun(ctx, c, *t, data)
+	}
 	if !s.limiter("wa-run:"+c.addr, 20*time.Second, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.run.too_many"))
 	}
@@ -1816,6 +2008,15 @@ func (s *Server) waConfirm(ctx context.Context, c *chat) error {
 	}
 	if input == nil {
 		input = map[string]any{}
+	}
+	if roles, _ := startRolesOf(def); !mayStart(c.p, roles) {
+		// The person's roles changed while they were asked.
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
+			return auditStartRefused(ctx, tx, c.ch.Name(), c.p, data.Workflow.String(), roles)
+		}); err != nil {
+			return err
+		}
+		return c.say(ctx, s, c.t("wa.run.not_yours", "workflow", data.Name, "roles", startRolesWords(roles)))
 	}
 	raw, _ := json.Marshal(input)
 	if probs := s.inputProblems(data.Workflow, data.Version, def, raw); len(probs) > 0 {

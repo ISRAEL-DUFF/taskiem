@@ -15,7 +15,7 @@ import (
 // withStock gives a world's server the shops' stock movements over its
 // fake Xenibase.
 func withStock(w *world) *stock.Stock {
-	w.srv.Stock = &stock.Stock{Pool: w.env.DB.App, Table: &storefront.XenibaseStock{Pool: w.env.DB.App, Registry: w.env.Registry, Vault: w.env.Vault,
+	w.srv.Stock = &stock.Stock{Pool: w.env.DB.App, Catalogue: &storefront.XenibaseCatalogue{Pool: w.env.DB.App, Registry: w.env.Registry, Vault: w.env.Vault,
 		Guard: w.env.Egress}}
 	return w.srv.Stock
 }
@@ -47,9 +47,10 @@ func TestStockByAPI(t *testing.T) {
 	owner.must(409, "POST", "/v1/stock/items", map[string]any{"name": "Indomie", "quantity": 5}, "Idempotency-Key", "i0")
 	viewer.must(403, "POST", "/v1/stock/setup", nil)
 
+	// The products table holds no count: stock items do.
 	set := owner.must(200, "POST", "/v1/stock/setup", nil)
 	cols := set["columns"].(map[string]any)
-	if set["catalogue"] != "products" || cols["stock"] != "stock" || cols["unit"] != "unit" || cols["cost_price"] != "cost_price" || cols["reorder_level"] != "reorder_level" {
+	if set["catalogue"] != "products" || cols["stock"] != nil || cols["unit"] != nil || cols["cost_price"] != nil || cols["reorder_level"] != nil {
 		t.Fatalf("setup: %v", set)
 	}
 	if sf := owner.must(200, "GET", "/v1/storefront", nil); sf["status"] != "draft" || sf["slug"] != "mama-put-stores" {
@@ -76,7 +77,9 @@ func TestStockByAPI(t *testing.T) {
 
 	// Its columns change in place; its stock never does.
 	owner.must(400, "PATCH", "/v1/stock/items/"+id, map[string]any{"reorder_level": -1})
-	if out := owner.must(200, "PATCH", "/v1/stock/items/"+id, map[string]any{"reorder_level": 10, "target_level": 60, "price_kobo": 900000, "supplier": "Dangote Depot"}); out["item"].(map[string]any)["reorder_level"] != float64(10) {
+	// A supplier is one of the business's, added first.
+	owner.must(400, "PATCH", "/v1/stock/items/"+id, map[string]any{"supplier": "Dangote Depot"})
+	if out := owner.must(200, "PATCH", "/v1/stock/items/"+id, map[string]any{"reorder_level": 10, "target_level": 60, "price_kobo": 900000}); out["item"].(map[string]any)["reorder_level"] != float64(10) {
 		t.Fatalf("patched: %v", out)
 	}
 	viewer.must(403, "PATCH", "/v1/stock/items/"+id, map[string]any{"reorder_level": 1})
@@ -103,7 +106,38 @@ func TestStockByAPI(t *testing.T) {
 	}
 	owner.must(200, "POST", "/v1/stock/movements", map[string]any{"item_id": id, "reason": "count", "count": 7}, "Idempotency-Key", "m5")
 
-	// The owner edits the count in the table itself: found on refresh.
+	list := viewer.must(200, "GET", "/v1/stock/movements?item="+id, nil)["movements"].([]any)
+	reasons := []string{}
+	for _, x := range list {
+		reasons = append(reasons, x.(map[string]any)["reason"].(string))
+	}
+	if strings.Join(reasons, ",") != "count,adjustment,received" || list[0].(map[string]any)["change"] != float64(2) {
+		t.Fatalf("movements: %v", list)
+	}
+
+	// A material: counted, not sold, nothing in the catalogue; low at its
+	// own level (spec §12).
+	owner.must(400, "POST", "/v1/stock/items", map[string]any{"name": "Ankara fabric", "material": true, "price_kobo": 100}, "Idempotency-Key", "f0")
+	fabric := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Ankara fabric", "quantity": 3, "unit": "yard", "reorder_level": 5, "material": true},
+		"Idempotency-Key", "f1")["item"].(map[string]any)
+	if fabric["material"] != true || fabric["stock"] != float64(3) || fabric["id"] != fabric["stock_item_id"] {
+		t.Fatalf("material: %v", fabric)
+	}
+	if again := owner.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Ankara fabric", "quantity": 3, "material": true}, "Idempotency-Key", "f1"); again["item"].(map[string]any)["id"] != fabric["id"] {
+		t.Fatalf("again: %v", again)
+	}
+	owner.must(400, "PATCH", "/v1/stock/items/"+fabric["id"].(string), map[string]any{"price_kobo": 100})
+	owner.must(400, "PATCH", "/v1/stock/items/"+fabric["id"].(string), map[string]any{"supplier": "Nobody Yet"})
+	got = viewer.must(200, "GET", "/v1/stock", nil)
+	if f := itemsByName(t, got)["Ankara fabric"]; f["low"] != true || f["suggest"] != float64(7) {
+		t.Fatalf("the material's low: %v", f)
+	}
+	if rows := owner.must(200, "GET", "/v1/storefront/catalogue", nil)["items"].([]any); strings.Contains(toJSON(rows), "Ankara") {
+		t.Fatalf("a material in the catalogue: %v", rows)
+	}
+
+	// A product deleted in the owner's own table: after the refresh, its
+	// stock item is a material, its count and history kept (spec §12).
 	tables := owner.must(200, "GET", "/v1/tables", nil)["tables"].([]any)
 	var products string
 	for _, x := range tables {
@@ -111,18 +145,18 @@ func TestStockByAPI(t *testing.T) {
 			products = x.(map[string]any)["id"].(string)
 		}
 	}
-	owner.must(200, "PATCH", "/v1/tables/"+products+"/rows/"+id, map[string]any{"set": map[string]any{"stock": 9}}, "Idempotency-Key", "edit-1")
+	sid := itemsByName(t, got)["Indomie"]["stock_item_id"]
+	owner.must(200, "DELETE", "/v1/tables/"+products+"/rows/"+id, nil, "Idempotency-Key", "del-1")
 	owner.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
-	list := viewer.must(200, "GET", "/v1/stock/movements?item="+id, nil)["movements"].([]any)
-	reasons := []string{}
-	for _, x := range list {
-		reasons = append(reasons, x.(map[string]any)["reason"].(string))
+	gone := itemsByName(t, viewer.must(200, "GET", "/v1/stock", nil))["Indomie"]
+	if gone == nil || gone["material"] != true || gone["id"] != sid || gone["stock"] != float64(7) {
+		t.Fatalf("the deleted product's stock item: %v", gone)
 	}
-	if strings.Join(reasons, ",") != "outside,count,adjustment,received" || list[0].(map[string]any)["change"] != float64(2) {
-		t.Fatalf("movements: %v", list)
+	if n := len(viewer.must(200, "GET", "/v1/stock/movements?item="+sid.(string), nil)["movements"].([]any)); n != 3 {
+		t.Fatalf("its history: %d movements", n)
 	}
 	viewer.must(400, "GET", "/v1/stock/movements?reason=stolen", nil)
-	if n := len(viewer.must(200, "GET", "/v1/stock/movements?reason=received", nil)["movements"].([]any)); n != 2 {
+	if n := len(viewer.must(200, "GET", "/v1/stock/movements?reason=received", nil)["movements"].([]any)); n != 3 {
 		t.Fatalf("received: %d", n)
 	}
 	if out := owner.must(200, "GET", "/v1/audit?limit=100", nil); !strings.Contains(toJSON(out), `"stock.move"`) || !strings.Contains(toJSON(out), `"stock.setup"`) {
@@ -130,8 +164,9 @@ func TestStockByAPI(t *testing.T) {
 	}
 }
 
-// A catalogue the business already has keeps its own columns: Keep my
-// stock maps the stock column it has and adds the others.
+// A catalogue the business already has is left as it is by Keep my
+// stock: its own count column is not read, and a product starts being
+// counted, by a stock item, when its stock is first recorded.
 func TestStockOnAnExistingCatalogue(t *testing.T) {
 	w := newTablesWorld(t)
 	withStock(w.world)
@@ -141,24 +176,22 @@ func TestStockOnAnExistingCatalogue(t *testing.T) {
 	table := tbl["id"].(string)
 	owner.must(201, "POST", "/v1/tables/"+table+"/rows", map[string]any{"row": map[string]any{"name": "Jollof rice", "price": "1500", "left": 4, "unit": "plate"}}, "Idempotency-Key", "r1")
 	owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ada-kitchen", "draft": map[string]any{"name": "Ada's Kitchen"}, "catalogue_table": table,
-		"catalogue_columns": map[string]any{"name": "name", "price": "price", "stock": "left"}})
+		"catalogue_columns": map[string]any{"name": "name", "price": "price"}})
 
 	set := owner.must(200, "POST", "/v1/stock/setup", nil)
-	cols := set["columns"].(map[string]any)
-	if set["catalogue"] != "menu" || cols["stock"] != "left" || cols["unit"] != "unit" || cols["cost_price"] != "cost_price" || cols["supplier"] != "supplier" {
+	if set["catalogue"] != "menu" || len(set["columns"].(map[string]any)) != 3 {
 		t.Fatalf("setup: %v", set)
 	}
 	got := owner.must(200, "GET", "/v1/stock", nil)
 	jollof := itemsByName(t, got)["Jollof rice"]
-	if jollof["stock"] != float64(4) || jollof["unit"] != "plate" {
+	if jollof["stock"] != nil || jollof["stock_item_id"] != nil {
 		t.Fatalf("stock: %v", got)
 	}
-	// The first count seen in the table is explained before the first
-	// change lands on it.
 	owner.must(200, "POST", "/v1/stock/movements", map[string]any{"item_id": jollof["id"], "reason": "received", "change": 10}, "Idempotency-Key", "m1")
+	jollof = itemsByName(t, owner.must(200, "GET", "/v1/stock", nil))["Jollof rice"]
 	list := owner.must(200, "GET", "/v1/stock/movements", nil)["movements"].([]any)
-	if len(list) != 2 || list[1].(map[string]any)["reason"] != "outside" || list[1].(map[string]any)["note"] != "First count seen in the table" {
-		t.Fatalf("movements: %v", list)
+	if jollof["stock"] != float64(10) || jollof["stock_item_id"] == nil || len(list) != 1 || list[0].(map[string]any)["item_id"] != jollof["stock_item_id"] {
+		t.Fatalf("counted from now: %v, %v", jollof, list)
 	}
 }
 
@@ -182,7 +215,7 @@ func TestStockByChat(t *testing.T) {
 	if r := w.say(t, vn, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "table.edit") {
 		t.Errorf("viewer: %q", r)
 	}
-	if r := w.say(t, on, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "Start keeping stock with *Indomie*: 50 cartons at ₦8,500 each?") {
+	if r := w.say(t, on, "add 50 cartons of Indomie at 8,500"); !strings.Contains(r, "Start keeping stock with *Indomie*: 50 cartons at ₦8,500 each. Do you sell it?") {
 		t.Fatalf("first add: %q", r)
 	}
 	if r := w.yes(t, on); !strings.Contains(r, "Added *Indomie*: 50 cartons.") || !strings.Contains(r, "send *price Indomie 9500*") {

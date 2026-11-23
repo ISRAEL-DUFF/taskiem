@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { ApiError } from "../api";
 import {
   aboutOrderDraft,
+  theirErrorWords,
   linkChoices,
   whatsappHere,
   withoutTool,
@@ -289,5 +291,14 @@ describe("one customer across the app and WhatsApp (§11)", () => {
     // Only a wa.me link becomes the button's href.
     for (const link of ["javascript:alert(1)", "http://wa.me/2348000000001", "https://wa.me.evil.test/1", "https://example.com/wa.me/1", ""])
       expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"], whatsapp: { number: wa.number, link } })).toEqual({ taskiem: true, whatsapp: null });
+  });
+});
+
+describe("theirErrorWords", () => {
+  it("says a tool not offered to customers, one gone, too many tries, and the rest as a start", () => {
+    expect(theirErrorWords(new ApiError(409, "This can't be done from here.", [], { not_offered: true }))).toBe("This can't be done from here. Ask them here in the chat.");
+    expect(theirErrorWords(new ApiError(404, "no tool /x", []))).toBe("This isn't available any more.");
+    expect(theirErrorWords(new ApiError(429, "slow down", []))).toBe("Too many tries just now. Try again in a while.");
+    expect(theirErrorWords(new ApiError(409, "that confirmation has expired; start the tool again", [], {}))).toBe("That confirmation has expired; start the tool again");
   });
 });

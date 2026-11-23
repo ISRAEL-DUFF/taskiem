@@ -154,8 +154,25 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   count and what went missing. Running low, each item with a bar of what is
   left against its level, and Order them. One row to Supplies (how many are
   open, how many need you). The terminal's sales to say, today's sales,
-  your items (a row opens Record stock, Change, History), the counts and
-  every change.
+  What you count (a row opens Record stock, Change, History), the counts
+  and every change.
+- **What you count** (S2, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §4.5). Its head, the filter All, Sold,
+  Not sold as `TkChips` under it, then the stock items on one panel: each
+  a row with its letters, its count and unit at the end, a Low pill and a
+  level bar, and under its name what it is **Sold as** (a product using
+  more than one a sale says so: "Malt, pack of 6 (6 a sale)") or **Not
+  sold**, then its cost, levels and supplier. A product's sizes and
+  colours are one row with their count together, and each size a tag row
+  under it ("Of Ankara shirt"). The head's + is **Add something to
+  count**, a form sheet that asks **Do you sell it?** first (two radio
+  rows), then the name, how many and the unit, the selling price only
+  for Yes, and the cost, levels and supplier.
+- **Counted by**, on a product's sheet, a form row above In stock: its
+  stock item, how many a sale uses and its count, with Change opening a
+  form sheet (the stock item as a pick box over `pickOneOf`, how many a
+  sale uses, Count by none in red). A product in sizes and colours says
+  why it cannot be chosen there.
 - **Supplies** (from Stock and from Orders' "To suppliers"). Open, Received
   or Cancelled. A top card of what is on order and still owed, the orders as
   a flow (draft, sent, confirmed, coming in; violet, blue, teal, orange),
@@ -171,6 +188,70 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   confirmed, delivered, received), All came or Not all came; the supplier on
   one card with what they last said; the lines with their amounts and the
   total; Cancel as a row.
+- **The question on a purchase line** (U2a, 22 November 2026; [what a
+  business buys](what-a-business-buys.md) §6; `chat/treat_line.dart`). A
+  card per line: "**Sewing machine** from **Singer Ltd**", then "How should
+  we treat it?" muted; Just record it, Add to stock and Keep track of it as
+  choice rows (`TkListRow(chevron: false)` with an icon square and the
+  tick, `TkTick`, at the end; radios until the PR review of 23 November),
+  each with a short line; once confirmed the card shuts to its few words; for Add
+  to stock a pick box of the stock item (`pickOneOf`, Make a new one first,
+  which opens a form sheet asking **Do you sell it?**); Label as a pick box.
+  The label's sheet: a search box to type or pick, Make this label for a
+  new name typed, Your labels by use, Suggested, and No label. A line
+  remembered is one card in a few words ("Add to stock: Rice · Packaging")
+  with Change, which opens it with **Remember for next time** as a switch;
+  a line that came says "it came, so it stays". The cards stand on the
+  ground under a heading (`TreatSection`), not on a panel. Tracking more
+  than 50 asks in a sheet: "Put 500 nylon bags on Things we have, one row
+  each?", Just record them or Put them on.
+- **A line's mark** on an order to a supplier and on a bill (`LineMark`):
+  under its name, To stock (teal, a box) or Things we have (violet, #) as a
+  small pill, then its label, or Not labelled muted.
+- **What you buy from them** (Suppliers, a supplier's row): their
+  remembered items as rows, each with its treatment's square (recorded
+  blue, stock teal, tracked violet) and "Keep track of it · Machines";
+  a row opens a form sheet with the question, Save, and Forget in red.
+- **Labels** (Money, under Settings, for those who manage money): a callout
+  that renaming or merging changes reports, not records; the labels by use
+  as rows with their letters; a row opens Rename and Merge into another
+  label (`pickAction`), Merge asking which label (`pickOneOf`), then sure.
+- **Things we have** (U3, 22 November 2026; [what a business
+  buys](what-a-business-buys.md) §5.3; `chat/things_page.dart`), from
+  Money's Go to (a violet # square). The head's + is **Add something we
+  have**; chips Newest first and By label under it. A top card: "What we
+  still have" in violet, the total at cost large, how many, and a split bar
+  by label (three and Other). The rows have their letters, the label (or
+  Not labelled), from whom and the day it came, the cost at the end, and a
+  status pill only when no longer had. By label: a section per label with
+  its total at the title's end. **Show those no longer had** is a small
+  button under the list; they come in a section of their own.
+- **One of Things we have**: its name as a 22 px title; a top card of what
+  it cost, its status in the eyebrow's end, when it came and from whom (and
+  when it was sold, broken… in the status's accent). **Status** as five
+  radio rows (Have, Sold, Broken, Given away, Gone); **Details** (Label,
+  Serial number, Warranty ends, Note) and **Where it came from** (From, the
+  order, which opens, or Added by hand) as square-icon rows. Sold opens a
+  form sheet: Sold for (optional), Paid in cash or by transfer once a price
+  is typed; without `invoice.manage` a blue callout says a price is money
+  in, and it is marked sold without one. Without `table.edit`, a lock
+  callout and nothing pressable. A failed change is a toast.
+- **Add something we have**: a form sheet (name, what it cost, when it
+  came, from whom over `pickOneOf`, the label through the line's label
+  sheet), then "If you have them" (serial, warranty ends, note).
+- **An order's tracked lines** link to their rows: under What you ordered
+  (an order to a supplier) and on a bill, one row "On Things we have"
+  opening the list of that order's rows.
+- **Spending by label** (§5.4; `chat/spending.dart`). On Money, a section
+  for the period after In this period: the split bar (Running costs, Bought
+  to sell or make with, Bought to keep, with their amounts), then the
+  three labels spent on most, See all opening the page. The page: month
+  chips (This month and five before); a top card of profit (lime, red when
+  under) with "Bought to keep left out", what made it, and the split bar
+  in shares; tiles Running costs (orange), To sell or make with (teal) and
+  a wide Bought to keep (violet, "left out of profit"); then By label, each
+  with its amount and what of it was bought to sell or keep, Not labelled
+  with a # tile.
 
 ### Cards in a conversation
 
@@ -330,6 +411,13 @@ web's pictures (the parity test still builds and drives them).
   Back and Close on the card's colour, the title in Inter Tight, the search
   on a card, filters as the switch, the rows on one card. Sell and Order:
   − and + round on a soft track, lime once picked; the total a pine bar.
+- **Your tools** (made tools M1, 22 November 2026): the business's own
+  tools follow the built-in tiles under a small "Your tools" heading, in
+  the same tiles. A tool's sheet is a `TkFormSheet` (`/command` over its
+  name); Yes is a second step of the same sheet ("What will run" as
+  `TkLines`). Its answer stands in the chat as the cards do: a text in
+  Taskiem's bubble, a card or a list in the card frame (`cardDecoration`),
+  the person's values as their own bubble before it.
 - **Left as it was:** the product form keeps its order (the photo's ways
   under the picture, the fields one under another) in the new colours; the
   documents named in a message (`RefCard`).
@@ -350,12 +438,21 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
   - App lock as a switch: on locks every time Taskiem opens; the row opens
     the choice of when (at once, after a minute, after half an hour).
 - Appearance as a switch of three.
-- Signing in: Passkeys and Your phones, each with its count.
+- Signing in: Passkeys and Your phones, each with its count, and PIN.
 - The chats you work from: WhatsApp, Telegram and Slack, each with
   whether it is linked.
 - Saved: Saved things, the business's (saved objects S0, S1).
-- For everyone here: Chat tools, a switch, for owners and admins.
+- For everyone here: Chat tools, a switch, for owners and admins; Read
+  handwriting with AI (I3), a switch beside it where this Taskiem can,
+  that only owners can change (others see it, with "Only an owner can
+  change this"), what it sends in the note under it.
 - Sign out of this phone.
+
+A photo the phone could not read (no account, no line of a list): where
+reading with AI is on, a violet `PhotoAICallout` under "From a photo"
+("No account number found", "Read it with AI", "Sends this photo to
+Taskiem's AI. It is not kept."); from a chat photo's menu, the same as a
+`pickAction` sheet.
 
 Every row that has more opens its own page (`SettingsPage`, Back to
 Settings), with its groups as headings over cards (`SettingsCard`).
@@ -424,6 +521,26 @@ A forgotten password is done in the app (`lib/screens/forgot_password.dart`):
 
 A link that comes while someone is signed in opens Choose a new password
 over the app.
+
+### The PIN (`lib/screens/you_pin.dart`)
+
+The person's one PIN (GET and PUT /v1/me/pin) approves on WhatsApp and
+pays up to ₦100,000 (₦200,000 a day). It is never shown and never asked
+for in a message.
+
+- **Set your PIN**, once a new account is made (a new number, or signing
+  up in the app), when it has none: the PIN typed twice in two rows of
+  `CodeBoxes(obscure: true)` in one `TkFormGroup`, what it is for under
+  them, Set your PIN as the `TkCta` and **Not now** as a bold link. A
+  mismatch or a weak PIN (one digit repeated, a run like 123456) is said
+  before anything is sent, in a red callout.
+- **Settings › PIN** (You's Your account, and a business's Signing in):
+  `TkLines` with the PIN as dots, when it was set and from when it pays;
+  a red callout when it is locked and an orange one while a new PIN waits
+  its 24 hours; Change PIN opens the same form. Its button asks for the
+  passkey first ("Confirm with your passkey and save"), or none moments
+  after signing in. With neither, a callout says to sign out, sign in
+  again and change it within 10 minutes.
 
 ## Sheets and the chats, as drawn
 
@@ -516,6 +633,65 @@ Left different on purpose:
 - Availability adds "Another time", to type one's own.
 - A customer's order keeps what changes it: − and +, the address, the
   fee and how they pay.
+
+### Paying a person
+
+Built 21 November 2026 in the same look, from the plan (no drawing yet).
+
+- **The Pay sheet** is the chat's form for the action, with its own
+  kinds: a saved account as @name chips under its box, an account number
+  of 10 digits, the bank a `TkPickBox` opening the bank list with a search.
+  Its button is Next: nothing is paid from the form.
+- **Check before you pay:** the bank's name for the account is the
+  largest words on the sheet, on a `TkTopCard` with "The bank says" over it
+  and the payee, bank and masked account under it, then the amount. A
+  changed account is a red callout, a first payment and the same payment
+  in the last day orange ones. Pay ₦… carries the fingerprint; the
+  authenticator's code is behind a link, as Approve has it.
+- **Payments:** a list page with the filters under the head; one not sent
+  yet has an amber dot and its own section. The owner's limits are rows
+  under "What others may pay", each opening a sheet.
+- **From a message** (phase 2): "Pay this account" is a pill under the
+  bubble on the wallpaper (the incoming bubble's colour, a teal round bank
+  mark; lime with a tick once paid, "Paid ₦45,000 on 3 Nov · Pay again").
+  "Add to the list" is a second pill beside it (the accent's words, a
+  people mark), not shown once paid. While the list has rows, a slim card
+  sits on the wallpaper above the box: a teal round mark, "3 to pay ·
+  ₦95,000" (and "1 needs an amount" in orange under it), Pay these in the
+  main pill, and ⋯ for Clear; a batch made from it waiting: an orange
+  clock, "Waiting to be sent", Open.
+- **The bank for a number:** the bank list puts the likely banks first,
+  marked "Likely for this number"; "Check the likely banks for me" is a
+  bold link under the bank's box, its answers rows under "What the banks
+  say" (lime with the name, red without), the one picked ticked. The bank's
+  name is a lime callout, no account a red one; the message's name that is
+  not the bank's an amber one.
+- **Pay on a rider:** a small Pay button on the rider's row.
+- **Payroll** (P4a; Payrolla's, shown in Taskiem): a list page like
+  Payments, the latest run's net pay large on a `TkTopCard` with its status
+  pill; the runs as rows with a calendar tile, "Nov 2026" (the month short
+  beside the amount and pill), Show more a `TkSmallButton`. A run is a
+  one-document page (title 22): net pay on top, Review and approve in
+  Payrolla a `TkCta` with an arrow, Not paid first. Staff in Payrolla: rows
+  with Confirm (primary), Choose or Unlink as small buttons at their end.
+
+### Paying a bill by transfer
+
+Built 21 November 2026 in the same look, from the payments flow's part 1
+(`docs/spec/chat-payments-flow.md`; no drawing yet).
+
+- **Pay** on a bill (its card, its page) or a customer's invoice opens a
+  small sheet of the ways as rows (`pickPayWay`): by transfer on teal, from
+  Taskiem on violet, their checkout on orange. With one way, Pay goes
+  straight to it.
+- **The transfer card** (`TransferCard`) has the card's kicker and a pill
+  (Getting it, Waiting, Expiring, Paid, Part-paid, Expired, No number);
+  "Send exactly" over the amount large; the bank, the number (in groups)
+  and the name on a panel of the ground's colour, each with a round Copy;
+  the countdown with a clock, orange in the last five minutes; a lime dot
+  that pulses while it waits, never a spinner over the number. Its one
+  step (Pay the next one, Pay the rest, Get a new number) is the card's
+  pine button; I need longer is a bold link.
 
 ## The school, as drawn
 

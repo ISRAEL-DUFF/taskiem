@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { figureRows, lengthWords, shiftWords, staffTile, emptyStaff, inviteSub, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffProblem } from "./team";
+import { figureRows, lengthWords, shiftWords, staffTile, emptyStaff, inviteSub, payAccountRequest, payAccountWords, payWords, personSub, profileForm, profileProblem, profileRequest, roleWords, rotaWords, staffPayFill, staffProblem, staffUnpayable } from "./team";
 
 describe("staff", () => {
   it("says roles as people do", () => {
@@ -113,5 +113,25 @@ describe("clocking in", () => {
       ["Tasks", "None"],
     ]);
     expect(figureRows({ ...f, handovers: [{ at: "2026-11-09T16:00:00Z" }] }, money)).toContainEqual(["Handovers", "1"]);
+  });
+});
+
+describe("where a staff member is paid", () => {
+  const acct = { saved_id: "s1", name: "musa", title: "Musa, cashier", bank_name: "Access Bank", last4: "6789", account_name: "MUSA BELLO" };
+  it("shows the linked account masked", () => {
+    expect(payAccountWords(acct)).toBe("@musa · Access Bank ••6789 · MUSA BELLO");
+    expect(payAccountWords({ ...acct, account_name: undefined })).toBe("@musa · Access Bank ••6789");
+  });
+  it("starts the Pay sheet for wages, to them", () => {
+    expect(staffPayFill("u1")).toEqual({ staff: "u1", for: "wages" });
+  });
+  it("links or unlinks a saved account", () => {
+    expect(payAccountRequest("s1")).toEqual({ saved_id: "s1" });
+    expect(payAccountRequest(null)).toEqual({ saved_id: null });
+  });
+  it("says why someone cannot be paid from a list", () => {
+    expect(staffUnpayable({ pay_account: acct }, false)).toBeNull();
+    expect(staffUnpayable({ pay_account: null }, true)).toBe("No account linked: link one on their page");
+    expect(staffUnpayable({}, false)).toBe("No account linked: an owner links one on their page");
   });
 });

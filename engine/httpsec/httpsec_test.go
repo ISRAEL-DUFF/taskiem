@@ -22,3 +22,17 @@ func TestFrameHeaders(t *testing.T) {
 		t.Errorf("no ancestors: %s", csp)
 	}
 }
+
+// Only the photo reader's files may compile WebAssembly: the app's own
+// pages may not.
+func TestOCRPolicy(t *testing.T) {
+	if strings.Contains(CSP, "wasm") || strings.Contains(AppCSP([]string{"https://forms.example"}), "wasm") {
+		t.Errorf("the app's policy compiles WebAssembly: %s", CSP)
+	}
+	if !strings.Contains(OCRCSP, "script-src 'self' 'wasm-unsafe-eval';") || strings.Contains(OCRCSP, "'unsafe-eval'") {
+		t.Errorf("the reader's policy: %s", OCRCSP)
+	}
+	if strings.Replace(OCRCSP, " 'wasm-unsafe-eval'", "", 1) != CSP {
+		t.Errorf("the reader's policy is the app's with WebAssembly: %s", OCRCSP)
+	}
+}

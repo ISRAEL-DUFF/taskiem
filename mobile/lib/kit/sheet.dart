@@ -863,7 +863,8 @@ class TkPickBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    // A finger's 48 px, as the boxes beside it (46 drawn).
+    return TapArea(child: Semantics(
       button: true,
       label: label,
       value: shown,
@@ -884,6 +885,6 @@ class TkPickBox extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }

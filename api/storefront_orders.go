@@ -145,6 +145,8 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	ref := chi.URLParam(r, "reference")
 	var o storefront.Order
 	var pays []storefront.OrderPayment
+	var orders int
+	var savedAs string
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		o, err = s.Orders.GetOrder(r.Context(), tx, principalFrom(r.Context()).TenantID, ref)
@@ -152,6 +154,14 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 			return pgx.ErrNoRows
 		}
 		if err != nil {
+			return err
+		}
+		// How many orders its customer has made: one is a new customer's
+		// first, which the page offers to save (saved objects S3).
+		if orders, err = customerOrdersTx(r.Context(), tx, principalFrom(r.Context()).TenantID, ref); err != nil {
+			return err
+		}
+		if savedAs, err = customerSavedTx(r.Context(), tx, principalFrom(r.Context()).TenantID, o.Customer); err != nil {
 			return err
 		}
 		// The money matched to it (docs/matching.md), undone with
@@ -168,7 +178,7 @@ func (s *Server) getStorefrontOrder(w http.ResponseWriter, r *http.Request) {
 	if !reveal {
 		maskCustomer(&o.Customer)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal})
+	writeJSON(w, http.StatusOK, map[string]any{"order": o, "payments": pays, "revealed": reveal, "customer_orders": orders, "customer_saved": savedAs})
 }
 
 // maskCustomer leaves enough to recognise a customer: a name's first
@@ -201,6 +211,12 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 	go every(ctx, time.Minute, func() {
 		if err := s.StaffTick(ctx); err != nil && ctx.Err() == nil {
 			s.Logger.Error("staff: the job", "err", err)
+		}
+	})
+	// Reminders on saved things' dates, told in the morning (saved_reminders.go).
+	go every(ctx, time.Minute, func() {
+		if err := s.SavedRemindersTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("saved: the reminders", "err", err)
 		}
 	})
 	// The phone index's one-time fill: orders made before it, a few

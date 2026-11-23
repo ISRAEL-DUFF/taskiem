@@ -16,7 +16,7 @@ import 'config.dart';
 /// (taskiem-for-everyone §7): the chats and one chat, Orders and one order,
 /// Discover and a business's profile; You's settings stay on the web.
 final _opens = RegExp(
-  r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+'
+  r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+|payments|payments/[^/]+|payments/batches/[^/]+|payroll|payroll/staff|payroll/runs/[^/]+'
   r'|you|you/chats|you/chats/[^/]+|you/orders|you/orders/[^/]+/[^/]+|you/discover|you/discover/[^/]+'
   r'|you/people/[^/]+|you/people/requests/[^/]+|you/groups/[^/]+)/?$',
 );

@@ -90,6 +90,7 @@ func storefrontRow(t *testing.T, w *world, slug string) (status string, version 
 
 func TestWhatsAppMakeMyPage(t *testing.T) {
 	w := shopWorld(t)
+	withStock(w.world)
 	owner := w.tenant(t, "Ada's Kitchen", "ada@ada.test")
 	verifyPhone(t, w.world, owner, "phone", "business") // publishing goes live at once (moderation.md)
 	const on, vn, an, bn, cn = "+2348010000009", "+2348010000005", "+2348010000006", "+2348010000007", "+2348010000008"
@@ -161,7 +162,7 @@ func TestWhatsAppMakeMyPage(t *testing.T) {
 	}
 	var cols string
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT s.catalogue_columns::text FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table
-		WHERE s.slug = 'adas-kitchen' AND d.name = 'products'`).Scan(&cols); err != nil || !strings.Contains(cols, `"price": "price"`) || !strings.Contains(cols, `"stock": "stock"`) {
+		WHERE s.slug = 'adas-kitchen' AND d.name = 'products'`).Scan(&cols); err != nil || !strings.Contains(cols, `"price": "price"`) || strings.Contains(cols, `"stock"`) {
 		t.Fatalf("catalogue: %v %s", err, cols)
 	}
 	if n := len(w.rows(t, "products")); n != 0 {
@@ -262,7 +263,8 @@ func TestWhatsAppMakeMyPage(t *testing.T) {
 		t.Fatalf("stock asked: %q", r)
 	}
 	w.yes(t, bn)
-	if r := w.say(t, bn, "stock jollof rice lots"); !strings.Contains(r, "*stock Jollof rice 20*") {
+	// With stock kept, "stock <item>" asks after an item: one by that name.
+	if r := w.say(t, bn, "stock jollof rice lots"); !strings.Contains(r, "Nothing in your catalogue is called jollof rice lots") {
 		t.Errorf("bad stock: %q", r)
 	}
 	if r := w.say(t, bn, "hide pizza"); !strings.Contains(r, "Nothing in your catalogue is called pizza") {
