@@ -192,7 +192,9 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   business buys](what-a-business-buys.md) §6; `chat/treat_line.dart`). A
   card per line: "**Sewing machine** from **Singer Ltd**", then "How should
   we treat it?" muted; Just record it, Add to stock and Keep track of it as
-  radio rows (`TkListRow` with `TkRadio`), each with a short line; for Add
+  choice rows (`TkListRow(chevron: false)` with an icon square and the
+  tick, `TkTick`, at the end; radios until the PR review of 23 November),
+  each with a short line; once confirmed the card shuts to its few words; for Add
   to stock a pick box of the stock item (`pickOneOf`, Make a new one first,
   which opens a form sheet asking **Do you sell it?**); Label as a pick box.
   The label's sheet: a search box to type or pick, Make this label for a

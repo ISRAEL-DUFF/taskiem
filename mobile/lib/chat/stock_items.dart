@@ -10,10 +10,9 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/forms.dart' show TkFormRow, TkMoneyField, nairaKobo;
-import '../kit/kit.dart' show TkRadio;
 import '../kit/list.dart' show TkSoftButton;
 import '../kit/look.dart' show TkCallout, TkSquare;
-import '../kit/mobile.dart' show TkFormGroup, TkFormSheet, TkListRow;
+import '../kit/mobile.dart' show TkFormGroup, TkFormSheet, TkListRow, TkTick;
 import '../kit/sheet.dart' show TkKitField, TkPickBox, showTkSheet;
 import '../theme/look.dart' show TkLook;
 import 'approve.dart' show TkTextBox;
@@ -181,7 +180,15 @@ class _AddToCountSheetState extends State<AddToCountSheet> {
 
   Widget _choice(bool yes, String title, String sub) => Semantics(
     selected: _sell == yes,
-    child: TkListRow(title: title, sub: sub, leading: TkRadio(checked: _sell == yes), onTap: () => setState(() => _sell = yes)),
+    child: TkListRow(
+      title: title,
+      sub: sub,
+      icon: yes ? 'b-store' : 'b-box',
+      square: yes ? TkLook.of(context).teal : TkLook.of(context).orange,
+      chevron: false,
+      trailing: TkTick(_sell == yes),
+      onTap: () => setState(() => _sell = yes),
+    ),
   );
 
   Widget _field(String label, TextEditingController c, {String? hint, bool number = false, int? max}) => TkKitField(

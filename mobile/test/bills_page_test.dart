@@ -203,6 +203,18 @@ void main() {
     expect(find.bySemanticsLabel('Query this bill'), findsNothing);
   });
 
+  testWidgets('a bill line not matched to its order line has no mark', (t) async {
+    final b = _bill()
+      ..['lines'] = [
+        {'description': 'Sewing machine', 'quantity': 1, 'unit_kobo': 15600000, 'purchase_id': 'po-1', 'seller_item_id': 'si-1'},
+        {'description': 'Delivery', 'quantity': 1, 'unit_kobo': 500000, 'purchase_id': 'po-1'},
+      ];
+    await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), bill: b);
+    expect(find.text('Delivery'), findsOneWidget);
+    expect(find.text('Things we have'), findsOneWidget, reason: 'the matched line, kept track of');
+    expect(find.text('Not labelled'), findsOneWidget, reason: 'only the matched line, which has no label');
+  });
+
   testWidgets('On Things we have shows only to someone who may see Things we have', (t) async {
     final tracked = _bill()
       ..['lines'] = [

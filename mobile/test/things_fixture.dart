@@ -38,7 +38,8 @@ Map<String, Object?> thing(
   'status': status,
   'status_at': status == 'have' ? received : '2026-11-20T10:00:00Z',
   'sale_entry_id': ?sale,
-  'created_by': 'Ada',
+  // As the server stores it: who added it, as an actor id, not a name.
+  'created_by': '7d1f3c2a-5b9e-4c1d-8a6f-2e0b9c4d7a11',
   'created_at': received,
 };
 
@@ -49,13 +50,15 @@ final things = [
   thing('th-4', 'Old freezer', status: 'sold', cost: 12000000, labelId: 'lb-mach', label: 'Machines', received: '2025-06-01T10:00:00Z', sale: 'me-9'),
 ];
 
-Map<String, Object?> thingsAnswer(bool all) {
-  final list = [for (final t in things) if (all || t['status'] == 'have') t];
-  final had = things.where((t) => t['status'] == 'have');
+Map<String, Object?> thingsAnswer(bool all, {String? order}) {
+  final kept = [for (final t in things) if (order == null || t['purchase_order_id'] == order) t];
+  final list = [for (final t in kept) if (all || t['status'] == 'have') t];
+  final had = kept.where((t) => t['status'] == 'have');
   return {
     'things': list,
     'count': had.length,
     'total_kobo': had.fold<int>(0, (n, t) => n + (t['cost_kobo'] as int? ?? 0)),
+    if (order == null)
     'groups': [
       {'label_id': 'lb-mach', 'label': 'Machines', 'count': 2, 'total_kobo': 77000000},
       {'label_id': null, 'label': '', 'count': 1, 'total_kobo': 8500000},
@@ -85,7 +88,7 @@ http.Response _ok(Object b, [int status = 200]) => http.Response(jsonEncode(b), 
 http.Response? thingsAnswers(http.Request req) {
   final p = req.url.path;
   if (req.method == 'GET') {
-    if (p == '/v1/things') return _ok(thingsAnswer(req.url.queryParameters['all'] == 'true'));
+    if (p == '/v1/things') return _ok(thingsAnswer(req.url.queryParameters['all'] == 'true', order: req.url.queryParameters['order']));
     if (p.startsWith('/v1/things/')) {
       final t = things.where((t) => t['id'] == p.split('/').last).firstOrNull;
       return t == null ? _ok({'error': 'not found'}, 404) : _ok({'thing': t});

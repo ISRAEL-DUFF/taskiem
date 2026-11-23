@@ -13,6 +13,8 @@ import 'package:taskiem/api/api.g.dart' show Me, Thing;
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/chat/spending.dart';
 import 'package:taskiem/chat/things_page.dart';
+import 'package:taskiem/kit/kit.dart' show TkRadio;
+import 'package:taskiem/kit/mobile.dart' show TkListRow, TkTick;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -174,6 +176,31 @@ void main() {
     expect(sent.last, 'PATCH /v1/things/th-6 {"status":"sold"}');
     expect(find.text('Marked sold; its sale was recorded already'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('added by hand: the day, not who added it as an id', (t) async {
+    await open(t, (a) => ThingPage(auth: a, thing: _of('th-3')));
+    await t.scrollUntilVisible(find.text('Added by hand'), 200);
+    expect(find.text('Added by hand'), findsOneWidget);
+    expect(find.text('2 Sep 2026'), findsOneWidget);
+    expect(find.textContaining('7d1f3c2a'), findsNothing, reason: 'created_by is an actor id, not a name');
+    expect(find.textContaining('By '), findsNothing);
+  });
+
+  testWidgets('from an order: its rows asked of the server by the order', (t) async {
+    final sent = await open(t, (a) => ThingsPage(auth: a, order: 'po-1', orderReference: 'PO-0012', backLabel: 'Back to the order'));
+    expect(sent, contains('GET /v1/things?all=true&order=po-1'));
+    expect(sent.where((s) => s.startsWith('GET /v1/things?') && !s.contains('order=')), isEmpty, reason: 'not the whole list filtered on the phone');
+    expect(find.text('From PO-0012: 1 thing'), findsOneWidget);
+    expect(find.text('Sewing machine'), findsOneWidget);
+    expect(find.text('Generator'), findsNothing);
+  });
+
+  testWidgets('the status is chosen from rows ticked, not radios', (t) async {
+    await open(t, (a) => ThingPage(auth: a, thing: _of('th-2')));
+    expect(find.byType(TkRadio), findsNothing);
+    expect(find.descendant(of: find.ancestor(of: find.text('Still with the business'), matching: find.byType(TkListRow)), matching: find.byType(TkTick)), findsOneWidget);
+    expect(find.byType(TkTick), findsNWidgets(5));
   });
 
   testWidgets('seen, not changed, without table.edit', (t) async {

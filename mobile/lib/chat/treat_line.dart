@@ -15,11 +15,11 @@ import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/forms.dart' show TkSwitchRow;
 import '../kit/icon.dart' show TkIcon;
-import '../kit/kit.dart' show TkAppLook, TkRadio, TkSmallButton;
+import '../kit/kit.dart' show TkAppLook, TkSmallButton;
 import '../kit/list.dart' show TkSearchBox;
 import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/modal.dart' show showTkToast;
-import '../kit/mobile.dart' show TkFormGroup, TkFormSheet, TkListRow, TkPanel, TkSection;
+import '../kit/mobile.dart' show TkFormGroup, TkFormSheet, TkListRow, TkPanel, TkSection, TkTick;
 import '../kit/sheet.dart' show TkCta, TkGhostButton, TkKitField, TkPickBox, TkSheet, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -244,6 +244,8 @@ class _TreatQuestionState extends State<TreatQuestion> {
   void didUpdateWidget(TreatQuestion old) {
     super.didUpdateWidget(old);
     if (widget.asked && !old.asked) _open = true;
+    // Answered (confirmed, and read again): shut, in a few words.
+    if (!widget.asked && old.asked) _open = false;
   }
 
   Treat get _v => widget.value;
@@ -286,8 +288,18 @@ class _TreatQuestionState extends State<TreatQuestion> {
       child: TkListRow(
         title: treatWords(how),
         sub: sub,
-        leading: TkRadio(checked: on),
+        icon: switch (how) {
+          'stock' => 'b-box',
+          'track' => 'b-hash',
+          _ => 'b-receipt',
+        },
+        square: switch (how) {
+          'stock' => TkLook.of(context).teal,
+          'track' => TkLook.of(context).violet,
+          _ => TkLook.of(context).blue,
+        },
         chevron: false,
+        trailing: TkTick(on),
         semanticsLabel: '${treatWords(how)}: ${widget.item}',
         onTap: widget.onChanged == null ? null : () => _set(_v.copyWith(how: how)),
       ),
@@ -581,8 +593,10 @@ class _NewStockItemSheetState extends State<NewStockItemSheet> {
     child: TkListRow(
       title: title,
       sub: sub,
-      leading: TkRadio(checked: _sell == yes),
+      icon: yes ? 'b-store' : 'b-box',
+      square: yes ? TkLook.of(context).teal : TkLook.of(context).orange,
       chevron: false,
+      trailing: TkTick(_sell == yes),
       onTap: () => setState(() => _sell = yes),
     ),
   );

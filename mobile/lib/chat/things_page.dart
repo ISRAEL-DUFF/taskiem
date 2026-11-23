@@ -15,10 +15,10 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/forms.dart' show TkMoneyField, nairaKobo;
-import '../kit/kit.dart' show TkRadio, TkSmallButton;
+import '../kit/kit.dart' show TkSmallButton;
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/look.dart' show TkCallout, TkEyebrow, TkSplitBar, TkSquare, TkTopCard, tkFigure;
-import '../kit/mobile.dart' show TkCountUp, TkFormGroup, TkFormSheet, TkHeadButton, TkListRow, TkRoute, TkSection, TkChips;
+import '../kit/mobile.dart' show TkCountUp, TkFormGroup, TkFormSheet, TkHeadButton, TkListRow, TkRoute, TkSection, TkChips, TkTick;
 import '../kit/modal.dart' show showTkToast;
 import '../kit/page.dart' show TkPageScreen;
 import '../kit/sheet.dart' show TkKitField, TkPickBox, showTkSheet;
@@ -95,7 +95,10 @@ class _ThingsPageState extends State<ThingsPage> {
   Future<void> _load() async {
     final asked = ++_asked;
     try {
-      final r = await widget.auth.api.listThings(all: _all ? 'true' : null, group: 'label');
+      // An order's rows are asked of the server by its id (every status),
+      // not picked from the newest 2,000 here.
+      final order = widget.order;
+      final r = order != null ? await widget.auth.api.listThings(all: 'true', order: order) : await widget.auth.api.listThings(all: _all ? 'true' : null, group: 'label');
       if (!mounted || asked != _asked) return;
       setState(() {
         _things = r.things;
@@ -137,8 +140,7 @@ class _ThingsPageState extends State<ThingsPage> {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final order = widget.order;
-    final all = _things;
-    final list = all == null ? null : (order == null ? all : all.where((x) => x.purchaseOrderId == order).toList());
+    final list = _things;
     final had = list?.where((x) => x.status == 'have').toList() ?? const <Thing>[];
     final gone = list?.where((x) => x.status != 'have').toList() ?? const <Thing>[];
     final colours = [look.violet, look.teal, look.orange, look.blue];
@@ -365,8 +367,22 @@ class _ThingPageState extends State<ThingPage> {
     child: TkListRow(
       title: thingStatus(s),
       sub: sub,
-      leading: TkRadio(checked: _t.status == s),
+      icon: switch (s) {
+        'sold' => 'b-money',
+        'broken' => 'b-tools',
+        'given' => 'b-share',
+        'gone' => 'b-x-ring',
+        _ => 'b-check-ring',
+      },
+      square: switch (s) {
+        'sold' => TkLook.of(context).blue,
+        'broken' => TkLook.of(context).orange,
+        'given' => TkLook.of(context).violet,
+        'gone' => TkLook.of(context).red,
+        _ => TkLook.of(context).teal,
+      },
       chevron: false,
+      trailing: TkTick(_t.status == s),
       onTap: edit && !_busy ? () => _status(s) : null,
     ),
   );
@@ -498,7 +514,9 @@ class _ThingPageState extends State<ThingPage> {
                   onTap: () => openPurchase(context, widget.auth, order, backLabel: 'Back to ${x.name}'),
                 )
               else
-                TkListRow(title: 'Added by hand', sub: 'By ${x.createdBy}, ${dateLabel(lagosDay(x.createdAt.toUtc().toIso8601String()))}', icon: 'b-hand', square: look.teal, chevron: false),
+                // created_by is who added it as an id (a person's or a key's), not a
+                // name, so only the day is shown.
+                TkListRow(title: 'Added by hand', sub: dateLabel(lagosDay(x.createdAt.toUtc().toIso8601String())), icon: 'b-hand', square: look.teal, chevron: false),
             ],
           ),
         ],
@@ -595,7 +613,15 @@ class _SoldSheetState extends State<SoldSheet> {
 
   Widget _paid(String v, String words, String sub) => Semantics(
     selected: _how == v,
-    child: TkListRow(title: words, sub: sub, leading: TkRadio(checked: _how == v), chevron: false, onTap: () => setState(() => _how = v)),
+    child: TkListRow(
+      title: words,
+      sub: sub,
+      icon: v == 'cash' ? 'b-cash' : 'b-bank',
+      square: v == 'cash' ? TkLook.of(context).teal : TkLook.of(context).blue,
+      chevron: false,
+      trailing: TkTick(_how == v),
+      onTap: () => setState(() => _how = v),
+    ),
   );
 
   @override

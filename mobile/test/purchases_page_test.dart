@@ -415,6 +415,27 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('a line confirmed: the question shuts to a few words', (t) async {
+    final p = _purchase(link: '', lines: [_line(0, 'Diesel', unconfirmed: true)]);
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: p,
+      answer: (req) {
+        // Confirmed: read again, the line is no longer asked.
+        if (req.method == 'PATCH') (p['lines'] as List).first['unconfirmed'] = false;
+        return null;
+      },
+    );
+    expect(find.text('How should we treat it?'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Confirm how Diesel is treated'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH /v1/stock/purchases/P1/lines/0')), hasLength(1));
+    expect(find.text('How should we treat it?'), findsNothing, reason: 'closed once confirmed');
+    expect(find.bySemanticsLabel('Confirm how Diesel is treated'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('a line that came meanwhile: locked, said, read again', (t) async {
     await open(
       t,

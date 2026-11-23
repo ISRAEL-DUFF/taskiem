@@ -268,7 +268,8 @@ class _StockPageState extends State<StockPage> {
         setState(() => _round++);
         await _reload();
       },
-      action: keeps ? TkHeadButton(icon: 'b-plus', label: 'Add something to count', primary: true, onTap: _add) : null,
+      // Adding a stock item changes the business's tables: table.edit.
+      action: keeps && widget.auth.can('table.edit') ? TkHeadButton(icon: 'b-plus', label: 'Add something to count', primary: true, onTap: _add) : null,
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (v == null && _error == null) Text('Loading your stock…', style: tkHint(t)),
@@ -290,8 +291,11 @@ class _StockPageState extends State<StockPage> {
           ),
         if (keeps) ...[
           if (sales != null) ..._salesToday(t, sales, items),
+          // The stock items did not load: say so, never "nothing is low".
+          if (_listError case final e?) TkCallout(leading: TkSquare('b-alert', color: look.red), title: 'What you count did not load', sub: e, color: look.red, subLines: 3),
           TkHighlights(
             tiles: [
+              if (_listError == null)
               TkHighlight(
                 label: 'Low',
                 icon: 'b-box',
@@ -323,6 +327,7 @@ class _StockPageState extends State<StockPage> {
                 ),
             ],
           ),
+          if (_listError == null)
           TkSection(
             title: 'Running low',
             count: low.length,

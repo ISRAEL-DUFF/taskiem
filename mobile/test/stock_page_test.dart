@@ -8,7 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
-import 'package:taskiem/api/api.g.dart' show ListStockItemsResponse;
+import 'package:taskiem/api/api.g.dart' show ListStockItemsResponse, Me;
 import 'package:taskiem/chat/stock_items.dart';
 import 'package:taskiem/chat/stock_page.dart';
 import 'package:taskiem/kit/modal.dart' show TkModal;
@@ -70,7 +70,7 @@ void main() {
     expect(rows.where((r) => shows(StockShow.sold, r)).length, 5);
   });
 
-  Future<List<String>> open(WidgetTester t, {Future<http.Response?> Function(http.Request req)? also}) async {
+  Future<List<String>> open(WidgetTester t, {Future<http.Response?> Function(http.Request req)? also, List<String>? perms}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 4000);
     t.view.devicePixelRatio = 1;
@@ -163,6 +163,7 @@ void main() {
       }),
       now: () => f.at,
     );
+    if (perms != null) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'permissions': perms});
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: StockPage(auth: chats.auth)));
     await settle(t);
     return sent;
@@ -180,6 +181,23 @@ void main() {
     expect(find.text('Order 2'), findsOneWidget, reason: 'the Low tile: Indomie and a shirt’s L');
     expect(find.text('4 cartons'), findsNWidgets(2), reason: 'low, and among the items');
     expect(find.text('Rice: received +20'), findsOneWidget);
+  });
+
+  testWidgets('Add something to count only for someone who may change tables', (t) async {
+    await open(t);
+    expect(find.bySemanticsLabel('Add something to count'), findsOneWidget);
+    await open(t, perms: const ['table.read', 'invoice.read']);
+    expect(find.text('Running low'), findsOneWidget, reason: 'the page is still shown');
+    expect(find.bySemanticsLabel('Add something to count'), findsNothing);
+  });
+
+  testWidgets('the stock items failing to load says so, not that nothing is low', (t) async {
+    await open(t, also: (req) async => req.url.path == '/v1/stock/stock-items' ? http.Response('{"error":"Stock items could not be read"}', 500, headers: {'content-type': 'application/json'}) : null);
+    expect(find.text('What you count did not load'), findsOneWidget);
+    expect(find.text('None'), findsNothing, reason: 'no Low tile saying none');
+    expect(find.text('nothing at its low level'), findsNothing);
+    expect(find.text('Running low'), findsNothing);
+    expect(find.text('Give what you count a low level, and it shows here when it runs low.'), findsNothing);
   });
 
   testWidgets('stock recorded: some spoilt, taken off, with why', (t) async {

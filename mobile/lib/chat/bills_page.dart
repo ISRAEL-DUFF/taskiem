@@ -315,8 +315,11 @@ class _BillPageState extends State<BillPage> with Polling {
   Widget? _mark(Map<String, dynamic> l) {
     if (_labels == null) return null;
     final o = _lineOf(l);
-    final label = o == null ? '' : (_labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '');
-    return LineMark(how: _str(o?['treatment']), label: label);
+    // Not matched to an order line (no seller item, or not on it): nothing
+    // is known of how it is treated, so no mark, not "Not labelled".
+    if (o == null) return null;
+    final label = _labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '';
+    return LineMark(how: _str(o['treatment']), label: label);
   }
 
   Future<void> _load() async {
