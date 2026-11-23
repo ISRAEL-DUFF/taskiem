@@ -1,3 +1,4 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, NavLink } from "react-router-dom";
@@ -1473,6 +1474,7 @@ export function StorefrontTabs() {
       {stock && <NavLink to="/storefront/stock">Stock</NavLink>}
       {stock && <NavLink to="/storefront/suppliers">Suppliers</NavLink>}
       {stock && <NavLink to="/storefront/price-lists">Price lists</NavLink>}
+      <AreaPageTabs areas={["storefront", ...(orders ? ["orders"] : []), ...(stock ? ["stock"] : [])]} />
     </nav>
   );
 }

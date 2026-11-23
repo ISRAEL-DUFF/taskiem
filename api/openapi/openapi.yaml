@@ -40090,7 +40090,7 @@ paths:
       - Pages
       summary: Taskiem's own records a page may show
       description: >-
-        The views of the business's own records a page part may read (`"source": {"records": "orders"}`): orders and invoices, each with its fixed columns (a personal column is shown masked to everyone, and is never narrowed, added up, grouped or ordered by), whether its area is on (a part over an area that is off is refused at publishing), and whether the caller may see it (orders need storefront.manage or order.handle, invoices invoice.read: a viewer without it is shown "You cannot see orders." in place of the part). For the editor (page.edit).
+        The views of the business's own records a page part may read (`"source": {"records": "orders"}`): orders, invoices, deliveries, customers and staff, each with its fixed columns (a personal column is shown masked to everyone, and is never narrowed, added up, grouped or ordered by), whether its area is on (a part over an area that is off is refused at publishing), and whether the caller may see it (orders and deliveries need storefront.manage or order.handle, invoices and customers invoice.read, staff member.manage: a viewer without it is shown "You cannot see orders." in place of the part). For the editor (page.edit).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -40138,6 +40138,9 @@ paths:
                                 type: string
                               personal:
                                 type: boolean
+                              sealed:
+                                type: boolean
+                                description: "Read from its record's sealed envelope (a rider's name): shown, but never narrowed, searched or ordered by."
                             additionalProperties: false
                       additionalProperties: false
                 additionalProperties: false
@@ -61108,6 +61111,10 @@ components:
         updated_at:
           type: string
           format: date-time
+        place:
+          type: string
+          enum: [storefront, orders, stock, money, links, schools]
+          description: The area the published page is a tab under, after Taskiem's own tabs, while that area is on (pages §9).
       additionalProperties: false
     PageList:
       type: object

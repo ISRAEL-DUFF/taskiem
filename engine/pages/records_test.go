@@ -55,7 +55,7 @@ func TestRecordsRefusals(t *testing.T) {
 	rows := []struct {
 		name, from, to, path, says string
 	}{
-		{"unknown view", `"source": {"records": "orders"}}`, `"source": {"records": "riders"}}`, "/blocks/0/source/records", "Taskiem's riders, which a page cannot show: it shows orders and invoices"},
+		{"unknown view", `"source": {"records": "orders"}}`, `"source": {"records": "riders"}}`, "/blocks/0/source/records", "Taskiem's riders, which a page cannot show: it shows orders, invoices, deliveries, customers and staff"},
 		{"area off", `{"records": "orders"}, "value": "count"`, `{"records": "orders"}, "value": "count"`, "/blocks/0/source/records", "the business's orders, and Orders is turned off in Settings"},
 		{"unknown column", `"of": "total"`, `"of": "amount"`, "/blocks/1/of", "which the table Invoices does not have"},
 		{"sum of a personal column", `"value": "sum", "of": "total", "naira": true, "source": {"records": "invoices", "filters": [{"column": "status", "op": "neq", "value": "void"}]}`,

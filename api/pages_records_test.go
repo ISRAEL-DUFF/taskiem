@@ -102,7 +102,7 @@ func TestPagesRecords(t *testing.T) {
 
 	// The editor's list of views.
 	recs := owner.must(200, "GET", "/v1/page-records", nil)["records"].([]any)
-	if len(recs) != 2 || recs[0].(map[string]any)["name"] != "orders" || recs[0].(map[string]any)["on"] != true {
+	if len(recs) != 5 || recs[0].(map[string]any)["name"] != "orders" || recs[0].(map[string]any)["on"] != true {
 		t.Fatalf("records: %v", recs)
 	}
 	owner.must(201, "POST", "/v1/pages", map[string]any{"document": salesPage})

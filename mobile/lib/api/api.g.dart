@@ -16655,13 +16655,16 @@ class PageList {
 }
 
 class PageSummary {
-  const PageSummary({required this.about, required this.hasDraft, required this.icon, required this.name, required this.pinned, required this.published, this.publishedAt, required this.roles, required this.title, required this.updatedAt, this.version});
+  const PageSummary({required this.about, required this.hasDraft, required this.icon, required this.name, required this.pinned, this.place, required this.published, this.publishedAt, required this.roles, required this.title, required this.updatedAt, this.version});
 
   final String about;
   final bool hasDraft;
   final String icon;
   final String name;
   final bool pinned;
+  /// The area the published page is a tab under, after Taskiem's own tabs,
+  /// while that area is on (pages §9).
+  final String? place;
   final bool published;
   final DateTime? publishedAt;
   /// Who may open it (owners always; empty, everyone in the business).
@@ -16677,6 +16680,7 @@ class PageSummary {
         icon: j['icon'] as String,
         name: j['name'] as String,
         pinned: j['pinned'] as bool,
+        place: j['place'] == null ? null : j['place'] as String,
         published: j['published'] as bool,
         publishedAt: j['published_at'] == null ? null : DateTime.parse(j['published_at'] as String),
         roles: (j['roles'] as List).map((e) => e as String).toList(),
@@ -16691,6 +16695,7 @@ class PageSummary {
         'icon': icon,
         'name': name,
         'pinned': pinned,
+        'place': ?place,
         'published': published,
         'published_at': ?publishedAt?.toUtc().toIso8601String(),
         'roles': roles.map((e) => e).toList(),

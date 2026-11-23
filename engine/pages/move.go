@@ -369,7 +369,7 @@ func Missing(p *Page, tables []datatables.Table, areaOn func(area string) bool) 
 			case !known:
 				out = append(out, fmt.Sprintf("Taskiem has no records called %s that a page can show.", view))
 				continue
-			case areaOn != nil && !areaOn(string(v.Area)):
+			case areaOn != nil && v.Area != "" && !areaOn(string(v.Area)):
 				out = append(out, fmt.Sprintf("This business has %s turned off, so its %s cannot be shown.", AreaWords(v.Area), v.Words))
 				continue
 			}

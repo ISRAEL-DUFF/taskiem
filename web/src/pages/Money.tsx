@@ -1,3 +1,4 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useId, useMemo, useState } from "react";
 import { ReceiveMoneyCard } from "./ReceiveMoney";
 import { SavedFill } from "./SavedFill";
@@ -109,6 +110,7 @@ function MoneyTabs() {
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
+      <AreaPageTabs areas={["money"]} />
     </nav>
   );
 }

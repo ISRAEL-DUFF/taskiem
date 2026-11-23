@@ -101,7 +101,8 @@ func newPageWatch(page *pages.Page, p *Principal, areaOn func(string) bool) *pag
 		}
 		if b.Source.Records != "" {
 			v, ok := pages.RecordViewNamed(b.Source.Records)
-			if ok && p.Can(v.Perm) && (areaOn == nil || areaOn(string(v.Area))) {
+			// A view with no changed_at (customers, staff) is read again on a pull.
+			if ok && v.Changed != "" && p.Can(v.Perm) && (areaOn == nil || areaOn(string(v.Area))) {
 				w.records[v.Name] = append(w.records[v.Name], b.ID)
 			}
 			continue

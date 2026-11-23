@@ -34,6 +34,7 @@ import 'words.dart' show CardTone, Tone, naira;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../theme/look.dart';
+import 'pages_page.dart' show PlacedPages;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -475,6 +476,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                 }(),
             ],
           ),
+        PlacedPages(auth: _auth, areas: const ['orders', 'storefront'], backLabel: 'Back to Orders'),
       ],
     );
   }

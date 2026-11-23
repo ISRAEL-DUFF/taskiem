@@ -97,6 +97,8 @@ export interface PageSummary {
   version: number | null;
   published_at?: string;
   updated_at: string;
+  /** The area it is a tab under (published pages only). */
+  place?: string;
 }
 
 export interface PageProblem {
@@ -174,6 +176,11 @@ export function pagesFor(pages: PageSummary[], query: string): PageSummary[] {
   const q = query.trim().toLowerCase();
   if (!q) return pages.filter((p) => p.pinned);
   return pages.filter((p) => p.name.startsWith(q) || p.title.toLowerCase().startsWith(q));
+}
+
+/** The published pages placed as tabs under these areas, in the list's order (pages §9). */
+export function placedPages(pages: PageSummary[], areas: string[]): PageSummary[] {
+  return pages.filter((p) => p.published && !!p.place && areas.includes(p.place));
 }
 
 /** The page "/" and its name opens, exactly (pages §9). */
@@ -370,7 +377,8 @@ export interface RecordView {
   on: boolean;
   may_read: boolean;
   area: string;
-  columns: { name: string; title: string; type: string; personal: boolean }[];
+  /** sealed: read from its record's envelope (a rider's name): never narrowed or ordered by. */
+  columns: { name: string; title: string; type: string; personal: boolean; sealed?: boolean }[];
 }
 
 /** The editor names a view as a table ("records:orders"), so its pickers
@@ -387,7 +395,8 @@ export function recordTables(views: RecordView[]): Table[] {
       name: RECORDS + v.name,
       title: `${v.title} (Taskiem's)`,
       description: "",
-      columns: v.columns.map((c) => ({ name: c.name, title: c.title, type: c.type as Column["type"], required: false, personal: c.personal })),
+      // A sealed column is offered as a personal one is: shown, never a condition or an order.
+      columns: v.columns.map((c) => ({ name: c.name, title: c.title, type: c.type as Column["type"], required: false, personal: c.personal || !!c.sealed })),
       postgres_table: "",
       connection: "",
       created_by: "",

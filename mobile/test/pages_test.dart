@@ -19,6 +19,7 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/route.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/pages_page.dart';
+import 'package:taskiem/kit/page.dart' show TkPageScreen;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -553,6 +554,31 @@ void main() {
     await settle(t);
     expect(acts.last, {'block': 'list', 'row': 'd1', 'action': 1, 'yes': true});
     await t.pump(const Duration(seconds: 4));
+  });
+
+  // A page as a tab under an area: a section after the area's own, its
+  // published pages placed there only.
+  testWidgets('pages placed under an area show on its screen', (t) async {
+    phone(t, 500);
+    final api = _Api();
+    api.routes['GET /v1/pages'] = (_) => {
+      'pages': [
+        {..._summary('orders-today', 'Orders today', about: 'What came in today'), 'place': 'orders'},
+        {..._summary('cash', 'Cash count'), 'place': 'money'},
+        _summary('tickets', 'Tickets'),
+      ],
+      'can_edit': false,
+      'can_publish': false,
+      'max_pinned': 5,
+      'max_pages': 10,
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TkPageScreen(title: 'Orders', children: [PlacedPages(auth: api.auth(), areas: const ['orders', 'storefront'])])));
+    await settle(t);
+    expect(find.text('Your pages'), findsOneWidget);
+    expect(find.text('Orders today'), findsOneWidget);
+    expect(find.text('Cash count'), findsNothing);
+    expect(find.text('Tickets'), findsNothing);
+    await looks(t, 'page-placed');
   });
 
   test('when a tool worked a part out, in words', () {

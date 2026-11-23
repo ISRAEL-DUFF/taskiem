@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layout, pageCalled, pagesFor, stillWorking, workedWords, type DrawnPart, type PageSummary } from "./pages";
+import { layout, pageCalled, pagesFor, placedPages, stillWorking, workedWords, type DrawnPart, type PageSummary } from "./pages";
 
 // Pages G2: when a tool worked a part out, a part still being worked out,
 // and the page's buttons and a status kept apart from a row of figures.
@@ -51,6 +51,11 @@ describe("pages in the chat", () => {
     expect(pagesFor(pages, "").map((p) => p.name)).toEqual(["tickets"]);
     expect(pagesFor(pages, "lea").map((p) => p.name)).toEqual(["leave-days"]);
     expect(pagesFor(pages, "Tick").map((p) => p.name)).toEqual(["tickets"]);
+  });
+  it("places a published page as a tab under its area", () => {
+    const placed = [{ ...page("orders-today", "Orders today"), place: "orders" }, { ...page("draft", "Draft"), place: "orders", published: false }, page("tickets", "Tickets")];
+    expect(placedPages(placed, ["storefront", "orders"]).map((p) => p.name)).toEqual(["orders-today"]);
+    expect(placedPages(placed, ["money"])).toEqual([]);
   });
   it("opens a page by its whole name only", () => {
     expect(pageCalled(pages, "/tickets")?.name).toBe("tickets");

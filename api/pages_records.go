@@ -38,7 +38,8 @@ func pageAreas(ctx context.Context, tx pgx.Tx) (func(string) bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return func(a string) bool { return st.On(areas.Area(a)) }, nil
+	// A view in no area (staff) is always on.
+	return func(a string) bool { return a == "" || st.On(areas.Area(a)) }, nil
 }
 
 // recordsOrderable says whether a part's rows may be put in a column's
@@ -206,13 +207,33 @@ func (s *Server) recordRows(ctx context.Context, tx pgx.Tx, v pages.RecordView, 
 		var opened map[string]any
 		var env map[string]any
 		if s.Vault != nil && json.Unmarshal(r.env, &env) == nil && env != nil {
-			x, err := s.Vault.OpenTx(ctx, tx, tenant, env)
-			switch {
-			case errors.Is(err, pii.ErrErased):
-			case err != nil:
-				return nil, nil, err
-			default:
-				opened, _ = x.(map[string]any)
+			if pii.IsEnvelope(env) {
+				x, err := s.Vault.OpenTx(ctx, tx, tenant, env)
+				switch {
+				case errors.Is(err, pii.ErrErased):
+				case err != nil:
+					return nil, nil, err
+				default:
+					opened, _ = x.(map[string]any)
+				}
+			} else {
+				// Fields sealed each on their own (a customer's name, phone
+				// and email): each opened, an erased one left empty.
+				opened = map[string]any{}
+				for k, e := range env {
+					m, ok := e.(map[string]any)
+					if !ok || !pii.IsEnvelope(m) {
+						continue
+					}
+					x, err := s.Vault.OpenTx(ctx, tx, tenant, m)
+					switch {
+					case errors.Is(err, pii.ErrErased):
+					case err != nil:
+						return nil, nil, err
+					default:
+						opened[k] = x
+					}
+				}
 			}
 		}
 		out = append(out, v.RecordRow(r.key, r.created, r.values, opened))
@@ -240,7 +261,7 @@ func (s *Server) listPageRecords(w http.ResponseWriter, r *http.Request) {
 	for _, v := range pages.RecordViews {
 		cols := []map[string]any{}
 		for _, c := range v.Columns {
-			cols = append(cols, map[string]any{"name": c.Name, "title": c.Title, "type": c.Type, "personal": c.Personal})
+			cols = append(cols, map[string]any{"name": c.Name, "title": c.Title, "type": c.Type, "personal": c.Personal, "sealed": c.SQL == ""})
 		}
 		list = append(list, map[string]any{"name": v.Name, "title": v.Title, "on": areaOn(string(v.Area)), "may_read": p.Can(v.Perm),
 			"area": pages.AreaWords(v.Area), "columns": cols})

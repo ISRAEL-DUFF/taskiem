@@ -884,5 +884,56 @@ List<Widget> pinnedPageRows(BuildContext context, Auth auth, List<PageSummary> p
   ];
 }
 
+/// The business's pages placed under an area (pages §9, `"place": {"area":
+/// "money"}`): a section after Taskiem's own on that area's screen (the
+/// screen shows while the area is on), each row opening its page. Nothing
+/// is drawn when there are none.
+class PlacedPages extends StatefulWidget {
+  const PlacedPages({super.key, required this.auth, required this.areas, this.backLabel = 'Back'});
+  final Auth auth;
+  final List<String> areas;
+  final String backLabel;
+
+  @override
+  State<PlacedPages> createState() => _PlacedPagesState();
+}
+
+class _PlacedPagesState extends State<PlacedPages> {
+  List<PageSummary> _pages = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(() async {
+      try {
+        final all = (await widget.auth.api.listPages()).pages;
+        if (mounted) setState(() => _pages = placedPages(all, widget.areas));
+      } on Object {
+        // None shown: the screen stands without them.
+      }
+    }());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_pages.isEmpty) return const SizedBox.shrink();
+    final look = TkLook.of(context);
+    return TkSection(title: 'Your pages', inset: 56, children: [
+      for (final p in _pages)
+        TkListRow(
+          title: p.title,
+          sub: p.about,
+          icon: pageIcon(p.icon),
+          square: look.teal,
+          semanticsLabel: '${p.title}. Open',
+          onTap: () => unawaited(openPage(context, widget.auth, p.name, backLabel: widget.backLabel)),
+        ),
+    ]);
+  }
+}
+
+/// The published pages placed under these areas.
+List<PageSummary> placedPages(List<PageSummary> pages, List<String> areas) => [for (final p in pages) if (p.published && p.place != null && areas.contains(p.place)) p];
+
 /// A tone for a status pill, exported for the tests' words.
 Widget pagePill(String words, String? tone) => CardPill(words, pageTone(tone));

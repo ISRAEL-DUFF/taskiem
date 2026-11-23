@@ -63,6 +63,9 @@ type RecordView struct {
 	// notices, api/pages_live.go; never updated_at, which the shop's
 	// retention reads).
 	From, Tenant, Key, Seal, Changed string
+	// Alias is From's alias when From is more than "table alias" (a
+	// grouped read); else its second word.
+	Alias string
 	// Link is the record's own screen, with %s for its key (escaped).
 	Link    string
 	Columns []RecordColumn
@@ -127,6 +130,68 @@ var RecordViews = []RecordView{
 			{Column: datatables.Column{Name: "due_on", Title: "Due", Type: "date"}, SQL: "i.due_on"},
 			{Column: datatables.Column{Name: "issued_at", Title: "Sent", Type: "datetime"}, SQL: "i.sent_at"},
 			{Column: datatables.Column{Name: "paid_at", Title: "Paid on", Type: "datetime"}, SQL: "i.paid_at"},
+		},
+	},
+	{
+		// Deliveries (dispatch): each offer of an order to a rider, as the
+		// Riders screen lists them; the customer is the order's, sealed with
+		// it and masked for everyone. A row is a delivery; it links to its
+		// order. Changed by changed_at (migration 00571).
+		Name: "deliveries", Title: "Deliveries", Words: "deliveries",
+		Area: areas.Storefront, Perm: access.StorefrontManage + "|" + access.OrderHandle,
+		From: "deliveries d", Tenant: "d.tenant_id", Key: "d.id::text",
+		Seal: "jsonb_build_object('customer', (SELECT o.customer FROM storefront_orders o WHERE o.id = d.order_id), 'rider', (SELECT r.name FROM riders r WHERE r.id = d.rider_id))", Changed: "d.changed_at",
+		Columns: []RecordColumn{
+			{Column: datatables.Column{Name: "order", Title: "Order", Type: "text"}, SQL: "(SELECT o.reference FROM storefront_orders o WHERE o.id = d.order_id)", NotNull: true},
+			{Column: datatables.Column{Name: "customer", Title: "Customer", Type: "text", Personal: true}, Sealed: "customer.name"},
+			{Column: datatables.Column{Name: "phone", Title: "Phone", Type: "phone", Personal: true}, Sealed: "customer.phone"},
+			{Column: datatables.Column{Name: "rider", Title: "Rider", Type: "text"}, Sealed: "rider"}, // sealed, shown: never narrowed or ordered by
+			{Column: datatables.Column{Name: "status", Title: "Status", Type: "text"}, SQL: "d.status", NotNull: true, Exact: true},
+			{Column: datatables.Column{Name: "zone", Title: "Delivery area", Type: "text"}, SQL: "(SELECT o.zone FROM storefront_orders o WHERE o.id = d.order_id)"},
+			{Column: datatables.Column{Name: "fee", Title: "Rider's fee", Type: "integer"}, SQL: "d.fee_kobo", NotNull: true},
+			{Column: datatables.Column{Name: "owed", Title: "Owed to the rider", Type: "integer"},
+				SQL: "CASE WHEN d.status = 'delivered' AND d.confirmed_at IS NULL THEN d.fee_kobo ELSE 0 END", NotNull: true},
+			{Column: datatables.Column{Name: "paid_how", Title: "Paid at the door", Type: "text"}, SQL: "d.paid_how", Exact: true},
+			{Column: datatables.Column{Name: "offered_at", Title: "Offered", Type: "datetime"}, SQL: "d.offered_at", NotNull: true},
+			{Column: datatables.Column{Name: "delivered_at", Title: "Delivered", Type: "datetime"}, SQL: "d.delivered_at"},
+			{Column: datatables.Column{Name: "confirmed_at", Title: "Confirmed", Type: "datetime"}, SQL: "d.confirmed_at"},
+		},
+	},
+	{
+		// Customers (the debtor book, engine/invoicing/book.go): the
+		// business's customers of record, as Money's customers list them;
+		// their name, phone and email are sealed each on their own and masked
+		// for everyone. What each owes is worked out from their invoices.
+		// No changed_at: a page over them is read again on a pull.
+		Name: "customers", Title: "Customers", Words: "customers",
+		Area: areas.Money, Perm: access.InvoiceRead,
+		From: "invoice_customers c", Tenant: "c.tenant_id", Key: "c.id::text",
+		Seal: "jsonb_build_object('name', c.name, 'phone', c.phone, 'email', c.email)",
+		Columns: []RecordColumn{
+			{Column: datatables.Column{Name: "customer", Title: "Customer", Type: "text", Personal: true}, Sealed: "name"},
+			{Column: datatables.Column{Name: "phone", Title: "Phone", Type: "phone", Personal: true}, Sealed: "phone"},
+			{Column: datatables.Column{Name: "email", Title: "Email", Type: "email", Personal: true}, Sealed: "email"},
+			{Column: datatables.Column{Name: "invoices", Title: "Invoices", Type: "integer"},
+				SQL: "(SELECT count(*) FROM customer_invoices i WHERE i.tenant_id = c.tenant_id AND i.customer_id = c.customer_id AND i.status <> 'void')", NotNull: true},
+			{Column: datatables.Column{Name: "owed", Title: "Owed", Type: "integer"},
+				SQL: "(SELECT COALESCE(sum(GREATEST(i.total_kobo - i.paid_kobo, 0)), 0) FROM customer_invoices i WHERE i.tenant_id = c.tenant_id AND i.customer_id = c.customer_id AND i.status NOT IN ('draft', 'void'))", NotNull: true},
+			{Column: datatables.Column{Name: "added_at", Title: "Added", Type: "datetime"}, SQL: "c.created_at", NotNull: true},
+		},
+	},
+	{
+		// Staff (Staff, member.manage): the business's people, one row each
+		// with their roles, as the Staff screen lists them; a chat number is
+		// that screen's to reveal, so it is not a column. A sign-in address
+		// made for someone who joined by phone is left out. No changed_at.
+		Name: "staff", Title: "Staff", Words: "staff",
+		Perm:  access.MemberManage,
+		From:  "(SELECT tenant_id, user_id AS id, min(created_at) AS created_at, string_agg(role, ', ' ORDER BY role) AS roles FROM memberships GROUP BY tenant_id, user_id) m JOIN users u ON u.id = m.id",
+		Alias: "m", Tenant: "m.tenant_id", Key: "m.id::text", Seal: "NULL::jsonb", Link: "/staff/%s",
+		Columns: []RecordColumn{
+			{Column: datatables.Column{Name: "name", Title: "Name", Type: "text"}, SQL: "u.name", NotNull: true},
+			{Column: datatables.Column{Name: "email", Title: "Email", Type: "email"}, SQL: "CASE WHEN u.email LIKE '%.taskiem.invalid' THEN NULL ELSE u.email END"},
+			{Column: datatables.Column{Name: "roles", Title: "Roles", Type: "text"}, SQL: "m.roles", NotNull: true},
+			{Column: datatables.Column{Name: "joined_at", Title: "Joined", Type: "datetime"}, SQL: "m.created_at", NotNull: true},
 		},
 	},
 }
@@ -243,7 +308,15 @@ func (v RecordView) sqlOf(name string, order bool) (RecordColumn, string, error)
 	return RecordColumn{}, "", fmt.Errorf("%w: no column %s", ErrRecordsRead, name)
 }
 
-func (v RecordView) alias() string { return strings.SplitN(v.From, " ", 2)[1] }
+func (v RecordView) alias() string {
+	if v.Alias != "" {
+		return v.Alias
+	}
+	return strings.SplitN(v.From, " ", 2)[1]
+}
+
+// AliasOf is the alias a view's rows are read under.
+func (v RecordView) AliasOf() string { return v.alias() }
 
 // Orderable says whether a view's rows may be put in a column's order: one
 // of its own columns that is not personal, or when a row was made.
@@ -484,7 +557,7 @@ func (v RecordView) RecordRow(key string, createdAt *string, values []*string, o
 	}
 	for i, c := range v.Columns {
 		if c.Sealed != "" {
-			if x, ok := opened[c.Sealed].(string); ok && x != "" {
+			if x, ok := sealedAt(opened, c.Sealed).(string); ok && x != "" {
 				row[c.Name] = x
 			}
 			continue
@@ -494,6 +567,32 @@ func (v RecordView) RecordRow(key string, createdAt *string, values []*string, o
 		}
 	}
 	return row
+}
+
+// sealedAt is an opened envelope's field by its path ("customer.name": a
+// view whose seal holds several envelopes, each opened on its own).
+func sealedAt(opened map[string]any, path string) any {
+	var cur any = opened
+	for _, k := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = m[k]
+	}
+	return cur
+}
+
+// sealedColumn says whether a view's column is read from its sealed
+// envelope (a personal one, or a rider's name): never a condition, an
+// order or a search, which are SQL.
+func (v RecordView) sealedColumn(name string) bool {
+	for _, c := range v.Columns {
+		if c.Name == name {
+			return c.SQL == ""
+		}
+	}
+	return false
 }
 
 // ReadRecordCursor takes back a view's cursor: only a count of the rows
@@ -523,18 +622,18 @@ func recordsChecks(ps *problems, at, name string, b Block, env Env) (datatables.
 		ps.add(at+"/source/records", "%s shows Taskiem's %s, which a page cannot show: it shows %s.", name, b.Source.Records, andList(words))
 		return datatables.Table{}, false
 	}
-	if env.AreaOn != nil && !env.AreaOn(string(v.Area)) {
+	if env.AreaOn != nil && v.Area != "" && !env.AreaOn(string(v.Area)) {
 		ps.add(at+"/source/records", "%s shows the business's %s, and %s is turned off in Settings.", name, v.Words, AreaWords(v.Area))
 		return datatables.Table{}, false
 	}
 	t := v.Table()
 	for j, c := range b.Source.Filters {
-		if col, ok := columnOf(t, c.Column); ok && col.Personal {
+		if col, ok := columnOf(t, c.Column); ok && (col.Personal || v.sealedColumn(c.Column)) {
 			ps.add(fmt.Sprintf("%s/source/filters/%d/column", at, j), "%s cannot pick %s by %s: it is personal, and hidden on the page.", name, v.Words, columnTitle(col))
 		}
 	}
 	for j, o := range b.Source.Order {
-		if col, ok := columnOf(t, o.Column); ok && col.Personal {
+		if col, ok := columnOf(t, o.Column); ok && (col.Personal || v.sealedColumn(o.Column)) {
 			ps.add(fmt.Sprintf("%s/source/order/%d/column", at, j), "%s cannot put %s in order by %s: it is personal, and hidden on the page.", name, v.Words, columnTitle(col))
 		}
 	}

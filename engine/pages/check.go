@@ -211,6 +211,17 @@ func Check(p *Page, env Env) []Problem {
 // or dates filter on a personal column cannot: its values are masked for
 // a viewer without table.read, and narrowing by them would show them.
 func (f Filter) fits(t datatables.Table) string {
+	if v, ok := RecordViewOf(t.Name); ok {
+		// A view's column read from its sealed envelope (a rider's name) is
+		// never narrowed by: that is SQL, and the value is not there.
+		for _, c := range append([]string{f.Column}, f.Columns...) {
+			if c != "" && v.sealedColumn(c) {
+				if col, ok := columnOf(t, c); ok && !col.Personal {
+					return fmt.Sprintf("%s is kept sealed, and read only for the rows shown", columnTitle(col))
+				}
+			}
+		}
+	}
 	switch f.Type {
 	case "search":
 		if len(f.Columns) == 0 {
@@ -379,7 +390,11 @@ func plainQueryError(err error) string {
 // search cannot be used to guess a masked value.
 func SearchColumns(f Filter, t datatables.Table, personal bool) []datatables.Column {
 	var out []datatables.Column
+	view, isView := RecordViewOf(t.Name)
 	for _, c := range t.Columns {
+		if isView && view.sealedColumn(c.Name) && !c.Personal {
+			continue // read from its envelope, never searched (a rider's name)
+		}
 		named := slices.Contains(f.Columns, c.Name)
 		if len(f.Columns) == 0 {
 			named = c.Type == "text"

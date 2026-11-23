@@ -120,17 +120,25 @@ func lockPageNames(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
 
 // pageSummary is a page in the list.
 func pageSummary(pg pageRow) map[string]any {
-	about := ""
+	about, place := "", ""
 	if pg.Published != nil {
 		var head struct {
-			About string `json:"about"`
+			About string       `json:"about"`
+			Place *pages.Place `json:"place"`
 		}
 		_ = json.Unmarshal(pg.Published, &head)
 		about = head.About
+		if head.Place != nil {
+			place = head.Place.Area
+		}
 	}
 	out := map[string]any{"name": pg.Name, "title": pg.Title, "icon": pg.Icon, "about": about, "roles": nonNil(pg.Roles),
 		"pinned": pg.Pinned, "published": pg.Version != nil, "has_draft": pg.Draft != nil, "version": pg.Version,
 		"updated_at": pg.UpdatedAt.UTC().Format(time.RFC3339)}
+	if place != "" {
+		// A tab under this area, after Taskiem's own (pages §9).
+		out["place"] = place
+	}
 	if pg.PublishedAt != nil {
 		out["published_at"] = pg.PublishedAt.UTC().Format(time.RFC3339)
 	}
