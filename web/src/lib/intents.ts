@@ -110,6 +110,8 @@ export function parseRequest(text: string, products: Named[], orders: { id: stri
   return null;
 }
 
-/** Whether words might be a request at all (before anything is loaded). */
+/** Whether words might be a request at all (before anything is loaded).
+ * Words about a saved thing ("what's @generator's last service date?")
+ * are a question about it, answered in its place, not a request. */
 export const mightBeRequest = (text: string) =>
-  /\b(price|came in|arrived|received|stock in|service|accept)\b/i.test(text) && text.trim().length <= 160;
+  /\b(price|came in|arrived|received|stock in|service|accept)\b/i.test(text) && !/@[a-z0-9]/i.test(text) && text.trim().length <= 160;

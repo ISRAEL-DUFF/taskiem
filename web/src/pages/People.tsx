@@ -44,6 +44,7 @@ import { useConfirm } from "./ConfirmSheet";
 import { Copy } from "./Forms";
 import { MoreRows } from "./MoreRows";
 import { AccountFields } from "./PeopleChat";
+import { SavedFill } from "./SavedFill";
 import { useSwitch } from "./Switch";
 import { GroupInvites } from "./Groups";
 import { canShareInto, GROUPS_ADD_CHOICES, GROUPS_ADD_HINT, groupPath, membersWords, type Group } from "../lib/groups";
@@ -251,6 +252,7 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
       <div className="pc-check">
         <form className="pc-check" onSubmit={byNumber} aria-labelledby="people-by-number">
           <h3 id="people-by-number">By phone number</h3>
+          <SavedFill kind="phone" label="their phone number" inSheet onPick={(_, p) => setPhone(p)} />
           <KitField label="Their phone number">
             <input type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0803 123 4567" data-testid="people-phone" />
           </KitField>
@@ -589,6 +591,7 @@ export function PeoplePrivacyPage() {
 export function PayoutPage() {
   const view = useLoad(() => get<{ account: PayoutAccount | null; words: string }>("/v1/me/payout-account"), []);
   const [acct, setAcct] = useState<PayoutAccount>({ bank: "", account_number: "", account_name: "" });
+  const [fillProblem, setFillProblem] = useState("");
   const act = useAction();
   const sure = useConfirm();
   useEffect(() => {
@@ -617,6 +620,23 @@ export function PayoutPage() {
             }}
           >
             <p className="hint">{view.data.words || "Taskiem does not check this account and moves no money."}</p>
+            <div className="saved-fill-line">
+              <SavedFill
+                kind="bank_account"
+                label="your bank account"
+                onPick={(x, number, problem) => {
+                  // The whole account is replaced: its bank, its number
+                  // once a passkey showed it, and the bank's name for it.
+                  setAcct({ bank: x.details.bank_name ?? "", account_number: number, account_name: x.check.account_name ?? "" });
+                  setFillProblem(problem ?? "");
+                }}
+              />
+            </div>
+            {fillProblem && (
+              <p className="error-text saved-fill-note" role="alert" data-testid="saved-fill-note">
+                {fillProblem}
+              </p>
+            )}
             <AccountFields value={acct} onChange={setAcct} />
             <div className="row-actions">
               <button type="submit" className="primary" disabled={act.busy} data-testid="payout-save">

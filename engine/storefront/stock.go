@@ -217,6 +217,11 @@ func (x *XenibaseCatalogue) call(ctx context.Context, tenant uuid.UUID, action s
 	if err != nil {
 		return nil, err
 	}
+	if x.Pool != nil {
+		// An open page over the catalogue is told (pages §9); failing
+		// that, it is pulled to refresh.
+		_ = datatables.MarkStepRowsChanged(ctx, x.Pool, tenant, action, in)
+	}
 	out, _ := resp.Output.(map[string]any)
 	return out, nil
 }

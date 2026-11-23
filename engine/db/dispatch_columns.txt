@@ -336,6 +336,7 @@ customer_invoice_requests.order_id
 customer_invoice_requests.reply_to
 customer_invoice_requests.tenant_id
 customer_invoices.allow_part_payments
+customer_invoices.changed_at
 customer_invoices.connection
 customer_invoices.created_at
 customer_invoices.created_by
@@ -370,6 +371,9 @@ customer_messages.attachment
 customer_messages.expires_at
 customer_messages.id
 customer_messages.tenant_id
+customer_tool_watches.created_at
+customer_tool_watches.notified_at
+customer_tool_watches.tenant_id
 customer_typing.person_id
 customer_typing.side
 customer_typing.tenant_id
@@ -792,6 +796,13 @@ password_resets.secret_hash
 password_resets.selector
 password_resets.used_at
 password_resets.user_id
+payments.amount_kobo
+payments.confirmed_at
+payments.confirmed_by
+payments.confirmed_with
+payments.status
+pin_removals.removed_at
+pin_removals.user_id
 plan_worker_pools.assigned_at
 plan_worker_pools.assigned_by
 plan_worker_pools.plan_id
@@ -1326,6 +1337,7 @@ tenant_limits.link_messages_daily
 tenant_limits.max_connections
 tenant_limits.max_data_table_columns
 tenant_limits.max_data_tables
+tenant_limits.max_pages
 tenant_limits.max_payload_bytes
 tenant_limits.max_queued_runs
 tenant_limits.max_retention_days
@@ -1451,9 +1463,13 @@ whatsapp_outbox.tenant_id
 whatsapp_pins.failed_since
 whatsapp_pins.failures
 whatsapp_pins.locked_until
+whatsapp_pins.pays_from
 whatsapp_pins.pin_hash
 whatsapp_pins.set_at
 whatsapp_pins.user_id
+whatsapp_run_watches.channel
+whatsapp_run_watches.notified_at
+whatsapp_run_watches.tenant_id
 whatsapp_templates.language
 whatsapp_templates.meta_id
 whatsapp_templates.name
@@ -1712,6 +1728,13 @@ saved_files.tenant_id
 saved_files.object_id
 saved_files.path
 saved_files.created_at
+saved_reminders.id
+saved_reminders.last_sent
+saved_reminders.person_id
+saved_reminders.remind_on
+saved_reminders.tell_tenant
+saved_reminders.tell_user
+saved_reminders.tenant_id
 product_stock.tenant_id
 product_stock.product_id
 product_stock.stock_item_id

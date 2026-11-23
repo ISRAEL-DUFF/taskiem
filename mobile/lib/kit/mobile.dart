@@ -992,8 +992,11 @@ class TkSkeleton extends StatelessWidget {
 /// screens"): the sheet's title large, what it is about over it, the form
 /// on the ground, and its buttons at the foot: the main one last, wide.
 class TkFormSheet extends StatelessWidget {
-  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay, this.actionIcon});
+  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay, this.actionIcon, this.foot});
   final String title;
+
+  /// A line over the buttons, kept in view (how many, and the total).
+  final String? foot;
   final String? crumb;
   final List<Widget> children;
 
@@ -1026,7 +1029,9 @@ class TkFormSheet extends StatelessWidget {
       ),
       // TkSheet sets it in its foot: not a second foot inside it.
       bareFooter: true,
-      footer: Row(
+      footer: _withFoot(
+        context,
+        Row(
         children: [
           // A long action ("Save JSS 1A's fees") takes more of the row, so it
           // stays on one line, as drawn.
@@ -1034,8 +1039,26 @@ class TkFormSheet extends StatelessWidget {
           Expanded(flex: action.length + (actionIcon == null ? 0 : 3) > 15 ? 6 : 4, child: TkCta(label: action, icon: actionIcon, onTap: onAction)),
         ],
       ),
+      ),
     ),
   );
+
+  Widget _withFoot(BuildContext context, Widget buttons) {
+    final words = foot;
+    if (words == null || words.isEmpty) return buttons;
+    final t = TkTheme.tokens(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+          child: Semantics(liveRegion: true, child: Text(words, textAlign: TextAlign.center, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text))),
+        ),
+        buttons,
+      ],
+    );
+  }
 }
 
 /// A group of a form's fields (docs/spec/mobile-app-look.md, "The remaining

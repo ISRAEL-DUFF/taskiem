@@ -215,77 +215,83 @@ interface WhatsAppBinding {
   dormant?: boolean;
 }
 
-/** The WhatsApp approval PIN: entered in a WhatsApp form, it confirms
- * decisions whose policy accepts it (step_up whatsapp_pin). */
-function WhatsAppPin({
-  pin,
-  onChange,
-}: {
-  pin: NonNullable<WhatsAppBinding["pin"]>;
-  onChange: () => void;
-}) {
+/** The person's one PIN (GET/PUT/DELETE /v1/me/pin): it approves on
+ * WhatsApp and pays small amounts in WhatsApp's form or the app's pad when a
+ * passkey is not to hand. Behind a passkey or an authenticator it pays at
+ * once; set without (a first PIN, or moments after signing in again) it
+ * pays 24 hours on. */
+interface MePin {
+  set: boolean;
+  set_at?: string;
+  locked_until?: string;
+  pays_from?: string;
+  change_without: boolean;
+  change_without_until?: string;
+}
+
+function YourPin() {
   const { me } = useAuth();
+  const pin = useLoad<MePin>(() => get<MePin>("/v1/me/pin"), []);
   const [value, setValue] = useState("");
+  const [again, setAgain] = useState("");
   const [typed, setTyped] = useState("");
   const act = useAction();
+  const p = pin.data;
   const strong = me?.factors?.passkey || me?.factors?.totp;
+  const waiting = p?.pays_from && new Date(p.pays_from).getTime() > Date.now();
+  // Without a passkey or an authenticator, only a first PIN or one changed
+  // moments after signing in again.
+  const may = !!p && (strong || p.change_without);
   return (
-    <div data-testid="whatsapp-pin">
-      <h3>Approval PIN</h3>
+    <section className="card" data-testid="your-pin">
+      <h2 style={{ marginTop: 0 }}>Your PIN</h2>
       <p className="hint">
-        Six digits you enter in WhatsApp to confirm approvals whose policy
-        allows a WhatsApp PIN. Policies asking for a passkey or authenticator
-        code still send you here. Five wrong PINs lock it for 15 minutes.
+        Six digits for when your passkey is not to hand: it approves on
+        WhatsApp, and pays up to ₦100,000 (₦200,000 a day) in WhatsApp&rsquo;s
+        form or the app. Taskiem never asks for it in a message. Five wrong
+        PINs lock it for 15 minutes.
       </p>
-      <ErrorBox error={act.error} />
-      {pin.set && (
+      <ErrorBox error={pin.error ?? act.error} />
+      {p?.set && (
         <div className="row">
-          <p className="grow">
+          <p className="grow" data-testid="your-pin-state">
             PIN set{" "}
-            {pin.set_at && <span className="hint">{fmtTime(pin.set_at)}</span>}
-            {pin.locked_until && (
-              <strong> · locked until {fmtTime(pin.locked_until)}</strong>
-            )}
+            {p.set_at && <span className="hint">{fmtTime(p.set_at)}</span>}
+            {waiting && p.pays_from && <> · can pay from {fmtTime(p.pays_from)}</>}
+            {p.locked_until && <strong> · locked until {fmtTime(p.locked_until)}</strong>}
           </p>
           <button
             className="danger"
             disabled={act.busy}
             onClick={() =>
-              confirm("Remove your WhatsApp PIN?") &&
-              void act.run(
-                async () => (await del("/v1/me/whatsapp/pin"), onChange()),
-                "PIN removed",
-              )
+              confirm("Remove your PIN?") &&
+              void act.run(async () => (await del("/v1/me/pin"), pin.reload()), "PIN removed")
             }
           >
             Remove
           </button>
         </div>
       )}
-      {strong ? (
+      {p && may && (
         <form
           className="row"
           style={{ alignItems: "flex-end" }}
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(
-              async () => (
-                await put("/v1/me/whatsapp/pin", {
-                  pin: value,
-                  ...(await proof(me?.factors, typed, "whatsapp.pin")),
-                }),
-                setValue(""),
-                setTyped(""),
-                onChange()
-              ),
-              "PIN saved",
-            );
+            void act.run(async () => {
+              if (value !== again) throw new Error("The two PINs are not the same.");
+              const body: Record<string, unknown> = { pin: value };
+              // Behind a passkey or an authenticator: it pays at once.
+              if (strong) Object.assign(body, await proof(me?.factors, typed, "pin.set"));
+              await put("/v1/me/pin", body);
+              setValue("");
+              setAgain("");
+              setTyped("");
+              pin.reload();
+            }, "PIN saved");
           }}
         >
-          <Field
-            label={pin.set ? "New PIN" : "PIN"}
-            hint="Not one digit repeated, nor a run like 123456"
-          >
+          <Field label={p.set ? "New PIN" : "PIN"} hint="Not one digit repeated, nor a run like 123456">
             <input
               type="password"
               inputMode="numeric"
@@ -295,18 +301,30 @@ function WhatsAppPin({
               onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
             />
           </Field>
-          <ProofField to="set the PIN" value={typed} onChange={setTyped} />
-          <button type="submit" disabled={act.busy || value.length !== 6}>
-            {pin.set ? "Change PIN" : "Set PIN"}
+          <Field label="The same PIN again">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              value={again}
+              onChange={(e) => setAgain(e.target.value.replace(/\D/g, ""))}
+            />
+          </Field>
+          {strong && <ProofField to="set the PIN" value={typed} onChange={setTyped} />}
+          <button type="submit" disabled={act.busy || value.length !== 6 || again.length !== 6}>
+            {p.set ? "Change PIN" : "Set PIN"}
           </button>
         </form>
-      ) : (
-        <p className="hint">
-          Add a passkey or an authenticator first: the PIN stands in for them in
-          WhatsApp.
+      )}
+      {p && !strong && (
+        <p className="hint" data-testid="your-pin-hold">
+          {p.change_without
+            ? "Without a passkey, a PIN set now can pay from 24 hours on."
+            : "To change it without a passkey, sign out, sign in again and change it within 10 minutes; it can pay from 24 hours on."}
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -667,8 +685,10 @@ function WhatsApp() {
           </button>
         </form>
       )}
-      {b.data.number && b.data.flows && b.data.pin && (
-        <WhatsAppPin pin={b.data.pin} onChange={b.reload} />
+      {b.data.number && b.data.flows && (
+        <p className="hint">
+          Your PIN, for approving here, is under <a href="#your-pin">Your PIN</a>.
+        </p>
       )}
     </section>
   );
@@ -839,6 +859,9 @@ export function Account() {
       <ChatSignIn />
       <Passkeys />
       <PasskeyOnly />
+      <div id="your-pin">
+        <YourPin />
+      </div>
       <WhatsApp />
       <Telegram />
       <Slack />

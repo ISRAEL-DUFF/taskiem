@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -43,7 +44,10 @@ type StockItem struct {
 	SupplierID *uuid.UUID `json:"supplier_id,omitempty"`
 	Supplier   string     `json:"supplier,omitempty"`
 	// GroupOf is the product a size's or colour's stock item belongs to.
-	GroupOf   string     `json:"group_of,omitempty"`
+	GroupOf string `json:"group_of,omitempty"`
+	// Code is its barcode, for Scan to count (device fields D2); "" for
+	// none. One current stock item of a business has a code.
+	Code      string     `json:"code,omitempty"`
 	CreatedBy string     `json:"created_by"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -51,14 +55,14 @@ type StockItem struct {
 }
 
 const itemCols = `i.id, i.name, i.unit, i.category, i.count, i.cost_kobo, i.low_level, i.target_level, i.supplier_id, COALESCE(s.name, ''),
-	COALESCE(i.group_of, ''), i.created_by, i.created_at, i.updated_at, i.retired_at`
+	COALESCE(i.group_of, ''), COALESCE(i.code, ''), i.created_by, i.created_at, i.updated_at, i.retired_at`
 
 const itemFrom = ` FROM stock_items i LEFT JOIN suppliers s ON s.tenant_id = i.tenant_id AND s.id = i.supplier_id`
 
 func scanItem(r pgx.Row) (StockItem, error) {
 	var x StockItem
 	err := r.Scan(&x.ID, &x.Name, &x.Unit, &x.Category, &x.Count, &x.CostKobo, &x.Low, &x.Target, &x.SupplierID, &x.Supplier,
-		&x.GroupOf, &x.CreatedBy, &x.CreatedAt, &x.UpdatedAt, &x.RetiredAt)
+		&x.GroupOf, &x.Code, &x.CreatedBy, &x.CreatedAt, &x.UpdatedAt, &x.RetiredAt)
 	return x, err
 }
 
@@ -179,6 +183,54 @@ func SetItemTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, set ItemSet
 	return StockItemTx(ctx, tx, tenant, id)
 }
 
+// MaxCode is the longest barcode a stock item keeps.
+const MaxCode = 64
+
+// CodeTaken is SetCodeTx's refusal of a code another current stock item
+// has: Name is that item's.
+type CodeTaken struct {
+	ID   uuid.UUID
+	Name string
+}
+
+func (e *CodeTaken) Error() string { return "the code is " + e.Name + "'s already" }
+
+// SetCodeTx sets a stock item's barcode (Scan to count, device fields
+// D2), trimmed; "" clears it. A code another current stock item of the
+// business has, in any case, is refused with *CodeTaken; one longer than
+// MaxCode or with control characters with ErrInvalid.
+func SetCodeTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, code string) (StockItem, error) {
+	code = strings.TrimSpace(code)
+	if len([]rune(code)) > MaxCode || strings.IndexFunc(code, unicode.IsControl) >= 0 {
+		return StockItem{}, fmt.Errorf("%w: a barcode is up to %d characters, letters and digits", ErrInvalid, MaxCode)
+	}
+	x, err := StockItemTx(ctx, tx, tenant, id)
+	if err != nil {
+		return x, err
+	}
+	if code != "" && x.RetiredAt == nil {
+		var other CodeTaken
+		err := tx.QueryRow(ctx, `SELECT id, name FROM stock_items WHERE tenant_id = $1 AND id <> $2 AND retired_at IS NULL AND lower(code) = lower($3)`,
+			tenant, id, code).Scan(&other.ID, &other.Name)
+		if err == nil {
+			return x, &other
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return x, err
+		}
+	}
+	_, err = tx.Exec(ctx, `UPDATE stock_items SET code = NULLIF($3, '') WHERE tenant_id = $1 AND id = $2`, tenant, id, code)
+	var pe *pgconn.PgError
+	if errors.As(err, &pe) && pe.Code == "23505" && pe.ConstraintName == "stock_items_code" {
+		// Taken at the same moment by another.
+		return x, &CodeTaken{Name: "another item"}
+	}
+	if err != nil {
+		return x, err
+	}
+	return StockItemTx(ctx, tx, tenant, id)
+}
+
 // RetireItemTx retires a stock item (a size or colour taken off sale): it
 // keeps its count and movements, and is offered nowhere. back brings a
 // retired one back.
@@ -200,7 +252,12 @@ func RetireItemTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, back boo
 		if retired && current >= MaxItems {
 			return ErrTooMany
 		}
-		q = `UPDATE stock_items SET retired_at = NULL WHERE tenant_id = $1 AND id = $2 AND retired_at IS NOT NULL`
+		// Its barcode, if a current item has taken it meanwhile, stays
+		// with that one: one current item has a code.
+		q = `UPDATE stock_items i SET retired_at = NULL,
+			code = CASE WHEN EXISTS (SELECT 1 FROM stock_items o WHERE o.tenant_id = i.tenant_id AND o.retired_at IS NULL AND lower(o.code) = lower(i.code))
+				THEN NULL ELSE i.code END
+			WHERE i.tenant_id = $1 AND i.id = $2 AND i.retired_at IS NOT NULL`
 	}
 	_, err := tx.Exec(ctx, q, tenant, id)
 	return err
@@ -233,6 +290,8 @@ type Item struct {
 	Target     *int64     `json:"target_level,omitempty"`
 	Supplier   string     `json:"supplier,omitempty"`
 	SupplierID *uuid.UUID `json:"supplier_id,omitempty"`
+	// Code is its stock item's barcode (Scan to count), "" for none.
+	Code string `json:"code,omitempty"`
 	// Category is the owner's label for the kind of thing it is
 	// ("Sneakers"): the catalogue's for a product, the stock item's for a
 	// material.
@@ -361,6 +420,7 @@ func (it *Item) withStock(x StockItem) {
 	it.StockItemID, it.Stock, it.Unit = x.ID.String(), &n, x.Unit
 	it.CostKobo, it.Reorder, it.Target = x.CostKobo, x.Low, x.Target
 	it.Supplier, it.SupplierID = x.Supplier, x.SupplierID
+	it.Code = x.Code
 }
 
 // FromStockItem is a material as an item.

@@ -1,5 +1,7 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useId, useMemo, useState } from "react";
 import { ReceiveMoneyCard } from "./ReceiveMoney";
+import { SavedFill } from "./SavedFill";
 import { Link, NavLink, Navigate, useSearchParams } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
@@ -111,6 +113,7 @@ export function MoneyTabs() {
       <NavLink to="/money/statements">Upload statement</NavLink>
       <NavLink to="/money/entries">Cash and expenses</NavLink>
       <NavLink to="/money/fees">Fees</NavLink>
+      <AreaPageTabs areas={["money"]} />
       {can("table.read") && <NavLink to="/money/things">Things we have</NavLink>}
       {moneyAccess(can).manage && <NavLink to="/money/labels">Labels</NavLink>}
     </nav>
@@ -962,6 +965,9 @@ export function MoneyEntries() {
             </label>
           ))}
         </fieldset>
+        <div className="saved-fill-line">
+          <SavedFill kind="date" label="the date" onPick={(_, d) => set({ date: d })} />
+        </div>
         <div className="row">
           <Field label="Amount (₦)">
             <input inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="12000" />

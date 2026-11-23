@@ -3,6 +3,7 @@ package ai_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -127,6 +128,31 @@ func TestAnthropicRequestShape(t *testing.T) {
 	}
 	if b["stream"] == true {
 		t.Errorf("small requests do not stream")
+	}
+}
+
+// A photo to read goes as an image block before the turn's words; a
+// self-hosted model refuses it.
+func TestAnthropicImages(t *testing.T) {
+	api := &fakeAPI{answer: "GTBank 0123456789"}
+	ts := httptest.NewServer(api.handler(t))
+	defer ts.Close()
+	p := ai.NewAnthropic(ai.AnthropicOptions{APIKey: "test-key", BaseURL: ts.URL})
+	req := ai.Request{Messages: []ai.Message{{Role: "user", Text: "Write out the text.", Images: []ai.Image{{MediaType: "image/png", Data: []byte("png!")}}}}}
+	if _, err := p.Complete(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	content := api.bodies[0]["messages"].([]any)[0].(map[string]any)["content"].([]any)
+	img := content[0].(map[string]any)
+	src, _ := img["source"].(map[string]any)
+	if len(content) != 2 || img["type"] != "image" || src["media_type"] != "image/png" || src["data"] != "cG5nIQ==" || content[1].(map[string]any)["type"] != "text" {
+		t.Fatalf("content: %v", content)
+	}
+	if req.Estimate() < 1600 {
+		t.Errorf("estimate counts the image: %d", req.Estimate())
+	}
+	if _, err := (&ai.SelfHosted{}).Complete(context.Background(), req); !errors.Is(err, ai.ErrNoImages) {
+		t.Errorf("self-hosted: %v", err)
 	}
 }
 

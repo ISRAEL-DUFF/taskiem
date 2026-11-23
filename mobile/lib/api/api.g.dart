@@ -469,6 +469,36 @@ class TaskiemApi {
     return PayMyChatOrderResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Their tools (`GET /v1/me/chats/{id}/tools`)
+  Future<MyChatToolsResponse> myChatTools({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/tools');
+    return MyChatToolsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start one of their tools (`POST /v1/me/chats/{id}/tools/{command}/start`)
+  Future<ToolStart> startMyChatTool({required StartMyChatToolRequest body, required String id, required String command}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/tools/${Uri.encodeComponent(command)}/start', body: body.toJson());
+    return ToolStart.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say yes to one of their tools (`POST /v1/me/chats/{id}/tools/{command}/confirm`)
+  Future<ConfirmMyChatToolResponse> confirmMyChatTool({required ConfirmMyChatToolRequest body, required String id, required String command}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/tools/${Uri.encodeComponent(command)}/confirm', body: body.toJson());
+    return ConfirmMyChatToolResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The answer to your tool (`GET /v1/me/chats/{id}/runs/{run}/answer`)
+  Future<ToolAnswer> myChatToolAnswer({required String id, required String run}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/runs/${Uri.encodeComponent(run)}/answer');
+    return ToolAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Press a button on an answer (`POST /v1/me/chats/{id}/tools/buttons/{token}`)
+  Future<PressMyChatToolButtonResponse> pressMyChatToolButton({required String id, required String token}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/tools/buttons/${Uri.encodeComponent(token)}');
+    return PressMyChatToolButtonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Search Discover (`POST /v1/discover/search`)
   Future<DiscoverSearchResponse> discoverSearch({required DiscoverSearchRequest body}) async {
     final j = await _t.send('POST', '/v1/discover/search', body: body.toJson());
@@ -726,6 +756,18 @@ class TaskiemApi {
   Future<ChatToolsSetting> putChatTools({required PutChatToolsRequest body}) async {
     final j = await _t.send('PUT', '/v1/settings/chat-tools', body: body.toJson());
     return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Whether photos may be read with AI (`GET /v1/settings/ai-photo-reading`)
+  Future<AIPhotoReading> getAIPhotoReading() async {
+    final j = await _t.send('GET', '/v1/settings/ai-photo-reading');
+    return AIPhotoReading.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn reading photos with AI on or off (`PUT /v1/settings/ai-photo-reading`)
+  Future<AIPhotoReading> putAIPhotoReading({required PutAIPhotoReadingRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/ai-photo-reading', body: body.toJson());
+    return AIPhotoReading.fromJson(j as Map<String, dynamic>);
   }
 
   /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
@@ -1608,10 +1650,331 @@ class TaskiemApi {
     await _t.send('DELETE', '/v1/saved-kinds/${Uri.encodeComponent(id)}');
   }
 
+  /// Import saved things from a file (`POST /v1/saved/import`)
+  Future<SavedImport> importSaved({required ImportSavedRequest body}) async {
+    final j = await _t.send('POST', '/v1/saved/import', body: body.toJson());
+    return SavedImport.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save an order's customer as a saved person (`POST /v1/storefront/orders/{reference}/save-customer`)
+  Future<SaveOrderCustomerResponse> saveOrderCustomer({required SaveOrderCustomerRequest body, required String reference}) async {
+    final j = await _t.send('POST', '/v1/storefront/orders/${Uri.encodeComponent(reference)}/save-customer', body: body.toJson());
+    return SaveOrderCustomerResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// The banks by name (`GET /v1/me/banks`)
   Future<ListMyBanksResponse> listMyBanks() async {
     final j = await _t.send('GET', '/v1/me/banks');
     return ListMyBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Payments to people, the newest first (`GET /v1/payments`)
+  Future<ListPaymentsResponse> listPayments({String? status}) async {
+    final j = await _t.send('GET', '/v1/payments', query: {'status': ?status});
+    return ListPaymentsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The banks to pay an account number at, the likely ones first (`GET /v1/payments/banks`)
+  Future<ListPayBanksResponse> listPayBanks({String? account}) async {
+    final j = await _t.send('GET', '/v1/payments/banks', query: {'account': ?account});
+    return ListPayBanksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What a message says to pay (`POST /v1/payments/read`)
+  Future<ReadPaymentResponse> readPayment({required ReadPaymentRequest body}) async {
+    final j = await _t.send('POST', '/v1/payments/read', body: body.toJson());
+    return ReadPaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Check the likely banks for an account number (`POST /v1/payments/name-check`)
+  Future<PayNameCheckResponse> payNameCheck({required PayNameCheckRequest body}) async {
+    final j = await _t.send('POST', '/v1/payments/name-check', body: body.toJson());
+    return PayNameCheckResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prepare a payment (`POST /v1/payments`)
+  Future<CreatePaymentResponse> createPayment({required CreatePaymentRequest body}) async {
+    final j = await _t.send('POST', '/v1/payments', body: body.toJson());
+    return CreatePaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One payment (`GET /v1/payments/{id}`)
+  Future<GetPaymentResponse> getPayment({required String id}) async {
+    final j = await _t.send('GET', '/v1/payments/${Uri.encodeComponent(id)}');
+    return GetPaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a prepared payment, with a passkey or the person's PIN (`POST /v1/payments/{id}/confirm`)
+  Future<ConfirmPaymentResponse> confirmPayment({required ConfirmPaymentRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/confirm', body: body.toJson());
+    return ConfirmPaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Let a payment not sent yet go (`POST /v1/payments/{id}/cancel`)
+  Future<CancelPaymentResponse> cancelPayment({required String id}) async {
+    final j = await _t.send('POST', '/v1/payments/${Uri.encodeComponent(id)}/cancel');
+    return CancelPaymentResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What each role may pay without the owner's OK (`GET /v1/pay-limits`)
+  Future<GetPayLimitsResponse> getPayLimits() async {
+    final j = await _t.send('GET', '/v1/pay-limits');
+    return GetPayLimitsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Set a role's limit (the owner's alone) (`PUT /v1/pay-limits/{role}`)
+  Future<PayLimit> putPayLimit({required PayLimit body, required String role}) async {
+    final j = await _t.send('PUT', '/v1/pay-limits/${Uri.encodeComponent(role)}', body: body.toJson());
+    return PayLimit.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Where a staff member is paid, outside payroll (`PUT /v1/staff/{user}/pay-account`)
+  Future<PutStaffPayAccountResponse> putStaffPayAccount({required PutStaffPayAccountRequest body, required String user}) async {
+    final j = await _t.send('PUT', '/v1/staff/${Uri.encodeComponent(user)}/pay-account', body: body.toJson());
+    return PutStaffPayAccountResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your PIN (`GET /v1/me/pin`)
+  Future<MePin> getMePin() async {
+    final j = await _t.send('GET', '/v1/me/pin');
+    return MePin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Set or change your PIN (`PUT /v1/me/pin`)
+  Future<MePin> putMePin({required PutMePinRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/pin', body: body.toJson());
+    return MePin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove your PIN (`DELETE /v1/me/pin`)
+  Future<void> deleteMePin() async {
+    await _t.send('DELETE', '/v1/me/pin');
+  }
+
+  /// Your list of people to pay, collected from messages (`GET /v1/pay-collection`)
+  Future<PayCollection> getPayCollection() async {
+    final j = await _t.send('GET', '/v1/pay-collection');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add someone to your list (`POST /v1/pay-collection`)
+  Future<PayCollection> addPayCollection({required AddPayCollectionRequest body}) async {
+    final j = await _t.send('POST', '/v1/pay-collection', body: body.toJson());
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Clear your list (`DELETE /v1/pay-collection`)
+  Future<PayCollection> clearPayCollection() async {
+    final j = await _t.send('DELETE', '/v1/pay-collection');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay your list as a batch (`POST /v1/pay-collection/batch`)
+  Future<PayPayCollectionResponse> payPayCollection({required PayPayCollectionRequest body}) async {
+    final j = await _t.send('POST', '/v1/pay-collection/batch', body: body.toJson());
+    return PayPayCollectionResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a row's amount or what it is for (`PATCH /v1/pay-collection/{id}`)
+  Future<PayCollection> patchPayCollection({required PatchPayCollectionRequest body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/pay-collection/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a row off your list (`DELETE /v1/pay-collection/{id}`)
+  Future<PayCollection> removePayCollection({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/pay-collection/${Uri.encodeComponent(id)}');
+    return PayCollection.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The payroll, from Payrolla (`GET /v1/payroll`)
+  Future<GetPayrollResponse> getPayroll({String? cursor, String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll', query: {'cursor': ?cursor, 'connection': ?connection});
+    return GetPayrollResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One payroll run, from Payrolla (`GET /v1/payroll/runs/{run}`)
+  Future<GetPayrollRunResponse> getPayrollRun({required String run, String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll/runs/${Uri.encodeComponent(run)}', query: {'connection': ?connection});
+    return GetPayrollRunResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Staff and who they are in Payrolla (`GET /v1/payroll/staff`)
+  Future<GetPayrollStaffResponse> getPayrollStaff({String? connection}) async {
+    final j = await _t.send('GET', '/v1/payroll/staff', query: {'connection': ?connection});
+    return GetPayrollStaffResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Who a staff member is in Payrolla (`PUT /v1/staff/{user}/payrolla`)
+  Future<PutStaffPayrollaResponse> putStaffPayrolla({required PutStaffPayrollaRequest body, required String user}) async {
+    final j = await _t.send('PUT', '/v1/staff/${Uri.encodeComponent(user)}/payrolla', body: body.toJson());
+    return PutStaffPayrollaResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Batches of payments, the newest first (`GET /v1/payment-batches`)
+  Future<ListPaymentBatchesResponse> listPaymentBatches() async {
+    final j = await _t.send('GET', '/v1/payment-batches');
+    return ListPaymentBatchesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prepare a batch of payments (`POST /v1/payment-batches`)
+  Future<CreatePaymentBatchResponse> createPaymentBatch({required CreatePaymentBatchRequest body}) async {
+    final j = await _t.send('POST', '/v1/payment-batches', body: body.toJson());
+    return CreatePaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Read a pasted list for a batch (`POST /v1/payment-batches/read`)
+  Future<ReadPaymentListResponse> readPaymentList({required ReadPaymentListRequest body}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/read', body: body.toJson());
+    return ReadPaymentListResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A batch, a row per person (`GET /v1/payment-batches/{id}`)
+  Future<GetPaymentBatchResponse> getPaymentBatch({required String id}) async {
+    final j = await _t.send('GET', '/v1/payment-batches/${Uri.encodeComponent(id)}');
+    return GetPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a batch, with one passkey (`POST /v1/payment-batches/{id}/confirm`)
+  Future<ConfirmPaymentBatchResponse> confirmPaymentBatch({required ConfirmPaymentBatchRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/confirm', body: body.toJson());
+    return ConfirmPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The owner''s OK for every row waiting, with one passkey (`POST /v1/payment-batches/{id}/approve`)
+  Future<ApprovePaymentBatchResponse> approvePaymentBatch({required ApprovePaymentBatchRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/approve', body: body.toJson());
+    return ApprovePaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Let a batch not sent go (`POST /v1/payment-batches/{id}/cancel`)
+  Future<CancelPaymentBatchResponse> cancelPaymentBatch({required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/cancel');
+    return CancelPaymentBatchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay the failed rows again (`POST /v1/payment-batches/{id}/again`)
+  Future<PayBatchAgainResponse> payBatchAgain({required String id}) async {
+    final j = await _t.send('POST', '/v1/payment-batches/${Uri.encodeComponent(id)}/again');
+    return PayBatchAgainResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// An account number to pay a bill by transfer (`POST /v1/bills/{id}/transfer`)
+  Future<Bill> askBillTransfer({required AskBillTransferRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/bills/${Uri.encodeComponent(id)}/transfer', body: body.toJson());
+    return Bill.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A bill with its account number to pay by transfer (`GET /v1/bills/{id}/transfer`)
+  Future<Bill> getBillTransfer({required String id}) async {
+    final j = await _t.send('GET', '/v1/bills/${Uri.encodeComponent(id)}/transfer');
+    return Bill.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// An invoice's account number to pay by transfer (`GET /v1/me/chats/{id}/invoices/{invoice}/transfer`)
+  Future<CustomerTransfer> getMyInvoiceTransfer({required String id, required String invoice}) async {
+    final j = await _t.send('GET', '/v1/me/chats/${Uri.encodeComponent(id)}/invoices/${Uri.encodeComponent(invoice)}/transfer');
+    return CustomerTransfer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay an invoice by transfer (`POST /v1/me/chats/{id}/invoices/{invoice}/transfer`)
+  Future<CustomerTransfer> askMyInvoiceTransfer({required AskMyInvoiceTransferRequest body, required String id, required String invoice}) async {
+    final j = await _t.send('POST', '/v1/me/chats/${Uri.encodeComponent(id)}/invoices/${Uri.encodeComponent(invoice)}/transfer', body: body.toJson());
+    return CustomerTransfer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your tools (`GET /v1/tools`)
+  Future<ListToolsResponse> listTools({String? environment}) async {
+    final j = await _t.send('GET', '/v1/tools', query: {'environment': ?environment});
+    return ListToolsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Read words for a tool (`POST /v1/tools/{command}/read`)
+  Future<ReadToolResponse> readTool({required ReadToolRequest body, required String command}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/read', body: body.toJson());
+    return ReadToolResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start a tool (`POST /v1/tools/{command}/start`)
+  Future<ToolStart> startTool({required StartToolRequest body, required String command, String? idempotencyKey}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/start', body: body.toJson(), headers: {'Idempotency-Key': ?idempotencyKey});
+    return ToolStart.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Confirm a tool's start (`POST /v1/tools/{command}/confirm`)
+  Future<ToolRun> confirmTool({required ConfirmToolRequest body, required String command}) async {
+    final j = await _t.send('POST', '/v1/tools/${Uri.encodeComponent(command)}/confirm', body: body.toJson());
+    return ToolRun.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A run's answer (`GET /v1/runs/{run}/answer`)
+  Future<ToolAnswer> getRunAnswer({required String run}) async {
+    final j = await _t.send('GET', '/v1/runs/${Uri.encodeComponent(run)}/answer');
+    return ToolAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a tool more careful (`PUT /v1/tools/{command}/settings`)
+  Future<void> setToolSettings({required SetToolSettingsRequest body, required String command}) async {
+    await _t.send('PUT', '/v1/tools/${Uri.encodeComponent(command)}/settings', body: body.toJson());
+  }
+
+  /// What a scanned code can start (`GET /v1/scan/offers`)
+  Future<ScanOffersResponse> scanOffers({String? format, String? environment}) async {
+    final j = await _t.send('GET', '/v1/scan/offers', query: {'format': ?format, 'environment': ?environment});
+    return ScanOffersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Form steps waiting for you, or for members of your roles (`GET /v1/form-requests`)
+  Future<ListFormRequestsResponse> listFormRequests() async {
+    final j = await _t.send('GET', '/v1/form-requests');
+    return ListFormRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A form step addressed to you or one of your roles, with its prefill (`GET /v1/form-requests/{id}`)
+  Future<FormRequest> getFormRequest({required String id}) async {
+    final j = await _t.send('GET', '/v1/form-requests/${Uri.encodeComponent(id)}');
+    return FormRequest.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Answer a form step addressed to you or one of your roles (`POST /v1/form-requests/{id}/answers`)
+  Future<AnswerFormRequestResponse> answerFormRequest({required AnswerFormRequestRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/form-requests/${Uri.encodeComponent(id)}/answers', body: body.toJson());
+    return AnswerFormRequestResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Press a button (`POST /v1/tools/buttons/{button}`)
+  Future<PressToolButtonResponse> pressToolButton({required String button}) async {
+    final j = await _t.send('POST', '/v1/tools/buttons/${Uri.encodeComponent(button)}');
+    return PressToolButtonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// List pages (`GET /v1/pages`)
+  Future<PageList> listPages() async {
+    final j = await _t.send('GET', '/v1/pages');
+    return PageList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Draw a page (`GET /v1/pages/{name}/view`)
+  Future<PageDrawing> viewPage({required String name, String? draft, String? filters, String? run}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/view', query: {'draft': ?draft, 'filters': ?filters, 'run': ?run});
+    return PageDrawing.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// More rows of a part (`GET /v1/pages/{name}/blocks/{block}`)
+  Future<PageBlock> getPageBlock({required String name, required String block, String? cursor, String? order, String? desc, String? draft, String? filters}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/blocks/${Uri.encodeComponent(block)}', query: {'cursor': ?cursor, 'order': ?order, 'desc': ?desc, 'draft': ?draft, 'filters': ?filters});
+    return PageBlock.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Press a page's button (`POST /v1/pages/{name}/act`)
+  Future<PageActResult> actOnPage({required PageActRequest body, required String name, String? draft, String? filters}) async {
+    final j = await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/act', body: body.toJson(), query: {'draft': ?draft, 'filters': ?filters});
+    return PageActResult.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Work a page's tools out again (`POST /v1/pages/{name}/refresh`)
+  Future<void> refreshPage({required String name}) async {
+    await _t.send('POST', '/v1/pages/${Uri.encodeComponent(name)}/refresh');
   }
 
   /// Treat a line of a purchase order, and confirm it (`PATCH /v1/stock/purchases/{id}/lines/{position}`)
@@ -3747,7 +4110,7 @@ class GetChatAlertsResponse {
 
 /// An alert as a chat card, with what its next step needs.
 class ChatAlert {
-  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.reference, this.reorder, this.school, required this.title, this.who});
+  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.proof, this.reference, this.reorder, this.school, required this.title, this.who});
 
   final int? amountKobo;
   final Approval? approval;
@@ -3758,6 +4121,11 @@ class ChatAlert {
   final String key;
   final String kind;
   final String line;
+  /// confirm: the delivery's proof from a form step (docs/spec/device-fields.md
+  /// §6, riders@1 record_proof): the pin at its masked point (about 100 m,
+  /// never the exact place), the latest photo, and which was read by the phone
+  /// and which was sent.
+  final ChatAlertProof? proof;
   final String? reference;
   final ChatAlertReorder? reorder;
   /// school_approval: a school's request waiting for a second person (cash at
@@ -3777,6 +4145,7 @@ class ChatAlert {
         key: j['key'] as String,
         kind: j['kind'] as String,
         line: j['line'] as String,
+        proof: j['proof'] == null ? null : ChatAlertProof.fromJson(j['proof'] as Map<String, dynamic>),
         reference: j['reference'] == null ? null : j['reference'] as String,
         reorder: j['reorder'] == null ? null : ChatAlertReorder.fromJson(j['reorder'] as Map<String, dynamic>),
         school: j['school'] == null ? null : SchoolPosting.fromJson(j['school'] as Map<String, dynamic>),
@@ -3792,6 +4161,7 @@ class ChatAlert {
         'key': key,
         'kind': kind,
         'line': line,
+        'proof': ?proof?.toJson(),
         'reference': ?reference,
         'reorder': ?reorder?.toJson(),
         'school': ?school?.toJson(),
@@ -3879,6 +4249,69 @@ class Approval {
         'subject': ?subject,
         'timeout_at': ?timeoutAt,
         'workflow': workflow,
+      };
+}
+
+/// confirm: the delivery's proof from a form step (docs/spec/device-fields.md
+/// §6, riders@1 record_proof): the pin at its masked point (about 100 m, never
+/// the exact place), the latest photo, and which was read by the phone and
+/// which was sent.
+class ChatAlertProof {
+  const ChatAlertProof({this.mark, this.photoSource, this.photoUrl, this.signatureUrl, this.signed, this.where});
+
+  final String? mark;
+  final String? photoSource;
+  /// A link to the latest photo, valid for 10 minutes
+  final String? photoUrl;
+  /// A link to the customer's signature, valid for 10 minutes
+  final String? signatureUrl;
+  /// The customer signed on the rider's phone (device fields D2)
+  final bool? signed;
+  final ChatAlertProofWhere? where;
+
+  factory ChatAlertProof.fromJson(Map<String, dynamic> j) => ChatAlertProof(
+        mark: j['mark'] == null ? null : j['mark'] as String,
+        photoSource: j['photo_source'] == null ? null : j['photo_source'] as String,
+        photoUrl: j['photo_url'] == null ? null : j['photo_url'] as String,
+        signatureUrl: j['signature_url'] == null ? null : j['signature_url'] as String,
+        signed: j['signed'] == null ? null : j['signed'] as bool,
+        where: j['where'] == null ? null : ChatAlertProofWhere.fromJson(j['where'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'mark': ?mark,
+        'photo_source': ?photoSource,
+        'photo_url': ?photoUrl,
+        'signature_url': ?signatureUrl,
+        'signed': ?signed,
+        'where': ?where?.toJson(),
+      };
+}
+
+class ChatAlertProofWhere {
+  const ChatAlertProofWhere({this.accuracyM, this.coarse, required this.lat, required this.lng, required this.source});
+
+  final double? accuracyM;
+  final bool? coarse;
+  /// Masked to three decimal places
+  final double lat;
+  final double lng;
+  final String source;
+
+  factory ChatAlertProofWhere.fromJson(Map<String, dynamic> j) => ChatAlertProofWhere(
+        accuracyM: j['accuracy_m'] == null ? null : (j['accuracy_m'] as num).toDouble(),
+        coarse: j['coarse'] == null ? null : j['coarse'] as bool,
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+        source: j['source'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'accuracy_m': ?accuracyM,
+        'coarse': ?coarse,
+        'lat': lat,
+        'lng': lng,
+        'source': source,
       };
 }
 
@@ -4734,9 +5167,12 @@ class ChatTopic {
 }
 
 class ChatAction {
-  const ChatAction({this.add, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
+  const ChatAction({this.add, this.confirm, required this.does, this.fields, required this.icon, required this.id, required this.line, required this.opens, this.page, this.shortcut, required this.title, this.tool});
 
   final bool? add;
+  /// What the form's button asks before the command is sent; `passkey` (a
+  /// payment) opens the single-action step-up.
+  final String? confirm;
   final String does;
   final List<ChatField>? fields;
   final String icon;
@@ -4750,6 +5186,7 @@ class ChatAction {
 
   factory ChatAction.fromJson(Map<String, dynamic> j) => ChatAction(
         add: j['add'] == null ? null : j['add'] as bool,
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
         does: j['does'] as String,
         fields: j['fields'] == null ? null : (j['fields'] as List).map((e) => ChatField.fromJson(e as Map<String, dynamic>)).toList(),
         icon: j['icon'] as String,
@@ -4764,6 +5201,7 @@ class ChatAction {
 
   Map<String, dynamic> toJson() => {
         'add': ?add,
+        'confirm': ?confirm,
         'does': does,
         'fields': ?fields?.map((e) => e.toJson()).toList(),
         'icon': icon,
@@ -6020,6 +6458,342 @@ class PayMyChatOrderResponse {
       };
 }
 
+class MyChatToolsResponse {
+  const MyChatToolsResponse({required this.tools});
+
+  final List<CustomerTool> tools;
+
+  factory MyChatToolsResponse.fromJson(Map<String, dynamic> j) => MyChatToolsResponse(
+        tools: (j['tools'] as List).map((e) => CustomerTool.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'tools': tools.map((e) => e.toJson()).toList(),
+      };
+}
+
+class CustomerTool {
+  const CustomerTool({this.about, this.answer, required this.command, this.icon, this.inputs, required this.name});
+
+  final String? about;
+  /// text, card or list; left out when the tool tells only that it started (a
+  /// public menu's entry)
+  final String? answer;
+  final String command;
+  final String? icon;
+  /// The tool's inputs schema, for its form (flat, ten fields at most)
+  final Map<String, dynamic>? inputs;
+  final String name;
+
+  factory CustomerTool.fromJson(Map<String, dynamic> j) => CustomerTool(
+        about: j['about'] == null ? null : j['about'] as String,
+        answer: j['answer'] == null ? null : j['answer'] as String,
+        command: j['command'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': ?about,
+        'answer': ?answer,
+        'command': command,
+        'icon': ?icon,
+        'inputs': ?inputs,
+        'name': name,
+      };
+}
+
+class StartMyChatToolRequest {
+  const StartMyChatToolRequest({this.input});
+
+  final Map<String, dynamic>? input;
+
+  factory StartMyChatToolRequest.fromJson(Map<String, dynamic> j) => StartMyChatToolRequest(
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'input': ?input,
+      };
+}
+
+class ToolStart {
+  const ToolStart({required this.care, this.confirm, this.created, this.expiresAt, this.runId, required this.values});
+
+  final String care;
+  final String? confirm;
+  final bool? created;
+  final DateTime? expiresAt;
+  final String? runId;
+  final List<ToolStartValuesItem> values;
+
+  factory ToolStart.fromJson(Map<String, dynamic> j) => ToolStart(
+        care: j['care'] as String,
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
+        created: j['created'] == null ? null : j['created'] as bool,
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        runId: j['run_id'] == null ? null : j['run_id'] as String,
+        values: (j['values'] as List).map((e) => ToolStartValuesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'care': care,
+        'confirm': ?confirm,
+        'created': ?created,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'run_id': ?runId,
+        'values': values.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ToolStartValuesItem {
+  const ToolStartValuesItem({required this.label, required this.name, required this.value});
+
+  final String label;
+  final String name;
+  final String value;
+
+  factory ToolStartValuesItem.fromJson(Map<String, dynamic> j) => ToolStartValuesItem(
+        label: j['label'] as String,
+        name: j['name'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'name': name,
+        'value': value,
+      };
+}
+
+class ConfirmMyChatToolRequest {
+  const ConfirmMyChatToolRequest({required this.confirm, this.input});
+
+  final String confirm;
+  final Map<String, dynamic>? input;
+
+  factory ConfirmMyChatToolRequest.fromJson(Map<String, dynamic> j) => ConfirmMyChatToolRequest(
+        confirm: j['confirm'] as String,
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': confirm,
+        'input': ?input,
+      };
+}
+
+class ConfirmMyChatToolResponse {
+  const ConfirmMyChatToolResponse({required this.created, required this.runId});
+
+  final bool created;
+  final String runId;
+
+  factory ConfirmMyChatToolResponse.fromJson(Map<String, dynamic> j) => ConfirmMyChatToolResponse(
+        created: j['created'] as bool,
+        runId: j['run_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created': created,
+        'run_id': runId,
+      };
+}
+
+class ToolAnswer {
+  const ToolAnswer({this.amountKobo, this.buttons, this.empty, this.error, this.lines, this.ref, this.rows, this.state, required this.status, this.text, this.title, this.tool, required this.type, this.waitingFor});
+
+  final int? amountKobo;
+  final List<ToolButton>? buttons;
+  final String? empty;
+  final String? error;
+  final List<ToolAnswerLinesItem>? lines;
+  final String? ref;
+  final List<ToolAnswerRowsItem>? rows;
+  final ToolAnswerState? state;
+  final String status;
+  final String? text;
+  final String? title;
+  final String? tool;
+  final String type;
+  /// Who a run on its way waits for (made tools §7, "Waiting for Ada to
+  /// approve"): an open approval step's approvers, an open form step's
+  /// recipient, in names and roles only. Left out when it waits for nobody.
+  final List<ToolAnswerWait>? waitingFor;
+
+  factory ToolAnswer.fromJson(Map<String, dynamic> j) => ToolAnswer(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => ToolButton.fromJson(e as Map<String, dynamic>)).toList(),
+        empty: j['empty'] == null ? null : j['empty'] as String,
+        error: j['error'] == null ? null : j['error'] as String,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => ToolAnswerLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        ref: j['ref'] == null ? null : j['ref'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => ToolAnswerRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        state: j['state'] == null ? null : ToolAnswerState.fromJson(j['state'] as Map<String, dynamic>),
+        status: j['status'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+        tool: j['tool'] == null ? null : j['tool'] as String,
+        type: j['type'] as String,
+        waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'buttons': ?buttons?.map((e) => e.toJson()).toList(),
+        'empty': ?empty,
+        'error': ?error,
+        'lines': ?lines?.map((e) => e.toJson()).toList(),
+        'ref': ?ref,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'state': ?state?.toJson(),
+        'status': status,
+        'text': ?text,
+        'title': ?title,
+        'tool': ?tool,
+        'type': type,
+        'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ToolButton {
+  const ToolButton({this.inputs, required this.label, this.once, this.token, required this.tool});
+
+  final Map<String, dynamic>? inputs;
+  final String label;
+  final bool? once;
+  /// Presses it (POST /v1/tools/buttons/{token})
+  final String? token;
+  final String tool;
+
+  factory ToolButton.fromJson(Map<String, dynamic> j) => ToolButton(
+        inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
+        label: j['label'] as String,
+        once: j['once'] == null ? null : j['once'] as bool,
+        token: j['token'] == null ? null : j['token'] as String,
+        tool: j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'inputs': ?inputs,
+        'label': label,
+        'once': ?once,
+        'token': ?token,
+        'tool': tool,
+      };
+}
+
+class ToolAnswerLinesItem {
+  const ToolAnswerLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory ToolAnswerLinesItem.fromJson(Map<String, dynamic> j) => ToolAnswerLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+      };
+}
+
+class ToolAnswerRowsItem {
+  const ToolAnswerRowsItem({this.actions, this.state, this.sub, required this.title});
+
+  final List<ToolButton>? actions;
+  final ToolAnswerState? state;
+  final String? sub;
+  final String title;
+
+  factory ToolAnswerRowsItem.fromJson(Map<String, dynamic> j) => ToolAnswerRowsItem(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => ToolButton.fromJson(e as Map<String, dynamic>)).toList(),
+        state: j['state'] == null ? null : ToolAnswerState.fromJson(j['state'] as Map<String, dynamic>),
+        sub: j['sub'] == null ? null : j['sub'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
+        'state': ?state?.toJson(),
+        'sub': ?sub,
+        'title': title,
+      };
+}
+
+class ToolAnswerState {
+  const ToolAnswerState({required this.text, this.tone});
+
+  final String text;
+  final String? tone;
+
+  factory ToolAnswerState.fromJson(Map<String, dynamic> j) => ToolAnswerState(
+        text: j['text'] as String,
+        tone: j['tone'] == null ? null : j['tone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'tone': ?tone,
+      };
+}
+
+class ToolAnswerWait {
+  const ToolAnswerWait({required this.kind, this.request, required this.who, this.you});
+
+  final String kind;
+  /// A form put to the person asking, to open under To fill in
+  final String? request;
+  /// In words: "Ada", "you", "an owner", "someone with the role manager", "the
+  /// cashiers", a linked business's name, "someone outside the business"
+  final String who;
+  /// It waits for the person asking
+  final bool? you;
+
+  factory ToolAnswerWait.fromJson(Map<String, dynamic> j) => ToolAnswerWait(
+        kind: j['kind'] as String,
+        request: j['request'] == null ? null : j['request'] as String,
+        who: j['who'] as String,
+        you: j['you'] == null ? null : j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'request': ?request,
+        'who': who,
+        'you': ?you,
+      };
+}
+
+class PressMyChatToolButtonResponse {
+  const PressMyChatToolButtonResponse({required this.button, required this.command, required this.inputs, required this.name, this.once});
+
+  final String button;
+  final String command;
+  final Map<String, dynamic> inputs;
+  final String name;
+  final bool? once;
+
+  factory PressMyChatToolButtonResponse.fromJson(Map<String, dynamic> j) => PressMyChatToolButtonResponse(
+        button: j['button'] as String,
+        command: j['command'] as String,
+        inputs: j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        once: j['once'] == null ? null : j['once'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'button': button,
+        'command': command,
+        'inputs': inputs,
+        'name': name,
+        'once': ?once,
+      };
+}
+
 class DiscoverSearchRequest {
   const DiscoverSearchRequest({this.area, this.category, this.near, this.offset, this.q});
 
@@ -7038,7 +7812,7 @@ class StorefrontColumns {
 }
 
 class StockItem {
-  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, this.material, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.stockItemId, this.suggest, this.supplier, this.supplierId, this.targetLevel, this.unit, this.uses, this.variant, this.variantOf});
+  const StockItem({required this.available, this.category, this.choices, this.code, this.costKobo, this.description, required this.id, this.low, this.material, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.stockItemId, this.suggest, this.supplier, this.supplierId, this.targetLevel, this.unit, this.uses, this.variant, this.variantOf});
 
   final bool available;
   /// The kind of thing it is ("Sneakers"), when the catalogue has a category
@@ -7047,6 +7821,9 @@ class StockItem {
   /// A product's choices, when it has sizes and colours (it keeps no stock of
   /// its own then)
   final List<VariantChoice>? choices;
+  /// Its stock item's barcode (a count by scanning, device fields D2); absent
+  /// for none
+  final String? code;
   /// The last price paid for one of its stock item
   final int? costKobo;
   /// Its words on the storefront, when the catalogue maps them
@@ -7086,6 +7863,7 @@ class StockItem {
         available: j['available'] as bool,
         category: j['category'] == null ? null : j['category'] as String,
         choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => VariantChoice.fromJson(e as Map<String, dynamic>)).toList(),
+        code: j['code'] == null ? null : j['code'] as String,
         costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
         description: j['description'] == null ? null : j['description'] as String,
         id: j['id'] as String,
@@ -7111,6 +7889,7 @@ class StockItem {
         'available': available,
         'category': ?category,
         'choices': ?choices?.map((e) => e.toJson()).toList(),
+        'code': ?code,
         'cost_kobo': ?costKobo,
         'description': ?description,
         'id': id,
@@ -7159,9 +7938,11 @@ class ListStockItemsResponse {
 /// A stock item as the Stock page lists it, with the products it is sold as
 /// (none for a material).
 class StockItemRow {
-  const StockItemRow({required this.category, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
+  const StockItemRow({required this.category, required this.code, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
 
   final String category;
+  /// Its barcode, for a count by scanning (device fields D2); "" for none
+  final String code;
   final Object? costKobo;
   final int count;
   final String groupName;
@@ -7185,6 +7966,7 @@ class StockItemRow {
 
   factory StockItemRow.fromJson(Map<String, dynamic> j) => StockItemRow(
         category: j['category'] as String,
+        code: j['code'] as String,
         costKobo: j['cost_kobo'],
         count: (j['count'] as num).toInt(),
         groupName: j['group_name'] as String,
@@ -7205,6 +7987,7 @@ class StockItemRow {
 
   Map<String, dynamic> toJson() => {
         'category': category,
+        'code': code,
         'cost_kobo': ?costKobo,
         'count': count,
         'group_name': groupName,
@@ -8403,6 +9186,37 @@ class PutChatToolsRequest {
 
   Map<String, dynamic> toJson() => {
         'chat_tools': chatTools,
+      };
+}
+
+class AIPhotoReading {
+  const AIPhotoReading({required this.aiPhotoReading, required this.available});
+
+  final bool aiPhotoReading;
+  final bool available;
+
+  factory AIPhotoReading.fromJson(Map<String, dynamic> j) => AIPhotoReading(
+        aiPhotoReading: j['ai_photo_reading'] as bool,
+        available: j['available'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ai_photo_reading': aiPhotoReading,
+        'available': available,
+      };
+}
+
+class PutAIPhotoReadingRequest {
+  const PutAIPhotoReadingRequest({required this.aiPhotoReading});
+
+  final bool aiPhotoReading;
+
+  factory PutAIPhotoReadingRequest.fromJson(Map<String, dynamic> j) => PutAIPhotoReadingRequest(
+        aiPhotoReading: j['ai_photo_reading'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ai_photo_reading': aiPhotoReading,
       };
 }
 
@@ -13538,15 +14352,20 @@ class MySavedStepUpOptionsResponse {
 }
 
 class ReadSavedWordsRequest {
-  const ReadSavedWordsRequest({required this.text});
+  const ReadSavedWordsRequest({this.from, required this.text});
 
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
   final String text;
 
   factory ReadSavedWordsRequest.fromJson(Map<String, dynamic> j) => ReadSavedWordsRequest(
+        from: j['from'] == null ? null : j['from'] as String,
         text: j['text'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'from': ?from,
         'text': text,
       };
 }
@@ -13724,6 +14543,206 @@ class SavedKindResult {
       };
 }
 
+class ImportSavedRequest {
+  const ImportSavedRequest({this.confirm, required this.csv});
+
+  /// The plan's hash, to save it.
+  final String? confirm;
+  final String csv;
+
+  factory ImportSavedRequest.fromJson(Map<String, dynamic> j) => ImportSavedRequest(
+        confirm: j['confirm'] == null ? null : j['confirm'] as String,
+        csv: j['csv'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': ?confirm,
+        'csv': csv,
+      };
+}
+
+class SavedImport {
+  const SavedImport({this.added, this.checkWords, this.failed, required this.hash, this.left, this.leftWords, this.rows, required this.saved, this.skipped, required this.total, this.unchecked});
+
+  /// The names saved.
+  final List<String>? added;
+  /// When some accounts are unchecked, how many and how to check them, in plain
+  /// words.
+  final String? checkWords;
+  /// Lines that could not be saved after all (a bank that does not know the
+  /// account), each with why.
+  final List<SavedImportFailedItem>? failed;
+  final String hash;
+  /// Lines not reached within the time limit; sending the file again saves
+  /// them, skipping what is saved.
+  final List<SavedImportLeftItem>? left;
+  /// When lines are left, what to do, in plain words.
+  final String? leftWords;
+  /// The plan's things, those to skip with them.
+  final List<SavedImportRowsItem>? rows;
+  /// false for the plan; true once saved.
+  final bool saved;
+  /// The names not saved because they are saved already as the same kind.
+  final List<String>? skipped;
+  /// The things to save (the rows not skipped).
+  final int total;
+  /// The bank accounts saved (in added) whose name the bank has not checked,
+  /// each with why; Check names on the Saved page (POST /v1/saved/check) checks
+  /// them.
+  final List<SavedImportUncheckedItem>? unchecked;
+
+  factory SavedImport.fromJson(Map<String, dynamic> j) => SavedImport(
+        added: j['added'] == null ? null : (j['added'] as List).map((e) => e as String).toList(),
+        checkWords: j['check_words'] == null ? null : j['check_words'] as String,
+        failed: j['failed'] == null ? null : (j['failed'] as List).map((e) => SavedImportFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        hash: j['hash'] as String,
+        left: j['left'] == null ? null : (j['left'] as List).map((e) => SavedImportLeftItem.fromJson(e as Map<String, dynamic>)).toList(),
+        leftWords: j['left_words'] == null ? null : j['left_words'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => SavedImportRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        saved: j['saved'] as bool,
+        skipped: j['skipped'] == null ? null : (j['skipped'] as List).map((e) => e as String).toList(),
+        total: (j['total'] as num).toInt(),
+        unchecked: j['unchecked'] == null ? null : (j['unchecked'] as List).map((e) => SavedImportUncheckedItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': ?added?.map((e) => e).toList(),
+        'check_words': ?checkWords,
+        'failed': ?failed?.map((e) => e.toJson()).toList(),
+        'hash': hash,
+        'left': ?left?.map((e) => e.toJson()).toList(),
+        'left_words': ?leftWords,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'saved': saved,
+        'skipped': ?skipped?.map((e) => e).toList(),
+        'total': total,
+        'unchecked': ?unchecked?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SavedImportFailedItem {
+  const SavedImportFailedItem({required this.line, required this.message, required this.name});
+
+  final int line;
+  final String message;
+  final String name;
+
+  factory SavedImportFailedItem.fromJson(Map<String, dynamic> j) => SavedImportFailedItem(
+        line: (j['line'] as num).toInt(),
+        message: j['message'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'message': message,
+        'name': name,
+      };
+}
+
+class SavedImportLeftItem {
+  const SavedImportLeftItem({required this.line, required this.name});
+
+  final int line;
+  final String name;
+
+  factory SavedImportLeftItem.fromJson(Map<String, dynamic> j) => SavedImportLeftItem(
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'name': name,
+      };
+}
+
+class SavedImportRowsItem {
+  const SavedImportRowsItem({required this.hint, required this.kind, required this.line, required this.name, this.skip, required this.title, this.warning});
+
+  final String hint;
+  final String kind;
+  /// Its line in the file, the column names' being 1.
+  final int line;
+  final String name;
+  /// Saved already by this name and kind (an earlier send of the file); not
+  /// saved again.
+  final bool? skip;
+  final String title;
+  /// What to know before saving it, which does not keep it from being saved (a
+  /// bank Taskiem does not know by that name, its name not checked), or why it
+  /// is skipped.
+  final String? warning;
+
+  factory SavedImportRowsItem.fromJson(Map<String, dynamic> j) => SavedImportRowsItem(
+        hint: j['hint'] as String,
+        kind: j['kind'] as String,
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+        skip: j['skip'] == null ? null : j['skip'] as bool,
+        title: j['title'] as String,
+        warning: j['warning'] == null ? null : j['warning'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'hint': hint,
+        'kind': kind,
+        'line': line,
+        'name': name,
+        'skip': ?skip,
+        'title': title,
+        'warning': ?warning,
+      };
+}
+
+class SavedImportUncheckedItem {
+  const SavedImportUncheckedItem({required this.line, required this.name, required this.problem});
+
+  final int line;
+  final String name;
+  final String problem;
+
+  factory SavedImportUncheckedItem.fromJson(Map<String, dynamic> j) => SavedImportUncheckedItem(
+        line: (j['line'] as num).toInt(),
+        name: j['name'] as String,
+        problem: j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line': line,
+        'name': name,
+        'problem': problem,
+      };
+}
+
+class SaveOrderCustomerRequest {
+  const SaveOrderCustomerRequest({this.name});
+
+  final String? name;
+
+  factory SaveOrderCustomerRequest.fromJson(Map<String, dynamic> j) => SaveOrderCustomerRequest(
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': ?name,
+      };
+}
+
+class SaveOrderCustomerResponse {
+  const SaveOrderCustomerResponse({required this.saved});
+
+  final SavedObject saved;
+
+  factory SaveOrderCustomerResponse.fromJson(Map<String, dynamic> j) => SaveOrderCustomerResponse(
+        saved: SavedObject.fromJson(j['saved'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'saved': saved.toJson(),
+      };
+}
+
 class ListMyBanksResponse {
   const ListMyBanksResponse({required this.banks, required this.from});
 
@@ -13758,6 +14777,2749 @@ class ListMyBanksResponseBanksItem {
   Map<String, dynamic> toJson() => {
         'code': code,
         'name': name,
+      };
+}
+
+class ListPaymentsResponse {
+  const ListPaymentsResponse({required this.payments});
+
+  final List<Payment> payments;
+
+  factory ListPaymentsResponse.fromJson(Map<String, dynamic> j) => ListPaymentsResponse(
+        payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payments': payments.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Payment {
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.finishedAt, this.firstPayment, required this.id, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.runId, this.savedId, this.staffId, required this.startedFrom, required this.status});
+
+  /// The account number masked (••6789).
+  final String account;
+  /// The bank's name for the account, once checked.
+  final Object? accountName;
+  /// The same amount to the same payee in the last day.
+  final bool? again;
+  final int amountKobo;
+  /// Confirmed by you, and its run still waits for your own OK, which did not
+  /// reach it: confirm it again (POST /v1/payments/{id}/confirm) to give it.
+  final bool? awaitsYourOk;
+  final String bankName;
+  /// The list it was paid in, when it was
+  final Object? batchId;
+  final bool? changedAccount;
+  final Object? confirmedAt;
+  final Object? confirmedBy;
+  final DateTime createdAt;
+  final Object? feeKobo;
+  final Object? finishedAt;
+  final bool? firstPayment;
+  final String id;
+  /// Why the owner's OK is asked, comma-separated; `limit` over the payer's
+  /// limit, `changed` an account changed since it was last paid, `first` an
+  /// account staff never paid before. Empty when none.
+  final String? needsOk;
+  final String? note;
+  final String payee;
+  /// An owner's own saved account, paid from the business (owner's drawings).
+  final bool personal;
+  final String preparedBy;
+  final String purpose;
+  final String? purposeNote;
+  final Object? reason;
+  /// The rider paid, when it was one
+  final Object? riderId;
+  final Object? runId;
+  final Object? savedId;
+  /// The staff member paid, when it was one
+  final Object? staffId;
+  final String startedFrom;
+  final String status;
+
+  factory Payment.fromJson(Map<String, dynamic> j) => Payment(
+        account: j['account'] as String,
+        accountName: j['account_name'],
+        again: j['again'] == null ? null : j['again'] as bool,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        awaitsYourOk: j['awaits_your_ok'] == null ? null : j['awaits_your_ok'] as bool,
+        bankName: j['bank_name'] as String,
+        batchId: j['batch_id'],
+        changedAccount: j['changed_account'] == null ? null : j['changed_account'] as bool,
+        confirmedAt: j['confirmed_at'],
+        confirmedBy: j['confirmed_by'],
+        createdAt: DateTime.parse(j['created_at'] as String),
+        feeKobo: j['fee_kobo'],
+        finishedAt: j['finished_at'],
+        firstPayment: j['first_payment'] == null ? null : j['first_payment'] as bool,
+        id: j['id'] as String,
+        needsOk: j['needs_ok'] == null ? null : j['needs_ok'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        payee: j['payee'] as String,
+        personal: j['personal'] as bool,
+        preparedBy: j['prepared_by'] as String,
+        purpose: j['purpose'] as String,
+        purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
+        reason: j['reason'],
+        riderId: j['rider_id'],
+        runId: j['run_id'],
+        savedId: j['saved_id'],
+        staffId: j['staff_id'],
+        startedFrom: j['started_from'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': account,
+        'account_name': ?accountName,
+        'again': ?again,
+        'amount_kobo': amountKobo,
+        'awaits_your_ok': ?awaitsYourOk,
+        'bank_name': bankName,
+        'batch_id': ?batchId,
+        'changed_account': ?changedAccount,
+        'confirmed_at': ?confirmedAt,
+        'confirmed_by': ?confirmedBy,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'fee_kobo': ?feeKobo,
+        'finished_at': ?finishedAt,
+        'first_payment': ?firstPayment,
+        'id': id,
+        'needs_ok': ?needsOk,
+        'note': ?note,
+        'payee': payee,
+        'personal': personal,
+        'prepared_by': preparedBy,
+        'purpose': purpose,
+        'purpose_note': ?purposeNote,
+        'reason': ?reason,
+        'rider_id': ?riderId,
+        'run_id': ?runId,
+        'saved_id': ?savedId,
+        'staff_id': ?staffId,
+        'started_from': startedFrom,
+        'status': status,
+      };
+}
+
+class ListPayBanksResponse {
+  const ListPayBanksResponse({required this.banks, required this.from});
+
+  final List<ListPayBanksResponseBanksItem> banks;
+  /// The payments connection the list is from ("iswallet/taskiem"), to send
+  /// back as `code_from`; empty for the list by name alone.
+  final String from;
+
+  factory ListPayBanksResponse.fromJson(Map<String, dynamic> j) => ListPayBanksResponse(
+        banks: (j['banks'] as List).map((e) => ListPayBanksResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+        from: j['from'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'banks': banks.map((e) => e.toJson()).toList(),
+        'from': from,
+      };
+}
+
+class ListPayBanksResponseBanksItem {
+  const ListPayBanksResponseBanksItem({required this.code, this.likely, required this.name});
+
+  /// The bank's code in this list; empty in the list by name alone.
+  final String code;
+  final bool? likely;
+  final String name;
+
+  factory ListPayBanksResponseBanksItem.fromJson(Map<String, dynamic> j) => ListPayBanksResponseBanksItem(
+        code: j['code'] as String,
+        likely: j['likely'] == null ? null : j['likely'] as bool,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'likely': ?likely,
+        'name': name,
+      };
+}
+
+class ReadPaymentRequest {
+  const ReadPaymentRequest({this.from, required this.text});
+
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
+  final String text;
+
+  factory ReadPaymentRequest.fromJson(Map<String, dynamic> j) => ReadPaymentRequest(
+        from: j['from'] == null ? null : j['from'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'from': ?from,
+        'text': text,
+      };
+}
+
+class ReadPaymentResponse {
+  const ReadPaymentResponse({this.accountNumber, this.amountKobo, this.bankCode, this.bankName, required this.found, this.likely, this.name, this.paid, this.payee});
+
+  final String? accountNumber;
+  final int? amountKobo;
+  final String? bankCode;
+  final String? bankName;
+  final bool found;
+  final List<ReadPaymentResponseLikelyItem>? likely;
+  final String? name;
+  final ReadPaymentResponsePaid? paid;
+  /// The business's saved account with this number, by its name (staff pay
+  /// saved accounts only)
+  final String? payee;
+
+  factory ReadPaymentResponse.fromJson(Map<String, dynamic> j) => ReadPaymentResponse(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankCode: j['bank_code'] == null ? null : j['bank_code'] as String,
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        found: j['found'] as bool,
+        likely: j['likely'] == null ? null : (j['likely'] as List).map((e) => ReadPaymentResponseLikelyItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] == null ? null : j['name'] as String,
+        paid: j['paid'] == null ? null : ReadPaymentResponsePaid.fromJson(j['paid'] as Map<String, dynamic>),
+        payee: j['payee'] == null ? null : j['payee'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_code': ?bankCode,
+        'bank_name': ?bankName,
+        'found': found,
+        'likely': ?likely?.map((e) => e.toJson()).toList(),
+        'name': ?name,
+        'paid': ?paid?.toJson(),
+        'payee': ?payee,
+      };
+}
+
+class ReadPaymentResponseLikelyItem {
+  const ReadPaymentResponseLikelyItem({this.code, this.likely, this.name});
+
+  final String? code;
+  final bool? likely;
+  final String? name;
+
+  factory ReadPaymentResponseLikelyItem.fromJson(Map<String, dynamic> j) => ReadPaymentResponseLikelyItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        likely: j['likely'] == null ? null : j['likely'] as bool,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'likely': ?likely,
+        'name': ?name,
+      };
+}
+
+class ReadPaymentResponsePaid {
+  const ReadPaymentResponsePaid({this.amountKobo, this.at, this.id, this.status});
+
+  final int? amountKobo;
+  final DateTime? at;
+  final String? id;
+  final String? status;
+
+  factory ReadPaymentResponsePaid.fromJson(Map<String, dynamic> j) => ReadPaymentResponsePaid(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        at: j['at'] == null ? null : DateTime.parse(j['at'] as String),
+        id: j['id'] == null ? null : j['id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'at': ?at?.toUtc().toIso8601String(),
+        'id': ?id,
+        'status': ?status,
+      };
+}
+
+class PayNameCheckRequest {
+  const PayNameCheckRequest({required this.accountNumber, this.bankCodes});
+
+  final String accountNumber;
+  final List<String>? bankCodes;
+
+  factory PayNameCheckRequest.fromJson(Map<String, dynamic> j) => PayNameCheckRequest(
+        accountNumber: j['account_number'] as String,
+        bankCodes: j['bank_codes'] == null ? null : (j['bank_codes'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': accountNumber,
+        'bank_codes': ?bankCodes?.map((e) => e).toList(),
+      };
+}
+
+class PayNameCheckResponse {
+  const PayNameCheckResponse({required this.account, required this.banks});
+
+  /// The number, masked
+  final String account;
+  final List<PayNameCheckResponseBanksItem> banks;
+
+  factory PayNameCheckResponse.fromJson(Map<String, dynamic> j) => PayNameCheckResponse(
+        account: j['account'] as String,
+        banks: (j['banks'] as List).map((e) => PayNameCheckResponseBanksItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': account,
+        'banks': banks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayNameCheckResponseBanksItem {
+  const PayNameCheckResponseBanksItem({this.accountName, required this.bankCode, required this.bankName, this.problem});
+
+  final String? accountName;
+  final String bankCode;
+  final String bankName;
+  final String? problem;
+
+  factory PayNameCheckResponseBanksItem.fromJson(Map<String, dynamic> j) => PayNameCheckResponseBanksItem(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        bankCode: j['bank_code'] as String,
+        bankName: j['bank_name'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'bank_code': bankCode,
+        'bank_name': bankName,
+        'problem': ?problem,
+      };
+}
+
+class CreatePaymentRequest {
+  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.staffId});
+
+  /// An account not saved (pay.account), with bank_name; its name is checked
+  /// with the bank as it is prepared. 409 `name_not_checked` when the bank did
+  /// not say it.
+  final String? accountNumber;
+  final int amountKobo;
+  final String? bankName;
+  final String? from;
+  final bool? mine;
+  final String? note;
+  final String? payee;
+  final String? purpose;
+  final String? purposeNote;
+  /// One of the business's riders, paid to the account kept for their payouts.
+  /// 409 `no_bank` when none is kept.
+  final String? riderId;
+  final String? savedId;
+  /// A staff member, paid to the saved account linked to them (payments outside
+  /// payroll). 409 `no_bank` when none is linked.
+  final String? staffId;
+
+  factory CreatePaymentRequest.fromJson(Map<String, dynamic> j) => CreatePaymentRequest(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
+        mine: j['mine'] == null ? null : j['mine'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+        purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
+        riderId: j['rider_id'] == null ? null : j['rider_id'] as String,
+        savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
+        staffId: j['staff_id'] == null ? null : j['staff_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': amountKobo,
+        'bank_name': ?bankName,
+        'from': ?from,
+        'mine': ?mine,
+        'note': ?note,
+        'payee': ?payee,
+        'purpose': ?purpose,
+        'purpose_note': ?purposeNote,
+        'rider_id': ?riderId,
+        'saved_id': ?savedId,
+        'staff_id': ?staffId,
+      };
+}
+
+class CreatePaymentResponse {
+  const CreatePaymentResponse({required this.payment});
+
+  final Payment payment;
+
+  factory CreatePaymentResponse.fromJson(Map<String, dynamic> j) => CreatePaymentResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+      };
+}
+
+class GetPaymentResponse {
+  const GetPaymentResponse({required this.payment});
+
+  final Payment payment;
+
+  factory GetPaymentResponse.fromJson(Map<String, dynamic> j) => GetPaymentResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+      };
+}
+
+class ConfirmPaymentRequest {
+  const ConfirmPaymentRequest({this.again, this.passkey, this.pin, this.totp});
+
+  final bool? again;
+  final Map<String, dynamic>? passkey;
+  /// The person's six-digit PIN, typed in the app's own pad (never sent in a
+  /// message)
+  final String? pin;
+  final String? totp;
+
+  factory ConfirmPaymentRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentRequest(
+        again: j['again'] == null ? null : j['again'] as bool,
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] == null ? null : j['pin'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again,
+        'passkey': ?passkey,
+        'pin': ?pin,
+        'totp': ?totp,
+      };
+}
+
+class ConfirmPaymentResponse {
+  const ConfirmPaymentResponse({required this.payment});
+
+  final Payment payment;
+
+  factory ConfirmPaymentResponse.fromJson(Map<String, dynamic> j) => ConfirmPaymentResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+      };
+}
+
+class CancelPaymentResponse {
+  const CancelPaymentResponse({required this.payment});
+
+  final Payment payment;
+
+  factory CancelPaymentResponse.fromJson(Map<String, dynamic> j) => CancelPaymentResponse(
+        payment: Payment.fromJson(j['payment'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payment': payment.toJson(),
+      };
+}
+
+class GetPayLimitsResponse {
+  const GetPayLimitsResponse({required this.limits});
+
+  final List<PayLimit> limits;
+
+  factory GetPayLimitsResponse.fromJson(Map<String, dynamic> j) => GetPayLimitsResponse(
+        limits: (j['limits'] as List).map((e) => PayLimit.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'limits': limits.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PayLimit {
+  const PayLimit({this.dayKobo, this.oneKobo, this.role});
+
+  final int? dayKobo;
+  final int? oneKobo;
+  final String? role;
+
+  factory PayLimit.fromJson(Map<String, dynamic> j) => PayLimit(
+        dayKobo: j['day_kobo'] == null ? null : (j['day_kobo'] as num).toInt(),
+        oneKobo: j['one_kobo'] == null ? null : (j['one_kobo'] as num).toInt(),
+        role: j['role'] == null ? null : j['role'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day_kobo': ?dayKobo,
+        'one_kobo': ?oneKobo,
+        'role': ?role,
+      };
+}
+
+class PutStaffPayAccountRequest {
+  const PutStaffPayAccountRequest({this.passkey, this.savedId, this.totp});
+
+  final Map<String, dynamic>? passkey;
+  final Object? savedId;
+  final String? totp;
+
+  factory PutStaffPayAccountRequest.fromJson(Map<String, dynamic> j) => PutStaffPayAccountRequest(
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        savedId: j['saved_id'],
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey,
+        'saved_id': ?savedId,
+        'totp': ?totp,
+      };
+}
+
+class PutStaffPayAccountResponse {
+  const PutStaffPayAccountResponse({this.payAccount});
+
+  final Object? payAccount;
+
+  factory PutStaffPayAccountResponse.fromJson(Map<String, dynamic> j) => PutStaffPayAccountResponse(
+        payAccount: j['pay_account'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pay_account': ?payAccount,
+      };
+}
+
+class MePin {
+  const MePin({required this.changeWithout, this.changeWithoutUntil, this.lockedUntil, this.paysFrom, required this.set, this.setAt});
+
+  final bool changeWithout;
+  final DateTime? changeWithoutUntil;
+  final DateTime? lockedUntil;
+  final DateTime? paysFrom;
+  final bool set;
+  final DateTime? setAt;
+
+  factory MePin.fromJson(Map<String, dynamic> j) => MePin(
+        changeWithout: j['change_without'] as bool,
+        changeWithoutUntil: j['change_without_until'] == null ? null : DateTime.parse(j['change_without_until'] as String),
+        lockedUntil: j['locked_until'] == null ? null : DateTime.parse(j['locked_until'] as String),
+        paysFrom: j['pays_from'] == null ? null : DateTime.parse(j['pays_from'] as String),
+        set: j['set'] as bool,
+        setAt: j['set_at'] == null ? null : DateTime.parse(j['set_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change_without': changeWithout,
+        'change_without_until': ?changeWithoutUntil?.toUtc().toIso8601String(),
+        'locked_until': ?lockedUntil?.toUtc().toIso8601String(),
+        'pays_from': ?paysFrom?.toUtc().toIso8601String(),
+        'set': set,
+        'set_at': ?setAt?.toUtc().toIso8601String(),
+      };
+}
+
+class PutMePinRequest {
+  const PutMePinRequest({this.passkey, required this.pin, this.totp});
+
+  final Map<String, dynamic>? passkey;
+  final String pin;
+  final String? totp;
+
+  factory PutMePinRequest.fromJson(Map<String, dynamic> j) => PutMePinRequest(
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        pin: j['pin'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey,
+        'pin': pin,
+        'totp': ?totp,
+      };
+}
+
+class PayCollection {
+  const PayCollection({required this.count, this.inBatch, required this.noAmount, required this.rows, required this.totalKobo});
+
+  final int count;
+  final Object? inBatch;
+  final int noAmount;
+  final List<PayCollectionRowsItem> rows;
+  final int totalKobo;
+
+  factory PayCollection.fromJson(Map<String, dynamic> j) => PayCollection(
+        count: (j['count'] as num).toInt(),
+        inBatch: j['in_batch'],
+        noAmount: (j['no_amount'] as num).toInt(),
+        rows: (j['rows'] as List).map((e) => PayCollectionRowsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'in_batch': ?inBatch,
+        'no_amount': noAmount,
+        'rows': rows.map((e) => e.toJson()).toList(),
+        'total_kobo': totalKobo,
+      };
+}
+
+class PayCollectionRowsItem {
+  const PayCollectionRowsItem({required this.addedAt, this.amountKobo, required this.bankName, required this.id, required this.last4, required this.name, required this.note, required this.payee, required this.purpose, this.savedId, this.source, required this.title});
+
+  final DateTime addedAt;
+  final Object? amountKobo;
+  final String bankName;
+  final String id;
+  final String last4;
+  final String name;
+  final String note;
+  final String payee;
+  final String purpose;
+  final Object? savedId;
+  final Object? source;
+  final String title;
+
+  factory PayCollectionRowsItem.fromJson(Map<String, dynamic> j) => PayCollectionRowsItem(
+        addedAt: DateTime.parse(j['added_at'] as String),
+        amountKobo: j['amount_kobo'],
+        bankName: j['bank_name'] as String,
+        id: j['id'] as String,
+        last4: j['last4'] as String,
+        name: j['name'] as String,
+        note: j['note'] as String,
+        payee: j['payee'] as String,
+        purpose: j['purpose'] as String,
+        savedId: j['saved_id'],
+        source: j['source'],
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_at': addedAt.toUtc().toIso8601String(),
+        'amount_kobo': ?amountKobo,
+        'bank_name': bankName,
+        'id': id,
+        'last4': last4,
+        'name': name,
+        'note': note,
+        'payee': payee,
+        'purpose': purpose,
+        'saved_id': ?savedId,
+        'source': ?source,
+        'title': title,
+      };
+}
+
+class AddPayCollectionRequest {
+  const AddPayCollectionRequest({this.accountNumber, this.amountKobo, this.bankName, this.name, this.note, this.payee, this.purpose, this.savedId, this.source});
+
+  final String? accountNumber;
+  final Object? amountKobo;
+  final String? bankName;
+  final String? name;
+  final String? note;
+  final String? payee;
+  final String? purpose;
+  final String? savedId;
+  final PayCollectionSource? source;
+
+  factory AddPayCollectionRequest.fromJson(Map<String, dynamic> j) => AddPayCollectionRequest(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'],
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+        savedId: j['saved_id'] == null ? null : j['saved_id'] as String,
+        source: j['source'] == null ? null : PayCollectionSource.fromJson(j['source'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'name': ?name,
+        'note': ?note,
+        'payee': ?payee,
+        'purpose': ?purpose,
+        'saved_id': ?savedId,
+        'source': ?source?.toJson(),
+      };
+}
+
+class PayCollectionSource {
+  const PayCollectionSource({required this.chat, this.from, required this.kind, required this.message});
+
+  final String chat;
+  /// Who sent it, as the chat names them
+  final String? from;
+  final String kind;
+  final String message;
+
+  factory PayCollectionSource.fromJson(Map<String, dynamic> j) => PayCollectionSource(
+        chat: j['chat'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
+        kind: j['kind'] as String,
+        message: j['message'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat': chat,
+        'from': ?from,
+        'kind': kind,
+        'message': message,
+      };
+}
+
+class PayPayCollectionRequest {
+  const PayPayCollectionRequest({this.purpose, this.title});
+
+  final String? purpose;
+  final String? title;
+
+  factory PayPayCollectionRequest.fromJson(Map<String, dynamic> j) => PayPayCollectionRequest(
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'purpose': ?purpose,
+        'title': ?title,
+      };
+}
+
+class PayPayCollectionResponse {
+  const PayPayCollectionResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory PayPayCollectionResponse.fromJson(Map<String, dynamic> j) => PayPayCollectionResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class PaymentBatch {
+  const PaymentBatch({this.confirmedAt, required this.count, required this.createdAt, required this.createdBy, required this.failed, this.held, required this.id, required this.kind, required this.paidKobo, required this.payments, this.results, required this.status, required this.title, required this.totalKobo, required this.waiting});
+
+  final Object? confirmedAt;
+  final int count;
+  final DateTime createdAt;
+  final String createdBy;
+  final int failed;
+  /// Rows held out when it was prepared, with why
+  final List<PaymentBatchHeldItem>? held;
+  final String id;
+  final String kind;
+  final int paidKobo;
+  final List<Payment> payments;
+  /// What became of each row when it was sent or approved
+  final List<PaymentBatchResultsItem>? results;
+  final String status;
+  final String title;
+  final int totalKobo;
+  final int waiting;
+
+  factory PaymentBatch.fromJson(Map<String, dynamic> j) => PaymentBatch(
+        confirmedAt: j['confirmed_at'],
+        count: (j['count'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        createdBy: j['created_by'] as String,
+        failed: (j['failed'] as num).toInt(),
+        held: j['held'] == null ? null : (j['held'] as List).map((e) => PaymentBatchHeldItem.fromJson(e as Map<String, dynamic>)).toList(),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payments: (j['payments'] as List).map((e) => Payment.fromJson(e as Map<String, dynamic>)).toList(),
+        results: j['results'] == null ? null : (j['results'] as List).map((e) => PaymentBatchResultsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        status: j['status'] as String,
+        title: j['title'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirmed_at': ?confirmedAt,
+        'count': count,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'created_by': createdBy,
+        'failed': failed,
+        'held': ?held?.map((e) => e.toJson()).toList(),
+        'id': id,
+        'kind': kind,
+        'paid_kobo': paidKobo,
+        'payments': payments.map((e) => e.toJson()).toList(),
+        'results': ?results?.map((e) => e.toJson()).toList(),
+        'status': status,
+        'title': title,
+        'total_kobo': totalKobo,
+        'waiting': waiting,
+      };
+}
+
+class PaymentBatchHeldItem {
+  const PaymentBatchHeldItem({this.code, this.payee, this.problem, this.row});
+
+  final String? code;
+  final String? payee;
+  final String? problem;
+  final int? row;
+
+  factory PaymentBatchHeldItem.fromJson(Map<String, dynamic> j) => PaymentBatchHeldItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        row: j['row'] == null ? null : (j['row'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payee': ?payee,
+        'problem': ?problem,
+        'row': ?row,
+      };
+}
+
+class PaymentBatchResultsItem {
+  const PaymentBatchResultsItem({this.code, this.payment, this.problem});
+
+  final String? code;
+  final String? payment;
+  final String? problem;
+
+  factory PaymentBatchResultsItem.fromJson(Map<String, dynamic> j) => PaymentBatchResultsItem(
+        code: j['code'] == null ? null : j['code'] as String,
+        payment: j['payment'] == null ? null : j['payment'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'payment': ?payment,
+        'problem': ?problem,
+      };
+}
+
+class PatchPayCollectionRequest {
+  const PatchPayCollectionRequest({this.amountKobo, this.note, this.purpose});
+
+  final int? amountKobo;
+  final String? note;
+  final String? purpose;
+
+  factory PatchPayCollectionRequest.fromJson(Map<String, dynamic> j) => PatchPayCollectionRequest(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        note: j['note'] == null ? null : j['note'] as String,
+        purpose: j['purpose'] == null ? null : j['purpose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'note': ?note,
+        'purpose': ?purpose,
+      };
+}
+
+class GetPayrollResponse {
+  const GetPayrollResponse({this.company, required this.connected, this.connection, this.nextCursor, required this.runs, this.test});
+
+  final GetPayrollResponseCompany? company;
+  final bool connected;
+  final String? connection;
+  final String? nextCursor;
+  final List<PayrollRun> runs;
+  final bool? test;
+
+  factory GetPayrollResponse.fromJson(Map<String, dynamic> j) => GetPayrollResponse(
+        company: j['company'] == null ? null : GetPayrollResponseCompany.fromJson(j['company'] as Map<String, dynamic>),
+        connected: j['connected'] as bool,
+        connection: j['connection'] == null ? null : j['connection'] as String,
+        nextCursor: j['next_cursor'] == null ? null : j['next_cursor'] as String,
+        runs: (j['runs'] as List).map((e) => PayrollRun.fromJson(e as Map<String, dynamic>)).toList(),
+        test: j['test'] == null ? null : j['test'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'company': ?company?.toJson(),
+        'connected': connected,
+        'connection': ?connection,
+        'next_cursor': ?nextCursor,
+        'runs': runs.map((e) => e.toJson()).toList(),
+        'test': ?test,
+      };
+}
+
+class GetPayrollResponseCompany {
+  const GetPayrollResponseCompany({required this.name, required this.payFrequency});
+
+  final String name;
+  final String payFrequency;
+
+  factory GetPayrollResponseCompany.fromJson(Map<String, dynamic> j) => GetPayrollResponseCompany(
+        name: j['name'] as String,
+        payFrequency: j['pay_frequency'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'pay_frequency': payFrequency,
+      };
+}
+
+/// A payroll run as Payrolla keeps it
+class PayrollRun {
+  const PayrollRun({required this.awaitingApproval, required this.employeeCount, required this.payDate, required this.periodEnd, required this.periodStart, required this.runId, required this.runType, required this.status, required this.totalGrossKobo, required this.totalNetKobo});
+
+  final bool awaitingApproval;
+  final int employeeCount;
+  final String payDate;
+  final String periodEnd;
+  final String periodStart;
+  final String runId;
+  final String runType;
+  /// DRAFT, COMPUTED, APPROVED, LOCKED, DISBURSING, COMPLETED,
+  /// PARTIALLY_COMPLETED, CANCELLED or FAILED
+  final String status;
+  final int totalGrossKobo;
+  final int totalNetKobo;
+
+  factory PayrollRun.fromJson(Map<String, dynamic> j) => PayrollRun(
+        awaitingApproval: j['awaiting_approval'] as bool,
+        employeeCount: (j['employee_count'] as num).toInt(),
+        payDate: j['pay_date'] as String,
+        periodEnd: j['period_end'] as String,
+        periodStart: j['period_start'] as String,
+        runId: j['run_id'] as String,
+        runType: j['run_type'] as String,
+        status: j['status'] as String,
+        totalGrossKobo: (j['total_gross_kobo'] as num).toInt(),
+        totalNetKobo: (j['total_net_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'awaiting_approval': awaitingApproval,
+        'employee_count': employeeCount,
+        'pay_date': payDate,
+        'period_end': periodEnd,
+        'period_start': periodStart,
+        'run_id': runId,
+        'run_type': runType,
+        'status': status,
+        'total_gross_kobo': totalGrossKobo,
+        'total_net_kobo': totalNetKobo,
+      };
+}
+
+class GetPayrollRunResponse {
+  const GetPayrollRunResponse({this.approvalUrl, required this.connection, required this.counts, required this.lines, required this.run});
+
+  final String? approvalUrl;
+  final String connection;
+  final GetPayrollRunResponseCounts counts;
+  final List<GetPayrollRunResponseLinesItem> lines;
+  final GetPayrollRunResponseRun run;
+
+  factory GetPayrollRunResponse.fromJson(Map<String, dynamic> j) => GetPayrollRunResponse(
+        approvalUrl: j['approval_url'] == null ? null : j['approval_url'] as String,
+        connection: j['connection'] as String,
+        counts: GetPayrollRunResponseCounts.fromJson(j['counts'] as Map<String, dynamic>),
+        lines: (j['lines'] as List).map((e) => GetPayrollRunResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        run: GetPayrollRunResponseRun.fromJson(j['run'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approval_url': ?approvalUrl,
+        'connection': connection,
+        'counts': counts.toJson(),
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'run': run.toJson(),
+      };
+}
+
+class GetPayrollRunResponseCounts {
+  const GetPayrollRunResponseCounts({required this.failed, required this.paid, required this.returned, required this.waiting});
+
+  final int failed;
+  final int paid;
+  final int returned;
+  final int waiting;
+
+  factory GetPayrollRunResponseCounts.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseCounts(
+        failed: (j['failed'] as num).toInt(),
+        paid: (j['paid'] as num).toInt(),
+        returned: (j['returned'] as num).toInt(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed,
+        'paid': paid,
+        'returned': returned,
+        'waiting': waiting,
+      };
+}
+
+class GetPayrollRunResponseLinesItem {
+  const GetPayrollRunResponseLinesItem({required this.employeeId, required this.name, required this.netKobo, required this.payslipId, this.reason, this.reference, this.staff, required this.state, required this.status});
+
+  final String employeeId;
+  final String name;
+  final int netKobo;
+  final String payslipId;
+  final String? reason;
+  final String? reference;
+  final Object? staff;
+  final String state;
+  final String status;
+
+  factory GetPayrollRunResponseLinesItem.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseLinesItem(
+        employeeId: j['employee_id'] as String,
+        name: j['name'] as String,
+        netKobo: (j['net_kobo'] as num).toInt(),
+        payslipId: j['payslip_id'] as String,
+        reason: j['reason'] == null ? null : j['reason'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        staff: j['staff'],
+        state: j['state'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'employee_id': employeeId,
+        'name': name,
+        'net_kobo': netKobo,
+        'payslip_id': payslipId,
+        'reason': ?reason,
+        'reference': ?reference,
+        'staff': ?staff,
+        'state': state,
+        'status': status,
+      };
+}
+
+class GetPayrollRunResponseRun {
+  const GetPayrollRunResponseRun({this.approvedAt, this.createdAt, this.lockedAt, required this.summary, this.updatedAt});
+
+  final Object? approvedAt;
+  final Object? createdAt;
+  final Object? lockedAt;
+  final PayrollRun summary;
+  final Object? updatedAt;
+
+  factory GetPayrollRunResponseRun.fromJson(Map<String, dynamic> j) => GetPayrollRunResponseRun(
+        approvedAt: j['approved_at'],
+        createdAt: j['created_at'],
+        lockedAt: j['locked_at'],
+        summary: PayrollRun.fromJson(j['summary'] as Map<String, dynamic>),
+        updatedAt: j['updated_at'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approved_at': ?approvedAt,
+        'created_at': ?createdAt,
+        'locked_at': ?lockedAt,
+        'summary': summary.toJson(),
+        'updated_at': ?updatedAt,
+      };
+}
+
+class GetPayrollStaffResponse {
+  const GetPayrollStaffResponse({required this.connection, required this.employees, required this.staff});
+
+  final String connection;
+  final List<GetPayrollStaffResponseEmployeesItem> employees;
+  final List<GetPayrollStaffResponseStaffItem> staff;
+
+  factory GetPayrollStaffResponse.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponse(
+        connection: j['connection'] as String,
+        employees: (j['employees'] as List).map((e) => GetPayrollStaffResponseEmployeesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        staff: (j['staff'] as List).map((e) => GetPayrollStaffResponseStaffItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': connection,
+        'employees': employees.map((e) => e.toJson()).toList(),
+        'staff': staff.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GetPayrollStaffResponseEmployeesItem {
+  const GetPayrollStaffResponseEmployeesItem({this.department, required this.id, this.linkedTo, required this.name, required this.status});
+
+  final String? department;
+  final String id;
+  final Object? linkedTo;
+  final String name;
+  final String status;
+
+  factory GetPayrollStaffResponseEmployeesItem.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponseEmployeesItem(
+        department: j['department'] == null ? null : j['department'] as String,
+        id: j['id'] as String,
+        linkedTo: j['linked_to'],
+        name: j['name'] as String,
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'department': ?department,
+        'id': id,
+        'linked_to': ?linkedTo,
+        'name': name,
+        'status': status,
+      };
+}
+
+class GetPayrollStaffResponseStaffItem {
+  const GetPayrollStaffResponseStaffItem({required this.name, this.payrolla, this.suggested, required this.userId});
+
+  final String name;
+  final Object? payrolla;
+  final Object? suggested;
+  final String userId;
+
+  factory GetPayrollStaffResponseStaffItem.fromJson(Map<String, dynamic> j) => GetPayrollStaffResponseStaffItem(
+        name: j['name'] as String,
+        payrolla: j['payrolla'],
+        suggested: j['suggested'],
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'payrolla': ?payrolla,
+        'suggested': ?suggested,
+        'user_id': userId,
+      };
+}
+
+class PutStaffPayrollaRequest {
+  const PutStaffPayrollaRequest({this.connection, this.employeeId});
+
+  final String? connection;
+  final Object? employeeId;
+
+  factory PutStaffPayrollaRequest.fromJson(Map<String, dynamic> j) => PutStaffPayrollaRequest(
+        connection: j['connection'] == null ? null : j['connection'] as String,
+        employeeId: j['employee_id'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'connection': ?connection,
+        'employee_id': ?employeeId,
+      };
+}
+
+class PutStaffPayrollaResponse {
+  const PutStaffPayrollaResponse({this.payrolla});
+
+  final Object? payrolla;
+
+  factory PutStaffPayrollaResponse.fromJson(Map<String, dynamic> j) => PutStaffPayrollaResponse(
+        payrolla: j['payrolla'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'payrolla': ?payrolla,
+      };
+}
+
+class ListPaymentBatchesResponse {
+  const ListPaymentBatchesResponse({required this.batches});
+
+  final List<PaymentBatch> batches;
+
+  factory ListPaymentBatchesResponse.fromJson(Map<String, dynamic> j) => ListPaymentBatchesResponse(
+        batches: (j['batches'] as List).map((e) => PaymentBatch.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batches': batches.map((e) => e.toJson()).toList(),
+      };
+}
+
+class CreatePaymentBatchRequest {
+  const CreatePaymentBatchRequest({this.copyOf, this.from, this.kind, this.rows, this.title});
+
+  /// Last time's batch, its rows again
+  final String? copyOf;
+  final String? from;
+  final String? kind;
+  final List<Map<String, dynamic>>? rows;
+  final String? title;
+
+  factory CreatePaymentBatchRequest.fromJson(Map<String, dynamic> j) => CreatePaymentBatchRequest(
+        copyOf: j['copy_of'] == null ? null : j['copy_of'] as String,
+        from: j['from'] == null ? null : j['from'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'copy_of': ?copyOf,
+        'from': ?from,
+        'kind': ?kind,
+        'rows': ?rows?.map((e) => e).toList(),
+        'title': ?title,
+      };
+}
+
+class CreatePaymentBatchResponse {
+  const CreatePaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory CreatePaymentBatchResponse.fromJson(Map<String, dynamic> j) => CreatePaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ReadPaymentListRequest {
+  const ReadPaymentListRequest({this.from, required this.text});
+
+  /// photo: the text was read from a photo on the phone (letters read in place
+  /// of digits are put right first)
+  final String? from;
+  final String text;
+
+  factory ReadPaymentListRequest.fromJson(Map<String, dynamic> j) => ReadPaymentListRequest(
+        from: j['from'] == null ? null : j['from'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'from': ?from,
+        'text': text,
+      };
+}
+
+class ReadPaymentListResponse {
+  const ReadPaymentListResponse({required this.lines});
+
+  final List<ReadPaymentListResponseLinesItem> lines;
+
+  factory ReadPaymentListResponse.fromJson(Map<String, dynamic> j) => ReadPaymentListResponse(
+        lines: (j['lines'] as List).map((e) => ReadPaymentListResponseLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ReadPaymentListResponseLinesItem {
+  const ReadPaymentListResponseLinesItem({this.accountNumber, this.amountKobo, this.bankName, required this.line, this.name, this.payee, this.problem, required this.text});
+
+  final String? accountNumber;
+  final int? amountKobo;
+  final String? bankName;
+  final int line;
+  final String? name;
+  final String? payee;
+  final String? problem;
+  final String text;
+
+  factory ReadPaymentListResponseLinesItem.fromJson(Map<String, dynamic> j) => ReadPaymentListResponseLinesItem(
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        line: (j['line'] as num).toInt(),
+        name: j['name'] == null ? null : j['name'] as String,
+        payee: j['payee'] == null ? null : j['payee'] as String,
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'line': line,
+        'name': ?name,
+        'payee': ?payee,
+        'problem': ?problem,
+        'text': text,
+      };
+}
+
+class GetPaymentBatchResponse {
+  const GetPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory GetPaymentBatchResponse.fromJson(Map<String, dynamic> j) => GetPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ConfirmPaymentBatchRequest {
+  const ConfirmPaymentBatchRequest({this.again, this.passkey, required this.payments});
+
+  /// The rows the person said "pay again" to (the same payment in the last day)
+  final List<String>? again;
+  final Map<String, dynamic>? passkey;
+  /// The rows the person saw, acted on exactly; 409 `changed` when they differ
+  /// from the batch's
+  final List<String> payments;
+
+  factory ConfirmPaymentBatchRequest.fromJson(Map<String, dynamic> j) => ConfirmPaymentBatchRequest(
+        again: j['again'] == null ? null : (j['again'] as List).map((e) => e as String).toList(),
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        payments: (j['payments'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'again': ?again?.map((e) => e).toList(),
+        'passkey': ?passkey,
+        'payments': payments.map((e) => e).toList(),
+      };
+}
+
+class ConfirmPaymentBatchResponse {
+  const ConfirmPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory ConfirmPaymentBatchResponse.fromJson(Map<String, dynamic> j) => ConfirmPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class ApprovePaymentBatchRequest {
+  const ApprovePaymentBatchRequest({this.passkey, required this.payments});
+
+  final Map<String, dynamic>? passkey;
+  /// The waiting rows the owner saw, acted on exactly; 409 `changed` when they
+  /// differ
+  final List<String> payments;
+
+  factory ApprovePaymentBatchRequest.fromJson(Map<String, dynamic> j) => ApprovePaymentBatchRequest(
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        payments: (j['payments'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey,
+        'payments': payments.map((e) => e).toList(),
+      };
+}
+
+class ApprovePaymentBatchResponse {
+  const ApprovePaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory ApprovePaymentBatchResponse.fromJson(Map<String, dynamic> j) => ApprovePaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class CancelPaymentBatchResponse {
+  const CancelPaymentBatchResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory CancelPaymentBatchResponse.fromJson(Map<String, dynamic> j) => CancelPaymentBatchResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class PayBatchAgainResponse {
+  const PayBatchAgainResponse({required this.batch});
+
+  final PaymentBatch batch;
+
+  factory PayBatchAgainResponse.fromJson(Map<String, dynamic> j) => PayBatchAgainResponse(
+        batch: PaymentBatch.fromJson(j['batch'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'batch': batch.toJson(),
+      };
+}
+
+class AskBillTransferRequest {
+  const AskBillTransferRequest({this.longer});
+
+  /// Ask for the longest the supplier's provider gives ("I need longer")
+  final bool? longer;
+
+  factory AskBillTransferRequest.fromJson(Map<String, dynamic> j) => AskBillTransferRequest(
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'longer': ?longer,
+      };
+}
+
+class Bill {
+  const Bill({required this.allowPartPayments, required this.amountKobo, required this.createdAt, required this.declaredPaidKobo, required this.disputed, required this.dueKobo, this.dueOn, required this.id, required this.lines, required this.link, required this.mirroredAt, required this.paidKobo, this.payAccountNumber, this.payBankName, this.payLink, required this.payingKobo, required this.reference, required this.sentKobo, required this.status, required this.supplier, required this.supplierName, this.transfer, required this.uncountedKobo, this.waysToPay});
+
+  final bool allowPartPayments;
+  final int amountKobo;
+  final DateTime createdAt;
+  /// What the business says it paid outside Taskiem; its own figure
+  final int declaredPaidKobo;
+  final bool disputed;
+  /// What is left to pay; what was sent from Taskiem and is not counted yet
+  /// (uncounted_kobo) is not due again
+  final int dueKobo;
+  final String? dueOn;
+  final String id;
+  final List<Map<String, dynamic>> lines;
+  final String link;
+  final DateTime mirroredAt;
+  /// What the supplier's match has counted paid
+  final int paidKobo;
+  /// The account number the supplier issued this business; a transfer into it
+  /// is matched to the supplier's invoices exactly
+  final String? payAccountNumber;
+  final String? payBankName;
+  /// The supplier's invoice page, which takes a card or a transfer
+  final String? payLink;
+  /// A payment from Taskiem under way
+  final int payingKobo;
+  /// The supplier's invoice number
+  final String reference;
+  /// What the bank confirmed the business sent from Taskiem; the supplier's
+  /// match counts it in paid_kobo
+  final int sentKobo;
+  final String status;
+  final String supplier;
+  final String supplierName;
+  /// The account number to pay this bill by transfer, for those who may pay
+  /// bills (invoice.manage); null when none was asked for.
+  final BillTransfer? transfer;
+  /// Of what was sent from Taskiem, what the supplier's figure does not show
+  /// yet (its match has not paired the payment, or its count has not come
+  /// back); not due again, so the bill is not paid twice
+  final int uncountedKobo;
+  /// How the bill can be paid now, the default first; transfer (an account
+  /// number for one payment), taskiem (from the business's payments account),
+  /// checkout (the supplier's page)
+  final List<String>? waysToPay;
+
+  factory Bill.fromJson(Map<String, dynamic> j) => Bill(
+        allowPartPayments: j['allow_part_payments'] as bool,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        declaredPaidKobo: (j['declared_paid_kobo'] as num).toInt(),
+        disputed: j['disputed'] as bool,
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        dueOn: j['due_on'] == null ? null : j['due_on'] as String,
+        id: j['id'] as String,
+        lines: (j['lines'] as List).map((e) => e as Map<String, dynamic>).toList(),
+        link: j['link'] as String,
+        mirroredAt: DateTime.parse(j['mirrored_at'] as String),
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        payAccountNumber: j['pay_account_number'] == null ? null : j['pay_account_number'] as String,
+        payBankName: j['pay_bank_name'] == null ? null : j['pay_bank_name'] as String,
+        payLink: j['pay_link'] == null ? null : j['pay_link'] as String,
+        payingKobo: (j['paying_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        sentKobo: (j['sent_kobo'] as num).toInt(),
+        status: j['status'] as String,
+        supplier: j['supplier'] as String,
+        supplierName: j['supplier_name'] as String,
+        transfer: j['transfer'] == null ? null : BillTransfer.fromJson(j['transfer'] as Map<String, dynamic>),
+        uncountedKobo: (j['uncounted_kobo'] as num).toInt(),
+        waysToPay: j['ways_to_pay'] == null ? null : (j['ways_to_pay'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'allow_part_payments': allowPartPayments,
+        'amount_kobo': amountKobo,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'declared_paid_kobo': declaredPaidKobo,
+        'disputed': disputed,
+        'due_kobo': dueKobo,
+        'due_on': ?dueOn,
+        'id': id,
+        'lines': lines.map((e) => e).toList(),
+        'link': link,
+        'mirrored_at': mirroredAt.toUtc().toIso8601String(),
+        'paid_kobo': paidKobo,
+        'pay_account_number': ?payAccountNumber,
+        'pay_bank_name': ?payBankName,
+        'pay_link': ?payLink,
+        'paying_kobo': payingKobo,
+        'reference': reference,
+        'sent_kobo': sentKobo,
+        'status': status,
+        'supplier': supplier,
+        'supplier_name': supplierName,
+        'transfer': ?transfer?.toJson(),
+        'uncounted_kobo': uncountedKobo,
+        'ways_to_pay': ?waysToPay?.map((e) => e).toList(),
+      };
+}
+
+/// The account number to pay this bill by transfer, for those who may pay bills
+/// (invoice.manage); null when none was asked for.
+class BillTransfer {
+  const BillTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, this.expiresAt, this.longer, this.next, this.paidAt, this.problem, this.receivedKobo, required this.state});
+
+  final String? accountName;
+  final String? accountNumber;
+  /// Send exactly this
+  final int? amountKobo;
+  final String? bankName;
+  final DateTime? expiresAt;
+  /// The supplier's provider gives longer than the default ("I need longer" may
+  /// be offered)
+  final bool? longer;
+  /// Paid, the same supplier's next bill still to pay
+  final String? next;
+  /// When the bill was paid in full
+  final DateTime? paidAt;
+  /// Why a number could not be had, in plain words
+  final String? problem;
+  /// Part paid, what arrived
+  final int? receivedKobo;
+  final String state;
+
+  factory BillTransfer.fromJson(Map<String, dynamic> j) => BillTransfer(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        problem: j['problem'] == null ? null : j['problem'] as String,
+        receivedKobo: j['received_kobo'] == null ? null : (j['received_kobo'] as num).toInt(),
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'longer': ?longer,
+        'next': ?next,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'problem': ?problem,
+        'received_kobo': ?receivedKobo,
+        'state': state,
+      };
+}
+
+class CustomerTransfer {
+  const CustomerTransfer({this.accountName, this.accountNumber, this.amountKobo, this.bankName, required this.dueKobo, this.expiresAt, required this.invoice, this.longer, this.paidAt, required this.reference, required this.state});
+
+  final String? accountName;
+  final String? accountNumber;
+  /// Send exactly this
+  final int? amountKobo;
+  final String? bankName;
+  final int dueKobo;
+  final DateTime? expiresAt;
+  final String invoice;
+  /// The business's provider gives longer than the default ("I need longer" may
+  /// be offered)
+  final bool? longer;
+  final DateTime? paidAt;
+  final String reference;
+  final String state;
+
+  factory CustomerTransfer.fromJson(Map<String, dynamic> j) => CustomerTransfer(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        bankName: j['bank_name'] == null ? null : j['bank_name'] as String,
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        expiresAt: j['expires_at'] == null ? null : DateTime.parse(j['expires_at'] as String),
+        invoice: j['invoice'] as String,
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'amount_kobo': ?amountKobo,
+        'bank_name': ?bankName,
+        'due_kobo': dueKobo,
+        'expires_at': ?expiresAt?.toUtc().toIso8601String(),
+        'invoice': invoice,
+        'longer': ?longer,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'reference': reference,
+        'state': state,
+      };
+}
+
+class AskMyInvoiceTransferRequest {
+  const AskMyInvoiceTransferRequest({this.longer});
+
+  final bool? longer;
+
+  factory AskMyInvoiceTransferRequest.fromJson(Map<String, dynamic> j) => AskMyInvoiceTransferRequest(
+        longer: j['longer'] == null ? null : j['longer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'longer': ?longer,
+      };
+}
+
+class ListToolsResponse {
+  const ListToolsResponse({required this.tools});
+
+  final List<MadeTool> tools;
+
+  factory ListToolsResponse.fromJson(Map<String, dynamic> j) => ListToolsResponse(
+        tools: (j['tools'] as List).map((e) => MadeTool.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'tools': tools.map((e) => e.toJson()).toList(),
+      };
+}
+
+class MadeTool {
+  const MadeTool({required this.about, required this.alwaysAsk, this.answer, required this.care, required this.command, required this.environment, this.icon, this.inputs, required this.name, required this.says, required this.version, required this.workflowId});
+
+  final String about;
+  final bool alwaysAsk;
+  /// text, card or list; left out when the tool answers with how its run ended
+  final String? answer;
+  final MadeToolCare care;
+  final String command;
+  final String environment;
+  final String? icon;
+  /// The tool's inputs schema, for its form
+  final Map<String, dynamic>? inputs;
+  final String name;
+  final List<String> says;
+  final int version;
+  final String workflowId;
+
+  factory MadeTool.fromJson(Map<String, dynamic> j) => MadeTool(
+        about: j['about'] as String,
+        alwaysAsk: j['always_ask'] as bool,
+        answer: j['answer'] == null ? null : j['answer'] as String,
+        care: MadeToolCare.fromJson(j['care'] as Map<String, dynamic>),
+        command: j['command'] as String,
+        environment: j['environment'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        inputs: j['inputs'] == null ? null : j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        says: (j['says'] as List).map((e) => e as String).toList(),
+        version: (j['version'] as num).toInt(),
+        workflowId: j['workflow_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'always_ask': alwaysAsk,
+        'answer': ?answer,
+        'care': care.toJson(),
+        'command': command,
+        'environment': environment,
+        'icon': ?icon,
+        'inputs': ?inputs,
+        'name': name,
+        'says': says.map((e) => e).toList(),
+        'version': version,
+        'workflow_id': workflowId,
+      };
+}
+
+class MadeToolCare {
+  const MadeToolCare({this.because, required this.level});
+
+  final List<String>? because;
+  final String level;
+
+  factory MadeToolCare.fromJson(Map<String, dynamic> j) => MadeToolCare(
+        because: j['because'] == null ? null : (j['because'] as List).map((e) => e as String).toList(),
+        level: j['level'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'because': ?because?.map((e) => e).toList(),
+        'level': level,
+      };
+}
+
+class ReadToolRequest {
+  const ReadToolRequest({this.environment, required this.text});
+
+  final String? environment;
+  final String text;
+
+  factory ReadToolRequest.fromJson(Map<String, dynamic> j) => ReadToolRequest(
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'environment': ?environment,
+        'text': text,
+      };
+}
+
+class ReadToolResponse {
+  const ReadToolResponse({required this.command, required this.notes, required this.values});
+
+  final String command;
+  final List<String> notes;
+  final Map<String, dynamic> values;
+
+  factory ReadToolResponse.fromJson(Map<String, dynamic> j) => ReadToolResponse(
+        command: j['command'] as String,
+        notes: (j['notes'] as List).map((e) => e as String).toList(),
+        values: j['values'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'command': command,
+        'notes': notes.map((e) => e).toList(),
+        'values': values,
+      };
+}
+
+class StartToolRequest {
+  const StartToolRequest({this.answerInChat, this.button, this.environment, this.input});
+
+  /// Also put the answer's words in the person's Taskiem conversation when the
+  /// run ends (the web's sheet; the app draws its own)
+  final bool? answerInChat;
+  /// The button pressed to open this form; a once button is spent by the run it
+  /// starts (409 when someone was first)
+  final String? button;
+  final String? environment;
+  final Map<String, dynamic>? input;
+
+  factory StartToolRequest.fromJson(Map<String, dynamic> j) => StartToolRequest(
+        answerInChat: j['answer_in_chat'] == null ? null : j['answer_in_chat'] as bool,
+        button: j['button'] == null ? null : j['button'] as String,
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answer_in_chat': ?answerInChat,
+        'button': ?button,
+        'environment': ?environment,
+        'input': ?input,
+      };
+}
+
+class ConfirmToolRequest {
+  const ConfirmToolRequest({required this.confirm, this.environment, this.input, this.passkey, this.totp});
+
+  final String confirm;
+  final String? environment;
+  final Map<String, dynamic>? input;
+  final Map<String, dynamic>? passkey;
+  final String? totp;
+
+  factory ConfirmToolRequest.fromJson(Map<String, dynamic> j) => ConfirmToolRequest(
+        confirm: j['confirm'] as String,
+        environment: j['environment'] == null ? null : j['environment'] as String,
+        input: j['input'] == null ? null : j['input'] as Map<String, dynamic>,
+        passkey: j['passkey'] == null ? null : j['passkey'] as Map<String, dynamic>,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm': confirm,
+        'environment': ?environment,
+        'input': ?input,
+        'passkey': ?passkey,
+        'totp': ?totp,
+      };
+}
+
+class ToolRun {
+  const ToolRun({required this.created, required this.runId});
+
+  final bool created;
+  final String runId;
+
+  factory ToolRun.fromJson(Map<String, dynamic> j) => ToolRun(
+        created: j['created'] as bool,
+        runId: j['run_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created': created,
+        'run_id': runId,
+      };
+}
+
+class SetToolSettingsRequest {
+  const SetToolSettingsRequest({required this.alwaysAsk, this.environment});
+
+  final bool alwaysAsk;
+  final String? environment;
+
+  factory SetToolSettingsRequest.fromJson(Map<String, dynamic> j) => SetToolSettingsRequest(
+        alwaysAsk: j['always_ask'] as bool,
+        environment: j['environment'] == null ? null : j['environment'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'always_ask': alwaysAsk,
+        'environment': ?environment,
+      };
+}
+
+class ScanOffersResponse {
+  const ScanOffersResponse({required this.format, required this.offers});
+
+  final String format;
+  final List<ScanOffer> offers;
+
+  factory ScanOffersResponse.fromJson(Map<String, dynamic> j) => ScanOffersResponse(
+        format: j['format'] as String,
+        offers: (j['offers'] as List).map((e) => ScanOffer.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'format': format,
+        'offers': offers.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A workflow a scanned code can start (device fields D2)
+class ScanOffer {
+  const ScanOffer({this.about, required this.asks, this.command, required this.environment, this.icon, required this.input, required this.kind, required this.name, required this.version, this.why, required this.workflowId});
+
+  final String? about;
+  /// The other inputs it requires; none, and the code is all it needs
+  final List<String> asks;
+  /// A tool's command
+  final String? command;
+  final String environment;
+  final String? icon;
+  /// The scan input the code fills
+  final String input;
+  /// tool, opened by its command; or a workflow
+  final String kind;
+  final String name;
+  final int version;
+  final String? why;
+  final String workflowId;
+
+  factory ScanOffer.fromJson(Map<String, dynamic> j) => ScanOffer(
+        about: j['about'] == null ? null : j['about'] as String,
+        asks: (j['asks'] as List).map((e) => e as String).toList(),
+        command: j['command'] == null ? null : j['command'] as String,
+        environment: j['environment'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        input: j['input'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        version: (j['version'] as num).toInt(),
+        why: j['why'] == null ? null : j['why'] as String,
+        workflowId: j['workflow_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': ?about,
+        'asks': asks.map((e) => e).toList(),
+        'command': ?command,
+        'environment': environment,
+        'icon': ?icon,
+        'input': input,
+        'kind': kind,
+        'name': name,
+        'version': version,
+        'why': ?why,
+        'workflow_id': workflowId,
+      };
+}
+
+class ListFormRequestsResponse {
+  const ListFormRequestsResponse({required this.requests});
+
+  final List<FormRequest> requests;
+
+  factory ListFormRequestsResponse.fromJson(Map<String, dynamic> j) => ListFormRequestsResponse(
+        requests: (j['requests'] as List).map((e) => FormRequest.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class FormRequest {
+  const FormRequest({this.createdAt, this.description, required this.expiresAt, this.from, required this.id, this.member, this.prefill, this.role, required this.runId, required this.schema, required this.status, required this.title});
+
+  final DateTime? createdAt;
+  final Object? description;
+  final DateTime expiresAt;
+  /// The business that asked, when it asked you through a business link (to
+  /// {link}, device fields D1); the request is theirs, answered through the
+  /// link
+  final String? from;
+  final String id;
+  /// The member asked by name (a form step to one member); absent when asked by
+  /// role
+  final String? member;
+  final Map<String, dynamic>? prefill;
+  final String? role;
+  /// The run waiting for the answer; the nil UUID for a request another
+  /// business put to you through a link (its run is theirs)
+  final String runId;
+  final Map<String, dynamic> schema;
+  final String status;
+  final String title;
+
+  factory FormRequest.fromJson(Map<String, dynamic> j) => FormRequest(
+        createdAt: j['created_at'] == null ? null : DateTime.parse(j['created_at'] as String),
+        description: j['description'],
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        from: j['from'] == null ? null : j['from'] as String,
+        id: j['id'] as String,
+        member: j['member'] == null ? null : j['member'] as String,
+        prefill: j['prefill'] == null ? null : j['prefill'] as Map<String, dynamic>,
+        role: j['role'] == null ? null : j['role'] as String,
+        runId: j['run_id'] as String,
+        schema: j['schema'] as Map<String, dynamic>,
+        status: j['status'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': ?createdAt?.toUtc().toIso8601String(),
+        'description': ?description,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'from': ?from,
+        'id': id,
+        'member': ?member,
+        'prefill': ?prefill,
+        'role': ?role,
+        'run_id': runId,
+        'schema': schema,
+        'status': status,
+        'title': title,
+      };
+}
+
+class AnswerFormRequestRequest {
+  const AnswerFormRequestRequest({this.answers, this.device});
+
+  /// The answers by field. A location field (device fields) takes {lat, lng,
+  /// accuracy_m, at, fix} read at the tap, {address} typed where the field
+  /// allows it, or {state refused or unavailable, reason}; its source, state
+  /// and coarse are set by the server.
+  final Map<String, dynamic>? answers;
+  final FormDevice? device;
+
+  factory AnswerFormRequestRequest.fromJson(Map<String, dynamic> j) => AnswerFormRequestRequest(
+        answers: j['answers'] == null ? null : j['answers'] as Map<String, dynamic>,
+        device: j['device'] == null ? null : FormDevice.fromJson(j['device'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answers': ?answers,
+        'device': ?device?.toJson(),
+      };
+}
+
+/// The app or the web that answered, and its clock (docs/spec/device-fields.md
+/// §3). The server keeps the time it received the answer beside it, and marks
+/// clock_differs when the two differ beyond what offline explains.
+class FormDevice {
+  const FormDevice({this.app, this.at, this.online, this.version});
+
+  /// app is the phone app; anything else is taken as web
+  final String? app;
+  /// When the answer was made, by the device's clock
+  final DateTime? at;
+  /// false for an answer made offline and sent later
+  final bool? online;
+  final String? version;
+
+  factory FormDevice.fromJson(Map<String, dynamic> j) => FormDevice(
+        app: j['app'] == null ? null : j['app'] as String,
+        at: j['at'] == null ? null : DateTime.parse(j['at'] as String),
+        online: j['online'] == null ? null : j['online'] as bool,
+        version: j['version'] == null ? null : j['version'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'app': ?app,
+        'at': ?at?.toUtc().toIso8601String(),
+        'online': ?online,
+        'version': ?version,
+      };
+}
+
+class AnswerFormRequestResponse {
+  const AnswerFormRequestResponse({required this.submission});
+
+  final FormSubmission submission;
+
+  factory AnswerFormRequestResponse.fromJson(Map<String, dynamic> j) => AnswerFormRequestResponse(
+        submission: FormSubmission.fromJson(j['submission'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'submission': submission.toJson(),
+      };
+}
+
+class FormSubmission {
+  const FormSubmission({required this.answers, required this.channel, required this.createdAt, this.files, this.formId, required this.id, this.message, this.note, required this.reference, this.requestId, required this.respondent, this.runId, required this.status});
+
+  /// Personal values masked as {masked, category} unless revealed
+  final Map<String, dynamic> answers;
+  final String channel;
+  final DateTime createdAt;
+  final List<FormSubmissionFilesItem>? files;
+  final Object? formId;
+  final String id;
+  final Object? message;
+  final Object? note;
+  final String reference;
+  final Object? requestId;
+  final Map<String, dynamic> respondent;
+  final Object? runId;
+  final String status;
+
+  factory FormSubmission.fromJson(Map<String, dynamic> j) => FormSubmission(
+        answers: j['answers'] as Map<String, dynamic>,
+        channel: j['channel'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        files: j['files'] == null ? null : (j['files'] as List).map((e) => FormSubmissionFilesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        formId: j['form_id'],
+        id: j['id'] as String,
+        message: j['message'],
+        note: j['note'],
+        reference: j['reference'] as String,
+        requestId: j['request_id'],
+        respondent: j['respondent'] as Map<String, dynamic>,
+        runId: j['run_id'],
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answers': answers,
+        'channel': channel,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'files': ?files?.map((e) => e.toJson()).toList(),
+        'form_id': ?formId,
+        'id': id,
+        'message': ?message,
+        'note': ?note,
+        'reference': reference,
+        'request_id': ?requestId,
+        'respondent': respondent,
+        'run_id': ?runId,
+        'status': status,
+      };
+}
+
+class FormSubmissionFilesItem {
+  const FormSubmissionFilesItem({this.field, this.id, this.name, this.size, this.type});
+
+  final String? field;
+  final String? id;
+  final String? name;
+  final int? size;
+  final String? type;
+
+  factory FormSubmissionFilesItem.fromJson(Map<String, dynamic> j) => FormSubmissionFilesItem(
+        field: j['field'] == null ? null : j['field'] as String,
+        id: j['id'] == null ? null : j['id'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        size: j['size'] == null ? null : (j['size'] as num).toInt(),
+        type: j['type'] == null ? null : j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'field': ?field,
+        'id': ?id,
+        'name': ?name,
+        'size': ?size,
+        'type': ?type,
+      };
+}
+
+class PressToolButtonResponse {
+  const PressToolButtonResponse({required this.button, required this.command, required this.inputs, required this.name, required this.once});
+
+  final String button;
+  final String command;
+  final Map<String, dynamic> inputs;
+  final String name;
+  final bool once;
+
+  factory PressToolButtonResponse.fromJson(Map<String, dynamic> j) => PressToolButtonResponse(
+        button: j['button'] as String,
+        command: j['command'] as String,
+        inputs: j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        once: j['once'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'button': button,
+        'command': command,
+        'inputs': inputs,
+        'name': name,
+        'once': once,
+      };
+}
+
+class PageList {
+  const PageList({required this.canEdit, required this.canPublish, required this.maxPages, required this.maxPinned, required this.pages});
+
+  final bool canEdit;
+  final bool canPublish;
+  /// The plan's limit, drafts counted (0 no limit).
+  final int maxPages;
+  final int maxPinned;
+  final List<PageSummary> pages;
+
+  factory PageList.fromJson(Map<String, dynamic> j) => PageList(
+        canEdit: j['can_edit'] as bool,
+        canPublish: j['can_publish'] as bool,
+        maxPages: (j['max_pages'] as num).toInt(),
+        maxPinned: (j['max_pinned'] as num).toInt(),
+        pages: (j['pages'] as List).map((e) => PageSummary.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'can_edit': canEdit,
+        'can_publish': canPublish,
+        'max_pages': maxPages,
+        'max_pinned': maxPinned,
+        'pages': pages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PageSummary {
+  const PageSummary({required this.about, required this.hasDraft, required this.icon, required this.name, required this.pinned, this.place, required this.published, this.publishedAt, required this.roles, required this.title, required this.updatedAt, this.version});
+
+  final String about;
+  final bool hasDraft;
+  final String icon;
+  final String name;
+  final bool pinned;
+  /// The area the published page is a tab under, after Taskiem's own tabs,
+  /// while that area is on (pages §9).
+  final String? place;
+  final bool published;
+  final DateTime? publishedAt;
+  /// Who may open it (owners always; empty, everyone in the business).
+  final List<String> roles;
+  final String title;
+  final DateTime updatedAt;
+  /// The published version.
+  final Object? version;
+
+  factory PageSummary.fromJson(Map<String, dynamic> j) => PageSummary(
+        about: j['about'] as String,
+        hasDraft: j['has_draft'] as bool,
+        icon: j['icon'] as String,
+        name: j['name'] as String,
+        pinned: j['pinned'] as bool,
+        place: j['place'] == null ? null : j['place'] as String,
+        published: j['published'] as bool,
+        publishedAt: j['published_at'] == null ? null : DateTime.parse(j['published_at'] as String),
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        title: j['title'] as String,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+        version: j['version'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': about,
+        'has_draft': hasDraft,
+        'icon': icon,
+        'name': name,
+        'pinned': pinned,
+        'place': ?place,
+        'published': published,
+        'published_at': ?publishedAt?.toUtc().toIso8601String(),
+        'roles': roles.map((e) => e).toList(),
+        'title': title,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+        'version': ?version,
+      };
+}
+
+class PageDrawing {
+  const PageDrawing({required this.blocks, required this.canEdit, required this.draft, required this.drawnAt, required this.filters, required this.page});
+
+  final List<PageBlock> blocks;
+  final bool canEdit;
+  /// Whether this is the draft.
+  final bool draft;
+  final DateTime drawnAt;
+  final List<PageFilter> filters;
+  final PageSummary page;
+
+  factory PageDrawing.fromJson(Map<String, dynamic> j) => PageDrawing(
+        blocks: (j['blocks'] as List).map((e) => PageBlock.fromJson(e as Map<String, dynamic>)).toList(),
+        canEdit: j['can_edit'] as bool,
+        draft: j['draft'] as bool,
+        drawnAt: DateTime.parse(j['drawn_at'] as String),
+        filters: (j['filters'] as List).map((e) => PageFilter.fromJson(e as Map<String, dynamic>)).toList(),
+        page: PageSummary.fromJson(j['page'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocks': blocks.map((e) => e.toJson()).toList(),
+        'can_edit': canEdit,
+        'draft': draft,
+        'drawn_at': drawnAt.toUtc().toIso8601String(),
+        'filters': filters.map((e) => e.toJson()).toList(),
+        'page': page.toJson(),
+      };
+}
+
+/// One part as drawn. A heading has title and text; a figure label, value,
+/// shown, tone, lead, naira and maybe change and over; a list or table title,
+/// size, empty, count, rows, more and has_detail (a list groups, a table
+/// columns and order). G2 adds buttons (title, actions), a status (title, run,
+/// status, words, tone, started_at, ended_at, waiting_for) and parts a tool
+/// works out (from_tool; worked_at, or working while it runs). broken, error or
+/// unavailable replace the rest.
+class PageBlock {
+  const PageBlock({this.actions, this.alert, this.broken, this.change, this.columns, this.count, this.empty, this.endedAt, this.error, this.fromTool, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.run, this.shown, this.size, this.startedAt, this.status, this.tableId, this.text, this.title, this.tone, required this.type, this.unavailable, this.value, this.waitingFor, this.words, this.workedAt, this.working});
+
+  /// The page's own buttons (a buttons part).
+  final List<PageAction>? actions;
+  /// A figure that counts and is an alert while above zero.
+  final bool? alert;
+  /// For editors, why this part cannot be drawn ("This part needs fixing").
+  final String? broken;
+  final PageBlockChange? change;
+  final List<PageBlockColumnsItem>? columns;
+  /// How many rows match, beyond those shown.
+  final int? count;
+  final String? empty;
+  final DateTime? endedAt;
+  /// Why this part could not be read just now.
+  final String? error;
+  /// The part is worked out by a made tool.
+  final bool? fromTool;
+  final List<PageBlockGroupsItem>? groups;
+  final bool? hasDetail;
+  final String id;
+  final String? label;
+  final bool? lead;
+  /// The cursor for the next rows; null at the end.
+  final Object? more;
+  final bool? naira;
+  final PageBlockOrder? order;
+  /// Said when a sum stopped at its first 5,000 rows.
+  final String? over;
+  final List<PageRow>? rows;
+  /// A status part's run, with its times and who it waits for, only for a
+  /// caller with run.read (status and words are for every viewer).
+  final String? run;
+  /// The figure as drawn (a count, or naira).
+  final String? shown;
+  final String? size;
+  final DateTime? startedAt;
+  /// A status part's run's state (queued, running, waiting, completed, failed,
+  /// cancelled).
+  final String? status;
+  /// A table part with yes/no columns the caller may tick here, its table
+  /// (PATCH /v1/tables/{id}/rows/{row}).
+  final String? tableId;
+  final String? text;
+  final String? title;
+  final String? tone;
+  final String type;
+  /// In place of a part over Taskiem's own records, why it is not drawn for
+  /// this caller ("You cannot see orders.", or the area is turned off).
+  final String? unavailable;
+  final double? value;
+  final List<ToolAnswerWait>? waitingFor;
+  /// A status part's state in plain words.
+  final String? words;
+  /// When the tool worked it out (Refresh works it out again).
+  final DateTime? workedAt;
+  /// The tool has not answered yet ("Still working…"); read the page again.
+  final String? working;
+
+  factory PageBlock.fromJson(Map<String, dynamic> j) => PageBlock(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => PageAction.fromJson(e as Map<String, dynamic>)).toList(),
+        alert: j['alert'] == null ? null : j['alert'] as bool,
+        broken: j['broken'] == null ? null : j['broken'] as String,
+        change: j['change'] == null ? null : PageBlockChange.fromJson(j['change'] as Map<String, dynamic>),
+        columns: j['columns'] == null ? null : (j['columns'] as List).map((e) => PageBlockColumnsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        count: j['count'] == null ? null : (j['count'] as num).toInt(),
+        empty: j['empty'] == null ? null : j['empty'] as String,
+        endedAt: j['ended_at'] == null ? null : DateTime.parse(j['ended_at'] as String),
+        error: j['error'] == null ? null : j['error'] as String,
+        fromTool: j['from_tool'] == null ? null : j['from_tool'] as bool,
+        groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => PageBlockGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        hasDetail: j['has_detail'] == null ? null : j['has_detail'] as bool,
+        id: j['id'] as String,
+        label: j['label'] == null ? null : j['label'] as String,
+        lead: j['lead'] == null ? null : j['lead'] as bool,
+        more: j['more'],
+        naira: j['naira'] == null ? null : j['naira'] as bool,
+        order: j['order'] == null ? null : PageBlockOrder.fromJson(j['order'] as Map<String, dynamic>),
+        over: j['over'] == null ? null : j['over'] as String,
+        rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => PageRow.fromJson(e as Map<String, dynamic>)).toList(),
+        run: j['run'] == null ? null : j['run'] as String,
+        shown: j['shown'] == null ? null : j['shown'] as String,
+        size: j['size'] == null ? null : j['size'] as String,
+        startedAt: j['started_at'] == null ? null : DateTime.parse(j['started_at'] as String),
+        status: j['status'] == null ? null : j['status'] as String,
+        tableId: j['table_id'] == null ? null : j['table_id'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+        title: j['title'] == null ? null : j['title'] as String,
+        tone: j['tone'] == null ? null : j['tone'] as String,
+        type: j['type'] as String,
+        unavailable: j['unavailable'] == null ? null : j['unavailable'] as String,
+        value: j['value'] == null ? null : (j['value'] as num).toDouble(),
+        waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
+        words: j['words'] == null ? null : j['words'] as String,
+        workedAt: j['worked_at'] == null ? null : DateTime.parse(j['worked_at'] as String),
+        working: j['working'] == null ? null : j['working'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
+        'alert': ?alert,
+        'broken': ?broken,
+        'change': ?change?.toJson(),
+        'columns': ?columns?.map((e) => e.toJson()).toList(),
+        'count': ?count,
+        'empty': ?empty,
+        'ended_at': ?endedAt?.toUtc().toIso8601String(),
+        'error': ?error,
+        'from_tool': ?fromTool,
+        'groups': ?groups?.map((e) => e.toJson()).toList(),
+        'has_detail': ?hasDetail,
+        'id': id,
+        'label': ?label,
+        'lead': ?lead,
+        'more': ?more,
+        'naira': ?naira,
+        'order': ?order?.toJson(),
+        'over': ?over,
+        'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'run': ?run,
+        'shown': ?shown,
+        'size': ?size,
+        'started_at': ?startedAt?.toUtc().toIso8601String(),
+        'status': ?status,
+        'table_id': ?tableId,
+        'text': ?text,
+        'title': ?title,
+        'tone': ?tone,
+        'type': type,
+        'unavailable': ?unavailable,
+        'value': ?value,
+        'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
+        'words': ?words,
+        'worked_at': ?workedAt?.toUtc().toIso8601String(),
+        'working': ?working,
+      };
+}
+
+/// A button as drawn (G2). Pressed with POST /v1/pages/{name}/act, by its place
+/// among the part's buttons.
+class PageAction {
+  const PageAction({this.disabled, required this.index, required this.kind, required this.label, this.tool});
+
+  /// Why the caller cannot use it (the tool's roles); drawn greyed with this.
+  final String? disabled;
+  final int index;
+  final String kind;
+  final String label;
+  /// The tool a tool's button opens.
+  final String? tool;
+
+  factory PageAction.fromJson(Map<String, dynamic> j) => PageAction(
+        disabled: j['disabled'] == null ? null : j['disabled'] as String,
+        index: (j['index'] as num).toInt(),
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+        tool: j['tool'] == null ? null : j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'disabled': ?disabled,
+        'index': index,
+        'kind': kind,
+        'label': label,
+        'tool': ?tool,
+      };
+}
+
+class PageBlockChange {
+  const PageBlockChange({required this.before, required this.down, required this.up, required this.words});
+
+  final double before;
+  final bool down;
+  final bool up;
+  /// "up 12% on last week"
+  final String words;
+
+  factory PageBlockChange.fromJson(Map<String, dynamic> j) => PageBlockChange(
+        before: (j['before'] as num).toDouble(),
+        down: j['down'] as bool,
+        up: j['up'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'before': before,
+        'down': down,
+        'up': up,
+        'words': words,
+      };
+}
+
+class PageBlockColumnsItem {
+  const PageBlockColumnsItem({required this.column, this.edit, required this.label, required this.naira, required this.sortable});
+
+  final String column;
+  /// A yes/no column the caller may tick here (G2).
+  final bool? edit;
+  final String label;
+  final bool naira;
+  /// Whether the rows may be put in this column's order (`order`) by this
+  /// caller; never a personal column for a caller without table.read.
+  final bool sortable;
+
+  factory PageBlockColumnsItem.fromJson(Map<String, dynamic> j) => PageBlockColumnsItem(
+        column: j['column'] as String,
+        edit: j['edit'] == null ? null : j['edit'] as bool,
+        label: j['label'] as String,
+        naira: j['naira'] as bool,
+        sortable: j['sortable'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'column': column,
+        'edit': ?edit,
+        'label': label,
+        'naira': naira,
+        'sortable': sortable,
+      };
+}
+
+class PageBlockGroupsItem {
+  const PageBlockGroupsItem({required this.key, required this.label});
+
+  final String key;
+  final String label;
+
+  factory PageBlockGroupsItem.fromJson(Map<String, dynamic> j) => PageBlockGroupsItem(
+        key: j['key'] as String,
+        label: j['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label,
+      };
+}
+
+class PageBlockOrder {
+  const PageBlockOrder({required this.column, required this.desc});
+
+  final String column;
+  final bool desc;
+
+  factory PageBlockOrder.fromJson(Map<String, dynamic> j) => PageBlockOrder(
+        column: j['column'] as String,
+        desc: j['desc'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'column': column,
+        'desc': desc,
+      };
+}
+
+class PageRow {
+  const PageRow({this.actions, this.cells, this.detail, this.group, required this.id, this.link, this.state, this.sub, this.ticks, this.title});
+
+  /// The row's buttons that show for it (G2; when hides one), drawn on the row
+  /// and its card.
+  final List<PageAction>? actions;
+  /// A table's cells, in its columns' order, written as people read them.
+  final List<String>? cells;
+  final PageRowDetail? detail;
+  /// The key of the group the row is under (a grouped list).
+  final String? group;
+  final String id;
+  /// A row of Taskiem's own records (an order, an invoice) links to the
+  /// record's own screen, as the web's address (/storefront/orders/AD-12,
+  /// /invoices/INV-0001); the app opens it too.
+  final String? link;
+  final PageRowState? state;
+  final String? sub;
+  /// A table's yes/no cells the caller may tick here (table.edit, a column
+  /// marked edit), by the column's place; null for the others.
+  final List<Object?>? ticks;
+  final String? title;
+
+  factory PageRow.fromJson(Map<String, dynamic> j) => PageRow(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => PageAction.fromJson(e as Map<String, dynamic>)).toList(),
+        cells: j['cells'] == null ? null : (j['cells'] as List).map((e) => e as String).toList(),
+        detail: j['detail'] == null ? null : PageRowDetail.fromJson(j['detail'] as Map<String, dynamic>),
+        group: j['group'] == null ? null : j['group'] as String,
+        id: j['id'] as String,
+        link: j['link'] == null ? null : j['link'] as String,
+        state: j['state'] == null ? null : PageRowState.fromJson(j['state'] as Map<String, dynamic>),
+        sub: j['sub'] == null ? null : j['sub'] as String,
+        ticks: j['ticks'] == null ? null : (j['ticks'] as List).map((e) => e).toList(),
+        title: j['title'] == null ? null : j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
+        'cells': ?cells?.map((e) => e).toList(),
+        'detail': ?detail?.toJson(),
+        'group': ?group,
+        'id': id,
+        'link': ?link,
+        'state': ?state?.toJson(),
+        'sub': ?sub,
+        'ticks': ?ticks?.map((e) => e).toList(),
+        'title': ?title,
+      };
+}
+
+class PageRowDetail {
+  const PageRowDetail({required this.lines, required this.title});
+
+  final List<PageRowDetailLinesItem> lines;
+  final String title;
+
+  factory PageRowDetail.fromJson(Map<String, dynamic> j) => PageRowDetail(
+        lines: (j['lines'] as List).map((e) => PageRowDetailLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'title': title,
+      };
+}
+
+class PageRowDetailLinesItem {
+  const PageRowDetailLinesItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory PageRowDetailLinesItem.fromJson(Map<String, dynamic> j) => PageRowDetailLinesItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+      };
+}
+
+class PageRowState {
+  const PageRowState({required this.text, required this.tone});
+
+  final String text;
+  final String tone;
+
+  factory PageRowState.fromJson(Map<String, dynamic> j) => PageRowState(
+        text: j['text'] as String,
+        tone: j['tone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'tone': tone,
+      };
+}
+
+class PageFilter {
+  const PageFilter({required this.id, required this.label, this.options, required this.type, required this.value});
+
+  final String id;
+  final String label;
+  final List<PageFilterOptionsItem>? options;
+  final String type;
+  /// The value the page was drawn with; empty for none.
+  final String value;
+
+  factory PageFilter.fromJson(Map<String, dynamic> j) => PageFilter(
+        id: j['id'] as String,
+        label: j['label'] as String,
+        options: j['options'] == null ? null : (j['options'] as List).map((e) => PageFilterOptionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        type: j['type'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'options': ?options?.map((e) => e.toJson()).toList(),
+        'type': type,
+        'value': value,
+      };
+}
+
+class PageFilterOptionsItem {
+  const PageFilterOptionsItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  factory PageFilterOptionsItem.fromJson(Map<String, dynamic> j) => PageFilterOptionsItem(
+        label: j['label'] as String,
+        value: j['value'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'value': value,
+      };
+}
+
+class PageActRequest {
+  const PageActRequest({required this.action, required this.block, this.row, this.yes});
+
+  final int action;
+  final String block;
+  /// The row's id as drawn (none for the page's own buttons).
+  final String? row;
+  /// The person said Yes to a signal.
+  final bool? yes;
+
+  factory PageActRequest.fromJson(Map<String, dynamic> j) => PageActRequest(
+        action: (j['action'] as num).toInt(),
+        block: j['block'] as String,
+        row: j['row'] == null ? null : j['row'] as String,
+        yes: j['yes'] == null ? null : j['yes'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': action,
+        'block': block,
+        'row': ?row,
+        'yes': ?yes,
+      };
+}
+
+class PageActResult {
+  const PageActResult({this.approval, this.asks, required this.kind, this.run, this.sent, this.tool, this.words});
+
+  final Approval? approval;
+  /// A signal not sent yet: the question to say Yes to (press again with yes).
+  final String? asks;
+  final String kind;
+  final String? run;
+  final bool? sent;
+  /// The tool to open and the values it fills in (a value shown masked is left
+  /// out, to be asked); start it with POST /v1/tools/{command}/start and this
+  /// button.
+  final PageActResultTool? tool;
+  final String? words;
+
+  factory PageActResult.fromJson(Map<String, dynamic> j) => PageActResult(
+        approval: j['approval'] == null ? null : Approval.fromJson(j['approval'] as Map<String, dynamic>),
+        asks: j['asks'] == null ? null : j['asks'] as String,
+        kind: j['kind'] as String,
+        run: j['run'] == null ? null : j['run'] as String,
+        sent: j['sent'] == null ? null : j['sent'] as bool,
+        tool: j['tool'] == null ? null : PageActResultTool.fromJson(j['tool'] as Map<String, dynamic>),
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approval': ?approval?.toJson(),
+        'asks': ?asks,
+        'kind': kind,
+        'run': ?run,
+        'sent': ?sent,
+        'tool': ?tool?.toJson(),
+        'words': ?words,
+      };
+}
+
+/// The tool to open and the values it fills in (a value shown masked is left
+/// out, to be asked); start it with POST /v1/tools/{command}/start and this
+/// button.
+class PageActResultTool {
+  const PageActResultTool({required this.button, required this.command, required this.inputs, required this.name, required this.once});
+
+  final String button;
+  final String command;
+  final Map<String, dynamic> inputs;
+  final String name;
+  final bool once;
+
+  factory PageActResultTool.fromJson(Map<String, dynamic> j) => PageActResultTool(
+        button: j['button'] as String,
+        command: j['command'] as String,
+        inputs: j['inputs'] as Map<String, dynamic>,
+        name: j['name'] as String,
+        once: j['once'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'button': button,
+        'command': command,
+        'inputs': inputs,
+        'name': name,
+        'once': once,
       };
 }
 

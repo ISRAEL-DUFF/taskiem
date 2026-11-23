@@ -15,6 +15,7 @@ import 'package:taskiem/chat/words.dart' show Tone;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'saved_stub.dart';
 import 'support.dart';
 
 var noTimes = false;
@@ -46,7 +47,7 @@ void main() {
     expect(Notice.of(120).hours, isTrue);
   });
 
-  Future<List<String>> open(WidgetTester t) async {
+  Future<List<String>> open(WidgetTester t, {SavedStub? stub}) async {
     t.view.physicalSize = const Size(390, 5000);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -76,6 +77,7 @@ void main() {
     final chats = ChatsData(
       f.auth(also: (req) async {
         final p = req.url.path;
+        if (stub?.answer(req) case final r?) return r;
         if (req.method == 'GET') {
           if (p == '/v1/storefront') return ok(sf);
           if (p == '/v1/storefront/services') {
@@ -198,6 +200,37 @@ void main() {
     await settle(t);
     expect(sent.single, 'POST /v1/storefront/bookings/BK-1/move {"starts_at":"2099-11-14T11:00:00+01:00"}');
     expect(find.text('BK-1 is moved to Sat 14 Nov, 11:00; the customer is told.'), findsOneWidget);
+  });
+
+  testWidgets('free times not read: the new date from a date saved on a thing', (t) async {
+    noTimes = true;
+    addTearDown(() => noTimes = false);
+    final stub = SavedStub(
+      business: [savedThing('C1', 'business', 'custom', 'van', 'The van', 'LND 123', const {}, kindId: 'K1', values: {'service_due': '2099-11-14'})],
+      kinds: [
+        savedKind('K1', 'Van', [
+          {'key': 'service_due', 'label': 'Service due', 'type': 'date'},
+        ]),
+      ],
+    );
+    final sent = await open(t, stub: stub);
+    await t.tap(find.bySemanticsLabel(RegExp('^Move or cancel Braids BK-1')));
+    await settle(t);
+    await t.tap(find.text('Type a day and time instead'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick a date from your saved things'));
+    await settle(t);
+    expect(find.text('@van · Service due · 14 Nov 2099'), findsOneWidget);
+    expect(stub.calls, containsAll(['GET /v1/me/saved-kinds', 'GET /v1/saved-kinds']));
+    await t.tap(find.text('@van · Service due · 14 Nov 2099'));
+    await t.pumpAndSettle();
+    final inModal = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(inModal.at(0)).controller.text, '2099-11-14');
+    await t.enterText(inModal.at(1), '11:00');
+    await t.pump();
+    await t.tap(find.descendant(of: find.byType(TkModal), matching: find.bySemanticsLabel('Move')).first);
+    await settle(t);
+    expect(sent.single, 'POST /v1/storefront/bookings/BK-1/move {"starts_at":"2099-11-14T11:00:00+01:00"}');
   });
 
   testWidgets('the hours: Monday 09:00 to 17:00 kept, Tuesday opened, auto-confirm; past days off removed; saved as the API takes them', (t) async {

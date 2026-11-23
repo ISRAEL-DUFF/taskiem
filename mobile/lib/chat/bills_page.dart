@@ -25,6 +25,7 @@ import 'approve.dart' show TkTextBox;
 import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show fmtTime, shortDay;
 import 'money_sheets.dart' show billHero, billStatus, canPay, sentLine;
+import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill, payWayWords;
 import 'things_page.dart' show ThingsPage;
 import 'treat_line.dart' show LineMark;
 import 'words.dart' show naira;
@@ -380,8 +381,25 @@ class _BillPageState extends State<BillPage> with Polling {
     final manage = _auth.can('invoice.manage');
     final sent = sentLine(b);
     final lines = _maps(b['lines']);
+    final transfer = b['transfer'] is Map ? _str((b['transfer'] as Map)['state']) : '';
     return [
       _top(context, b, h, manage),
+      // Paying by transfer: the number asked for, kept up to date (the
+      // card the chat shows).
+      if (manage && transfer.isNotEmpty && transfer != 'paid')
+        TkSection(
+          title: 'By transfer',
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: TransferLive(
+                key: ValueKey('transfer ${b['id']}'),
+                source: BillTransferSource(_auth, _str(b['id']), number: _str(b['reference'])),
+                onNext: (next) => openBill(context, _auth, next),
+              ),
+            ),
+          ],
+        ),
       if (_int(b['paying_kobo']) > 0)
         _box(t, 'A payment of ${naira(_int(b['paying_kobo']))} from Taskiem is under way: it waits for approval, then for the bank.'),
       if (sent.isNotEmpty) Text(sent, style: tkHint(t)),
@@ -524,6 +542,7 @@ class _BillPageState extends State<BillPage> with Polling {
     final s = _pay;
     final ready = s != null && _str(s['workflow_id']).isNotEmpty;
     final pays = manage && canPay(b);
+    final ways = [for (final w in (b['ways_to_pay'] as List? ?? const [])) if (w is String) w];
     return TkTopCard(
       semanticsLabel: 'What is left to pay',
       child: Column(
@@ -537,8 +556,37 @@ class _BillPageState extends State<BillPage> with Polling {
             const SizedBox(height: 12),
             TkProgress(h.paid, color: look.lime, semanticsLabel: '${(h.paid * 100).round()}% paid'),
           ],
-          if (pays && s == null && _payError != null) ...[const SizedBox(height: 12), TkErrorBox(_payError!)],
-          if (pays && s != null) ...[
+          // The ways it can be paid now (the payments flow, part 1): Pay
+          // opens them in a small sheet, by transfer first.
+          if (manage && ways.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TkSmallButton(
+                    label: 'Pay ${naira(_int(b['due_kobo']))}',
+                    primary: true,
+                    onPressed: _busy
+                        ? null
+                        : () => payBill(
+                            context,
+                            auth: _auth,
+                            bill: _str(b['id']),
+                            onSent: _load,
+                            onHowToPay: (_, _) {},
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              ways.length == 1 ? payWayWords(ways.first).title : '${payWayWords(ways.first).title}, or ${ways.length == 2 ? 'one other way' : '${ways.length - 1} other ways'}.',
+              style: tkText(size: 12.5, lineHeight: 1.4, color: t.muted),
+            ),
+          ],
+          if (pays && ways.isEmpty && s == null && _payError != null) ...[const SizedBox(height: 12), TkErrorBox(_payError!)],
+          if (pays && ways.isEmpty && s != null) ...[
             const SizedBox(height: 14),
             Row(
               children: [

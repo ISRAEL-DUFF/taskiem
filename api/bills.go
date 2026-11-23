@@ -44,6 +44,8 @@ func (s *Server) billRoutes(r chi.Router) {
 	r.With(read).Get("/bills/{id}", s.getBill)
 	r.With(read).Get("/bills/{id}/payments", s.listBillPayments)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/pay", s.payBill)
+	r.With(manage, s.tenantWide).Post("/bills/{id}/transfer", s.askBillTransfer)
+	r.With(manage).Get("/bills/{id}/transfer", s.getBillTransfer)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/payments/{payment}/confirm-pair", s.confirmBillPair)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/declare", s.declareBillPaid)
 	r.With(manage, s.tenantWide).Post("/bills/{id}/query", s.queryBill)
@@ -51,7 +53,7 @@ func (s *Server) billRoutes(r chi.Router) {
 }
 
 type billsOut struct {
-	Bills []links.Bill `json:"bills"`
+	Bills []billWithWays `json:"bills"`
 }
 
 func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
@@ -62,9 +64,19 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 	}
 	var out billsOut
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		out.Bills, err = links.ListBillsTx(r.Context(), tx, status, 200)
-		return err
+		list, err := links.ListBillsTx(r.Context(), tx, status, 200)
+		if err != nil {
+			return err
+		}
+		out.Bills = make([]billWithWays, 0, len(list))
+		for _, b := range list {
+			v, err := s.billView(r.Context(), tx, principalFrom(r.Context()), b)
+			if err != nil {
+				return err
+			}
+			out.Bills = append(out.Bills, v)
+		}
+		return nil
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -73,10 +85,13 @@ func (s *Server) listBills(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBill(w http.ResponseWriter, r *http.Request) {
-	var b links.Bill
+	var b billWithWays
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		var err error
-		b, err = links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		x, err := links.GetBillTx(r.Context(), tx, chi.URLParam(r, "id"))
+		if err != nil {
+			return err
+		}
+		b, err = s.billView(r.Context(), tx, principalFrom(r.Context()), x)
 		return err
 	}); err != nil {
 		s.fail(w, r, billErr(err))
@@ -340,6 +355,7 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	var buyer, link uuid.UUID
 	var created bool
 	var bill links.Mirror
+	var transferTold string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
 		clear := func() error {
 			_, err := tx.Exec(ctx, `DELETE FROM link_mirrors_due WHERE tenant_id = $1 AND invoice_id = $2`, seller, invoice)
@@ -389,6 +405,30 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 				return err
 			}
 		}
+		// Paying by transfer: whether the seller's provider gives a number
+		// for one payment, and the newest the invoice has.
+		// (A connection that could not be read just now keeps what the bill
+		// had.)
+		if s.Invoices.Rails != nil {
+			if rl, err := s.Invoices.Rails.Resolve(ctx, seller, x.Connection); err == nil {
+				on := rl.Transfer != nil
+				longer := on && rl.Transfer.MaxMinutes > invoicing.AccountMinutes
+				bill.PayByTransfer, bill.TransferLonger = &on, &longer
+			}
+		}
+		all, err := invoicing.Accounts(ctx, tx, x.ID)
+		if err != nil {
+			return err
+		}
+		for _, a := range all {
+			// The newest number given (a failed ask on the seller's own page
+			// is not the buyer's to see).
+			if a.Kind == "transfer" && a.AccountNumber != "" && (a.Status == "open" || a.Status == "paid") {
+				bill.Transfer = &links.BillTransfer{Seq: a.Seq, BankName: a.BankName, AccountNumber: a.AccountNumber, AccountName: a.AccountName,
+					AmountKobo: a.AmountKobo, Status: a.Status, ExpiresAt: a.ExpiresAt, PaidAt: x.PaidAt, CreatedAt: a.CreatedAt}
+				break
+			}
+		}
 		if err := clear(); err != nil {
 			return err
 		}
@@ -401,6 +441,25 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if created, err = links.MirrorBillTx(ctx, tx, buyer, bill); err != nil {
 			return err
 		}
+		// A number paid into: both chats told once, paid in full or part.
+		if t := bill.Transfer; t != nil && !bill.Voided {
+			event := ""
+			switch {
+			case bill.PaidKobo >= bill.AmountKobo:
+				event = "transfer_paid"
+			case t.Status == "paid":
+				event = "transfer_part"
+			}
+			if event != "" {
+				told, err := links.TellTransferTx(ctx, tx, buyer, link, x.ID, fmt.Sprintf("%d:%s", t.Seq, event))
+				if err != nil {
+					return err
+				}
+				if told {
+					transferTold = event
+				}
+			}
+		}
 		// Its stock lines take Stock bought, as an order paid by hand
 		// does, so the spending report does not depend on that.
 		return spend.BillLabelsTx(ctx, tx, buyer, link, bill.Lines, "system:link-mirror")
@@ -412,6 +471,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 	}
 	if err != nil || link == uuid.Nil {
 		return false, err
+	}
+	if transferTold != "" {
+		s.background(ctx, "bill transfer paid", func(ctx context.Context) {
+			paid := bill.PaidKobo
+			s.billCards(ctx, link, seller, buyer, bill.Reference, transferTold, false, &paid, "")
+		})
 	}
 	if created {
 		s.background(ctx, "bill arrived", func(ctx context.Context) {
@@ -599,6 +664,10 @@ func billWords(l lang.Tag, b links.Mirror) (string, string) {
 // an invoice, as before: the last word is not an invoice number).
 func (s *Server) waBillCommand(ctx context.Context, c *chat, text, cmd string) (bool, error) {
 	f := strings.Fields(text)
+	// "pay INV-0042": an account number to pay the bill by transfer.
+	if len(f) >= 2 && strings.EqualFold(f[0], "pay") && billNumberRe.MatchString(f[len(f)-1]) {
+		return s.waPayBill(ctx, c, strings.Join(f[1:], " "))
+	}
 	one := len(f) >= 2 && strings.EqualFold(f[0], "bill") && (len(f) == 2 || billNumberRe.MatchString(f[len(f)-1]))
 	switch {
 	case cmd == "bills" || cmd == "my bills" || cmd == "bills due":

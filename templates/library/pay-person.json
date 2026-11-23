@@ -1,0 +1,358 @@
+{
+  "id": "pay-person",
+  "title": "Pay one person, safely",
+  "summary": "Pays one person from your payments account once someone who may pay confirms it with a passkey; the name is checked with the bank first.",
+  "description": "Taskiem's own workflow for paying one person (Pay in Tools and the chat). The person paying confirms it with a passkey in Taskiem, which approves it here; over the payer's limit, or to an account changed since it was last paid, it waits for the owner's approval instead. Then the name on the account is checked with your connected account, the transfer is sent once (a retry never sends twice), Taskiem waits for the bank to confirm and records how it ended on the payment.",
+  "category": "payments",
+  "tags": [
+    "managed"
+  ],
+  "keywords": [
+    "pay someone",
+    "transfer"
+  ],
+  "requires": [],
+  "connectors": [
+    "payments@1",
+    "capability:pay_bank",
+    "capability:resolve_account"
+  ],
+  "variables": [],
+  "params": [
+    {
+      "name": "rail_connection",
+      "type": "connection",
+      "capability": [
+        "pay_bank",
+        "resolve_account"
+      ],
+      "title": "Pay from",
+      "description": "The payments account people are paid from: any you connected that can pay bank accounts.",
+      "required": false,
+      "default": "",
+      "example": ""
+    },
+    {
+      "name": "funding_account",
+      "type": "string",
+      "title": "Wallet to pay from",
+      "description": "Only for iswallet and Anchor, which hold several wallets: the one payments come out of. Leave it blank otherwise.",
+      "required": false,
+      "default": "",
+      "example": "",
+      "max_length": 100
+    }
+  ],
+  "definition": {
+    "schema": "wd/v1",
+    "id": "wf_payPerson",
+    "version": 1,
+    "name": "Pay one person, safely",
+    "trigger": {
+      "type": "manual"
+    },
+    "inputs": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "payment_id",
+          "payee",
+          "bank_code",
+          "account_number",
+          "amount_kobo",
+          "narration",
+          "purpose",
+          "needs_ok",
+          "account",
+          "needs",
+          "account_name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "payment_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "title": "Payment"
+          },
+          "payee": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "title": "Who",
+            "x-pii": "name"
+          },
+          "bank_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20,
+            "title": "Bank"
+          },
+          "account_number": {
+            "type": "string",
+            "pattern": "^[0-9]{10}$",
+            "title": "Account number",
+            "x-pii": "account_number"
+          },
+          "amount_kobo": {
+            "type": "integer",
+            "minimum": 100,
+            "title": "Amount (kobo)"
+          },
+          "narration": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "title": "What the transfer says"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "bill",
+              "wages",
+              "delivery",
+              "refund",
+              "stock",
+              "other"
+            ],
+            "title": "What for"
+          },
+          "needs_ok": {
+            "type": "boolean",
+            "title": "Needs the owner's OK"
+          },
+          "account": {
+            "type": "string",
+            "maxLength": 20,
+            "title": "The account, masked"
+          },
+          "needs": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Why the owner's OK is asked"
+          },
+          "account_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "The bank's name for the account",
+            "x-pii": "name"
+          }
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "approve",
+        "type": "approval",
+        "name": "Confirm the payment",
+        "config": {
+          "role": "owner",
+          "count": 1,
+          "timeout": "48h",
+          "on_timeout": "reject",
+          "subject": {
+            "payee": "=trigger.body.payee",
+            "account_name": "=trigger.body.account_name",
+            "account": "=trigger.body.account",
+            "amount_naira": "=double(trigger.body.amount_kobo) / 100.0",
+            "for": "=trigger.body.purpose",
+            "needs_ok": "=trigger.body.needs_ok",
+            "why": "=trigger.body.needs"
+          }
+        }
+      },
+      {
+        "id": "verify",
+        "type": "connector",
+        "name": "Check the payment is the one confirmed",
+        "connector": "payments@1",
+        "action": "check",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "amount_kobo": "=trigger.body.amount_kobo",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "needs_ok": "=trigger.body.needs_ok"
+        },
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision == 'approved'",
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_not_checked",
+              "type": "connector",
+              "name": "Record that the payment was stopped",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "rejected",
+                "reason": "Stopped before paying: it was not approved by whom it must be."
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "check_name",
+        "type": "capability",
+        "uses": "resolve_account",
+        "name": "Check the name on the account",
+        "connection": "{{rail_connection}}",
+        "input": {
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_no_name",
+              "type": "connector",
+              "name": "Record that the account was not found",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "failed",
+                "reason": "The bank did not find that account."
+              }
+            }
+          ]
+        },
+        "needs": [
+          "verify"
+        ]
+      },
+      {
+        "id": "pay",
+        "type": "capability",
+        "uses": "pay_bank",
+        "name": "Pay",
+        "connection": "{{rail_connection}}",
+        "needs": [
+          "check_name"
+        ],
+        "input": {
+          "amount_kobo": "=trigger.body.amount_kobo",
+          "bank_code": "=trigger.body.bank_code",
+          "account_number": "=trigger.body.account_number",
+          "account_name": "=steps.check_name.output.account_name",
+          "narration": "=trigger.body.narration",
+          "source": "{{funding_account}}"
+        },
+        "effect": {
+          "idempotency_seed": "='payment:' + trigger.body.payment_id"
+        },
+        "retry": {
+          "max": 8,
+          "backoff": "exponential",
+          "initial": "5s",
+          "max_delay": "10m",
+          "max_duration": "6h"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_not_paid",
+              "type": "connector",
+              "name": "Record that the payment could not be made",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "failed",
+                "account_name": "=steps.check_name.output.account_name"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "settle",
+        "type": "capability",
+        "uses": "await_settlement",
+        "name": "Wait for the bank to confirm",
+        "needs": [
+          "pay"
+        ],
+        "timeout": "72h",
+        "when": "=steps.pay.output.status == 'pending'",
+        "input": {
+          "payout_id": "=steps.pay.output.payout_id"
+        },
+        "on_error": {
+          "steps": [
+            {
+              "id": "record_unknown",
+              "type": "connector",
+              "name": "Record that the bank did not say",
+              "connector": "payments@1",
+              "action": "finish",
+              "input": {
+                "payment_id": "=trigger.body.payment_id",
+                "status": "unknown",
+                "account_name": "=steps.check_name.output.account_name",
+                "payout_id": "=steps.pay.output.payout_id"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "record_paid",
+        "type": "connector",
+        "name": "Record how the payment went",
+        "connector": "payments@1",
+        "action": "finish",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "=steps.pay.output.status == 'settled' ? 'paid' : 'failed'",
+          "account_name": "=steps.check_name.output.account_name",
+          "payout_id": "=steps.pay.output.payout_id",
+          "reason": "=steps.pay.output.?reason.orValue('')"
+        },
+        "needs": [
+          "pay"
+        ],
+        "when": "=steps.pay.output.status != 'pending'"
+      },
+      {
+        "id": "record_settled",
+        "type": "connector",
+        "name": "Record how the payment went",
+        "connector": "payments@1",
+        "action": "finish",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "=steps.settle.output.status == 'settled' ? 'paid' : 'failed'",
+          "account_name": "=steps.check_name.output.account_name",
+          "payout_id": "=steps.pay.output.payout_id",
+          "reason": "=steps.settle.output.?reason.orValue('')"
+        },
+        "needs": [
+          "settle"
+        ]
+      },
+      {
+        "id": "record_rejected",
+        "type": "connector",
+        "name": "Record that nothing was paid",
+        "connector": "payments@1",
+        "action": "finish",
+        "needs": [
+          "approve"
+        ],
+        "when": "=steps.approve.output.decision != 'approved'",
+        "input": {
+          "payment_id": "=trigger.body.payment_id",
+          "status": "rejected"
+        }
+      }
+    ],
+    "settings": {
+      "timeout": "7d"
+    }
+  }
+}

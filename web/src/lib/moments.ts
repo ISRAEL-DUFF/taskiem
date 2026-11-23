@@ -28,7 +28,7 @@ export function setSound(on: boolean) {
 export function isNews(card: DocCard, mine: boolean): boolean {
   return (
     !mine &&
-    ["ordered", "auto_accepted", "bill", "declared"].includes(card.event)
+    ["ordered", "auto_accepted", "bill", "declared", "transfer_paid"].includes(card.event)
   );
 }
 
@@ -41,6 +41,7 @@ export function isGoodMoment(
   if (mine) return false;
   return (
     card.event === "declared" ||
+    card.event === "transfer_paid" ||
     ((card.event === "ordered" || card.event === "auto_accepted") &&
       firstOrderToday)
   );

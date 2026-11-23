@@ -41,6 +41,7 @@ import { nairaKobo } from "../lib/toolforms";
 import { ErrorBox, useAction, useLoad } from "../ui";
 import { initialsOf } from "./ChatAvatar";
 import { useConfirm } from "./ConfirmSheet";
+import { useBillPay } from "./PayByTransfer";
 import { fromMemory } from "../lib/treat";
 import {
   LineTreatMark,
@@ -1279,6 +1280,12 @@ export function BillView({
   };
   const fromTaskiem = canEdit && canPay(bill) && !!settings.data?.workflow_id;
   const amountKobo = useMemo(() => nairaKobo(amount), [amount]);
+  // Pay (the payments flow, part 1): the ways to pay as a step of this
+  // sheet, transfer first; the account number stays here once given.
+  const pay = useBillPay(bill, () =>
+    void run("pay", {}, `Paying ${bill.reference} from Taskiem`),
+  );
+  useSheetStep(pay.step !== null, pay.close);
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
@@ -1304,6 +1311,7 @@ export function BillView({
           )}
         </div>
         {sentLine(bill) && <p className="tk-form-now">{sentLine(bill)}</p>}
+        {canEdit && (pay.content ?? pay.card)}
         <ul className="tk-lines">
           {bill.lines.map((l, i) => (
             <li key={i}>
@@ -1389,7 +1397,11 @@ export function BillView({
             Not now
           </button>
         )}
-        {mode === "query" ? (
+        {pay.step !== null && mode === "" ? (
+          <button type="button" className="tk-cta" onClick={pay.close}>
+            {pay.step === "transfer" ? "Done" : "Not now"}
+          </button>
+        ) : mode === "query" ? (
           <button
             type="button"
             className="tk-cta"
@@ -1419,6 +1431,37 @@ export function BillView({
           >
             Tell {bill.supplier_name}
           </button>
+        ) : bill.due_kobo > 0 && canEdit && bill.ways_to_pay ? (
+          pay.ways.length === 0 ? (
+            <Link
+              className="tk-cta"
+              to={`/bills/${encodeURIComponent(bill.id)}`}
+            >
+              How to pay
+            </Link>
+          ) : pay.checkoutOnly ? (
+            <a
+              className="tk-cta tk-pay"
+              href={pay.checkoutOnly}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Pay {formatPrice(bill.due_kobo)}
+              <span className="sr-only">
+                {" "}
+                on {bill.supplier_name}'s checkout (opens a new tab)
+              </span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="tk-cta tk-pay"
+              disabled={busy}
+              onClick={pay.start}
+            >
+              Pay {formatPrice(bill.due_kobo)}
+            </button>
+          )
         ) : bill.due_kobo > 0 ? (
           <>
             {bill.pay_link && (

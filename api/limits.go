@@ -61,6 +61,8 @@ func (s *Server) checkCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, li
 		err = runtime.CheckCount(ctx, tx, limit, `connections WHERE tenant_id = $1 AND status = 'active'`, lim.MaxConnections, tenant)
 	case "max_data_tables":
 		err = runtime.CheckCount(ctx, tx, limit, `data_tables WHERE tenant_id = $1 AND kept_by IS NULL`, lim.MaxDataTables, tenant) // tables Taskiem keeps are not the plan's
+	case "max_pages":
+		err = runtime.CheckCount(ctx, tx, limit, `pages WHERE tenant_id = $1`, lim.MaxPages, tenant) // drafts count (pages §12)
 	}
 	if _, ok := runtime.IsLimit(err); ok {
 		s.Store.LimitHit(ctx, tenant, limit)

@@ -11,9 +11,12 @@ import {
   type Choices,
 } from "./TreatLine";
 import { Link, useParams } from "react-router-dom";
-import { get, post, postOnce, put, whenOff } from "../api";
-import { useAuth } from "../auth";
+import { ApiError, get, post, postOnce, put, whenOff } from "../api";
 import { toast } from "../toast";
+import { SavedFill } from "./SavedFill";
+import { placeAddressFit, placeOffer, type PlaceOffer } from "../lib/saved";
+import { PlaceSaveOffer } from "./SaveAfter";
+import { useAuth } from "../auth";
 import { naira, toKobo } from "../lib/invoices";
 import { daysValue } from "../lib/statements";
 import {
@@ -27,10 +30,13 @@ import {
   type TradeOrder,
 } from "../lib/tradeorders";
 import {
+  deliverToOpen,
+  deliverToSub,
   linesWords,
   sizeParents,
   STATUS,
   type Purchase,
+  type PurchaseDeliverTo,
 } from "../lib/purchases";
 import type { LinksView } from "../lib/links";
 import { quantity, type StockItem, type StockView } from "../lib/stock";
@@ -43,6 +49,7 @@ import {
   Items,
   Modal,
   PageHeader,
+  Row,
   Skeleton,
   useAction,
   useLoad,
@@ -975,6 +982,183 @@ function DraftOrder({
 
 /** One purchase order of ours, with a linked supplier's progress on it and
  * what we may do: accept its change, cancel or ask to, say what came. */
+/** Where one purchase from a linked supplier is delivered (saved objects
+ * S2): its own place or the business's, changed (from a saved place too)
+ * until the supplier has it, then only shown. */
+function PurchaseDeliverToCard({ p }: { p: Purchase }) {
+  const path = `/v1/stock/purchases/${encodeURIComponent(p.id)}/deliver-to`;
+  const view = useLoad(() => get<PurchaseDeliverTo>(path), [path]);
+  const [changing, setChanging] = useState(false);
+  // The server's word that the supplier has it now (409): only shown after.
+  const [closed, setClosed] = useState("");
+  // A typed address just saved for it (saved objects S3): offered as a place.
+  const [offer, setOffer] = useState<PlaceOffer | null>(null);
+  const d = view.data;
+  const open = deliverToOpen(p) && !closed;
+  return (
+    <section
+      className="card"
+      aria-labelledby="purchase-deliver"
+      data-testid="purchase-deliver-to"
+    >
+      <h2 id="purchase-deliver">Delivered to</h2>
+      <ErrorBox error={view.error} />
+      {!d ? (
+        !view.error && <Skeleton rows={1} label="Loading where it goes…" />
+      ) : (
+        <Items label="Delivered to">
+          <Row
+            icon="place"
+            title={d.address || "Picked up"}
+            sub={
+              <span className="sub">
+                {[d.phone, deliverToSub(d)].filter(Boolean).join(" · ")}
+              </span>
+            }
+            testid="purchase-deliver-place"
+          >
+            {open && (
+              <button
+                type="button"
+                className="small"
+                onClick={() => setChanging(true)}
+              >
+                Change<span className="sr-only"> where it is delivered</span>
+              </button>
+            )}
+          </Row>
+        </Items>
+      )}
+      {closed ? (
+        <p className="hint" role="status" data-testid="purchase-deliver-closed">
+          {closed}
+        </p>
+      ) : (
+        !deliverToOpen(p) && (
+          <p className="hint">
+            {p.supplier} has the order: to change where it goes, tell them in
+            your conversation with them.
+          </p>
+        )
+      )}
+      {changing && d && (
+        <DeliverToModal
+          p={p}
+          path={path}
+          initial={d}
+          onClose={() => setChanging(false)}
+          onClosed={(why) => (setChanging(false), setClosed(why))}
+          onDone={(next) => (setChanging(false), setOffer(next), view.reload())}
+        />
+      )}
+      {offer && <PlaceSaveOffer key={offer.address} offer={offer} />}
+    </section>
+  );
+}
+
+function DeliverToModal({
+  p,
+  path,
+  initial,
+  onClose,
+  onClosed,
+  onDone,
+}: {
+  p: Purchase;
+  path: string;
+  initial: PurchaseDeliverTo;
+  onClose: () => void;
+  onClosed: (why: string) => void;
+  /** Saved: with the place to offer saving, when it was typed and new. */
+  onDone: (offer: PlaceOffer | null) => void;
+}) {
+  const [address, setAddress] = useState(initial.address);
+  const [phone, setPhone] = useState(initial.phone);
+  const [fitHint, setFitHint] = useState("");
+  // The address a saved place filled, until it is typed in: not offered.
+  const [picked, setPicked] = useState<string>();
+  const { can } = useAuth();
+  const act = useAction();
+  return (
+    <Modal title={`Where ${p.reference} is delivered`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(async () => {
+            const body = { address: address.trim(), phone: phone.trim() };
+            try {
+              await put(path, body);
+            } catch (err) {
+              // The supplier has it now: say so where it was, read-only.
+              if (err instanceof ApiError && err.status === 409)
+                return onClosed(err.message);
+              throw err;
+            }
+            toast("Saved");
+            onDone(placeOffer({ ...body, was: initial.address, picked, may: can("saved.manage") }));
+          }, false);
+        }}
+      >
+        <p className="hint">
+          For this order only. {p.supplier}'s rider brings it here.
+        </p>
+        <div className="saved-fill-line">
+          <SavedFill
+            kind="place"
+            label="where it is delivered"
+            onPick={(x) => {
+              const fit = placeAddressFit(x.details, 300);
+              setAddress(fit.address);
+              setPicked(fit.address);
+              setFitHint(fit.hint);
+              if (x.details.phone?.trim()) setPhone(x.details.phone.trim());
+            }}
+          />
+        </div>
+        <Field label="Address">
+          <input
+            value={address}
+            maxLength={300}
+            placeholder="12 Admiralty Way, Lekki"
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setPicked(undefined);
+              setFitHint("");
+            }}
+            autoComplete="street-address"
+          />
+        </Field>
+        <p className="hint saved-fill-note" role="status" data-testid="saved-fill-note">
+          {fitHint}
+        </p>
+        <Field label="Number the rider calls at the door">
+          <input
+            value={phone}
+            type="tel"
+            inputMode="tel"
+            placeholder="0803 123 4567"
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+          />
+        </Field>
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !address.trim() || !phone.trim()}
+          >
+            Save
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 export function PurchasePage() {
   const { id = "" } = useParams();
   const { data, error, reload } = useLoad(
@@ -1033,6 +1217,9 @@ export function PurchasePage() {
               You asked {p.supplier} to cancel it; they cancel it or keep it.
             </p>
           )}
+          {can("storefront.manage") &&
+            (p.link_id || p.status === "drafted") &&
+            p.status !== "cancelled" && <PurchaseDeliverToCard p={p} />}
           <section className="card" aria-labelledby="purchase-lines">
             <h2 id="purchase-lines">What you ordered</h2>
             <table className="cards">

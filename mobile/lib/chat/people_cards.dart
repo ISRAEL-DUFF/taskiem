@@ -30,6 +30,7 @@ import 'door.dart' show deliveryStep, yourOrderStatus, doorTone;
 import 'groups.dart' show pickChatsAndGroups;
 import 'my_chat.dart' show OpenMyChat, chatWithBusiness, sayFailure;
 import 'people.dart';
+import 'saved_fill.dart' show SavedButton, fillSavedAccount;
 import 'words.dart';
 
 String _str(Object? v) => v is String ? v : '';
@@ -740,6 +741,18 @@ class _SplitFormState extends State<_SplitForm> {
     Navigator.of(context).pop(SendPeopleMessageRequestCard(type: 'split', amountKobo: kobo, what: what, payTo: to));
   }
 
+  /// A saved bank account (saved objects §6.4), one picker at a time.
+  bool _picking = false;
+  Future<void> _fromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      await fillSavedAccount(context, widget.auth, bank: _bank, number: _number, name: _name);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -757,7 +770,16 @@ class _SplitFormState extends State<_SplitForm> {
               TkKitField(label: 'Paid to', hint: 'Your saved account', field: false, child: Text(accountLine(saved), style: tkText(size: 15, weight: 600, color: t.text))),
               TkLinkButton(label: 'Use another account', onPressed: () => setState(() => _other = true)),
             ] else ...[
-              TkKitField(label: 'Bank', child: TkTextBox(controller: _bank, hint: 'GTBank')),
+              TkKitField(
+                label: 'Bank',
+                child: Row(
+                  children: [
+                    Expanded(child: TkTextBox(controller: _bank, hint: 'GTBank')),
+                    const SizedBox(width: 8),
+                    SavedButton(semantics: 'Fill from a saved bank account', picking: _picking, onPressed: _fromSaved),
+                  ],
+                ),
+              ),
               TkKitField(label: 'Account number', child: TkTextBox(controller: _number, digits: 10)),
               TkKitField(label: 'Name on the account', child: TkTextBox(controller: _name)),
             ],
@@ -846,6 +868,18 @@ class _PayoutAccountPageState extends State<PayoutAccountPage> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// A saved bank account (saved objects §6.4), one picker at a time.
+  bool _picking = false;
+  Future<void> _fromSaved() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      await fillSavedAccount(context, widget.auth, bank: _bank, number: _number, name: _name);
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
   Future<void> _remove() async {
     setState(() => (_busy = true, _error = null));
     try {
@@ -877,7 +911,16 @@ class _PayoutAccountPageState extends State<PayoutAccountPage> {
         if (a == null && _error == null) const TkLoading(label: 'Loading…'),
         TkFormGroup(
           children: [
-            TkKitField(label: 'Bank', child: TkTextBox(controller: _bank, hint: 'GTBank', size: 15, height: 46)),
+            TkKitField(
+              label: 'Bank',
+              child: Row(
+                children: [
+                  Expanded(child: TkTextBox(controller: _bank, hint: 'GTBank', size: 15, height: 46)),
+                  const SizedBox(width: 8),
+                  SavedButton(semantics: 'Fill from a saved bank account', picking: _picking, busy: _busy, onPressed: _fromSaved),
+                ],
+              ),
+            ),
             TkKitField(label: 'Account number', child: TkTextBox(controller: _number, digits: 10, size: 15, height: 46)),
             TkKitField(label: 'Name on the account', child: TkTextBox(controller: _name, size: 15, height: 46)),
           ],

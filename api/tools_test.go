@@ -1,0 +1,283 @@
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
+)
+
+// A tool's care is worked out from its steps when it is published and kept
+// with the version; a command is one workflow's per environment (decision
+// 0070).
+func TestToolPublish(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@tools.test")
+	def := func(id, name, command, step string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"` + id + `","version":1,"name":"` + name + `","trigger":{"type":"manual"},
+			"outputs":[{"name":"left","type":"integer","title":"Left","description":"Days left","value":"=1"}],
+			"inputs":{"schema":{"type":"object","properties":{}}},
+			"tool":{"name":"` + name + `","command":"` + command + `","about":"Days of leave left","answer":{"type":"text","text":"=string(outputs.left) + ' days'"}},
+			"steps":[` + step + `]}`)
+	}
+	read := `{"id":"look","type":"http","config":{"method":"GET","url":"https://api.example.com/leave"}}`
+	tell := `{"id":"tell","type":"http","config":{"method":"POST","class":"unsafe_write","url":"https://api.example.com/leave","body":{"asked":true}}}`
+
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Leave left", "definition": def("wf_leave", "Leave left", "leave-left", read)})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	got := owner.must(200, "GET", "/v1/workflows/"+wf+"/versions/1", nil)
+	if care := got["tool_care"].(map[string]any); care["level"] != "answers" {
+		t.Errorf("care of a read: %v", care)
+	}
+
+	// Another workflow may not take the same command.
+	other := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Ask leave", "definition": def("wf_ask", "Ask leave", "leave-left", tell)})["id"].(string)
+	if e := owner.must(409, "POST", "/v1/workflows/"+other+"/versions/1/publish", nil); !strings.Contains(e["error"].(string), "/leave-left is already Leave left's") {
+		t.Errorf("same command: %v", e)
+	}
+	// Under its own, it asks yes: it writes.
+	v := owner.must(201, "POST", "/v1/workflows/"+other+"/versions", map[string]any{"definition": def("wf_ask", "Ask leave", "ask-leave", tell)})["version"]
+	ver := toJSON(v)
+	owner.must(200, "POST", "/v1/workflows/"+other+"/versions/"+ver+"/publish", nil)
+	if care := owner.must(200, "GET", "/v1/workflows/"+other+"/versions/"+ver, nil)["tool_care"].(map[string]any); care["level"] != "yes" || toJSON(care["because"]) != `["tell"]` {
+		t.Errorf("care of a write: %v", care)
+	}
+	// A reserved word is refused when validated.
+	if v := owner.must(200, "POST", "/v1/validate", map[string]any{"definition": def("wf_x", "X", "invoice", read)}); v["valid"] != false || !strings.Contains(toJSON(v["problems"]), "Taskiem's own commands") {
+		t.Errorf("reserved: %v", v)
+	}
+}
+
+// A member uses a tool through the API (made tools M1): listed, started at
+// once when it only reads, with the echo; asked yes once an owner makes it
+// always ask, then confirmed once with the same values; its answer drawn
+// from the run's outputs; held to the workflow's roles.
+func TestToolUse(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@tooluse.test")
+	def := json.RawMessage(`{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave left","trigger":{"type":"manual"},"roles":["operator"],
+		"inputs":{"schema":{"type":"object","required":["who"],"properties":{"who":{"type":"string","title":"Who"}}}},
+		"outputs":[{"name":"left","type":"integer","title":"Left","description":"Days left","value":"=steps.look.output.left"},
+		           {"name":"who","type":"string","title":"Who","description":"Who","value":"=steps.look.output.who"}],
+		"tool":{"name":"Leave left","command":"leave-left","about":"Days of leave left","answer":{"type":"text","text":"=outputs.who + ' has ' + string(outputs.left) + ' days of leave left'"}},
+		"steps":[{"id":"look","type":"transform","config":{"output":{"left":12,"who":"=trigger.body.who"}}}]}`)
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Leave left", "definition": def})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	op := w.member(t, owner, "op@tooluse.test", "operator")
+	builder := w.member(t, owner, "bo@tooluse.test", "builder")
+
+	// Listed for whoever may start it.
+	tools := op.must(200, "GET", "/v1/tools", nil)["tools"].([]any)
+	if len(tools) != 1 || tools[0].(map[string]any)["command"] != "leave-left" || tools[0].(map[string]any)["care"].(map[string]any)["level"] != "answers" {
+		t.Fatalf("listed: %v", tools)
+	}
+	if got := builder.must(200, "GET", "/v1/tools", nil)["tools"].([]any); len(got) != 0 {
+		t.Errorf("listed for a builder: %v", got)
+	}
+	if e := builder.must(403, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{"who": "Musa"}}); !strings.Contains(e["error"].(string), "only operator") {
+		t.Errorf("builder: %v", e)
+	}
+	op.must(422, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{}})
+	op.must(404, "POST", "/v1/tools/nope/start", map[string]any{"input": map[string]any{}})
+
+	// It only reads: started at once, with the echo.
+	got := op.must(201, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{"who": "Musa"}})
+	if got["care"] != "answers" || toJSON(got["values"]) != `[{"label":"Who","name":"who","value":"Musa"}]` {
+		t.Fatalf("at once: %v", got)
+	}
+	run := got["run_id"].(string)
+	w.env.Drain(t)
+	if a := op.must(200, "GET", "/v1/runs/"+run+"/answer", nil); a["type"] != "text" || a["text"] != "Musa has 12 days of leave left" || a["status"] != "completed" {
+		t.Errorf("answer: %v", a)
+	}
+
+	// Always ask: yes, once, with the same values.
+	op.must(403, "PUT", "/v1/tools/leave-left/settings", map[string]any{"always_ask": true})
+	owner.must(204, "PUT", "/v1/tools/leave-left/settings", map[string]any{"always_ask": true})
+	got = op.must(200, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{"who": "Ada"}})
+	if got["care"] != "yes" || got["confirm"] == nil || got["run_id"] != nil {
+		t.Fatalf("asks yes: %v", got)
+	}
+	confirm := got["confirm"].(string)
+	op.must(409, "POST", "/v1/tools/leave-left/confirm", map[string]any{"confirm": confirm, "input": map[string]any{"who": "Bayo"}})
+	owner.must(404, "POST", "/v1/tools/leave-left/confirm", map[string]any{"confirm": confirm, "input": map[string]any{"who": "Ada"}})
+	first := op.must(201, "POST", "/v1/tools/leave-left/confirm", map[string]any{"confirm": confirm, "input": map[string]any{"who": "Ada"}})
+	again := op.must(200, "POST", "/v1/tools/leave-left/confirm", map[string]any{"confirm": confirm, "input": map[string]any{"who": "Ada"}})
+	if first["run_id"] != again["run_id"] {
+		t.Errorf("confirmed twice: %v %v", first, again)
+	}
+	var tool string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT detail->>'tool' FROM audit_log WHERE action = 'run.start' ORDER BY id DESC LIMIT 1`).Scan(&tool); err != nil || tool != "leave-left" {
+		t.Errorf("audited: %q %v", tool, err)
+	}
+
+	// A key cannot say yes to a tool that asks.
+	k := owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "ci", "permissions": []string{"run.start", "run.read"}})["key"].(string)
+	key := &client{t: t, base: w.base, token: k}
+	key.must(403, "POST", "/v1/tools/leave-left/start", map[string]any{"input": map[string]any{"who": "Ada"}})
+	// A key kept to another environment reads no prod answer.
+	devKey := &client{t: t, base: w.base, token: owner.must(201, "POST", "/v1/api-keys", map[string]any{"name": "dev", "permissions": []string{"run.read"}, "environment": "dev"})["key"].(string)}
+	devKey.must(404, "GET", "/v1/runs/"+run+"/answer", nil)
+
+	// Deployed without the block: no tool.
+	plain := strings.Replace(string(def), `"tool":{"name":"Leave left","command":"leave-left","about":"Days of leave left","answer":{"type":"text","text":"=outputs.who + ' has ' + string(outputs.left) + ' days of leave left'"}},`, "", 1)
+	v := owner.must(201, "POST", "/v1/workflows/"+wf+"/versions", map[string]any{"definition": json.RawMessage(plain)})["version"]
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/"+toJSON(v)+"/publish", nil)
+	if got := op.must(200, "GET", "/v1/tools", nil)["tools"].([]any); len(got) != 0 {
+		t.Errorf("after a version without a tool: %v", got)
+	}
+}
+
+// A tool from WhatsApp (made tools M1): called by its command (the rest of
+// the message is its one input), started at once with the echo when it
+// only reads, its answer sent when the run ends; asked yes when an owner
+// makes it always ask; listed by tools; refused, in words, to a member
+// outside its roles.
+func TestToolInChat(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@toolchat.test")
+	def := json.RawMessage(`{"schema":"wd/v1","id":"wf_leave","version":1,"name":"Leave left","trigger":{"type":"manual"},"roles":["operator"],
+		"inputs":{"schema":{"type":"object","required":["who"],"properties":{"who":{"type":"string","title":"Who"}}}},
+		"outputs":[{"name":"left","type":"integer","title":"Left","description":"Days left","value":"=steps.look.output.left"},
+		           {"name":"who","type":"string","title":"Who","description":"Who","value":"=steps.look.output.who"}],
+		"tool":{"name":"Leave left","command":"leave-left","about":"Days of leave left","says":["days left for"],
+		        "answer":{"type":"text","text":"=outputs.who + ' has ' + string(outputs.left) + ' days of leave left'"}},
+		"steps":[{"id":"look","type":"transform","config":{"output":{"left":12,"who":"=trigger.body.who"}}}]}`)
+	wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Leave left", "definition": def})["id"].(string)
+	owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	op := w.member(t, owner, "op@toolchat.test", "operator")
+	const on = "+2348010000041"
+	w.bind(t, op, on)
+
+	if r := w.say(t, on, "tools"); !strings.Contains(r, "/leave-left: Leave left. Days of leave left") {
+		t.Errorf("tools: %q", r)
+	}
+	got := w.send(t, on, whatsapptest.Text("leave-left Musa"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Starting Leave left with:") || !strings.Contains(got[0].Text, "Musa") {
+		t.Fatalf("echo: %+v", got)
+	}
+	w.env.Drain(t)
+	w.tick(t)
+	if last := w.graph.Last(t, on); !strings.Contains(last.Text, "Musa has 12 days of leave left") {
+		t.Errorf("answer: %+v", last)
+	}
+	// By a phrase it says.
+	if got := w.send(t, on, whatsapptest.Text("days left for Ada")); len(got) != 1 || !strings.Contains(got[0].Text, "Ada") {
+		t.Errorf("phrase: %+v", got)
+	}
+
+	// Always ask: what will run, then yes.
+	owner.must(204, "PUT", "/v1/tools/leave-left/settings", map[string]any{"always_ask": true})
+	if r := w.say(t, on, "/leave-left Bayo"); !strings.Contains(r, "Bayo") || strings.Contains(r, "Starting") {
+		t.Errorf("asks: %q", r)
+	}
+	if got := w.send(t, on, whatsapptest.ButtonReply("yes", "Yes, run it")); len(got) != 0 && strings.Contains(got[0].Text, "not") {
+		t.Errorf("yes: %+v", got)
+	}
+	w.env.Drain(t)
+	w.tick(t)
+	if last := w.graph.Last(t, on); !strings.Contains(last.Text, "Bayo has 12 days") {
+		t.Errorf("answer after yes: %+v", last)
+	}
+
+	// Outside its roles: told who may.
+	bo := w.member(t, owner, "bo@toolchat.test", "builder")
+	w.bind(t, bo, "+2348010000042")
+	if r := w.say(t, "+2348010000042", "leave-left Musa"); !strings.Contains(r, "Only operator can start Leave left") {
+		t.Errorf("builder: %q", r)
+	}
+}
+
+// Buttons (made tools M2): "Open tickets" lists, each row's Assign to me
+// opens the assign tool filled in, as the presser; once, the first run
+// spends it and the next person is told who took it; a card's button is a
+// reply button in WhatsApp, which opens the tool there.
+func TestToolButtons(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@buttons.test")
+	publish := func(def string) {
+		t.Helper()
+		var head struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal([]byte(def), &head)
+		wf := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": head.Name, "definition": json.RawMessage(def)})["id"].(string)
+		owner.must(200, "POST", "/v1/workflows/"+wf+"/versions/1/publish", nil)
+	}
+	publish(`{"schema":"wd/v1","id":"wf_assign","version":1,"name":"Assign a ticket","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","required":["ref"],"properties":{"ref":{"type":"string","title":"Ticket"}}}},
+		"outputs":[{"name":"ref","type":"string","title":"Ticket","description":"The ticket","value":"=steps.take.output.ref"}],
+		"tool":{"name":"Assign a ticket","command":"assign-ticket","about":"Take a ticket","answer":{"type":"text","text":"='Yours: ' + outputs.ref"}},
+		"steps":[{"id":"take","type":"transform","config":{"output":{"ref":"=trigger.body.ref"}}}]}`)
+	publish(`{"schema":"wd/v1","id":"wf_open","version":1,"name":"Open tickets","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","properties":{}}},
+		"outputs":[{"name":"tickets","type":"list","title":"Tickets","description":"Open ones","value":"=steps.find.output.tickets"},
+		           {"name":"first","type":"string","title":"First","description":"The first","value":"=steps.find.output.first"}],
+		"tool":{"name":"Open tickets","command":"open-tickets","about":"The open tickets",
+		        "answer":{"type":"list","from":"tickets","title":"Open tickets","item":{"title":"=item.title","sub":"=item.ref"},
+		                  "actions":[{"label":"Assign to me","tool":"assign-ticket","inputs":{"ref":"=item.ref"},"once":true}]}},
+		"steps":[{"id":"find","type":"transform","config":{"output":{"first":"T-1","tickets":[{"ref":"T-1","title":"Printer jam"},{"ref":"T-2","title":"No Wi-Fi"}]}}}]}`)
+	publish(`{"schema":"wd/v1","id":"wf_first","version":1,"name":"First ticket","trigger":{"type":"manual"},
+		"inputs":{"schema":{"type":"object","properties":{}}},
+		"outputs":[{"name":"ref","type":"string","title":"Ref","description":"The first","value":"=steps.find.output.ref"}],
+		"tool":{"name":"First ticket","command":"first-ticket","about":"The first open ticket",
+		        "answer":{"type":"card","title":"=outputs.ref","buttons":[{"label":"Assign to me","tool":"assign-ticket","inputs":{"ref":"=outputs.ref"}}]}},
+		"steps":[{"id":"find","type":"transform","config":{"output":{"ref":"T-9"}}}]}`)
+	ada := w.member(t, owner, "ada@buttons.test", "operator")
+	bo := w.member(t, owner, "bo@buttons.test", "operator")
+
+	// The list, each row with its button.
+	run := ada.must(201, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": map[string]any{}})["run_id"].(string)
+	w.env.Drain(t)
+	a := ada.must(200, "GET", "/v1/runs/"+run+"/answer", nil)
+	rows := a["rows"].([]any)
+	if a["type"] != "list" || len(rows) != 2 {
+		t.Fatalf("list: %v", a)
+	}
+	act := rows[1].(map[string]any)["actions"].([]any)[0].(map[string]any)
+	token := act["token"].(string)
+	// Drawn again, the same button.
+	if again := ada.must(200, "GET", "/v1/runs/"+run+"/answer", nil)["rows"].([]any)[1].(map[string]any)["actions"].([]any)[0].(map[string]any)["token"]; again != token {
+		t.Errorf("drawn twice: %v %v", token, again)
+	}
+
+	// Pressed: the assign tool, filled in.
+	p := ada.must(200, "POST", "/v1/tools/buttons/"+token, nil)
+	if p["command"] != "assign-ticket" || toJSON(p["inputs"]) != `{"ref":"T-2"}` || p["once"] != true {
+		t.Fatalf("pressed: %v", p)
+	}
+	started := ada.must(201, "POST", "/v1/tools/assign-ticket/start", map[string]any{"input": p["inputs"], "button": token})
+	w.env.Drain(t)
+	if got := ada.must(200, "GET", "/v1/runs/"+started["run_id"].(string)+"/answer", nil); got["text"] != "Yours: T-2" {
+		t.Errorf("assigned: %v", got)
+	}
+	// Once: the next person is told who took it.
+	if e := bo.must(409, "POST", "/v1/tools/buttons/"+token, nil); !strings.Contains(e["error"].(string), "Already done") {
+		t.Errorf("taken: %v", e)
+	}
+	bo.must(409, "POST", "/v1/tools/assign-ticket/start", map[string]any{"input": map[string]any{"ref": "T-2"}, "button": token})
+	// A button of another tool is refused.
+	other := rows[0].(map[string]any)["actions"].([]any)[0].(map[string]any)["token"].(string)
+	bo.must(400, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": map[string]any{}, "button": other})
+	bo.must(404, "POST", "/v1/tools/buttons/"+uuid.NewString(), nil)
+
+	// WhatsApp: a card's button is a reply button; pressed, the tool opens
+	// filled in and, as it only reads, starts at once.
+	const on = "+2348010000051"
+	w.bind(t, bo, on)
+	w.say(t, on, "first-ticket")
+	w.env.Drain(t)
+	w.tick(t)
+	last := w.graph.Last(t, on)
+	if !strings.Contains(last.Text, "T-9") || len(last.Buttons) != 1 || !strings.HasPrefix(last.Buttons[0].ID, "tb:") {
+		t.Fatalf("card in chat: %+v", last)
+	}
+	got := w.send(t, on, whatsapptest.ButtonReply(last.Buttons[0].ID, "Assign to me"))
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Starting Assign a ticket") || !strings.Contains(got[0].Text, "T-9") {
+		t.Fatalf("pressed in chat: %+v", got)
+	}
+}

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/code_scanner.dart';
 import 'package:taskiem/api/api.g.dart' show ListStockItemsResponse, Me;
 import 'package:taskiem/chat/stock_items.dart';
 import 'package:taskiem/chat/stock_page.dart';
@@ -15,6 +16,7 @@ import 'package:taskiem/kit/modal.dart' show TkModal;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'form_request_d2_test.dart' show StandInCamera;
 import 'guidelines.dart';
 import 'looks.dart';
 import 'stock_items_fixture.dart';
@@ -286,6 +288,116 @@ void main() {
     await t.tap(find.bySemanticsLabel('Save the limit'));
     await settle(t);
     expect(sent.where((x) => !x.startsWith('GET')), ['PUT /v1/stock/settings {"count_limit_kobo":1000000}']);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a count by scanning (device fields D2): each scan adds one; a code no item has is said which item, kept on it; pictured', (t) async {
+    final camera = StandInCamera();
+    final was = codeScanner;
+    codeScanner = DeviceCodeScanner(camera: camera.call, gap: Duration.zero);
+    addTearDown(() => codeScanner = was);
+    http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+    final sent = await open(
+      t,
+      also: (req) async => req.method == 'GET' && req.url.path == '/v1/stock'
+          ? ok({
+              'keeps_stock': true,
+              'catalogue': 'Products',
+              'items': [
+                // A barcode is the stock item's: on each product it counts.
+                {'id': 'indomie', 'stock_item_id': 'si-indomie', 'name': 'Indomie', 'available': true, 'stock': 4, 'unit': 'carton', 'code': '6151100093217'},
+                {'id': 'rice', 'stock_item_id': 'si-rice', 'name': 'Rice', 'available': true, 'stock': 20, 'unit': 'bag'},
+                {'id': 'rice-5', 'stock_item_id': 'si-rice', 'name': 'Rice, 5 bags', 'available': true, 'stock': 20, 'uses': 5, 'unit': 'bag'},
+                {'id': 'gift', 'name': 'Gift card', 'available': true, 'stock': null},
+              ],
+            })
+          : req.method == 'PATCH'
+          ? ok({'item': <String, Object>{}})
+          : null,
+    );
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Count the shelf'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Scan to count'));
+    await settle(t);
+    expect(camera.opened, greaterThan(0));
+    for (final c in ['6151100093217', '6151100093217', '5000112637922', '6151100093217']) {
+      camera.show(ScannedCode(c, 'ean_13'));
+      await t.pump();
+    }
+    await t.pump();
+    expect(find.text('×3'), findsOneWidget);
+    expect(find.text('Not one of your items yet'), findsOneWidget);
+    await looks(t, 'scan-count');
+    await t.tap(find.text('Done · 4 scanned'));
+    await t.pumpAndSettle();
+    final boxes = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(boxes.at(0)).controller.text, '3');
+    expect(find.text('Not one of your items yet: 5000112637922'), findsOneWidget);
+    await t.tap(find.text('Which item?'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Rice').last);
+    await settle(t);
+    expect(sent.first, 'PATCH /v1/stock/items/si-rice {"code":"5000112637922"}', reason: 'on its stock item');
+    expect(t.widget<EditableText>(boxes.at(1)).controller.text, '1');
+    expect(find.textContaining('Not one of your items yet'), findsNothing);
+    // Scanned again, it is Rice (sold singly), not the pack of 5.
+    await t.tap(find.text('Scan to count'));
+    await settle(t);
+    camera.show(ScannedCode('5000112637922', 'ean_13'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Done · 1 scanned'));
+    await t.pumpAndSettle();
+    expect(t.widget<EditableText>(boxes.at(1)).controller.text, '2');
+    expect(t.widget<EditableText>(boxes.at(2)).controller.text, '');
+    await t.tap(find.bySemanticsLabel('Record the count'));
+    await settle(t);
+    expect(sent, contains('POST /v1/stock/counts {"lines":[{"item_id":"indomie","count":3},{"item_id":"rice","count":2}],"reason":""}'));
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a count by scanning: a code another item has is refused in plain words, and the scans wait', (t) async {
+    final camera = StandInCamera();
+    final was = codeScanner;
+    codeScanner = DeviceCodeScanner(camera: camera.call, gap: Duration.zero);
+    addTearDown(() => codeScanner = was);
+    http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+    const words = 'That barcode is Nylon bags’s already. Clear it there first, or scan another.';
+    final sent = await open(
+      t,
+      also: (req) async => req.method == 'GET' && req.url.path == '/v1/stock'
+          ? ok({
+              'keeps_stock': true,
+              'catalogue': 'Products',
+              'items': [
+                {'id': 'rice', 'stock_item_id': 'si-rice', 'name': 'Rice', 'available': true, 'stock': 20, 'unit': 'bag'},
+                {'id': 'si-nylon', 'material': true, 'name': 'Nylon bags', 'available': true, 'stock': 200, 'unit': 'bag', 'code': 'ABC'},
+              ],
+            })
+          : req.method == 'PATCH'
+          ? http.Response(jsonEncode({'error': words, 'code': 'code_taken'}), 409, headers: {'content-type': 'application/json'})
+          : null,
+    );
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Count the shelf'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Scan to count'));
+    await settle(t);
+    camera.show(ScannedCode('5000112637922', 'ean_13'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Done · 1 scanned'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Which item?'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Rice').last);
+    await settle(t);
+    expect(sent.first, 'PATCH /v1/stock/items/si-rice {"code":"5000112637922"}');
+    expect(find.text(words), findsOneWidget);
+    expect(find.text('Not one of your items yet: 5000112637922'), findsOneWidget, reason: 'its scans wait to be said');
+    final boxes = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    expect(t.widget<EditableText>(boxes.at(0)).controller.text, '');
     await t.pump(const Duration(seconds: 5));
   });
 

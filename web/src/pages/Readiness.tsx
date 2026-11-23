@@ -79,6 +79,18 @@ function NeedItem({ need, onChanged }: { need: ReadyNeed; onChanged: () => void 
           </p>
         ))}
       {fix.kind === "give_role" && (can("member.manage") ? <RoleFix role={fix.role} onDone={onChanged} /> : <AskOwner />)}
+      {fix.kind === "save_thing" && (
+        // The message says what to save; this opens the page it is saved on.
+        <p data-testid="need-saved">
+          {can("saved.manage") ? (
+            <Link className="button small" to="/settings/saved">
+              Open Saved<span className="sr-only"> to save @{fix.name}</span>
+            </Link>
+          ) : (
+            <span className="hint">Ask the business's owner to save @{fix.name}.</span>
+          )}
+        </p>
+      )}
       {fix.kind === "ask_support" && <p className="hint">Nothing to set up here: once {fix.service} has turned it on and a customer has paid by transfer, this note goes away.</p>}
     </div>
   );

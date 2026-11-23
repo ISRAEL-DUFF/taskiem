@@ -9,12 +9,19 @@ import (
 )
 
 func refsOf(a *cel.Ast) Refs {
-	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}, Secrets: map[string]bool{}, Env: map[string]bool{}}
+	r := Refs{Roots: map[string]bool{}, Steps: map[string]bool{}, Secrets: map[string]bool{}, Env: map[string]bool{}, Saved: map[string]bool{}}
 	root := a.NativeRep().Expr()
+	// Every use of the saved root must name its thing literally
+	// (saved.price_list, saved["price-list"], saved.?price_list): one that
+	// does not cannot be read when the run starts.
+	savedUses, savedNamed := 0, 0
 	celast.PreOrderVisit(root, celast.NewExprVisitor(func(e celast.Expr) {
 		switch e.Kind() {
 		case celast.IdentKind:
 			r.Roots[e.AsIdent()] = true
+			if e.AsIdent() == "saved" {
+				savedUses++
+			}
 		case celast.SelectKind:
 			s := e.AsSelect()
 			if op := s.Operand(); op.Kind() == celast.IdentKind {
@@ -25,11 +32,25 @@ func refsOf(a *cel.Ast) Refs {
 					r.Secrets[s.FieldName()] = true
 				case "env":
 					r.Env[s.FieldName()] = true
+				case "saved":
+					r.Saved[s.FieldName()] = true
+					savedNamed++
 				}
 			}
 		case celast.CallKind:
 			// steps["id"] index form
 			c := e.AsCall()
+			// saved.?name and saved[?"name"]: optional, still named.
+			if (c.FunctionName() == "_?._" || c.FunctionName() == "_[?_]") && len(c.Args()) == 2 {
+				if op := c.Args()[0]; op.Kind() == celast.IdentKind && op.AsIdent() == "saved" {
+					if lit := c.Args()[1]; lit.Kind() == celast.LiteralKind {
+						if s, ok := lit.AsLiteral().Value().(string); ok {
+							r.Saved[s] = true
+							savedNamed++
+						}
+					}
+				}
+			}
 			if c.FunctionName() == "_[_]" && len(c.Args()) == 2 {
 				if op := c.Args()[0]; op.Kind() == celast.IdentKind {
 					if lit := c.Args()[1]; lit.Kind() == celast.LiteralKind {
@@ -41,6 +62,9 @@ func refsOf(a *cel.Ast) Refs {
 								r.Secrets[s] = true
 							case "env":
 								r.Env[s] = true
+							case "saved":
+								r.Saved[s] = true
+								savedNamed++
 							}
 						}
 					}
@@ -48,6 +72,7 @@ func refsOf(a *cel.Ast) Refs {
 			}
 		}
 	}))
+	r.SavedUnnamed = savedUses > savedNamed
 	// Comprehension variables (e.g. b in list.filter(b, ...)) appear as
 	// identifiers; keep only real roots.
 	for k := range r.Roots {

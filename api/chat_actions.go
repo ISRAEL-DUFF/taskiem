@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"sort"
@@ -51,7 +52,11 @@ const (
 type chatField struct {
 	Key  string
 	Ask  string // the question
-	Kind string // text, phone, money, number, signed, order, booking, rider, item, product, zone, or a choice
+	Kind string // text, phone, money, number, signed, order, booking, rider, item, product, zone, a choice,
+	// or a saved thing (saved objects): saved (any, by its name), saved_place
+	// (a place), person (typed, or a saved person)
+	// payee (a saved bank account the person may pay), account (an account
+	// number: never offered as a choice) or bank.
 	// Choices are the fixed choices of a "choice" field.
 	Choices  []string
 	Optional bool
@@ -79,6 +84,10 @@ type chatAction struct {
 	// channels that have no forms.
 	Fields []chatField
 	Make   func(v map[string]string) string
+	// Confirm is what the form's button asks before the command is sent:
+	// "passkey" (a payment) opens the single-action step-up; on the chat
+	// apps the command answers with a link to confirm it.
+	Confirm string
 	// may reports whether the person may use it here.
 	may func(s *Server, c *chat, on areas.State) bool
 }
@@ -101,6 +110,7 @@ var chatTopics = []chatTopic{
 	{"bookings", "Bookings", "bookings", "violet", []string{"bookings", "appointments"}},
 	{"buying", "Suppliers", "purchases", "orange", []string{"suppliers", "supplier", "buying"}},
 	{"money", "Money", "money", "lime", []string{"money", "expenses", "invoices"}},
+	{"pay", "Pay", "money", "teal", []string{"pay", "payments", "transfers"}},
 	{"owe", "Who owes you", "customers", "red", []string{"debts", "debtors", "credit"}},
 	{"staff", "Staff and tasks", "tasks", "blue", []string{"staff", "tasks", "team"}},
 	{"lists", "Your lists", "tables", "violet", []string{"lists", "tables"}},
@@ -147,7 +157,13 @@ var (
 	invoicesOn  = func(s *Server, _ *chat, _ areas.State) bool { return s.Invoices != nil }
 	aiOn        = func(s *Server, _ *chat, _ areas.State) bool { return s.AI != nil }
 	anyone      = func(*Server, *chat, areas.State) bool { return true }
+	inBusiness  = func(_ *Server, c *chat, _ areas.State) bool { return c.tenant.ID != uuid.Nil }
+	// payMay: who may pay, in a business with somewhere to pay from.
+	payMay = both(perm(PermMoneyPay), inBusiness, func(s *Server, _ *chat, _ areas.State) bool { return s.accountRails() != nil })
 )
+
+// payFor is what a payment is for, as its forms and questions offer it.
+var payFor = choice("for", "What is it for?", "a bill", "wages", "a delivery", "a refund", "stock bought", "other")
 
 // fill puts values into a command: "{name}" by its value; "[ {areas}]"
 // only when the value inside is given.
@@ -170,6 +186,18 @@ func fill(tmpl string) func(map[string]string) string {
 }
 
 func f(key, ask, kind string) chatField { return chatField{Key: key, Ask: ask, Kind: kind} }
+
+// atNames is make with the named values' "@" taken off, as a saved thing's
+// name is written after the command's own "@".
+func atNames(mk func(map[string]string) string, keys ...string) func(map[string]string) string {
+	return func(v map[string]string) string {
+		w := maps.Clone(v)
+		for _, k := range keys {
+			w[k] = strings.TrimPrefix(strings.TrimSpace(w[k]), "@")
+		}
+		return mk(w)
+	}
+}
 
 func opt(fl chatField) chatField { fl.Optional = true; return fl }
 
@@ -317,6 +345,10 @@ var chatActions = []chatAction{
 		Fields: []chatField{f("name", "What's the supplier called?", "text"), f("phone", "What's their phone number?", "phone"),
 			opt(f("for", "What do you buy from them? Send skip if many things.", "text"))},
 		Make: fill("add supplier {name} {phone}[ for {for}]"), may: both(perm(PermStorefrontManage), purchasesOn)},
+	{ID: "buying.deliver", Topic: "buying", Title: "Deliver to a saved place", Line: "Where one order goes, like @warehouse", Icon: "purchases", Does: doesChanges, Opens: opensQuestions,
+		Shortcut: "deliver P-7QX4KD to @warehouse",
+		Fields:   []chatField{f("ref", "Which order? Its number, like P-7QX4KD.", "text"), f("place", "Where to? A saved place's name, like warehouse.", "saved_place")},
+		Make:     atNames(fill("deliver {ref} to @{place}"), "place"), may: both(perm(PermStorefrontManage), purchasesOn, stockOn)},
 	{ID: "buying.bills", Topic: "buying", Title: "Your bills", Line: "What you owe suppliers", Icon: "bills", Does: doesShow, Opens: opensPage,
 		Shortcut: "/bills", Tool: "bills", Page: "/bills", may: perm(PermInvoiceRead)},
 
@@ -327,7 +359,7 @@ var chatActions = []chatAction{
 		Make:     fill("spent {amount} on {what}"), may: permIn(PermInvoiceManage, areas.Money)},
 	{ID: "money.invoice", Topic: "money", Title: "Send an invoice", Line: "To a customer, from the chat", Icon: "invoices", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "invoice Ada 25,000 for 5 bags of rice",
-		Fields:   []chatField{f("who", "Who is it for?", "text"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
+		Fields:   []chatField{f("who", "Who is it for? A name, or a saved person like @acme.", "person"), f("amount", "How much?", "money"), f("for", "For what?", "text")},
 		Make:     fill("invoice {who} {amount} for {for}"), may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
 	{ID: "money.cash", Topic: "money", Title: "Cash in or out", Line: "The till, the safe", Icon: "money", Does: doesAsks, Opens: opensQuestions,
 		Shortcut: "cash in 20,000 till",
@@ -338,6 +370,24 @@ var chatActions = []chatAction{
 	{ID: "money.invoices", Topic: "money", Title: "Your invoices", Line: "Sent, paid, and late", Icon: "invoices", Does: doesShow, Opens: opensPage,
 		Shortcut: "/invoices", Tool: "invoices", Page: "/invoices", may: permIn(PermInvoiceRead, areas.Money)},
 
+	// Pay (P1; docs/spec/chat-pay-people.md): nothing pays without the
+	// person's passkey. Staff pay the business's saved accounts only.
+	{ID: "pay.person", Topic: "pay", Title: "Pay someone", Line: "From your balance, checked with the bank", Icon: "money", Does: doesAsks, Opens: opensForm,
+		Shortcut: "send 45k to @chidi for a delivery", Tool: "pay", Confirm: "passkey",
+		Fields: []chatField{f("who", "Who are you paying? One of your saved accounts, like @chidi.", "payee"), f("amount", "How much?", "money"), payFor,
+			opt(f("note", "A few words for their bank statement? Send skip for none.", "text"))},
+		Make: atNames(fill("send {amount} to @{who} for {for}[: {note}]"), "who"), may: payMay},
+	{ID: "pay.account", Topic: "pay", Title: "Pay an account number", Line: "Any bank: its name is checked first", Icon: "money", Does: doesAsks, Opens: opensForm,
+		Shortcut: "send 45k to 0123456789 gtbank for stock bought", Tool: "pay", Add: true, Confirm: "passkey",
+		Fields: []chatField{f("number", "What is the account number? 10 digits.", "account"), f("bank", "Which bank is it with?", "bank"),
+			f("amount", "How much?", "money"), payFor},
+		Make: fill("send {amount} to {number} {bank} for {for}"), may: both(payMay, func(_ *Server, c *chat, _ areas.State) bool { return isOwner(c.p) })},
+	{ID: "pay.list", Topic: "pay", Title: "Your payments", Line: "Sent, waiting for an OK, and paid", Icon: "money", Does: doesShow, Opens: opensPage,
+		Page: "/payments", may: payMay},
+	{ID: "pay.payroll", Topic: "pay", Title: "Payroll", Line: "Payrolla's runs: who was paid, and who was not and why", Icon: "money", Does: doesShow, Opens: opensPage,
+		Page: "/payroll", may: perm(PermPayrollRead)},
+	{ID: "pay.payees", Topic: "pay", Title: "Your payees", Line: "The accounts you pay, by name", Icon: "saved", Does: doesShow, Opens: opensPage,
+		Page: "/settings/saved", may: payMay},
 	// Who owes you
 	{ID: "owe.list", Topic: "owe", Title: "Who owes you", Line: "Everyone, biggest first", Icon: "customers", Does: doesShow, Opens: opensShow,
 		Shortcut: "who owes me", may: both(permIn(PermInvoiceManage, areas.Money), invoicesOn)},
@@ -394,6 +444,26 @@ var chatActions = []chatAction{
 		Shortcut: "save mum: GTBank 0123456789",
 		Fields:   []chatField{f("name", "What name should it have? Like mum.", "text"), f("what", "What should I keep? Like GTBank 0123456789.", "text")},
 		Make:     fill("save {name}: {what}"), may: anyone},
+	// What saved things do in the chat (saved objects S2, S3).
+	{ID: "saved.ask", Topic: "saved", Title: "Ask about a saved thing", Line: "A detail, like @mum's phone", Icon: "saved", Does: doesShow, Opens: opensQuestions,
+		Shortcut: "what's @mum's phone?",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like mum.", "saved"),
+			opt(f("what", "What do you want to know? Like phone, or the insurance date. Send skip for all of it.", "text"))},
+		Make: atNames(fill("what is @{name}[ {what}]"), "name"), may: anyone},
+	{ID: "saved.remind", Topic: "saved", Title: "Remind me of a date", Line: "A saved date, told on its day", Icon: "saved", Does: doesChanges, Opens: opensQuestions,
+		Shortcut: "remind me when @car insurance is due",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like car.", "saved"),
+			opt(f("what", "Which of its dates? Like insurance or birthday. Send skip if it has one.", "text"))},
+		Make: atNames(fill("remind me when @{name}[ {what}] is due"), "name"), may: anyone},
+	{ID: "saved.reminders", Topic: "saved", Title: "Your reminders", Line: "The dates you asked to be told of", Icon: "saved", Does: doesShow, Opens: opensShow,
+		Shortcut: "my reminders", may: anyone},
+	{ID: "saved.share", Topic: "saved", Title: "Share a saved thing", Line: "With a linked business or a customer", Icon: "saved", Does: doesAsks, Opens: opensQuestions,
+		Shortcut: "share @our-account with Ada's Kitchen",
+		Fields: []chatField{f("name", "Which saved thing? Its name, like our-account.", "saved"),
+			f("to", "Who with? A linked business or a customer, by name.", "text")},
+		Make: atNames(fill("share @{name} with {to}"), "name"), may: inBusiness},
+	{ID: "saved.import", Topic: "saved", Title: "Import from a file", Line: "A spreadsheet of accounts, people, places", Icon: "saved", Does: doesChanges, Opens: opensPage,
+		Page: "/settings/saved", may: both(perm(PermSavedManage), inBusiness)},
 
 	// School
 	{ID: "school.students", Topic: "school", Title: "Students", Line: "By class, with what they owe", Icon: "school", Does: doesShow, Opens: opensPage,
@@ -469,6 +539,7 @@ var topicHints = map[string][]string{
 	"bookings": {"booking", "appointment", "slot", "day off"},
 	"buying":   {"supplier", "restock", "depot", "wholesale", "distributor", "purchase", "received"},
 	"money":    {"money", "spent", "spend", "expense", "cash", "transfer", "invoice", "diesel", "fuel", "rent"},
+	"pay":      {"pay", "payee", "transfer to", "send money"},
 	"owe":      {"owe", "owing", "debt", "debtor", "credit", "balance", "pay me", "dey owe"},
 	"staff":    {"staff", "task", "worker", "team", "approv", "employee"},
 	"lists":    {"list", "table", "record", "spreadsheet"},
@@ -574,6 +645,8 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 	switch fl.Kind {
 	case "choice":
 		return fl.Choices
+	case "saved", "saved_place", "person", "payee":
+		return s.savedChoices(ctx, c, fl.Kind)
 	case "rider", "zone":
 		if !s.Riders.Ready() {
 			return nil
@@ -693,7 +766,22 @@ var (
 	possessiveRe = regexp.MustCompile(`\{[a-z_]+\}'s`)
 	doesRe       = regexp.MustCompile(`does \{[a-z_]+\}`)
 	sentenceRe   = regexp.MustCompile(`[^.?!]+[.?!]?`)
+	skipRe       = regexp.MustCompile(`\bskip\b`)
+	placeRe      = regexp.MustCompile(`\{[a-z_]+\}`)
 )
+
+// askLabel is a field's form label and hint in l. A question naming
+// another value ("What's {name}'s phone number?") is made a pronoun in
+// English; another language has its own label for it (the question's id
+// and ".label"), since a form shows the field before that value is known.
+func askLabel(l lang.Tag, a chatAction, f chatField) (label, hint string) {
+	label, hint = formLabel(word(l, askWordID(a, f), f.Ask))
+	if placeRe.MatchString(label) {
+		en, _ := formLabel(f.Ask)
+		label = word(l, askWordID(a, f)+".label", en)
+	}
+	return label, hint
+}
 
 // formLabel parts a question into a form's label and hint: its first
 // sentence, and the rest less what only a chat needs ("Send skip ...");
@@ -707,7 +795,9 @@ func formLabel(ask string) (label, hint string) {
 		switch {
 		case i == 0:
 			label = sn
-		case sn == "" || strings.HasPrefix(sn, "Send skip") || strings.HasPrefix(sn, "Send its number"):
+		// "skip" is kept in English in every language (the chat reads it in
+		// English), so a sentence naming it is the chat's, in any language.
+		case sn == "" || skipRe.MatchString(sn) || strings.HasPrefix(sn, "Send its number"):
 		default:
 			rest = append(rest, sn)
 		}
@@ -726,6 +816,8 @@ type chatActionOut struct {
 	Tool     string `json:"tool,omitempty"`
 	Add      bool   `json:"add,omitempty"`
 	Page     string `json:"page,omitempty"`
+	// Confirm: "passkey" when the form's button asks for one first.
+	Confirm string `json:"confirm,omitempty"`
 	// Fields are what the action's form asks for (M4).
 	Fields []chatFieldOut `json:"fields,omitempty"`
 }
@@ -740,9 +832,9 @@ type chatTopicOut struct {
 
 func actionOut(l lang.Tag, a chatAction) chatActionOut {
 	out := chatActionOut{ID: a.ID, Title: word(l, titleWordID(a), a.Title), Line: word(l, lineWordID(a), a.Line), Icon: a.Icon, Does: a.Does, Opens: a.Opens,
-		Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page}
+		Shortcut: a.Shortcut, Tool: a.Tool, Add: a.Add, Page: a.Page, Confirm: a.Confirm}
 	for _, f := range a.Fields {
-		label, hint := formLabel(word(l, askWordID(a, f), f.Ask))
+		label, hint := askLabel(l, a, f)
 		out.Fields = append(out.Fields, chatFieldOut{Key: f.Key, Label: label, Hint: hint, Kind: f.Kind, Choices: f.Choices, Optional: f.Optional})
 	}
 	return out

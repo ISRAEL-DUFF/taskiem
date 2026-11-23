@@ -369,6 +369,35 @@ var letterHints = map[Tag]string{
 	HA: "ɓɗƙƴ",
 }
 
+// Tags are every language's tag, English first.
+func Tags() []Tag {
+	out := []Tag{EN}
+	for _, i := range All() {
+		if i.Tag != EN {
+			out = append(out, i.Tag)
+		}
+	}
+	return out
+}
+
+// CommandWord reports whether a folded word is the first word of one of
+// Taskiem's own commands in any language's word lists: a business's own
+// tool may not take it (decision 0073).
+func CommandWord(word string) bool {
+	for _, w := range mustWords() {
+		for _, lists := range []map[Intent][]string{w.Phrases, w.Prefixes} {
+			for _, ps := range lists {
+				for _, p := range ps {
+					if first, _, _ := strings.Cut(p, " "); first == word {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 // TreatAnswer is an answer to the chat's questions on a purchase line
 // (what-a-business-buys §6): a treatment, or a label's Another or No
 // label.

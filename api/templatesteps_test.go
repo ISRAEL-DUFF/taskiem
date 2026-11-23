@@ -34,8 +34,7 @@ func TestTemplateSteps(t *testing.T) {
 		m := x.(map[string]any)
 		callable[m["id"].(string)] = m["callable"].(map[string]any)
 	}
-	if len(callable) < 5 || callable["run-payroll"]["effect"].(map[string]any)["class"] != "moves_money" ||
-		strings.Contains(toJSON(callable["run-payroll"]["params"]), "pay_day") || !strings.Contains(toJSON(callable["send-invoice"]["inputs"]), "amount_naira") {
+	if len(callable) < 4 || callable["pay-a-list"]["effect"].(map[string]any)["class"] != "moves_money" || !strings.Contains(toJSON(callable["send-invoice"]["inputs"]), "amount_naira") {
 		t.Fatalf("callable templates: %v", callable)
 	}
 

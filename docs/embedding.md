@@ -102,7 +102,7 @@ POST /v1/partner/embed-apps
   "branding": {"colours": {"primary": "#0a7d5a", "background": "#ffffff"}, "font_family": "Inter, sans-serif",
                "logo_url": "https://cdn.wagely.example/logo.svg", "radius": "8px", "mode": "auto"},
   "allowed_connectors": ["paystack", "termii", "http"],
-  "allowed_templates": ["payroll-reminder"],
+  "allowed_templates": ["daily-reminder"],
   "end_user_permissions": ["workflow.read", "workflow.edit", "workflow.publish", "run.read", "run.start"],
   "headless": false,
   "webhook_url": "https://api.wagely.example/taskiem/webhooks",

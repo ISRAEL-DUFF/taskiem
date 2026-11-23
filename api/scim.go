@@ -862,6 +862,9 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 			AND NOT EXISTS (SELECT 1 FROM memberships WHERE user_id = $1 AND tenant_id = $2)`, user, tenant); err != nil {
 			return ch, err
 		}
+		if err := dropLeaverLinksTx(ctx, tx, tenant, user); err != nil {
+			return ch, err
+		}
 		if err := push.DropOrphansTx(ctx, tx, user); err != nil {
 			return ch, err
 		}

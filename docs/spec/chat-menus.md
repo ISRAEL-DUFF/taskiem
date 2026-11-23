@@ -166,7 +166,13 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | --- | --- | --- | --- |
 | Your saved things | show | page | none yet |
 | Save something | asks | questions | *save mum: GTBank 0123456789* |
+| Ask about a saved thing | show | questions | *what's @mum's phone?* |
+| Remind me of a date | changes | questions | *remind me when @car insurance is due* |
+| Your reminders | show | show | *my reminders* |
 | Share a saved thing | asks | questions | *share @our-account with Ada's Kitchen* |
+| Import from a file | changes | page | none (the Saved page) |
+
+The saved things' rows came with saved objects S2 and S3 (built-plan stage 2); Suppliers has **Deliver to a saved place** (*deliver P-7QX4KD to @warehouse*) too. A field may take a saved thing (`saved`, any kind, by its name; `saved_place`, a place) or a person (`person`: a name typed, or a saved person): its chips are the person's own and the business's saved things of that kind, most recently changed first, as `@name`. "Send an invoice" takes its customer so. The model is told the person's saved things by `@name` and kind, never what they hold, so a message about one in any language picks these rows.
 
 **School** (for those who read the school, as the tools panel's school tiles)
 | Action | Does | Opens | Shortcut |

@@ -1,3 +1,4 @@
+import { AreaPageTabs } from "./AreaPageTabs";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, NavLink } from "react-router-dom";
@@ -37,6 +38,8 @@ import { publishNotice, type Trust } from "../lib/trust";
 import { StorefrontDomains } from "./StorefrontDomains";
 import { StorefrontEmbedSites } from "./StorefrontEmbedSites";
 import { StorefrontPreview } from "./StorefrontPreview";
+import { SavedFill } from "./SavedFill";
+import { placeAddressFit } from "../lib/saved";
 import { isKept, type Table } from "../lib/tables";
 import { THEMES, type Brand } from "../lib/brand";
 import {
@@ -136,6 +139,8 @@ function StorefrontEditor({
   const [slugTouched, setSlugTouched] = useState(initial !== null);
   const [closing, setClosing] = useState(false);
   const [notice, setNotice] = useState("");
+  // What a saved place left out of the address to fit.
+  const [fitHint, setFitHint] = useState("");
   const [catalogueTick, setCatalogueTick] = useState(0);
   const [trustTick, setTrustTick] = useState(0);
   const trust = useLoad(
@@ -416,6 +421,21 @@ function StorefrontEditor({
               multiline
               onChange={(v) => setText("about", v)}
             />
+            <div className="saved-fill-line">
+              <SavedFill
+                kind="place"
+                label="your area, address and phone"
+                onPick={(x) => {
+                  // The area to its own field; the street and landmark to
+                  // the address, the landmark left out if it does not fit.
+                  const fit = placeAddressFit({ line: x.details.line, landmark: x.details.landmark }, LIMITS.address);
+                  setText("area", (x.details.area ?? "").trim().slice(0, LIMITS.area));
+                  setText("address", fit.address);
+                  if (x.details.phone?.trim()) setText("phone", x.details.phone.trim());
+                  setFitHint(fit.hint);
+                }}
+              />
+            </div>
             <div className="row">
               <TextInput
                 label="Area"
@@ -428,9 +448,15 @@ function StorefrontEditor({
                 label="Address"
                 value={form.text.address}
                 max={LIMITS.address}
-                onChange={(v) => setText("address", v)}
+                onChange={(v) => {
+                  setText("address", v);
+                  setFitHint("");
+                }}
               />
             </div>
+            <p className="hint saved-fill-note" role="status" data-testid="saved-fill-note">
+              {fitHint}
+            </p>
             <TextInput
               label="Map search"
               hint="What a map link searches for. Left empty, your name and address are used."
@@ -1448,6 +1474,7 @@ export function StorefrontTabs() {
       {stock && <NavLink to="/storefront/stock">Stock</NavLink>}
       {stock && <NavLink to="/storefront/suppliers">Suppliers</NavLink>}
       {stock && <NavLink to="/storefront/price-lists">Price lists</NavLink>}
+      <AreaPageTabs areas={["storefront", ...(orders ? ["orders"] : []), ...(stock ? ["stock"] : [])]} />
     </nav>
   );
 }

@@ -411,6 +411,13 @@ web's pictures (the parity test still builds and drives them).
   Back and Close on the card's colour, the title in Inter Tight, the search
   on a card, filters as the switch, the rows on one card. Sell and Order:
   − and + round on a soft track, lime once picked; the total a pine bar.
+- **Your tools** (made tools M1, 22 November 2026): the business's own
+  tools follow the built-in tiles under a small "Your tools" heading, in
+  the same tiles. A tool's sheet is a `TkFormSheet` (`/command` over its
+  name); Yes is a second step of the same sheet ("What will run" as
+  `TkLines`). Its answer stands in the chat as the cards do: a text in
+  Taskiem's bubble, a card or a list in the card frame (`cardDecoration`),
+  the person's values as their own bubble before it.
 - **Left as it was:** the product form keeps its order (the photo's ways
   under the picture, the fields one under another) in the new colours; the
   documents named in a message (`RefCard`).
@@ -431,12 +438,21 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
   - App lock as a switch: on locks every time Taskiem opens; the row opens
     the choice of when (at once, after a minute, after half an hour).
 - Appearance as a switch of three.
-- Signing in: Passkeys and Your phones, each with its count.
+- Signing in: Passkeys and Your phones, each with its count, and PIN.
 - The chats you work from: WhatsApp, Telegram and Slack, each with
   whether it is linked.
 - Saved: Saved things, the business's (saved objects S0, S1).
-- For everyone here: Chat tools, a switch, for owners and admins.
+- For everyone here: Chat tools, a switch, for owners and admins; Read
+  handwriting with AI (I3), a switch beside it where this Taskiem can,
+  that only owners can change (others see it, with "Only an owner can
+  change this"), what it sends in the note under it.
 - Sign out of this phone.
+
+A photo the phone could not read (no account, no line of a list): where
+reading with AI is on, a violet `PhotoAICallout` under "From a photo"
+("No account number found", "Read it with AI", "Sends this photo to
+Taskiem's AI. It is not kept."); from a chat photo's menu, the same as a
+`pickAction` sheet.
 
 Every row that has more opens its own page (`SettingsPage`, Back to
 Settings), with its groups as headings over cards (`SettingsCard`).
@@ -505,6 +521,26 @@ A forgotten password is done in the app (`lib/screens/forgot_password.dart`):
 
 A link that comes while someone is signed in opens Choose a new password
 over the app.
+
+### The PIN (`lib/screens/you_pin.dart`)
+
+The person's one PIN (GET and PUT /v1/me/pin) approves on WhatsApp and
+pays up to ₦100,000 (₦200,000 a day). It is never shown and never asked
+for in a message.
+
+- **Set your PIN**, once a new account is made (a new number, or signing
+  up in the app), when it has none: the PIN typed twice in two rows of
+  `CodeBoxes(obscure: true)` in one `TkFormGroup`, what it is for under
+  them, Set your PIN as the `TkCta` and **Not now** as a bold link. A
+  mismatch or a weak PIN (one digit repeated, a run like 123456) is said
+  before anything is sent, in a red callout.
+- **Settings › PIN** (You's Your account, and a business's Signing in):
+  `TkLines` with the PIN as dots, when it was set and from when it pays;
+  a red callout when it is locked and an orange one while a new PIN waits
+  its 24 hours; Change PIN opens the same form. Its button asks for the
+  passkey first ("Confirm with your passkey and save"), or none moments
+  after signing in. With neither, a callout says to sign out, sign in
+  again and change it within 10 minutes.
 
 ## Sheets and the chats, as drawn
 
@@ -597,6 +633,65 @@ Left different on purpose:
 - Availability adds "Another time", to type one's own.
 - A customer's order keeps what changes it: − and +, the address, the
   fee and how they pay.
+
+### Paying a person
+
+Built 21 November 2026 in the same look, from the plan (no drawing yet).
+
+- **The Pay sheet** is the chat's form for the action, with its own
+  kinds: a saved account as @name chips under its box, an account number
+  of 10 digits, the bank a `TkPickBox` opening the bank list with a search.
+  Its button is Next: nothing is paid from the form.
+- **Check before you pay:** the bank's name for the account is the
+  largest words on the sheet, on a `TkTopCard` with "The bank says" over it
+  and the payee, bank and masked account under it, then the amount. A
+  changed account is a red callout, a first payment and the same payment
+  in the last day orange ones. Pay ₦… carries the fingerprint; the
+  authenticator's code is behind a link, as Approve has it.
+- **Payments:** a list page with the filters under the head; one not sent
+  yet has an amber dot and its own section. The owner's limits are rows
+  under "What others may pay", each opening a sheet.
+- **From a message** (phase 2): "Pay this account" is a pill under the
+  bubble on the wallpaper (the incoming bubble's colour, a teal round bank
+  mark; lime with a tick once paid, "Paid ₦45,000 on 3 Nov · Pay again").
+  "Add to the list" is a second pill beside it (the accent's words, a
+  people mark), not shown once paid. While the list has rows, a slim card
+  sits on the wallpaper above the box: a teal round mark, "3 to pay ·
+  ₦95,000" (and "1 needs an amount" in orange under it), Pay these in the
+  main pill, and ⋯ for Clear; a batch made from it waiting: an orange
+  clock, "Waiting to be sent", Open.
+- **The bank for a number:** the bank list puts the likely banks first,
+  marked "Likely for this number"; "Check the likely banks for me" is a
+  bold link under the bank's box, its answers rows under "What the banks
+  say" (lime with the name, red without), the one picked ticked. The bank's
+  name is a lime callout, no account a red one; the message's name that is
+  not the bank's an amber one.
+- **Pay on a rider:** a small Pay button on the rider's row.
+- **Payroll** (P4a; Payrolla's, shown in Taskiem): a list page like
+  Payments, the latest run's net pay large on a `TkTopCard` with its status
+  pill; the runs as rows with a calendar tile, "Nov 2026" (the month short
+  beside the amount and pill), Show more a `TkSmallButton`. A run is a
+  one-document page (title 22): net pay on top, Review and approve in
+  Payrolla a `TkCta` with an arrow, Not paid first. Staff in Payrolla: rows
+  with Confirm (primary), Choose or Unlink as small buttons at their end.
+
+### Paying a bill by transfer
+
+Built 21 November 2026 in the same look, from the payments flow's part 1
+(`docs/spec/chat-payments-flow.md`; no drawing yet).
+
+- **Pay** on a bill (its card, its page) or a customer's invoice opens a
+  small sheet of the ways as rows (`pickPayWay`): by transfer on teal, from
+  Taskiem on violet, their checkout on orange. With one way, Pay goes
+  straight to it.
+- **The transfer card** (`TransferCard`) has the card's kicker and a pill
+  (Getting it, Waiting, Expiring, Paid, Part-paid, Expired, No number);
+  "Send exactly" over the amount large; the bank, the number (in groups)
+  and the name on a panel of the ground's colour, each with a round Copy;
+  the countdown with a clock, orange in the last five minutes; a lime dot
+  that pulses while it waits, never a spinner over the number. Its one
+  step (Pay the next one, Pay the rest, Get a new number) is the card's
+  pine button; I need longer is a bold link.
 
 ## The school, as drawn
 

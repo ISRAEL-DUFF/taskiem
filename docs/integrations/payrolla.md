@@ -51,9 +51,19 @@ Events never carry bank account numbers, salary breakdowns or ID numbers. They d
 | `create_payslip_link` | `POST /connect/payslips/{payslip_id}/link` | unsafe write | A 7-day link to one payslip; the employee confirms the last four digits of their phone. Payrolla takes no idempotency key, so an answer lost in transit parks the step rather than asking twice. The link is sealed. Refused with `PAYSLIP_LINKS_DISABLED` until the owner allows it, and `PAYSLIP_NOT_FINAL` before the run is locked |
 | `list_events` | `GET /connect/events` | read | The last 30 days of the company's events, oldest first, after an event id: for catching up after an outage |
 
+## In Taskiem's own screens
+
+Payroll is Payrolla's; Taskiem shows it as its own (P4a in the [build plan](../spec/build-plan-saved-tools-payments.md)), through the same connection, with no Payrolla screens embedded:
+
+- **Payroll** (`GET /v1/payroll`, `GET /v1/payroll/runs/{run}`): the company's runs, newest first; a run's total, its timeline, each person's net pay and whether it arrived (paid, waiting, not paid with Payrolla's reason, returned), and **Review and approve in Payrolla** while it waits for approval. Seeing it needs the `payroll.read` permission, the owner's alone unless given to a role: it shows what people earn, whatever the key's scopes.
+- **Staff in Payrolla** (`GET /v1/payroll/staff`, `PUT /v1/staff/{user}/payrolla`): each staff member linked to the Payrolla employee they are, suggested by the same sign-in email or chat number and confirmed by an owner (one employee, one staff member). Only Payrolla's id and the name it gave are kept.
+- **Their own chat:** a `notify@1` `message` naming the employee (`payrolla_employee`) reaches a linked staff member on their own chat with the business, so `payrolla-tell-staff` sends pay arrived and the payslip link there, not by SMS.
+
+A refused key says what to do: `scope_required` (make a key with Read payroll and Read employees), `reconnect` (the key was revoked), `payrolla_down` (try again in a minute).
+
 ## What is not here yet
 
-- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Showing Payrolla's screens inside Taskiem (the launch token and the embed SDK, where approving and paying work) is [R6](../spec/rails-and-products.md).
+- **Approving in Taskiem.** There is no approve API, by Payrolla's design: an approver opens `approval_url` and confirms with their own factor in Payrolla. Taskiem will not embed Payrolla's screens (22 November 2026): it asks Payrolla for an approve API that accepts Taskiem's signed passkey approval, with the rest of running payroll from Taskiem ([the request](payrolla-api-requests.md)).
 - **Catching up by itself.** `list_events` replays the last 30 days, but nothing calls it automatically after an outage yet; Payrolla retries a failed delivery for about two days, and the owner can resend one.
 - **Connecting by OAuth.** Payrolla issues keys by hand only.
 

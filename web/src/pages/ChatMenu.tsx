@@ -16,6 +16,7 @@ import { KitField, Sheet } from "../kit";
 import { FormFrame } from "./FormFrame";
 import { Icon } from "../icons";
 import type { ToolKey } from "../lib/tools";
+import { PaySheet } from "./PaySheet";
 
 export interface ChatField {
   key: string;
@@ -37,6 +38,10 @@ export interface ChatAction {
   tool?: string;
   add?: boolean;
   page?: string;
+  /** "passkey": the form prepares something (a payment) that the person
+   * confirms with their passkey; its words are never sent as the command
+   * (docs/spec/chat-pay-people.md). */
+  confirm?: string;
   fields?: ChatField[];
 }
 
@@ -210,6 +215,8 @@ export function MenuCard({
     const picked = a.id === menu.pick && topic === menu.topic;
     if (picked && a.fields?.length && Object.keys(menu.values ?? {}).length > 0)
       return setForm({ action: a, values: { ...menu.values } });
+    // A payment: the Pay sheet here, whatever its tool, never the words.
+    if (a.confirm === "passkey" && a.fields?.length) return setForm({ action: a, values: picked ? { ...menu.values } : {} });
     if (a.opens === "form" && a.tool && openTool) {
       choose(a, true);
       return openTool(a.tool as ToolKey, from, { add: a.add });
@@ -240,7 +247,13 @@ export function MenuCard({
     form &&
     createPortal(
       <div style={{ display: "contents" }} onSubmit={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-        <ActionForm action={form.action} initial={form.values} onClose={() => setForm(undefined)} onSend={(v) => sent(form.action, v)} />
+        <ActionForm
+          action={form.action}
+          initial={form.values}
+          onClose={() => setForm(undefined)}
+          onSend={(v) => sent(form.action, v)}
+          onPaid={() => choose(form.action, true)}
+        />
       </div>,
       document.body,
     );
@@ -373,9 +386,31 @@ const NUMERIC = new Set(["money", "number", "signed", "phone"]);
  * An action's form (chat-menus.md M4): a field for each of its values, with
  * the choices the business's own records offer as chips; Save sends it to
  * Taskiem as "form:<id>:<values>", read as its command typed, the Save
- * being the person's yes.
+ * being the person's yes. An action that asks for a passkey (a payment,
+ * confirm: "passkey") is the Pay sheet instead: it prepares the payment,
+ * shows it with the bank's name large, and is confirmed with the passkey.
  */
 export function ActionForm({
+  action,
+  initial,
+  onClose,
+  onSend,
+  onPaid,
+}: {
+  action: ChatAction;
+  initial: Record<string, string>;
+  onClose: () => void;
+  onSend: (values: Record<string, string>) => void;
+  /** A payment confirmed in the Pay sheet. */
+  onPaid?: () => void;
+}) {
+  if (action.confirm === "passkey")
+    return <PaySheet title={action.title} actionId={action.id} fields={action.fields ?? []} initial={initial} from="chat" onClose={onClose} onPaid={onPaid} />;
+  return <CommandForm action={action} initial={initial} onClose={onClose} onSend={onSend} />;
+}
+
+/** An action's form whose Save sends its command. */
+function CommandForm({
   action,
   initial,
   onClose,

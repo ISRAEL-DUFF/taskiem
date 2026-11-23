@@ -95,3 +95,10 @@ func SetPeopleListPage(n int) func() {
 	peopleListPage = n
 	return func() { peopleListPage = old }
 }
+
+// SetPageToolWait sets how long a page's view waits for a tool it started.
+func SetPageToolWait(d time.Duration) func() {
+	old := pageToolWait
+	pageToolWait = d
+	return func() { pageToolWait = old }
+}

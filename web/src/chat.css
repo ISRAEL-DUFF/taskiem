@@ -336,7 +336,9 @@ img.tk-live-tile { object-fit: cover; }
 .composer > .send-button:disabled { opacity: 1; background: var(--brand); color: var(--brand-dark); }
 .composer > .send-button svg, .composer > .icon-button.primary svg { color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .composer > .send-button, :root[data-theme="dark"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button, :root[data-theme="system"] .composer > .icon-button.primary { background: var(--brand-dark); color: var(--brand-dark-text); } }
 :root[data-theme="dark"] .composer > .send-button svg, :root[data-theme="dark"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .composer > .send-button svg, :root[data-theme="system"] .composer > .icon-button.primary svg { color: var(--brand-dark-text); } }
 .composer-tools { background: var(--panel); color: var(--brand); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.08); }
 :root[data-theme="dark"] .composer-tools { color: var(--text); }
 /* The head: on a phone only search (the board), Order as a pine pill on a
@@ -347,6 +349,7 @@ img.tk-live-tile { object-fit: cover; }
 .chat-head .chat-sub { font-size: 13px; color: var(--muted); }
 .chat-head .chat-sub .typing { color: var(--brand); font-weight: 600; }
 :root[data-theme="dark"] .chat-head .chat-sub .typing { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .chat-head .chat-sub .typing { color: var(--brand-dark); } }
 /* Diary lines: the pill alone (when it was is for a screen reader). */
 .tk-diary-when:not(:has(button)) { display: contents; }
 
@@ -362,6 +365,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-row-tile[data-tone="sand"] { background: var(--tone-sand-bg); color: var(--tone-sand-ink); }
 .tk-cta svg { width: 20px; height: 20px; color: var(--brand-dark); stroke-width: 2.4; }
 :root[data-theme="dark"] .tk-cta svg { color: var(--brand-dark-text); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-cta svg { color: var(--brand-dark-text); } }
 .tk-sheet-more { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 14px auto 4px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
 .tk-sheet-more:hover { color: var(--text); text-decoration: none; }
 .tk-sheet-more svg { width: 16px; height: 16px; }
@@ -431,6 +435,7 @@ img.tk-live-tile { object-fit: cover; }
 .tk-share-box > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tk-share-change, .tk-share-change:hover:not(:disabled) { flex: none; min-height: 36px; padding: 0 4px; border: 0; background: none; box-shadow: none; font-size: 14px; font-weight: 700; color: var(--brand); }
 :root[data-theme="dark"] .tk-share-change { color: var(--brand-dark); }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .tk-share-change { color: var(--brand-dark); } }
 .tk-share-pick { display: flex; flex-direction: column; gap: 2px; margin: -4px 0 0; padding: 6px 14px; border: 1px solid var(--border); border-radius: 14px; }
 .tk-share-row { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; font-weight: 500; color: var(--text); cursor: pointer; }
 .tk-share-note { margin: 0; padding: 12px 14px; border-radius: 14px; border: 1px dashed color-mix(in srgb, var(--brand-dark) 70%, var(--border-strong)); background: var(--tone-green-bg); color: var(--tone-green-ink); font-size: 13px; line-height: 1.45; }
@@ -565,6 +570,7 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .pc-app-line a { color: var(--muted); }
 .pc-offers { margin: 8px auto; max-width: 420px; }
 .pc-tiles, .pc-items, .pc-orders, .pc-lines { list-style: none; margin: 0; padding: 0; }
+.pc-tools-head { margin: 14px 16px 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .pc-tile { width: 100%; text-align: left; background: none; border: 0; box-shadow: none; cursor: pointer; font: inherit; }
 .pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
 .pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
@@ -743,6 +749,46 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-menu-tip b { color: var(--text); font-weight: 600; }
 .tk-form-chips { padding: 2px 0 8px; flex-wrap: wrap; }
 
+/* ---------- Your tools (made tools M1) ---------- */
+
+/* What will run, or what was read: label and value, one per line. */
+.tk-tool-values { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.tk-tool-values > div { display: flex; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
+.tk-tool-values dt { color: var(--muted); font-size: 14px; }
+.tk-tool-values dd { margin: 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; text-align: right; }
+.tk-tool-echo { display: flex; flex-direction: column; gap: 6px; }
+/* A sentence answers as a message from Taskiem. */
+.tk-answer-text { align-self: flex-start; max-width: 100%; padding: 10px 14px; border-radius: 4px 16px 16px 16px; background: var(--chat-in); color: var(--text); box-shadow: 0 0 0 1px var(--border); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; }
+.tk-answer-note { padding: 12px 14px; border-radius: 14px; background: var(--panel-2); color: var(--text); }
+.tk-answer-note p { margin: 0; }
+.tk-answer-note.bad { background: var(--tint-warn); color: var(--tint-warn-text); }
+.tk-answer-note a { color: inherit; text-decoration: underline; }
+/* A button someone else used first, or one gone: why, under its row. */
+.tk-answer-taken { display: block; color: var(--muted); font-size: 13.5px; }
+.tk-answer-card { background: var(--panel-2); box-shadow: 0 0 0 1px var(--border); }
+.tk-answer-amount { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tk-answer-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tk-answer-rows > li { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.tk-answer-rows > li:first-child { border-top: 0; }
+.tk-answer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.tk-answer-row .tk-row-words { min-width: 0; display: flex; flex-direction: column; }
+.tk-tool-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.tk-tool-head .tk-tile-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--tint); color: var(--tint-text); }
+.tk-tool-head .tk-tile-icon svg { width: 20px; height: 20px; }
+.tk-tool-head > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.tk-tool-care svg { width: 16px; height: 16px; flex: none; }
+/* Fill from words, at the top of a tool's form (made tools M3). */
+.tk-tool-words { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.tk-tool-words-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.tk-tool-words-row { display: flex; gap: 8px; min-width: 0; }
+.tk-tool-words-row input { flex: 1; min-width: 0; }
+.tk-tool-words-row .tk-btn { flex: none; min-height: 40px; padding: 0 16px; }
+.tk-tool-words-said { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.tk-tool-words-said p { margin: 0; }
+.tk-tool-words-note { color: var(--text); font-weight: 600; }
+.tk-answer-note a { display: inline-block; margin-top: 6px; font-weight: 600; }
+/* Your tools after the built-in ones, under their own heading. */
+.tk-tools-sub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
 /* What Taskiem answered a "@Taskiem" typed in a business's conversation,
    on our side only (Conversation.tsx TaskiemNote). */
 .tk-taskiem-note {

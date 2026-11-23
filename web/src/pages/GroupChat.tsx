@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSavedPicks } from "./SavedPicks";
 import { sendSaved } from "./SavedCard";
 import { SaveAsItem, useSaveAs } from "./SaveAs";
+import { PayFromMessages, PayListBar, PhotoAccountItems } from "./PayChip";
 import type { Suggestion } from "../lib/mentions";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
@@ -440,195 +441,199 @@ export function GroupChatPage() {
   const current = !!g && !g.left;
 
   return (
-    <section className="chat-pane person-pane group-pane" aria-label={`Group ${name}`} data-testid="group-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
-      <h1 className="sr-only">{g ? `Group ${g.name}` : "Group"}</h1>
-      <p className="sr-only" aria-live="polite" data-testid="group-typing-live">
-        {typingWords(typingNames)}
-      </p>
-      <ChatHead
-        onBack={() => nav("/you")}
-        menuLabel="More about this group"
-        avatar={<ChatAvatar name={name} logo={g?.photo?.url} />}
-        title={
-          g ? (
-            <Link to={groupInfoPath(id)} className="group-head-link" data-testid="group-head-info">
-              {g.name}
-            </Link>
-          ) : (
-            "Group"
-          )
-        }
-        subtitle={sub ? <span className={typingNames.length ? "typing" : undefined} data-testid={typingNames.length ? "group-typing" : "group-head-line"}>{sub}</span> : undefined}
-        items={
-          g
-            ? (close) => (
-                <>
-                  <button type="button" role="menuitem" onClick={() => (close(), nav(groupInfoPath(id)))} data-testid="group-info">
-                    Group info
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => (close(), nav(`/you/people/search?group=${encodeURIComponent(id)}&name=${encodeURIComponent(g.name)}`))}
-                    data-testid="group-search"
-                  >
-                    Search in this group
-                  </button>
-                  {current && (
-                    <button type="button" role="menuitem" onClick={() => (close(), void change({ muted: !g.muted }, g.muted ? "Notifications on" : "Muted"))} data-testid="group-mute">
-                      {g.muted ? "Unmute notifications" : "Mute notifications"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      close();
-                      void change({ archived: !g.archived }, g.archived ? "Back in your chats" : "Archived").then((ok) => ok && !g.archived && nav("/you"));
-                    }}
-                  >
-                    {g.archived ? "Unarchive" : "Archive"}
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => (close(), nav(`${groupInfoPath(id)}?report=1`))} data-testid="group-report">
-                    Report group
-                  </button>
-                  {current ? (
-                    <button type="button" role="menuitem" onClick={() => (close(), void leave())} data-testid="group-leave">
-                      Leave group
-                    </button>
-                  ) : null}
-                  <button type="button" role="menuitem" onClick={() => (close(), void deleteForMe())} data-testid="group-delete">
-                    {g.left ? "Delete group" : "Clear chat"}
-                  </button>
-                </>
-              )
-            : undefined
-        }
-      />
-      {problem && (
-        <div className="notice pc-notice" role="alert" data-testid="group-problem">
-          <span className="grow">
-            {problem}
-            {/Your standing/.test(problem) && (
-              <>
-                {" "}
-                <Link to="/you/settings/standing">Open Your standing</Link>
-              </>
-            )}
-          </span>
-          <button type="button" className="small" onClick={() => setProblem(undefined)}>
-            OK
-          </button>
-        </div>
-      )}
-      <ErrorBox error={sendError ?? act.error ?? pollError ?? group.error} />
-      {at && atMissing && (
-        <p className="notice" role="status" data-testid="group-at-missing" data-state={atMissing}>
-          <span className="grow">{AT_FIND_WORDS[atMissing]}</span>
-          {atMissing === "far" && (
-            <>
-              {" "}
-              <button type="button" className="small" onClick={keepLooking} disabled={looking}>
-                {looking ? "Looking…" : "Keep looking"}
-              </button>
-            </>
-          )}
+    <PayFromMessages chat={{ kind: "group", id, name: g?.name }}>
+      <section className="chat-pane person-pane group-pane" aria-label={`Group ${name}`} data-testid="group-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
+        <h1 className="sr-only">{g ? `Group ${g.name}` : "Group"}</h1>
+        <p className="sr-only" aria-live="polite" data-testid="group-typing-live">
+          {typingWords(typingNames)}
         </p>
-      )}
-      <ChatStream
-        items={messages}
-        thread={thread}
-        hasOlder={hasOlder}
-        prefix="group"
-        keyOf={(m) => m.id}
-        startsRun={(prev, m) => !prev || prev.kind === "event" || prev.mine !== m.mine || prev.sender_id !== m.sender_id}
-        empty={<>Say hello to {name}.</>}
-        render={(m, { first }) => {
-          if (m.kind === "event")
-            return (
-              <p className={`group-event${fromTaskiem(m) ? " taskiem" : ""}`} data-testid="group-event" data-type={m.event?.type} id={`m-${m.id}`}>
-                {fromTaskiem(m) && <Icon name="info" />}
-                <span>{m.body}</span>
-              </p>
-            );
-          return (
-            <GroupBubble
-              m={m}
-              first={first}
-              quoted={m.reply_to ? byID.get(m.reply_to) : undefined}
-              sender={m.sender_id ? byPerson.get(m.sender_id) : undefined}
-              names={names}
-              flash={thread.flashId === m.id}
-              canPost={!!g?.can_post}
-              current={current}
-              busy={act.busy}
-              onReply={() => composer.setReply(m)}
-              onSaveAs={saveAs.fromWords}
-              onReact={(e) => void react(m, e)}
-              onStar={() => void star(m)}
-              onPaid={(paid) => void markPaid(m, paid)}
-              onSheet={(k) => setSheet({ k, m })}
-              fileURL={groupFileURL(id, m.id)}
-            />
-          );
-        }}
-      />
-      {noPost ? (
-        <div className="customer-note stop group-closed" role="status" data-testid={g?.closed ? "group-closed" : g?.left ? "group-left" : "group-admins-only"}>
-          <p>{noPost}</p>
-          {g?.closed && g.role === "admin" && g.closed.can_appeal && !g.closed.appeal && (
-            <Link className="button small" to={`${groupInfoPath(id)}#appeal`} data-testid="group-appeal-open">
-              Appeal
-            </Link>
-          )}
-          {g?.left && (
-            <button type="button" className="small danger" onClick={() => void deleteForMe()} data-testid="group-left-delete">
-              Delete group
-            </button>
-          )}
-        </div>
-      ) : (
-        g && (
-          <ComposerView
-            c={composer}
-            busy={false}
-            prefix="group"
-            textId="group-text"
-            textLabel={`Message ${g.name}`}
-            lead={
-              <button type="button" className="composer-tools" aria-label="Share a card" data-testid="group-share-button" onClick={() => setSheet({ k: "share" })}>
-                <Icon name="grid" />
-              </button>
-            }
-          />
-        )
-      )}
-      {g && sheet?.k === "forward" && <ForwardSheet from={{ group_id: id }} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {g && sheet?.k === "card" && <CardSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {g && sheet?.k === "info" && <ReadBySheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {g && sheet?.k === "reactions" && <ReactionsSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {g && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} together={g.can_post ? { group_id: id } : undefined} />}
-      {g && sheet?.k === "place" && <PlaceSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(location) => sendOther({ location })} />}
-      {g && sheet?.k === "split" && <SplitSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} />}
-      {g && sheet?.k === "delete" && (
-        <DeleteAsk
-          m={sheet.m}
-          group
-          mayEveryone={mayDeleteGroupForEveryone(g, sheet.m)}
-          onClose={() => setSheet(undefined)}
-          onDelete={(forEveryone) =>
-            void act.run(async () => {
-              setSheet(undefined);
-              await del(`${base}/messages/${encodeURIComponent(sheet.m.id)}?for=${forEveryone ? "everyone" : "me"}`);
-              if (forEveryone) await pull(false);
-              else setMessages((cur) => cur?.filter((x) => x.id !== sheet.m.id));
-            }, forEveryone ? "Deleted for everyone" : "Deleted for you")
+        <ChatHead
+          onBack={() => nav("/you")}
+          menuLabel="More about this group"
+          avatar={<ChatAvatar name={name} logo={g?.photo?.url} />}
+          title={
+            g ? (
+              <Link to={groupInfoPath(id)} className="group-head-link" data-testid="group-head-info">
+                {g.name}
+              </Link>
+            ) : (
+              "Group"
+            )
+          }
+          subtitle={sub ? <span className={typingNames.length ? "typing" : undefined} data-testid={typingNames.length ? "group-typing" : "group-head-line"}>{sub}</span> : undefined}
+          items={
+            g
+              ? (close) => (
+                  <>
+                    <button type="button" role="menuitem" onClick={() => (close(), nav(groupInfoPath(id)))} data-testid="group-info">
+                      Group info
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => (close(), nav(`/you/people/search?group=${encodeURIComponent(id)}&name=${encodeURIComponent(g.name)}`))}
+                      data-testid="group-search"
+                    >
+                      Search in this group
+                    </button>
+                    {current && (
+                      <button type="button" role="menuitem" onClick={() => (close(), void change({ muted: !g.muted }, g.muted ? "Notifications on" : "Muted"))} data-testid="group-mute">
+                        {g.muted ? "Unmute notifications" : "Mute notifications"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        close();
+                        void change({ archived: !g.archived }, g.archived ? "Back in your chats" : "Archived").then((ok) => ok && !g.archived && nav("/you"));
+                      }}
+                    >
+                      {g.archived ? "Unarchive" : "Archive"}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => (close(), nav(`${groupInfoPath(id)}?report=1`))} data-testid="group-report">
+                      Report group
+                    </button>
+                    {current ? (
+                      <button type="button" role="menuitem" onClick={() => (close(), void leave())} data-testid="group-leave">
+                        Leave group
+                      </button>
+                    ) : null}
+                    <button type="button" role="menuitem" onClick={() => (close(), void deleteForMe())} data-testid="group-delete">
+                      {g.left ? "Delete group" : "Clear chat"}
+                    </button>
+                  </>
+                )
+              : undefined
           }
         />
-      )}
-      {sure.node}
-      {saveAs.node}
-    </section>
+        {problem && (
+          <div className="notice pc-notice" role="alert" data-testid="group-problem">
+            <span className="grow">
+              {problem}
+              {/Your standing/.test(problem) && (
+                <>
+                  {" "}
+                  <Link to="/you/settings/standing">Open Your standing</Link>
+                </>
+              )}
+            </span>
+            <button type="button" className="small" onClick={() => setProblem(undefined)}>
+              OK
+            </button>
+          </div>
+        )}
+        <ErrorBox error={sendError ?? act.error ?? pollError ?? group.error} />
+        {at && atMissing && (
+          <p className="notice" role="status" data-testid="group-at-missing" data-state={atMissing}>
+            <span className="grow">{AT_FIND_WORDS[atMissing]}</span>
+            {atMissing === "far" && (
+              <>
+                {" "}
+                <button type="button" className="small" onClick={keepLooking} disabled={looking}>
+                  {looking ? "Looking…" : "Keep looking"}
+                </button>
+              </>
+            )}
+          </p>
+        )}
+        <ChatStream
+          items={messages}
+          thread={thread}
+          hasOlder={hasOlder}
+          prefix="group"
+          keyOf={(m) => m.id}
+          startsRun={(prev, m) => !prev || prev.kind === "event" || prev.mine !== m.mine || prev.sender_id !== m.sender_id}
+          empty={<>Say hello to {name}.</>}
+          render={(m, { first }) => {
+            if (m.kind === "event")
+              return (
+                <p className={`group-event${fromTaskiem(m) ? " taskiem" : ""}`} data-testid="group-event" data-type={m.event?.type} id={`m-${m.id}`}>
+                  {fromTaskiem(m) && <Icon name="info" />}
+                  <span>{m.body}</span>
+                </p>
+              );
+            return (
+              <GroupBubble
+                m={m}
+                first={first}
+                quoted={m.reply_to ? byID.get(m.reply_to) : undefined}
+                sender={m.sender_id ? byPerson.get(m.sender_id) : undefined}
+                names={names}
+                flash={thread.flashId === m.id}
+                canPost={!!g?.can_post}
+                current={current}
+                busy={act.busy}
+                onReply={() => composer.setReply(m)}
+                onSaveAs={saveAs.fromWords}
+                onSavePhoto={saveAs.fromPhoto}
+                onReact={(e) => void react(m, e)}
+                onStar={() => void star(m)}
+                onPaid={(paid) => void markPaid(m, paid)}
+                onSheet={(k) => setSheet({ k, m })}
+                fileURL={groupFileURL(id, m.id)}
+              />
+            );
+          }}
+        />
+        <PayListBar />
+        {noPost ? (
+          <div className="customer-note stop group-closed" role="status" data-testid={g?.closed ? "group-closed" : g?.left ? "group-left" : "group-admins-only"}>
+            <p>{noPost}</p>
+            {g?.closed && g.role === "admin" && g.closed.can_appeal && !g.closed.appeal && (
+              <Link className="button small" to={`${groupInfoPath(id)}#appeal`} data-testid="group-appeal-open">
+                Appeal
+              </Link>
+            )}
+            {g?.left && (
+              <button type="button" className="small danger" onClick={() => void deleteForMe()} data-testid="group-left-delete">
+                Delete group
+              </button>
+            )}
+          </div>
+        ) : (
+          g && (
+            <ComposerView
+              c={composer}
+              busy={false}
+              prefix="group"
+              textId="group-text"
+              textLabel={`Message ${g.name}`}
+              lead={
+                <button type="button" className="composer-tools" aria-label="Share a card" data-testid="group-share-button" onClick={() => setSheet({ k: "share" })}>
+                  <Icon name="grid" />
+                </button>
+              }
+            />
+          )
+        )}
+        {g && sheet?.k === "forward" && <ForwardSheet from={{ group_id: id }} m={sheet.m} onClose={() => setSheet(undefined)} />}
+        {g && sheet?.k === "card" && <CardSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
+        {g && sheet?.k === "info" && <ReadBySheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
+        {g && sheet?.k === "reactions" && <ReactionsSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
+        {g && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} together={g.can_post ? { group_id: id } : undefined} />}
+        {g && sheet?.k === "place" && <PlaceSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(location) => sendOther({ location })} />}
+        {g && sheet?.k === "split" && <SplitSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} />}
+        {g && sheet?.k === "delete" && (
+          <DeleteAsk
+            m={sheet.m}
+            group
+            mayEveryone={mayDeleteGroupForEveryone(g, sheet.m)}
+            onClose={() => setSheet(undefined)}
+            onDelete={(forEveryone) =>
+              void act.run(async () => {
+                setSheet(undefined);
+                await del(`${base}/messages/${encodeURIComponent(sheet.m.id)}?for=${forEveryone ? "everyone" : "me"}`);
+                if (forEveryone) await pull(false);
+                else setMessages((cur) => cur?.filter((x) => x.id !== sheet.m.id));
+              }, forEveryone ? "Deleted for everyone" : "Deleted for you")
+            }
+          />
+        )}
+        {sure.node}
+        {saveAs.node}
+      </section>
+    </PayFromMessages>
   );
 }
 
@@ -652,6 +657,7 @@ function GroupBubble({
   onSheet,
   fileURL,
   onSaveAs,
+  onSavePhoto,
 }: {
   m: GroupMessage;
   first: boolean;
@@ -665,6 +671,8 @@ function GroupBubble({
   onReply: () => void;
   /** Save as… on its words (saved objects S1, part 4). */
   onSaveAs: (text: string) => void;
+  /** Pay this account and Save the account on a photo, read on this device. */
+  onSavePhoto: (url: string) => void;
   onReact: (emoji: string) => void;
   onStar: () => void;
   onPaid: (paid: boolean) => void;
@@ -724,6 +732,7 @@ function GroupBubble({
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
                   {!card && m.body && <SaveAsItem text={m.body} onSave={onSaveAs} close={close} />}
+                  {m.attachment?.kind === "photo" && <PhotoAccountItems url={fileURL} message={m.id} close={close} saveAccount={onSavePhoto} />}
                   {card?.type !== "split" && card?.type !== "basket" && (
                     <PopItem icon="forward" onClick={() => (close(), onSheet("forward"))}>
                       Forward

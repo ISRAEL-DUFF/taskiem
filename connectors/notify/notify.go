@@ -9,6 +9,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -62,7 +63,10 @@ type Outside struct {
 	Title       string
 	Text        string
 	About       string
-	Key         string
+	// PayrollaEmployee: the Payrolla employee it is about; a staff member
+	// linked to them hears it on their own chat instead.
+	PayrollaEmployee string
+	Key              string
 }
 
 // Delivery is how a message to someone outside goes.
@@ -88,6 +92,45 @@ type Teller interface {
 // message may carry (whatsapp.TellTemplate) and template_vars must hold
 // exactly its variables; their values may be expressions.
 func CheckTell(input map[string]any) []string {
+	out := checkButtons(input)
+	if t := checkTellTemplate(input); len(t) > 0 {
+		out = append(out, t...)
+	}
+	return out
+}
+
+var buttonTool = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
+
+// checkButtons holds a Tell me message's buttons: three at most, each a
+// label of twenty characters and a tool's command written out.
+func checkButtons(input map[string]any) []string {
+	raw, has := input["buttons"]
+	if !has {
+		return nil
+	}
+	bs, ok := raw.([]any)
+	if !ok {
+		return []string{"buttons is a list of {label, tool, inputs, once}"}
+	}
+	var out []string
+	if len(bs) > 3 {
+		out = append(out, "a message carries at most 3 buttons")
+	}
+	for i, x := range bs {
+		b, _ := x.(map[string]any)
+		label, _ := b["label"].(string)
+		tool, _ := b["tool"].(string)
+		if n := len([]rune(label)); n == 0 || n > 20 {
+			out = append(out, fmt.Sprintf("buttons[%d]: a label of 1 to 20 characters", i))
+		}
+		if !buttonTool.MatchString(tool) {
+			out = append(out, fmt.Sprintf("buttons[%d]: tool is a tool's command, written out (clean-disk)", i))
+		}
+	}
+	return out
+}
+
+func checkTellTemplate(input map[string]any) []string {
 	name, has := input["template"]
 	vars, hasVars := input["template_vars"]
 	if !has && !hasVars {
@@ -203,11 +246,12 @@ func New(t Teller) *connector.Connector {
 			m.Title, _ = req.Input["title"].(string)
 			m.Text, _ = req.Input["message"].(string)
 			m.About, _ = req.Input["about"].(string)
-			m.Phone, m.Email = strings.TrimSpace(m.Phone), strings.TrimSpace(m.Email)
+			m.PayrollaEmployee, _ = req.Input["payrolla_employee"].(string)
+			m.Phone, m.Email, m.PayrollaEmployee = strings.TrimSpace(m.Phone), strings.TrimSpace(m.Email), strings.TrimSpace(m.PayrollaEmployee)
 			switch {
 			case strings.TrimSpace(m.Text) == "":
 				return connector.Response{}, fmt.Errorf("a message is required: %w", effects.ErrFatal)
-			case m.Phone == "" && m.Email == "":
+			case m.Phone == "" && m.Email == "" && m.PayrollaEmployee == "":
 				return connector.Response{}, fmt.Errorf("their phone number or email is required: %w", effects.ErrFatal)
 			}
 			d, err := t.Message(ctx, m)

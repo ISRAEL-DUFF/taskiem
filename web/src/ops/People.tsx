@@ -296,11 +296,14 @@ function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction |
 /** A note and a decision taken with the passkey. */
 function Decide({
   label,
+  name,
   buttons,
   noteLabel,
   required,
 }: {
   label: string;
+  /** Its landmark's name where several are on one page: unique there. */
+  name?: string;
   noteLabel: string;
   required?: boolean;
   buttons: { text: string; danger?: boolean; run: (note: string) => Promise<unknown>; done: string }[];
@@ -308,7 +311,7 @@ function Decide({
   const [note, setNote] = useState("");
   const act = useAction();
   return (
-    <section className="card" aria-label={label}>
+    <section className="card" aria-label={name ?? label}>
       <h2>{label}</h2>
       <Field label={noteLabel}>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={3} />
@@ -828,8 +831,9 @@ export function Appeals() {
       />
       <ErrorBox error={error} />
       {data && data.appeals.length === 0 && <div className="empty">{state === "open" ? "No open appeals." : "None."}</div>}
-      {data?.appeals.map((a) => (
-        <section className="card" key={a.id} data-testid="ops-appeal" aria-label={`Appeal from ${a.name}`}>
+      {data?.appeals.map((a, i) => (
+        // Numbered: two appeals may come from people of one name.
+        <section className="card" key={a.id} data-testid="ops-appeal" aria-label={`Appeal ${i + 1}, from ${a.name || "no name"}`}>
           <h2>
             <Link to={`/ops/people/persons/${a.person_id}`}>{a.name || "No name"}</Link>: {anyActionLabel(a.action)}
           </h2>
@@ -846,6 +850,7 @@ export function Appeals() {
           {a.state === "open" ? (
             <Decide
               label="Answer the appeal"
+              name={`Answer appeal ${i + 1}`}
               noteLabel="Your answer (they are told it)"
               required
               buttons={[

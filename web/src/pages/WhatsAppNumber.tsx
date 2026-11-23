@@ -177,6 +177,10 @@ function PublicMenu({ view, onSaved }: { view: NumberView; onSaved: () => void }
         Anyone who writes to this number without a linked account sees these workflows and can start them, after filling in a WhatsApp form and confirming. They
         run as <code>whatsapp_public:&lt;number&gt;</code> under your plan limits, with strict rate limits. Offer only what is safe for anyone to start.
       </p>
+      <p className="hint">
+        Each one is a tool for your customers. Tools you make for customers are on the menu too, and customers get each answer, showing only what the workflow
+        marks public.
+      </p>
       <ErrorBox error={act.error ?? wfs.error} />
       <label className="row">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer the menu

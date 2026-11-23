@@ -654,6 +654,11 @@ func Document(mediaID, mime, filename, caption string) map[string]any {
 	return map[string]any{"type": "document", "document": doc}
 }
 
+// Location is an inbound shared location (WhatsApp's location message).
+func Location(lat, lng float64) map[string]any {
+	return map[string]any{"type": "location", "location": map[string]any{"latitude": lat, "longitude": lng}}
+}
+
 // Text is an inbound text message.
 func Text(body string) map[string]any {
 	return map[string]any{"type": "text", "text": map[string]any{"body": body}}

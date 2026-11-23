@@ -15,7 +15,8 @@ export type AlertKind =
   | "school_approval"
   | "deal"
   | "order_draft"
-  | "customer_waiting";
+  | "customer_waiting"
+  | "page";
 
 export interface ChatAlert {
   key: string;
@@ -40,7 +41,52 @@ export interface ChatAlert {
   };
   approval?: Approval;
   who?: string;
+  /** A Confirm card's proof of delivery (device fields §6). */
+  proof?: AlertProof;
 }
+
+/** A delivery's proof: the pin at its masked point (about 100 m), the
+ * photo, and how each was got. */
+export interface AlertProof {
+  where?: {
+    lat: number;
+    lng: number;
+    source: "device" | "sent" | "typed";
+    coarse?: boolean;
+    accuracy_m?: number;
+  };
+  mark?:
+    | "confirmed_at_door"
+    | "far_from_address"
+    | "said_by_rider"
+    | "read_by_phone"
+    | "no_location";
+  photo_url?: string;
+  photo_source?: "camera" | "sent";
+}
+
+/** Which was read by the phone and which was sent, in words. */
+export function proofWords(p: AlertProof): { where?: string; photo?: string } {
+  const where = {
+    confirmed_at_door: "Location read by the rider's phone, at the door",
+    far_from_address:
+      "Location read by the rider's phone, far from the address",
+    read_by_phone: "Location read by the rider's phone",
+    said_by_rider: "Location sent by the rider (a pin they placed)",
+    no_location: undefined,
+  }[p.mark ?? "no_location"];
+  const photo =
+    p.photo_source === "camera"
+      ? "Photo taken in the app"
+      : p.photo_source === "sent"
+        ? "Photo sent by the rider"
+        : undefined;
+  return { where, photo };
+}
+
+/** The masked pin on a map: never the coordinates in words. */
+export const pinLink = (w: NonNullable<AlertProof["where"]>) =>
+  `https://www.google.com/maps?q=${w.lat.toFixed(3)},${w.lng.toFixed(3)}`;
 
 /** Each kind's tile: its icon, and whether it is a warning. */
 export const ALERT_LOOK: Record<
@@ -58,6 +104,7 @@ export const ALERT_LOOK: Record<
   deal: { icon: "money", tone: "warn" },
   order_draft: { icon: "chat", tone: "lime" },
   customer_waiting: { icon: "chat", tone: "warn" },
+  page: { icon: "dashboard", tone: "warn" },
 };
 
 /** "Reorder 20 from Bayo Rice Mills". */

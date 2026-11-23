@@ -12,6 +12,7 @@ import { Help } from "../onboarding";
 import { proof } from "../passkeys";
 import { SchoolsSwitch } from "./Schools";
 import { setChatTools } from "../lib/useChatTools";
+import { AIPhotoReadingSwitch } from "./AIPhotoReading";
 
 interface Secret {
   environment: string;
@@ -178,6 +179,7 @@ export function Settings() {
       </div>
       {can("member.manage") && <AdvancedSwitch />}
       {can("member.manage") && <ChatToolsSwitch />}
+      <AIPhotoReadingSwitch />
       {(can("order.handle") || can("storefront.manage")) && (
         <div className="card" data-testid="settings-customer-chats">
           <h2 style={{ marginTop: 0 }}>Customer chats</h2>

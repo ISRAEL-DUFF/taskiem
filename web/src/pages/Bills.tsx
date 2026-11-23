@@ -1,10 +1,11 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { billHero, billPath, billsDue, billStatus, canPay, sentLine, type Bill, type BillPaySettings } from "../lib/bills";
 import { dateLabel, naira, toKobo } from "../lib/invoices";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DocThread } from "./Conversation";
+import { useBillPay } from "./PayByTransfer";
 import { useBillMarks } from "./TreatLine";
 import { EmptyState, ErrorBox, Field, fmtTime, Item, Items, Modal, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 
@@ -132,13 +133,14 @@ export function BillPage() {
             </div>
           )}
           {sentLine(b) && <p className="hint">{sentLine(b)}</p>}
+          {can("invoice.manage") && <BillPay bill={b} onDone={reload} />}
           {can("invoice.manage") && canPay(b) && <PayFromTaskiem bill={b} onDone={reload} />}
           {b.disputed && (
             <div className="warning" role="note" data-testid="bill-queried">
               You queried this bill. It is not paid from Taskiem until {b.supplier_name} settles the query.
             </div>
           )}
-          {b.due_kobo > 0 && (b.pay_account_number || b.pay_link) && (
+          {b.due_kobo > 0 && (b.pay_account_number || (b.pay_link && !can("invoice.manage"))) && (
             <section className="card" aria-labelledby="bill-pay" data-testid="bill-pay">
               <h2 id="bill-pay">How to pay</h2>
               {b.pay_account_number && (
@@ -148,7 +150,7 @@ export function BillPage() {
                   transfer's note: it is counted towards this invoice by itself. Without it, it counts towards your oldest invoice from {b.supplier_name} first.
                 </p>
               )}
-              {b.pay_link && (
+              {b.pay_link && !can("invoice.manage") && (
                 <p>
                   <a className="button" href={b.pay_link} target="_blank" rel="noreferrer">
                     Pay on the invoice's page
@@ -196,6 +198,60 @@ export function BillPage() {
   );
 }
 
+/** Pay on a bill (the payments flow, part 1): the ways to pay in a sheet,
+ * transfer first, or straight to the only one; the account number on the
+ * page once one was given. */
+function BillPay({ bill, onDone }: { bill: Bill; onDone: () => void }) {
+  const act = useAction();
+  const pay = useBillPay(
+    bill,
+    () => void act.run(async () => (await post(`${billPath(bill.id)}/pay`), onDone()), "Sent for approval"),
+    onDone,
+  );
+  // "Pay the next one" opens a bill with ?pay=1: its Pay is pressed.
+  const [params, setParams] = useSearchParams();
+  const started = useRef(false);
+  const { start, ways, checkoutOnly } = pay;
+  useEffect(() => {
+    if (started.current || params.get("pay") !== "1") return;
+    started.current = true;
+    setParams({}, { replace: true });
+    if (bill.due_kobo > 0 && ways.length > 0 && !checkoutOnly) start();
+  }, [params, setParams, bill.due_kobo, ways, checkoutOnly, start]);
+  const live = pay.transfer && (pay.transfer.state === "open" || pay.transfer.state === "asking");
+  const due = bill.due_kobo > 0 && ways.length > 0;
+  return (
+    <>
+      <ErrorBox error={act.error} />
+      {due && !live && (
+        <p className="row-actions" data-testid="bill-pay-button">
+          {checkoutOnly ? (
+            <a className="button primary" href={checkoutOnly} target="_blank" rel="noreferrer">
+              Pay {naira(bill.due_kobo)}
+              <span className="sr-only"> on {bill.supplier_name}'s checkout (opens a new tab)</span>
+            </a>
+          ) : (
+            <button type="button" className="primary" disabled={act.busy} onClick={start}>
+              Pay {naira(bill.due_kobo)}
+            </button>
+          )}
+        </p>
+      )}
+      {pay.card}
+      {pay.step && (
+        <Modal title={pay.step === "transfer" ? "Pay by transfer" : `Pay ${naira(bill.due_kobo)}`} onClose={pay.close}>
+          {pay.content}
+          <p className="row-actions">
+            <button type="button" onClick={pay.close}>
+              {pay.step === "transfer" ? "Done" : "Not now"}
+            </button>
+          </p>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /** Paying a bill from the business's own Taskiem wallet, after its
  * approval: set up once, then Pay. */
 function PayFromTaskiem({ bill, onDone }: { bill: Bill; onDone: () => void }) {
@@ -203,6 +259,8 @@ function PayFromTaskiem({ bill, onDone }: { bill: Bill; onDone: () => void }) {
   const act = useAction();
   if (!settings.data) return <ErrorBox error={settings.error} />;
   const ready = !!settings.data.workflow_id;
+  // Once set up, Pay from Taskiem is one of the ways to pay (BillPay).
+  if (ready && bill.ways_to_pay) return null;
   return (
     <section className="card" aria-labelledby="bill-pay-taskiem" data-testid="bill-pay-taskiem">
       <h2 id="bill-pay-taskiem">Pay from Taskiem</h2>

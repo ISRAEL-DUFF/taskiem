@@ -47,6 +47,7 @@ Map<String, Object?> _si(
   'supplier': supplier,
   'group_of': group,
   'group_name': groupName,
+  'code': '',
   'low': low,
   'suggest': suggest,
   'value_kobo': value,

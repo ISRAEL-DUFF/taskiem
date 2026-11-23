@@ -114,8 +114,28 @@ func (s *Server) toolLink(tool string, r *toolRequest) string {
 // waToolsCommand answers "tools", "/tools" and "/<tool>" with chat tools
 // on: links to the tools the person may open (false: not one).
 func (s *Server) waToolsCommand(ctx context.Context, c *chat, cmd string) (bool, error) {
-	if !c.tools || c.state != stateIdle {
+	if c.state != stateIdle {
 		return false, nil
+	}
+	// The business's own tools, by their commands, whether or not the
+	// tools panel is on (made tools M1: the commands work wherever run
+	// does).
+	var own []string
+	if cmd == "tools" || cmd == "/tools" || cmd == "my tools" {
+		var err error
+		if own, err = s.madeToolLines(ctx, c); err != nil {
+			return false, err
+		}
+	}
+	ownWords := ""
+	if len(own) > 0 {
+		ownWords = c.t("wa.tool.yours") + "\n" + strings.Join(own, "\n")
+	}
+	if !c.tools {
+		if ownWords == "" {
+			return false, nil
+		}
+		return true, c.say(ctx, s, ownWords)
 	}
 	want := ""
 	switch {
@@ -159,13 +179,20 @@ func (s *Server) waToolsCommand(ctx context.Context, c *chat, cmd string) (bool,
 	}
 	// "/start" and the like are not tools: left to what reads them.
 	if len(lines) == 0 {
+		if ownWords != "" {
+			return true, c.say(ctx, s, ownWords)
+		}
 		return false, nil
 	}
 	head := "Your tools, on the web:"
 	if want != "" {
 		head = "Open it on the web:"
 	}
-	return true, c.say(ctx, s, head+"\n"+strings.Join(lines, "\n"))
+	out := head + "\n" + strings.Join(lines, "\n")
+	if ownWords != "" {
+		out += "\n\n" + ownWords
+	}
+	return true, c.say(ctx, s, out)
 }
 
 // roleTools are the tools of staff who work from chat (as the web's

@@ -13,9 +13,26 @@ import {
   receiveRequest,
   supplierProblem,
   supplierSub,
+  deliverToOpen,
+  deliverToSub,
   type Purchase,
   type Supplier,
 } from "./purchases";
+
+describe("where a purchase is delivered", () => {
+  it("can be changed until the supplier has it", () => {
+    expect(deliverToOpen({ status: "drafted" })).toBe(true);
+    expect(deliverToOpen({ status: "sent", seller_status: null })).toBe(true);
+    expect(deliverToOpen({ status: "sent", seller_status: "received" })).toBe(false);
+    expect(deliverToOpen({ status: "confirmed", seller_status: "accepted" })).toBe(false);
+    expect(deliverToOpen({ status: "cancelled" })).toBe(false);
+  });
+  it("says whose place it is", () => {
+    expect(deliverToSub({ address: "", phone: "", own: false })).toBe("Nowhere set: you pick it up.");
+    expect(deliverToSub({ address: "12 Allen Avenue", phone: "+2348031234567", own: false })).toBe("Where your orders usually go");
+    expect(deliverToSub({ address: "The farm", phone: "+2348031234567", own: true })).toBe("This order's own place");
+  });
+});
 
 const po: Purchase = {
   id: "p1",

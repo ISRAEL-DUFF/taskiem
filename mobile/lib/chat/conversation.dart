@@ -32,6 +32,8 @@ import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
 import 'bills_page.dart' show openBill;
+import 'pay_chip.dart' show PayChip, mayHoldAccount, mayPayFromMessages;
+import 'pay_transfer.dart' show BillTransferSource, TransferLive, payBill;
 import 'invoices_page.dart' show openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'statement_page.dart' show openStatement;
@@ -59,8 +61,9 @@ import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
-import 'save_as.dart' show saveFromWords, saveNamed;
+import 'save_as.dart' show photoAccountItems, saveFromWords, saveNamed;
 import 'saved_files.dart' show attachSavedFile;
+import 'pay_collect.dart' show PayListBar;
 
 /// Conversation.tsx PAGE: a page of messages.
 const _page = 50;
@@ -861,6 +864,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     onDone: () => widget.data.pull(),
     // A document opens on its screen, or in its tool's sheet.
     onOpen: widget.onOpenDoc ?? _openDoc,
+    // Pay on a bill's card: the ways to pay it, over the chat (a host
+    // that opens documents itself opens it there).
+    onPay: widget.onOpenDoc == null ? (card) => _pay(card.id ?? card.reference) : null,
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
       if (mounted) showTkToast(context, words);
@@ -1006,6 +1012,38 @@ class _ConversationScreenState extends State<ConversationScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  /// Pay on a bill (the payments flow, part 1): its ways in a small sheet,
+  /// by transfer first; the way last used with this seller remembered.
+  Future<void> _pay(String bill) {
+    final chats = widget.data.chats;
+    return payBill(
+      context,
+      auth: chats.auth,
+      bill: bill,
+      prefs: chats.prefs,
+      now: chats.now,
+      sound: chats.soundOn,
+      onSent: () => unawaited(widget.data.pull().catchError((Object _) {})),
+      onHowToPay: (context, id) => openBill(context, chats.auth, id),
+    );
+  }
+
+  /// The newest transfer card of a bill, kept up to date: the account
+  /// number, the countdown, then Paid (only for those who may pay bills).
+  Widget? _transfer(LinkDocCard card) {
+    final chats = widget.data.chats;
+    if (card.doc != 'bill' || card.event != 'transfer' || !chats.auth.can('invoice.manage')) return null;
+    final id = card.id ?? card.reference;
+    return TransferLive(
+      key: ValueKey('transfer $id'),
+      source: BillTransferSource(chats.auth, id, number: card.reference),
+      now: chats.now,
+      sound: chats.soundOn,
+      onNext: (next) => unawaited(_pay(next)),
+      others: [('Other ways to pay', () => unawaited(_pay(id)))],
     );
   }
 
@@ -1316,6 +1354,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final body = m.body ?? '';
     final other = _d.conv.name;
     final mineEmoji = m.reactions?.where((r) => r.mine == true).firstOrNull?.emoji;
+    final photo = card == null && x.out == null && !m.id.startsWith('local-') && m.attachment?.kind == 'photo' && (m.attachment?.type ?? '').startsWith('image/');
     setState(() {
       _menuFor = m.id;
       _picking = false;
@@ -1334,6 +1373,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (card == null && body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: body)), done: 'Copied'),
         // Save as… (saved objects S1, part 4): the business's for whoever may manage them.
         if (card == null && body.isNotEmpty) MenuItem('note', 'Save as…', () => saveFromWords(context, _d.chats.auth, body, business: true)),
+        // A photo (reading account details from photos): read on the phone.
+        if (photo)
+          ...photoAccountItems(
+            context,
+            _d.chats.auth,
+            ChatFiles.path(m),
+            business: true,
+            from: (kind: 'link', chat: _d.conv.link, message: m.id, from: m.mine ? '' : (m.senderName ?? other)),
+          ),
         if (card == null && _write && _others.isNotEmpty) MenuItem('forward', 'Forward', () => _forward(m)),
         MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => _d.star(m)),
         if (card == null && _trades) MenuItem('trash', 'Delete for me', () => _hide(m), danger: true, separated: true),
@@ -1539,6 +1587,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Expanded(
                 child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
               ),
+              // The people to pay collected from messages (pay_collect.dart).
+              PayListBar(auth: d.chats.auth, follow: d.follow),
               ListenableBuilder(listenable: d, builder: (context, _) => _tags.plain()),
               // The tools' picker floats over the thread from the box, 8 px
               // above it, its shadow over the box too (`.composer > .tk-picker`).
@@ -1624,10 +1674,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // card of a document shows where it is now.
     final newest = <String>{};
     final current = <String, LinkDocCard>{};
+    // A transfer card's number paid into: the paid (or part paid) card
+    // nearest after it says so.
+    final paidLater = <String, LinkDocCard>{};
+    final paidAfter = <String, LinkDocCard>{};
     for (final x in (items ?? const <ThreadMessage>[]).reversed) {
       final card = x.m.card;
       if (x.m.kind != 'card' || card == null) continue;
       final key = '${card.doc}:${card.reference}';
+      if (card.event == 'transfer_paid' || card.event == 'transfer_part') paidLater[key] = card;
+      if (card.event == 'transfer' && paidLater[key] != null) paidAfter[x.id] = paidLater[key]!;
       if (current.containsKey(key)) continue;
       current[key] = card;
       newest.add(x.id);
@@ -1675,7 +1731,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
         }
         final first = prev == null || _startsRun(prev.m, m.m);
         final card = m.m.kind == 'card' ? m.m.card : null;
-        return Padding(
+        // Account details in the words: Pay this account under it (phase 2).
+        final pay = card == null && m.out == null && mayHoldAccount(m.m.body) && mayPayFromMessages(d.chats.auth);
+        final bubble = Padding(
           padding: EdgeInsets.only(top: first ? 6 : 0),
           child: _Bubble(
             m: m,
@@ -1684,7 +1742,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
             last: next == null || diary(next.m) || _startsRun(m.m, next.m) || dayLabel(m.m.createdAt, now) != dayLabel(next.m.createdAt, now),
             now: now,
             latest: newest.contains(m.id),
-            current: card == null ? null : current['${card.doc}:${card.reference}'],
+            current: card == null ? null : paidAfter[m.id] ?? current['${card.doc}:${card.reference}'],
+            paid: paidAfter[m.id],
+            transfer: card != null && newest.contains(m.id) ? _transfer(card) : null,
             acts: _acts,
             changed: () => setState(() {}),
             files: d.chats.files,
@@ -1702,6 +1762,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
             refs: (auth: d.chats.auth, link: d.conv.link),
             onMore: () => setState(() => _taps[m.id] = (_taps[m.id] ?? 0) + 1),
           ),
+        );
+        if (!pay) return bubble;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            bubble,
+            PayChip(
+              key: ValueKey('pay-${m.id}'),
+              auth: d.chats.auth,
+              id: m.id,
+              text: m.m.body!,
+              mine: m.m.mine,
+              from: (kind: 'link', chat: d.conv.link, message: m.id, from: m.m.mine ? '' : (m.m.senderName ?? d.conv.name)),
+            ),
+          ],
         );
       },
     );
@@ -1793,6 +1868,8 @@ class _Bubble extends StatelessWidget {
     required this.files,
     this.latest = false,
     this.current,
+    this.paid,
+    this.transfer,
     this.onRetry,
     this.onDiscard,
     this.menuOpen = false,
@@ -1855,6 +1932,13 @@ class _Bubble extends StatelessWidget {
 
   /// The document's newest card: where it is now.
   final LinkDocCard? current;
+
+  /// A transfer card's number paid into: the paid or part paid card after it.
+  final LinkDocCard? paid;
+
+  /// A bill's newest transfer card, kept up to date, in place of the
+  /// card's frame.
+  final Widget? transfer;
   final VoidCallback? onRetry;
   final VoidCallback? onDiscard;
 
@@ -2016,12 +2100,13 @@ class _Bubble extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                transfer ??
                                 CardFrame(
                                   card: card,
                                   current: current,
                                   mine: mine,
                                   now: now,
-                                  title: cardLine(card, mine, other),
+                                  title: cardLine(card, mine, other, paid: paid, now: now),
                                   view: viewButton(card, acts),
                                   actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
                                   // A deal to answer (theirs, the newest of its order).

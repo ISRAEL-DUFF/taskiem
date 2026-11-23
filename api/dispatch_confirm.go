@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -174,6 +175,14 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 		if len(list) == 0 {
 			return nil
 		}
+		ids := make([]uuid.UUID, len(list))
+		for i, x := range list {
+			ids[i] = x.id
+		}
+		proofs, err := dispatch.ProofsTx(ctx, tx, ids)
+		if err != nil {
+			return err
+		}
 		names := map[uuid.UUID]string{}
 		if all, err := s.Riders.ListTx(ctx, tx, p.TenantID, riders.Filter{}); err == nil {
 			for _, rd := range all {
@@ -190,10 +199,68 @@ func (s *Server) confirmAlerts(ctx context.Context, p *Principal) ([]chatAlert, 
 			if x.confirmed {
 				line = invoicing.Naira(fee) + " fee was not paid: confirm again to pay it"
 			}
-			out = append(out, chatAlert{Key: "confirm:" + x.id.String(), Kind: "confirm", At: x.at, ID: x.id.String(), Reference: x.ref,
-				Title: "Confirm " + x.ref + ", delivered by " + name, Line: line, AmountKobo: &fee})
+			al := chatAlert{Key: "confirm:" + x.id.String(), Kind: "confirm", At: x.at, ID: x.id.String(), Reference: x.ref,
+				Title: "Confirm " + x.ref + ", delivered by " + name, Line: line, AmountKobo: &fee}
+			if pv, ok := proofs[x.id]; ok && (pv.Where != nil || pv.Photo != "" || pv.Mark != "" || pv.Signature != "") {
+				al.Proof = &alertProof{Where: pv.Where, Mark: pv.Mark, PhotoSource: pv.PhotoSource}
+				// The photo is in the business's private storage: a rider's
+				// from dispatch, or a form step's file (the same storage).
+				var signer interface {
+					SignURL(ctx context.Context, tenant uuid.UUID, path string, ttl time.Duration) (string, time.Time, error)
+				}
+				switch {
+				case s.Media != nil:
+					signer = s.Media
+				case s.Forms != nil && s.Forms.Files != nil:
+					signer = s.Forms.Files
+				}
+				if pv.Photo != "" && signer != nil {
+					if u, _, err := signer.SignURL(ctx, p.TenantID, pv.Photo, 10*time.Minute); err == nil {
+						al.Proof.PhotoURL = u
+					}
+				}
+				if pv.Signature != "" {
+					// Signed by the customer on the rider's phone (D2).
+					al.Proof.Signed = true
+					if signer != nil {
+						if u, _, err := signer.SignURL(ctx, p.TenantID, pv.Signature, 10*time.Minute); err == nil {
+							al.Proof.SignatureURL = u
+						}
+					}
+				}
+				if w := proofWords(pv); w != "" {
+					al.Line += " · " + w
+				}
+			}
+			out = append(out, al)
 		}
 		return nil
 	})
 	return out, err
+}
+
+// proofWords says in a line how a delivery was proved: which was read by
+// the phone and which was sent (device fields §6).
+func proofWords(pv dispatch.ProofView) string {
+	var parts []string
+	switch pv.Mark {
+	case dispatch.MarkAtDoor:
+		parts = append(parts, "location read by the phone at the door")
+	case dispatch.MarkFar:
+		parts = append(parts, "location read by the phone, far from the address")
+	case dispatch.MarkReadByPhone:
+		parts = append(parts, "location read by the phone")
+	case dispatch.MarkSaidByRider:
+		parts = append(parts, "location sent by the rider")
+	}
+	switch pv.PhotoSource {
+	case "camera":
+		parts = append(parts, "photo taken in the app")
+	case "sent":
+		parts = append(parts, "photo sent")
+	}
+	if pv.Signature != "" {
+		parts = append(parts, "signed by the customer")
+	}
+	return strings.Join(parts, " · ")
 }

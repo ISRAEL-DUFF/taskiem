@@ -80,9 +80,10 @@ func (a AppLinks) PasskeyOrigins() []string {
 // You's pages (docs/spec/taskiem-for-everyone.md §7): its chats (a push
 // opens /you/chats/{id}), Orders and one order, Discover and a business's
 // profile; a people chat and a request (a push opens /you/people/{id}).
-// You's settings stay on the web. A person's link, /p/{code}
+// You's settings stay on the web. A payment (/payments/{id}, the link
+// the chat sends to confirm one) opens in the app. A person's link, /p/{code}
 // (people-chatting §5.2), opens the app as a business's chat link does.
-var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/reset-password"}
+var appPaths = []string{"/chat", "/chat/*", "/m/*", "/p/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/you/people/*", "/g/*", "/you/groups", "/you/groups/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/payments", "/payments/*", "/payroll", "/payroll/*", "/reset-password"}
 
 // assetLinks is Android's Digital Asset Links: the app handles these links
 // and shares these sign-ins (passkeys).

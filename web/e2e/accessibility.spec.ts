@@ -8,6 +8,20 @@ import { PUBLIC, familyLink, familySchool } from "./familyschool";
 // the page, which the console's Content Security Policy would refuse.
 test.use({ bypassCSP: true });
 
+// The app is light unless the reader picks a theme (src/theme.ts), so the
+// emulated colour scheme alone never showed the dark theme: follow the
+// device ("system") unless a test picks one itself, so each dark run below
+// checks the dark theme.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("taskiem-theme")) localStorage.setItem("taskiem-theme", "system");
+    } catch {
+      // no storage: light
+    }
+  });
+});
+
 const PAGES = [
   "/home",
   "/search",
@@ -61,6 +75,10 @@ const PAGES = [
   "/money/statements",
   "/money/entries",
   "/money/fees",
+  "/payments",
+  "/payments/several",
+  "/payments/several/list",
+  "/payroll",
   "/money/labels",
   "/money/things",
   "/money/things?all=true",
@@ -77,6 +95,7 @@ const PAGES = [
   "/schools/gate",
   "/settings/schools",
   "/start-something",
+  "/pages",
 ];
 
 async function signIn(page: Page) {
@@ -516,6 +535,22 @@ for (const scheme of ["light", "dark"] as const)
       );
       await page.route("**/v1/me/chats/c1/read", (r) => r.fulfill({ status: 204 }));
       await page.route("**/v1/me/chats/c1/orders", (r) => r.fulfill(json({ orders: [] })));
+      // The invoice's account number, to pay it by transfer (the payments flow, part 1).
+      await page.route("**/v1/me/chats/c1/invoices/f1/transfer", (r) =>
+        r.fulfill(
+          json({
+            invoice: "f1",
+            reference: "INV-0001",
+            due_kobo: 100_000,
+            state: "open",
+            bank_name: "Wema Bank",
+            account_number: "0123456789",
+            account_name: "Mama's Kitchen",
+            amount_kobo: 100_000,
+            expires_at: new Date(Date.now() + 3 * 60_000).toISOString(),
+          }),
+        ),
+      );
       // A server with no push keys: "We'll text you when they answer."
       await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.goto("/you/chats/c1");
@@ -525,6 +560,8 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Business checked · Payments through Taskiem · Trading 1 year");
       await expect(page.getByTestId("person-whatsapp-here")).toBeVisible();
       await expect(page.getByTestId("person-on-whatsapp")).toHaveCount(2);
+      // The number in its last minutes: the warning colour.
+      await expect(page.getByTestId("customer-transfer-card").getByTestId("transfer-time")).toHaveText(/^Expires in 2:\d\d$/);
       await check("/you/chats/{id}");
       expect(found, found.join("\n\n")).toEqual([]);
     });
@@ -1349,4 +1386,422 @@ for (const scheme of ["light", "dark"] as const)
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       }
       await expect(page.getByTestId("delete-steps-app")).toContainText("Delete your account");
+    });
+
+// Pay on a rider (paying people, phase 2): the riders' pay page with a Pay
+// on each rider whose bank account is kept, and the Pay sheet it opens
+// (what for: a delivery), signed in as a new owner. The riders and pay
+// APIs are stood in for: the e2e server sends no rider messages.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Pay on a rider passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Rider Pay ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@riderpay.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const rider = "0192e2e0-0000-7000-8000-00000000e001";
+      await page.route("**/v1/riders/owed", (q) => q.fulfill(fulfil({ owed: [] })));
+      await page.route("**/v1/riders/pay", (q) =>
+        q.fulfill(fulfil({ workflow_id: null, payouts: [], lines: [{ rider_id: rider, rider: "Musa Bello", deliveries: 3, fees_kobo: 450_000, owed_kobo: 0, net_kobo: 450_000, bank: "GTBank ••6789" }] })),
+      );
+      let body: unknown;
+      await page.route("**/v1/payments", (q) => {
+        body = q.request().postDataJSON();
+        return q.fulfill(
+          fulfil({
+            payment: {
+              id: "0192e2e0-0000-7000-8000-00000000e002", saved_id: null, personal: false, payee: "Musa Bello", bank_name: "Guaranty Trust Bank", account: "••6789",
+              account_name: "MUSA BELLO", amount_kobo: 450_000, purpose: "delivery", purpose_note: "", note: "", first_payment: false, changed_account: false, needs_ok: "",
+              status: "prepared", reason: null, fee_kobo: null, started_from: "tools", prepared_by: "user:ada", confirmed_by: null,
+              created_at: new Date().toISOString(), confirmed_at: null, finished_at: null, again: false,
+            },
+          }),
+        );
+      });
+      await page.goto("/storefront/riders/pay");
+      const row = page.getByTestId("rider-due").filter({ hasText: "Musa Bello" });
+      await expect(row).toContainText("GTBank ••6789");
+      let vs = await axe(page);
+      expect(vs, describe("/storefront/riders/pay with Pay", vs)).toEqual([]);
+      await row.getByRole("button", { name: "Pay Musa Bello" }).click();
+      const sheet = page.getByTestId("pay-sheet");
+      await expect(sheet.getByTestId("pay-rider-lead")).toContainText("GTBank ••6789");
+      await expect(sheet.getByLabel("How much? in naira")).toHaveValue("4,500");
+      await expect(sheet.getByRole("group", { name: "What is it for?" }).getByRole("button", { name: "a delivery" })).toHaveAttribute("aria-pressed", "true");
+      vs = await axe(page);
+      expect(vs, describe("the Pay sheet for a rider", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await sheet.getByTestId("pay-prepare").click();
+      await expect(sheet.getByTestId("pay-name")).toHaveText("MUSA BELLO");
+      expect(body).toEqual({ from: "tools", rider_id: rider, amount_kobo: 450_000, purpose: "delivery" });
+    });
+
+// Pay several people (paying people, phase 3): one list's page, to
+// confirm with a row held out and a changed account, and once sent with
+// rows paid, waiting and failed. The batch API is stood in for: the e2e
+// server has no payments account to pay from.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`A list of people to pay passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Pay List ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@paylist.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const pay = (id: string, payee: string, status: string, over: Record<string, unknown> = {}) => ({
+        id, saved_id: null, personal: false, payee, bank_name: "GTBank", account: "••6789", account_name: payee.toUpperCase(), amount_kobo: 450_000, purpose: "delivery",
+        purpose_note: "", note: "", first_payment: false, changed_account: false, needs_ok: "", status, reason: null, fee_kobo: null, run_id: null, started_from: "tools",
+        prepared_by: "user:ada", confirmed_by: null, created_at: now, confirmed_at: null, finished_at: null, again: false, ...over,
+      });
+      const list = (status: string, payments: ReturnType<typeof pay>[]) => ({
+        id: "0192e2e0-0000-7000-8000-00000000f001", title: "Riders, week 45", kind: "riders", status, created_by: "user:ada", created_at: now, confirmed_at: status === "sent" ? now : null,
+        payments, total_kobo: 450_000 * payments.length, count: payments.length, paid_kobo: 450_000, waiting: 1, failed: 1,
+      });
+      let sent = false;
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/payment-batches/"),
+        (q) =>
+          q.fulfill(
+            fulfil({
+              batch: sent
+                ? list("sent", [pay("p1", "Musa Bello", "paid"), pay("p2", "Kemi Ade", "waiting_ok"), pay("p3", "Tunde Bello", "failed", { reason: "account closed" })])
+                : list("prepared", [pay("p1", "Musa Bello", "prepared", { first_payment: true }), pay("p2", "Kemi Ade", "prepared", { changed_account: true })]),
+            }),
+          ),
+      );
+      await page.goto("/payments/batches/0192e2e0-0000-7000-8000-00000000f001");
+      await expect(page.getByTestId("batch-status")).toHaveText("To confirm");
+      await expect(page.getByTestId("batch-warn-changed")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a list to confirm", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      sent = true;
+      await page.reload();
+      await expect(page.getByTestId("batch-status")).toHaveText("Waiting for an OK");
+      await expect(page.getByTestId("batch-approve")).toBeVisible();
+      vs = await axe(page);
+      expect(vs, describe("a list sent", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+// Your list to pay, collected from messages (Pay several people, From
+// messages): a row from a link chat, one from a photo with no amount yet,
+// the check held up until it has one. The list's API is stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Your list to pay passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      // The theme the app shows is the one kept in this browser.
+      await page.addInitScript((t) => {
+        try {
+          localStorage.setItem("taskiem-theme", t);
+        } catch {
+          // the default theme, then
+        }
+      }, scheme);
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Collect ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@collect.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const now = new Date().toISOString();
+      const row = (id: string, name: string, amount: number | null, source: Record<string, string>) => ({
+        id, saved_id: null, payee: "", title: "Account ••6789", name, bank_name: "GTBank", last4: "6789", amount_kobo: amount, purpose: "", note: "", source, added_at: now,
+      });
+      const rows = [
+        row("0192e2e0-0000-7000-8000-00000000c001", "Chidi Okeke", 4_500_000, { kind: "link", chat: "L1", message: "m1" }),
+        row("0192e2e0-0000-7000-8000-00000000c002", "Tunde", null, { kind: "photo", chat: "customer:C1", message: "m2" }),
+      ];
+      await page.route(
+        (u) => u.pathname === "/v1/pay-collection",
+        (q) => q.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ rows, count: 2, total_kobo: 4_500_000, no_amount: 1, in_batch: null }) }),
+      );
+      await page.goto("/payments/several/list");
+      await expect(page.getByTestId("collect-row")).toHaveCount(2);
+      await page.getByTestId("collect-check").click();
+      await expect(page.getByTestId("collect-blocked")).toBeVisible();
+      const vs = await axe(page);
+      expect(vs, describe("your list to pay", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+// Where we pay a staff member (outside payroll): their page with the
+// account linked, Pay and the owner's Change and Unlink, choosing one of
+// the saved accounts, and Add staff in Pay several people with someone
+// not payable. The staff and saved APIs are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Where we pay a staff member passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Staff Pay ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@staffpay.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const musa = "0192e2e0-0000-7000-8000-00000000a201";
+      const acct = { saved_id: "0192e2e0-0000-7000-8000-00000000b201", name: "musa", title: "Musa Bello", bank_name: "Access Bank", last4: "6789", account_name: "MUSA BELLO", linked_at: new Date().toISOString() };
+      const person = (id: string, name: string, linked: typeof acct | null) => ({ user_id: id, name, phone: "•••4567", roles: ["cashier"], chat: true, profile: { title: "", note: "", rota: [] }, pay_account: linked });
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/staff"),
+        (q) => {
+          const path = new URL(q.request().url()).pathname;
+          if (path === "/v1/staff") return q.fulfill(fulfil({ people: [person(musa, "Musa Bello", acct), person("0192e2e0-0000-7000-8000-00000000a202", "Kemi Ade", null)], invites: [] }));
+          if (path.endsWith("/figures"))
+            return q.fulfill(
+              fulfil({ period: "week", from: "2026-11-16", to: "2026-11-22", minutes: 0, shifts: 0, late_days: [], missed_days: [], sales: { count: 0, total_kobo: 0, by_how: {} }, handovers: [], orders: 0, tasks: { done: 0, done_late: 0, cant: 0, open: 0, late: 0 } }),
+            );
+          if (path === `/v1/staff/${musa}`) return q.fulfill(fulfil(person(musa, "Musa Bello", acct)));
+          return q.fulfill(fulfil(person("0192e2e0-0000-7000-8000-00000000a202", "Kemi Ade", null)));
+        },
+      );
+      await page.route(
+        (u) => u.pathname === "/v1/saved" && u.searchParams.get("kind") === "bank_account",
+        (q) =>
+          q.fulfill(
+            fulfil({
+              limit: 100,
+              saved: [{ id: acct.saved_id, owner: "business", name: "musa", title: "Musa Bello", kind: "bank_account", hint: "Access Bank ••6789", details: {}, check: { state: "checked", account_name: "MUSA BELLO", via: null, at: null, problem: null }, to_change: false, created_at: "", updated_at: "" }],
+            }),
+          ),
+      );
+      await page.goto(`/staff/${musa}`);
+      await expect(page.getByTestId("person-pay-account")).toHaveText("@musa · Access Bank ••6789 · MUSA BELLO");
+      await expect(page.getByTestId("staff-pay")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a staff member's page with where we pay them", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.getByRole("button", { name: "Change where Musa Bello is paid" }).click();
+      await expect(page.getByRole("dialog", { name: "Where we pay Musa Bello" }).getByRole("radio", { name: /MUSA BELLO/ })).toBeChecked();
+      vs = await axe(page);
+      expect(vs, describe("choosing where we pay them", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await page.goto("/payments/several");
+      await page.getByTestId("add-staff").click();
+      const picker = page.getByRole("dialog", { name: "Add staff" });
+      await expect(picker).toContainText("No account linked: link one on their page");
+      vs = await axe(page);
+      expect(vs, describe("Add staff in Pay several people", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+// Payroll, read from Payrolla (P4a): the runs, one run waiting for
+// approval with someone not paid, and Staff in Payrolla with a likely
+// match. Payrolla's answers are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Payroll passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Payroll ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@payroll.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+      const id = "0192e2e0-0000-7000-8000-00000000d201";
+      const musa = "0192e2e0-0000-7000-8000-00000000a301";
+      const run = { run_id: id, period_start: "2026-11-01", period_end: "2026-11-30", pay_date: "2026-11-30", run_type: "REGULAR", status: "COMPUTED", employee_count: 2, total_gross_kobo: 36_000_000, total_net_kobo: 30_000_000, awaiting_approval: true };
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/payroll"),
+        (q) => {
+          const p = new URL(q.request().url()).pathname;
+          if (p === "/v1/payroll") return q.fulfill(fulfil({ connected: true, connection: "payrolla", test: true, company: { name: "Mama's Kitchen Ltd", pay_frequency: "MONTHLY" }, runs: [run, { ...run, run_id: "0192e2e0-0000-7000-8000-00000000d202", period_start: "2026-10-01", period_end: "2026-10-31", status: "COMPLETED" }], next_cursor: "c2" }));
+          if (p === "/v1/payroll/staff")
+            return q.fulfill(
+              fulfil({
+                connection: "payrolla",
+                staff: [
+                  { user_id: musa, name: "Musa Bello", payrolla: null, suggested: { employee_id: "e1", name: "Musa Bello", by: "phone" } },
+                  { user_id: "0192e2e0-0000-7000-8000-00000000a302", name: "Kemi Ade", payrolla: { employee_id: "e2", name: "Kemi Ade", linked_by_name: "Ada Owner", linked_at: new Date().toISOString() }, suggested: null },
+                ],
+                employees: [{ id: "e1", name: "Musa Bello", status: "ACTIVE", linked_to: null }, { id: "e2", name: "Kemi Ade", status: "ACTIVE", linked_to: "0192e2e0-0000-7000-8000-00000000a302" }],
+              }),
+            );
+          return q.fulfill(
+            fulfil({
+              connection: "payrolla",
+              run: { summary: run, created_at: null, updated_at: null, approved_at: null, locked_at: null },
+              lines: [
+                { payslip_id: "p1", employee_id: "e1", name: "Musa Bello", net_kobo: 15_000_000, status: "CONFIRMED", state: "paid", staff: { user_id: musa, name: "Musa Bello" } },
+                { payslip_id: "p2", employee_id: "e2", name: "Kemi Ade", net_kobo: 15_000_000, status: "REVERSED", state: "returned", reason: "The bank sent it back", staff: null },
+              ],
+              counts: { paid: 1, waiting: 0, failed: 0, returned: 1 },
+              approval_url: "https://app.payrolla.example/approve",
+            }),
+          );
+        },
+      );
+      for (const [path, ready] of [
+        ["/payroll", "payroll-hero"],
+        [`/payroll/runs/${id}`, "payroll-approve-open"],
+        ["/payroll/staff", "payroll-staff-confirm"],
+      ] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(ready).first()).toBeVisible();
+        const vs = await axe(page);
+        expect(vs, describe(path, vs)).toEqual([]);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      }
+    });
+
+// Save as… beside a message's Pay this account (paying people, phase 2):
+// the chip line, the sheet with the likely banks, and the sheet once saved
+// with the bank's name, signed in as a new owner. The customer chat, the
+// message's reading, the banks and the save are stood in for.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Save as… from a message passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const stamp = String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+      const r = await page.request.post("/v1/signup", {
+        headers: { "X-Taskiem-Request": "1" },
+        data: { tenant: `Save As ${stamp}`, email: `${stamp}-${Math.random().toString(36).slice(2, 8)}@saveas.test`, name: "Ada Owner", password: "correct horse battery" },
+      });
+      expect(r.status(), await r.text()).toBe(201);
+      const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const text = "Acct: 0123456789, send 45k. Chidi Okafor";
+      const chat = { id: "0192e2e0-0000-7000-8000-00000000e101", name: "Tolu Bello", phone: "+234 803 ••• 0099", last: text, last_mine: false, last_at: now, unread: 0, window_open: true, window_until: null, stopped: false, archived: false, line: "whatsapp" };
+      await page.route(
+        (u) => u.pathname.startsWith("/v1/customer-chats"),
+        (q) => {
+          const p = new URL(q.request().url()).pathname;
+          if (p === "/v1/customer-chats") return q.fulfill(fulfil({ chats: [chat] }));
+          if (p === "/v1/customer-chats/unread") return q.fulfill(fulfil({ chats: 0, messages: 0 }));
+          if (p === `/v1/customer-chats/${chat.id}`) return q.fulfill(fulfil(chat));
+          if (p.endsWith("/messages")) return q.fulfill(fulfil({ messages: [{ id: "m1", mine: false, kind: "text", body: text, read_at: now, created_at: now }], more: false }));
+          if (p.endsWith("/orders")) return q.fulfill(fulfil({ orders: [] }));
+          return q.fulfill(fulfil({}));
+        },
+      );
+      const banks = [
+        { code: "058", name: "Guaranty Trust Bank", likely: true },
+        { code: "044", name: "Access Bank", likely: true },
+      ];
+      await page.route("**/v1/payments/read", (q) => q.fulfill(fulfil({ found: true, account_number: "0123456789", amount_kobo: 4_500_000, name: "Chidi Okafor", likely: banks })));
+      await page.route("**/v1/payments/banks?*", (q) => q.fulfill(fulfil({ from: "paystack", banks })));
+      await page.route(
+        (u) => u.pathname === "/v1/saved",
+        (q) => {
+          if (q.request().method() !== "POST") return q.fallback();
+          return q.fulfill(
+            fulfil(
+              {
+                saved: {
+                  id: "0192e2e0-0000-7000-8000-00000000e102", owner: "business", name: "chidi-okafor", title: "Chidi Okafor", kind: "bank_account", hint: "GTBank ••6789",
+                  details: { bank_name: "Guaranty Trust Bank", account_number: "••6789" }, check: { state: "checked", account_name: "CHIDI OKEKE", via: "paystack", at: now, problem: null },
+                  to_change: false, created_at: now, updated_at: now,
+                },
+              },
+              201,
+            ),
+          );
+        },
+      );
+      await page.goto(`/chat?with=c-${chat.id}`);
+      const message = page.getByTestId("customer-pane").getByTestId("customer-message").filter({ hasText: "send 45k" });
+      await expect(message.getByTestId("pay-chip-save")).toBeVisible();
+      let vs = await axe(page);
+      expect(vs, describe("a message with Save as…", vs)).toEqual([]);
+      await message.getByTestId("pay-chip-save").click();
+      const sheet = page.getByTestId("save-as-sheet");
+      await expect(sheet.getByRole("group", { name: "Banks this number could be with" })).toBeVisible();
+      vs = await axe(page);
+      expect(vs, describe("the Save as sheet", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await sheet.getByRole("button", { name: "Guaranty Trust Bank" }).click();
+      await sheet.getByTestId("save-as-save").click();
+      await expect(sheet.getByTestId("save-as-bank-name")).toContainText("CHIDI OKEKE");
+      vs = await axe(page);
+      expect(vs, describe("the Save as sheet, saved", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+
+
+/** A tool of the business (made tools M1), published once whichever test runs first. */
+async function aTool(page: Page): Promise<string> {
+  const h = { headers: { "X-Taskiem-Request": "1" } };
+  const tools = (await (await page.request.get("/v1/tools")).json()) as { tools: { command: string }[] };
+  if (tools.tools.some((t) => t.command === "a11y-note")) return "a11y-note";
+  const definition = {
+    schema: "wd/v1",
+    id: "wf_a11ynote",
+    version: 1,
+    name: "Accessible note",
+    trigger: { type: "manual" },
+    inputs: { schema: { type: "object", properties: { what: { type: "string", title: "What for" }, amount: { type: "integer", title: "Amount" } } } },
+    steps: [{ id: "note", type: "transform", config: { output: { said: "=trigger.body.what", amount: "=trigger.body.amount" } } }],
+    outputs: [
+      { name: "what", type: "string", title: "What for", description: "What it was for", value: "=steps.note.output.said" },
+      { name: "amount_kobo", type: "integer", title: "Amount", description: "How much", value: "=steps.note.output.amount" },
+    ],
+    tool: {
+      name: "Accessible note",
+      command: "a11y-note",
+      about: "Note what money went on",
+      answer: { type: "card", title: "Noted", ref: "=outputs.what", state: { text: "Kept", tone: "good" }, lines: [{ label: "What for", value: "=outputs.what" }], amount: "=outputs.amount_kobo" },
+    },
+  };
+  const made = (await (await page.request.post("/v1/workflows", { ...h, data: { name: "Accessible note", definition } })).json()) as { id: string };
+  const pub = await page.request.post(`/v1/workflows/${made.id}/versions/1/publish`, h);
+  // Another test may have published it a moment before.
+  const now = (await (await page.request.get("/v1/tools")).json()) as { tools: { command: string }[] };
+  expect(pub.ok() || now.tools.some((t) => t.command === "a11y-note"), await pub.text()).toBeTruthy();
+  return "a11y-note";
+}
+
+// Your tools (made tools M1): a tool's page with its sheet, the tools
+// panel with Your tools, and a card answer, at a phone's widths.
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Your tools pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await signIn(page);
+      const command = await aTool(page);
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      await page.goto(`/tools/${command}`);
+      const sheet = page.getByTestId("made-tool-sheet");
+      await expect(sheet.getByLabel("What for")).toBeVisible();
+      await check("/tools/:command (its sheet)");
+      await sheet.getByRole("button", { name: "Close" }).click();
+      await expect(page.getByTestId("tool-page")).toBeVisible();
+      await check("/tools/:command");
+      // The chat: "/" and Your tools, then its card answer.
+      await page.goto("/chat?with=taskiem");
+      await page.getByLabel("Message to Taskiem").fill("/a11y");
+      await expect(page.getByTestId("your-tools")).toBeVisible();
+      await check("/chat (Your tools)");
+      await page.getByTestId("tools-panel").getByRole("button", { name: /Accessible note/ }).click();
+      await sheet.getByLabel("What for").fill("Diesel");
+      await sheet.getByLabel("Amount").fill("450000");
+      await sheet.getByRole("button", { name: "Go" }).click();
+      const answer = sheet.getByTestId("tool-answer");
+      await expect(answer).toHaveAttribute("data-status", "completed", { timeout: 30_000 });
+      await expect(answer).toContainText("₦4,500");
+      await check("/chat (a tool's card answer)");
+      expect(found, found.join("\n\n")).toEqual([]);
     });

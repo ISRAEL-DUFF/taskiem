@@ -19,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/productstock"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/wd"
 )
 
 // Stock (docs/spec/stock.md, docs/spec/what-a-business-buys.md §4;
@@ -915,7 +916,8 @@ func (s *Server) addStockItem(w http.ResponseWriter, r *http.Request) {
 }
 
 // patchStockItem is PATCH /v1/stock/items/{id}: an item's name, prices,
-// unit, levels, supplier, or whether it is shown. Its stock changes by movements only.
+// unit, levels, supplier, barcode, or whether it is shown. Its stock
+// changes by movements only.
 func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name      *string `json:"name"`
@@ -931,6 +933,9 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 		// Available shows or hides it on the storefront and the price
 		// lists it is on (chat tools' product form).
 		Available *bool `json:"available"`
+		// Code is its stock item's barcode, for Scan to count (device
+		// fields D2); "" clears it.
+		Code *string `json:"code"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -963,6 +968,35 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 	if before.Material && (in.PriceKobo != nil || in.Available != nil) {
 		s.fail(w, r, fmt.Errorf("%w: %s is not sold, so it has no price and is not on your storefront", errBadRequest, before.Name))
 		return
+	}
+	// Its barcode is its stock item's: checked here, set first below.
+	var codeItem uuid.UUID
+	if in.Code != nil {
+		c := strings.TrimSpace(*in.Code)
+		if c != "" {
+			if why := wd.ScanTextProblem(c); why != "" {
+				s.fail(w, r, fmt.Errorf("%w: %s", errBadRequest, why))
+				return
+			}
+			if strings.ContainsRune(c, '\t') || len([]rune(c)) > stock.MaxCode {
+				s.fail(w, r, fmt.Errorf("%w: a barcode is at most %d characters, on one line", errBadRequest, stock.MaxCode))
+				return
+			}
+		}
+		in.Code = &c
+		sid := before.StockItemID
+		if before.Material {
+			sid = before.ID
+		}
+		switch {
+		case before.HasSizes():
+			s.fail(w, r, fmt.Errorf("%w: %s is counted by its sizes and colours: give each of them its barcode", errBadRequest, before.Name))
+			return
+		case sid == "":
+			s.fail(w, r, fmt.Errorf("%w: %s is not counted, so it has no barcode to scan", errBadRequest, before.Name))
+			return
+		}
+		codeItem = uuid.MustParse(sid)
 	}
 	if in.Category != nil {
 		c, err := checkCategory(*in.Category)
@@ -1105,6 +1139,30 @@ func (s *Server) patchStockItem(w http.ResponseWriter, r *http.Request) {
 			_, err := supplierOfTx(r.Context(), tx, p.TenantID, *d.Supplier)
 			return err
 		}); err != nil {
+			s.stockFail(w, r, err)
+			return
+		}
+	}
+	// Its barcode, before anything else: a code another item has is
+	// refused with nothing changed.
+	if in.Code != nil && *in.Code != before.Code {
+		var taken *stock.CodeTaken
+		err := s.tx(r, func(tx pgx.Tx) error {
+			x, err := stock.SetCodeTx(r.Context(), tx, p.TenantID, codeItem, *in.Code)
+			if err != nil {
+				return err
+			}
+			return auditTx(r, tx, "stock.item_change", before.Name, map[string]any{"stock_item_id": x.ID, "columns": []string{"code"}})
+		})
+		if errors.As(err, &taken) {
+			out := map[string]any{"error": "That barcode is " + taken.Name + "’s already. Clear it there first, or scan another.", "code": "code_taken"}
+			if taken.ID != uuid.Nil {
+				out["stock_item_id"] = taken.ID
+			}
+			writeJSON(w, http.StatusConflict, out)
+			return
+		}
+		if err != nil {
 			s.stockFail(w, r, err)
 			return
 		}

@@ -88,7 +88,6 @@ export const CHECKLIST: Record<ChecklistId, { title: string; text: string; href:
  * the library, with those that need a developer last. */
 export const STARTERS = [
   "daily-reminder",
-  "payroll-reminder",
   "send-invoice",
   "payment-link-per-order",
   "pay-a-list",

@@ -43,6 +43,7 @@ import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'product_form.dart' show formKey;
 import 'stock_page.dart' show feeInput;
+import 'pages_page.dart' show PlacedPages;
 import 'words.dart' show CardTone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -601,6 +602,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
             ],
           ),
         if (_receive?['on'] == true) _ReceiveCard(r: _receive!),
+        PlacedPages(auth: widget.auth, areas: const ['money'], backLabel: 'Back to Money'),
       ],
     );
   }
