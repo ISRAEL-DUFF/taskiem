@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/stock"
+	"github.com/israel-duff/taskiem/templates"
 )
 
 func catalogueNamed(table string, names map[string]string) stock.OldCatalogue {
@@ -101,5 +102,25 @@ func TestOldColumnsInstead(t *testing.T) {
 		if s := stock.Instead(tc.col, tc.uses); !strings.Contains(s, tc.has) {
 			t.Errorf("%s %s: %q", tc.uses, tc.col, s)
 		}
+	}
+}
+
+// PR review fix 4: the shop front's products table (templates/tables, made
+// by the shop kind) makes none of the stock columns S1 took from the
+// catalogue: how many are left is kept on stock items (decision 0070).
+func TestShopTableHasNoOldColumns(t *testing.T) {
+	kt, ok := templates.KnownTable("products")
+	if !ok {
+		t.Fatal("no products table")
+	}
+	for _, c := range kt.Columns {
+		for _, old := range stock.OldColumns {
+			if c.Name == old {
+				t.Errorf("the products table still makes %s", old)
+			}
+		}
+	}
+	if strings.Contains(kt.Description, "stock kept") {
+		t.Errorf("its description: %q", kt.Description)
 	}
 }
