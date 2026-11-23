@@ -58,7 +58,7 @@ An alert channel of kind `telegram` names members by email; each alert goes to t
 | 24-hour window, approved templates outside it, template costs | None: the bot can write to a person at any time after they pressed Start |
 | A 6-digit code sent to the number | A one-time link opened from the account |
 | Forms (Flows) for inputs and the approval PIN | Inputs in chat; step-up by the web link |
-| Own numbers and public menus per organisation | One platform bot; not yet per organisation |
+| Own numbers and public menus per organisation, and so customers' tools | One platform bot; not yet per organisation. Customers' tools are on a business's own WhatsApp number and in the app ([tools](tools.md#customers-tools)) |
 | Phone number as identity | The Telegram user id (never the username, which can change) |
 | Photos (a product's, a logo) through the media API; images sent by link | Photos (the largest size, or an image sent as a file) through `getFile`; images sent with `sendPhoto` by link |
 

@@ -197,6 +197,7 @@ Within a stage, phases that do not need each other may be built at once by separ
 **M5. Customers' tools** (made tools T5). Needs: M2.
 - The public menu carried over; answers for customers with `public` outputs only; in the app, customers' tools in a business's customer chat (Taskiem for everyone's customer door rules apply).
 - Done when: a customer picks from **menu**, fills the form, says **yes** and gets the answer.
+- **Status (23 November 2026): built** ([As built: T5](made-tools.md#as-built-t5-customers-tools)), migration 00560. The public menu's entries are customers' tools (a command from each label), listed with the tools deployed for customers; on the business's own WhatsApp number **menu**, the form, **yes** always, and the answer from `public` outputs sent back when the run ends; in the app, **Their tools** in a person's chat with the business, through the customer door; runs as `whatsapp_public:<number>` or `customer:<person>`, audited, under the run limits and the menu's; a tool that moves money refused when listed and at start; buttons only to customers' tools, only for that customer. **Left:** Telegram and Slack, the web's side of a person's chat.
 
 **D2. Scan and signature** (the app as a node D2). Needs: D1.
 - Scanning a code and signing on the screen; a scan from the phone's home screen that starts a workflow, and tools on the home screen (settled by the founder, 19 November 2026).

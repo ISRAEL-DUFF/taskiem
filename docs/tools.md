@@ -9,7 +9,7 @@ A workflow you start by hand can be a **tool**: something your people call from 
 | **Name** and **about** | What the tile and the list show: "Log an expense", "Record money spent, with what it was for" |
 | **Command** | The word after `/`: `expense`. One workflow's per business and environment, and never one of Taskiem's own words in any language (`invoice`, `run`, `yes`…) |
 | **Says** | Up to eight phrases that call it when a message starts with one: "spent", "i bought" |
-| **Who it is for** | Your members (customers' tools come later). Who among them may use it is the workflow's **Who can start it** (`roles`): the same rule holds on every way to start it |
+| **Who it is for** | Your members, or your customers (`for: "customers"`, [below](#customers-tools)). Who among your members may use it is the workflow's **Who can start it** (`roles`): the same rule holds on every way to start it |
 | **What it says back** | A sentence, a card or a list, drawn from what the run gives back (its outputs) |
 
 ## How careful it is
@@ -58,3 +58,30 @@ An API key may start a tool that only reads; one that asks waits for a person. A
 A tool's card and list rows, and a Tell me message (`notify.tell` `buttons`, up to three), carry buttons that open another tool filled in. Each is a row the server mints the first time it is drawn: a random token, kept seven days, read only inside its business, held by the tool's workflow (renaming a command keeps it working). Pressing one (`POST /v1/tools/buttons/{token}`) gives the tool and its values to whoever pressed it, held to its roles; a value that was shown masked is asked rather than filled in, and a button never carries personal data opened. A `once` button is spent by the first run it starts; the same person pressing again gets that run, a run that fails to start gives the button back, and anyone else is told who took it and when. Two presses of one button by one person within ten seconds are one run.
 
 **In a chat.** When a tool's run started from WhatsApp, Telegram or Slack ends, its answer comes back there. A card's buttons (three at most) are the chat's reply buttons. A list shows its first ten rows; past ten it says *…and 4 more: see them all in the app* with the run's link, and only those ten rows' buttons are minted. On WhatsApp the list is a list message (**Choose**): a row's title, its sub and state as the description; choosing a row answers with that row's buttons as reply buttons, so even a row with one action is pressed in a second tap, after its words are shown again. Only the person the answer went to can choose a row, in the business it came from, while its buttons last (seven days); anyone else is told the list was sent to someone else. On Telegram and Slack the list is one message, the rows as lines and a button for each row's action, named by the row and its label cut short (*Printer jam · Assign to me*). Pressing any of them is a press as above (the business's members, the tool's roles, `once`). Outside WhatsApp's 24-hour window an answer goes as the run-outcome template with **Open**, without its buttons.
+
+## Customers' tools
+
+A tool with `"for": "customers"` is for the people who buy from you (made tools T5, [decision 0070](decisions/0070-made-tools.md) point 6). Your **public menu**'s entries are customers' tools too: migration 00560 carried each one over, named by its label, with a command made from the label (`Pay a supplier` is `pay-a-supplier`; one that clashes gets `-2`), and a new entry gets one the same way. A workflow that declares a customers' tool of its own is that tool instead of its menu entry. No other tool's command may be a menu entry's (publishing says which).
+
+| | |
+| --- | --- |
+| **Where** | Your own WhatsApp number (**menu**, then a number, with the menu switched on), and a person's chat with you in the app, under the tools button as **Their tools**. Not Telegram or Slack (one bot for everyone), never the shared number |
+| **Which** | Your customers' tools deployed in prod, and the menu's entries whose workflow is deployed there. Never one whose steps move money (refused when published, and again when listed and at every start, whatever was deployed), one whose workflow names roles (a customer holds none), or one whose inputs no form carries (nested, or more than ten) |
+| **Asking** | A form only: WhatsApp's form, the app's sheet; never questions in the chat, never words read by the model |
+| **Yes** | Always: what will run, then **yes**, whatever the tool's care. Nothing starts before it |
+| **Whose run** | The customer's, never a member's: `whatsapp_public:<number>` on WhatsApp, `customer:<person>` in the app, with no roles. In your audit as `run.start` (`for: customers`, the tool, the channel), the number masked; in the app each step through the customer door is audited too (`customer.tools`, `customer.tool`) |
+| **Limits** | Your plan's run limits, as any run, and the menu's: three starts, then one every 20 minutes, a customer; 30 a minute for the business |
+| **The answer** | Drawn from the outputs your workflow marks `public` and nothing else: the rest are dropped before the answer is worked out, so an answer that names one (at any depth, in a row, in a button's values) shows nothing of it. Masked as messages are. How a run that failed failed, and who it waits for, are never said to a customer: they get "didn't go through" and the reference |
+| **Buttons** | Only to your other customers' tools (one to a members' tool is left out), and only for the customer the answer went to, as long as it lasts (seven days). A button fills the tool's form; it never starts it |
+
+**On WhatsApp.** **menu** lists the customers' tools by name; a number sends the form (`taskiem_inputs`); then the summary and **yes**. A tool with an answer says *{tool} has started. Your reference is …; the answer comes here when it is ready*, and the answer comes from your number when the run ends: a card's buttons as reply buttons, a list's first ten rows as words (*…and 4 more.*). Outside WhatsApp's 24-hour window it is not sent. A menu entry with no answer says *has started* and its reference, as before. A button pressed opens that tool: straight to **yes** when it carries every value, else the form.
+
+**In the app.** A person's chat with you, the tools button: **Their tools** under Their shop, Book and Pay. A tool's sheet: its form, **Next**, what will run and **Yes, go ahead**, then the answer, read until the run ends.
+
+| Call (the person's own, through the customer door) | What |
+| --- | --- |
+| `GET /v1/me/chats/{id}/tools` | Their tools: command, name, about, icon, inputs, the answer's shape; never care, roles or steps |
+| `POST /v1/me/chats/{id}/tools/{command}/start` | Values in: what will run and a confirm (200), never a run; 409 `not_offered`; 404 for a members' tool |
+| `POST /v1/me/chats/{id}/tools/{command}/confirm` | The confirm and the same values: the run, once (201; 200 with the same run after) |
+| `GET /v1/me/chats/{id}/runs/{run}/answer` | The answer of a run the person started, public outputs only |
+| `POST /v1/me/chats/{id}/tools/buttons/{token}` | A button on their answer: the tool it opens and its values |
