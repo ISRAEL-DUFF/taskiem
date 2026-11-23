@@ -1,6 +1,6 @@
 # Your pages
 
-A **page** is a screen your business makes for itself: "Tickets" with how many are open and the open ones as a list, "Expenses this month", "Generators". You pick the parts and what feeds them from your [data tables](data-tables.md); Taskiem lays them out for a phone first and draws them on the web and in the phone app. A page is not code and runs nothing ([decision 0072](decisions/0072-pages.md), [the plan](spec/pages.md), [the contract](contracts/page-v1.md)).
+A **page** is a screen your business makes for itself: "Tickets" with how many are open and the open ones as a list, "Expenses this month", "Generators". You pick the parts and what feeds them from your [data tables](data-tables.md), or from your orders and invoices; Taskiem lays them out for a phone first and draws them on the web and in the phone app. A page is not code and runs nothing ([decision 0072](decisions/0072-pages.md), [the plan](spec/pages.md), [the contract](contracts/page-v1.md)).
 
 ## The quickest start: Show as a page
 
@@ -15,7 +15,26 @@ On a table's page, **Show as a page** makes a page from it in one tap: a figure 
 | **List** | Rows, each a title, a line under it and a state; may be put in groups by a column (Open, Doing, Done). A press opens the row as a card |
 | **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order |
 
-Each figure, list and table reads one table, with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email column is the person's own). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
+Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email column is the person's own). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
+
+## Your orders and invoices
+
+A part can show your **orders** or your **invoices** as Taskiem keeps them, read only: in **Add a part**, pick **Orders (Taskiem's)** or **Invoices (Taskiem's)** where you pick a table. Each has a fixed set of columns:
+
+| | Columns |
+| --- | --- |
+| **Orders** | Number, Customer, Phone, Email, Status, Kind, Came from (shop, app or business), Total, Paid, Pickup or delivery, Delivery area, Delivery (its latest delivery), Placed, Paid on |
+| **Invoices** | Number, Customer, Phone, Email, Status, Kind, Total, Paid, Owed, Due, Sent, Paid on |
+
+They are counted, added up (Total, Paid, Owed, in naira), listed and narrowed as a table is: "orders received this week", "invoices overdue", the sum of what is owed. A row opens the order or invoice on its own screen.
+
+- **Who sees them:** besides the page's roles, a person needs what the Orders screen needs (`storefront.manage` or `order.handle`) to see orders, and what the Invoices screen needs (`invoice.read`) to see invoices. Others see "You cannot see orders." where the part would be; the rest of the page shows.
+- **The customer** (name, phone, email) is shown masked to everyone, as the Orders and Invoices lists show it (B•••, •••5678); to see a customer, open the order or invoice. So a page never searches, picks, groups, adds up or puts rows in order by the customer.
+- **A part over an area you turned off** (Settings, areas) cannot be published, and shows that it is turned off until you turn the area back on.
+
+## Kept up to date
+
+An open page keeps itself up to date: when a row of a table it shows is changed in Taskiem (on the web, in the app, in the chat, by a workflow), or an order or invoice changes, the parts that show it are read again within a few seconds, on every screen it is open on, without a reload. A list keeps the order you put it in. Pulling down (or **Refresh**) still reads the whole page. Rows written to a table from outside Taskiem show on the next pull.
 
 ## Who sees what
 
@@ -61,6 +80,8 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `POST /v1/pages/validate` | A document's problems, nothing saved |
 | `GET /v1/pages/{name}/view?filters=` | The page as drawn for you: every part's figures and rows worked out on the server, masked for you (`draft=1` for the draft) |
 | `GET /v1/pages/{name}/blocks/{id}?cursor=` | More rows of a list or table, or a table in a column's order (`order`, `desc=1`) |
+| `GET /v1/pages/{name}/live` | Server-sent events while the page is open: `changed` names the parts to read again (no data), at most once in two seconds |
+| `GET /v1/page-records` | Your orders and invoices as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |
 | `GET /v1/pages/{name}/export` | The page as a file: its document, no rows, nothing personal (`draft=1` for the draft) |
@@ -70,4 +91,4 @@ The web and the app both draw from `view`: neither reads a table for a page itse
 
 ## Not yet
 
-Buttons and actions on a page and its rows, tools feeding a page, a page as a tab under an area or as an alert, pages updating themselves when a row changes, pages in the chat (`/tickets`, the short form on WhatsApp), boards and charts come in later phases ([the plan](spec/pages.md#14-phases)).
+Buttons and actions on a page and its rows, tools feeding a page, deliveries, customers and staff as parts, a page as a tab under an area or as an alert, pages in the chat (`/tickets`, the short form on WhatsApp), boards and charts come in later phases ([the plan](spec/pages.md#14-phases)).
