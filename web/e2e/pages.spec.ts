@@ -323,7 +323,13 @@ const deliveries = {
       ],
     },
     { id: "owed", type: "figure", label: "Owed to riders", value: 150000, shown: "₦1,500", tone: "warn", lead: false, naira: true },
-    { id: "spent", type: "figure", label: "Fuel this week", value: 450000, shown: "₦4,500", tone: "plain", lead: false, naira: true, from_tool: true, worked_at: new Date(Date.now() - 180_000).toISOString() },
+    { id: "spent", type: "figure", label: "Fuel this week", value: 450000, shown: "₦4,500", tone: "plain", lead: false, naira: true, from_tool: true,
+      // Three minutes before the page is drawn, whenever that is in the
+      // run (a getter: worked out as the stand-in answers, not at load).
+      get worked_at() {
+        return new Date(Date.now() - 180_000).toISOString();
+      },
+    },
     {
       id: "today",
       type: "list",
