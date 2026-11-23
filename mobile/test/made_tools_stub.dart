@@ -180,6 +180,29 @@ class MadeServer {
   /// Buttons someone used first: their 409's words.
   final taken = <String, String>{};
 
+  /// POST /v1/tools/{command}/read (api/tools_read.go readToolRoute), as
+  /// the model would read "4500 diesel": an amount, then what it was for;
+  /// an @name the business has not saved is a note, nothing filled.
+  Map<String, dynamic> _read(String command, String text) {
+    final values = <String, dynamic>{};
+    final notes = <String>[];
+    final words = <String>[];
+    for (final w in text.trim().split(RegExp(r'\s+'))) {
+      final n = num.tryParse(w.replaceAll(',', ''));
+      if (w.startsWith('@')) {
+        notes.add('Nothing the business saved is called $w.');
+      } else if (n != null && !values.containsKey('amount')) {
+        values['amount'] = n;
+      } else if (w.isNotEmpty) {
+        words.add(w);
+      }
+    }
+    if (command == 'leave' && words.isNotEmpty) return {'command': command, 'values': {'name': words.join(' ')}, 'notes': notes};
+    if (command != 'expense') values.remove('amount');
+    if (command == 'expense' && words.isNotEmpty) values['what'] = words.join(' ');
+    return {'command': command, 'values': values, 'notes': notes};
+  }
+
   /// Buttons gone (expired, or their tool turned off): 404.
   final gone = <String>{};
   int _runs = 0;
@@ -249,7 +272,7 @@ class MadeServer {
     }
     final b = RegExp(r'^/v1/tools/buttons/([^/]+)$').firstMatch(p);
     if (b != null) return _press(b.group(1)!);
-    final m = RegExp(r'^/v1/tools/([^/]+)/(start|confirm|settings)$').firstMatch(p);
+    final m = RegExp(r'^/v1/tools/([^/]+)/(start|confirm|settings|read)$').firstMatch(p);
     if (m == null) return _json({'error': 'not found'}, 404);
     final tool = tools.where((t) => t['command'] == m.group(1)).firstOrNull;
     if (tool == null) return _json({'error': 'no tool /${m.group(1)}'}, 404);
@@ -262,6 +285,8 @@ class MadeServer {
     switch (m.group(2)) {
       case 'settings':
         return http.Response('', 204);
+      case 'read':
+        return _json(_read(tool['command'] as String, (body['text'] as String?) ?? ''));
       case 'start':
         final care = tool['always_ask'] == true && (tool['care'] as Map)['level'] == 'answers' ? 'yes' : (tool['care'] as Map)['level'] as String;
         if (care == 'answers') {

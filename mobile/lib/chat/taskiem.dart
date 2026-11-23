@@ -548,7 +548,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   /// A tool of the business's own: its sheet, then its run here, its
   /// answer when it ends.
   /// True when a run was started.
-  Future<bool> _openMade(MadeTool tool, {Map<String, dynamic> initial = const {}, String? button}) async {
+  Future<bool> _openMade(MadeTool tool, {Map<String, dynamic> initial = const {}, String? button, String? words}) async {
     _tools.close();
     unawaited(widget.data.chats.prefs?.rememberTool(madeKey(tool)));
     final got = await showMadeToolSheet(
@@ -556,6 +556,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       auth: widget.data.chats.auth,
       tool: tool,
       initial: initial,
+      words: words,
       button: button,
       onAlwaysAsk: (on) => _tools.setAlwaysAsk(tool.command, on),
     );
@@ -875,8 +876,13 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                     onSend: (words, file) {
                       // Tags name things for Taskiem in the words alone.
                       _tags.take(words);
+                      final made = file == null ? madeByCommand(_tools.made, words) : null;
                       if (file != null) {
                         d.sendFile(file, words);
+                      } else if (made != null) {
+                        // "/expense 4500 diesel": its form, filled in from
+                        // the words; nothing starts before its own button.
+                        unawaited(_openMade(made.tool, words: made.words));
                       } else if (d.briefs && asksBriefing(words)) {
                         // Asked for by name: the card, not a message.
                         _showBriefing(d);

@@ -30,6 +30,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart';
 import 'groups.dart' show pickAction, pickOneOf;
+import 'saved_fill.dart';
 import 'words.dart';
 
 // --- the tools ---
@@ -56,6 +57,16 @@ List<MadeTool> madeMatching(List<MadeTool> tools, String query) {
     for (final t in tools)
       if (t.command.startsWith(q) || t.name.toLowerCase().split(RegExp(r'\s+')).any((w) => w.startsWith(q))) t,
   ];
+}
+
+/// The tool "/command words" names and the words after it (made tools §6,
+/// "with words after it"), so its form opens filled in from them; null for
+/// "/command" alone (the panel opens it) and for no tool of the person's.
+({MadeTool tool, String words})? madeByCommand(List<MadeTool> tools, String text) {
+  final m = RegExp(r'^/([a-z][a-z0-9-]*)\s+(\S[\s\S]*)$').firstMatch(text.trim());
+  if (m == null) return null;
+  final tool = tools.where((t) => t.command == m.group(1)).firstOrNull;
+  return tool == null ? null : (tool: tool, words: m.group(2)!.replaceAll(RegExp(r'\s+'), ' ').trim());
 }
 
 /// Whether the tool asks before it runs: its steps say so, or an owner
@@ -138,6 +149,80 @@ List<SchemaField> schemaFields(Map<String, dynamic>? schema) {
   return out;
 }
 
+// --- saved things as a tool's inputs ---
+
+/// What a Saved button can fill in a tool's form (made tools M1: "a tool's
+/// input of a type a saved kind has … offers the person's and the
+/// business's Saved objects of that kind"): its x-saved hint when it has
+/// one, else its format, else the words of its name and label. Only a text
+/// field is offered one (as web/src/lib/toolsaved.ts).
+const toolSavedKinds = {'person', 'place', 'phone', 'email', 'bank_account', 'date'};
+
+const _savedFormats = {'phone': 'phone', 'phone-ng': 'phone', 'tel': 'phone', 'email': 'email', 'date': 'date'};
+
+final _savedWords = <(RegExp, String)>[
+  (RegExp(r'\b(phone|tel|telephone|mobile|whatsapp)\b'), 'phone'),
+  (RegExp(r'\b(e ?mail)\b'), 'email'),
+  (RegExp(r'\b(account number|bank account|account no|nuban)\b'), 'bank_account'),
+  (RegExp(r'\b(address|location|deliver to|delivery address|branch|place|site)\b'), 'place'),
+  (RegExp(r'\b(date|day|due|birthday|deadline)\b'), 'date'),
+  (RegExp(r'\b(customer|person|contact|recipient|client|supplier)\b'), 'person'),
+];
+
+/// The saved kind a field of a tool's form takes, or null.
+String? toolSavedKind(SchemaField f) {
+  if (f.kind != 'text' && f.kind != 'long') return null;
+  final hint = f.prop['x-saved'];
+  if (hint is String) return toolSavedKinds.contains(hint) ? hint : null;
+  final format = f.prop['format'];
+  if (format is String && format.isNotEmpty) return _savedFormats[format];
+  final words = '${f.name} ${f.prop['title'] ?? f.label}'
+      .replaceAllMapped(RegExp('([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+      .replaceAll(RegExp('[_-]+'), ' ')
+      .toLowerCase();
+  for (final (re, kind) in _savedWords) {
+    if (re.hasMatch(words)) return kind;
+  }
+  return null;
+}
+
+/// What the Saved button of a field of [kind] says to a screen reader.
+String _savedSemantics(String kind, String label) => switch (kind) {
+  'person' => 'Pick a saved person for $label',
+  'place' => 'Pick a saved place for $label',
+  'phone' => 'Pick a saved phone number for $label',
+  'email' => 'Pick a saved email for $label',
+  'bank_account' => 'Fill $label from a saved bank account',
+  _ => 'Pick a saved date for $label',
+};
+
+/// A saved thing of [kind] picked, as the words that fill a field: a
+/// person's name, a place's address (fitted to [max]), a phone or an email
+/// in full, an account's number once a passkey shows it, a date as
+/// 2027-03-03. Null when none is picked or nothing can fill it.
+Future<String?> pickSavedFor(BuildContext context, Auth auth, String kind, {int max = 300}) async {
+  switch (kind) {
+    case 'person':
+      return (await pickSaved(context, auth, kind: 'person', title: 'Saved people'))?.title;
+    case 'place':
+      return (await pickSavedPlace(context, auth, max: max))?.address;
+    case 'phone':
+      return pickSavedPhone(context, auth);
+    case 'email':
+      bool shown(SavedObject x) {
+        final e = (x.details.email ?? '').trim();
+        return e.isNotEmpty && !e.contains('•');
+      }
+      return (await pickSaved(context, auth, kind: 'person', title: 'Saved emails', fits: shown))?.details.email?.trim();
+    case 'bank_account':
+      final a = await pickSavedAccount(context, auth);
+      return a == null || a.number.isEmpty ? null : a.number;
+    case 'date':
+      return pickSavedDate(context, auth);
+  }
+  return null;
+}
+
 /// A value as a box shows it.
 String _shown(Object? v) => switch (v) {
   null => '',
@@ -167,6 +252,38 @@ class _FormValues {
   final List<SchemaField> fields;
   final boxes = <String, TextEditingController>{};
   final picked = <String, Object?>{};
+
+  /// Values read from words (POST /v1/tools/{command}/read) into the
+  /// fields they name; those that fit no field left out. How many filled.
+  int fill(Map<String, dynamic> values) {
+    var n = 0;
+    for (final f in fields) {
+      if (!values.containsKey(f.name)) continue;
+      final v = values[f.name];
+      switch (f.kind) {
+        case 'yes_no':
+          if (v is bool) {
+            picked[f.name] = v;
+            n++;
+          }
+        case 'choice':
+          final c = f.choices.where((c) => '$c' == '$v').firstOrNull;
+          if (c != null) {
+            picked[f.name] = c;
+            n++;
+          }
+        case 'choices':
+          if (v is List) {
+            picked[f.name] = [for (final c in f.choices) if (v.any((x) => '$x' == '$c')) c];
+            n++;
+          }
+        case 'text' || 'long' || 'number' || 'money':
+          boxes[f.name]!.text = _shown(v);
+          n++;
+      }
+    }
+    return n;
+  }
 
   void dispose() {
     for (final b in boxes.values) {
@@ -231,9 +348,16 @@ class _FormValues {
 
 /// The tool's form: a field for each input, in a form group.
 class _SchemaForm extends StatelessWidget {
-  const _SchemaForm({required this.values, required this.onChanged});
+  const _SchemaForm({required this.values, required this.onChanged, this.onSaved, this.picking, this.busy = false});
   final _FormValues values;
   final VoidCallback onChanged;
+
+  /// A field's Saved button pressed: the sheet picks and fills it.
+  final void Function(SchemaField f, String kind)? onSaved;
+
+  /// The field whose saved things are being read and picked from.
+  final String? picking;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -321,21 +445,37 @@ class _SchemaForm extends StatelessWidget {
           ),
         );
     }
+    final box = TkTextBox(
+      controller: values.boxes[f.name]!,
+      size: 15,
+      height: 46,
+      lines: f.kind == 'long' ? 3 : 1,
+      money: f.kind == 'money',
+      signed: f.kind == 'number',
+      prefix: f.kind == 'money' ? '₦' : null,
+      phone: f.prop['format'] == 'phone-ng',
+      max: f.kind == 'long' ? 2000 : 300,
+    );
+    final saved = onSaved == null ? null : toolSavedKind(f);
     return TkKitField(
       label: _label(f),
       hint: f.hint,
       error: values.problem(f),
-      child: TkTextBox(
-        controller: values.boxes[f.name]!,
-        size: 15,
-        height: 46,
-        lines: f.kind == 'long' ? 3 : 1,
-        money: f.kind == 'money',
-        signed: f.kind == 'number',
-        prefix: f.kind == 'money' ? '₦' : null,
-        phone: f.prop['format'] == 'phone-ng',
-        max: f.kind == 'long' ? 2000 : 300,
-      ),
+      child: saved == null
+          ? box
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: box),
+                const SizedBox(width: 8),
+                SavedButton(
+                  semantics: _savedSemantics(saved, f.label),
+                  picking: picking == f.name,
+                  busy: busy || (picking != null && picking != f.name),
+                  onPressed: () => onSaved!(f, saved),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -354,15 +494,20 @@ Future<MadeStarted?> showMadeToolSheet(
   required Auth auth,
   required MadeTool tool,
   Map<String, dynamic> initial = const {},
+  String? words,
   String? button,
   ValueChanged<bool>? onAlwaysAsk,
-}) => showTkSheet<MadeStarted>(context, (_) => MadeToolSheet(auth: auth, tool: tool, initial: initial, button: button, onAlwaysAsk: onAlwaysAsk));
+}) => showTkSheet<MadeStarted>(context, (_) => MadeToolSheet(auth: auth, tool: tool, initial: initial, words: words, button: button, onAlwaysAsk: onAlwaysAsk));
 
 class MadeToolSheet extends StatefulWidget {
-  const MadeToolSheet({super.key, required this.auth, required this.tool, this.initial = const {}, this.button, this.onAlwaysAsk});
+  const MadeToolSheet({super.key, required this.auth, required this.tool, this.initial = const {}, this.words, this.button, this.onAlwaysAsk});
   final Auth auth;
   final MadeTool tool;
   final Map<String, dynamic> initial;
+
+  /// Words typed after its command ("/expense 4500 diesel"): read into the
+  /// form when it opens (POST /v1/tools/{command}/read), nothing started.
+  final String? words;
 
   /// The button pressed to open it (its token): the start carries it, so a
   /// once button is spent by the run it starts (the confirm keeps it).
@@ -394,18 +539,69 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
   /// One key for the start, so a start sent twice runs once.
   final _key = 'app-tool-${DateTime.now().microsecondsSinceEpoch}';
 
+  /// Fill from words: its box, whether it is being read, and what the
+  /// reading said (how many filled, and what could not be read).
+  late final _words = TextEditingController(text: widget.words ?? '');
+  bool _reading = false;
+  String? _readSaid;
+  List<String> _readNotes = const [];
+
+  /// The field whose saved things are being picked from.
+  String? _picking;
+
   @override
   void initState() {
     super.initState();
     for (final b in _values.boxes.values) {
       b.addListener(() => setState(() {}));
     }
+    _words.addListener(() => setState(() {}));
+    if ((widget.words ?? '').trim().isNotEmpty) _read();
   }
 
   @override
   void dispose() {
     _values.dispose();
+    _words.dispose();
     super.dispose();
+  }
+
+  /// The words in the box read into the form: the values only fill it;
+  /// its own Run it or Next starts anything.
+  Future<void> _read() async {
+    final words = _words.text.trim();
+    if (words.isEmpty || _reading) return;
+    setState(() => (_reading = true, _readSaid = null, _readNotes = const []));
+    try {
+      final r = await widget.auth.api.readTool(command: widget.tool.command, body: ReadToolRequest(text: words));
+      if (!mounted) return;
+      final n = _values.fill(r.values);
+      setState(() {
+        _readNotes = r.notes;
+        _readSaid = n == 0
+            ? (r.notes.isEmpty ? 'Nothing in those words fits its fields. Fill them in below.' : null)
+            : 'Filled ${n == 1 ? 'one field' : '$n fields'} from your words. Check them before you go on.';
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() => _readSaid = e is ApiError && e.status == 429 ? 'Too many at once. Wait a moment and try again.' : errorWords(e));
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
+
+  /// A field's Saved button: one of the person's or the business's saved
+  /// things of its kind, picked, fills it.
+  Future<void> _fromSaved(SchemaField f, String kind) async {
+    if (_picking != null) return;
+    setState(() => _picking = f.name);
+    try {
+      final max = (f.prop['maxLength'] as num?)?.toInt() ?? 300;
+      final v = await pickSavedFor(context, widget.auth, kind, max: max);
+      if (v != null && v.isNotEmpty && mounted) _values.boxes[f.name]?.text = v.length > max ? v.substring(0, max) : v;
+    } finally {
+      if (mounted) setState(() => _picking = null);
+    }
   }
 
   bool get _asks => _alwaysAsk || widget.tool.care.level != 'answers';
@@ -524,7 +720,31 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
       onAction: _busy || !_values.ready ? null : _start,
       children: [
         if (shown.isNotEmpty)
-          _SchemaForm(values: _values, onChanged: () => setState(() {}))
+          TkFormGroup(
+            title: 'Fill from words',
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      label: 'Fill from words',
+                      child: TkTextBox(controller: _words, size: 15, height: 46, max: 300, hint: 'Say it as you would in the chat'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TkSmallButton(
+                    label: _reading ? 'Reading…' : 'Fill',
+                    semantics: 'Fill the form from these words',
+                    onPressed: _reading || _words.text.trim().isEmpty ? null : _read,
+                  ),
+                ],
+              ),
+              if (_readSaid != null) Text(_readSaid!, style: tkText(size: 13.5, lineHeight: 1.35, color: t.muted)),
+              for (final n in _readNotes) Text(n, style: tkText(size: 13.5, weight: 600, lineHeight: 1.35, color: t.text)),
+            ],
+          ),
+        if (shown.isNotEmpty)
+          _SchemaForm(values: _values, onChanged: () => setState(() {}), onSaved: _fromSaved, picking: _picking, busy: _busy)
         else
           TkFormGroup(
             children: [
@@ -794,12 +1014,20 @@ CardTone answerTone(String? tone) => switch (tone?.toLowerCase()) {
   _ => CardTone.plain,
 };
 
+/// "Waiting for Ada to approve", "Waiting for your answer: open To fill
+/// in": one sentence a step the run waits on (made tools §7).
+String waitWords(ToolAnswerWait w) => w.kind == 'approval'
+    ? (w.you == true ? 'Waiting for you to approve: open Approvals.' : 'Waiting for ${w.who} to approve.')
+    : (w.you == true ? 'Waiting for your answer: open To fill in.' : 'Waiting for ${w.who} to answer.');
+
 /// The words of a run that has no answer to show (yet): working, queued,
-/// waiting, stopped, done.
+/// waiting (for whom, when the server says), stopped, done.
 String? runWordsOf(MadeRun r) {
   final a = r.answer;
   if (r.lost) return 'That run can’t be read any more.';
   if (a == null) return 'Working on it…';
+  final waits = a.waitingFor ?? const <ToolAnswerWait>[];
+  if (waits.isNotEmpty && const {'running', 'pending', 'waiting'}.contains(a.status)) return waits.map(waitWords).join(' ');
   return switch (a.status) {
     'running' || 'pending' => 'Working on it…',
     'queued' => 'Queued behind other work. I’ll tell you when it’s done.',
