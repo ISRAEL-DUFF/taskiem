@@ -180,6 +180,10 @@ var ErrPersonalOrder = errors.New("the rows cannot be put in order by a personal
 // or dates filter on a personal column (Check refuses it) is left out for
 // a viewer without table.read, as a search leaves such columns out.
 func (p *Page) ReadFor(b Block, t datatables.Table, v Values, order *Order) (Read, error) {
+	if IsRecords(t.Name) {
+		// Taskiem's records' personal columns are masked for everyone.
+		v.Viewer.Personal = false
+	}
 	q, err := b.Source.query(t, nil)
 	if err != nil {
 		return Read{}, err
@@ -255,7 +259,7 @@ func (p *Page) HiddenFilter(f Filter, tables []datatables.Table, personal bool) 
 		return false
 	}
 	for _, name := range p.UsesTables() {
-		if t, ok := datatables.FindQueryTable(tables, name); ok {
+		if t, ok := Lookup(tables, name); ok {
 			if col, ok := columnOf(t, f.Column); ok && col.Personal {
 				return true
 			}
@@ -333,6 +337,22 @@ func ReadCursor(s string, order *Order, ranked bool) (Cursor, error) {
 	if s == "" {
 		return c, nil
 	}
+	c, err := readCursorRaw(s)
+	if err != nil || c.Order != OrderKey(order) {
+		return Cursor{}, ErrCursor
+	}
+	if ranked {
+		if c.After != "" || c.Skip <= 0 || c.Skip > MaxSkip {
+			return Cursor{}, ErrCursor
+		}
+	} else if c.Skip != 0 || c.After == "" {
+		return Cursor{}, ErrCursor
+	}
+	return c, nil
+}
+
+func readCursorRaw(s string) (Cursor, error) {
+	var c Cursor
 	if len(s) > 4096 {
 		return c, ErrCursor
 	}
@@ -342,14 +362,7 @@ func ReadCursor(s string, order *Order, ranked bool) (Cursor, error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&c) != nil || c.Order != OrderKey(order) {
-		return Cursor{}, ErrCursor
-	}
-	if ranked {
-		if c.After != "" || c.Skip <= 0 || c.Skip > MaxSkip {
-			return Cursor{}, ErrCursor
-		}
-	} else if c.Skip != 0 || c.After == "" {
+	if dec.Decode(&c) != nil {
 		return Cursor{}, ErrCursor
 	}
 	return c, nil
@@ -374,6 +387,9 @@ type Shown struct {
 	Group  string       `json:"group,omitempty"`
 	Cells  []string     `json:"cells,omitempty"`
 	Detail *ShownDetail `json:"detail,omitempty"`
+	// Link is the record's own screen, for a row of Taskiem's records
+	// (/storefront/orders/AD-12): the web's address, which the app opens too.
+	Link string `json:"link,omitempty"`
 }
 
 // ShownState is a row's state as drawn.
@@ -402,6 +418,9 @@ const maxShown = 300
 // applied before any expression sees the row, so no expression can show
 // what the mask hides), values written as people read them.
 func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown {
+	if IsRecords(t.Name) {
+		v.Viewer.Personal = false
+	}
 	out := make([]Shown, 0, len(rows))
 	filters := map[string]any{}
 	for k, x := range v.Set {
@@ -671,7 +690,7 @@ func ChangeWords(period string, now, before float64) string {
 func Shows(p *Page, tables []datatables.Table) []string {
 	var out []string
 	for _, name := range p.UsesTables() {
-		t, ok := datatables.FindQueryTable(tables, name)
+		t, ok := Lookup(tables, name)
 		if !ok {
 			continue
 		}
@@ -693,7 +712,7 @@ func Shows(p *Page, tables []datatables.Table) []string {
 			}
 		}
 		for _, b := range p.Blocks {
-			if b.Source == nil || b.Source.Table != name {
+			if b.Source == nil || b.Source.From() != name {
 				continue
 			}
 			if b.Type == "figure" {

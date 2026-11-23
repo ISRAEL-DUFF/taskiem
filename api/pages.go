@@ -53,7 +53,8 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.With(s.need(PermPageEdit)).Delete("/pages/{name}", s.deletePage)
 	r.Get("/pages/{name}/view", s.viewPage)
 	r.Get("/pages/{name}/blocks/{block}", s.pageBlock)
-	s.pageVersionRoutes(r) // versions, export and import (pages_versions.go)
+	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
+	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }
 
 // pageRow is a page as stored.
@@ -169,7 +170,11 @@ func pageEnv(ctx context.Context, tx pgx.Tx, self uuid.UUID) (pages.Env, error) 
 	if err != nil {
 		return pages.Env{}, err
 	}
-	return pages.Env{Tables: tables, Taken: func(name string) string {
+	areaOn, err := pageAreas(ctx, tx)
+	if err != nil {
+		return pages.Env{}, err
+	}
+	return pages.Env{Tables: tables, AreaOn: areaOn, Taken: func(name string) string {
 		var other bool
 		_ = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pages WHERE name = $1 AND id <> $2)`, name, self).Scan(&other)
 		if other {
@@ -633,6 +638,9 @@ type pageCtx struct {
 	editor  bool
 	readers map[string]tableRows
 	readErr error
+	// off: a part over Taskiem's records in an area the business has off,
+	// drawn as unavailable (pages_records.go).
+	off map[int]string
 }
 
 // openPage loads a page for drawing for the caller: the draft for an
@@ -640,7 +648,7 @@ type pageCtx struct {
 // against today's tables mark the parts that cannot be drawn.
 func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, bool) {
 	p := principalFrom(r.Context())
-	pc := &pageCtx{editor: p.Can(PermPageEdit), broken: map[int]string{}}
+	pc := &pageCtx{editor: p.Can(PermPageEdit), broken: map[int]string{}, off: map[int]string{}}
 	var viewer pages.Viewer
 	err := s.tx(r, func(tx pgx.Tx) error {
 		pg, err := loadPage(r.Context(), tx, chi.URLParam(r, "name"))
@@ -666,7 +674,16 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 		if pc.tables, err = datatables.ListTables(r.Context(), tx); err != nil {
 			return err
 		}
-		ps = append(ps, pages.Check(page, pages.Env{Tables: pc.tables})...)
+		areaOn, err := pageAreas(r.Context(), tx)
+		if err != nil {
+			return err
+		}
+		for i, b := range page.Blocks {
+			if v, ok := pages.RecordViewNamed(recordsOf(b)); ok && !areaOn(string(v.Area)) {
+				pc.off[i] = v.Unavailable()
+			}
+		}
+		ps = append(ps, pages.Check(page, pages.Env{Tables: pc.tables, AreaOn: areaOn})...)
 		for _, pr := range ps {
 			rest, ok := strings.CutPrefix(pr.Path, "/blocks/")
 			if !ok {
@@ -674,7 +691,8 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 			}
 			i, err := strconv.Atoi(strings.SplitN(rest, "/", 2)[0])
 			if err == nil {
-				if _, seen := pc.broken[i]; !seen {
+				_, seen := pc.broken[i]
+				if _, off := pc.off[i]; !seen && !off {
 					pc.broken[i] = pr.Message
 				}
 			}
@@ -743,7 +761,7 @@ func (s *Server) pageReader(ctx context.Context, pc *pageCtx, t datatables.Table
 }
 
 func (pc *pageCtx) table(b pages.Block) datatables.Table {
-	t, _ := datatables.FindQueryTable(pc.tables, b.Source.Table)
+	t, _ := pages.Lookup(pc.tables, b.Source.From())
 	return t
 }
 
@@ -756,6 +774,10 @@ func (s *Server) viewPage(w http.ResponseWriter, r *http.Request) {
 	}
 	blocks := []map[string]any{}
 	for i, b := range pc.page.Blocks {
+		if why, off := pc.off[i]; off {
+			blocks = append(blocks, map[string]any{"id": b.ID, "type": b.Type, "unavailable": why})
+			continue
+		}
 		if why, broken := pc.broken[i]; broken {
 			if pc.editor {
 				blocks = append(blocks, map[string]any{"id": b.ID, "type": b.Type, "broken": "This part needs fixing: " + why})
@@ -812,6 +834,10 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "only a list or a table has more rows")
 		return
 	}
+	if why, off := pc.off[i]; off {
+		writeJSON(w, http.StatusOK, map[string]any{"id": b.ID, "type": b.Type, "unavailable": why})
+		return
+	}
 	if why, broken := pc.broken[i]; broken {
 		if !pc.editor {
 			writeErr(w, http.StatusNotFound, "this page has no such part")
@@ -831,13 +857,19 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "a list keeps its own order")
 			return
 		}
-		if columnNamed(pc.table(b), col).Personal && !pc.values.Viewer.Personal {
+		if columnNamed(pc.table(b), col).Personal && (!pc.values.Viewer.Personal || b.Source.Records != "") {
 			writeErr(w, http.StatusBadRequest, "this column is personal: only someone who may read the table can put the rows in order by it")
 			return
 		}
 	}
-	ranked := pages.RankedByPersonal(b, pc.table(b), order, pc.values.Viewer.Personal)
-	cur, err := pages.ReadCursor(r.URL.Query().Get("cursor"), order, ranked)
+	var cur pages.Cursor
+	var err error
+	if b.Source.Records != "" {
+		cur, err = pages.ReadRecordCursor(r.URL.Query().Get("cursor"), order)
+	} else {
+		ranked := pages.RankedByPersonal(b, pc.table(b), order, pc.values.Viewer.Personal)
+		cur, err = pages.ReadCursor(r.URL.Query().Get("cursor"), order, ranked)
+	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -864,6 +896,9 @@ func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, curs
 	if err != nil {
 		out["broken"] = "This part needs fixing."
 		return out
+	}
+	if b.Source.Records != "" {
+		return s.drawRecords(ctx, pc, b, t, read, cursor, order, out)
 	}
 	tr, err := s.pageReader(ctx, pc, t)
 	if err != nil {
@@ -947,29 +982,7 @@ func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, curs
 		return out
 	}
 	// A list or a table.
-	out["title"], out["size"], out["empty"] = b.Title, nonEmpty(b.Size, "full"), nonEmpty(b.Empty, "Nothing to show")
-	out["has_detail"] = b.Detail != nil
-	if b.Type == "table" {
-		cols := []map[string]any{}
-		for _, c := range b.Columns {
-			label := c.Label
-			if label == "" {
-				label = columnNamed(t, c.Column).Title
-				if label == "" {
-					label = c.Column
-				}
-			}
-			// sortable: a press on it puts the rows in its order; never a
-			// personal column for a viewer without table.read (pageBlock
-			// refuses it), so the web and the app do not offer it.
-			sortable := !columnNamed(t, c.Column).Personal || pc.values.Viewer.Personal
-			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira, "sortable": sortable})
-		}
-		out["columns"] = cols
-		if order != nil {
-			out["order"] = map[string]any{"column": order.Column, "desc": order.Desc}
-		}
-	}
+	partHead(pc, b, t, order, out)
 	shown := []pages.Shown{}
 	var more any
 	count := int64(0)
@@ -1039,4 +1052,33 @@ func nonEmpty(s, def string) string {
 		return def
 	}
 	return s
+}
+
+// partHead is a list's or a table's head as drawn: its title, size and
+// words when empty, and a table's columns (each saying whether this
+// viewer may put the rows in its order) and the order it is in.
+func partHead(pc *pageCtx, b pages.Block, t datatables.Table, order *pages.Order, out map[string]any) {
+	out["title"], out["size"], out["empty"] = b.Title, nonEmpty(b.Size, "full"), nonEmpty(b.Empty, "Nothing to show")
+	out["has_detail"] = b.Detail != nil
+	if b.Type == "table" {
+		cols := []map[string]any{}
+		for _, c := range b.Columns {
+			label := c.Label
+			if label == "" {
+				label = columnNamed(t, c.Column).Title
+				if label == "" {
+					label = c.Column
+				}
+			}
+			// sortable: a press on it puts the rows in its order; never a
+			// personal column for a viewer without table.read (pageBlock
+			// refuses it), so the web and the app do not offer it.
+			sortable := !columnNamed(t, c.Column).Personal || pc.values.Viewer.Personal && b.Source.Records == ""
+			cols = append(cols, map[string]any{"column": c.Column, "label": label, "naira": c.Naira, "sortable": sortable})
+		}
+		out["columns"] = cols
+		if order != nil {
+			out["order"] = map[string]any{"column": order.Column, "desc": order.Desc}
+		}
+	}
 }

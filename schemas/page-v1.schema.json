@@ -105,12 +105,13 @@
       }
     },
     "source": {
-      "description": "A data table: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses.",
+      "description": "A data table, or a view of Taskiem's own records (orders, invoices): the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["table"],
+      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }],
       "properties": {
         "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
+        "records": { "description": "One of Taskiem's own record views, read only: orders or invoices (more later).", "type": "string", "pattern": "^[a-z][a-z_]{1,30}$" },
         "filters": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/condition" } },
         "order": {
           "type": "array",

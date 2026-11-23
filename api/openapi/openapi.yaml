@@ -39636,6 +39636,66 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/page-records:
+    get:
+      operationId: listPageRecords
+      tags:
+      - Pages
+      summary: Taskiem's own records a page may show
+      description: >-
+        The views of the business's own records a page part may read (`"source": {"records": "orders"}`): orders and invoices, each with its fixed columns (a personal column is shown masked to everyone, and is never narrowed, added up, grouped or ordered by), whether its area is on (a part over an area that is off is refused at publishing), and whether the caller may see it (orders need storefront.manage or order.handle, invoices invoice.read: a viewer without it is shown "You cannot see orders." in place of the part). For the editor (page.edit).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: page.edit
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, title, 'on', may_read, area, columns]
+                      properties:
+                        name:
+                          type: string
+                        title:
+                          type: string
+                        'on':
+                          type: boolean
+                          description: Whether its area is on for the business.
+                        may_read:
+                          type: boolean
+                          description: Whether the caller holds the area's read permission.
+                        area:
+                          type: string
+                          description: The area's name, as Settings says it.
+                        columns:
+                          type: array
+                          items:
+                            type: object
+                            required: [name, title, type, personal]
+                            properties:
+                              name:
+                                type: string
+                              title:
+                                type: string
+                              type:
+                                type: string
+                              personal:
+                                type: boolean
+                            additionalProperties: false
+                      additionalProperties: false
+                additionalProperties: false
+        default:
+          $ref: '#/components/responses/Error'
   /v1/pages/{name}/blocks/{block}:
     get:
       operationId: getPageBlock
@@ -60699,6 +60759,9 @@ components:
           items:
             type: string
           description: A table's cells, in its columns' order, written as people read them.
+        link:
+          type: string
+          description: A row of Taskiem's own records (an order, an invoice) links to the record's own screen, as the web's address (/storefront/orders/AD-12, /invoices/INV-0001); the app opens it too.
         detail:
           type: object
           required: [title, lines]
@@ -60720,7 +60783,7 @@ components:
       additionalProperties: false
     PageBlock:
       type: object
-      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). broken or error replace the rest.
+      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). broken, error or unavailable replace the rest.
       required: [id, type]
       properties:
         id:
@@ -60824,6 +60887,9 @@ components:
         error:
           type: string
           description: Why this part could not be read just now.
+        unavailable:
+          type: string
+          description: In place of a part over Taskiem's own records, why it is not drawn for this caller ("You cannot see orders.", or the area is turned off).
       additionalProperties: false
     PageDrawing:
       type: object

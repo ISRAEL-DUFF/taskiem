@@ -128,7 +128,7 @@ func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 		if b.Source == nil || len(b.Source.Filters) == 0 {
 			continue
 		}
-		t, ok := datatables.FindQueryTable(tables, b.Source.Table)
+		t, ok := Lookup(tables, b.Source.From())
 		if !ok {
 			continue
 		}
@@ -152,8 +152,10 @@ func ForExport(p *Page, tables []datatables.Table) (out *Page, left int) {
 // Missing says, in plain words, what a page names that the business does
 // not have: each table it shows that the business has no table of that
 // name for, and each column of a table it has that the table lacks. A
-// page read from a file says these first, before the rest of Check.
-func Missing(p *Page, tables []datatables.Table) []string {
+// page read from a file says these first, before the rest of Check. A
+// part over Taskiem's own records names a view Taskiem has, in an area
+// the business has on (areaOn; nil, every area is), or that is said too.
+func Missing(p *Page, tables []datatables.Table, areaOn func(area string) bool) []string {
 	var out []string
 	filters := map[string]Filter{}
 	for _, f := range p.Filters {
@@ -163,15 +165,16 @@ func Missing(p *Page, tables []datatables.Table) []string {
 	var names []string
 	for _, b := range p.Blocks {
 		s := b.Source
-		if s == nil || s.Table == "" {
+		from := s.From()
+		if from == "" {
 			continue
 		}
-		if !slices.Contains(names, s.Table) {
-			names = append(names, s.Table)
+		if !slices.Contains(names, from) {
+			names = append(names, from)
 		}
 		add := func(c string) {
-			if c != "" && !slices.Contains(cols[s.Table], c) {
-				cols[s.Table] = append(cols[s.Table], c)
+			if c != "" && !slices.Contains(cols[from], c) {
+				cols[from] = append(cols[from], c)
 			}
 		}
 		reads := func(v string) {
@@ -225,7 +228,18 @@ func Missing(p *Page, tables []datatables.Table) []string {
 		}
 	}
 	for _, name := range names {
-		t, ok := datatables.FindQueryTable(tables, name)
+		if view, ok := strings.CutPrefix(name, RecordsPrefix); ok {
+			v, known := RecordViewNamed(view)
+			switch {
+			case !known:
+				out = append(out, fmt.Sprintf("Taskiem has no records called %s that a page can show.", view))
+				continue
+			case areaOn != nil && !areaOn(string(v.Area)):
+				out = append(out, fmt.Sprintf("This business has %s turned off, so its %s cannot be shown.", AreaWords(v.Area), v.Words))
+				continue
+			}
+		}
+		t, ok := Lookup(tables, name)
 		if !ok || t.Name != name {
 			out = append(out, fmt.Sprintf("This business has no table called %s.", name))
 			continue

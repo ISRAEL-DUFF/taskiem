@@ -17,6 +17,9 @@ type Env struct {
 	// Taken says why name cannot be this page's ("" when it is free): another
 	// page has it, or a tool's command is that word.
 	Taken func(name string) string
+	// AreaOn says whether a business area is on (engine/areas); nil, all
+	// are. A part over Taskiem's records in an area that is off is refused.
+	AreaOn func(area string) bool
 }
 
 // ReservedName reports whether a page's name is one of Taskiem's own
@@ -53,10 +56,19 @@ func Check(p *Page, env Env) []Problem {
 		}
 		at := fmt.Sprintf("/blocks/%d", i)
 		name := b.partName(i)
-		t, ok := datatables.FindQueryTable(env.Tables, b.Source.Table)
-		if !ok || t.Name != b.Source.Table {
-			ps.add(at+"/source/table", "%s shows the table %s, which the business does not have.", name, b.Source.Table)
-			continue
+		var t datatables.Table
+		if b.Source.Records != "" {
+			var ok bool
+			if t, ok = recordsChecks(&ps, at, name, b, env); !ok {
+				continue
+			}
+		} else {
+			var ok bool
+			t, ok = Lookup(env.Tables, b.Source.Table)
+			if !ok || t.Name != b.Source.Table {
+				ps.add(at+"/source/table", "%s shows the table %s, which the business does not have.", name, b.Source.Table)
+				continue
+			}
 		}
 		if _, err := b.Source.query(t, nil); err != nil {
 			ps.add(at+"/source", "%s: %s.", name, plainQueryError(err))
@@ -150,6 +162,9 @@ func (f Filter) fits(t datatables.Table) string {
 			if !ok {
 				return fmt.Sprintf("the table %s has no column %s", tableTitle(t), c)
 			}
+			if col.Personal && IsRecords(t.Name) {
+				return fmt.Sprintf("%s is personal, and hidden on the page", columnTitle(col))
+			}
 			if col.Type != "text" && col.Type != "email" && col.Type != "phone" {
 				return fmt.Sprintf("%s does not hold words", columnTitle(col))
 			}
@@ -183,6 +198,9 @@ func (f Filter) fits(t datatables.Table) string {
 		}
 		if col.Type != "email" {
 			return fmt.Sprintf("Mine reads a column of email addresses, and %s is not one", columnTitle(col))
+		}
+		if IsRecords(t.Name) {
+			return fmt.Sprintf("%s is the customer's, and hidden on the page", columnTitle(col))
 		}
 	}
 	return ""

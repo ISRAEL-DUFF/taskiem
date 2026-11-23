@@ -250,7 +250,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 			VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $7)`, id, p.TenantID, page.Name, page.Title, page.Icon, page.Marshal(), p.Actor()); err != nil {
 			return err
 		}
-		missing := pages.Missing(page, env.Tables)
+		missing := pages.Missing(page, env.Tables, env.AreaOn)
 		if err := auditTx(r, tx, "page.import", page.Name, map[string]any{"title": page.Title, "asked_name": asked, "missing": len(missing)}); err != nil {
 			return err
 		}

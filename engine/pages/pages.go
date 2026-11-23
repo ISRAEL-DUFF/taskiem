@@ -117,9 +117,11 @@ type Change struct {
 	Period string `json:"period"` // day, week, month
 }
 
-// Source is what feeds a part: a data table's rows.
+// Source is what feeds a part: a data table's rows, or a view of
+// Taskiem's own records (orders, invoices: records.go), never both.
 type Source struct {
-	Table   string      `json:"table"`
+	Table   string      `json:"table,omitempty"`
+	Records string      `json:"records,omitempty"`
 	Filters []Condition `json:"filters,omitempty"`
 	Order   []Order     `json:"order,omitempty"`
 	Uses    []string    `json:"uses,omitempty"`
@@ -458,9 +460,12 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		return
 	}
 	s := b.Source
-	if s == nil || s.Table == "" {
+	if s == nil || (s.Table == "" && s.Records == "") {
 		ps.add(at+"/source", "%s needs the table it shows.", name)
 		return
+	}
+	if s.Table != "" && s.Records != "" {
+		ps.add(at+"/source", "%s shows one table, or Taskiem's own records: not both.", name)
 	}
 	if len(s.Filters) > MaxConditions {
 		ps.add(at+"/source/filters", "%s has at most %d conditions.", name, MaxConditions)
@@ -502,12 +507,13 @@ func (p *Page) Marshal() []byte {
 	return b
 }
 
-// UsesTables are the tables a page reads, each once, in order.
+// UsesTables are the tables a page reads, each once, in order (a view of
+// Taskiem's records as "records:<view>").
 func (p *Page) UsesTables() []string {
 	var out []string
 	for _, b := range p.Blocks {
-		if b.Source != nil && !slices.Contains(out, b.Source.Table) {
-			out = append(out, b.Source.Table)
+		if b.Source != nil && !slices.Contains(out, b.Source.From()) {
+			out = append(out, b.Source.From())
 		}
 	}
 	return out

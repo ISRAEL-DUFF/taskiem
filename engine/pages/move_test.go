@@ -50,15 +50,15 @@ func TestForExport(t *testing.T) {
 
 func TestMissing(t *testing.T) {
 	p := parseOK(t, good)
-	if got := Missing(p, []datatables.Table{tickets}); len(got) != 0 {
+	if got := Missing(p, []datatables.Table{tickets}, nil); len(got) != 0 {
 		t.Errorf("nothing missing: %v", got)
 	}
 	thin := datatables.Table{Name: "tickets", Title: "Tickets", Columns: []datatables.Column{{Name: "title", Type: "text"}, {Name: "status", Type: "text"}}}
-	got := strings.Join(Missing(p, []datatables.Table{thin}), " ")
+	got := strings.Join(Missing(p, []datatables.Table{thin}, nil), " ")
 	if !strings.Contains(got, "The table Tickets has no columns") || !strings.Contains(got, "amount_kobo") || !strings.Contains(got, "customer") {
 		t.Errorf("columns: %s", got)
 	}
-	if got := Missing(p, nil); len(got) != 1 || got[0] != "This business has no table called tickets." {
+	if got := Missing(p, nil, nil); len(got) != 1 || got[0] != "This business has no table called tickets." {
 		t.Errorf("tables: %v", got)
 	}
 }
