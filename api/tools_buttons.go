@@ -118,9 +118,10 @@ func masked(v any) bool {
 // buttonRows is how many of a list's rows get their buttons minted.
 const buttonRows = 100
 
-// mintAnswerButtons gives each of an answer's buttons (a card's, each
-// row's) its id; a button whose tool is not there is left out.
-func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer, rows bool) error {
+// mintAnswerButtons gives each of an answer's buttons (a card's, each of
+// the first rows rows') its id; a button whose tool is not there is left
+// out.
+func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env string, run uuid.UUID, a *madeAnswer, rows int) error {
 	return db0(ctx, s, tenant, func(tx pgx.Tx) error {
 		mint := func(place string, bs []answerBtn) ([]answerBtn, error) {
 			var out []answerBtn
@@ -142,7 +143,7 @@ func (s *Server) mintAnswerButtons(ctx context.Context, tenant uuid.UUID, env st
 			return err
 		}
 		for i := range a.Rows {
-			if !rows || i >= buttonRows {
+			if i >= min(rows, buttonRows) {
 				a.Rows[i].Actions = nil // pressed from a narrower list
 				continue
 			}

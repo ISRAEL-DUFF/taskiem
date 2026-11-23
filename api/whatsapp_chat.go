@@ -863,6 +863,10 @@ func (s *Server) waCommand(ctx context.Context, c *chat) error {
 	if id, ok := strings.CutPrefix(text, buttonReplyPrefix); ok {
 		return s.waToolButton(ctx, c, id)
 	}
+	// A row chosen from a tool's list answer (tools_rows.go).
+	if ref, ok := strings.CutPrefix(text, rowReplyPrefix); ok {
+		return s.waToolRow(ctx, c, ref)
+	}
 	// Pay on a bill's reminder (link_credit.go).
 	if ref, ok := strings.CutPrefix(text, billPayPrefix); ok {
 		return s.waBillPayPress(ctx, c, ref)

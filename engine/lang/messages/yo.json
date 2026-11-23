@@ -4011,6 +4011,11 @@
       "reviewed": false,
       "context": "Not translated yet: in English until a translator writes it. A tool's list answer with no rows and no empty text of its own"
     },
+    "wa.tool.row_not_yours": {
+      "text": "That list was sent to someone else, or is not available any more.",
+      "reviewed": false,
+      "context": "Not translated yet: in English until a translator writes it. Someone other than the person a tool's list answer went to chose one of its rows (WhatsApp's list message), or the list is not in this business"
+    },
     "wa.tool.list_more": {
       "text": "\u2026and {count} more: see them all in the app.",
       "reviewed": false,
