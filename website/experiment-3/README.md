@@ -8,9 +8,9 @@ One animated landing page for Taskiem. Its energy comes from [owo.app](https://o
 | --- | --- |
 | `v1/` | **Frozen.** The first version, kept unchanged as the reference while we iterate. Preview: <https://claude.ai/artifact/8tcV54JwwbvdXLoZK6uaWw> |
 | `v2/` | Brand colours only (pine, lime, mist, white, with a little mint and amber). The hero phone switches between Taskiem chat, WhatsApp and Telegram sales; an endless strip of the connectors' logos; a workflow canvas that builds and runs itself; one sale traced step by step; animated job cards; a PIN approval; the experiment-2 site's footer. **Frozen.** Preview: <https://claude.ai/artifact/72teAue6hJYHpD9Bs6ksyH> |
-| `v3/` | v2's home page with a Schools link and a "Running a school?" band, and a second page, `schools.html`: a phone that switches between a parent, the proprietor and the gate; money landing on each child's own account number (Moniepoint, Flutterwave, Paystack); billing the term on the workflow canvas; the reminder ladder; cash approval and the gate; the proprietor's overview. Greenfield College and its figures are examples. Preview: <https://claude.ai/artifact/5B3WC3vWneqTps4W9Gd8hc> |
+| `v3/` | v2's home page with a Schools link and a "Running a school?" band, and a second page, `schools.html`: a phone that switches between a parent, the proprietor and the gate; money landing on each child's own account number (Moniepoint, Flutterwave, Paystack); billing the term on the workflow canvas; the reminder ladder; cash approval and the gate; the proprietor's overview. Greenfield College and its figures are examples. Its canvases are drawn as the app draws them, and a test run ticks each step. **Frozen.** Preview: <https://claude.ai/artifact/5B3WC3vWneqTps4W9Gd8hc> |
 
-Each later version goes in its own folder (`v4/`, …), and no earlier one is edited.
+Each later version goes in its own folder (`v5/`, …), and no earlier one is edited.
 
 ## Opening a version
 

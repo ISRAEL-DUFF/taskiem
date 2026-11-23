@@ -483,6 +483,88 @@ button{font:inherit}
 .nav-new{color:var(--acc)!important}
 .nav-new::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-right:7px;vertical-align:middle}
 
+/* ---------- the canvas: a workflow as the web app's builder draws it (as on experiment 2) ---------- */
+:root{--okc:#1f7a50;--infoc:#2f5bd3;--warnbg:#fdf0dc;--warnc:#8a3410}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--okc:#6fd3a0;--infoc:#9db8ff;--warnbg:rgba(253,240,220,.14);--warnc:#f0b27a}}
+:root[data-theme="dark"]{--okc:#6fd3a0;--infoc:#9db8ff;--warnbg:rgba(253,240,220,.14);--warnc:#f0b27a}
+.wf-say{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:16px 18px;border-radius:24px 24px 0 0;background:var(--pine);box-shadow:inset 0 0 0 1px var(--panel-edge)}
+.wf-say > svg{width:34px;height:34px;flex:none;display:block}
+.wf-say .cm{margin:0;max-width:none}
+.wf-say .cm.out{flex:1 1 320px}
+.wf-say .cm.in{flex:0 1 auto}
+.wf{background:var(--card);border:1px solid var(--line);border-top:0;border-radius:0 0 24px 24px;overflow:hidden;box-shadow:0 24px 60px rgba(13,59,46,.10)}
+.wf-bar{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);background:var(--card)}
+.wf-back{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);color:var(--muted);flex:none}
+.wf-name{font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.wf-tag{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.wf-tabs{display:flex;gap:4px;margin-left:8px}
+.wf-tabs span{padding:6px 12px;border-radius:999px;font-size:13.5px;font-weight:500;color:var(--muted)}
+.wf-tabs span.on{background:var(--ground);color:var(--ink);font-weight:800}
+.wf-actions{margin-left:auto;display:flex;gap:8px}
+.wf-btn{padding:7px 14px;border-radius:999px;border:1px solid var(--line);font-size:13.5px;font-weight:800;color:var(--ink);white-space:nowrap;transition:transform .2s,background .2s,color .2s}
+.wf-btn.main{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.wf-btn.press{transform:scale(.9);background:var(--ground)}
+.wf-canvas{position:relative;overflow:hidden;height:440px;background-color:var(--ground);background-image:radial-gradient(color-mix(in srgb,var(--muted) 38%,transparent) 1.2px,transparent 1.3px);background-size:22px 22px}
+.wf-stage{position:relative;width:1160px;height:440px;transform-origin:0 0}
+.wf-edges{position:absolute;inset:0;width:1160px;height:440px;overflow:visible}
+.wf-edges path{fill:none;stroke:color-mix(in srgb,var(--muted) 60%,var(--line));stroke-width:1.75;transition:stroke .3s}
+.wf-edges path.no{stroke-dasharray:4 4;opacity:.7}
+.wf-edges path.hot{stroke:var(--okc);stroke-width:2.2}
+.wf-edges .plus{fill:var(--card);stroke:color-mix(in srgb,var(--muted) 60%,var(--line));stroke-width:1.25}
+.wf-edges .plus-x path{stroke:var(--muted);stroke-width:1.6;stroke-linecap:round}
+.wf-edges .wf-pulse{fill:var(--lime);stroke:var(--pine);stroke-width:2.5;opacity:0;transition:opacity .2s}
+.wf-lab{position:absolute;font-size:11.5px;font-weight:600;line-height:1.5;padding:0 8px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.wf-card{position:absolute;display:flex;align-items:center;gap:12px;width:240px;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid color-mix(in srgb,var(--muted) 45%,var(--line));color:var(--ink);box-shadow:0 6px 18px rgba(13,59,46,.08);transition:border-color .3s,box-shadow .3s}
+.wf-card::before,.wf-card::after{content:"";position:absolute;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--card);border:1.5px solid color-mix(in srgb,var(--muted) 60%,var(--line))}
+.wf-card::before{left:-5px}.wf-card::after{right:-5px}
+.wf-card.trigger::before{display:none}
+.wf-card.trigger{background:#0d3b2e;border-color:#0d3b2e;color:#ffffff}
+.wf-card.trigger::after{border-color:#0d3b2e}
+.wf-card.dim{opacity:.62}
+.wf-ico{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;flex:none;background:var(--ground);color:var(--muted)}
+.wf-card.trigger .wf-ico{background:rgba(255,255,255,.1);color:#c8f169}
+.wf-ico.tone-brand{background:color-mix(in srgb,var(--acc) 12%,var(--card));color:var(--acc)}
+.wf-ico.tone-ok{background:color-mix(in srgb,var(--okc) 14%,var(--card));color:var(--okc)}
+.wf-ico.tone-info{background:color-mix(in srgb,var(--infoc) 13%,var(--card));color:var(--infoc)}
+.wf-ico.tone-warn{background:var(--warnbg);color:var(--warnc)}
+.wf-ico.tone-muted{background:var(--ground);color:var(--muted)}
+.wf-text{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.3}
+.wf-kicker{font-size:11.5px;font-weight:500;color:rgba(255,255,255,.78)}
+.wf-title{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-card.trigger .wf-title{white-space:normal}
+.wf-line{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wf-card.trigger .wf-line{color:rgba(255,255,255,.78)}
+.wf-br{display:none}
+.wf-done{position:absolute;right:-7px;top:-7px;width:18px;height:18px;border-radius:50%;background:var(--okc);color:var(--card);display:grid;place-items:center;font-size:11px;font-weight:800;box-shadow:0 0 0 2px var(--card);transform:scale(0);transition:transform .45s cubic-bezier(.2,.8,.3,1.4)}
+.wf-card.ran{border-color:var(--okc)}
+.wf-card.ran .wf-done{transform:scale(1)}
+.wf-tools{position:absolute;left:14px;bottom:14px;display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:14px;color:var(--ink)}
+.wf-tools span{display:grid;place-items:center;min-width:30px;height:30px;padding:0 6px;border-radius:8px;font-weight:800}
+.wf-tools span.wide{padding:0 10px;font-size:13px}
+.wf-map{position:absolute;right:14px;bottom:14px;width:132px;height:52px;border-radius:10px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.wf-map i{position:absolute;width:14%;height:20%;border-radius:2px;background:color-mix(in srgb,var(--muted) 55%,var(--line))}
+/* phones: the same cards, one under another, joined by a line */
+@media (max-width:700px){
+  .wf-say{padding:14px}
+  .wf-bar{gap:10px;padding:10px 14px}
+  .wf-bar .wf-tabs,.wf-bar .wf-tag,.wf-bar .wf-btn:not(.main),.wf-map{display:none}
+  .wf-canvas{height:auto!important;padding:22px 16px 70px}
+  .wf-stage{width:auto;height:auto;transform:none!important;display:flex;flex-direction:column;gap:26px}
+  .wf-edges,.wf-lab{display:none}
+  .wf-card{position:relative;left:auto!important;top:auto!important;width:auto}
+  .wf-card::after{display:none}
+  .wf-card::before{display:block;left:50%;top:auto;bottom:-28px;margin:0 0 0 -1px;width:2px;height:26px;border:0;border-radius:0;background:color-mix(in srgb,var(--muted) 60%,var(--line))}
+  .wf-card.ran::before{background:var(--okc)}
+  .wf-card.dim::before{display:none}
+  .wf-br{display:inline-block;align-self:flex-start;font-size:11px;font-weight:700;padding:0 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-bottom:3px}
+  .wf-title,.wf-line{white-space:normal}
+}
+
+.shead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:16px 40px;margin-bottom:clamp(24px,3.5vw,40px)}
+.shead .label{color:var(--acc)}
+.shead .h2{margin-top:10px}
+.shead p{max-width:42ch}
+
 /* footer: as on the experiment-2 site */
 .foot{background:var(--pine);color:var(--white);box-shadow:inset 0 1px 0 var(--panel-edge)}
 .foot .wrap{padding-block:56px calc(40px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:48px}
@@ -792,26 +874,28 @@ button{font:inherit}
         <div><p class="label">Billing, by saying it</p><h2 class="h2">Bill the whole term<br>in one message.</h2></div>
         <p>Taskiem reads your classes and fees, invoices every student once, and sends each family their invoice. Running it again only bills students added since.</p>
       </div>
-      <div class="board">
-        <div class="panel composer">
-          <div class="ctop"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Taskiem"><rect width="100" height="100" rx="26" fill="#0d3b2e"/><path d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#ffffff"/></svg><div><b>Taskiem</b><small>Greenfield College</small></div></div>
-          <div class="cmsgs">
-            <div class="cm out" id="bPrompt">on the first day of term, bill every student their fees and send each family their invoice and fees page, then tell the bursar what went out</div>
-            <div class="cm in" id="bReply">Here is your workflow: 6 steps, on Monday 7 September. Each student is billed once, even if it runs again. Nothing is sent until you switch it on.<span class="turn" id="bTurn">Switch it on</span></div>
-          </div>
-          <div class="cinput" id="bInputWrap"><span id="bInput">Message Taskiem</span><i>↑</i></div>
+      <div class="wf-say">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Taskiem"><rect width="100" height="100" rx="26" fill="#0d3b2e"/><path d="M27 40H61" stroke="#c8f169" stroke-width="11" stroke-linecap="round"/><path d="M42 22V58Q42 74 58 74H64" stroke="#c8f169" stroke-width="11" stroke-linecap="round" fill="none"/><circle cx="78" cy="74" r="7" fill="#ffffff"/></svg>
+        <p class="cm out">on the first day of term, bill every student their fees and send each family their invoice and fees page, then tell the bursar what went out</p>
+        <p class="cm in">Here is your workflow: 7 steps, on 7 September. Each student is billed once, even if it runs again.</p>
+      </div>
+      <div class="wf" data-wf>
+        <div class="wf-bar">
+          <span class="wf-back" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></span>
+          <span class="wf-name">Bill the first term</span>
+          <span class="wf-tag">Version 1 · Draft</span>
+          <span class="wf-tabs" aria-hidden="true"><span class="on">Steps</span><span>Runs</span><span>Settings</span></span>
+          <span class="wf-actions" aria-hidden="true"><span class="wf-btn">Save draft</span><span class="wf-btn test">Test workflow</span><span class="wf-btn main">Publish</span></span>
         </div>
-        <div class="canvas">
-          <div class="cbar"><b>Bill the first term</b><span class="state" id="bState">Live</span><span class="zoom" aria-hidden="true">−&nbsp;100%&nbsp;+</span></div>
-          <div class="nodes" id="nodes">
-            <svg class="edges" id="edges" aria-hidden="true"></svg>
-            <div class="node" style="--c:1;--r:1"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><span class="k">When</span><b>First day of term</b><small>Monday 7 September, 07:00</small><span class="res">Ran 07:00</span></div>
-            <div class="node" style="--c:2;--r:1"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></svg></span><span class="k">Read</span><b>Classes and fees</b><small>each class's fees, each family's options</small><span class="res">14 classes</span></div>
-            <div class="node" style="--c:3;--r:1"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span class="k">Invoice</span><b>Every enrolled student</b><small>once each, even if it runs again</small><span class="res">412 invoiced</span></div>
-            <div class="node" style="--c:3;--r:2"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 4l3 3-3 3"/><path d="M4 12v-1a4 4 0 0 1 4-4h12"/><path d="M7 20l-3-3 3-3"/><path d="M20 12v1a4 4 0 0 1-4 4H4"/></svg></span><span class="k">Repeat</span><b>For each family</b><small>brothers and sisters together</small><span class="res">268 families</span></div>
-            <div class="node" style="--c:2;--r:2"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5h14v10H10l-5 4z"/><path d="M9 9h6M9 12h4"/></svg></span><span class="k">Send</span><b>Invoice and fees page</b><small>by WhatsApp, or SMS</small><span class="res">268 sent ✓</span></div>
-            <div class="node" style="--c:1;--r:2"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span><span class="k">Tell</span><b>Message the bursar</b><small>what went out, and to whom</small><span class="res">Report sent</span></div>
+        <div class="wf-canvas">
+          <div class="wf-stage">
+            <svg class="wf-edges" viewBox="0 0 1160 440" preserveAspectRatio="none"><path class="hot" data-e="1" d="M280 100 H330"/><path class="hot" data-e="2" d="M570 100 H620"/><path class="hot" data-e="3" d="M860 100 H910"/><path class="hot" data-e="4" d="M1030 132 V196 Q1030 208 1018 208 H172 Q160 208 160 220 V284"/><path class="no" d="M1030 132 V284"/><path class="hot" data-e="5" d="M280 316 H330"/><path class="hot" data-e="6" d="M570 316 H620"/><circle class="plus" cx="305" cy="100" r="11"/><circle class="plus" cx="595" cy="100" r="11"/><circle class="plus" cx="885" cy="100" r="11"/><circle class="plus" cx="305" cy="316" r="11"/><circle class="plus" cx="595" cy="316" r="11"/><g class="plus-x"><path d="M301 100h8M305 96v8"/><path d="M591 100h8M595 96v8"/><path d="M881 100h8M885 96v8"/><path d="M301 316h8M305 312v8"/><path d="M591 316h8M595 312v8"/></g><circle class="wf-pulse" r="7" cx="280" cy="100"/></svg>
+            <span class="wf-lab" style="left:948px;top:196px">Yes</span>
+            <span class="wf-lab" style="left:1040px;top:196px">No</span>
+            <div class="wf-card trigger" style="left:40px;top:56px"><span class="wf-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span class="wf-text"><span class="wf-kicker">What starts it</span><span class="wf-title">On 7 September, 7:00</span><span class="wf-line">First day of term</span></span></div><div class="wf-card ran" data-run="1" style="left:330px;top:68px"><span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></span><span class="wf-text"><span class="wf-title">Read this term's fees</span><span class="wf-line">Schools · Fees by class</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="2" style="left:620px;top:68px"><span class="wf-ico tone-info"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span class="wf-text"><span class="wf-title">Invoice every student</span><span class="wf-line">Schools · Invoice the term, once</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="3" style="left:910px;top:68px"><span class="wf-ico tone-warn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><path d="M12 17h.01"/></svg></span><span class="wf-text"><span class="wf-title">Any new invoices?</span><span class="wf-line">If · one or more</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="4" style="left:40px;top:284px"><span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M18 15l2 2 3-3"/></svg></span><span class="wf-text"><span class="wf-br">Yes</span><span class="wf-title">Send each family their invoice</span><span class="wf-line">For each · WhatsApp, or SMS</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="5" style="left:330px;top:284px"><span class="wf-ico tone-brand"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M12 10v10"/></svg></span><span class="wf-text"><span class="wf-title">Record what went out</span><span class="wf-line">Your records · Add rows</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card ran" data-run="6" style="left:620px;top:284px"><span class="wf-ico tone-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span><span class="wf-text"><span class="wf-title">Tell the bursar</span><span class="wf-line">WhatsApp · 412 invoiced, 268 families</span></span><span class="wf-done" aria-hidden="true">✓</span></div><div class="wf-card dim" style="left:910px;top:284px"><span class="wf-ico tone-muted"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/></svg></span><span class="wf-text"><span class="wf-br">No</span><span class="wf-title">Tell the bursar nothing was new</span><span class="wf-line">WhatsApp · Tell</span></span></div>
           </div>
+          <div class="wf-tools" aria-hidden="true"><span>+</span><span>−</span><span>⤢</span><span class="wide">Tidy up</span></div>
+          <div class="wf-map" aria-hidden="true"><i style="left:4%;top:18%;background:#0d3b2e"></i><i style="left:30%;top:18%"></i><i style="left:56%;top:18%"></i><i style="left:82%;top:18%"></i><i style="left:4%;top:62%"></i><i style="left:30%;top:62%"></i><i style="left:56%;top:62%"></i><i style="left:82%;top:62%;opacity:.4"></i></div>
         </div>
       </div>
     </div>
@@ -1113,45 +1197,23 @@ button{font:inherit}
     }), { threshold: .3 }).observe(sec);
   })();
 
-  /* workflow canvas */
-  (() => {
-    const box = $('#nodes'), svg = $('#edges'), nodes = $$('.node', box);
-    const prompt = $('#bPrompt'), reply = $('#bReply'), turn = $('#bTurn'), state = $('#bState');
-    const inWrap = $('#bInputWrap'), input = $('#bInput');
-    const PROMPT = prompt.textContent;
-    const NS = 'http://www.w3.org/2000/svg';
-    const pairs = nodes.slice(1).map((n, i) => [i, i + 1]);
-    const els = pairs.map(() => {
-      const b = document.createElementNS(NS, 'path'); b.setAttribute('class', 'b');
-      const l = document.createElementNS(NS, 'path'); l.setAttribute('class', 'l'); l.setAttribute('pathLength', '1');
-      const e = document.createElementNS(NS, 'circle'); e.setAttribute('class', 'end'); e.setAttribute('r', '4');
-      svg.append(b, l, e); return { b, l, e };
-    });
-    const pulse = document.createElementNS(NS, 'circle'); pulse.setAttribute('class', 'pulse'); pulse.setAttribute('r', '7'); svg.append(pulse);
-    function layout() {
-      const o = box.getBoundingClientRect();
-      svg.setAttribute('viewBox', `0 0 ${o.width} ${o.height}`);
-      pairs.forEach(([a, b], i) => {
-        const A = nodes[a].getBoundingClientRect(), B = nodes[b].getBoundingClientRect();
-        let x1, y1, x2, y2, d;
-        if (Math.abs(A.top - B.top) < 20) {
-          const right = B.left > A.left;
-          x1 = (right ? A.right : A.left) - o.left; y1 = A.top + A.height / 2 - o.top;
-          x2 = (right ? B.left : B.right) - o.left; y2 = B.top + B.height / 2 - o.top;
-          const m = (x2 - x1) / 2; d = `M${x1} ${y1}C${x1 + m} ${y1} ${x2 - m} ${y2} ${x2} ${y2}`;
-        } else {
-          x1 = A.left + A.width / 2 - o.left; y1 = A.bottom - o.top;
-          x2 = B.left + B.width / 2 - o.left; y2 = B.top - o.top;
-          const m = (y2 - y1) / 2; d = `M${x1} ${y1}C${x1} ${y1 + m} ${x2} ${y2 - m} ${x2} ${y2}`;
-        }
-        els[i].b.setAttribute('d', d); els[i].l.setAttribute('d', d);
-        els[i].e.setAttribute('cx', x2); els[i].e.setAttribute('cy', y2);
-      });
+  /* the canvas: always drawn; a test run ticks each step in turn */
+  $$('[data-wf]').forEach(wf => {
+    const frame = $('.wf-canvas', wf), stage = $('.wf-stage', wf), W = 1160, H = 440;
+    const narrow = () => matchMedia('(max-width:700px)').matches;
+    function fit() {
+      if (narrow()) { stage.style.transform = ''; frame.style.height = ''; frame.style.overflowX = ''; return; }
+      const s = Math.min(1, Math.max(frame.clientWidth / W, .66));
+      stage.style.transform = `scale(${s})`;
+      frame.style.height = Math.round(H * s) + (s < 1 ? 56 : 0) + 'px';
+      frame.style.overflowX = s * W > frame.clientWidth + 1 ? 'auto' : 'hidden';
     }
-    layout();
-    addEventListener('resize', layout);
-    if (document.fonts) document.fonts.ready.then(layout);
+    fit();
+    if ('ResizeObserver' in window) new ResizeObserver(fit).observe(frame); else addEventListener('resize', fit);
     if (reduce) return;
+    const cards = $$('.wf-card[data-run]', stage).sort((a, b) => a.dataset.run - b.dataset.run);
+    const edges = $$('.wf-edges path[data-e]', stage).sort((a, b) => a.dataset.e - b.dataset.e);
+    const pulse = $('.wf-pulse', stage), test = $('.wf-btn.test', wf);
     let run = 0, inView = false;
     const sleep = (ms, id) => new Promise((ok, no) => setTimeout(() => id === run ? ok() : no('stop'), ms));
     const travel = (path, ms, id) => new Promise((ok, no) => {
@@ -1166,52 +1228,28 @@ button{font:inherit}
       };
       requestAnimationFrame(f);
     });
-    function reset() {
-      nodes.forEach(n => { n.classList.add('off'); n.classList.remove('lit'); $('.res', n).classList.add('hide'); });
-      els.forEach(x => { x.b.classList.add('gone'); x.l.classList.add('hide'); x.e.classList.add('gone'); });
-      pulse.style.opacity = 0;
-      prompt.classList.add('hid'); reply.classList.add('hid'); turn.classList.remove('press');
-      state.classList.add('draft'); state.textContent = 'Draft';
-      input.textContent = 'Message Taskiem'; inWrap.classList.remove('typing');
-    }
     async function cycle() {
       const id = ++run;
       try {
-        reset(); layout();
-        await sleep(600, id);
-        inWrap.classList.add('typing');
-        for (let k = 1; k <= PROMPT.length; k += 2) { input.textContent = PROMPT.slice(0, k); await sleep(22, id); }
-        input.textContent = PROMPT; await sleep(350, id);
-        input.textContent = 'Message Taskiem'; inWrap.classList.remove('typing');
-        prompt.classList.remove('hid'); prompt.classList.add('pop');
-        await sleep(700, id);
-        for (let i = 0; i < nodes.length; i++) {
-          nodes[i].classList.remove('off');
-          await sleep(320, id);
-          if (els[i]) { els[i].b.classList.remove('gone'); els[i].l.classList.remove('hide'); await sleep(260, id); els[i].e.classList.remove('gone'); }
-        }
-        await sleep(400, id);
-        reply.classList.remove('hid'); reply.classList.add('pop');
-        await sleep(1300, id);
-        turn.classList.add('press'); await sleep(220, id); turn.classList.remove('press');
-        state.classList.remove('draft'); state.textContent = 'Live';
-        await sleep(900, id);
-        for (let i = 0; i < nodes.length; i++) {
-          nodes[i].classList.add('lit'); $('.res', nodes[i]).classList.remove('hide');
-          await sleep(380, id);
-          nodes[i].classList.remove('lit');
-          if (els[i]) await travel(els[i].l, 620, id);
+        cards.forEach(c => c.classList.remove('ran')); edges.forEach(e => e.classList.remove('hot'));
+        await sleep(500, id);
+        test.classList.add('press'); await sleep(260, id); test.classList.remove('press');
+        await sleep(250, id);
+        for (let i = 0; i < cards.length; i++) {
+          if (!narrow()) await travel(edges[i], i === 3 ? 1100 : 520, id); else await sleep(450, id);
+          edges[i].classList.add('hot'); cards[i].classList.add('ran');
+          await sleep(220, id);
         }
         pulse.style.opacity = 0;
-        await sleep(3800, id);
+        await sleep(3600, id);
         if (inView) cycle();
       } catch (e) { if (e !== 'stop') throw e; }
     }
     new IntersectionObserver(es => es.forEach(e => {
       if (e.isIntersecting && !inView) { inView = true; cycle(); }
-      else if (!e.isIntersecting && inView) { inView = false; run++; nodes.forEach(n => n.classList.remove('off', 'lit')); $$('.res', box).forEach(r => r.classList.remove('hide')); els.forEach(x => { x.b.classList.remove('gone'); x.l.classList.remove('hide'); x.e.classList.remove('gone'); }); prompt.classList.remove('hid'); reply.classList.remove('hid'); state.classList.remove('draft'); state.textContent = 'Live'; pulse.style.opacity = 0; }
-    }), { threshold: .3 }).observe($('#build'));
-  })();
+      else if (!e.isIntersecting && inView) { inView = false; run++; pulse.style.opacity = 0; cards.forEach(c => c.classList.add('ran')); edges.forEach(e => e.classList.add('hot')); }
+    }), { threshold: .25 }).observe(frame);
+  });
 
   /* the proprietor's numbers count up when they arrive */
   function countUp(el) {
