@@ -107,6 +107,11 @@ type Server struct {
 	// liveGate caps the open live connections of You (people_live.go), per
 	// person and per server.
 	liveGate chatStreamGate
+	// pageGate caps the open pages kept up to date (pages_live.go).
+	pageGate chatStreamGate
+	// PageLiveEvery is how often an open page asks what changed (zero: two
+	// seconds; tests set it shorter).
+	PageLiveEvery time.Duration
 	// ChatStreamPing is how often an open chat stream says something when it
 	// has nothing to say (zero: ten seconds).
 	ChatStreamPing time.Duration

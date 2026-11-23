@@ -53,6 +53,7 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.With(s.need(PermPageEdit)).Delete("/pages/{name}", s.deletePage)
 	r.Get("/pages/{name}/view", s.viewPage)
 	r.Get("/pages/{name}/blocks/{block}", s.pageBlock)
+	r.Get("/pages/{name}/live", s.pageLive)                              // pages_live.go
 	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
 	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }

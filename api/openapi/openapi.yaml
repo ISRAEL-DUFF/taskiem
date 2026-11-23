@@ -39636,6 +39636,48 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/pages/{name}/live:
+    get:
+      operationId: pageLive
+      tags:
+      - Pages
+      summary: Be told when an open page changes
+      description: >-
+        Server-sent events while a page is open (docs/pages.md, Kept up to date): a `changed` event `{"page", "blocks": [ids], "all"}` when what those parts read may have changed (a table's rows written through Taskiem, the business's orders or invoices), so the client reads those parts again; `all` when the page itself changed (published again), every part. A notice carries no data. It is debounced: the server looks every two seconds, and all that changed in between is one notice. `ready` `{"page", "blocks"}` on connecting (the parts watched: a part over orders or invoices only for a caller who may see them), `gone` when the caller may no longer open the page (the stream ends), and `ping` at least every ten seconds. Only a page the caller may open (404 otherwise); a business may hold forty open (429 with Retry-After past that), and a client that cannot should pull to refresh as before. The stream closes after half an hour; clients reconnect.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: draft
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+        description: '1: the draft, for someone with page.edit (else the published page)'
+      responses:
+        '200':
+          description: Server-sent events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          description: >-
+            No such page, or one the caller may not open.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/page-records:
     get:
       operationId: listPageRecords

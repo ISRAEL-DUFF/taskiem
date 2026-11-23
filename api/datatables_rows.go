@@ -26,6 +26,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/datatables"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -78,10 +79,11 @@ func optionalKey(r *http.Request) (string, error) {
 // tableRows is the table in the path with the connector ready to act on
 // its rows.
 type tableRows struct {
-	table datatables.Table
-	conn  *connector.Connector
-	creds map[string]string
-	hc    *http.Client
+	tenant uuid.UUID
+	table  datatables.Table
+	conn   *connector.Connector
+	creds  map[string]string
+	hc     *http.Client
 }
 
 func (s *Server) tableRows(r *http.Request) (tableRows, error) {
@@ -99,7 +101,7 @@ func (s *Server) tableRowsFor(ctx context.Context, tenant uuid.UUID, t datatable
 	if err != nil {
 		return tableRows{}, err
 	}
-	return tableRows{table: t, conn: conn, creds: creds, hc: hc}, nil
+	return tableRows{tenant: tenant, table: t, conn: conn, creds: creds, hc: hc}, nil
 }
 
 // writable refuses changing a kept table's rows (datatables.ErrKept).
@@ -121,6 +123,14 @@ func (tr tableRows) call(ctx context.Context, s *Server, action string, in map[s
 	resp, err := tr.conn.Actions[action].Execute(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if datatables.WritesRows(action) && tr.tenant != uuid.Nil {
+		// An open page over the table is told (pages §9, pages_live.go).
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tr.tenant}, func(tx pgx.Tx) error {
+			return datatables.MarkRowsChanged(ctx, tx, tr.tenant, tr.table.Name)
+		}); err != nil {
+			s.Logger.Warn("tables: marking the rows changed", "err", err)
+		}
 	}
 	out, _ := resp.Output.(map[string]any)
 	return out, nil
