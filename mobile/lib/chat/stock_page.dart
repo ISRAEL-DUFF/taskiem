@@ -1342,8 +1342,23 @@ class _CountFormState extends State<_CountForm> {
 
   void _changed() => setState(() {});
 
-  /// The item whose barcode this is.
-  Map<String, dynamic>? _codeItem(String code) => widget.items.where((it) => (it['code'] as String?)?.trim() == code.trim()).firstOrNull;
+  /// The stock item an item is counted by (GET /v1/stock's
+  /// stock_item_id; a material is its own), '' for one not counted.
+  static String _stockItemOf(Map<String, dynamic> it) => it['stock_item_id'] as String? ?? (it['material'] == true ? it['id'] as String : '');
+
+  /// Whether an item takes a barcode: it is counted by a stock item of its
+  /// own, not through its sizes and colours.
+  static bool _canCode(Map<String, dynamic> it) => _stockItemOf(it).isNotEmpty && (it['choices'] as List? ?? const []).isEmpty;
+
+  /// The item whose barcode this is. A barcode is its stock item's (as
+  /// the server matches it, in any case); of the products a stock item
+  /// counts, the one sold singly takes the scans.
+  Map<String, dynamic>? _codeItem(String code) {
+    final c = code.trim().toLowerCase();
+    if (c.isEmpty) return null;
+    final has = widget.items.where((it) => _canCode(it) && (it['code'] as String? ?? '').trim().toLowerCase() == c).toList();
+    return has.where((it) => ((it['uses'] as num?) ?? 1) == 1).firstOrNull ?? has.firstOrNull;
+  }
 
   void _addTo(String id, int n) {
     final box = _boxes[id];
@@ -1375,20 +1390,26 @@ class _CountFormState extends State<_CountForm> {
   }
 
   /// A code no item has: the person says which item it is; it is kept on
-  /// the item (its barcode), and its scans counted.
+  /// the item's stock item (its barcode), and its scans counted.
   Future<void> _name(String code) async {
     final id = await pickOneOf(
       context,
       title: 'Which item is $code?',
       searchHint: 'Find an item',
-      choices: [for (final it in widget.items) if ((it['code'] as String? ?? '').isEmpty) (it['id'] as String, it['name'] as String? ?? '', stockLine(it))],
+      choices: [
+        for (final it in widget.items)
+          if (_canCode(it) && (it['code'] as String? ?? '').isEmpty) (it['id'] as String, it['name'] as String? ?? '', stockLine(it)),
+      ],
     );
     if (id == null || !mounted) return;
     setState(() => _naming = code);
     try {
-      await widget.auth.transport.send('PATCH', '/v1/stock/items/${Uri.encodeComponent(id)}', body: {'code': code});
-      final it = widget.items.firstWhere((x) => x['id'] == id);
-      it['code'] = code;
+      final stockItem = _stockItemOf(widget.items.firstWhere((x) => x['id'] == id));
+      await widget.auth.transport.send('PATCH', '/v1/stock/items/${Uri.encodeComponent(stockItem)}', body: {'code': code});
+      // Every product its stock item counts has the code now.
+      for (final it in widget.items) {
+        if (_stockItemOf(it) == stockItem) it['code'] = code;
+      }
       if (!mounted) return;
       setState(() {
         _addTo(id, _unknown.remove(code) ?? 0);

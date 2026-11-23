@@ -18,8 +18,6 @@ Stock is a feature of the catalogue, not an area to turn on. A business keeps st
 | `reorder_level` | `reorder_level` | At or below this, the item is low |
 | `target_level` | `target_level` | What a low item is ordered back up to |
 | `supplier` | `supplier` | Who the business buys it from |
-| `barcode` | `code` | The barcode on its pack, for a count by scanning in the app; added the first time an item is given one (`PATCH /v1/stock/items/{id}` with `code`), as `category` is |
-
 None of these but `stock` is on the public page; a sold-out item shows as before. An item added for stock with no selling price is not shown on the page until it has one (`available` false).
 
 ## Movements
@@ -87,6 +85,8 @@ An order can be cancelled until anything is received on it. A supplier that is a
 ## Counts, shrinkage and leaks
 
 A **count** is how many of each item are on the shelf: `count rice 12, indomie 40` (a reason after a colon: `count rice 12: rats`), `count` to be asked item by item (a number, *skip*, or *done*), or **Count the shelf** on the Stock page (a sheet to fill, or a CSV of names and counts it reads into the sheet). Shown first and written on **yes**: each item whose count differs gets a `count` movement naming the count (`C-7QX4KD`), with the reason as its note and the item's cost price. A count of every item holding a count is a full count, closing a counting period. `stock rice 12` is still a count of one item. In the phone app, **Count the shelf** also has **Scan to count**: each scan of an item's barcode adds one to its count, and a code no item has yet is said which item and kept on it ([device fields D2](spec/device-fields.md#16-as-built-d2)).
+
+**Barcodes.** The barcode on a pack is kept on the **stock item** (`stock_items.code`, migration 00590), not in the catalogue: a material has one as a product does, and the products one stock item counts (a bottle and a pack of 6) share it, the scans going to the one sold singly. `PATCH /v1/stock/items/{id}` with `code` sets it (by the product's id, the material's, or the stock item's): trimmed, at most 64 characters, no control characters; empty clears it; audited as an item's other changes (`stock.item_change`, columns `code`). One current stock item of a business has a code, in any case: another's is refused with 409 `code_taken`, naming the item that has it. A retired stock item keeps its code, which a current one may take; brought back, it gives it up if so. Not for a product not counted, nor for one sold in sizes and colours (each size's stock item has its own). `GET /v1/stock` items and `GET /v1/stock/stock-items` rows carry `code`; the public page never does.
 
 **A count stands.** The shelf already shows every sale, receipt and adjustment made before the count, so a change of an item's that had not reached the table when its shelf was counted lands first, as what it was, and the count then sets the number: the table ends on the number counted, and the count books only the difference those changes do not explain (a sale still on its way is sold, not lost). While such a change cannot reach the table, the count waits behind it.
 

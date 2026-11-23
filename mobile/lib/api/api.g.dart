@@ -7821,8 +7821,8 @@ class StockItem {
   /// A product's choices, when it has sizes and colours (it keeps no stock of
   /// its own then)
   final List<VariantChoice>? choices;
-  /// The barcode on its pack, when the catalogue keeps barcodes (a count by
-  /// scanning)
+  /// Its stock item's barcode (a count by scanning, device fields D2); absent
+  /// for none
   final String? code;
   /// The last price paid for one of its stock item
   final int? costKobo;
@@ -7938,9 +7938,11 @@ class ListStockItemsResponse {
 /// A stock item as the Stock page lists it, with the products it is sold as
 /// (none for a material).
 class StockItemRow {
-  const StockItemRow({required this.category, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
+  const StockItemRow({required this.category, required this.code, this.costKobo, required this.count, required this.groupName, required this.groupOf, required this.id, required this.low, this.lowLevel, required this.name, required this.retired, required this.soldAs, this.suggest, required this.supplier, this.supplierId, this.targetLevel, required this.unit, required this.valueKobo});
 
   final String category;
+  /// Its barcode, for a count by scanning (device fields D2); "" for none
+  final String code;
   final Object? costKobo;
   final int count;
   final String groupName;
@@ -7964,6 +7966,7 @@ class StockItemRow {
 
   factory StockItemRow.fromJson(Map<String, dynamic> j) => StockItemRow(
         category: j['category'] as String,
+        code: j['code'] as String,
         costKobo: j['cost_kobo'],
         count: (j['count'] as num).toInt(),
         groupName: j['group_name'] as String,
@@ -7984,6 +7987,7 @@ class StockItemRow {
 
   Map<String, dynamic> toJson() => {
         'category': category,
+        'code': code,
         'cost_kobo': ?costKobo,
         'count': count,
         'group_name': groupName,

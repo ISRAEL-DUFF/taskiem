@@ -52,7 +52,9 @@ type StockItemRow struct {
 	// GroupName that product's name.
 	GroupOf   string `json:"group_of"`
 	GroupName string `json:"group_name"`
-	Low       bool   `json:"low"`
+	// Code is its barcode (Scan to count, device fields D2), "" for none.
+	Code string `json:"code"`
+	Low  bool   `json:"low"`
 	// Suggest is how many to reorder of a low one (as Item.Suggest), nil
 	// when it is not low.
 	Suggest *int64 `json:"suggest"`
@@ -99,7 +101,7 @@ func StockItemRows(rows []map[string]any, m storefront.Columns, items []StockIte
 			return s[a].ProductID < s[b].ProductID
 		})
 		r := StockItemRow{ID: x.ID, Name: x.Name, Unit: x.Unit, Category: x.Category, Count: x.Count, CostKobo: x.CostKobo,
-			LowLevel: x.Low, TargetLevel: x.Target, SupplierID: x.SupplierID, Supplier: x.Supplier, GroupOf: x.GroupOf,
+			LowLevel: x.Low, TargetLevel: x.Target, SupplierID: x.SupplierID, Supplier: x.Supplier, GroupOf: x.GroupOf, Code: x.Code,
 			Retired: x.RetiredAt != nil, SoldAs: s}
 		if x.GroupOf != "" {
 			r.GroupName = products[x.GroupOf].Name

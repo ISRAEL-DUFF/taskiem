@@ -13659,7 +13659,7 @@ paths:
       tags:
       - Stock
       summary: Change an item's details
-      description: A product's name, price, category and whether it is shown, written to the catalogue table; its unit, cost, reorder and target levels and supplier (one of the business's, by name), to its stock item (a product not counted yet starts being counted). A material's name, category and the rest are its stock item's. Its stock changes by movements only.
+      description: A product's name, price, category and whether it is shown, written to the catalogue table; its unit, cost, reorder and target levels and supplier (one of the business's, by name), to its stock item (a product not counted yet starts being counted). A material's name, category and the rest are its stock item's; its barcode (code) is its stock item's too. Its stock changes by movements only.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -13706,7 +13706,7 @@ paths:
                 code:
                   type: string
                   maxLength: 64
-                  description: The barcode on its pack; empty for none. The catalogue gets a barcode column the first time one is set (a count by scanning, device fields D2)
+                  description: 'The barcode on its pack, kept on its stock item (a material''s own; a product''s counting stock item, shared by the products it counts); trimmed, empty clears it. Read by a count by scanning (device fields D2). A code another current stock item of the business has (in any case) is refused with 409 code_taken, naming that item. Not for a product not counted, nor one sold in sizes and colours (each size has its own).'
                 available:
                   type: boolean
                   description: Shown on the storefront and the price lists it is on
@@ -52894,7 +52894,7 @@ components:
     StockItemRow:
       type: object
       description: A stock item as the Stock page lists it, with the products it is sold as (none for a material).
-      required: [id, name, unit, category, count, cost_kobo, low_level, target_level, supplier_id, supplier, group_of, group_name, low, suggest, value_kobo, retired, sold_as]
+      required: [id, name, unit, category, count, cost_kobo, low_level, target_level, supplier_id, supplier, group_of, group_name, code, low, suggest, value_kobo, retired, sold_as]
       properties:
         id:
           type: string
@@ -52923,6 +52923,10 @@ components:
           description: The product (catalogue row id) a size's or colour's stock item belongs to; "" for none
         group_name:
           type: string
+        code:
+          type: string
+          maxLength: 64
+          description: Its barcode, for a count by scanning (device fields D2); "" for none
         low:
           type: boolean
         suggest:
@@ -52997,7 +53001,7 @@ components:
           description: The kind of thing it is ("Sneakers"), when the catalogue has a category column
         code:
           type: string
-          description: The barcode on its pack, when the catalogue keeps barcodes (a count by scanning)
+          description: Its stock item's barcode (a count by scanning, device fields D2); absent for none
         description:
           type: string
           description: Its words on the storefront, when the catalogue maps them
