@@ -185,6 +185,21 @@ func SetItemTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, set ItemSet
 func RetireItemTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, back bool) error {
 	q := `UPDATE stock_items SET retired_at = now() WHERE tenant_id = $1 AND id = $2 AND retired_at IS NULL`
 	if back {
+		// Brought back, it is current again: within MaxItems, counted
+		// under the business's lock that making one takes (migration
+		// 00501's trigger).
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('stock_items ' || $1::text, 0))`, tenant); err != nil {
+			return err
+		}
+		var retired bool
+		var current int
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_items WHERE tenant_id = $1 AND id = $2 AND retired_at IS NOT NULL),
+			(SELECT count(*) FROM stock_items WHERE tenant_id = $1 AND retired_at IS NULL)`, tenant, id).Scan(&retired, &current); err != nil {
+			return err
+		}
+		if retired && current >= MaxItems {
+			return ErrTooMany
+		}
 		q = `UPDATE stock_items SET retired_at = NULL WHERE tenant_id = $1 AND id = $2 AND retired_at IS NOT NULL`
 	}
 	_, err := tx.Exec(ctx, q, tenant, id)

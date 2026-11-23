@@ -2,6 +2,7 @@ package stock_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/productstock"
+	"github.com/israel-duff/taskiem/engine/stock"
 )
 
 // PR review fix 1: a catalogue refresh drops only the links made before it
@@ -76,4 +78,34 @@ func TestRefreshKeepsLinksMadeDuringTheRead(t *testing.T) {
 	if _, ok := left["old"]; !ok {
 		t.Fatalf("a product in the read lost its link: %v", left)
 	}
+}
+
+// PR review fix: bringing back a retired stock item makes it current
+// again, so it is held to the 5,000 a business keeps, as making one is.
+func TestBringingBackHeldToTheLimit(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t, nil)
+	old := w.counted("old")
+	w.in(func(tx pgx.Tx) error {
+		return stock.RetireItemTx(ctx, tx, w.env.Tenant, old, false)
+	})
+	w.in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO stock_items (id, tenant_id, name, created_by)
+			SELECT gen_random_uuid(), $1, 'Item ' || n, 'test' FROM generate_series(1, $2::int) n`, w.env.Tenant, stock.MaxItems)
+		return err
+	})
+	err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.env.Tenant}, func(tx pgx.Tx) error {
+		return stock.RetireItemTx(ctx, tx, w.env.Tenant, old, true)
+	})
+	if !errors.Is(err, stock.ErrTooMany) {
+		t.Fatalf("brought back past 5,000: %v", err)
+	}
+	// One retired: there is room for it again.
+	w.in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE stock_items SET retired_at = now() WHERE tenant_id = $1 AND name = 'Item 1'`, w.env.Tenant)
+		return err
+	})
+	w.in(func(tx pgx.Tx) error {
+		return stock.RetireItemTx(ctx, tx, w.env.Tenant, old, true)
+	})
 }

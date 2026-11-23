@@ -100,9 +100,12 @@ type ItemMemory struct {
 
 // NameKey is how supplier_items matches an item's name: lowered, spaces
 // trimmed and single, so "Diesel" and "diesel " are one item. The table
-// holds only keys made so (a CHECK).
+// holds only keys made so (a CHECK). Go lowers letter for letter ("İ" is
+// "i", not the two letters a full lowering makes), so a name of 200 keys
+// in 200; the key is cut to the 200 the CHECK allows all the same, never
+// ending in a space.
 func NameKey(name string) string {
-	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+	return strings.TrimRight(cut(strings.ToLower(strings.Join(strings.Fields(name), " ")), 200), " ")
 }
 
 // KeptStatus is where a row of Things we have stands.
