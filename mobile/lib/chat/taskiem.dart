@@ -487,9 +487,16 @@ class TaskiemData extends ChangeNotifier {
   }
 }
 
+/// A tool to open as the conversation opens, its form filled in (a
+/// shortcut on the app's icon, a code scanned from the home screen).
+typedef ToolToOpen = ({String command, Map<String, dynamic> initial});
+
 /// Taskiem's conversation.
 class TaskiemScreen extends StatefulWidget {
-  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.onOpenCustomer, this.onOpenLink});
+  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.onOpenCustomer, this.onOpenLink, this.openTool});
+
+  /// Opened at once, once the person's tools are read.
+  final ToolToOpen? openTool;
 
   final TaskiemData data;
   final VoidCallback? onBack;
@@ -565,6 +572,19 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _runs.add(run);
     _reveal(run);
     return true;
+  }
+
+  /// The tool the conversation was opened for (the app icon's shortcut, a
+  /// code scanned from the home screen): its sheet, filled in.
+  void _openGiven() {
+    final given = widget.openTool;
+    if (given == null || !mounted) return;
+    final tool = _tools.made.where((t) => t.command == given.command).firstOrNull;
+    if (tool == null) {
+      showTkToast(context, 'That tool isn’t one you can use here.', error: true);
+      return;
+    }
+    unawaited(_openMade(tool, initial: given.initial));
   }
 
   /// Where each run's answer is drawn, to bring it into sight.
@@ -782,7 +802,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     if (widget.data.messages == null) widget.data.open();
     // The business's own tools, read now: the tools button shows for them
     // even with the built-in tools off.
-    unawaited(_tools.loadMade());
+    unawaited(_tools.loadMade().then((_) => _openGiven()));
     _runs.addListener(_runsChanged);
     // The menus' catalogue, read now, so a menu is drawn whole at once.
     unawaited(catalogueOf(widget.data.chats.auth).then((_) {}, onError: (Object _) {}));
@@ -857,6 +877,24 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                     recent: d.chats.prefs?.recentTools ?? const [],
                     maxHeight: room,
                   ),
+                ),
+                // A sentence starting with a phrase one of the person's
+                // tools says: "Open X, filled in" over the box (the web's
+                // chip). Sent instead, the words go to the chat.
+                ListenableBuilder(
+                  listenable: Listenable.merge([_tools, _text]),
+                  builder: (context, _) {
+                    final r = _tools.shown || _tags.tagging ? null : madeByPhrase(_tools.made, _text.text);
+                    if (r == null) return const SizedBox.shrink();
+                    return MadeToolChip(
+                      tool: r.tool,
+                      words: r.words,
+                      onOpen: () {
+                        _text.clear();
+                        unawaited(_openMade(r.tool, words: r.words.isEmpty ? null : r.words));
+                      },
+                    );
+                  },
                 ),
                 ListenableBuilder(
                   listenable: _tools,

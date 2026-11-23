@@ -6,8 +6,11 @@
 // an input a saved kind fits has the Saved button; a waiting run says
 // "Waiting for Ada to approve".
 
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show MadeTool, ToolAnswerWait;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/made_tools.dart';
@@ -15,6 +18,7 @@ import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'looks.dart';
 import 'made_tools_stub.dart';
 import 'saved_stub.dart';
 import 'support.dart';
@@ -115,6 +119,62 @@ void main() {
     expect(madeByCommand(tools, '/expense'), isNull);
     expect(madeByCommand(tools, '/nope 4500'), isNull);
     expect(madeByCommand(tools, 'spent 4500'), isNull);
+  });
+
+  test('a sentence starting with a phrase one tool says names it; two tools, none (web/src/lib/tools.ts madeToolWords)', () {
+    MadeTool tool(String command, List<String> says) => MadeTool.fromJson({...madeTools[1], 'command': command, 'name': command, 'says': says});
+    final tools = [tool('expense', ['spent', 'i bought']), tool('fuel', ['i bought fuel']), tool('leave', ['leave for'])];
+    expect(madeByPhrase(tools, 'Spent  4,500 on diesel')?.tool.command, 'expense');
+    expect(madeByPhrase(tools, 'Spent  4,500 on diesel')?.words, '4,500 on diesel');
+    // The longest phrase wins.
+    expect(madeByPhrase(tools, 'i bought fuel for 4500')?.tool.command, 'fuel');
+    expect(madeByPhrase(tools, 'i bought fuel for 4500')?.words, 'for 4500');
+    expect(madeByPhrase(tools, 'i bought rice')?.tool.command, 'expense');
+    // The phrase alone: the tool, no words.
+    expect(madeByPhrase(tools, 'leave for')?.words, '');
+    // Not at the start, a word that only begins with it, or a command: none.
+    expect(madeByPhrase(tools, 'I spent 4500'), isNull);
+    expect(madeByPhrase(tools, 'spentthrift'), isNull);
+    expect(madeByPhrase(tools, '/expense 4500'), isNull);
+    // The same phrase said by two tools: the chat asks which; no chip.
+    expect(madeByPhrase([...tools, tool('petty', ['spent'])], 'spent 4500'), isNull);
+  });
+
+  testWidgets('a phrase of one tool offers "Open X, filled in": pressed, the sheet opens with the words read; sent, the words go to the chat; pictured', (t) async {
+    final server = await taskiem(t, server: _SaysServer());
+    await t.enterText(box(), 'spent 4500 diesel');
+    await t.pump();
+    final chip = find.bySemanticsLabel('Open Log an expense, filled in: 4500 diesel');
+    expect(chip, findsOneWidget);
+    await looks(t, 'made-tool-chip');
+    await t.tap(chip);
+    await settle(t);
+    expect(server.sent.map((s) => '${s.method} ${s.path}'), ['POST /v1/tools/expense/read']);
+    expect(server.sent.single.body, {'text': '4500 diesel'});
+    expect(valueOf(t, 'Amount'), '4500');
+    expect(valueOf(t, 'What for'), 'diesel');
+    t.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await settle(t);
+    expect(t.widget<EditableText>(find.descendant(of: box(), matching: find.byType(EditableText))).controller.text, '', reason: 'the words went to the form');
+
+    // Sent instead of pressed: to the chat, as WhatsApp reads it; no form.
+    server.sent.clear();
+    await send(t, 'spent 300 on pens');
+    expect(server.sent.where((s) => s.path.startsWith('/v1/tools')), isEmpty);
+    expect((server as _SaysServer).said, ['spent 300 on pens']);
+    expect(find.bySemanticsLabel(RegExp('^Open Log an expense, filled in')), findsNothing);
+
+    // A phrase two tools say: no chip.
+    await t.enterText(box(), 'leave for Musa');
+    await t.pump();
+    expect(find.bySemanticsLabel('Open Leave left, filled in: Musa'), findsOneWidget);
+  });
+
+  testWidgets('a phrase two tools say offers no chip', (t) async {
+    await taskiem(t, server: MadeServer(tools: [...madeTools, {...madeTools[0], 'command': 'leave-days', 'name': 'Leave days', 'says': ['leave for']}]));
+    await t.enterText(box(), 'leave for Musa');
+    await t.pump();
+    expect(find.bySemanticsLabel(RegExp('filled in')), findsNothing);
   });
 
   testWidgets('"/expense 4500 diesel" opens its form filled in from the words; nothing starts before Next', (t) async {
@@ -226,4 +286,18 @@ void main() {
     expect(find.text('Nothing the business saved is called @nowhere.'), findsOneWidget);
     await snap(t, 'made-saved-dark');
   });
+}
+
+/// The tools' stand-in, and Taskiem's conversation taking what is said.
+class _SaysServer extends MadeServer {
+  final said = <String>[];
+
+  @override
+  Future<http.Response?> call(http.Request req) async {
+    if (req.method == 'POST' && req.url.path == '/v1/taskiem-chat') {
+      said.add('${(jsonDecode(req.body) as Map)['text']}');
+      return http.Response(jsonEncode({'messages': <Object>[]}), 200, headers: {'content-type': 'application/json'});
+    }
+    return super.call(req);
+  }
 }

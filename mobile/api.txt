@@ -399,6 +399,8 @@ startTool
 confirmTool
 getRunAnswer
 setToolSettings
+# A code scanned from the home screen (device fields D2)
+scanOffers
 
 # Form steps for you (device fields D1, docs/spec/device-fields.md): the
 # app answers a form step, its location and photo read at the tap; a photo

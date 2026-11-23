@@ -20,6 +20,7 @@ import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
 import 'app/route.dart';
 import 'app/session.dart';
+import 'app/shortcuts.dart';
 import 'app/sound.dart' show chime;
 import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
@@ -44,6 +45,7 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'chat/scan_start.dart' show scanFromHome;
 import 'screens/chat_link.dart';
 import 'chat/group_chat.dart' show GroupChatData, GroupChatScreen;
 import 'chat/group_new.dart' show GroupJoinScreen;
@@ -88,13 +90,15 @@ void main() {
   auth.start();
   // Links to this server's pages, opened in the app (lib/app/applinks.dart).
   final links = LinkInbox();
+  // Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart).
+  final shortcuts = HomeShortcuts(PhoneShortcuts());
   // The phone's own start screen (the mark on pine) stays until the app's
   // first screen is the real one, so there is one opening, not two: the
   // app draws nothing until the session and the settings are read (or a
   // few seconds have gone, on a slow phone: then its own mark on pine).
   WidgetsBinding.instance.deferFirstFrame();
   unawaited(_whenOpen(auth, prefs).timeout(const Duration(seconds: 3), onTimeout: () {}).whenComplete(WidgetsBinding.instance.allowFirstFrame));
-  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
+  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links, shortcuts: shortcuts));
 }
 
 /// Done once the session is known and the settings are read.
@@ -115,7 +119,10 @@ Future<void> _whenOpen(Auth auth, Prefs prefs) async {
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.now = DateTime.now});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.shortcuts, this.now = DateTime.now});
+
+  /// The app icon's shortcuts: Scan a code, and the person's tools.
+  final HomeShortcuts? shortcuts;
 
   /// The theme when there are no [prefs] (tests show one theme).
   final TkMode mode;
@@ -180,7 +187,7 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links, shortcuts: shortcuts)),
     );
   }
 }
@@ -190,12 +197,13 @@ class TaskiemApp extends StatelessWidget {
 /// or moved to another business, they are closed, and the chats start
 /// afresh for the new session.
 class _Root extends StatefulWidget {
-  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links});
+  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links, this.shortcuts});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
   final PhoneNotifications? notify;
   final LinkInbox? links;
+  final HomeShortcuts? shortcuts;
 
   @override
   State<_Root> createState() => _RootState();
@@ -249,7 +257,7 @@ class _RootState extends State<_Root> {
       // Just made an account: Set your PIN, or Not now (when it has none).
       AuthState.signedIn when auth.offerPin => PinStepScreen(key: ValueKey('pin ${auth.session}'), auth: auth, onDone: () => setState(() => auth.offerPin = false)),
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
-      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links, shortcuts: widget.shortcuts),
     };
   }
 }
@@ -401,7 +409,8 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links});
+  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links, this.shortcuts});
+  final HomeShortcuts? shortcuts;
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
@@ -436,6 +445,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // waited behind signing in.
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
+    // The app icon's shortcuts: this person's tools on it, and the one
+    // tapped (now, or before signing in) opened.
+    widget.shortcuts?.addListener(_shortcut);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _shortcut());
+    unawaited(_putShortcuts());
     final notify = widget.notify;
     if (notify != null) {
       notify.addListener(_notified);
@@ -497,6 +511,43 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
     final page = widget.links?.take();
     if (page != null) _openPath(page);
+  }
+
+  /// Scan a code and up to three of the person's tools, on the app's icon.
+  Future<void> _putShortcuts() async {
+    final shortcuts = widget.shortcuts;
+    if (shortcuts == null) return;
+    var tools = <({String command, String name})>[];
+    try {
+      if (_chats.auth.can('run.start')) {
+        tools = [for (final t in (await _chats.auth.api.listTools()).tools) (command: t.command, name: t.name)];
+      }
+    } on Object {
+      // Scan alone, then.
+    }
+    await shortcuts.show(tools, recent: widget.prefs?.recentTools ?? const []);
+  }
+
+  /// A shortcut tapped on the app's icon: Scan a code, or a tool.
+  void _shortcut() {
+    if (!mounted) return;
+    final type = widget.shortcuts?.take();
+    if (type == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    final tool = shortcutTool(type);
+    if (tool != null) {
+      _openTool(tool, const {});
+    } else if (type == scanShortcut) {
+      unawaited(scanFromHome(context, auth: _chats.auth, openTool: _openTool));
+    }
+  }
+
+  /// A tool's sheet in Taskiem's conversation, filled in with [initial].
+  void _openTool(String command, Map<String, dynamic> initial) {
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst);
+    nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats, openTool: (command: command, initial: initial))));
   }
 
   void _arrived(PushNote n) {
@@ -638,6 +689,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   void dispose() {
     widget.notify?.removeListener(_notified);
     widget.links?.removeListener(_linked);
+    widget.shortcuts?.removeListener(_shortcut);
     if (widget.notify?.onArrived == _arrived) widget.notify?.onArrived = null;
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;
@@ -795,8 +847,9 @@ class _OpenState extends State<_Open> {
 
 /// Taskiem's conversation, open: its data lives while it is open.
 class _OpenTaskiem extends StatefulWidget {
-  const _OpenTaskiem({required this.chats});
+  const _OpenTaskiem({required this.chats, this.openTool});
   final ChatsData chats;
+  final ToolToOpen? openTool;
 
   @override
   State<_OpenTaskiem> createState() => _OpenTaskiemState();
@@ -814,6 +867,7 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   @override
   Widget build(BuildContext context) => TaskiemScreen(
     data: _data,
+    openTool: widget.openTool,
     onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,

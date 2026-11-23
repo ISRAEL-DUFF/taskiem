@@ -134,7 +134,8 @@ void main() {
     expect(body, startsWith('multipart/form-data'));
     expect(body, contains('name="proof"; filename="photo.jpg"'));
     expect(body, contains('"where":{"lat":6.5244,"lng":3.3792,"accuracy_m":12,'));
-    expect(body, contains('"signed":{"state":"unavailable"'));
+    // The signature is optional and not signed: left out, not made up (D2).
+    expect(body, isNot(contains('"signed"')));
     expect(body, contains('"app":"app"'));
     expect(body, contains('"online":true'));
     expect(find.text('Sent'), findsOneWidget);

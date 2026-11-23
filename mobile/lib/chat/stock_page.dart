@@ -21,6 +21,8 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
 import 'chats.dart' show LinkSection;
+import 'code_scanner.dart';
+import 'groups.dart' show pickOneOf;
 import 'sizes_forms.dart' show choicesOf, sizesOf, variantLabel, variantOf;
 import 'product_form.dart' show hasSizes, sizesLine, sizesWords;
 import 'purchases_page.dart' show PurchasesCard, SuppliesPage;
@@ -1325,7 +1327,7 @@ class _CountsCardState extends State<_CountsCard> {
 
 /// CountModal: how many of each item are on the shelf, with why they
 /// differ. (The web also reads a CSV; on a phone the shelf is counted by
-/// hand.)
+/// hand, or by scanning each item's barcode: device fields D2.)
 class _CountForm extends StatefulWidget {
   const _CountForm({required this.auth, required this.items});
   final Auth auth;
@@ -1342,7 +1344,72 @@ class _CountFormState extends State<_CountForm> {
   bool _busy = false;
   String? _error;
 
+  /// Codes scanned that no item has yet, and how many times each.
+  final _unknown = <String, int>{};
+
+  /// An item's barcode being saved.
+  String? _naming;
+
   void _changed() => setState(() {});
+
+  /// The item whose barcode this is.
+  Map<String, dynamic>? _codeItem(String code) => widget.items.where((it) => (it['code'] as String?)?.trim() == code.trim()).firstOrNull;
+
+  void _addTo(String id, int n) {
+    final box = _boxes[id];
+    if (box == null) return;
+    box.text = '${(_whole(box.text) ?? 0) + n}';
+  }
+
+  /// Scan to count: each item's barcode, once for each one on the shelf;
+  /// every scan adds one to its count.
+  Future<void> _scan() async {
+    final got = await codeScanner.scanMany(
+      context,
+      title: 'Scan to count',
+      formats: const ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'qr'],
+      name: (c) => _codeItem(c.text)?['name'] as String?,
+      backLabel: 'Back to Count the shelf',
+    );
+    if (got == null || !mounted) return;
+    setState(() {
+      for (final c in got) {
+        final it = _codeItem(c.text);
+        if (it != null) {
+          _addTo(it['id'] as String, 1);
+        } else {
+          _unknown[c.text] = (_unknown[c.text] ?? 0) + 1;
+        }
+      }
+    });
+  }
+
+  /// A code no item has: the person says which item it is; it is kept on
+  /// the item (its barcode), and its scans counted.
+  Future<void> _name(String code) async {
+    final id = await pickOneOf(
+      context,
+      title: 'Which item is $code?',
+      searchHint: 'Find an item',
+      choices: [for (final it in widget.items) if ((it['code'] as String? ?? '').isEmpty) (it['id'] as String, it['name'] as String? ?? '', stockLine(it))],
+    );
+    if (id == null || !mounted) return;
+    setState(() => _naming = code);
+    try {
+      await widget.auth.transport.send('PATCH', '/v1/stock/items/${Uri.encodeComponent(id)}', body: {'code': code});
+      final it = widget.items.firstWhere((x) => x['id'] == id);
+      it['code'] = code;
+      if (!mounted) return;
+      setState(() {
+        _addTo(id, _unknown.remove(code) ?? 0);
+        _error = null;
+      });
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+    } finally {
+      if (mounted) setState(() => _naming = null);
+    }
+  }
 
   @override
   void dispose() {
@@ -1393,7 +1460,24 @@ class _CountFormState extends State<_CountForm> {
       error: _error,
       save: _problem != null ? null : _save,
       children: [
-        Text('Enter what is on the shelf. Leave an item empty to skip it. Count every item to close the month’s count.', style: tkHint(t)),
+        Text('Enter what is on the shelf, or scan each item’s barcode. Leave an item empty to skip it. Count every item to close the month’s count.', style: tkHint(t)),
+        TkListRow(
+          title: 'Scan to count',
+          sub: 'Each scan adds one to that item',
+          icon: 'b-qr',
+          square: TkLook.of(context).teal,
+          onTap: _busy ? null : _scan,
+        ),
+        for (final e in _unknown.entries)
+          TkCallout(
+            leading: TkSquare('b-qr', color: TkLook.of(context).orange),
+            title: 'Not one of your items yet: ${e.key}',
+            sub: 'Scanned ${e.value == 1 ? 'once' : '${e.value} times'}. Say which item it is, and its count goes there.',
+            subLines: 3,
+            color: TkLook.of(context).orange,
+            button: _naming == e.key ? 'Saving…' : 'Which item?',
+            onPressed: _naming != null ? null : () => _name(e.key),
+          ),
         for (final it in widget.items)
           TkKitField(
             label: it['name'] as String? ?? '',

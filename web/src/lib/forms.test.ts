@@ -448,6 +448,23 @@ describe("client-side checks", () => {
     });
     expect(parts.files.map(([k]) => k)).toEqual(["proof"]);
     expect(Object.keys(parts.json)).toEqual(["where", "note"]);
+    // A signature with its signer's name (D2): the drawing a part, the
+    // name in the answers; not answered until the name is given.
+    const png = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+      "signature.png",
+      { type: "image/png" },
+    );
+    expect(deviceAnswered({ file: png, signed_by: " " })).toBe(false);
+    expect(deviceAnswered({ file: png, signed_by: "Ngozi Eze" })).toBe(true);
+    expect(
+      deviceSummary("signature", { file: png, signed_by: "Ngozi Eze" }),
+    ).toBe("Signed by Ngozi Eze.");
+    const signed = answerParts({
+      signed: { file: png, signed_by: " Ngozi Eze " },
+    });
+    expect(signed.files).toEqual([["signed", png]]);
+    expect(signed.json).toEqual({ signed: { signed_by: "Ngozi Eze" } });
     expect(unavailableDeviceAnswers(q)).toEqual({
       where: {
         state: "unavailable",

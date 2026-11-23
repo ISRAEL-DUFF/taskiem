@@ -2,7 +2,9 @@
 // browser is asked only when the person presses the field's button, after
 // its why. A location is the browser's own prompt; a photo the camera
 // where the browser offers it (capture), else a file, marked sent either
-// way; a signature a pad; a scan the code typed. A refusal is an answer.
+// way; a signature a pad (drawn with a finger or the mouse, in ink on
+// white, with the signer's name where the question asks it: D2); a scan
+// the code typed. A refusal is an answer.
 import { useEffect, useId, useRef, useState } from "react";
 import {
   deviceSummary,
@@ -23,7 +25,11 @@ interface Props {
   onChange: (v: unknown) => void;
 }
 
-type WithWhy = FieldSchema & { why?: string; allow_typed?: boolean };
+type WithWhy = FieldSchema & {
+  why?: string;
+  allow_typed?: boolean;
+  ask_name?: boolean;
+};
 
 export function DeviceField({
   name,
@@ -133,7 +139,11 @@ export function DeviceField({
         />
       )}
       {kind === "signature" && (
-        <SignaturePad label={label} onChange={onChange} />
+        <SignaturePad
+          label={label}
+          askName={p.ask_name === true}
+          onChange={onChange}
+        />
       )}
       {kind === "scan" && (
         <input
@@ -178,22 +188,49 @@ export function DeviceField({
   );
 }
 
-/** A pad to sign on: pointer strokes, sent as a PNG. */
+/** The pad is paper in both themes (styles.css `.signature-pad`'s
+ * --paper and --paper-ink): ink on white, so what is kept reads the same
+ * wherever it is shown. */
+function tone(c: HTMLCanvasElement, name: string, fallback: string) {
+  return getComputedStyle(c).getPropertyValue(name).trim() || fallback;
+}
+
+function paper(c: HTMLCanvasElement | null) {
+  const ctx = c?.getContext("2d");
+  if (!c || !ctx) return;
+  ctx.fillStyle = tone(c, "--paper", "white");
+  ctx.fillRect(0, 0, c.width, c.height);
+}
+
+/** A pad to sign on: pointer strokes, sent as a PNG; the signer's name
+ * beside it where the question asks. */
 function SignaturePad({
   label,
+  askName,
   onChange,
 }: {
   label: string;
+  askName: boolean;
   onChange: (v: unknown) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [signed, setSigned] = useState(false);
+  const file = useRef<File | undefined>(undefined);
+  const name = useRef("");
+  const nameId = useId();
+  const tell = () =>
+    onChange(
+      file.current && askName
+        ? { file: file.current, signed_by: name.current }
+        : file.current,
+    );
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
     c.width = c.clientWidth || 320;
     c.height = c.clientHeight || 160;
+    paper(c);
   }, []);
   const at = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -202,7 +239,9 @@ function SignaturePad({
   const done = () => {
     drawing.current = false;
     ref.current?.toBlob((b) => {
-      if (b) onChange(new File([b], "signature.png", { type: "image/png" }));
+      if (!b) return;
+      file.current = new File([b], "signature.png", { type: "image/png" });
+      tell();
     }, "image/png");
   };
   return (
@@ -219,7 +258,7 @@ function SignaturePad({
           e.currentTarget.setPointerCapture(e.pointerId);
           ctx.lineWidth = 2;
           ctx.lineCap = "round";
-          ctx.strokeStyle = getComputedStyle(e.currentTarget).color;
+          ctx.strokeStyle = tone(e.currentTarget, "--paper-ink", "black");
           ctx.beginPath();
           ctx.moveTo(...at(e));
         }}
@@ -238,14 +277,28 @@ function SignaturePad({
           type="button"
           className="link"
           onClick={() => {
-            const c = ref.current;
-            c?.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+            paper(ref.current);
             setSigned(false);
+            file.current = undefined;
             onChange(undefined);
           }}
         >
           Clear
         </button>
+      )}
+      {askName && (
+        <div className="form-field">
+          <label htmlFor={nameId}>Name of who signed</label>
+          <input
+            id={nameId}
+            maxLength={120}
+            autoComplete="off"
+            onChange={(e) => {
+              name.current = e.target.value;
+              if (file.current) tell();
+            }}
+          />
+        </div>
       )}
     </div>
   );

@@ -4,10 +4,12 @@
 // never chosen from the gallery. A refusal is an answer (Can't). Made with
 // no connection, the answer is kept on the phone and sent when it is back,
 // marked as made offline (online: false), so a rider in a dead spot is not
-// stuck. A signature is D2: the app sends it unavailable for now.
+// stuck. A code is scanned with the camera (or typed where the question
+// allows), and a signature drawn on the screen with a finger, sent as a PNG
+// beside the photo (D2): a rider hands the phone to the customer to sign.
 //
-// The phone's location is behind [formPlaceFinder] and its camera behind
-// [takeFormPhoto], so a test gives its own.
+// The phone's location is behind [formPlaceFinder], its camera behind
+// [takeFormPhoto] and [codeScanner], so a test gives its own.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -28,7 +30,9 @@ import '../kit/page.dart';
 import '../kit/sheet.dart' show TkCta, TkKitField, TkLines;
 import '../theme/look.dart';
 import 'approve.dart' show TkTextBox;
+import 'code_scanner.dart';
 import 'people_place.dart' show DevicePlaceFinder, PlaceFinder, PlaceProblem, PlaceRefused, placeProblemWords;
+import 'signature_pad.dart';
 import 'today_tab.dart' show shortWhen;
 import 'words.dart' show CardTone;
 
@@ -82,16 +86,25 @@ Future<int> sendKeptFormAnswers(Auth auth) async {
     }
     final id = k['id'] as String? ?? '';
     final photoKey = k['photo'] as String?;
+    final signKey = k['signature'] as String?;
     try {
-      Uint8List? photo;
-      if (photoKey != null) photo = await store.media(photoKey);
-      await _sendAnswer(auth, id, (k['answers'] as Map).cast<String, dynamic>(), (k['device'] as Map).cast<String, dynamic>(), k['field'] as String?, photo);
+      final files = <_Part>[];
+      if (photoKey != null) {
+        final photo = await store.media(photoKey);
+        if (photo != null && k['field'] is String) files.add(_photoPart(k['field'] as String, photo));
+      }
+      if (signKey != null) {
+        final png = await store.media(signKey);
+        if (png != null && k['signature_field'] is String) files.add(_signaturePart(k['signature_field'] as String, png));
+      }
+      await _sendAnswer(auth, id, (k['answers'] as Map).cast<String, dynamic>(), (k['device'] as Map).cast<String, dynamic>(), files);
     } on Offline {
       break;
     } on ApiError {
       // Closed, or refused: it cannot go, now or later.
     }
     if (photoKey != null) store.dropMedia(photoKey);
+    if (signKey != null) store.dropMedia(signKey);
     left.removeAt(0);
     sent++;
     store.write(keptFormAnswersKey, left.isEmpty ? null : left);
@@ -99,10 +112,15 @@ Future<int> sendKeptFormAnswers(Auth auth) async {
   return sent;
 }
 
-Future<void> _sendAnswer(Auth auth, String id, Map<String, dynamic> answers, Map<String, dynamic> device, String? photoField, List<int>? photo) async {
-  if (photoField != null && photo != null) {
-    await auth.transport.upload('/v1/form-requests/${Uri.encodeComponent(id)}/answers',
-        bytes: photo, filename: 'photo.jpg', type: 'image/jpeg', field: photoField, fields: {'answers': jsonEncode(answers), 'device': jsonEncode(device)});
+/// A file sent with an answer, as a part named by its question.
+typedef _Part = ({String field, List<int> bytes, String filename, String type});
+
+_Part _photoPart(String field, List<int> bytes) => (field: field, bytes: bytes, filename: 'photo.jpg', type: 'image/jpeg');
+_Part _signaturePart(String field, List<int> bytes) => (field: field, bytes: bytes, filename: 'signature.png', type: 'image/png');
+
+Future<void> _sendAnswer(Auth auth, String id, Map<String, dynamic> answers, Map<String, dynamic> device, List<_Part> files) async {
+  if (files.isNotEmpty) {
+    await auth.transport.uploadFiles('/v1/form-requests/${Uri.encodeComponent(id)}/answers', files: files, fields: {'answers': jsonEncode(answers), 'device': jsonEncode(device)});
     return;
   }
   await auth.api.answerFormRequest(id: id, body: AnswerFormRequestRequest(answers: answers, device: FormDevice.fromJson(device)));
@@ -127,6 +145,10 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
   final _typed = <String, TextEditingController>{};
   ({List<int> bytes, String name})? _photo;
   String? _photoField;
+
+  /// What was signed on the pad, and its question.
+  Signed? _signed;
+  String? _signedField;
   String? _reading;
   PlaceProblem? _placeProblem;
   bool _busy = false;
@@ -229,11 +251,48 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
     });
   }
 
+  /// The code, read by the camera at the tap (or typed where the question
+  /// allows), after the question's why.
+  Future<void> _scan(String field, Map<String, dynamic> p) async {
+    final formats = (p['formats'] as List?)?.whereType<String>().toList();
+    final got = await codeScanner.scanOne(
+      context,
+      title: _label(field, p),
+      why: p['why'] as String?,
+      formats: formats,
+      allowTyped: p['allow_typed'] != false,
+      backLabel: 'Back to ${_req?.title ?? 'the question'}',
+    );
+    if (got == null || !mounted) return;
+    setState(() {
+      _device[field] = got.toJson();
+      _missing.remove(field);
+      if (_missing.isEmpty) _error = null;
+    });
+  }
+
+  /// The pad: the person (or the customer, handed the phone) signs.
+  Future<void> _sign(String field, Map<String, dynamic> p) async {
+    final got = await signOnScreen(context, title: _label(field, p), why: p['why'] as String?, askName: p['ask_name'] == true, backLabel: 'Back to ${_req?.title ?? 'the question'}');
+    if (got == null || !mounted) return;
+    setState(() {
+      _signed = got;
+      _signedField = field;
+      _device.remove(field);
+      _missing.remove(field);
+      if (_missing.isEmpty) _error = null;
+    });
+  }
+
   void _cannot(String field) => setState(() {
     _device[field] = {'state': 'refused', 'reason': 'I cannot answer this here'};
     if (_photoField == field) {
       _photo = null;
       _photoField = null;
+    }
+    if (_signedField == field) {
+      _signed = null;
+      _signedField = null;
     }
     _missing.remove(field);
     if (_missing.isEmpty) _error = null;
@@ -249,8 +308,10 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
     for (final e in props.entries) {
       final kind = e.value['type'];
       if (_deviceKinds.contains(kind)) {
-        if (kind == 'signature' && !_device.containsKey(e.key)) {
-          answers[e.key] = {'state': 'unavailable', 'reason': 'the app cannot take a signature yet'};
+        final signed = kind == 'signature' && _signedField == e.key && _signed != null;
+        if (signed) {
+          // The drawing goes as a part; the signer's name beside it.
+          if (_signed!.name != null) answers[e.key] = {'signed_by': _signed!.name};
         } else if (_device.containsKey(e.key)) {
           answers[e.key] = _device[e.key];
         } else if (!(kind == 'photo' && _photoField == e.key) && need.contains(e.key)) {
@@ -279,7 +340,7 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
       _error = null;
     });
     try {
-      await _sendAnswer(widget.auth, r.id, answers, device, _photoField, _photo?.bytes);
+      await _sendAnswer(widget.auth, r.id, answers, device, _files());
       if (mounted) setState(() => _done = 'sent');
     } on Offline {
       // No connection: kept, and sent when it is back, as made offline.
@@ -292,10 +353,23 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
           photoKey = 'form-photo:${r.id}';
           await store.keepMedia(photoKey, _photo!.bytes);
         }
+        String? signKey;
+        if (_signed != null) {
+          signKey = 'form-signature:${r.id}';
+          await store.keepMedia(signKey, _signed!.png);
+        }
         final kept = store.read(keptFormAnswersKey);
         store.write(keptFormAnswersKey, [
           if (kept is List) ...kept,
-          {'id': r.id, 'answers': answers, 'device': {...device, 'online': false}, 'field': _photoField, 'photo': photoKey},
+          {
+            'id': r.id,
+            'answers': answers,
+            'device': {...device, 'online': false},
+            'field': _photoField,
+            'photo': photoKey,
+            'signature_field': _signedField,
+            'signature': signKey,
+          },
         ]);
         if (mounted) setState(() => _done = 'kept');
       }
@@ -305,6 +379,12 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// The files this answer sends: the photo and the signature.
+  List<_Part> _files() => [
+    if (_photoField != null && _photo != null) _photoPart(_photoField!, _photo!.bytes),
+    if (_signedField != null && _signed != null) _signaturePart(_signedField!, _signed!.png),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -418,11 +498,33 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
             child: Image.memory(Uint8List.fromList(_photo!.bytes), width: 44, height: 44, fit: BoxFit.cover, semanticLabel: 'The photo you took', errorBuilder: (_, _, _) => const SizedBox(width: 44, height: 44)),
           );
         }
-      default:
-        icon = kind == 'scan' ? 'b-qr' : 'b-note';
+      case 'scan':
+        icon = 'b-qr';
         square = look.blue;
-        title = kind == 'scan' ? 'Scanning comes to the app soon' : 'Signing comes to the app soon';
-        sub = 'Sent as not available here; $why'.replaceAll('; Why:', '. Why:');
+        final code = v != null && !refused ? v : null;
+        title = code != null ? 'Scan it again' : 'Scan the code';
+        tap = () => _scan(name, p);
+        if (code != null) {
+          status = code['format'] == null ? 'Typed' : 'Scanned';
+          sub = '${code['text']} · ${formatWords(code['format'] as String?)}';
+        }
+      default:
+        icon = 'b-note';
+        square = look.teal;
+        final signed = _signedField == name && _signed != null;
+        title = signed ? 'Sign again' : 'Sign on the screen';
+        tap = () => _sign(name, p);
+        if (signed) {
+          status = 'Signed';
+          sub = _signed!.name != null ? 'Signed by ${_signed!.name}' : 'Signed on this phone';
+          leading = Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), color: const Color(0xFFFFFFFF)),
+            clipBehavior: Clip.antiAlias,
+            child: Image.memory(_signed!.png, fit: BoxFit.contain, semanticLabel: 'The signature', errorBuilder: (_, _, _) => const SizedBox(width: 44, height: 44)),
+          );
+        }
     }
     if (refused) {
       status = 'Can’t';
@@ -433,7 +535,7 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
       status = 'Needed';
       tone = CardTone.danger;
     }
-    final answered = status == 'Read' || status == 'Taken' || refused;
+    final answered = status != null && status != 'Needed';
     return TkSection(
       title: label,
       inset: 56,
@@ -450,7 +552,7 @@ class _FormRequestScreenState extends State<FormRequestScreen> {
           chevron: false,
           onTap: tap,
           semanticsLabel: '$title: $label',
-          trailing: (kind == 'location' || kind == 'photo') && !answered
+          trailing: !answered
               ? Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: TkSmallButton(label: 'Can’t', semantics: 'I can’t answer $label', onPressed: () => _cannot(name)),

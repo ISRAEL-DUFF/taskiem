@@ -601,7 +601,24 @@ export type DeviceValue =
   | { address: string }
   | { text: string }
   | { state: "refused" | "unavailable"; reason: string }
+  | SignedValue
   | File;
+
+/** A signature drawn, with the signer's name where the question asks it
+ * (`ask_name`, D2): the drawing goes as a part, the name in the answers. */
+export interface SignedValue {
+  file: File;
+  signed_by: string;
+}
+
+function isSigned(v: unknown): v is SignedValue {
+  return (
+    typeof File !== "undefined" &&
+    !!v &&
+    typeof v === "object" &&
+    (v as { file?: unknown }).file instanceof File
+  );
+}
 
 /** A browser's reading of where it is, as a location field takes it. */
 export function locationAnswer(p: {
@@ -637,6 +654,10 @@ export function locationRefusal(code: number): DeviceValue {
 /** Plain words for a device field's answer once given. */
 export function deviceSummary(kind: DeviceKind, v: unknown): string {
   if (!v) return "";
+  if (isSigned(v))
+    return v.signed_by.trim()
+      ? `Signed by ${v.signed_by.trim()}.`
+      : "Signed. Type the name of who signed.";
   if (typeof File !== "undefined" && v instanceof File)
     return kind === "signature"
       ? "Signed."
@@ -656,6 +677,7 @@ export function deviceSummary(kind: DeviceKind, v: unknown): string {
 /** Whether a device field holds an answer, a refusal included. */
 export function deviceAnswered(v: unknown): boolean {
   if (!v) return false;
+  if (isSigned(v)) return v.file.size > 0 && v.signed_by.trim() !== "";
   if (typeof File !== "undefined" && v instanceof File) return v.size > 0;
   const m = v as Record<string, unknown>;
   return (
@@ -679,7 +701,10 @@ export function answerParts(answers: Record<string, unknown>): {
   const files: [string, File][] = [];
   for (const [k, v] of Object.entries(answers)) {
     if (typeof File !== "undefined" && v instanceof File) files.push([k, v]);
-    else json[k] = v;
+    else if (isSigned(v)) {
+      files.push([k, v.file]);
+      json[k] = { signed_by: v.signed_by.trim() };
+    } else json[k] = v;
   }
   return { json, files };
 }
@@ -1269,7 +1294,10 @@ export function stepProblems(cfg: FormStepConfig, path = ""): Problem[] {
         "the person who started it is signed in: verify is for a phone or email",
       );
   } else if (set.length !== 1)
-    add("/to", "to is exactly one of phone, email, role, member, link or starter");
+    add(
+      "/to",
+      "to is exactly one of phone, email, role, member, link or starter",
+    );
   else if (
     to.link &&
     !to.link.trim().startsWith("=") &&

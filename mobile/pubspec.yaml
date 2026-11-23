@@ -62,6 +62,9 @@ dependencies:
   # Reading an account number or a list in a photo on the phone itself, the
   # photo never sent for reading (lib/chat/photo_text.dart). MIT. Needs iOS 15.5.
   google_mlkit_text_recognition: 0.17.1
+  # Scan a code and the person's tools on the app's icon (lib/app/shortcuts.dart;
+  # device fields D2). BSD-3-Clause.
+  quick_actions: 1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

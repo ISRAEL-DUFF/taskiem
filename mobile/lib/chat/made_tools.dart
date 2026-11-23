@@ -17,6 +17,7 @@ import '../app/auth.dart';
 import '../app/links.dart' show openInBrowser;
 import '../app/passkey.dart';
 import '../kit/forms.dart' show TkSwitch, errorWords, nairaKobo;
+import '../kit/icon.dart' show TkIcon;
 import '../kit/page.dart' show TkPageScreen;
 import '../kit/kit.dart';
 import '../kit/look.dart';
@@ -29,6 +30,7 @@ import '../theme/look_icons.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart';
+import 'code_scanner.dart';
 import 'groups.dart' show pickAction, pickOneOf;
 import 'saved_fill.dart';
 import 'words.dart';
@@ -73,6 +75,97 @@ List<MadeTool> madeMatching(List<MadeTool> tools, String query) {
   return (tool: tool, words: String.fromCharCodes(words.runes.take(300)));
 }
 
+/// The tool a sentence starts with a phrase of (web/src/lib/tools.ts
+/// madeToolWords, "phrase"): "i bought fuel for 4500" names the tool that
+/// says "i bought", and the words after the phrase are read into its form.
+/// The longest phrase wins; null when no phrase starts it, or when the
+/// longest is said by two tools (the chat asks which), and for a "/command".
+({MadeTool tool, String words})? madeByPhrase(List<MadeTool> tools, String text) {
+  final t = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (t.isEmpty || t.startsWith('/')) return null;
+  final folded = t.toLowerCase();
+  MadeTool? best;
+  var len = 0;
+  var tie = false;
+  for (final tool in tools) {
+    for (final say in tool.says) {
+      final p = say.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      if (p.isEmpty || !(folded == p || folded.startsWith('$p '))) continue;
+      if (best != null && len == p.length && best.command != tool.command) {
+        tie = true;
+      } else if (best == null || p.length > len) {
+        best = tool;
+        len = p.length;
+        tie = false;
+      }
+    }
+  }
+  if (best == null || tie) return null;
+  return (tool: best, words: String.fromCharCodes(t.substring(len).trim().runes.take(300)));
+}
+
+/// "Open X, filled in" over the Taskiem conversation's box, when what is
+/// typed starts with a phrase one of the person's tools says (the web's
+/// made-tool chip): pressed, the tool's sheet opens with the words read;
+/// sending the words still goes to the chat.
+class MadeToolChip extends StatelessWidget {
+  const MadeToolChip({super.key, required this.tool, required this.words, required this.onOpen});
+  final MadeTool tool;
+  final String words;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final kicker = 'Open ${tool.name}, filled in';
+    final shown = words.isEmpty ? '/${tool.command}' : words;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          container: true,
+          button: true,
+          label: '$kicker: $shown',
+          excludeSemantics: true,
+          onTap: onOpen,
+          child: TkPress(
+            onTap: onOpen,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 56, maxWidth: 520),
+              padding: const EdgeInsets.fromLTRB(10, 9, 14, 9),
+              decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(18), boxShadow: t.tkLift),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(color: t.brand, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: TkIcon(madeIcon(tool), size: 18, stroke: 2, color: t.brandDark),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(kicker.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11, weight: 700, color: t.muted).copyWith(letterSpacing: 0.9)),
+                        Text(shown, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.35, color: t.text)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Whether the tool asks before it runs: its steps say so, or an owner
 /// made it always ask.
 bool madeAsks(MadeTool t) => t.alwaysAsk || t.care.level != 'answers';
@@ -96,7 +189,8 @@ class SchemaField {
   final String name;
   final String label;
 
-  /// text, long, number, money, yes_no, choice, choices, device, other.
+  /// text, long, number, money, yes_no, choice, choices, scan (a code
+  /// the phone reads, or typed: device fields D2), device, other.
   final String kind;
   final bool required;
   final String? hint;
@@ -118,7 +212,9 @@ List<SchemaField> schemaFields(Map<String, dynamic>? schema) {
     if (x['hidden'] == true) continue;
     final type = p['type'];
     final items = (p['items'] as Map?)?.cast<String, dynamic>();
-    final kind = _deviceKinds.contains(type)
+    final kind = type == 'scan'
+        ? 'scan'
+        : _deviceKinds.contains(type)
         ? 'device'
         : type == 'boolean'
         ? 'yes_no'
@@ -249,9 +345,18 @@ class _FormValues {
           picked[f.name] = v is List ? [...v] : <Object?>[];
         case 'text' || 'long' || 'number' || 'money':
           boxes[f.name] = TextEditingController(text: _shown(v));
+        case 'scan':
+          // A code read from the home screen comes as {text, format}.
+          final text = v is Map ? '${v['text'] ?? ''}' : _shown(v);
+          boxes[f.name] = TextEditingController(text: text);
+          if (v is Map && v['format'] is String) scanned[f.name] = ScannedCode(text, v['format'] as String);
       }
     }
   }
+
+  /// A scan field's code as the camera read it (its format); typed over,
+  /// the code is the words typed.
+  final scanned = <String, ScannedCode>{};
 
   final List<SchemaField> fields;
   final boxes = <String, TextEditingController>{};
@@ -281,8 +386,8 @@ class _FormValues {
             picked[f.name] = [for (final c in f.choices) if (v.any((x) => '$x' == '$c')) c];
             n++;
           }
-        case 'text' || 'long' || 'number' || 'money':
-          boxes[f.name]!.text = _shown(v);
+        case 'text' || 'long' || 'number' || 'money' || 'scan':
+          boxes[f.name]!.text = v is Map ? '${v['text'] ?? ''}' : _shown(v);
           n++;
       }
     }
@@ -344,6 +449,10 @@ class _FormValues {
         case 'text' || 'long':
           final s = boxes[f.name]!.text.trim();
           if (s.isNotEmpty) out[f.name] = s;
+        case 'scan':
+          final s = boxes[f.name]!.text.trim();
+          final read = scanned[f.name];
+          if (s.isNotEmpty) out[f.name] = read != null && read.text.trim() == s ? read.toJson() : s;
       }
     }
     return out;
@@ -352,7 +461,10 @@ class _FormValues {
 
 /// The tool's form: a field for each input, in a form group.
 class _SchemaForm extends StatelessWidget {
-  const _SchemaForm({required this.values, required this.onChanged, this.onSaved, this.picking, this.busy = false});
+  const _SchemaForm({required this.values, required this.onChanged, this.onSaved, this.onScan, this.picking, this.busy = false});
+
+  /// A scan field's Scan pressed: the camera reads its code.
+  final void Function(SchemaField f)? onScan;
   final _FormValues values;
   final VoidCallback onChanged;
 
@@ -422,6 +534,22 @@ class _SchemaForm extends StatelessWidget {
               values.picked[f.name] = f.choices.firstWhere((c) => '$c' == got, orElse: () => got);
               onChanged();
             },
+          ),
+        );
+      case 'scan':
+        final read = values.scanned[f.name];
+        final typed = values.boxes[f.name]!.text.trim();
+        return TkKitField(
+          label: _label(f),
+          hint: read != null && read.text.trim() == typed ? 'Read by the camera: ${aFormat(read.format)}' : (f.hint ?? f.prop['why'] as String?),
+          child: Row(
+            children: [
+              Expanded(child: TkTextBox(controller: values.boxes[f.name]!, size: 15, height: 46, max: 2000)),
+              if (onScan != null) ...[
+                const SizedBox(width: 8),
+                TkSmallButton(label: 'Scan', icon: 'b-qr', semantics: 'Scan ${f.label}', onPressed: busy ? null : () => onScan!(f)),
+              ],
+            ],
           ),
         );
       case 'choices':
@@ -608,6 +736,24 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
     }
   }
 
+  /// A scan field's Scan: the camera reads its code at the tap, after the
+  /// input's why (device fields D2).
+  Future<void> _scanInto(SchemaField f) async {
+    final got = await codeScanner.scanOne(
+      context,
+      title: f.label,
+      why: f.prop['why'] as String?,
+      formats: (f.prop['formats'] as List?)?.whereType<String>().toList(),
+      allowTyped: f.prop['allow_typed'] != false,
+      backLabel: 'Back to ${widget.tool.name}',
+    );
+    if (got == null || !mounted) return;
+    setState(() {
+      _values.scanned[f.name] = got;
+      _values.boxes[f.name]?.text = got.text;
+    });
+  }
+
   bool get _asks => _alwaysAsk || widget.tool.care.level != 'answers';
 
   void _done(String run, List<ToolStartValuesItem> values) {
@@ -748,7 +894,7 @@ class _MadeToolSheetState extends State<MadeToolSheet> {
             ],
           ),
         if (shown.isNotEmpty)
-          _SchemaForm(values: _values, onChanged: () => setState(() {}), onSaved: _fromSaved, picking: _picking, busy: _busy)
+          _SchemaForm(values: _values, onChanged: () => setState(() {}), onSaved: _fromSaved, onScan: _scanInto, picking: _picking, busy: _busy)
         else
           TkFormGroup(
             children: [

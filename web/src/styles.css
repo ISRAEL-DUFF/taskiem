@@ -852,7 +852,8 @@ button.small:focus-visible { box-shadow: var(--ring); } /* the ring, which the l
 .field-error { color: var(--danger); font-size: 12.5px; margin-top: 4px; }
 .form-view input[aria-invalid="true"], .form-view textarea[aria-invalid="true"], .form-view select[aria-invalid="true"] { border-color: var(--danger); }
 .form-view .device-field .toolbar { margin: 4px 0 6px; }
-.form-view .signature-pad { display: block; width: 100%; max-width: 420px; height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); touch-action: none; }
+/* The pad is paper in both themes: ink on white, so a signature kept reads the same wherever it is shown (device fields D2). */
+.form-view .signature-pad { --paper: #ffffff; --paper-ink: #14201b; display: block; width: 100%; max-width: 420px; height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--paper); touch-action: none; }
 .money-input { display: flex; align-items: center; gap: 6px; }
 .money-input > span { font-weight: 600; color: var(--muted); }
 .form-buttons { margin-top: 8px; }

@@ -1889,6 +1889,12 @@ class TaskiemApi {
     await _t.send('PUT', '/v1/tools/${Uri.encodeComponent(command)}/settings', body: body.toJson());
   }
 
+  /// What a scanned code can start (`GET /v1/scan/offers`)
+  Future<ScanOffersResponse> scanOffers({String? format, String? environment}) async {
+    final j = await _t.send('GET', '/v1/scan/offers', query: {'format': ?format, 'environment': ?environment});
+    return ScanOffersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Form steps waiting for you, or for members of your roles (`GET /v1/form-requests`)
   Future<ListFormRequestsResponse> listFormRequests() async {
     final j = await _t.send('GET', '/v1/form-requests');
@@ -4111,18 +4117,24 @@ class Approval {
 /// the exact place), the latest photo, and which was read by the phone and
 /// which was sent.
 class ChatAlertProof {
-  const ChatAlertProof({this.mark, this.photoSource, this.photoUrl, this.where});
+  const ChatAlertProof({this.mark, this.photoSource, this.photoUrl, this.signatureUrl, this.signed, this.where});
 
   final String? mark;
   final String? photoSource;
   /// A link to the latest photo, valid for 10 minutes
   final String? photoUrl;
+  /// A link to the customer's signature, valid for 10 minutes
+  final String? signatureUrl;
+  /// The customer signed on the rider's phone (device fields D2)
+  final bool? signed;
   final ChatAlertProofWhere? where;
 
   factory ChatAlertProof.fromJson(Map<String, dynamic> j) => ChatAlertProof(
         mark: j['mark'] == null ? null : j['mark'] as String,
         photoSource: j['photo_source'] == null ? null : j['photo_source'] as String,
         photoUrl: j['photo_url'] == null ? null : j['photo_url'] as String,
+        signatureUrl: j['signature_url'] == null ? null : j['signature_url'] as String,
+        signed: j['signed'] == null ? null : j['signed'] as bool,
         where: j['where'] == null ? null : ChatAlertProofWhere.fromJson(j['where'] as Map<String, dynamic>),
       );
 
@@ -4130,6 +4142,8 @@ class ChatAlertProof {
         'mark': ?mark,
         'photo_source': ?photoSource,
         'photo_url': ?photoUrl,
+        'signature_url': ?signatureUrl,
+        'signed': ?signed,
         'where': ?where?.toJson(),
       };
 }
@@ -7542,7 +7556,7 @@ class GetStockResponse {
 }
 
 class StorefrontColumns {
-  const StorefrontColumns({this.available, this.buffer, this.capacity, this.category, this.choices, this.costPrice, this.description, this.duration, this.name, this.photo, this.price, this.priceUnit, this.reorderLevel, this.sort, this.stock, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf});
+  const StorefrontColumns({this.available, this.buffer, this.capacity, this.category, this.choices, this.code, this.costPrice, this.description, this.duration, this.name, this.photo, this.price, this.priceUnit, this.reorderLevel, this.sort, this.stock, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf});
 
   final String? available;
   /// Minutes kept free after each booking (default 0)
@@ -7552,6 +7566,9 @@ class StorefrontColumns {
   final String? category;
   /// A product's choices and their values, as JSON
   final String? choices;
+  /// The barcode on an item's pack, for a count by scanning (device fields D2);
+  /// never on the public page
+  final String? code;
   final String? costPrice;
   final String? description;
   /// A services table's length in minutes (required there)
@@ -7579,6 +7596,7 @@ class StorefrontColumns {
         capacity: j['capacity'] == null ? null : j['capacity'] as String,
         category: j['category'] == null ? null : j['category'] as String,
         choices: j['choices'] == null ? null : j['choices'] as String,
+        code: j['code'] == null ? null : j['code'] as String,
         costPrice: j['cost_price'] == null ? null : j['cost_price'] as String,
         description: j['description'] == null ? null : j['description'] as String,
         duration: j['duration'] == null ? null : j['duration'] as String,
@@ -7602,6 +7620,7 @@ class StorefrontColumns {
         'capacity': ?capacity,
         'category': ?category,
         'choices': ?choices,
+        'code': ?code,
         'cost_price': ?costPrice,
         'description': ?description,
         'duration': ?duration,
@@ -7621,7 +7640,7 @@ class StorefrontColumns {
 }
 
 class StockItem {
-  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.suggest, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf, this.waiting});
+  const StockItem({required this.available, this.category, this.choices, this.code, this.costKobo, this.description, required this.id, this.low, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.suggest, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf, this.waiting});
 
   final bool available;
   /// The kind of thing it is ("Sneakers"), when the catalogue has a category
@@ -7630,6 +7649,9 @@ class StockItem {
   /// A product's choices, when it has sizes and colours (it keeps no stock of
   /// its own then)
   final List<VariantChoice>? choices;
+  /// The barcode on its pack, when the catalogue keeps barcodes (a count by
+  /// scanning)
+  final String? code;
   /// The last price paid for one
   final int? costKobo;
   /// Its words on the storefront, when the catalogue maps them
@@ -7660,6 +7682,7 @@ class StockItem {
         available: j['available'] as bool,
         category: j['category'] == null ? null : j['category'] as String,
         choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => VariantChoice.fromJson(e as Map<String, dynamic>)).toList(),
+        code: j['code'] == null ? null : j['code'] as String,
         costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
         description: j['description'] == null ? null : j['description'] as String,
         id: j['id'] as String,
@@ -7682,6 +7705,7 @@ class StockItem {
         'available': available,
         'category': ?category,
         'choices': ?choices?.map((e) => e.toJson()).toList(),
+        'code': ?code,
         'cost_kobo': ?costKobo,
         'description': ?description,
         'id': id,
@@ -16288,6 +16312,72 @@ class SetToolSettingsRequest {
   Map<String, dynamic> toJson() => {
         'always_ask': alwaysAsk,
         'environment': ?environment,
+      };
+}
+
+class ScanOffersResponse {
+  const ScanOffersResponse({required this.format, required this.offers});
+
+  final String format;
+  final List<ScanOffer> offers;
+
+  factory ScanOffersResponse.fromJson(Map<String, dynamic> j) => ScanOffersResponse(
+        format: j['format'] as String,
+        offers: (j['offers'] as List).map((e) => ScanOffer.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'format': format,
+        'offers': offers.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A workflow a scanned code can start (device fields D2)
+class ScanOffer {
+  const ScanOffer({this.about, required this.asks, this.command, required this.environment, this.icon, required this.input, required this.kind, required this.name, required this.version, this.why, required this.workflowId});
+
+  final String? about;
+  /// The other inputs it requires; none, and the code is all it needs
+  final List<String> asks;
+  /// A tool's command
+  final String? command;
+  final String environment;
+  final String? icon;
+  /// The scan input the code fills
+  final String input;
+  /// tool, opened by its command; or a workflow
+  final String kind;
+  final String name;
+  final int version;
+  final String? why;
+  final String workflowId;
+
+  factory ScanOffer.fromJson(Map<String, dynamic> j) => ScanOffer(
+        about: j['about'] == null ? null : j['about'] as String,
+        asks: (j['asks'] as List).map((e) => e as String).toList(),
+        command: j['command'] == null ? null : j['command'] as String,
+        environment: j['environment'] as String,
+        icon: j['icon'] == null ? null : j['icon'] as String,
+        input: j['input'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        version: (j['version'] as num).toInt(),
+        why: j['why'] == null ? null : j['why'] as String,
+        workflowId: j['workflow_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': ?about,
+        'asks': asks.map((e) => e).toList(),
+        'command': ?command,
+        'environment': environment,
+        'icon': ?icon,
+        'input': input,
+        'kind': kind,
+        'name': name,
+        'version': version,
+        'why': ?why,
+        'workflow_id': workflowId,
       };
 }
 
