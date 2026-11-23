@@ -236,7 +236,7 @@ func TestPayrollLeavers(t *testing.T) {
 		saved_linked_by = 'user:test', saved_linked_at = now() WHERE user_id = $1`, femi, empAda); err != nil {
 		t.Fatal(err)
 	}
-	up, err := os.ReadFile("../engine/db/migrations/00513_staff_links_leavers.sql")
+	up, err := os.ReadFile("../engine/db/migrations/00522_staff_links_leavers.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

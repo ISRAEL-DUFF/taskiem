@@ -402,14 +402,7 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	for i, x := range made {
 		ids[i] = x.ID
 	}
-	// Where they are delivered is said first: the questions on lines not
-	// remembered may come before the orders are shown for Yes.
-	if deliver != "" {
-		if err := c.say(ctx, s, strings.TrimPrefix(deliver, "\n")); err != nil {
-			return true, err
-		}
-	}
-	return true, s.orderAsk(ctx, c, ids)
+	return true, s.orderAsk(ctx, c, ids, deliver)
 }
 
 // sendDrafted sends each of the orders one yes answered: those above the

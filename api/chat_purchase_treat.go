@@ -52,6 +52,9 @@ type treatAsk struct {
 	// answered; Done the lines answered ("<order>:<position>").
 	Orders []uuid.UUID `json:"orders"`
 	Done   []string    `json:"done,omitempty"`
+	// Note is said under the orders when they are shown (where they are
+	// delivered: "deliver to @warehouse").
+	Note string `json:"note,omitempty"`
 	// The line asked about.
 	Order    uuid.UUID `json:"order"`
 	Position int       `json:"position"`
@@ -87,18 +90,19 @@ func treatKey(order uuid.UUID, position int) string {
 // orderAsk asks the question on each line of orders just drafted in chat
 // that the business's memory does not know, then shows them for Yes.
 // Those who may not change stock are shown them at once, as suggested.
-func (s *Server) orderAsk(ctx context.Context, c *chat, ids []uuid.UUID) error {
+func (s *Server) orderAsk(ctx context.Context, c *chat, ids []uuid.UUID, note ...string) error {
+	n := strings.Join(note, "")
 	if c.p.Can(PermTableEdit) {
-		if asked, err := s.treatNext(ctx, c, &treatAsk{Orders: ids}, ""); asked || err != nil {
+		if asked, err := s.treatNext(ctx, c, &treatAsk{Orders: ids, Note: n}, ""); asked || err != nil {
 			return err
 		}
 	}
-	return s.orderConfirm(ctx, c, ids, "")
+	return s.orderConfirm(ctx, c, ids, "", n)
 }
 
 // orderConfirm shows orders drafted in chat for Yes: one, or several sent
 // by one Yes.
-func (s *Server) orderConfirm(ctx context.Context, c *chat, ids []uuid.UUID, before string) error {
+func (s *Server) orderConfirm(ctx context.Context, c *chat, ids []uuid.UUID, before string, note ...string) error {
 	orders := make([]stock.Purchase, 0, len(ids))
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		for _, id := range ids {
@@ -131,6 +135,7 @@ func (s *Server) orderConfirm(ctx context.Context, c *chat, ids []uuid.UUID, bef
 	if before != "" {
 		text = before + "\n\n" + text
 	}
+	text += strings.Join(note, "")
 	return s.shopAsk(ctx, c, sh, text)
 }
 
@@ -174,7 +179,7 @@ func (s *Server) treatFinish(ctx context.Context, c *chat, ta *treatAsk, before 
 	if asked, err := s.treatNext(ctx, c, ta, before); asked || err != nil {
 		return err
 	}
-	return s.orderConfirm(ctx, c, ta.Orders, before)
+	return s.orderConfirm(ctx, c, ta.Orders, before, ta.Note)
 }
 
 // treatSay keeps the question in the session and asks it.
