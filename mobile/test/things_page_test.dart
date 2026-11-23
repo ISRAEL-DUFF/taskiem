@@ -125,6 +125,16 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('sold with its money recorded: it stays sold', (t) async {
+    final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-7')));
+    final asked = sent.length;
+    await t.tap(find.text('Broken'));
+    await t.pumpAndSettle();
+    expect(sent.length, asked, reason: 'nothing is sent: the server would refuse it');
+    expect(find.text('Deep fryer was sold with its money recorded, so it stays sold'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('a cashier marks it sold, but cannot price it', (t) async {
     final sent = await open(t, (a) => ThingPage(auth: a, thing: _of('th-2')), perms: const ['table.read', 'table.edit', 'invoice.read']);
     await t.tap(find.text('Sold'));
@@ -275,6 +285,7 @@ void main() {
 final _more = [
   thing('th-5', 'Bicycle', status: 'sold', cost: 9000000, received: '2026-08-10T10:00:00Z'),
   thing('th-6', 'Chest freezer', cost: 15000000, received: '2026-07-01T10:00:00Z', sale: 'me-7'),
+  thing('th-7', 'Deep fryer', status: 'sold', cost: 8000000, received: '2026-06-01T10:00:00Z', sale: 'me-8'),
 ];
 
 /// A row of the fixture as the app reads it.

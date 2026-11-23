@@ -26,7 +26,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show lagosDay;
-import 'groups.dart' show askSure, pickAction, pickOneOf;
+import 'groups.dart' show pickAction, pickOneOf;
 import 'money_sheets.dart' show dateLabel;
 import 'purchases_page.dart' show openPurchase;
 import 'treat_line.dart' show LabelPickSheet, TreatChoices;
@@ -314,13 +314,10 @@ class _ThingPageState extends State<ThingPage> {
       return;
     }
     if (_t.status == 'sold' && (_t.saleEntryId ?? '').isNotEmpty) {
-      final yes = await askSure(
-        context,
-        title: 'Mark ${_t.name} ${thingStatus(s).toLowerCase()}?',
-        body: 'Its sale stays in your money log; reverse it there if it did not happen.',
-        ok: 'Mark it',
-      );
-      if (!yes || !mounted) return;
+      // Its sale is in money in, so it stays sold (the server refuses
+      // any other status): say why instead of asking.
+      showTkToast(context, '${_t.name} was sold with its money recorded, so it stays sold', error: true);
+      return;
     }
     await _patch(PatchThingRequest(status: s), s == 'have' ? 'Back on what we have' : 'Marked ${thingStatus(s).toLowerCase()}');
   }
