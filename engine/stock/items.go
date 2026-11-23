@@ -455,9 +455,30 @@ func ValueKobo(items []Item) int64 {
 			continue
 		}
 		seen[it.StockItemID] = true
-		v += *it.Stock * *it.CostKobo
+		v = AddKobo(v, MulKobo(*it.Stock, *it.CostKobo))
 	}
 	return v
+}
+
+// MulKobo is a count at a cost, both at least 0, held at the largest
+// int64 rather than overflowing: a count and a cost each up to a
+// trillion multiply past it.
+func MulKobo(count, cost int64) int64 {
+	if count <= 0 || cost <= 0 {
+		return 0
+	}
+	if count > math.MaxInt64/cost {
+		return math.MaxInt64
+	}
+	return count * cost
+}
+
+// AddKobo adds two values of at least 0, held at the largest int64.
+func AddKobo(a, b int64) int64 {
+	if a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
 }
 
 func money(r map[string]any, col, unit string) *int64 {

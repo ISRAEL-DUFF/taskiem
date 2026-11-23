@@ -64,7 +64,7 @@ func (s *Server) getStockItems(w http.ResponseWriter, r *http.Request) {
 	var value int64
 	low := 0
 	for _, it := range items {
-		value += it.ValueKobo
+		value = stock.AddKobo(value, it.ValueKobo)
 		if it.Low {
 			low++
 		}
