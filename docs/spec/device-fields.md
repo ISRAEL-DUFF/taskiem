@@ -105,7 +105,7 @@ The other direction, a workflow started by something the device does, is the sma
 
 | Trigger | What | In this plan |
 | --- | --- | --- |
-| **A scan from the home screen** | The app's scanner, outside any workflow, finds a code; a workflow with a `device` trigger of `kind: scan` whose `formats` match is offered, with the code as `trigger.body.scan` | **Yes, D2** (settled, §12, 3). It is a tap: the person chose to scan |
+| **A scan from the home screen** | The app's scanner, outside any workflow, finds a code; a workflow with a `device` trigger of `kind: scan` whose `formats` match is offered, with the code as `trigger.body.scan` | **Yes, D2** (settled, §12, 3). It is a tap: the person chose to scan. Built as a workflow's **scan input** rather than a `device` trigger ([§16](#16-as-built-d2)) |
 | **A tool from a shortcut** | The app puts a made tool on the phone's home screen or in a widget | **Yes, D2** (settled), as a way to call a tool |
 | **Entering or leaving a place**, **moving**, **the app opened** | The device reports without a tap | **No.** Each is background sensing, with the stores' rules, battery and consent at stake. Its own decision when there is a case for it |
 
@@ -255,6 +255,6 @@ Built 23 November 2026. Migration 00580.
 
 **Native set-up.** The camera permission (Android `CAMERA`, iOS `NSCameraUsageDescription`) was there for D1's scanner of a person's QR code; the iOS words now name scanning a code. quick_actions 1.1.1 needs nothing more.
 
-**Left.** The web scans by typing only (no camera); WhatsApp and Telegram leave a scan `unavailable` and a signature too (§3); the web's tool sheet takes a scan input as a typed code; the echo of a tool's values (`api/tools.go`) shows a scanned input as the object it is; a signer's name is sealed in the run but not shown on the Confirm card; the form host's one-time page still asks no device.
+**Left.** The web scans by typing only (no camera); WhatsApp and Telegram leave a scan `unavailable` and a signature too (§3); the web's tool sheet takes a scan input as a typed code; a signer's name is sealed in the run but not shown on the Confirm card; the form host's one-time page still asks no device.
 
 **Tests.** `engine/wd/devicefields_d2_test.go` (the scan input: where it may be, its values and source); `engine/forms/device_d2_test.go` (a code checked, the signer, the audit, a signature's PNG and size); `api/scan_offers_test.go` (offers by format and roles, the start's source); `api/forms_device_d2_test.go` (a customer signs on the rider's phone: refused as a JPEG and without a name, recorded, sealed, on the Confirm card, audited); `api/stock_codes_test.go`; `web/src/lib/forms.test.ts` (the signed value); `mobile/test/form_request_d2_test.dart` (the camera at the tap, a code of another kind, a code typed, the pad cleared and signed, offline; pictures `scan-sheet`, `signature-pad`, `form-request-d2`), `mobile/test/stock_page_test.dart` (count by scanning; `scan-count`), `mobile/test/scan_home_test.dart` (the icon's shortcuts, what a code starts, a tool filled in; `scan-offers`).
