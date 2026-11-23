@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/spend"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -397,8 +398,12 @@ func (s *Server) mirrorInvoice(ctx context.Context, seller, invoice uuid.UUID) (
 		if _, err := links.EnterTx(ctx, tx, link, "link.bill", detail, links.Actor{Type: "system", ID: "link-mirror"}); err != nil {
 			return err
 		}
-		created, err = links.MirrorBillTx(ctx, tx, buyer, bill)
-		return err
+		if created, err = links.MirrorBillTx(ctx, tx, buyer, bill); err != nil {
+			return err
+		}
+		// Its stock lines take Stock bought, as an order paid by hand
+		// does, so the spending report does not depend on that.
+		return spend.BillLabelsTx(ctx, tx, buyer, link, bill.Lines, "system:link-mirror")
 	})
 	if errors.As(err, new(*links.OtherOffError)) {
 		// The buyer has turned Money off: nothing crosses, and the invoice

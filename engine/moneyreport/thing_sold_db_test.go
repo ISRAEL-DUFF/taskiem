@@ -1,6 +1,8 @@
 package moneyreport_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,5 +71,24 @@ func TestSpendingThingSoldAtALoss(t *testing.T) {
 	})
 	if s := report(); s.Profit.InKobo != 30_000_000 || s.Profit.CostsKobo != 50_000_000 || s.Profit.ProfitKobo != -20_000_000 {
 		t.Fatalf("sold at a loss: %+v", s.Profit)
+	}
+	// Had again, it would be counted twice: its cost in profit as sold, and
+	// on Things we have. It stays sold while its sale's money counts (PR
+	// review fix); a note still changes.
+	have, note := stock.KeptHave, "sold to Bayo"
+	in(func(tx pgx.Tx) error {
+		if _, err := stock.ChangeThingTx(ctx, tx, tenant, thing, stock.ThingChange{Status: &have}, "user:ada", "back", log); !errors.Is(err, stock.ErrPurchase) ||
+			!strings.Contains(err.Error(), "stays sold") {
+			t.Errorf("back to have: %v", err)
+		}
+		_, err := stock.ChangeThingTx(ctx, tx, tenant, thing, stock.ThingChange{Note: &note}, "user:ada", "note", log)
+		return err
+	})
+	var status string
+	if err := d.Admin.QueryRow(ctx, `SELECT status FROM kept_things WHERE id = $1`, thing).Scan(&status); err != nil || status != "sold" {
+		t.Fatalf("status: %s %v", status, err)
+	}
+	if s := report(); s.Profit.CostsKobo != 50_000_000 || s.Profit.ProfitKobo != -20_000_000 {
+		t.Fatalf("after: %+v", s.Profit)
 	}
 }

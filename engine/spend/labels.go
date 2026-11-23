@@ -41,6 +41,9 @@ const NotLabelled = "Not labelled"
 var (
 	ErrLabel   = errors.New("spend: label")
 	ErrNoLabel = errors.New("spend: no such label")
+	// ErrKeyUsed: a payment's key was used to pay another order (or
+	// anything else written under purchase:<key>).
+	ErrKeyUsed = errors.New("spend: that key paid something else already")
 )
 
 // Label is one of the business's own labels (a row of spend_labels).
@@ -280,6 +283,13 @@ func RenameTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, name string)
 // so a merge stays one step (the database refuses chains). Nothing in the
 // money log changes.
 func MergeTx(ctx context.Context, tx pgx.Tx, tenant, id, into uuid.UUID) (Label, error) {
+	// A business's merges go one at a time: a merge locks more than its
+	// two labels (the label kept, those merged into the one merged), in
+	// no order two merges can share, so two at once could deadlock (PR
+	// review fix). Merges are rare; the lock is the business's.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('spend_labels merge ' || $1::text, 0))`, tenant); err != nil {
+		return Label{}, err
+	}
 	// Lock both, in id order, so two merges at once wait for each other.
 	rows, err := tx.Query(ctx, `SELECT `+labelCols+` FROM spend_labels WHERE tenant_id = $1 AND id = ANY ($2) ORDER BY id FOR UPDATE`, tenant, []uuid.UUID{id, into})
 	if err != nil {

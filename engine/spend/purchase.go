@@ -168,9 +168,11 @@ type Paid struct {
 // label on it (Not labelled lines together, as one with no label), each
 // with its purchase_payments row; the parts add up exactly to what was
 // paid, and a part that comes to no kobo writes nothing. fresh is false
-// when anything was recorded under the payment's key already (any part,
-// in any channel, however the order is labelled now): nothing is written
-// again.
+// when anything was recorded under the payment's key already for this
+// order (any part, in any channel, however the order is labelled now):
+// nothing is written again. A key that paid something else (another
+// order) is refused with ErrKeyUsed: the payment would otherwise be
+// dropped while looking made (PR review fix).
 func RecordPurchaseTx(ctx context.Context, tx pgx.Tx, log *moneylog.Log, tenant uuid.UUID, in PurchasePay) (paid []Paid, fresh bool, err error) {
 	if log == nil || in.Key == "" || in.AmountKobo <= 0 {
 		return nil, false, errors.New("spend: a payment needs the money log, a key and an amount")
@@ -185,6 +187,14 @@ func RecordPurchaseTx(ctx context.Context, tx pgx.Tx, log *moneylog.Log, tenant 
 		return nil, false, err
 	}
 	if done {
+		var ours bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM purchase_payments p JOIN money_entries e ON e.tenant_id = p.tenant_id AND e.id = p.entry_id
+			WHERE p.tenant_id = $1 AND p.purchase_id = $2 AND e.reference = ANY ($3))`, tenant, in.Order, partRefs(in.Key)).Scan(&ours); err != nil {
+			return nil, false, err
+		}
+		if !ours {
+			return nil, false, ErrKeyUsed
+		}
 		return nil, false, nil
 	}
 	if err := OrderLabelsTx(ctx, tx, tenant, in.Order, in.Actor); err != nil {

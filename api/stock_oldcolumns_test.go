@@ -107,3 +107,44 @@ func TestStockOldColumns(t *testing.T) {
 		t.Fatalf("by the mapping's name: %v", uses)
 	}
 }
+
+// A business with only a draft page (no published one, nothing counted:
+// not in taskiem_storefronts_due) is checked by the sweep too, once, and
+// its owner told (PR review fix).
+func TestStockOldColumnsDraftPage(t *testing.T) {
+	w := newTablesWorld(t)
+	if err := w.env.Registry.Register(stockconn.New(withStock(w.world))); err != nil {
+		t.Fatal(err)
+	}
+	owner := w.tenant(t, "Draft Stores", "ada@draft.test")
+	owner.must(200, "POST", "/v1/stock/setup", nil) // the catalogue: products
+	ctx := context.Background()
+	var status string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT status FROM storefronts WHERE tenant_id = $1`, tenantID(t, owner)).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	var due bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_storefronts_due(now()) WHERE tenant_id = $1)`, tenantID(t, owner)).Scan(&due); err != nil {
+		t.Fatal(err)
+	}
+	if status == "published" || status == "closed" || due {
+		t.Fatalf("not a draft page only: %s, due %v", status, due)
+	}
+	out := owner.must(201, "POST", "/v1/workflows", map[string]any{"name": "Low shelf", "definition": json.RawMessage(`{"schema":"wd/v1","id":"wf_low","version":1,"name":"Low shelf","trigger":{"type":"manual"},"steps":[
+		{"id":"read","type":"connector","connector":"xenibase@1","action":"read_rows","connection":"data_tables","input":{"table":"products","select":"name,stock"}}]}`)})
+	owner.must(200, "POST", "/v1/workflows/"+out["id"].(string)+"/versions/1/publish", nil)
+	for range 2 {
+		if err := w.srv.CheckOldColumnsAll(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n := 0
+	for _, x := range owner.must(200, "GET", "/v1/notifications", nil)["notifications"].([]any) {
+		if strings.Contains(x.(map[string]any)["title"].(string), "old stock columns") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("told %d times", n)
+	}
+}

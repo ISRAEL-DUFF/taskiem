@@ -17,6 +17,10 @@ var SafeReturn = safeReturn
 // BillOut is a bill as link@1 gives it to a workflow.
 var BillOut = billOut
 
+// CheckOldColumnsAll is the storefront sweep's old-columns check of every
+// business with a catalogue.
+func (s *Server) CheckOldColumnsAll(ctx context.Context) error { return s.checkOldColumnsAll(ctx) }
+
 // WaitBackground waits for work done after answering (reset emails).
 func (s *Server) WaitBackground() { s.bg.Wait() }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/spend"
 )
 
@@ -156,7 +157,10 @@ func (s *Server) mergeLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var l spend.Label
-	if err := s.tx(r, func(tx pgx.Tx) error {
+	// A deadlock with another change to the same labels (40P01) is tried
+	// again, not answered 500: the transaction rolled back.
+	p := principalFrom(r.Context())
+	if err := db.InTenantTxRetry(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, false, func(tx pgx.Tx) error {
 		var err error
 		if l, err = spend.MergeTx(r.Context(), tx, principalFrom(r.Context()).TenantID, id, req.Into); err != nil {
 			return err

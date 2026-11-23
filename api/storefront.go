@@ -469,7 +469,6 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 			for _, t := range tenants {
 				tctx, cancel := context.WithTimeout(ctx, storefrontSyncTimeout)
 				serr := s.SyncStorefront(tctx, t)
-				s.checkOldColumnsOnce(tctx, t)
 				cancel()
 				if serr != nil && ctx.Err() == nil {
 					s.Logger.Warn("storefront catalogue refresh", "tenant", t, "err", serr)
@@ -478,6 +477,11 @@ func (s *Server) RunStorefronts(ctx context.Context) error {
 		}
 		if err != nil && ctx.Err() == nil {
 			s.Logger.Error("storefront catalogue refreshes", "err", err)
+		}
+		// The old-columns check, once per business with a catalogue: a
+		// draft page's too, which the refresh above does not meet.
+		if cerr := s.checkOldColumnsAll(ctx); cerr != nil && ctx.Err() == nil {
+			s.Logger.Error("stock: checking workflows for the old columns", "err", cerr)
 		}
 		select {
 		case <-ctx.Done():
