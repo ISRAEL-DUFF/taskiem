@@ -720,3 +720,35 @@ export function madeToolsFor(tools: MadeTool[], query = ""): MadeTool[] {
         .some((w) => w.startsWith(q)),
   );
 }
+
+/** A tool the words reach, and the words for its form (made tools §6,
+ * "with words after it"): "/expense 4500 diesel" by its command, or a
+ * sentence that starts with a phrase it says ("i bought fuel for 4500").
+ * None for "/expense" alone (the panel opens it), for words that name no
+ * tool of the person's, or for a phrase two tools say (the chat asks). */
+export function madeToolWords(
+  tools: MadeTool[],
+  text: string,
+): { tool: MadeTool; words: string; by: "command" | "phrase" } | undefined {
+  const t = text.trim().replace(/\s+/g, " ");
+  const cmd = /^\/([a-z][a-z0-9-]*) (.+)$/.exec(t);
+  if (cmd) {
+    const tool = tools.find((x) => x.command === cmd[1]);
+    return tool ? { tool, words: (cmd[2] ?? "").trim(), by: "command" } : undefined;
+  }
+  const folded = t.toLowerCase();
+  let best: { tool: MadeTool; len: number } | undefined;
+  let tie = false;
+  for (const tool of tools)
+    for (const ph of tool.says ?? []) {
+      const p = ph.trim().toLowerCase().replace(/\s+/g, " ");
+      if (!p || !(folded === p || folded.startsWith(`${p} `))) continue;
+      if (best && best.len === p.length && best.tool.command !== tool.command) tie = true;
+      else if (!best || p.length > best.len) {
+        best = { tool, len: p.length };
+        tie = false;
+      }
+    }
+  if (!best || tie) return undefined;
+  return { tool: best.tool, words: t.slice(best.len).trim(), by: "phrase" };
+}

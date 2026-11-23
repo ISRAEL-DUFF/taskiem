@@ -27,14 +27,16 @@ import {
 // business's. A person with no business has only their own.
 
 /** What a Saved button fills: a person (a customer), a place (an
- * address), a phone (from saved people and places), a bank account (its
- * number shown with a passkey) or a date (saved on people and things). */
-export type FillKind = "person" | "place" | "phone" | "bank_account" | "date";
+ * address), a phone (from saved people and places), an email (a saved
+ * person's), a bank account (its number shown with a passkey) or a date
+ * (saved on people and things). */
+export type FillKind = "person" | "place" | "phone" | "email" | "bank_account" | "date";
 
 const FILL: Record<FillKind, { many: string; icon: string; list?: SavedKind; none: string }> = {
   person: { many: "people", icon: "members", list: "person", none: "Nothing saved of this kind yet." },
   place: { many: "places", icon: "place", list: "place", none: "Nothing saved of this kind yet." },
   phone: { many: "phones", icon: "members", none: "No saved person or place has a phone yet." },
+  email: { many: "emails", icon: "members", list: "person", none: "No saved person has an email yet." },
   bank_account: { many: "accounts", icon: "money", list: "bank_account", none: "Nothing saved of this kind yet." },
   date: { many: "dates", icon: "calendar", none: "No dates saved on your things yet." },
 };
@@ -158,6 +160,11 @@ function choicesOf(kind: FillKind, things: SavedThing[], kinds: KindList["kinds"
     return things.flatMap((x) => {
       const p = savedPhone(x);
       return p ? [{ key: x.id, thing: x, sub: savedSub(x), value: p, use: x.title }] : [];
+    });
+  if (kind === "email")
+    return things.flatMap((x) => {
+      const e = x.kind === "person" ? (x.details.email ?? "").trim() : "";
+      return e && !e.includes("•") ? [{ key: x.id, thing: x, sub: savedSub(x), value: e, use: x.title }] : [];
     });
   return things.filter((x) => x.kind === kind).map((x) => ({ key: x.id, thing: x, sub: savedSub(x), value: "", use: x.title }));
 }

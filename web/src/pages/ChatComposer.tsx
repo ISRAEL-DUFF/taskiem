@@ -33,7 +33,7 @@ import { OrderSheet, type OrderStart } from "./ChatBuyer";
 import { BookSheet } from "./ChatBook";
 import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
-import { madeToolsFor, toolsFor, type ToolKey } from "../lib/tools";
+import { madeToolWords, madeToolsFor, toolsFor, type ToolKey } from "../lib/tools";
 import { useMadeTools } from "../lib/useMadeTools";
 import { MadeToolSheet } from "./MadeToolSheet";
 import type { Prefill, Request } from "../lib/intents";
@@ -206,6 +206,8 @@ export function useComposer<R>(o: ComposerOptions<R>) {
   const [madeTool, setMadeTool] = useState<{
     command: string;
     from?: DOMRect;
+    /** Words typed after its command: read into its form. */
+    words?: string;
   }>();
   // The panel: the built-in tools when chat tools are on, Your tools when
   // the person has any.
@@ -231,9 +233,19 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     closeTools();
     setTool({ key: k, from, start });
   };
-  const openMade = (command: string, from?: DOMRect) => {
+  const openMade = (command: string, from?: DOMRect, words?: string) => {
     closeTools();
-    setMadeTool({ command, from });
+    setMadeTool({ command, from, words });
+  };
+  // Words that reach one of Your tools: "/expense 4500 diesel" opens its
+  // form filled in from them when sent (made tools §6); a sentence that
+  // starts with a phrase it says offers it as a chip, and is otherwise
+  // sent to Taskiem, which reads it as the chat does.
+  const madeReach = made.length > 0 ? madeToolWords(made, text) : undefined;
+  const openMadeWords = (r: NonNullable<typeof madeReach>) => {
+    setText("");
+    mentions.reset();
+    openMade(r.tool.command, undefined, r.words || undefined);
   };
   // A supplier's category opens their list, to order from; ours, our
   // products.
@@ -280,6 +292,11 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     const f = held ?? file;
     const body = held ? "" : text.trim();
     if (!body && !f) return;
+    if (!f && madeReach?.by === "command") {
+      // Nothing starts from the words: its form opens, filled in.
+      openMadeWords(madeReach);
+      return;
+    }
     requestAnimationFrame(() => textBox.current?.focus());
     const s: Sending<R> = {
       text: body,
@@ -448,6 +465,8 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     madeTool,
     setMadeTool,
     openMade,
+    madeReach,
+    openMadeWords,
   };
 }
 
@@ -615,6 +634,7 @@ export function ComposerView<R>({
       {c.madeTool && (
         <MadeToolSheet
           command={c.madeTool.command}
+          words={c.madeTool.words}
           from={c.madeTool.from}
           onClose={() => c.setMadeTool(undefined)}
           onStarted={c.o.onToolRun}
@@ -637,6 +657,19 @@ export function ComposerView<R>({
           <GroupedPicker m={c.mentions} />
           {c.o.tools && !c.toolsShown && !c.mentions.q && (
             <RequestChip text={c.text} onOpen={c.openRequest} />
+          )}
+          {c.madeReach?.by === "phrase" && !c.toolsShown && !c.mentions.q && (
+            <div className="tk-request" data-testid="made-tool-chip">
+              <button type="button" className="tk-request-btn" onClick={() => c.openMadeWords(c.madeReach!)}>
+                <span className="tk-request-icon" aria-hidden="true">
+                  <Icon name="bolt" />
+                </span>
+                <span className="tk-request-words">
+                  <span className="tk-request-kicker">Open {c.madeReach.tool.name}, filled in</span>
+                  <span>{c.madeReach.words || `/${c.madeReach.tool.command}`}</span>
+                </span>
+              </button>
+            </div>
           )}
           {toolsP.mounted && (
             <ToolsPanel

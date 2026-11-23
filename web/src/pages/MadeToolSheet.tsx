@@ -20,6 +20,7 @@ import {
   type ToolButton,
   type ToolStart,
   type ToolValue,
+  waitLink,
 } from "../lib/toolanswer";
 import { madeCare, madeIcon, type MadeTool } from "../lib/tools";
 import { reloadMadeTools, useMadeTools } from "../lib/useMadeTools";
@@ -189,6 +190,7 @@ export function AnswerView({
   const words = answerWords(a);
   if (words !== undefined) {
     const bad = a.status === "failed" || a.status === "needs_reconciliation";
+    const act = stillGoing(a.status) ? waitLink(a.waiting_for) : undefined;
     return (
       <div
         className={`tk-answer-note${bad ? " bad" : ""}`}
@@ -197,6 +199,11 @@ export function AnswerView({
         data-status={a.status}
       >
         <p>{words}</p>
+        {act && (
+          <Link to={act.to} data-testid="tool-wait-link">
+            {act.label}
+          </Link>
+        )}
         {(bad || a.status === "cancelled") && (
           <Link to={`/runs/${encodeURIComponent(run)}`}>
             Open the run to see why
@@ -302,10 +309,113 @@ export function AnswerView({
 /** What confirming with a passkey needs said, when it cannot be asked. */
 type NeedsKey = { methods: string[] };
 
+/** POST /v1/tools/{command}/read: the values words give the tool's
+ * inputs, and what could not be read (a saved thing not there). */
+interface ToolReading {
+  command: string;
+  values: Record<string, unknown>;
+  notes: string[];
+}
+
+/** The box at the top of a tool's form: words read into its fields (made
+ * tools M3, "/expense 4500 diesel"). The values only fill the form; the
+ * form's own Go or Next starts anything. */
+function FillFromWords({
+  command,
+  words,
+  onRead,
+}: {
+  command: string;
+  /** Words the person typed to reach the tool, read when it opens. */
+  words?: string;
+  onRead: (values: Record<string, unknown>) => void;
+}) {
+  const [text, setText] = useState(words ?? "");
+  const [busy, setBusy] = useState(false);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [said, setSaid] = useState<string>();
+  const read = async (t: string) => {
+    const w = t.trim();
+    if (!w) return;
+    setBusy(true);
+    setNotes([]);
+    setSaid(undefined);
+    try {
+      const r = await post<ToolReading>(path(command, "read"), { text: w });
+      const n = Object.keys(r.values ?? {}).length;
+      if (n > 0) onRead(r.values);
+      setNotes(r.notes ?? []);
+      setSaid(
+        n === 0
+          ? (r.notes ?? []).length > 0
+            ? undefined
+            : "Nothing in those words fits its fields. Fill them in below."
+          : `Filled ${n === 1 ? "one field" : `${n} fields`} from your words. Check them before you go on.`,
+      );
+    } catch (e) {
+      setSaid(
+        e instanceof ApiError && e.status === 429
+          ? "Too many at once. Wait a moment and try again."
+          : startErrorWords(e),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Words typed to reach it are read once, when it opens.
+  const first = useRef(words);
+  useEffect(() => {
+    if (first.current) void read(first.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="tk-tool-words" data-testid="tool-words">
+      <label className="tk-tool-words-label" htmlFor={`tool-words-${command}`}>
+        Fill from words
+      </label>
+      <div className="tk-tool-words-row">
+        <input
+          id={`tool-words-${command}`}
+          value={text}
+          maxLength={300}
+          placeholder="Say it as you would in the chat"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void read(text);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="tk-btn ghost"
+          disabled={busy || !text.trim()}
+          aria-busy={busy || undefined}
+          onClick={() => void read(text)}
+        >
+          {busy ? "Reading…" : "Fill"}
+        </button>
+      </div>
+      {(said || notes.length > 0) && (
+        <div className="tk-tool-words-said" role="status" data-testid="tool-words-said">
+          {said && <p>{said}</p>}
+          {notes.map((n, i) => (
+            <p key={i} className="tk-tool-words-note" data-testid="tool-words-note">
+              {n}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A tool's form, its care and its answer: the sheet's body and foot. */
 export function ToolRunner({
   tool,
   values,
+  words,
   button,
   onOpenTool,
   onStarted,
@@ -313,6 +423,9 @@ export function ToolRunner({
   tool: MadeTool;
   /** The form's first values (a button's). */
   values?: Record<string, unknown>;
+  /** Words typed after its command ("/expense 4500 diesel"): read into
+   * the form when it opens. */
+  words?: string;
   /** The button pressed to open it: sent with the start, which spends a
    * once button (the confirm keeps it). */
   button?: string;
@@ -483,11 +596,22 @@ export function ToolRunner({
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
+        {fields && (
+          <FillFromWords
+            command={tool.command}
+            words={words}
+            onRead={(v) => {
+              key.current = newKey();
+              setInput((was) => ({ ...(was ?? {}), ...v }));
+            }}
+          />
+        )}
         {fields ? (
           <SchemaForm
             schema={schema}
             value={input}
             expressions={false}
+            saved
             onChange={(v) => {
               key.current = newKey();
               setInput(v);
@@ -529,6 +653,7 @@ export function ToolRunner({
 export function MadeToolSheet({
   command,
   values,
+  words,
   from,
   onClose,
   onStarted,
@@ -536,6 +661,8 @@ export function MadeToolSheet({
 }: {
   command: string;
   values?: Record<string, unknown>;
+  /** Words typed after its command, read into its form when it opens. */
+  words?: string;
   from?: DOMRect | null;
   onClose: () => void;
   onStarted?: (run: string) => void;
@@ -547,9 +674,10 @@ export function MadeToolSheet({
   const [open, setOpen] = useState<{
     command: string;
     values?: Record<string, unknown>;
+    words?: string;
     button?: string;
     n: number;
-  }>({ command, values, n: 0 });
+  }>({ command, values, words, n: 0 });
   const tool = tools.find((t) => t.command === open.command);
   const openTool: OpenTool = (c, v, button) => {
     if (!tools.some((t) => t.command === c)) {
@@ -572,6 +700,7 @@ export function MadeToolSheet({
           key={`${tool.command}:${open.n}`}
           tool={tool}
           values={open.values}
+          words={open.words}
           button={open.button}
           onOpenTool={openTool}
           onStarted={onStarted}

@@ -75,6 +75,16 @@ export interface AnswerRow {
   actions?: ToolButton[];
 }
 
+/** Who a run on its way waits for: an approval's approvers, a form's
+ * recipient, in names and roles only ("Ada", "you", "the cashiers"). */
+export interface ToolWait {
+  kind: "approval" | "form";
+  who: string;
+  you?: boolean;
+  /** A form put to the person asking: its request, under To fill in. */
+  request?: string;
+}
+
 /** GET /v1/runs/{id}/answer. */
 export interface ToolAnswer {
   status: string;
@@ -90,6 +100,38 @@ export interface ToolAnswer {
   rows?: AnswerRow[];
   empty?: string;
   error?: string;
+  waiting_for?: ToolWait[];
+}
+
+/** "Waiting for Ada to approve", "Waiting for your answer: open To fill
+ * in": one sentence a step the run waits on. */
+export function waitWords(w: ToolWait): string {
+  if (w.kind === "approval")
+    return w.you
+      ? "Waiting for you to approve: open Approvals."
+      : `Waiting for ${w.who} to approve.`;
+  return w.you
+    ? "Waiting for your answer: open To fill in."
+    : `Waiting for ${w.who} to answer.`;
+}
+
+/** Where the person asking acts on what the run waits for: a form put to
+ * them, else an approval only they can give; none when it waits for
+ * others. */
+export function waitLink(
+  waits: ToolWait[] | undefined,
+): { to: string; label: string } | undefined {
+  const form = waits?.find((w) => w.kind === "form" && w.you);
+  if (form)
+    return {
+      to: form.request
+        ? `/forms/requests/${encodeURIComponent(form.request)}`
+        : "/forms/requests",
+      label: "To fill in",
+    };
+  if (waits?.some((w) => w.kind === "approval" && w.you))
+    return { to: "/approvals", label: "Approvals" };
+  return undefined;
 }
 
 /** The pill tones of the kit. */
@@ -122,11 +164,16 @@ export const nextAsk = (asked: number) => Math.min(5000, 1000 + asked * 500);
 export function answerWords(a: ToolAnswer): string | undefined {
   switch (a.status) {
     case "running":
-      return "Working on it…";
+      // A step that asks a person may still read as running.
+      return a.waiting_for?.length
+        ? a.waiting_for.map(waitWords).join(" ")
+        : "Working on it…";
     case "queued":
       return "Queued behind other work. It starts by itself.";
     case "waiting":
-      return "Waiting for someone to answer or approve. You will see the answer here when it is done.";
+      return a.waiting_for?.length
+        ? a.waiting_for.map(waitWords).join(" ")
+        : "Waiting for someone to answer or approve. You will see the answer here when it is done.";
     case "failed":
       return a.error ? `It did not finish: ${a.error}` : "It did not finish.";
     case "cancelled":

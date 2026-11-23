@@ -776,5 +776,15 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-tool-head .tk-tile-icon svg { width: 20px; height: 20px; }
 .tk-tool-head > span:last-child { display: flex; flex-direction: column; min-width: 0; }
 .tk-tool-care svg { width: 16px; height: 16px; flex: none; }
+/* Fill from words, at the top of a tool's form (made tools M3). */
+.tk-tool-words { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+.tk-tool-words-label { font-size: 13px; font-weight: 700; color: var(--muted); }
+.tk-tool-words-row { display: flex; gap: 8px; min-width: 0; }
+.tk-tool-words-row input { flex: 1; min-width: 0; }
+.tk-tool-words-row .tk-btn { flex: none; min-height: 40px; padding: 0 16px; }
+.tk-tool-words-said { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.tk-tool-words-said p { margin: 0; }
+.tk-tool-words-note { color: var(--text); font-weight: 600; }
+.tk-answer-note a { display: inline-block; margin-top: 6px; font-weight: 600; }
 /* Your tools after the built-in ones, under their own heading. */
 .tk-tools-sub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }

@@ -301,3 +301,123 @@ test("a run asks the person who started it in the Taskiem chat, with a saved pla
     .poll(async () => ((await (await page.request.get(`/v1/runs/${run}/answer`)).json()) as { text?: string }).text, { timeout: 60_000 })
     .toBe("Counting at Ikeja branch");
 });
+
+// The form fills from typed words (made tools M3): "/log-it diesel" sent
+// in the Taskiem chat opens the tool's form filled in from the words (POST
+// /v1/tools/{command}/read), and nothing starts before its own Go; the
+// box at the top of the form reads more words, a saved thing not there
+// said; a sentence that starts with a phrase it says offers it as a chip.
+test("words typed to a tool open its form filled in, and nothing starts before Go", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  await publish(page, {
+    schema: "wd/v1", id: "wf_logIt", version: 1, name: "Log it", trigger: { type: "manual" },
+    inputs: { schema: { type: "object", required: ["what"], properties: { what: { type: "string", title: "What for" } } } },
+    outputs: [{ name: "what", type: "string", title: "What for", description: "What it was for", value: "=steps.note.output.what" }],
+    tool: { name: "Log it", command: "log-it", about: "Note what money went on", says: ["note down"], answer: { type: "text", text: "='Logged: ' + outputs.what" } },
+    steps: [{ id: "note", type: "transform", config: { output: { what: "=trigger.body.what" } } }],
+  });
+  const starts: string[] = [];
+  page.on("request", (q) => {
+    if (q.url().endsWith("/v1/tools/log-it/start")) starts.push(q.url());
+  });
+
+  await page.goto("/chat?with=taskiem");
+  const box = page.getByLabel("Message to Taskiem");
+  const read = page.waitForRequest((q) => q.url().endsWith("/v1/tools/log-it/read") && q.method() === "POST");
+  await box.fill("/log-it diesel for the van");
+  await box.press("Enter");
+  expect((await read).postDataJSON()).toEqual({ text: "diesel for the van" });
+  const sheet = page.getByTestId("made-tool-sheet");
+  await expect(sheet.getByRole("heading", { name: "Log it" })).toBeVisible();
+  await expect(sheet.getByLabel("What for")).toHaveValue("diesel for the van");
+  await expect(sheet.getByTestId("tool-words-said")).toContainText("Filled one field from your words");
+  await expect(box).toHaveValue("");
+  expect(await axe(page)).toEqual([]);
+
+  // More words, in the box at the top: a saved thing not there is said.
+  const words = sheet.getByLabel("Fill from words");
+  await words.fill("@nowhere");
+  await sheet.getByRole("button", { name: "Fill", exact: true }).click();
+  await expect(sheet.getByTestId("tool-words-note")).toHaveText("Nothing the business saved is called @nowhere.");
+  await expect(sheet.getByLabel("What for")).toHaveValue("diesel for the van");
+  await words.fill("petrol");
+  await words.press("Enter");
+  await expect(sheet.getByLabel("What for")).toHaveValue("petrol");
+  expect(starts).toEqual([]);
+  await sheet.getByRole("button", { name: "Go" }).click();
+  await expect(sheet.getByTestId("tool-answer")).toHaveText(/Logged: petrol/, { timeout: 30_000 });
+  await sheet.getByRole("button", { name: "Close" }).click();
+
+  // A sentence that starts with its phrase: a chip, which opens it filled in.
+  await box.fill("note down rice for the shop");
+  const chip = page.getByTestId("made-tool-chip");
+  await expect(chip).toContainText("Open Log it, filled in");
+  await chip.getByRole("button").click();
+  await expect(sheet.getByLabel("What for")).toHaveValue("rice for the shop");
+  expect(starts).toHaveLength(1);
+});
+
+// Saved things as a tool's inputs (made tools M1): an input a saved kind
+// fits (by its x-saved hint, its format or its words) has a Saved button,
+// and a pick fills it: a place its address, a phone its number.
+test("a tool's form offers saved places and phones beside the inputs they fit", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const saved = await page.request.post("/v1/saved", {
+    ...H,
+    data: { name: "yaba-shop", title: "Yaba shop", kind: "place", details: { line: "3 Herbert Macaulay Way", area: "Yaba", phone: "08031234567" } },
+  });
+  expect(saved.ok(), await saved.text()).toBeTruthy();
+  await publish(page, {
+    schema: "wd/v1", id: "wf_sendParcel", version: 1, name: "Send a parcel", trigger: { type: "manual" },
+    inputs: {
+      schema: {
+        type: "object", required: ["deliver_to"],
+        properties: {
+          deliver_to: { type: "string", title: "Deliver to" },
+          customer_phone: { type: "string", title: "Their phone" },
+          what: { type: "string", title: "What it is" },
+        },
+      },
+    },
+    outputs: [{ name: "to", type: "string", title: "To", description: "Where", value: "=steps.note.output.to" }],
+    tool: { name: "Send a parcel", command: "send-parcel", about: "Where a parcel goes", answer: { type: "text", text: "='Going to ' + outputs.to" } },
+    steps: [{ id: "note", type: "transform", config: { output: { to: "=trigger.body.deliver_to" } } }],
+  });
+  const sheet = await openTool(page, "send-parcel", "Send a parcel");
+  // Two inputs a saved kind fits; What it is has none.
+  await expect(sheet.getByTestId("saved-fill")).toHaveCount(2);
+  await sheet.getByRole("button", { name: "Saved places for deliver to" }).click();
+  await expect(sheet.getByTestId("saved-fill-list")).toBeVisible();
+  expect(await axe(page)).toEqual([]);
+  await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Yaba shop" }).click();
+  await expect(sheet.getByLabel("Deliver to")).toHaveValue("3 Herbert Macaulay Way, Yaba");
+  await sheet.getByRole("button", { name: "Saved phones for their phone" }).click();
+  await sheet.getByTestId("saved-fill-pick").filter({ hasText: "Yaba shop" }).click();
+  await expect(sheet.getByLabel("Their phone")).toHaveValue(/08031234567|\+2348031234567/);
+  await sheet.getByRole("button", { name: "Go" }).click();
+  await expect(sheet.getByTestId("tool-answer")).toHaveText(/Going to 3 Herbert Macaulay Way, Yaba/, { timeout: 30_000 });
+});
+
+// "Waiting for your answer" (made tools §7): a tool's run that asks the
+// person who started it says so, with the way to To fill in.
+test("a tool's run waiting on a form says who it waits for", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  await publish(page, {
+    schema: "wd/v1", id: "wf_askCount", version: 1, name: "Ask the count", trigger: { type: "manual" },
+    inputs: { schema: { type: "object", properties: {} } },
+    outputs: [{ name: "n", type: "integer", title: "Count", description: "How many", value: "=steps.ask.output.n" }],
+    tool: { name: "Ask the count", command: "ask-count", about: "Count the stock", answer: { type: "text", text: "='Counted ' + string(outputs.n)" } },
+    steps: [{ id: "ask", type: "form", config: { title: "How many bags?", to: { role: "owner" }, schema: { type: "object", required: ["n"], properties: { n: { type: "integer", title: "Bags" } } } } }],
+  });
+  const sheet = await openTool(page, "ask-count", "Ask the count");
+  await sheet.getByRole("button", { name: "Next" }).click();
+  await sheet.getByRole("button", { name: "Yes", exact: true }).click();
+  const answer = sheet.getByTestId("tool-answer");
+  await expect(answer).toContainText("Waiting for you", { timeout: 30_000 });
+  await expect(answer).toContainText("Waiting for your answer: open To fill in.");
+  await expect(answer.getByRole("link", { name: "To fill in", exact: true })).toHaveAttribute("href", /\/forms\/requests\//);
+  expect(await axe(page)).toEqual([]);
+});
