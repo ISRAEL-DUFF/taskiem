@@ -30,6 +30,16 @@ A tool is called by `/command`, by its plain command, by a phrase it says, or by
 
 `@name` as a value is one of the business's **Saved** things, looked up by Taskiem, not the model: a place gives its address (or its phone, for an input about a phone), a person their name (or phone, or email), a text its words. A bank account, a file, and your own saved things never fill a tool's input; you are told so and asked.
 
+On the web and in the app, `/expense 4500 diesel` sent in the Taskiem chat opens the tool's form **filled in** from the words (`POST /v1/tools/{command}/read`) instead of going as a message; on the web a sentence that starts with a phrase one tool says offers it as a chip above the box. The form has a **Fill from words** box at its top that reads more words the same way, and says what it could not ("Nothing the business saved is called @x."). Nothing starts from words: only the form's own **Go**, **Run it** or **Next**.
+
+## Saved things in a tool's form
+
+An input a saved kind fits has the **Saved** button beside it, offering your saved things and the business's of that kind; a pick fills the input. Which kind is read from the input: its `x-saved` hint first (`place`, `person`, `phone`, `email`, `bank_account`, `date`), else its `format` (`phone`, `phone-ng`, `email`, `date`), else the words of its name and title (phone, email, account number, address or deliver to, date or due, customer or contact). Only a text input has one, never a choice, a number or a yes/no. A place fills its address (fitted to the input's length), a person their name, a phone or an email itself, a date as 2027-03-03, and a bank account its number, shown only with your passkey. This is a pick in the form, so your own saved things are offered too, unlike `@name` in words.
+
+## While a run waits
+
+A tool's run that stops for a person says who for, in names and roles only: **Waiting for Ada to approve** (the one person who holds the approval's role, or has it delegated; "you" when that is you; "someone with the role manager" when several do; "an owner" when nobody does), **Waiting for your answer: open To fill in** (a form step put to you, with a link to it on the web), or **Waiting for the cashiers / Bayo Stores / someone outside the business to answer** (a form to a role, a linked business, or a phone's or an email's link, never the number or the address). The answer's `waiting_for` carries it.
+
 ## The API
 
 | Call | What |
@@ -39,7 +49,7 @@ A tool is called by `/command`, by its plain command, by a phrase it says, or by
 | `POST /v1/tools/{command}/start` | Values in: the run at once (201, with the echo), or a confirm and what will run (200) |
 | `POST /v1/tools/{command}/confirm` | The confirm and the same values (and a passkey for a tool that moves money): the run, once |
 | `POST /v1/tools/buttons/{token}` | A button on an answer or a message pressed: the tool it opens and the values it fills in, for whoever pressed it; a once button someone used is 409 with who took it and when, one gone is 404. Its token goes with the start (`button`), and the run it starts spends a once button |
-| `GET /v1/runs/{id}/answer` | The run's answer as data, masked as messages are: text, card or list; how it ended while it runs or when it failed |
+| `GET /v1/runs/{id}/answer` | The run's answer as data, masked as messages are: text, card or list; how it ended while it runs or when it failed; while it runs, `waiting_for` (each open approval's or form's `kind`, `who` in words, `you`, and for a form put to you its `request`) |
 
 An API key may start a tool that only reads; one that asks waits for a person. An `Idempotency-Key` is the caller's own. What the run sealed as personal data is never opened for an answer: it shows masked (•••), and in full only on the run, to whoever may reveal it. What a tool shows is read with the business's connections, not with the rights of whoever calls it: a tool that reads salaries shows them to everyone who may use it. Choose its **Who can start it** with that in mind.
 
