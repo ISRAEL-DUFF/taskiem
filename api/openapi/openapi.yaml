@@ -39768,6 +39768,11 @@ paths:
         schema:
           type: string
         description: 'A JSON object of each filter''s value by its id: a search''s words, a choice''s value, dates (`today`, `week`, `month` or `2026-11-01..2026-11-30`), `on` for Mine.'
+      - name: run
+        in: query
+        schema:
+          type: string
+        description: The run a status part shows (a run of its own workflow only; else its latest).
       responses:
         '200':
           description: OK
@@ -39792,6 +39797,107 @@ paths:
         '409':
           description: >-
             The page is not published yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/act:
+    post:
+      operationId: actOnPage
+      tags:
+      - Pages
+      summary: Press a page's button
+      description: >-
+        A button on the page or on one of its rows (docs/pages.md, Buttons; G2), pressed by its part, row and place. The row is read again as the part shows it to the caller (a personal column masked without table.read) and the button's values worked out from it on the server. A tool's button gives the tool to open and its values, as a button on a tool's answer does (a masked value is asked, not filled; held to the tool's roles, 403; a once button someone used, 409 with who took it); start it with POST /v1/tools/{command}/start and the `button`. A signal asks first (`asks`), and with `yes` is sent to the one run it names, of the workflow the button names, waiting at a step that declares a page may send it, held to that workflow's roles (403); one that has moved on is 409 `moved_on`. An approval gives the approval to open when it waits for the caller (else 409); deciding it is POST /v1/approvals/{run}/{step}. Pass the page's `filters` as the view had them. Audited as `page.signal` for a signal sent.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      - name: draft
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+        description: '1: the draft, for someone with page.edit'
+      - name: filters
+        in: query
+        schema:
+          type: string
+        description: The page's filter values, as given to view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageActRequest'
+      responses:
+        '200':
+          description: What the button gives
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageActResult'
+        '403':
+          description: >-
+            The button's tool, or the workflow it tells, is not the caller's (its roles).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >-
+            No such page, part, button or row (a row not on the part for this caller any more).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The run has moved on (`moved_on`), the button is not there for this row any more, or a once button someone used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/pages/{name}/refresh:
+    post:
+      operationId: refreshPage
+      tags:
+      - Pages
+      summary: Work a page's tools out again
+      description: >-
+        What the tools that feed the page answered for the caller (kept sixty seconds) is let go, so the next view starts them again (G2, Refresh).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{1,23}$
+        description: The page's short name
+      responses:
+        '204':
+          description: Let go
+        '404':
+          description: >-
+            No such page, or one the caller may not open.
           content:
             application/json:
               schema:
@@ -41376,7 +41482,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft, customer_waiting, page]
         at:
           type: string
           format: date-time
@@ -60929,7 +61035,19 @@ components:
         from_table:
           type: string
           format: uuid
-          description: Make the page from this table (Show as a page); give this or document.
+          description: Make the page from this table (Show as a page); give this, from_tool or document.
+        from_tool:
+          type: object
+          description: Pin as a page (G2) from a tool's answer, for a tool that answers at once and the caller may use. A list answer becomes a list fed by the tool, with its rows' words and buttons; a card answer a figure for each of its first four lines that shows one output.
+          required: [command]
+          properties:
+            command:
+              type: string
+            inputs:
+              type: object
+              additionalProperties: true
+              description: The values the answer was given for, kept as the part's values.
+          additionalProperties: false
       additionalProperties: false
     PageProblem:
       type: object
@@ -61199,17 +61317,144 @@ components:
                     type: string
                 additionalProperties: false
           additionalProperties: false
+        actions:
+          type: array
+          description: The row's buttons that show for it (G2; when hides one), drawn on the row and its card.
+          items:
+            $ref: '#/components/schemas/PageAction'
+        ticks:
+          type: array
+          description: A table's yes/no cells the caller may tick here (table.edit, a column marked edit), by the column's place; null for the others.
+          items:
+            type:
+            - boolean
+            - 'null'
+      additionalProperties: false
+    PageAction:
+      type: object
+      description: A button as drawn (G2). Pressed with POST /v1/pages/{name}/act, by its place among the part's buttons.
+      required: [index, label, kind]
+      properties:
+        index:
+          type: integer
+        label:
+          type: string
+        kind:
+          type: string
+          enum: [tool, signal, approve]
+        tool:
+          type: string
+          description: The tool a tool's button opens.
+        disabled:
+          type: string
+          description: Why the caller cannot use it (the tool's roles); drawn greyed with this.
+      additionalProperties: false
+    PageActRequest:
+      type: object
+      required: [block, action]
+      properties:
+        block:
+          type: string
+        row:
+          type: string
+          description: The row's id as drawn (none for the page's own buttons).
+        action:
+          type: integer
+          minimum: 0
+        'yes':
+          type: boolean
+          description: The person said Yes to a signal.
+      additionalProperties: false
+    PageActResult:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [tool, signal, approve]
+        tool:
+          type: object
+          description: The tool to open and the values it fills in (a value shown masked is left out, to be asked); start it with POST /v1/tools/{command}/start and this button.
+          required: [button, command, name, inputs, once]
+          properties:
+            button:
+              type: string
+              format: uuid
+            command:
+              type: string
+            name:
+              type: string
+            inputs:
+              type: object
+              additionalProperties: true
+            once:
+              type: boolean
+          additionalProperties: false
+        asks:
+          type: string
+          description: "A signal not sent yet: the question to say Yes to (press again with yes)."
+        sent:
+          type: boolean
+        run:
+          type: string
+          format: uuid
+        words:
+          type: string
+        approval:
+          $ref: '#/components/schemas/Approval'
       additionalProperties: false
     PageBlock:
       type: object
-      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). broken, error or unavailable replace the rest.
+      description: One part as drawn. A heading has title and text; a figure label, value, shown, tone, lead, naira and maybe change and over; a list or table title, size, empty, count, rows, more and has_detail (a list groups, a table columns and order). G2 adds buttons (title, actions), a status (title, run, status, words, tone, started_at, ended_at, waiting_for) and parts a tool works out (from_tool; worked_at, or working while it runs). broken, error or unavailable replace the rest.
       required: [id, type]
       properties:
         id:
           type: string
         type:
           type: string
-          enum: [heading, figure, list, table]
+          enum: [heading, figure, list, table, buttons, status]
+        actions:
+          type: array
+          description: The page's own buttons (a buttons part).
+          items:
+            $ref: '#/components/schemas/PageAction'
+        alert:
+          type: boolean
+          description: A figure that counts and is an alert while above zero.
+        table_id:
+          type: string
+          format: uuid
+          description: A table part with yes/no columns the caller may tick here, its table (PATCH /v1/tables/{id}/rows/{row}).
+        from_tool:
+          type: boolean
+          description: The part is worked out by a made tool.
+        worked_at:
+          type: string
+          format: date-time
+          description: When the tool worked it out (Refresh works it out again).
+        working:
+          type: string
+          description: The tool has not answered yet ("Still working…"); read the page again.
+        run:
+          type: string
+          format: uuid
+          description: A status part's run.
+        status:
+          type: string
+          description: A status part's run's state (queued, running, waiting, completed, failed, cancelled).
+        words:
+          type: string
+          description: A status part's state in plain words.
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        waiting_for:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolAnswerWait'
         title:
           type: string
         text:
@@ -61290,6 +61535,9 @@ components:
               sortable:
                 type: boolean
                 description: Whether the rows may be put in this column's order (`order`) by this caller; never a personal column for a caller without table.read.
+              edit:
+                type: boolean
+                description: A yes/no column the caller may tick here (G2).
             additionalProperties: false
         order:
           type: object

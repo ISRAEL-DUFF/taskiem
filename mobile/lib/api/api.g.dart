@@ -1926,8 +1926,8 @@ class TaskiemApi {
   }
 
   /// Draw a page (`GET /v1/pages/{name}/view`)
-  Future<PageDrawing> viewPage({required String name, String? draft, String? filters}) async {
-    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/view', query: {'draft': ?draft, 'filters': ?filters});
+  Future<PageDrawing> viewPage({required String name, String? draft, String? filters, String? run}) async {
+    final j = await _t.send('GET', '/v1/pages/${Uri.encodeComponent(name)}/view', query: {'draft': ?draft, 'filters': ?filters, 'run': ?run});
     return PageDrawing.fromJson(j as Map<String, dynamic>);
   }
 
@@ -16722,10 +16722,17 @@ class PageDrawing {
 /// One part as drawn. A heading has title and text; a figure label, value,
 /// shown, tone, lead, naira and maybe change and over; a list or table title,
 /// size, empty, count, rows, more and has_detail (a list groups, a table
-/// columns and order). broken, error or unavailable replace the rest.
+/// columns and order). G2 adds buttons (title, actions), a status (title, run,
+/// status, words, tone, started_at, ended_at, waiting_for) and parts a tool
+/// works out (from_tool; worked_at, or working while it runs). broken, error or
+/// unavailable replace the rest.
 class PageBlock {
-  const PageBlock({this.broken, this.change, this.columns, this.count, this.empty, this.error, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.shown, this.size, this.text, this.title, this.tone, required this.type, this.unavailable, this.value});
+  const PageBlock({this.actions, this.alert, this.broken, this.change, this.columns, this.count, this.empty, this.endedAt, this.error, this.fromTool, this.groups, this.hasDetail, required this.id, this.label, this.lead, this.more, this.naira, this.order, this.over, this.rows, this.run, this.shown, this.size, this.startedAt, this.status, this.tableId, this.text, this.title, this.tone, required this.type, this.unavailable, this.value, this.waitingFor, this.words, this.workedAt, this.working});
 
+  /// The page's own buttons (a buttons part).
+  final List<PageAction>? actions;
+  /// A figure that counts and is an alert while above zero.
+  final bool? alert;
   /// For editors, why this part cannot be drawn ("This part needs fixing").
   final String? broken;
   final PageBlockChange? change;
@@ -16733,8 +16740,11 @@ class PageBlock {
   /// How many rows match, beyond those shown.
   final int? count;
   final String? empty;
+  final DateTime? endedAt;
   /// Why this part could not be read just now.
   final String? error;
+  /// The part is worked out by a made tool.
+  final bool? fromTool;
   final List<PageBlockGroupsItem>? groups;
   final bool? hasDetail;
   final String id;
@@ -16747,9 +16757,18 @@ class PageBlock {
   /// Said when a sum stopped at its first 5,000 rows.
   final String? over;
   final List<PageRow>? rows;
+  /// A status part's run.
+  final String? run;
   /// The figure as drawn (a count, or naira).
   final String? shown;
   final String? size;
+  final DateTime? startedAt;
+  /// A status part's run's state (queued, running, waiting, completed, failed,
+  /// cancelled).
+  final String? status;
+  /// A table part with yes/no columns the caller may tick here, its table
+  /// (PATCH /v1/tables/{id}/rows/{row}).
+  final String? tableId;
   final String? text;
   final String? title;
   final String? tone;
@@ -16758,14 +16777,25 @@ class PageBlock {
   /// this caller ("You cannot see orders.", or the area is turned off).
   final String? unavailable;
   final double? value;
+  final List<ToolAnswerWait>? waitingFor;
+  /// A status part's state in plain words.
+  final String? words;
+  /// When the tool worked it out (Refresh works it out again).
+  final DateTime? workedAt;
+  /// The tool has not answered yet ("Still working…"); read the page again.
+  final String? working;
 
   factory PageBlock.fromJson(Map<String, dynamic> j) => PageBlock(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => PageAction.fromJson(e as Map<String, dynamic>)).toList(),
+        alert: j['alert'] == null ? null : j['alert'] as bool,
         broken: j['broken'] == null ? null : j['broken'] as String,
         change: j['change'] == null ? null : PageBlockChange.fromJson(j['change'] as Map<String, dynamic>),
         columns: j['columns'] == null ? null : (j['columns'] as List).map((e) => PageBlockColumnsItem.fromJson(e as Map<String, dynamic>)).toList(),
         count: j['count'] == null ? null : (j['count'] as num).toInt(),
         empty: j['empty'] == null ? null : j['empty'] as String,
+        endedAt: j['ended_at'] == null ? null : DateTime.parse(j['ended_at'] as String),
         error: j['error'] == null ? null : j['error'] as String,
+        fromTool: j['from_tool'] == null ? null : j['from_tool'] as bool,
         groups: j['groups'] == null ? null : (j['groups'] as List).map((e) => PageBlockGroupsItem.fromJson(e as Map<String, dynamic>)).toList(),
         hasDetail: j['has_detail'] == null ? null : j['has_detail'] as bool,
         id: j['id'] as String,
@@ -16776,23 +16806,35 @@ class PageBlock {
         order: j['order'] == null ? null : PageBlockOrder.fromJson(j['order'] as Map<String, dynamic>),
         over: j['over'] == null ? null : j['over'] as String,
         rows: j['rows'] == null ? null : (j['rows'] as List).map((e) => PageRow.fromJson(e as Map<String, dynamic>)).toList(),
+        run: j['run'] == null ? null : j['run'] as String,
         shown: j['shown'] == null ? null : j['shown'] as String,
         size: j['size'] == null ? null : j['size'] as String,
+        startedAt: j['started_at'] == null ? null : DateTime.parse(j['started_at'] as String),
+        status: j['status'] == null ? null : j['status'] as String,
+        tableId: j['table_id'] == null ? null : j['table_id'] as String,
         text: j['text'] == null ? null : j['text'] as String,
         title: j['title'] == null ? null : j['title'] as String,
         tone: j['tone'] == null ? null : j['tone'] as String,
         type: j['type'] as String,
         unavailable: j['unavailable'] == null ? null : j['unavailable'] as String,
         value: j['value'] == null ? null : (j['value'] as num).toDouble(),
+        waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
+        words: j['words'] == null ? null : j['words'] as String,
+        workedAt: j['worked_at'] == null ? null : DateTime.parse(j['worked_at'] as String),
+        working: j['working'] == null ? null : j['working'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
+        'alert': ?alert,
         'broken': ?broken,
         'change': ?change?.toJson(),
         'columns': ?columns?.map((e) => e.toJson()).toList(),
         'count': ?count,
         'empty': ?empty,
+        'ended_at': ?endedAt?.toUtc().toIso8601String(),
         'error': ?error,
+        'from_tool': ?fromTool,
         'groups': ?groups?.map((e) => e.toJson()).toList(),
         'has_detail': ?hasDetail,
         'id': id,
@@ -16803,14 +16845,52 @@ class PageBlock {
         'order': ?order?.toJson(),
         'over': ?over,
         'rows': ?rows?.map((e) => e.toJson()).toList(),
+        'run': ?run,
         'shown': ?shown,
         'size': ?size,
+        'started_at': ?startedAt?.toUtc().toIso8601String(),
+        'status': ?status,
+        'table_id': ?tableId,
         'text': ?text,
         'title': ?title,
         'tone': ?tone,
         'type': type,
         'unavailable': ?unavailable,
         'value': ?value,
+        'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
+        'words': ?words,
+        'worked_at': ?workedAt?.toUtc().toIso8601String(),
+        'working': ?working,
+      };
+}
+
+/// A button as drawn (G2). Pressed with POST /v1/pages/{name}/act, by its place
+/// among the part's buttons.
+class PageAction {
+  const PageAction({this.disabled, required this.index, required this.kind, required this.label, this.tool});
+
+  /// Why the caller cannot use it (the tool's roles); drawn greyed with this.
+  final String? disabled;
+  final int index;
+  final String kind;
+  final String label;
+  /// The tool a tool's button opens.
+  final String? tool;
+
+  factory PageAction.fromJson(Map<String, dynamic> j) => PageAction(
+        disabled: j['disabled'] == null ? null : j['disabled'] as String,
+        index: (j['index'] as num).toInt(),
+        kind: j['kind'] as String,
+        label: j['label'] as String,
+        tool: j['tool'] == null ? null : j['tool'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'disabled': ?disabled,
+        'index': index,
+        'kind': kind,
+        'label': label,
+        'tool': ?tool,
       };
 }
 
@@ -16839,9 +16919,11 @@ class PageBlockChange {
 }
 
 class PageBlockColumnsItem {
-  const PageBlockColumnsItem({required this.column, required this.label, required this.naira, required this.sortable});
+  const PageBlockColumnsItem({required this.column, this.edit, required this.label, required this.naira, required this.sortable});
 
   final String column;
+  /// A yes/no column the caller may tick here (G2).
+  final bool? edit;
   final String label;
   final bool naira;
   /// Whether the rows may be put in this column's order (`order`) by this
@@ -16850,6 +16932,7 @@ class PageBlockColumnsItem {
 
   factory PageBlockColumnsItem.fromJson(Map<String, dynamic> j) => PageBlockColumnsItem(
         column: j['column'] as String,
+        edit: j['edit'] == null ? null : j['edit'] as bool,
         label: j['label'] as String,
         naira: j['naira'] as bool,
         sortable: j['sortable'] as bool,
@@ -16857,6 +16940,7 @@ class PageBlockColumnsItem {
 
   Map<String, dynamic> toJson() => {
         'column': column,
+        'edit': ?edit,
         'label': label,
         'naira': naira,
         'sortable': sortable,
@@ -16898,8 +16982,11 @@ class PageBlockOrder {
 }
 
 class PageRow {
-  const PageRow({this.cells, this.detail, this.group, required this.id, this.link, this.state, this.sub, this.title});
+  const PageRow({this.actions, this.cells, this.detail, this.group, required this.id, this.link, this.state, this.sub, this.ticks, this.title});
 
+  /// The row's buttons that show for it (G2; when hides one), drawn on the row
+  /// and its card.
+  final List<PageAction>? actions;
   /// A table's cells, in its columns' order, written as people read them.
   final List<String>? cells;
   final PageRowDetail? detail;
@@ -16912,9 +16999,13 @@ class PageRow {
   final String? link;
   final PageRowState? state;
   final String? sub;
+  /// A table's yes/no cells the caller may tick here (table.edit, a column
+  /// marked edit), by the column's place; null for the others.
+  final List<Object?>? ticks;
   final String? title;
 
   factory PageRow.fromJson(Map<String, dynamic> j) => PageRow(
+        actions: j['actions'] == null ? null : (j['actions'] as List).map((e) => PageAction.fromJson(e as Map<String, dynamic>)).toList(),
         cells: j['cells'] == null ? null : (j['cells'] as List).map((e) => e as String).toList(),
         detail: j['detail'] == null ? null : PageRowDetail.fromJson(j['detail'] as Map<String, dynamic>),
         group: j['group'] == null ? null : j['group'] as String,
@@ -16922,10 +17013,12 @@ class PageRow {
         link: j['link'] == null ? null : j['link'] as String,
         state: j['state'] == null ? null : PageRowState.fromJson(j['state'] as Map<String, dynamic>),
         sub: j['sub'] == null ? null : j['sub'] as String,
+        ticks: j['ticks'] == null ? null : (j['ticks'] as List).map((e) => e).toList(),
         title: j['title'] == null ? null : j['title'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'actions': ?actions?.map((e) => e.toJson()).toList(),
         'cells': ?cells?.map((e) => e).toList(),
         'detail': ?detail?.toJson(),
         'group': ?group,
@@ -16933,6 +17026,7 @@ class PageRow {
         'link': ?link,
         'state': ?state?.toJson(),
         'sub': ?sub,
+        'ticks': ?ticks?.map((e) => e).toList(),
         'title': ?title,
       };
 }

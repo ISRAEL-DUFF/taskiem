@@ -28,6 +28,27 @@ type Viewer struct {
 	Email, Phone string
 	// Personal: the viewer holds table.read, so personal columns show.
 	Personal bool
+	// Edit: the viewer holds table.edit, so a table's yes/no column marked
+	// "can be changed here" is a tick they may change (§7).
+	Edit bool
+}
+
+// ticks are a table row's yes/no cells that can be changed here.
+func ticks(b Block, t datatables.Table, raw map[string]any) []*bool {
+	var out []*bool
+	some := false
+	for _, c := range b.Columns {
+		var v *bool
+		if col, ok := columnOf(t, c.Column); c.Edit && ok && col.Type == "boolean" && !col.Personal {
+			x, _ := raw[c.Column].(bool)
+			v, some = &x, true
+		}
+		out = append(out, v)
+	}
+	if !some {
+		return nil
+	}
+	return out
 }
 
 // Values are a page's filters as one viewer set them, checked.
@@ -390,6 +411,12 @@ type Shown struct {
 	// Link is the record's own screen, for a row of Taskiem's records
 	// (/storefront/orders/AD-12): the web's address, which the app opens too.
 	Link string `json:"link,omitempty"`
+	// Actions are the row's buttons that show for it (when), by their
+	// place among the part's actions (G2).
+	Actions []ShownAction `json:"actions,omitempty"`
+	// Ticks are a table's yes/no cells that can be changed here, as
+	// true or false, by the column's place (nil for the others).
+	Ticks []*bool `json:"ticks,omitempty"`
 }
 
 // ShownState is a row's state as drawn.
@@ -460,6 +487,9 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 				}
 				s.Cells = append(s.Cells, fmt.Sprint(row[c.Column]))
 			}
+			if v.Viewer.Edit && !IsRecords(t.Name) {
+				s.Ticks = ticks(b, t, raw)
+			}
 		}
 		if d := b.Detail; d != nil {
 			sd := &ShownDetail{Title: say(d.Title, act), Lines: []ShownLine{}}
@@ -475,6 +505,7 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 			}
 			s.Detail = sd
 		}
+		s.Actions = ShownActions(b, act)
 		out = append(out, s)
 	}
 	return out
@@ -748,6 +779,23 @@ func Shows(p *Page, tables []datatables.Table) []string {
 			line += strings.Join(cols, ", ")
 		}
 		out = append(out, line)
+	}
+	// What tools work out for it (G2): "/spend's answer: total, rows".
+	var tools []string
+	outs := map[string][]string{}
+	for _, b := range p.Blocks {
+		if b.Source == nil || b.Source.Tool == "" {
+			continue
+		}
+		if !slices.Contains(tools, b.Source.Tool) {
+			tools = append(tools, b.Source.Tool)
+		}
+		if !slices.Contains(outs[b.Source.Tool], b.Source.Output) {
+			outs[b.Source.Tool] = append(outs[b.Source.Tool], b.Source.Output)
+		}
+	}
+	for _, c := range tools {
+		out = append(out, "/"+c+"'s answer: "+strings.Join(outs[c], ", "))
 	}
 	return out
 }

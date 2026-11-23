@@ -227,6 +227,9 @@ func (v RecordView) sqlOf(name string, order bool) (RecordColumn, string, error)
 		if order {
 			return RecordColumn{Column: datatables.Column{Name: name, Type: "text"}, NotNull: true}, v.alias() + ".id", nil
 		}
+		// A row's id as shown is its key: a button pressed on one row
+		// reads it again by it (api/pages_actions.go).
+		return RecordColumn{Column: datatables.Column{Name: name, Type: "text"}, NotNull: true}, v.Key, nil
 	}
 	for _, c := range v.Columns {
 		if c.Name != name {
@@ -245,6 +248,9 @@ func (v RecordView) alias() string { return strings.SplitN(v.From, " ", 2)[1] }
 // Orderable says whether a view's rows may be put in a column's order: one
 // of its own columns that is not personal, or when a row was made.
 func (v RecordView) Orderable(name string) bool {
+	if name == "id" {
+		return false
+	}
 	_, _, err := v.sqlOf(name, false)
 	return err == nil
 }

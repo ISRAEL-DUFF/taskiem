@@ -1190,6 +1190,55 @@ func (s *Store) DeliverSignalOnce(ctx context.Context, tenant uuid.UUID, env, ev
 	return s.deliverSignal(ctx, tenant, env, event, correlation, dedupKey, payload)
 }
 
+// DeliverSignalToRun hands a signal to one run, waiting for it at step (a
+// page's button, docs/spec/pages.md §7): never to another run waiting
+// under the same correlation, and never buffered for later. It reports
+// whether the run took it (false: it was not waiting there any more).
+func (s *Store) DeliverSignalToRun(ctx context.Context, tenant, run uuid.UUID, step, event string, payload any) (bool, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+	var took bool
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
+		took = false
+		var env, correlation string
+		err := tx.QueryRow(ctx, `SELECT environment, correlation FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`,
+			tenant, run, step, event).Scan(&env, &correlation)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := signalLock(ctx, tx, tenant, env, event, correlation); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE tenant_id = $1 AND run_id = $2 AND step_id = $3 AND event = $4`, tenant, run, step, event)
+		if err != nil || tag.RowsAffected() == 0 {
+			return err
+		}
+		if _, err := lockRun(ctx, tx, run); err != nil {
+			return err
+		}
+		stale, err := waitSettled(ctx, tx, run, step)
+		if err != nil || stale {
+			return err
+		}
+		if _, err := appendEvent(ctx, tx, run, history.SignalReceived, step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
+			return err
+		}
+		if !deciding(ctx, run) {
+			if err := s.decideInline(ctx, tx, RunRef{ID: run, TenantID: tenant}); err != nil {
+				return err
+			}
+		}
+		took = true
+		return nil
+	})
+	return took, err
+}
+
 func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event, correlation, dedupKey string, payload any) ([]uuid.UUID, bool, error) {
 	if env == "" {
 		return nil, false, errors.New("signal: no environment")

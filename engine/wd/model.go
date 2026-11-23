@@ -252,6 +252,9 @@ type SignalConfig struct {
 	Event       string `json:"event"`
 	Correlation string `json:"correlation"`
 	Timeout     string `json:"timeout,omitempty"`
+	// Pages: a page's button may send this signal to a run waiting here
+	// (docs/spec/pages.md §7), as whoever pressed it, after a Yes.
+	Pages bool `json:"pages,omitempty"`
 }
 
 type ApprovalConfig struct {

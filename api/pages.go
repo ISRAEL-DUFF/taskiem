@@ -54,6 +54,8 @@ func (s *Server) pageRoutes(r chi.Router) {
 	r.Get("/pages/{name}/view", s.viewPage)
 	r.Get("/pages/{name}/blocks/{block}", s.pageBlock)
 	r.Get("/pages/{name}/live", s.pageLive)                              // pages_live.go
+	r.Post("/pages/{name}/act", s.actPage)                               // pages_actions.go
+	r.Post("/pages/{name}/refresh", s.refreshPage)                       // pages_actions.go
 	r.With(s.need(PermPageEdit)).Get("/page-records", s.listPageRecords) // pages_records.go
 	s.pageVersionRoutes(r)                                               // versions, export and import (pages_versions.go)
 }
@@ -175,7 +177,7 @@ func pageProblems(w http.ResponseWriter, status int, msg string, ps []pages.Prob
 
 // pageEnv is what a page is checked against: the business's tables, and a
 // name another page or a tool's command has.
-func pageEnv(ctx context.Context, tx pgx.Tx, self uuid.UUID) (pages.Env, error) {
+func (s *Server) pageEnv(ctx context.Context, tx pgx.Tx, self uuid.UUID) (pages.Env, error) {
 	tables, err := datatables.ListTables(ctx, tx)
 	if err != nil {
 		return pages.Env{}, err
@@ -184,7 +186,7 @@ func pageEnv(ctx context.Context, tx pgx.Tx, self uuid.UUID) (pages.Env, error) 
 	if err != nil {
 		return pages.Env{}, err
 	}
-	return pages.Env{Tables: tables, AreaOn: areaOn, Taken: func(name string) string {
+	env := pages.Env{Tables: tables, AreaOn: areaOn, Taken: func(name string) string {
 		var other bool
 		_ = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pages WHERE name = $1 AND id <> $2)`, name, self).Scan(&other)
 		if other {
@@ -196,7 +198,9 @@ func pageEnv(ctx context.Context, tx pgx.Tx, self uuid.UUID) (pages.Env, error) 
 			return "A tool's word is " + name + ": pick another short name for the page, so /" + name + " means one thing."
 		}
 		return ""
-	}}, nil
+	}}
+	pageEnvTools(ctx, s, tx, &env) // pages_actions.go
+	return env, nil
 }
 
 // pageDetail is a page as its editor reads it: the summary, the published
@@ -249,7 +253,7 @@ func (s *Server) getPage(w http.ResponseWriter, r *http.Request) {
 		}
 		var env *pages.Env
 		if p.Can(PermPageEdit) {
-			e, err := pageEnv(r.Context(), tx, pg.ID)
+			e, err := s.pageEnv(r.Context(), tx, pg.ID)
 			if err != nil {
 				return err
 			}
@@ -267,6 +271,12 @@ func (s *Server) getPage(w http.ResponseWriter, r *http.Request) {
 type pageDocReq struct {
 	Document  json.RawMessage `json:"document"`
 	FromTable *uuid.UUID      `json:"from_table"`
+	// FromTool: Pin as a page, from a tool's answer (G2): the tool's
+	// command and the values it was given.
+	FromTool *struct {
+		Command string         `json:"command"`
+		Inputs  map[string]any `json:"inputs"`
+	} `json:"from_tool"`
 }
 
 // validatePage is POST /v1/pages/validate: a document's problems, held
@@ -287,7 +297,7 @@ func (s *Server) validatePage(w http.ResponseWriter, r *http.Request) {
 		}
 		var self uuid.UUID
 		_ = tx.QueryRow(r.Context(), `SELECT id FROM pages WHERE name = $1`, page.Name).Scan(&self)
-		env, err := pageEnv(r.Context(), tx, self)
+		env, err := s.pageEnv(r.Context(), tx, self)
 		if err != nil {
 			return err
 		}
@@ -310,8 +320,14 @@ func (s *Server) createPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if (req.FromTable == nil) == (len(req.Document) == 0) {
-		writeErr(w, http.StatusBadRequest, "give a page's document, or from_table: the table to make it from")
+	given := 0
+	for _, x := range []bool{req.FromTable != nil, len(req.Document) > 0, req.FromTool != nil} {
+		if x {
+			given++
+		}
+	}
+	if given != 1 {
+		writeErr(w, http.StatusBadRequest, "give a page's document, from_table (the table to make it from) or from_tool (a tool's answer to pin): one of them")
 		return
 	}
 	p := principalFrom(r.Context())
@@ -324,17 +340,30 @@ func (s *Server) createPage(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_pages"); err != nil {
 			return err
 		}
-		env, err := pageEnv(r.Context(), tx, uuid.Nil)
+		env, err := s.pageEnv(r.Context(), tx, uuid.Nil)
 		if err != nil {
 			return err
 		}
 		var page *pages.Page
-		if req.FromTable != nil {
-			t, err := datatables.GetTable(r.Context(), tx, *req.FromTable)
-			if err != nil {
-				return err
+		if req.FromTable != nil || req.FromTool != nil {
+			if req.FromTool != nil {
+				t, info, ok := pageToolInfo(r.Context(), s, tx, req.FromTool.Command)
+				if !ok {
+					return fmt.Errorf("%w: no tool /%s", pgx.ErrNoRows, req.FromTool.Command)
+				}
+				if !mayStart(p, t.Roles) {
+					return errNotYours(t.Name, t.Roles)
+				}
+				if page, err = pages.FromTool(t.Command, info, req.FromTool.Inputs); err != nil {
+					return fmt.Errorf("%w: %s", errBadRequest, err.Error())
+				}
+			} else {
+				t, err := datatables.GetTable(r.Context(), tx, *req.FromTable)
+				if err != nil {
+					return err
+				}
+				page = pages.FromTable(t)
 			}
-			page = pages.FromTable(t)
 			base := page.Name
 			for i := 2; env.Taken(page.Name) != "" && i < 100; i++ {
 				suffix := "-" + strconv.Itoa(i)
@@ -361,6 +390,9 @@ func (s *Server) createPage(w http.ResponseWriter, r *http.Request) {
 		if req.FromTable != nil {
 			detail["from_table"] = *req.FromTable
 		}
+		if req.FromTool != nil {
+			detail["from_tool"] = req.FromTool.Command
+		}
 		if err := auditTx(r, tx, "page.create", page.Name, detail); err != nil {
 			return err
 		}
@@ -368,7 +400,7 @@ func (s *Server) createPage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if env, err = pageEnv(r.Context(), tx, pg.ID); err != nil {
+		if env, err = s.pageEnv(r.Context(), tx, pg.ID); err != nil {
 			return err
 		}
 		out = pageDetail(p, pg, &env)
@@ -419,7 +451,7 @@ func (s *Server) putPageDraft(w http.ResponseWriter, r *http.Request) {
 		if err := auditTx(r, tx, "page.draft", pg.Name, nil); err != nil {
 			return err
 		}
-		env, err := pageEnv(r.Context(), tx, pg.ID)
+		env, err := s.pageEnv(r.Context(), tx, pg.ID)
 		if err != nil {
 			return err
 		}
@@ -464,7 +496,7 @@ func (s *Server) publishPage(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		page, ps := pages.Parse(pg.Draft)
-		env, err := pageEnv(r.Context(), tx, pg.ID)
+		env, err := s.pageEnv(r.Context(), tx, pg.ID)
 		if err != nil {
 			return err
 		}
@@ -660,6 +692,10 @@ type pageCtx struct {
 	// off: a part over Taskiem's records in an area the business has off,
 	// drawn as unavailable (pages_records.go).
 	off map[int]string
+	// tools: the tools the page names, read once (pages_actions.go); run:
+	// the run the page's address names, for a status part.
+	tools map[string]*toolRow
+	run   uuid.UUID
 }
 
 // openPage loads a page for drawing for the caller: the draft for an
@@ -702,7 +738,12 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 				pc.off[i] = v.Unavailable()
 			}
 		}
-		ps = append(ps, pages.Check(page, pages.Env{Tables: pc.tables, AreaOn: areaOn})...)
+		// Checked again at each view: a tool that came to ask before it
+		// runs no longer feeds a part, a signal no longer declared for
+		// pages is no button (G2).
+		env := pages.Env{Tables: pc.tables, AreaOn: areaOn}
+		pageEnvTools(r.Context(), s, tx, &env)
+		ps = append(ps, pages.Check(page, env)...)
 		for _, pr := range ps {
 			rest, ok := strings.CutPrefix(pr.Path, "/blocks/")
 			if !ok {
@@ -730,6 +771,10 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 		return nil, false
 	}
 	viewer.Personal = p.Can(PermTableRead)
+	viewer.Edit = p.Can(PermTableEdit)
+	if run := r.URL.Query().Get("run"); run != "" {
+		pc.run, _ = uuid.Parse(run) // a status part's run, of its own workflow only
+	}
 	set := map[string]string{}
 	if raw := r.URL.Query().Get("filters"); raw != "" {
 		var m map[string]any
@@ -908,7 +953,7 @@ func (s *Server) pageBlock(w http.ResponseWriter, r *http.Request) {
 // not read (the part's own order names one) go on by a skip of the rows
 // shown, never by the data API's cursor, which may carry the value a row
 // was ranked by; such a part shows its first 1,000 rows.
-func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, cursor pages.Cursor, order *pages.Order) map[string]any {
+func (s *Server) drawPart(ctx context.Context, pc *pageCtx, b pages.Block, cursor pages.Cursor, order *pages.Order) map[string]any {
 	out := map[string]any{"id": b.ID, "type": b.Type}
 	if b.Type == "heading" {
 		out["title"], out["text"] = b.Title, b.Text

@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/schemas"
@@ -45,10 +46,20 @@ const (
 
 var schema = schemacheck.New("https://schemas.taskiem.dev/page/v1.json", schemas.PageV1)
 
-// engine reads a page's expressions: over row (a table's row) and filters
-// (the page's filter values) only. outputs and item are a tool source's
-// (G2) and are refused until pages have them.
-var engine = expr.MustNewWithRoots("row", "filters")
+// engine reads a page's expressions over a table's rows: row (a table's
+// row) and filters (the page's filter values) only. toolEngine reads a
+// tool source's: outputs (its outputs), item (a row of a list it
+// returned) and filters; filtersEngine the page's own buttons' and a tool
+// source's inputs: filters alone (§5: four names, never steps, secrets
+// or the environment).
+var (
+	engine        = expr.MustNewWithRoots("row", "filters")
+	toolEngine    = expr.MustNewWithRoots("outputs", "item", "filters")
+	filtersEngine = expr.MustNewWithRoots("filters")
+)
+
+// MaxToolSources is how many parts of a page a tool feeds (§5).
+const MaxToolSources = 3
 
 var (
 	nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
@@ -66,6 +77,14 @@ type Page struct {
 	Roles   []string `json:"roles,omitempty"`
 	Filters []Filter `json:"filters,omitempty"`
 	Blocks  []Block  `json:"blocks"`
+	// Place shows the page as a tab under one of Taskiem's own areas
+	// (§9), after Taskiem's own tabs, while the area is on.
+	Place *Place `json:"place,omitempty"`
+}
+
+// Place is where else a page shows: a tab under an area.
+type Place struct {
+	Area string `json:"area"`
 }
 
 // Filter is a control at the top of a page (§6).
@@ -107,7 +126,14 @@ type Block struct {
 	Columns []TableColumn `json:"columns,omitempty"`
 	Detail  *Detail       `json:"detail,omitempty"`
 	Empty   string        `json:"empty,omitempty"`
-	// Every part but a heading.
+	// Alert: a figure that counts is an alert while above zero (§9).
+	Alert bool `json:"alert,omitempty"`
+	// Actions: a list's or a table's on each row (and its card), two at
+	// most; the page's own buttons, three at most (§7; actions.go).
+	Actions []Action `json:"actions,omitempty"`
+	// Workflow: a status part's declared workflow, whose run it shows.
+	Workflow string `json:"workflow,omitempty"`
+	// Every part but a heading, buttons and a status.
 	Source *Source `json:"source,omitempty"`
 }
 
@@ -117,14 +143,21 @@ type Change struct {
 	Period string `json:"period"` // day, week, month
 }
 
-// Source is what feeds a part: a data table's rows, or a view of
-// Taskiem's own records (orders, invoices: records.go), never both.
+// Source is what feeds a part: a data table's rows, a view of Taskiem's
+// own records (records.go), or a made tool that answers at once (G2,
+// tools.go): one of them.
 type Source struct {
-	Table   string      `json:"table,omitempty"`
-	Records string      `json:"records,omitempty"`
-	Filters []Condition `json:"filters,omitempty"`
-	Order   []Order     `json:"order,omitempty"`
-	Uses    []string    `json:"uses,omitempty"`
+	Table   string `json:"table,omitempty"`
+	Records string `json:"records,omitempty"`
+	// Tool is a made tool's command, Inputs its values (words, or an
+	// expression over filters), Output the output a figure shows or a
+	// list lists.
+	Tool    string         `json:"tool,omitempty"`
+	Inputs  map[string]any `json:"inputs,omitempty"`
+	Output  string         `json:"output,omitempty"`
+	Filters []Condition    `json:"filters,omitempty"`
+	Order   []Order        `json:"order,omitempty"`
+	Uses    []string       `json:"uses,omitempty"`
 }
 
 // Condition is one condition every row shown meets.
@@ -165,6 +198,9 @@ type TableColumn struct {
 	Column string `json:"column"`
 	Label  string `json:"label,omitempty"`
 	Naira  bool   `json:"naira,omitempty"`
+	// Edit: a yes/no column ticked in place by someone with table.edit
+	// (§7, "can be changed here").
+	Edit bool `json:"edit,omitempty"`
 }
 
 // Detail is one row as a card (shapes/v1).
@@ -238,7 +274,7 @@ func (b Block) partName(i int) string {
 	case b.Label != "":
 		return fmt.Sprintf("%q", b.Label)
 	}
-	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table"}[b.Type]
+	kind := map[string]string{"heading": "heading", "figure": "figure", "list": "list", "table": "table", "buttons": "buttons", "status": "status"}[b.Type]
 	if kind == "" {
 		kind = "part"
 	}
@@ -317,6 +353,22 @@ func (p *Page) check(ps *problems) {
 	if leads > 1 {
 		ps.add("/blocks", "Only one figure can be the page's main figure.")
 	}
+	tools := 0
+	for _, b := range p.Blocks {
+		if b.Source != nil && b.Source.Tool != "" {
+			tools++
+		}
+	}
+	if tools > MaxToolSources {
+		ps.add("/blocks", "At most %d parts of a page are worked out by a tool.", MaxToolSources)
+	}
+	if p.Place != nil {
+		if strings.TrimSpace(p.Place.Area) == "" {
+			ps.add("/place/area", "Say which of Taskiem's areas the page is a tab under.")
+		} else if _, ok := areas.Valid(p.Place.Area); !ok {
+			ps.add("/place/area", "The page is a tab under %s, which is not one of Taskiem's areas.", p.Place.Area)
+		}
+	}
 }
 
 func (f Filter) check(at string, ps *problems) {
@@ -365,6 +417,12 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 	if b.Size != "" && b.Size != "full" && b.Size != "half" {
 		ps.add(at+"/size", "%s is full width or half.", name)
 	}
+	fromTool := b.Source != nil && b.Source.Tool != ""
+	// What a row's words read: a table's row, or a tool's item.
+	rowEngine := engine
+	if fromTool {
+		rowEngine = toolEngine
+	}
 	needsSource := true
 	switch b.Type {
 	case "heading":
@@ -372,8 +430,27 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		if strings.TrimSpace(b.Title) == "" {
 			ps.add(at+"/title", "A heading needs its words.")
 		}
-		if b.Source != nil || b.Item != nil || b.Columns != nil || b.Value != "" || b.Label != "" {
+		if b.Source != nil || b.Item != nil || b.Columns != nil || b.Value != "" || b.Label != "" || b.Actions != nil {
 			ps.add(at, "A heading shows words only.")
+		}
+	case "buttons":
+		needsSource = false
+		if len(b.Actions) == 0 || len(b.Actions) > MaxPageActions {
+			ps.add(at+"/actions", "The page's buttons are 1 to %d.", MaxPageActions)
+		}
+		if b.Source != nil || b.Item != nil || b.Columns != nil || b.Value != "" || b.Detail != nil {
+			ps.add(at, "Buttons show buttons only.")
+		}
+		for j, a := range b.Actions {
+			a.check(fmt.Sprintf("%s/actions/%d", at, j), filtersEngine, ps)
+		}
+	case "status":
+		needsSource = false
+		if strings.TrimSpace(b.Workflow) == "" {
+			ps.add(at+"/workflow", "%s shows a run of a workflow: say which.", name)
+		}
+		if b.Source != nil || b.Item != nil || b.Columns != nil || b.Value != "" || b.Actions != nil || b.Detail != nil {
+			ps.add(at, "A status shows where a run is, and nothing else.")
 		}
 	case "figure":
 		if strings.TrimSpace(b.Label) == "" || len([]rune(b.Label)) > 40 {
@@ -388,25 +465,38 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 			if b.Of == "" {
 				ps.add(at+"/of", "%s adds up a column: say which.", name)
 			}
+		case "output":
+			if !fromTool {
+				ps.add(at+"/value", "%s shows what a tool worked out: say which tool.", name)
+			}
 		default:
-			ps.add(at+"/value", "%s counts the rows or adds up a column.", name)
+			ps.add(at+"/value", "%s counts the rows, adds up a column or shows what a tool worked out.", name)
+		}
+		if fromTool && b.Value != "output" {
+			ps.add(at+"/value", "%s is worked out by a tool: it shows the tool's answer, not a count or a total.", name)
 		}
 		if c := b.Change; c != nil && (c.Column == "" || !slices.Contains([]string{"day", "week", "month"}, c.Period)) {
 			ps.add(at+"/change", "%s compares a day, a week or a month by a date column.", name)
 		}
-		if b.Item != nil || b.Columns != nil || b.Detail != nil || b.Group != nil || b.Size != "" {
+		if b.Change != nil && fromTool {
+			ps.add(at+"/change", "%s is worked out by a tool: it cannot compare periods.", name)
+		}
+		if b.Alert && b.Value != "count" {
+			ps.add(at+"/alert", "Only a figure that counts can be an alert.")
+		}
+		if b.Item != nil || b.Columns != nil || b.Detail != nil || b.Group != nil || b.Size != "" || b.Actions != nil {
 			ps.add(at, "A figure shows one number.")
 		}
 	case "list":
 		if b.Item == nil || strings.TrimSpace(b.Item.Title) == "" {
 			ps.add(at+"/item", "%s needs what each row's title shows.", name)
 		} else {
-			checkValue(at+"/item/title", b.Item.Title, ps)
+			checkValueIn(rowEngine, at+"/item/title", b.Item.Title, ps)
 			if b.Item.Sub != "" {
-				checkValue(at+"/item/sub", b.Item.Sub, ps)
+				checkValueIn(rowEngine, at+"/item/sub", b.Item.Sub, ps)
 			}
 			if s := b.Item.State; s != nil {
-				checkValue(at+"/item/state/text", s.Text, ps)
+				checkValueIn(rowEngine, at+"/item/state/text", s.Text, ps)
 				if !slices.Contains(tones, s.Tone) {
 					ps.add(at+"/item/state/tone", "A row's state is plain, good, warn or bad.")
 				}
@@ -424,8 +514,11 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 			if len(g.Order) > MaxGroups {
 				ps.add(at+"/group/order", "%s has at most %d groups in order.", name, MaxGroups)
 			}
+			if fromTool {
+				ps.add(at+"/group", "%s is worked out by a tool: it is not put in groups.", name)
+			}
 		}
-		if b.Columns != nil || b.Value != "" {
+		if b.Columns != nil || b.Value != "" || b.Alert {
 			ps.add(at, "A list shows rows, each a title, a line under it and a state.")
 		}
 	case "table":
@@ -437,15 +530,26 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 				ps.add(fmt.Sprintf("%s/columns/%d", at, j), "Each column of %s needs the table's column it shows.", name)
 			}
 		}
-		if b.Item != nil || b.Group != nil || b.Value != "" {
+		if b.Item != nil || b.Group != nil || b.Value != "" || b.Alert {
 			ps.add(at, "A table shows rows in columns.")
+		}
+		if fromTool {
+			ps.add(at+"/source/tool", "%s shows a table's rows: a tool's answer is shown as a list or a figure.", name)
 		}
 	default:
 		needsSource = false
-		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists and tables.", b.Type)
+		ps.add(at+"/type", "Taskiem does not draw a part of the kind %q: a page has headings, figures, lists, tables, buttons and a status.", b.Type)
+	}
+	if b.Type == "list" || b.Type == "table" {
+		if len(b.Actions) > MaxRowActions {
+			ps.add(at+"/actions", "Each row of %s has at most %d buttons.", name, MaxRowActions)
+		}
+		for j, a := range b.Actions {
+			a.check(fmt.Sprintf("%s/actions/%d", at, j), rowEngine, ps)
+		}
 	}
 	if b.Detail != nil {
-		checkValue(at+"/detail/title", b.Detail.Title, ps)
+		checkValueIn(rowEngine, at+"/detail/title", b.Detail.Title, ps)
 		if len(b.Detail.Lines) > MaxDetailLines {
 			ps.add(at+"/detail/lines", "A row's card has at most %d lines.", MaxDetailLines)
 		}
@@ -453,19 +557,45 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 			if strings.TrimSpace(l.Label) == "" {
 				ps.add(fmt.Sprintf("%s/detail/lines/%d/label", at, j), "Each line of a row's card needs a label.")
 			}
-			checkValue(fmt.Sprintf("%s/detail/lines/%d/value", at, j), l.Value, ps)
+			checkValueIn(rowEngine, fmt.Sprintf("%s/detail/lines/%d/value", at, j), l.Value, ps)
 		}
 	}
 	if !needsSource {
 		return
 	}
 	s := b.Source
-	if s == nil || (s.Table == "" && s.Records == "") {
+	if s == nil || (s.Table == "" && s.Records == "" && s.Tool == "") {
 		ps.add(at+"/source", "%s needs the table it shows.", name)
 		return
 	}
-	if s.Table != "" && s.Records != "" {
-		ps.add(at+"/source", "%s shows one table, or Taskiem's own records: not both.", name)
+	n := 0
+	for _, x := range []string{s.Table, s.Records, s.Tool} {
+		if x != "" {
+			n++
+		}
+	}
+	if n > 1 {
+		ps.add(at+"/source", "%s shows one table, Taskiem's own records or a tool's answer: one of them.", name)
+	}
+	if s.Tool != "" {
+		if s.Output == "" {
+			ps.add(at+"/source/output", "%s shows one of the tool's answers: say which.", name)
+		}
+		if len(s.Filters) > 0 || len(s.Order) > 0 || len(s.Uses) > 0 {
+			ps.add(at+"/source", "%s is worked out by a tool: the page's filters reach it through the tool's values (filters.q), not as conditions.", name)
+		}
+		if len(s.Inputs) > 20 {
+			ps.add(at+"/source/inputs", "%s gives the tool at most 20 values.", name)
+		}
+		for k, v := range s.Inputs {
+			if str, ok := v.(string); ok && strings.HasPrefix(str, "=") {
+				checkValueIn(filtersEngine, at+"/source/inputs/"+k, str, ps)
+			}
+		}
+		return
+	}
+	if s.Inputs != nil || s.Output != "" {
+		ps.add(at+"/source", "%s shows a table: only a tool is given values.", name)
 	}
 	if len(s.Filters) > MaxConditions {
 		ps.add(at+"/source/filters", "%s has at most %d conditions.", name, MaxConditions)
@@ -483,8 +613,8 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 	}
 }
 
-// checkValue checks words or an expression (=...) over row and filters.
-func checkValue(at, v string, ps *problems) {
+// checkValueIn checks words or an expression over the names e reads.
+func checkValueIn(e *expr.Engine, at, v string, ps *problems) {
 	if strings.TrimSpace(v) == "" {
 		ps.add(at, "This needs words, or a column to show.")
 		return
@@ -493,8 +623,15 @@ func checkValue(at, v string, ps *problems) {
 	if !isExpr {
 		return
 	}
-	if err := engine.Check(src); err != nil {
-		ps.add(at, "Taskiem cannot read %q: a page shows a row's columns (row.name) and its filters (filters.q).", v)
+	if err := e.Check(src); err != nil {
+		switch e {
+		case toolEngine:
+			ps.add(at, "Taskiem cannot read %q: a part a tool works out shows its answers (outputs.total), a row of a list it gives (item.name) and the page's filters (filters.q).", v)
+		case filtersEngine:
+			ps.add(at, "Taskiem cannot read %q: this reads the page's filters only (filters.q).", v)
+		default:
+			ps.add(at, "Taskiem cannot read %q: a page shows a row's columns (row.name) and its filters (filters.q).", v)
+		}
 	}
 }
 
@@ -512,7 +649,7 @@ func (p *Page) Marshal() []byte {
 func (p *Page) UsesTables() []string {
 	var out []string
 	for _, b := range p.Blocks {
-		if b.Source != nil && !slices.Contains(out, b.Source.From()) {
+		if b.Source != nil && b.Source.From() != "" && !slices.Contains(out, b.Source.From()) {
 			out = append(out, b.Source.From())
 		}
 	}

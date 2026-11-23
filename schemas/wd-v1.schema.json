@@ -1249,6 +1249,10 @@
             "correlation": {
               "$ref": "#/$defs/expr"
             },
+            "pages": {
+              "type": "boolean",
+              "description": "A page's button may send this signal to a run waiting here (docs/spec/pages.md §7)"
+            },
             "timeout": {
               "$ref": "#/$defs/duration"
             }

@@ -146,7 +146,7 @@ func (s *Server) bringBackPageVersion(w http.ResponseWriter, r *http.Request) {
 		if err := auditTx(r, tx, "page.bring_back", pg.Name, map[string]any{"version": version, "published": pg.Version, "replaced_draft": pg.Draft != nil}); err != nil {
 			return err
 		}
-		env, err := pageEnv(r.Context(), tx, pg.ID)
+		env, err := s.pageEnv(r.Context(), tx, pg.ID)
 		if err != nil {
 			return err
 		}
@@ -186,7 +186,7 @@ func (s *Server) exportPage(w http.ResponseWriter, r *http.Request) {
 		if page == nil {
 			return fmt.Errorf("%w: this page cannot be read", errConflict)
 		}
-		env, err := pageEnv(r.Context(), tx, pg.ID)
+		env, err := s.pageEnv(r.Context(), tx, pg.ID)
 		if err != nil {
 			return err
 		}
@@ -238,7 +238,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		if err := s.checkCount(r.Context(), tx, p.TenantID, "max_pages"); err != nil {
 			return err
 		}
-		env, err := pageEnv(r.Context(), tx, uuid.Nil)
+		env, err := s.pageEnv(r.Context(), tx, uuid.Nil)
 		if err != nil {
 			return err
 		}
@@ -261,7 +261,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if env, err = pageEnv(r.Context(), tx, pg.ID); err != nil {
+		if env, err = s.pageEnv(r.Context(), tx, pg.ID); err != nil {
 			return err
 		}
 		var renamed any

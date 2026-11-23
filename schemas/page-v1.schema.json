@@ -33,6 +33,13 @@
       "minItems": 1,
       "maxItems": 12,
       "items": { "$ref": "#/$defs/block" }
+    },
+    "place": {
+      "description": "Where else the page shows: a tab under one of Taskiem's areas, after Taskiem's own tabs, while the area is on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area"],
+      "properties": { "area": { "enum": ["storefront", "orders", "stock", "money", "links", "schools"] } }
     }
   },
   "$defs": {
@@ -105,13 +112,16 @@
       }
     },
     "source": {
-      "description": "A data table, or a view of Taskiem's own records (orders, invoices): the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses.",
+      "description": "A data table, a view of Taskiem's own records, or a made tool that answers at once: the rows whose conditions all hold, in an order, narrowed by the page's filters the block uses (a tool: its output, given its values).",
       "type": "object",
       "additionalProperties": false,
-      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }],
+      "oneOf": [{ "required": ["table"] }, { "required": ["records"] }, { "required": ["tool", "output"] }],
       "properties": {
         "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
-        "records": { "description": "One of Taskiem's own record views, read only: orders or invoices (more later).", "type": "string", "pattern": "^[a-z][a-z_]{1,30}$" },
+        "records": { "description": "One of Taskiem's own record views, read only: orders, invoices, deliveries, customers or staff.", "type": "string", "pattern": "^[a-z][a-z_]{1,30}$" },
+        "tool": { "description": "A made tool that answers at once, by its command (G2): the part shows one of its outputs.", "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+        "inputs": { "description": "The tool's values: words, or an expression over filters.", "type": "object", "maxProperties": 20 },
+        "output": { "description": "The tool's output the part shows (a figure) or lists (a list).", "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
         "filters": { "type": "array", "maxItems": 5, "items": { "$ref": "#/$defs/condition" } },
         "order": {
           "type": "array",
@@ -156,10 +166,48 @@
         { "if": { "properties": { "type": { "enum": ["dates", "mine"] } } }, "then": { "required": ["column"] } }
       ]
     },
+    "action": {
+      "description": "A button (pages §7): a made tool's form filled in (tool, inputs, once), a signal to a run of a workflow that declares it for pages (signal), or a run's approval (approve); when hides it while false.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label"],
+      "oneOf": [{ "required": ["tool"] }, { "required": ["signal"] }, { "required": ["approve"] }],
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "tool": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+        "inputs": { "type": "object", "maxProperties": 20 },
+        "once": { "type": "boolean" },
+        "signal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workflow", "name"],
+          "oneOf": [{ "required": ["run"] }, { "required": ["to"] }],
+          "properties": {
+            "workflow": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "name": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,63}$" },
+            "run": { "$ref": "#/$defs/value" },
+            "to": { "$ref": "#/$defs/value" },
+            "input": { "type": "object", "maxProperties": 20 }
+          }
+        },
+        "approve": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workflow", "run", "step"],
+          "properties": {
+            "workflow": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "run": { "$ref": "#/$defs/value" },
+            "step": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$" }
+          }
+        },
+        "when": { "type": "string", "pattern": "^=", "maxLength": 500 }
+      }
+    },
+    "rowActions": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/action" } },
     "block": {
       "type": "object",
       "required": ["id", "type"],
-      "properties": { "type": { "enum": ["heading", "figure", "list", "table"] } },
+      "properties": { "type": { "enum": ["heading", "figure", "list", "table", "buttons", "status"] } },
       "oneOf": [
         {
           "additionalProperties": false,
@@ -184,11 +232,12 @@
               "description": "A figure counts every row its own conditions pick: the page's filters (uses) narrow lists and tables only.",
               "allOf": [{ "$ref": "#/$defs/source" }, { "not": { "required": ["uses"] } }]
             },
-            "value": { "enum": ["count", "sum"] },
+            "value": { "description": "count or sum over a table or a record view; output: one of a tool's outputs.", "enum": ["count", "sum", "output"] },
             "of": { "$ref": "#/$defs/column" },
             "naira": { "type": "boolean" },
             "tone": { "$ref": "#/$defs/tone" },
             "lead": { "type": "boolean" },
+            "alert": { "description": "A figure that counts is an alert while above zero.", "type": "boolean" },
             "change": {
               "description": "Counts (or adds up) only the rows whose date column falls in this period, and says the change on the period before.",
               "type": "object",
@@ -221,6 +270,7 @@
               }
             },
             "detail": { "$ref": "#/$defs/detail" },
+            "actions": { "$ref": "#/$defs/rowActions" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
@@ -244,12 +294,34 @@
                 "properties": {
                   "column": { "$ref": "#/$defs/column" },
                   "label": { "type": "string", "minLength": 1, "maxLength": 40 },
-                  "naira": { "type": "boolean" }
+                  "naira": { "type": "boolean" },
+                  "edit": { "description": "A yes/no column ticked in place by someone who may change the table's rows.", "type": "boolean" }
                 }
               }
             },
             "detail": { "$ref": "#/$defs/detail" },
+            "actions": { "$ref": "#/$defs/rowActions" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["id", "type", "actions"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "buttons" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+            "actions": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "$ref": "#/$defs/action" } }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["id", "type", "workflow"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "type": { "const": "status" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+            "workflow": { "description": "The workflow whose run it shows: the one the page's address names (?run=), else its latest.", "type": "string", "minLength": 1, "maxLength": 200 }
           }
         }
       ]

@@ -91,7 +91,7 @@ func TestRecordsRefusals(t *testing.T) {
 	}
 	// Parse: both a table and records.
 	_, ps := Parse([]byte(strings.Replace(ordersPage, `"source": {"records": "orders"}}`, `"source": {"records": "orders", "table": "x"}}`, 1)))
-	if len(ps) == 0 || !strings.Contains(ps[0].Message, "not both") {
+	if len(ps) == 0 || !strings.Contains(ps[0].Message, "one of them") {
 		t.Errorf("both: %v", ps)
 	}
 	// Missing: the area off, and a view Taskiem lacks.

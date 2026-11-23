@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/wdcheck"
 )
@@ -20,6 +21,14 @@ type Env struct {
 	// AreaOn says whether a business area is on (engine/areas); nil, all
 	// are. A part over Taskiem's records in an area that is off is refused.
 	AreaOn func(area string) bool
+	// Tool is the business's made tool by its command (G2); nil, none.
+	Tool func(command string) (ToolInfo, bool)
+	// Signal says why a page cannot send this signal to the runs of the
+	// workflow named ("" when it can: the workflow declares it for pages);
+	// nil, none can.
+	Signal func(workflow, name string) string
+	// Workflow says whether the business has a workflow by this name.
+	Workflow func(name string) bool
 }
 
 // ReservedName reports whether a page's name is one of Taskiem's own
@@ -68,12 +77,37 @@ func Check(p *Page, env Env) []Problem {
 			}
 		}
 	}
+	if p.Place != nil && p.Place.Area != "" {
+		if _, ok := areas.Valid(p.Place.Area); !ok {
+			ps.add("/place/area", "The page is a tab under %s, which is not one of Taskiem's areas.", p.Place.Area)
+		}
+	}
 	for i, b := range p.Blocks {
+		at := fmt.Sprintf("/blocks/%d", i)
+		name := b.partName(i)
+		switch b.Type {
+		case "status":
+			if b.Workflow != "" && (env.Workflow == nil || !env.Workflow(b.Workflow)) {
+				ps.add(at+"/workflow", "%s shows a run of %s, which the business does not have.", name, b.Workflow)
+			}
+		case "buttons":
+			for j, a := range b.Actions {
+				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
+			}
+		}
 		if b.Source == nil {
 			continue
 		}
-		at := fmt.Sprintf("/blocks/%d", i)
-		name := b.partName(i)
+		if b.Source.Tool != "" {
+			checkToolSource(&ps, at, name, b, env)
+			for j, a := range b.Actions {
+				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
+			}
+			continue
+		}
+		for j, a := range b.Actions {
+			checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
+		}
 		var t datatables.Table
 		if b.Source.Records != "" {
 			var ok bool
@@ -138,10 +172,20 @@ func Check(p *Page, env Env) []Problem {
 			}
 		case "table":
 			for j, c := range b.Columns {
-				if found, ok := col(fmt.Sprintf("%s/columns/%d/column", at, j), c.Column, "shows the column"); ok && c.Naira && found.Type != "integer" && found.Type != "number" {
+				found, ok := col(fmt.Sprintf("%s/columns/%d/column", at, j), c.Column, "shows the column")
+				if ok && c.Naira && found.Type != "integer" && found.Type != "number" {
 					ps.add(fmt.Sprintf("%s/columns/%d/naira", at, j), "%s shows %s as money, but it does not hold numbers.", name, columnTitle(found))
 				}
+				if ok && c.Edit && (found.Type != "boolean" || found.Personal || IsRecords(t.Name)) {
+					ps.add(fmt.Sprintf("%s/columns/%d/edit", at, j), "%s can tick %s here only if it is a yes or no column of the business's own table.", name, columnTitle(found))
+				}
 			}
+		}
+		if b.Alert && b.Source.Records == "" && b.Type == "figure" && b.Value != "count" {
+			ps.add(at+"/alert", "Only a figure that counts can be an alert.")
+		}
+		for j, a := range b.Actions {
+			checkActionReads(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, t, name)
 		}
 		if d := b.Detail; d != nil {
 			checkReads(&ps, at+"/detail/title", d.Title, t, name)
