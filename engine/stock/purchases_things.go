@@ -275,6 +275,21 @@ func ChangeThingTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, c Thing
 	if c.SalePriceKobo != nil && !c.Sells() {
 		return t, fmt.Errorf("%w: a price is for a thing marked sold", ErrPurchase)
 	}
+	// A thing sold with a price stays sold while its sale's money counts
+	// (PR review fix): profit counts its cost as sold, so had again it
+	// would be counted twice, there and on Things we have. The money stays
+	// recorded; only a sale whose money no longer counts (reversed or
+	// failed in the money log) may change.
+	if c.Status != nil && *c.Status != KeptSold && t.Status == KeptSold && t.SaleEntryID != nil {
+		var status string
+		if err := tx.QueryRow(ctx, `SELECT status FROM money_entries WHERE tenant_id = $1 AND COALESCE(corrects, id) = $2
+			ORDER BY recorded_at DESC, id DESC LIMIT 1`, tenant, *t.SaleEntryID).Scan(&status); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return t, err
+		}
+		if status == "settled" || status == "pending" {
+			return t, fmt.Errorf("%w: the sale of %s was recorded with its money, so it stays sold", ErrPurchase, t.Name)
+		}
+	}
 	if c.Serial != nil {
 		*c.Serial = strings.TrimSpace(*c.Serial)
 	}

@@ -110,3 +110,41 @@ func BillLinesPartsTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, li
 	}
 	return parts, nil
 }
+
+// BillLabelsTx gives a bill's lines added to stock the default label, as
+// paying an order by hand does (OrderLabelsTx), when the bill is mirrored
+// in: the lines of the order it was invoiced for that are added to stock
+// with no label take Stock bought, and when a line with no order is
+// added to stock by its item link with no label, Stock bought is made, so
+// BillLinesPartsTx finds it. Without it a linked supplier's stock lines
+// were Stock bought only where some order had been paid by hand (PR
+// review fix).
+func BillLabelsTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, raw json.RawMessage, actor string) error {
+	var lines []BillLine
+	if err := json.Unmarshal(raw, &lines); err != nil {
+		return err
+	}
+	var order *uuid.UUID
+	var items []string
+	for _, l := range lines {
+		if l.PurchaseID != nil && order == nil {
+			order = l.PurchaseID
+		}
+		if l.SellerItemID != "" {
+			items = append(items, l.SellerItemID)
+		}
+	}
+	if order != nil {
+		return OrderLabelsTx(ctx, tx, tenant, *order, actor)
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	var bare bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM item_links WHERE tenant_id = $1 AND link_id = $2 AND seller_item_id = ANY ($3)
+		AND treatment = 'stock' AND label_id IS NULL)`, tenant, link, items).Scan(&bare); err != nil || !bare {
+		return err
+	}
+	_, _, err := FindOrMakeTx(ctx, tx, tenant, StockBought, actor)
+	return err
+}

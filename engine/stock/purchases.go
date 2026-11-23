@@ -40,6 +40,8 @@ var (
 	ErrNoPurchase = errors.New("stock: no such purchase order")
 	// ErrPurchase: the order cannot do that now (its status, a line).
 	ErrPurchase = errors.New("stock: that does not fit the order")
+	// ErrKeyUsed: a payment's Idempotency-Key paid another order already.
+	ErrKeyUsed = errors.New("stock: key used already")
 	// ErrSecondApproval: the order is above the business's limit and was
 	// drafted by the person approving it.
 	ErrSecondApproval = errors.New("stock: a second person approves this order")
@@ -1485,6 +1487,9 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 	// (engine/spend; what a business buys §8, The expense).
 	_, fresh, err := spend.RecordPurchaseTx(ctx, tx, log, tenant, spend.PurchasePay{Order: id, Reference: x.Reference, Supplier: x.Supplier,
 		AmountKobo: amount, How: how, Channel: channel, Key: key, Actor: actor, When: time.Now()})
+	if errors.Is(err, spend.ErrKeyUsed) {
+		return x, fmt.Errorf("%w: this Idempotency-Key paid another order already: send a new key for a new payment", ErrKeyUsed)
+	}
 	if err != nil {
 		return x, err
 	}

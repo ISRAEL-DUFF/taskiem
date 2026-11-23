@@ -610,8 +610,12 @@ func (s *Server) waPaidSupplier(ctx context.Context, c *chat, m []string) (bool,
 	if len(orders) == 0 {
 		return true, c.say(ctx, s, c.t("wa.paid.none", "name", whatsapp.SafeText(sup.Name)))
 	}
-	x := orders[0]
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
+	return true, s.askPaySupplier(ctx, c, sup, orders[0], amount, how)
+}
+
+// askPaySupplier asks Yes to a payment of amount on order x (stock_pay).
+func (s *Server) askPaySupplier(ctx context.Context, c *chat, sup stock.Supplier, x stock.Purchase, amount int64, how string) error {
+	return s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
 		c.t("wa.paid.confirm", "supplier", whatsapp.SafeText(sup.Name), "amount", storefront.FormatNaira(amount), "how", c.t("sales.how_"+how),
 			"reference", x.Reference))
 }

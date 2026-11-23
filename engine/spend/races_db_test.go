@@ -2,12 +2,14 @@ package spend_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/spend"
@@ -63,6 +65,45 @@ func TestPurchaseKeyAfterRelabel(t *testing.T) {
 	w.exec(`UPDATE purchase_lines SET label_id = $2 WHERE purchase_order_id = $1 AND position = 1`, order2, fuel.ID)
 	if paid := payTx(); paid != 1_000_000 || len(w.entries()) != 2 {
 		t.Fatalf("PayTx again after relabelling: paid %d, entries %+v", paid, w.entries())
+	}
+}
+
+// A key that paid one order, sent to pay another (PR review fix): refused
+// as used, not answered as paid while nothing is written; in cash or by
+// transfer alike. The same order's retry is still answered as it was.
+func TestPurchaseKeyOtherOrder(t *testing.T) {
+	w := newWorld(t)
+	packaging := w.label("Packaging")
+	first, _, _ := w.order("P-FFF666")
+	w.line(first, 0, "Nylon bags", 100, 10_000, spend.Record, nil, &packaging.ID, nil)
+	second, _, _ := w.order("P-GGG777")
+	w.line(second, 0, "Nylon bags", 100, 10_000, spend.Record, nil, &packaging.ID, nil)
+	pay := func(order uuid.UUID, how string) error {
+		return db.InTenantTx(ctx, w.d.App, []uuid.UUID{w.tenant}, func(tx pgx.Tx) error {
+			_, err := stock.PayTx(ctx, tx, w.tenant, order, 500_000, how, "user:ada", "api-same", w.log)
+			return err
+		})
+	}
+	paid := func(order uuid.UUID) int64 {
+		var n int64
+		if err := w.d.Admin.QueryRow(ctx, `SELECT paid_kobo FROM purchase_orders WHERE id = $1`, order).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if err := pay(first, stock.Cash); err != nil {
+		t.Fatal(err)
+	}
+	if err := pay(first, stock.Cash); err != nil || paid(first) != 500_000 {
+		t.Fatalf("the same order again: %v, paid %d", err, paid(first))
+	}
+	for _, how := range []string{stock.Cash, stock.Transfer} {
+		if err := pay(second, how); !errors.Is(err, stock.ErrKeyUsed) || !strings.Contains(err.Error(), "paid another order") {
+			t.Errorf("another order, %s: %v", how, err)
+		}
+	}
+	if paid(second) != 0 || len(w.entries()) != 1 {
+		t.Fatalf("written: paid %d, %+v", paid(second), w.entries())
 	}
 }
 
@@ -201,5 +242,45 @@ func TestLabelMergeRace(t *testing.T) {
 	}
 	if n := w.chains(); n != 0 {
 		t.Fatalf("chains: %d", n)
+	}
+}
+
+// Two merges at once that lock the same labels in a different order (A
+// into B while B is kept as C, which takes A, B then C; and C into E,
+// which takes C, E, then moves B) do not deadlock: merges of a business
+// take its merge lock first, one after the other (PR review fix).
+func TestLabelMergesAtOnceNoDeadlock(t *testing.T) {
+	w := newWorld(t)
+	for round := range 20 {
+		n := strconv.Itoa(round)
+		a, b, c, e := w.label("A"+n), w.label("B"+n), w.label("C"+n), w.label("E"+n)
+		w.exec(`UPDATE spend_labels SET merged_into = $2 WHERE id = $1`, b.ID, c.ID)
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		for _, m := range [][2]uuid.UUID{{a.ID, b.ID}, {c.ID, e.ID}} {
+			go func() {
+				<-start
+				errs <- db.InTenantTx(ctx, w.d.App, []uuid.UUID{w.tenant}, func(tx pgx.Tx) error {
+					_, err := spend.MergeTx(ctx, tx, w.tenant, m[0], m[1])
+					return err
+				})
+			}()
+		}
+		close(start)
+		for range 2 {
+			err := <-errs
+			var pe *pgconn.PgError
+			switch {
+			case err == nil, errors.Is(err, spend.ErrLabel):
+			case errors.As(err, &pe) && pe.Code == "40P01":
+				t.Fatalf("round %d: deadlock: %v", round, err)
+			case errors.As(err, &pe) && pe.Code == "23514": // refused as a chain
+			default:
+				t.Fatalf("round %d: %v", round, err)
+			}
+		}
+		if n := w.chains(); n != 0 {
+			t.Fatalf("round %d: chains %d", round, n)
+		}
 	}
 }

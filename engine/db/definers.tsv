@@ -82,6 +82,7 @@ taskiem_catalogue_revoke(text,text,text,text)	@ISRAEL-DUFF (connectors)	A review
 taskiem_catalogue_set_publisher(text,text,text,text)	@ISRAEL-DUFF (connectors)	The operator verifies, suspends or reinstates a publisher (taskiem catalogue publishers) (00105)
 taskiem_catalogue_set_reviewer(text,boolean,text)	@ISRAEL-DUFF (connectors)	part of: The public connector catalogue, part 2 (00106)
 taskiem_catalogue_submission(uuid)	@ISRAEL-DUFF (connectors)	part of: The public connector catalogue, part 2 (00106)
+taskiem_catalogue_tenants()	@ISRAEL-DUFF (storefronts)	Businesses whose storefront names a catalogue table, whatever the page's status, for the once-per-business old-columns check (00507)
 taskiem_catalogue_version(text,text)	@ISRAEL-DUFF (connectors)	One version that is or was in the catalogue (published or revoked), for details and upgrade diffs (00107)
 taskiem_chat_bind_telegram(uuid,bigint,text)	@ISRAEL-DUFF (onboarding)	Binds a Telegram account that just wrote, bound to no one, to a person a chat sign-up made (00266)
 taskiem_chat_bind_whatsapp(uuid,text)	@ISRAEL-DUFF (onboarding)	Binds a number that just wrote, bound to no one, to a person a chat sign-up made (00266)

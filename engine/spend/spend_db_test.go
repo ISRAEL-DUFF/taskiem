@@ -333,3 +333,71 @@ func TestBillParts(t *testing.T) {
 		return nil
 	})
 }
+
+// A linked supplier's bill, mirrored in (PR review fix): its lines added
+// to stock with no label are Stock bought, whether or not an order was
+// ever paid by hand: the order's lines take the label, and a bill with no
+// order whose item link adds to stock finds it made.
+func TestBillLabels(t *testing.T) {
+	w := newWorld(t)
+	seller := w.d.SeedTenant(t, nil).ID
+	a, b := w.tenant, seller
+	if b.String() < a.String() {
+		a, b = b, a
+	}
+	link := uuid.New()
+	w.exec(`INSERT INTO business_links (id, a_tenant, b_tenant, status, requested_by, requester_actor, how, role, expires_at)
+		VALUES ($1, $2, $3, 'active', $2, 'user:ada', 'code', 'both', now() + interval '7 days')`, link, a, b)
+	order, _, fabric := w.order("P-HHH888")
+	w.line(order, 0, "Ankara fabric", 20, 200_000, spend.Stock, &fabric, nil, ptr("it-fabric"))
+	bill := func(lines []map[string]any) (uuid.UUID, json.RawMessage) {
+		raw, _ := json.Marshal(lines)
+		id := uuid.New()
+		w.exec(`INSERT INTO bills (id, tenant_id, link_id, supplier_tenant, supplier_name, source_id, reference, lines, amount_kobo)
+			VALUES ($1, $2, $3, $4, 'Singer Ltd', $5, $6, $7, 1000)`, id, w.tenant, link, seller, uuid.New(), "INV-"+id.String()[:4], raw)
+		return id, raw
+	}
+	parts := func(id uuid.UUID) []spend.Part {
+		var p []spend.Part
+		w.in(func(tx pgx.Tx) error {
+			var err error
+			p, err = spend.BillPartsTx(ctx, tx, w.tenant, id)
+			return err
+		})
+		return p
+	}
+	stockBought := func() *uuid.UUID {
+		var id uuid.UUID
+		if err := w.d.Admin.QueryRow(ctx, `SELECT id FROM spend_labels WHERE tenant_id = $1 AND name = 'Stock bought'`, w.tenant).Scan(&id); err != nil {
+			return nil
+		}
+		return &id
+	}
+	matched, raw := bill([]map[string]any{{"description": "Ankara fabric", "quantity": int64(20), "unit_kobo": int64(200_000), "seller_item_id": "it-fabric", "purchase_id": order}})
+	if p := parts(matched); len(p) != 1 || p[0].LabelID != nil {
+		t.Fatalf("before: %+v", p)
+	}
+	w.in(func(tx pgx.Tx) error { return spend.BillLabelsTx(ctx, tx, w.tenant, link, raw, "system:link-mirror") })
+	sb := stockBought()
+	if p := parts(matched); sb == nil || len(p) != 1 || p[0].LabelID == nil || *p[0].LabelID != *sb || p[0].Treatment != spend.Stock {
+		t.Fatalf("the order's: %+v %v", p, sb)
+	}
+	var label *uuid.UUID
+	if err := w.d.Admin.QueryRow(ctx, `SELECT label_id FROM purchase_lines WHERE purchase_order_id = $1`, order).Scan(&label); err != nil || label == nil || *label != *sb {
+		t.Fatalf("the order line: %v %v", label, err)
+	}
+
+	// No order: the item link adds to stock, with no label.
+	w.exec(`DELETE FROM purchase_lines WHERE purchase_order_id = $1`, order)
+	w.exec(`DELETE FROM spend_labels WHERE id = $1`, *sb)
+	w.exec(`INSERT INTO item_links (tenant_id, link_id, seller_item_id, seller_item, treatment, stock_item_id, updated_by) VALUES ($1, $2, 'it-rice', 'Rice', 'stock', $3, 'user:ada')`,
+		w.tenant, link, fabric)
+	loose, raw := bill([]map[string]any{{"description": "Rice", "quantity": int64(2), "unit_kobo": int64(1_000_000), "seller_item_id": "it-rice"}})
+	if p := parts(loose); len(p) != 1 || p[0].LabelID != nil {
+		t.Fatalf("no order, before: %+v", p)
+	}
+	w.in(func(tx pgx.Tx) error { return spend.BillLabelsTx(ctx, tx, w.tenant, link, raw, "system:link-mirror") })
+	if p, sb := parts(loose), stockBought(); sb == nil || len(p) != 1 || p[0].LabelID == nil || *p[0].LabelID != *sb {
+		t.Fatalf("no order: %+v %v", p, sb)
+	}
+}

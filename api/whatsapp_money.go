@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -11,8 +12,10 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/spend"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -181,6 +184,14 @@ func (s *Server) waMoneyStart(ctx context.Context, c *chat, m chatMoney, command
 		return true, c.say(ctx, s, c.t("wa.money.how"))
 	}
 	if m.Kind == "expense" {
+		// "paid 425,000 Dangote": money owed to a supplier is paid on its
+		// order or bill, not as an expense of its own, which the order's
+		// payment would count again.
+		if done, err := s.waMoneyOwed(ctx, c, m); done || err != nil {
+			return true, err
+		}
+	}
+	if m.Kind == "expense" {
 		// A label the business has already reads in its own spelling.
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 			l, err := spend.FindTx(ctx, tx, c.tenant.ID, m.Label)
@@ -199,6 +210,76 @@ func (s *Server) waMoneyStart(ctx context.Context, c *chat, m chatMoney, command
 		return true, err
 	}
 	return true, c.say(ctx, s, moneyConfirmText(c, m), moneyButtons(c)...)
+}
+
+// waMoneyOwed answers an expense whose words name a supplier owed money
+// (PR review fix): its vendor ("at Dangote"), else what it was for ("paid
+// 425,000 Dangote"). A supplier with an order not paid up is asked about
+// paying the oldest, as "paid Dangote 425,000" is (waPaidSupplier); a
+// linked supplier with an open bill is shown the bill, which is paid from
+// Bills. false when the words name neither: the expense goes on.
+func (s *Server) waMoneyOwed(ctx context.Context, c *chat, m chatMoney) (bool, error) {
+	names := []string{}
+	for _, n := range []string{m.Vendor, m.Description} {
+		if n = strings.TrimSpace(n); n != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		return false, nil
+	}
+	if s.Purchases.Ready() && s.Stock.Ready() {
+		list, err := s.chatSuppliers(ctx, c)
+		if err != nil {
+			return true, err
+		}
+		for _, n := range names {
+			sup, _, ferr := stock.FindSupplier(list, n)
+			if ferr != nil {
+				continue
+			}
+			var orders []stock.Purchase
+			if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+				var err error
+				orders, err = stock.UnpaidOfTx(ctx, tx, c.tenant.ID, sup.ID)
+				return err
+			}); err != nil {
+				return true, err
+			}
+			i := slices.IndexFunc(orders, func(x stock.Purchase) bool { return x.TotalKobo > x.PaidKobo })
+			if i < 0 {
+				continue
+			}
+			if !c.p.Can(PermStorefrontManage) {
+				return true, c.say(ctx, s, c.t("wa.supplier.denied", "org", c.tenant.Name))
+			}
+			return true, s.askPaySupplier(ctx, c, sup, orders[i], m.AmountKobo, stock.Transfer)
+		}
+	}
+	if !c.p.Can(PermInvoiceRead) {
+		return false, nil
+	}
+	var bills []links.Bill
+	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
+		var err error
+		bills, err = links.ListBillsTx(ctx, tx, "open", 50)
+		return err
+	}); err != nil {
+		return true, err
+	}
+	for _, n := range names {
+		n = strings.ToLower(strings.Join(strings.Fields(n), " "))
+		for _, test := range []func(string) bool{
+			func(x string) bool { return x == n },
+			func(x string) bool { return strings.HasPrefix(x, n) },
+			func(x string) bool { return strings.Contains(x, n) },
+		} {
+			if i := slices.IndexFunc(bills, func(b links.Bill) bool { return b.DueKobo > 0 && test(strings.ToLower(b.SupplierName)) }); i >= 0 {
+				return true, c.say(ctx, s, billDetail(c.lang.Tag, bills[i]))
+			}
+		}
+	}
+	return false, nil
 }
 
 func moneyConfirmText(c *chat, m chatMoney) string {

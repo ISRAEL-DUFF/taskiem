@@ -60,6 +60,9 @@ func (s *Server) purchaseFail(w http.ResponseWriter, r *http.Request, err error)
 		err = pgx.ErrNoRows
 	case errors.Is(err, stock.ErrPurchase):
 		err = fmt.Errorf("%w: %s", errBadRequest, msg)
+	case errors.Is(err, stock.ErrKeyUsed):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": strings.TrimPrefix(err.Error(), stock.ErrKeyUsed.Error()+": "), "code": "key_used"})
+		return
 	case errors.Is(err, stock.ErrSupplierExists), errors.Is(err, stock.ErrTooSoon), errors.Is(err, stock.ErrSecondApproval):
 		err = fmt.Errorf("%w: %s", errConflict, msg)
 	case errors.Is(err, stock.ErrLinked):

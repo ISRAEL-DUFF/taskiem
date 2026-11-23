@@ -16,8 +16,10 @@ import (
 // unit, cost_price, reorder_level, target_level or supplier on its
 // catalogue's table, with what to use instead. Nothing is in production,
 // so it is a check, not a data migration: GET /v1/stock/old-columns runs
-// it, and the storefront sweep runs it once per business after each start.
-// Either way the owners are told once (stock.TellOldColumns).
+// it, and the storefront sweep runs it once per business with a catalogue
+// after each start, whatever its page's status (a draft page's owner is
+// told too: PR review fix). Either way the owners are told once
+// (stock.TellOldColumns).
 
 // CheckOldColumns lists the business's workflow steps on the old columns
 // and tells its owners of them, once.
@@ -45,6 +47,29 @@ func (s *Server) checkOldColumnsOnce(ctx context.Context, tenant uuid.UUID) {
 			s.Logger.Warn("stock: checking workflows for the old columns", "tenant", tenant, "err", err)
 		}
 	}
+}
+
+// checkOldColumnsAll runs checkOldColumnsOnce for every business with a
+// catalogue table (taskiem_catalogue_tenants), the ones checked already
+// since start skipped.
+func (s *Server) checkOldColumnsAll(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_catalogue_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	for _, t := range tenants {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		tctx, cancel := context.WithTimeout(ctx, storefrontSyncTimeout)
+		s.checkOldColumnsOnce(tctx, t)
+		cancel()
+	}
+	return nil
 }
 
 func (s *Server) getStockOldColumns(w http.ResponseWriter, r *http.Request) {
