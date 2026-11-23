@@ -85,12 +85,26 @@ func TestProductLeft(t *testing.T) {
 	if got := read(asPublic); len(got) != 0 {
 		t.Fatalf("no page online, the public role read %v", got)
 	}
+	sf := uuid.Must(uuid.NewV7())
 	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefronts (id, tenant_id, slug, status, created_by) VALUES ($1, $2, 'malt-house', 'published', 'user:ada')`,
-		uuid.Must(uuid.NewV7()), shop.ID); err != nil {
+		sf, shop.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(asPublic); !left(got) {
-		t.Fatalf("the public role read %v, want %v", got, want)
+	// 00508: the public role reads only what the page's copy holds on
+	// sale, and its sizes; a product taken off sale ("single") is not
+	// read, nor one not on the page.
+	if got := read(asPublic); len(got) != 0 {
+		t.Fatalf("nothing on the page, the public role read %v", got)
+	}
+	if _, err := d.Admin.Exec(ctx, `INSERT INTO storefront_catalogue (storefront_id, table_name, row_id, tenant_id, position, item) VALUES
+		($1, 'products', 'pack', $2, 0, '{"id": "pack", "name": "Malt, pack of 6", "available": true}'),
+		($1, 'products', 'single', $2, 1, '{"id": "single", "name": "Malt", "available": false}'),
+		($1, 'products', 'shirt', $2, 2, '{"id": "shirt", "name": "Shirt", "available": true, "sizes": [{"id": "owed", "variant": {"Size": "M"}}]}')`,
+		sf, shop.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(asPublic); len(got) != 2 || got["pack"] != 1 || got["owed"] != 0 {
+		t.Fatalf("the public role read %v, want the pack and the size", got)
 	}
 	// Nothing else about stock is the public role's to read.
 	for _, q := range []string{
