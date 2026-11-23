@@ -50,6 +50,10 @@ A page is a screen a business makes for itself from parts Taskiem draws ([decisi
 
 Rules 1 (but uniqueness), 2, 7, a figure's `uses` and the structure are `pages.Parse`; 1's uniqueness and 3 to 6 are `pages.Check`; 8 and 9 are the API's view (`api/pages.go`) with `pages.ReadFor` and `pages.Shape`.
 
+## The file
+
+A page saved as a file (`GET /v1/pages/{name}/export`, `<name>.page.json`) is this document and nothing else, written with two spaces of indent: no rows, no ids of the business, and no condition on a personal column that carries a value (left out, and counted in the `Taskiem-Left-Out` header). Reading one back (`POST /v1/pages/import`) holds it to everything above: Parse refuses what is not a page, and Check against the business it is read into says what it names that the business lacks. A name already taken there becomes the next free one (`tickets-2`).
+
 ## Changes
 
 The format is new with G0 (decision 0072). Parts named in the plan and not in this version (buttons, status, board, chart, and tools or Taskiem's own records as sources) are additions to it when their phases come; a document without them is unchanged.

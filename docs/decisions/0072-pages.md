@@ -30,7 +30,7 @@ Taskiem has screens for what it built: orders, stock, money, staff. A business a
 
 ## Left to later phases
 
-Record views (Taskiem's own orders, invoices and deliveries as sources), a page as a tab under an area, the change notices that update an open page, and the versions list with bring-back are G1 items not in this first build; actions, tools as sources, the status block, alerts and **Pin as a page** are G2; the chat (G3); board and chart (G4); starters and **Describe it** (G5).
+Record views (Taskiem's own orders, invoices and deliveries as sources), a page as a tab under an area, and the change notices that update an open page are G1 items not in this first build (the versions list with bring-back, a page as a file and the app's ordering of a table followed on 23 November 2026, [§18](../spec/pages.md#18-as-built-g0-and-g1)); actions, tools as sources, the status block, alerts and **Pin as a page** are G2; the chat (G3); board and chart (G4); starters and **Describe it** (G5).
 
 ## Alternatives considered
 
