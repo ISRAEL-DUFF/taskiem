@@ -3,12 +3,15 @@
 // (GET /v1/chat/actions). A topic's menu shows its first five actions as
 // rows, the rest behind "All N" in a sheet; the topics are tiles. A row
 // shows its answer (sent back as "act:<id>"), opens its form or its page
-// here, or starts its questions in the chat. Once a row is pressed, or a
-// newer menu comes, the card folds to one line.
+// here, or starts its questions in the chat. Once a row is pressed, its ✕
+// closes it, the person says something else, or a newer menu comes, the
+// card folds to one line saying what happened (no "Show again": 21
+// November 2026).
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { get } from "../api";
+import { get, post } from "../api";
 import { KitField, Sheet } from "../kit";
 import { FormFrame } from "./FormFrame";
 import { Icon } from "../icons";
@@ -56,6 +59,10 @@ export interface MenuMessage {
   pick?: string;
   values?: Record<string, string>;
   tip?: string;
+  /** How it ended, as the server kept it. */
+  done?: "chose" | "closed" | "passed";
+  /** The action chosen, when it ended so. */
+  chose?: string;
 }
 
 /** A menu message's JSON, or undefined when it is not one. */
@@ -125,25 +132,64 @@ export function MenuCard({
   onReply,
   openTool,
   onFold,
+  head = true,
+  tiles,
+  onTopic,
 }: {
-  id: string;
+  /** The menu message; none for the menu in the tools panel
+   * (menus-everywhere.md §4), which has no ✕. */
+  id?: string;
+  /** The topics' own heading: not in the tools panel, whose chip says it. */
+  head?: boolean;
   menu: MenuMessage;
-  /** The newest menu: open; any other is folded. */
+  /** The newest menu, nothing said since: open; any other is folded. */
   open: boolean;
   busy: boolean;
   /** A row sent back to Taskiem, as a button's press. */
   onReply: (reply: string, text: string) => void;
-  openTool: (k: ToolKey, from?: DOMRect, start?: { add?: boolean }) => void;
+  /** A row's tool opened here; none where there are no tools (Today): the
+   * row is then done as one that asks. */
+  openTool?: (k: ToolKey, from?: DOMRect, start?: { add?: boolean }) => void;
+  /** At most this many topics' tiles, then "All topics" (Today's panel,
+   * menus-everywhere.md §5). */
+  tiles?: number;
+  /** A tile pressed: true when the page shows the topic itself (a sheet). */
+  onTopic?: (topic: string) => boolean;
   onFold?: () => void;
 }) {
   const { topics, retry } = useCatalogue();
   const navigate = useNavigate();
   const [topic, setTopic] = useState(menu.topic);
   const [chosen, setChosen] = useState<string>();
-  const [shown, setShown] = useState(open);
+  const [ended, setEnded] = useState(menu.done);
+  const [shown, setShown] = useState(open && !menu.done);
   const [all, setAll] = useState(false);
+  const [allTiles, setAllTiles] = useState(false);
   const [form, setForm] = useState<{ action: ChatAction; values: Record<string, string> }>();
-  useEffect(() => setShown(open && !chosen), [open, chosen]);
+  useEffect(() => {
+    if (open) return;
+    setShown(false);
+    setEnded((e) => e ?? "passed");
+  }, [open]);
+  const choose = (a: ChatAction, tell = false) => {
+    setChosen(a.title);
+    setEnded("chose");
+    setShown(false);
+    onFold?.();
+    // Nothing goes to Taskiem for a form or a page: the server is told, so
+    // the menu stays folded to what was chosen.
+    if (tell && id) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, { chose: a.id }).catch(() => undefined);
+  };
+  const close = () => {
+    setEnded("closed");
+    setShown(false);
+    if (id) void post(`/v1/taskiem-chat/menus/${encodeURIComponent(id)}/close`, {}).catch(() => undefined);
+  };
+  const closeButton = id && (
+    <button type="button" className="tk-menu-close" aria-label="Close this menu" onClick={close}>
+      <Icon name="close" />
+    </button>
+  );
 
   if (topics === null)
     return (
@@ -155,7 +201,11 @@ export function MenuCard({
       </div>
     );
   if (!topics) return <div className="tk-menu tk-menu-loading" data-msg={id} aria-busy="true" />;
-  const t = topic ? topics.find((x) => x.id === topic) : undefined;
+  // The action chosen (here, or kept by the server), and its topic when the
+  // card was the topics.
+  const chosenAction = menu.chose ? topics.flatMap((x) => x.actions).find((a) => a.id === menu.chose) : undefined;
+  const shownTopic = topic ?? (chosenAction ? topics.find((x) => x.actions.includes(chosenAction))?.id : undefined);
+  const t = shownTopic ? topics.find((x) => x.id === shownTopic) : undefined;
 
   const press = (a: ChatAction, from?: DOMRect) => {
     setAll(false);
@@ -167,14 +217,12 @@ export function MenuCard({
       return setForm({ action: a, values: { ...menu.values } });
     // A payment: the Pay sheet here, whatever its tool, never the words.
     if (a.confirm === "passkey" && a.fields?.length) return setForm({ action: a, values: picked ? { ...menu.values } : {} });
-    if (a.opens === "form" && a.tool) {
-      setChosen(a.title);
-      onFold?.();
+    if (a.opens === "form" && a.tool && openTool) {
+      choose(a, true);
       return openTool(a.tool as ToolKey, from, { add: a.add });
     }
     if (a.opens === "page" && a.page) {
-      setChosen(a.title);
-      onFold?.();
+      choose(a, true);
       return navigate(a.page);
     }
     // An action that takes values: its form here (M4), filled with what
@@ -182,29 +230,33 @@ export function MenuCard({
     if (a.fields?.length) {
       return setForm({ action: a, values: a.id === menu.pick && topic === menu.topic ? { ...menu.values } : {} });
     }
-    setChosen(a.title);
-    onFold?.();
+    choose(a);
     onReply(`act:${a.id}`, a.title);
   };
   const sent = (a: ChatAction, values: Record<string, string>) => {
     setForm(undefined);
-    setChosen(a.title);
-    onFold?.();
+    choose(a);
     const shown = (a.fields ?? []).map((f) => values[f.key]?.trim()).filter(Boolean);
     onReply(`form:${a.id}:${JSON.stringify(values)}`, shown.length ? `${a.title}: ${shown.join(", ")}` : a.title);
   };
-  const formSheet = form && (
-    <ActionForm
-      action={form.action}
-      initial={form.values}
-      onClose={() => setForm(undefined)}
-      onSend={(v) => sent(form.action, v)}
-      onPaid={() => {
-        setChosen(form.action.title);
-        onFold?.();
-      }}
-    />
-  );
+  // Its form's submit and keys stay its own: drawn inside a composer (the
+  // tools panel's menu), they would reach the composer's form too.
+  // Drawn outside the page's other forms (a portal), so its button
+  // submits its own form, not a composer's; its events stop at it too.
+  const formSheet =
+    form &&
+    createPortal(
+      <div style={{ display: "contents" }} onSubmit={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <ActionForm
+          action={form.action}
+          initial={form.values}
+          onClose={() => setForm(undefined)}
+          onSend={(v) => sent(form.action, v)}
+          onPaid={() => choose(form.action, true)}
+        />
+      </div>,
+      document.body,
+    );
 
   if (!shown)
     return (
@@ -216,11 +268,15 @@ export function MenuCard({
         </span>
         <span className="tk-menu-folded-words">
           <b>{t ? t.name : "Topics"}</b>
-          {chosen && <span> · {chosen}</span>}
+          <span>
+            {" · "}
+            {ended === "chose"
+              ? `You chose ${chosen ?? chosenAction?.title ?? "an action"}`
+              : ended === "closed"
+                ? "Closed, nothing done"
+                : "Not used"}
+          </span>
         </span>
-        <button type="button" className="link" onClick={() => setShown(true)}>
-          Show again
-        </button>
       </div>
       </>
     );
@@ -228,6 +284,7 @@ export function MenuCard({
   if (!t)
     return (
       <div className="tk-menu" data-msg={id} data-testid="taskiem-menu" data-topic="">
+        {head && (
         <div className="tk-menu-head">
           <span className="tk-tile-icon">
             <Icon name="grid" />
@@ -236,16 +293,26 @@ export function MenuCard({
             <span className="tk-menu-title">What would you like to do?</span>
             {menu.line && <span className="tk-menu-line">{menu.line}</span>}
           </span>
+          {closeButton}
         </div>
+        )}
         <div className="tk-menu-tiles" role="group" aria-label="Topics">
-          {topics.map((x) => (
-            <button key={x.id} type="button" className="tk-menu-tile" onClick={() => setTopic(x.id)}>
+          {(allTiles || tiles === undefined ? topics : topics.slice(0, tiles)).map((x) => (
+            <button key={x.id} type="button" className="tk-menu-tile" onClick={() => onTopic?.(x.id) || setTopic(x.id)}>
               <span className="tk-tile-icon">
                 <Icon name={menuIcon(x.icon)} />
               </span>
               <span>{x.name}</span>
             </button>
           ))}
+          {!allTiles && tiles !== undefined && topics.length > tiles && (
+            <button type="button" className="tk-menu-tile" onClick={() => setAllTiles(true)}>
+              <span className="tk-tile-icon">
+                <Icon name="grid" />
+              </span>
+              <span>All topics</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -283,6 +350,7 @@ export function MenuCard({
             <span className="tk-menu-title">{t.name}</span>
             <span className="tk-menu-line">{(topic === menu.topic && menu.line) || "What would you like to do?"}</span>
           </span>
+          {closeButton}
         </div>
         <div className="tk-menu-rows">{acts.slice(0, MENU_ROWS).map(row)}</div>
         <div className="tk-menu-foot">
@@ -406,4 +474,101 @@ function CommandForm({
       </FormFrame>
     </Sheet>
   );
+}
+
+/** What Taskiem said to a row pressed outside the Taskiem chat
+ * (menus-everywhere.md §3), in a sheet: its words, a question's buttons
+ * (answered here, the answer said in turn), and the way to the Taskiem
+ * chat, where all of it is kept. */
+export function ActionAnswer({
+  title,
+  said,
+  onClose,
+}: {
+  title: string;
+  said: { inbound: boolean; kind: string; text: string; buttons?: { id?: string; title: string }[] }[];
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const [now, setNow] = useState(said);
+  const [busy, setBusy] = useState(false);
+  const words: string[] = [];
+  const buttons: { id: string; title: string }[] = [];
+  for (const m of now) {
+    if (m.inbound) continue;
+    if (m.kind === "menu") {
+      const line = parseMenu(m.text)?.line;
+      if (line) words.push(line);
+    } else if (m.kind !== "chart" && m.text.trim()) words.push(m.text.replaceAll("*", "").trim());
+    for (const b of m.buttons ?? []) if (b.id) buttons.push({ id: b.id, title: b.title });
+  }
+  const press = async (b: { id: string; title: string }) => {
+    setBusy(true);
+    try {
+      const r = await post<{ messages: typeof said }>("/v1/taskiem-chat", { text: b.title, reply: b.id });
+      setNow(r.messages);
+    } catch {
+      words.push("That did not go. Try it in your Taskiem chat.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      title={title}
+      onClose={onClose}
+      testid="action-answer"
+      footer={
+        <>
+          <button type="button" className="secondary" onClick={() => (onClose(), navigate("/chat?with=taskiem"))}>
+            Taskiem chat
+          </button>
+          <button type="button" onClick={onClose}>
+            Done
+          </button>
+        </>
+      }
+    >
+      <div className="tk-action-answer">
+        <p>{words.length ? words.join("\n\n") : "Done. It is in your Taskiem chat."}</p>
+        {buttons.length > 0 && (
+          <div className="tk-action-answer-buttons">
+            {buttons.map((b, i) => (
+              <button key={b.id} type="button" className={i === 0 ? "" : "secondary"} disabled={busy} onClick={() => void press(b)}>
+                {b.title}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** A row pressed outside the Taskiem chat (menus-everywhere.md §3): done
+ * through the Taskiem chat (POST /v1/chat/actions/{id}/run) and answered in
+ * a sheet; with a link, what Taskiem said is left in that conversation as a
+ * note, given to onNote. `run` takes a row's reply ("act:<id>" or
+ * "form:<id>:<values>") and its words; `sheet` is the answer to draw. */
+export function useActionRun(link?: string, onNote?: (m: { id: string }) => void) {
+  const [answer, setAnswer] = useState<{ title: string; said: Parameters<typeof ActionAnswer>[0]["said"] }>();
+  const [error, setError] = useState<string>();
+  const run = (reply: string, text: string) => {
+    const form = /^form:([a-z]+\.[a-z_]+):(.*)$/s.exec(reply);
+    const id = form ? form[1] : reply.replace(/^act:/, "");
+    const values = form ? (JSON.parse(form[2] ?? "{}") as Record<string, string>) : undefined;
+    setError(undefined);
+    post<{ messages: Parameters<typeof ActionAnswer>[0]["said"]; note?: { id: string } }>(
+      `/v1/chat/actions/${encodeURIComponent(id ?? "")}/run`,
+      { link, values },
+    ).then(
+      (r) => {
+        if (r.note) onNote?.(r.note);
+        setAnswer({ title: text.split(":")[0] ?? text, said: r.messages });
+      },
+      (e: unknown) => setError((e as Error)?.message || "That could not be done."),
+    );
+  };
+  const sheet = answer && <ActionAnswer title={answer.title} said={answer.said} onClose={() => setAnswer(undefined)} />;
+  return { run, sheet, error };
 }

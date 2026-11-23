@@ -81,7 +81,7 @@ func TestCustomerAnswerLongList(t *testing.T) {
 	}
 }
 
-// A public menu's label gives a command as migration 00560 does.
+// A public menu's label gives a command as migration 00569 does.
 func TestMenuCommand(t *testing.T) {
 	taken := map[string]bool{"pay-a-supplier": true}
 	for label, want := range map[string]string{

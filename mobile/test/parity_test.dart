@@ -123,7 +123,7 @@ final screens = <String, Screen>{
   'chats': (
     build: () {
       final f = Fixture('chats');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       // The logos: fetched and decoded for real, outside the test's clock.
@@ -137,7 +137,7 @@ final screens = <String, Screen>{
   'chats-starred': (
     build: () {
       final f = Fixture('chats-starred');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       await _loaded(t);
@@ -148,7 +148,7 @@ final screens = <String, Screen>{
   'chats-search': (
     build: () {
       final f = Fixture('chats-search');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       await _loaded(t);
@@ -163,7 +163,7 @@ final screens = <String, Screen>{
   'explore': (
     build: () {
       final f = Fixture('explore');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       await _loaded(t);
@@ -175,7 +175,7 @@ final screens = <String, Screen>{
   'explore-start': (
     build: () {
       final f = Fixture('explore-start');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       await _loaded(t);
@@ -187,7 +187,7 @@ final screens = <String, Screen>{
   'explore-search': (
     build: () {
       final f = Fixture('explore');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: (t) async {
       await _loaded(t);
@@ -424,7 +424,7 @@ final screens = <String, Screen>{
   'chats-customers': (
     build: () {
       final f = Fixture('customers');
-      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at), onSearchAll: () {});
     },
     drive: _loaded,
   ),

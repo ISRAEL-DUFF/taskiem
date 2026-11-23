@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Who may start a workflow by hand (decision 0070). A definition's roles
+// Who may start a workflow by hand (decision 0073). A definition's roles
 // name the members who may start it, beside run.start; owners always may.
 // The rule holds on every way a person starts a run: the web and the
 // app's Run and the API (startRun), and run in the chat apps and the web's

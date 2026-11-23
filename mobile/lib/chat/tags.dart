@@ -108,8 +108,9 @@ bool _wordStarts(String text, String q) => text.startsWith(q) || text.split(RegE
 
 /// mentions.ts suggest: a word of the name starting with the query first,
 /// then the name holding it, then its category or words holding it; six
-/// at most.
-List<TagSuggestion> suggest(List<TagSuggestion> list, String query) {
+/// at most (every one with [limit] null: a chip of the picker, shown six
+/// at a time).
+List<TagSuggestion> suggest(List<TagSuggestion> list, String query, {int? limit = 6}) {
   final q = query.trim().toLowerCase();
   final starts = <TagSuggestion>[], holds = <TagSuggestion>[], about = <TagSuggestion>[];
   for (final s in list) {
@@ -122,7 +123,8 @@ List<TagSuggestion> suggest(List<TagSuggestion> list, String query) {
       about.add(s);
     }
   }
-  return [...starts, ...holds, ...about].take(6).toList();
+  final all = [...starts, ...holds, ...about];
+  return limit == null ? all : all.take(limit).toList();
 }
 
 /// A group of the "@" picker: "Products", "Services", "Businesses", or the
@@ -160,10 +162,18 @@ List<TagGroup> groupTags(
 
 /// mentions.ts insertMention: the query replaced by the picked name and a
 /// space; the text and where the caret goes.
-({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name) {
+({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name, {String? kind}) {
   // A thing picked with "/" is written as "#" writes an item: "#INV-0104";
-  // a saved thing found with "/mum" as its "@mum".
-  final head = '${text.substring(0, q.start)}${q.mark == '/' ? (q.kind == null ? '@' : '#') : q.mark}$name ';
+  // a saved thing found with "/mum" as its "@mum". Picked under another
+  // chip of the picker (menus-everywhere.md §7): a business or a saved
+  // thing as "@", an invoice or an order as "#" (a customer as typed: in a
+  // group "@" names a member).
+  final mark = switch (kind) {
+    'business' || 'saved' => '@',
+    'invoice' || 'bill' || 'order' || 'purchase' => '#',
+    _ => q.mark == '/' ? (q.kind == null ? '@' : '#') : q.mark,
+  };
+  final head = '${text.substring(0, q.start)}$mark$name ';
   return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
 }
 
@@ -321,3 +331,28 @@ List<TagSuggestion> productRefs(List<StockItem> items) => [
         words: it.description,
       ),
 ];
+
+
+/// The picker's chips (menus-everywhere.md §7): every kind it may offer,
+/// in its order, and what each is called.
+const tagChipLabels = {
+  'all': 'All',
+  'product': 'Products',
+  'service': 'Services',
+  'invoice': 'Invoices',
+  'order': 'Orders',
+  'customer': 'Customers',
+  'business': 'Businesses',
+  'saved': 'Saved',
+};
+
+/// The chip "/invoice" and the like open on.
+String tagChipOf(String? kind) => switch (kind) {
+  'bill' => 'invoice',
+  'purchase' => 'order',
+  null => 'all',
+  _ => kind,
+};
+
+/// The kinds a ref chip searches on the server.
+const tagChipKinds = {'invoice': 'invoice,bill', 'order': 'order,purchase', 'customer': 'customer'};

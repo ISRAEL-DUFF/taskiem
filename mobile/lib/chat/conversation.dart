@@ -24,6 +24,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'menu_card.dart' show MenuCard, MenuMessage, formOf, runActionHere;
 import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
@@ -586,6 +587,13 @@ class ConversationData extends ChangeNotifier {
     }
   }
 
+  /// A message the server wrote here for us (a note Taskiem left): shown
+  /// at once.
+  void arrived(LinkMessage m) {
+    _merge([m]);
+    _changed();
+  }
+
   void _merge(List<LinkMessage> add) {
     final byId = {for (final m in messages ?? const <LinkMessage>[]) m.id: m};
     for (final m in add) {
@@ -896,6 +904,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)..clearSlash = _text.clear;
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
+  /// The tools panel's other view (menus-everywhere.md §4): the topics'
+  /// menu. A row is done through the Taskiem chat and its answer shown in a
+  /// sheet; what Taskiem said stays here as a note only we see.
+  Widget _actionMenu(BuildContext context) => MenuCard(
+    auth: widget.data.chats.auth,
+    menu: const MenuMessage(),
+    open: true,
+    head: false,
+    onAct: (a) => unawaited(_runAction(a.id, a.title, null)),
+    onTool: (key, add) {
+      final tool = _tools.toolsHere('').where((t) => t.key == key).firstOrNull;
+      if (tool == null) return false;
+      _openTool(tool);
+      return true;
+    },
+    onPage: (_) => false,
+    onForm: (reply, text) {
+      final (id, values) = formOf(reply);
+      unawaited(_runAction(id, text, values));
+    },
+  );
+
+  Future<void> _runAction(String id, String title, Map<String, String>? values) async {
+    _tools.close();
+    final d = widget.data;
+    await runActionHere(
+      context,
+      d.chats.auth,
+      id,
+      title,
+      values,
+      link: d.conv.link,
+      onNote: d.arrived,
+      onOpenChat: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+    );
+  }
+
   void _openTool(Tool tool, {String? openId}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
@@ -1136,6 +1181,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tags = TagBox(
     text: _text,
     sources: _tagSources,
+    // Invoices, orders and customers searched on the server, every record
+    // (menus-everywhere.md §7).
+    searchRefs: (words, kinds, cursor) async {
+      final r = await widget.data.api.linkChatRefs(link: widget.data.conv.link, q: words, kind: kinds, cursor: cursor, limit: '20');
+      final now = widget.data.chats.now();
+      return (list: [for (final x in r.refs) refTag(x, now, date: shortDate, status: refStatusWords)], cursor: r.cursor ?? '');
+    },
     grouped: () => widget.data.chats.chatTools,
     taskiem: true,
     onChange: () {
@@ -1552,6 +1604,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     extras: tiles.extras,
                     recent: d.chats.prefs?.recentTools ?? const [],
                     maxHeight: room,
+                    menu: _actionMenu,
                   );
                 },
               ),
@@ -1668,6 +1721,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
         final next = nextOf[m.id];
         final lead = runs[m.id];
         if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
+        if (m.m.kind == 'taskiem') {
+          return TaskiemNote(
+            asked: m.m.asked ?? '',
+            answer: m.m.body ?? '',
+            at: m.m.createdAt,
+            onOpen: widget.onOpenLink == null ? null : () => widget.onOpenLink!('taskiem'),
+          );
+        }
         final first = prev == null || _startsRun(prev.m, m.m);
         final card = m.m.kind == 'card' ? m.m.card : null;
         // Account details in the words: Pay this account under it (phase 2).

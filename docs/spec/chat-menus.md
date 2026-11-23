@@ -62,6 +62,7 @@ The first catalogue, from what Taskiem does today. *Form* names the form the app
 | See what's low | show | show | *stock* |
 | How many of an item | show | show | *stock rice* |
 | Add stock that came in | changes | form: Stock in | *add 50 cartons of Indomie at 8,500* |
+| Add something to count | asks | questions (Do you sell it?) | *add 20 yards of ankara fabric* |
 | Correct a count | changes | questions | *adjust rice -2 spoilt* |
 | Count the shelf | changes | questions (item by item, as now) | *count rice 12, indomie 40* |
 | Record a sale | changes | form: Sell | (as in Sales) |
@@ -234,7 +235,13 @@ Measured in the demo (a 390 px wide phone): a topic's menu (a head, five rows, a
 | `questions` | The first question appears in the chat (§7) |
 | `page` | The page opens (in the app where it has the screen; else the web, as `openToolPage` does) |
 
-Once a row is pressed, the card **folds** to one line ("Riders: Add a rider") with "Show again" to unfold it, as tagged cards fold (17 November 2026); a newer menu folds it too (§6.1). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
+Once a row is pressed, the card **folds** to one line saying what happened, and does not unfold (21 November 2026: "Show again" kept a finished menu alive and in the way):
+
+- **"Riders · You chose Add a rider"**: a row pressed, or a row that opened a tool or a page here.
+- **"Riders · Closed, nothing done"**: its **✕**, in the card's head, so a menu can be put away without choosing.
+- **"Riders · Not used"**: the person typed something else, or a newer menu came (§6.1). A menu stays open only while nothing has been said since it.
+
+How it ended is kept with the menu (`chat_history.menu_done`, migration 00500: `chose:<id>`, `closed`, `passed`) and given in its text as `done` and `chose`, so it folds the same after a reload and on another device. The server ends a person's open menus when they next say something (`settleMenus`); the ✕, and a row that opens a tool or a page (nothing sent to Taskiem), tell it with `POST /v1/taskiem-chat/menus/{id}/close` (`{"chose": id}` for a row). A newer answer makes the card's rows unpressable, as Taskiem's buttons are now (`clearLiveButtons`). In the history the card is kept by its topic and rows' titles only, as buttons are (`keepHistory`).
 
 The card passes the app's rules (`mobile/CLAUDE.md`): light and dark, 340 to 390 wide, large text with nothing cut off, every row 48 px and labelled for screen readers ("Add a rider. Name, phone and the areas they cover. Button."). On the web it passes axe at 390 and 360 in both themes.
 
@@ -351,3 +358,11 @@ Not done: two buttons to a row on Telegram for the topics (one to a row for now)
 - Its button sends the values to Taskiem as `form:<id>:<values>`, with the words the person sees ("Add a rider: Musa Bello, 0803 123 4567, Yaba"). The values are checked as the questions check them; with every one needed, the command is made and read as typed, the form's button being the person's yes; else Taskiem says what to fill in.
 - The actions that had a form of their own (record a sale, stock in, a product, a service, a price list, the handover) keep it.
 - When the model knows the action but not every value (M2), the app and the web get its topic's menu with that row first and filled in; the row opens the form with those values in it. WhatsApp, Telegram and Slack keep the questions.
+
+## What S1b added (22 November 2026)
+
+- **Add something to count** (`stock.new`, under Stock; [what a business buys](what-a-business-buys.md) §4.5): *add 20 yards of ankara fabric* asks **Do you sell it?** for something new, on every channel. It asks by itself, so the model's action and its form are read as typed, with no Yes before the question.
+
+## What U2b added (22 November 2026)
+
+- **The question on what is bought** ([what a business buys](what-a-business-buys.md) §6, In chat): an order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) asks, before its Yes and one line at a time, about each line the business's memory does not know: **How should we treat it?** (Just record it, Add to stock, Keep track of it), for Add to stock **Which stock item?** (five items, materials included, and **A new one**, which asks Do you sell it?), then **Label** (three, **Another** to type one, **No label**). Buttons on Telegram, Slack and in the Taskiem chat; on WhatsApp reply buttons for three, a list beyond. A number, or the words typed or spoken, answer too (`keep track of it, machines`, `add to stock, lace`, `just record it`, in the person's language and English). It is not an action of the catalogue: the order's own command asks it.

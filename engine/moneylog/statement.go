@@ -403,6 +403,11 @@ type Entered struct {
 	Description string    `json:"description"`
 	Vendor      string    `json:"vendor,omitempty"`
 	Category    string    `json:"category,omitempty"`
+	// LabelID is an expense's label (spend_labels), found or made by the
+	// caller; Category is then the label's name, kept as it is
+	// (docs/spec/what-a-business-buys.md §5.4). Without one an expense is
+	// Not labelled, and Category free words, lowered.
+	LabelID *uuid.UUID `json:"label_id,omitempty"`
 	// Channel is where the money moved: "cash" (the default) or an
 	// account ("gtbank/current").
 	Channel string `json:"channel,omitempty"`
@@ -411,7 +416,17 @@ type Entered struct {
 }
 
 // Enter writes cash or an expense a person entered, once per key.
-func (l *Log) Enter(ctx context.Context, tenant uuid.UUID, by string, in Entered) (uuid.UUID, bool, error) {
+func (l *Log) Enter(ctx context.Context, tenant uuid.UUID, by string, in Entered) (id uuid.UUID, fresh bool, err error) {
+	err = db.InTenantTx(ctx, l.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		id, fresh, err = l.EnterTx(ctx, tx, tenant, by, in)
+		return err
+	})
+	return id, fresh, err
+}
+
+// EnterTx is Enter in the caller's transaction, where an expense's label
+// was found or made.
+func (l *Log) EnterTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string, in Entered) (uuid.UUID, bool, error) {
 	switch in.Kind {
 	case "cash":
 		if in.Direction != "in" && in.Direction != "out" {
@@ -449,7 +464,14 @@ func (l *Log) Enter(ctx context.Context, tenant uuid.UUID, by string, in Entered
 	}
 	amount := in.AmountKobo
 	when := in.When
-	return l.Record(ctx, tenant, Entry{Direction: in.Direction, Kind: in.Kind, Status: "settled", Channel: in.Channel, Reference: "entered:" + clip(ref, 180),
+	category := strings.ToLower(strings.TrimSpace(in.Category))
+	if in.LabelID != nil {
+		if in.Kind != "expense" {
+			return uuid.Nil, false, fmt.Errorf("%w: only an expense takes a label", ErrInvalid)
+		}
+		category = strings.TrimSpace(in.Category)
+	}
+	return l.RecordTx(ctx, tx, tenant, Entry{Direction: in.Direction, Kind: in.Kind, Status: "settled", Channel: in.Channel, Reference: "entered:" + clip(ref, 180),
 		AmountKobo: &amount, OccurredAt: &when, Source: "entered", Description: strings.TrimSpace(in.Description), Vendor: strings.TrimSpace(in.Vendor),
-		Category: strings.ToLower(strings.TrimSpace(in.Category)), EnteredBy: by})
+		Category: category, LabelID: in.LabelID, EnteredBy: by})
 }

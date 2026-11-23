@@ -36,6 +36,9 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show handOffFile;
 import 'bills_page.dart' show BillsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
+import 'labels_page.dart' show LabelsPage;
+import 'spending.dart' show SpendingCard;
+import 'things_page.dart' show ThingsPage;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'product_form.dart' show formKey;
@@ -513,8 +516,20 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
             TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'b-bank', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
             TkListRow(title: 'Cash and expenses', icon: 'b-cash', square: look.teal, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
             TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.lime, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
+            if (widget.auth.can('table.read'))
+              TkListRow(title: 'Things we have', sub: 'What you bought to keep', icon: 'b-hash', square: look.violet, onTap: () => _push(context, ThingsPage(auth: widget.auth))),
           ],
         ),
+        // Money's settings: the labels spending is grouped by, renamed and
+        // merged by those who manage money (what a business buys §5.4).
+        if (widget.auth.can('invoice.manage'))
+          TkSection(
+            title: 'Settings',
+            inset: 56,
+            children: [
+              TkListRow(title: 'Labels', sub: 'What you spend on: rename and merge', icon: 'b-hash', square: look.teal, onTap: () => _push(context, LabelsPage(auth: widget.auth))),
+            ],
+          ),
         if (s != null)
           TkSection(
             title: 'In this period',
@@ -550,6 +565,8 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
                 ),
             ],
           ),
+        // Spending by label for the period (what a business buys §5.4).
+        if (s != null && widget.auth.can('invoice.read')) SpendingCard(auth: widget.auth, from: p.from, to: p.to, now: widget.now),
         if (s != null)
           TkSection(
             title: 'By channel',

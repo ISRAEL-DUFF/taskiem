@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/israel-duff/taskiem/engine/stock"
 )
 
 // Deals (chat tools phase 7, docs/spec/chat-tools.md §9): wholesale price
@@ -268,13 +270,15 @@ func CounterTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, prices []int
 		return nil, fmt.Errorf("%w: nothing left to counter", ErrState)
 	}
 	// The buyer's side first: the door narrows the scope to the seller.
-	raw, _ := json.Marshal(lines)
 	var total int64
 	for _, l := range lines {
 		total += l.Quantity * l.CostKobo
 	}
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $2, total_kobo = $3, change = NULL, seller_status = 'received', offer = true, updated_at = now()
-		WHERE id = $1`, id, raw, total); err != nil {
+	if err := stock.SaveLinesTx(ctx, tx, id, lines); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET total_kobo = $2, change = NULL, seller_status = 'received', offer = true, updated_at = now()
+		WHERE id = $1`, id, total); err != nil {
 		return nil, err
 	}
 	if err := stockAuditTx(ctx, tx, buyer, "purchase.countered", p.Reference, id, by); err != nil {

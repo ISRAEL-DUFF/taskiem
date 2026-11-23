@@ -1750,7 +1750,7 @@ func (s *Server) waTrigger(ctx context.Context, c *chat, name string) error {
 			partial = append(partial, x)
 		}
 	}
-	// Only workflows the person may start (decision 0070); one they may
+	// Only workflows the person may start (decision 0073); one they may
 	// not, when nothing else matches, is said with who may.
 	var refused *runnable
 	mine := func(list []runnable) []runnable {

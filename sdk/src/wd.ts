@@ -325,9 +325,9 @@ export interface WorkflowDefinition {
   types?: Record<string, object | boolean>;
   settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
   outputs?: Output[];
-  /** Who may start it by hand (decision 0070): members holding one of these roles, beside run.start; owners always may. Left out: everyone with run.start. */
+  /** Who may start it by hand (decision 0073): members holding one of these roles, beside run.start; owners always may. Left out: everyone with run.start. */
   roles?: string[];
-  /** The workflow as a tool in the chat (decision 0070): its name, command, who it is for and what it answers with. */
+  /** The workflow as a tool in the chat (decision 0073): its name, command, who it is for and what it answers with. */
   tool?: Tool;
 }
 

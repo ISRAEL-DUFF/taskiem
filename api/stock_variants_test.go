@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -111,6 +112,23 @@ func TestStockVariants(t *testing.T) {
 	}
 	if r := items["Air Max 90 – 40, White"]; r == nil || r["available"] != false {
 		t.Fatalf("retired, not deleted: %v", r)
+	}
+	// Each size is counted by a stock item of its own, made at 0 with the
+	// product's unit and levels (spec §12); the one taken off sale has its
+	// stock item retired, its movements kept.
+	w40 := byName["Air Max 90 – 40, White"]
+	if w40["stock"] != float64(0) || w40["stock_item_id"] == nil || w40["unit"] != "pair" || w40["reorder_level"] != float64(2) {
+		t.Fatalf("40 white's stock item: %v", w40)
+	}
+	var retired bool
+	var group string
+	var moves int
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT i.retired_at IS NOT NULL, i.group_of, (SELECT count(*) FROM stock_movements m WHERE m.stock_item_id = i.id)
+		FROM stock_items i WHERE i.id = $1`, w40["stock_item_id"]).Scan(&retired, &group, &moves); err != nil || !retired || group != id {
+		t.Fatalf("40 white retired: %v %q %v", retired, group, err)
+	}
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM stock_movements WHERE stock_item_id = $1`, b40["stock_item_id"]).Scan(&moves); err != nil || moves == 0 {
+		t.Fatalf("43 black's movements: %d %v", moves, err)
 	}
 
 	// The product's new price reaches the sizes that share it.

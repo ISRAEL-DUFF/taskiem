@@ -358,26 +358,11 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 			}
 		}
 		for _, d := range drafts {
-			known, err := links.ItemLinksTx(ctx, tx, c.tenant.ID, d.link.ID)
-			if err != nil {
-				return err
-			}
 			in := make([]orderLineIn, 0, len(d.lines))
 			for _, l := range d.lines {
-				line := orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity}
-				if !slices.ContainsFunc(known, func(k links.ItemLink) bool { return k.SellerItemID == l.Item.ItemID }) {
-					// The first time, an own item of the same name is the one.
-					var same []stock.Item
-					for _, o := range items {
-						if strings.EqualFold(strings.TrimSpace(o.Name), strings.TrimSpace(l.Item.Name)) {
-							same = append(same, o)
-						}
-					}
-					if len(same) == 1 {
-						line.ItemID = same[0].ID
-					}
-				}
-				in = append(in, line)
+				// Unremembered, an own item of the same name (a product, or
+				// a material) is suggested: added to its stock item.
+				in = append(in, orderLineIn{SellerItemID: l.Item.ItemID, Quantity: l.Quantity, suggest: sameNamed(items, l.Item.Name)})
 			}
 			x, err := s.draftFromPricesTx(ctx, tx, c.p, d.link.ID, in, own, "", "wa-"+uuid.NewString())
 			if errAs(err, &unlinked) {
@@ -411,21 +396,20 @@ func (s *Server) waMentionOrder(ctx context.Context, c *chat, text string) (bool
 	case err != nil:
 		return true, err
 	}
-	if len(made) == 1 {
-		x := made[0]
-		return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-			c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-				"total", storefront.FormatNaira(x.TotalKobo))+deliver)
-	}
+	// Each line not remembered is asked how to treat it; then the orders
+	// are shown for one Yes.
 	ids := make([]uuid.UUID, len(made))
-	lines := make([]string, len(made))
 	for i, x := range made {
 		ids[i] = x.ID
-		lines[i] = c.t("wa.mention.draft", "reference", x.Reference, "supplier", whatsapp.SafeText(x.Supplier), "items", whatsapp.SafeText(x.Words()),
-			"total", storefront.FormatNaira(x.TotalKobo))
 	}
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_orders", StockChat: &stockChat{Purchase: &purchaseChat{Drafted: ids}}},
-		c.t("wa.mention.confirm", "count", strconv.Itoa(len(made)), "orders", strings.Join(lines, "\n"))+deliver)
+	// Where they are delivered is said first: the questions on lines not
+	// remembered may come before the orders are shown for Yes.
+	if deliver != "" {
+		if err := c.say(ctx, s, strings.TrimPrefix(deliver, "\n")); err != nil {
+			return true, err
+		}
+	}
+	return true, s.orderAsk(ctx, c, ids)
 }
 
 // sendDrafted sends each of the orders one yes answered: those above the

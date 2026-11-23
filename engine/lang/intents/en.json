@@ -40,5 +40,12 @@
     "invite": ["invite", "add member"]
   },
   "fillers": ["please", "pls", "kindly"],
-  "markers": []
+  "markers": [],
+  "treat": {
+    "record": ["just record it", "just record them", "just record", "record it", "record"],
+    "stock": ["add to stock", "add it to stock", "to stock", "stock it", "stock"],
+    "track": ["keep track of it", "keep track of them", "keep track", "track it", "track them", "track"],
+    "another": ["another", "another label", "another one", "something else"],
+    "no_label": ["no label", "not labelled", "not labeled", "none"]
+  }
 }

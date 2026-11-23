@@ -11,7 +11,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-import '../api/api.g.dart' show Approval, ChatAlert, PageSummary;
+import '../api/api.g.dart' show Approval, ChatAlert, ChatTopic, PageSummary;
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -21,7 +21,8 @@ import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/look.dart';
 import '../kit/modal.dart' show openOrSay;
 import '../kit/polling.dart';
-import '../kit/sheet.dart' show showTkSheet;
+import '../kit/sheet.dart' show TkSheet, showTkSheet;
+import 'menu_card.dart' show MenuCard, MenuMessage, catalogueOf, formOf, runActionHere;
 import '../theme/theme.dart';
 import 'alerts.dart' show subjectWords;
 import 'approve.dart' show ApproveSheet;
@@ -33,7 +34,7 @@ import 'pages_page.dart' show pinnedPageRows;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
 import 'form_request.dart' show FormRequestScreen, sendKeptFormAnswers;
-import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
+import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
 import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -248,8 +249,11 @@ String usualWords(({int kobo, bool? up}) v, DateTime now) {
 }
 
 class TodayTab extends StatefulWidget {
-  const TodayTab({super.key, required this.auth, this.now});
+  const TodayTab({super.key, required this.auth, this.now, this.onSearch});
   final Auth auth;
+
+  /// Search everywhere (menus-everywhere.md §6): its button in the head.
+  final VoidCallback? onSearch;
   final DateTime Function()? now;
 
   @override
@@ -428,6 +432,40 @@ class _TodayTabState extends State<TodayTab> with Polling {
   void _web(String path) {
     final u = Uri.parse('${_auth.transport.base}$path');
     openOrSay(context, () => openInBrowser(u), 'That page could not be opened.');
+  }
+
+  /// A topic of Today's menu: its rows in a sheet; a row pressed leaves
+  /// the sheet for its answer (or its form first).
+  Future<void> _topicSheet(String topic) async {
+    final topics = await catalogueOf(_auth).catchError((Object _) => <ChatTopic>[]);
+    final t = topics.where((x) => x.id == topic).firstOrNull;
+    if (t == null || !mounted) return;
+    await showTkSheet<void>(
+      context,
+      (sheet) => TkSheet(
+        title: t.name,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          child: MenuCard(
+            auth: _auth,
+            menu: MenuMessage(topic: topic),
+            open: true,
+            head: false,
+            onAct: (a) {
+              Navigator.of(sheet).pop();
+              unawaited(runActionHere(context, _auth, a.id, a.title, null));
+            },
+            onTool: (_, _) => false,
+            onPage: (_) => false,
+            onForm: (reply, text) {
+              Navigator.of(sheet).pop();
+              final (id, values) = formOf(reply);
+              unawaited(runActionHere(context, _auth, id, text, values));
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _go(Widget page) async {
@@ -613,12 +651,36 @@ class _TodayTabState extends State<TodayTab> with Polling {
               ],
             ),
           ),
+          if (widget.onSearch != null) ...[const SizedBox(width: 10), TkHeadButton(icon: 'b-search', label: 'Search everything', onTap: widget.onSearch!)],
           if (name.isNotEmpty) ...[const SizedBox(width: 10), TkFace(tkInitials(name), size: 38)],
         ],
       ),
       children: [
         ?top,
         if (tiles.isNotEmpty) TkHighlights(tiles: tiles),
+        // What would you like to do? (menus-everywhere.md §5): the topics
+        // used most, two rows of tiles; a tile's rows in a sheet, done
+        // through the Taskiem chat.
+        const TkSection(title: 'What would you like to do?'),
+        MenuCard(
+          key: const ValueKey('today-menu'),
+          auth: _auth,
+          menu: const MenuMessage(),
+          open: true,
+          head: false,
+          tiles: 7,
+          onTopic: (topic) {
+            unawaited(_topicSheet(topic));
+            return true;
+          },
+          onAct: (a) => unawaited(runActionHere(context, _auth, a.id, a.title, null)),
+          onTool: (_, _) => false,
+          onPage: (_) => false,
+          onForm: (reply, text) {
+            final (id, values) = formOf(reply);
+            unawaited(runActionHere(context, _auth, id, text, values));
+          },
+        ),
         TkSection(
           title: 'Needs you',
           inset: 56,

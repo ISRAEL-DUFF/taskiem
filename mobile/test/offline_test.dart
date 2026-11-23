@@ -225,6 +225,44 @@ void main() {
     store.close();
   });
 
+  test('kept offline, an answer that cannot be read is not sent again and again (the "@Taskiem" loop of 21 November 2026)', () async {
+    final f = Fixture('chat-tunde');
+    final store = await LocalStore.open('t_u', keys);
+    var online = true;
+    var sends = 0;
+    final s = signedIn(
+      f,
+      () => online,
+      also: (req) async {
+        if (req.method == 'POST' && req.url.path == '/v1/link-chats/$_link/messages') {
+          sends++;
+          // The old answer to "@Taskiem": Taskiem's words, no message.
+          return http.Response(jsonEncode({'messages': []}), 202, headers: {'content-type': 'application/json'});
+        }
+        return null;
+      },
+    );
+    s.auth.local = store;
+    final chats = ChatsData(s.auth, now: () => f.at);
+    await chats.load();
+    final conv = chats.conversations.firstWhere((c) => c.link == _link);
+    online = false;
+    final c = ConversationData(chats, conv, follow: false);
+    await c.open();
+    await c.send('@Taskiem sold 5 butter');
+    c.dispose();
+    online = true;
+    for (var n = 0; n < 3; n++) {
+      await chats.load();
+      for (var i = 0; i < 10; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    }
+    expect(sends, 1);
+    expect(store.outbox(), isEmpty);
+    store.close();
+  });
+
   test('signing out leaves nothing of the business on the phone', () async {
     final f = Fixture('chats');
     final s = signedIn(f, () => true);

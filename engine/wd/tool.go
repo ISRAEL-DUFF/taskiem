@@ -9,7 +9,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/expr"
 )
 
-// Made tools (decision 0070): a workflow started on demand declares itself
+// Made tools (decision 0073): a workflow started on demand declares itself
 // a tool with a top-level tool block. What it is called, the command that
 // calls it, who it is for and what it answers with. It is not part of what
 // a run does (decide() never reads it). Who may use it is the workflow's

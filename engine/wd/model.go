@@ -31,11 +31,11 @@ type Definition struct {
 	// step using it gets back, each an expression over its top-level
 	// steps.
 	Outputs []Output `json:"outputs,omitempty"`
-	// Roles are who may start the workflow by hand (decision 0070):
+	// Roles are who may start the workflow by hand (decision 0073):
 	// members holding one of them, beside run.start; owners always may.
 	// Empty: everyone with run.start.
 	Roles []string `json:"roles,omitempty"`
-	// Tool declares the workflow a tool in the chat (decision 0070): its
+	// Tool declares the workflow a tool in the chat (decision 0073): its
 	// name, command and answer. Not part of what a run does.
 	Tool *Tool `json:"tool,omitempty"`
 

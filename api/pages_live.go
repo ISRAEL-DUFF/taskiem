@@ -25,7 +25,7 @@ import (
 // the phone without a reload. It follows the change notices the chat
 // tools and the Chat page use (chat_changes.go's lines reach the Chat
 // page's stream, chat_stream.go): each connection asks, from indexes
-// (migrations 00555 to 00557), what changed since it last looked; nothing
+// (migrations 00564 to 00566), what changed since it last looked; nothing
 // is pushed through the database. The looks go to the read replica when
 // there is one keeping up (Store.ReadTx), as other views that may be
 // seconds stale do.

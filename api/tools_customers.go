@@ -25,10 +25,10 @@ import (
 	"github.com/israel-duff/taskiem/templates"
 )
 
-// Customers' tools (made tools T5, decision 0070 point 6; the build plan's
+// Customers' tools (made tools T5, decision 0073 point 6; the build plan's
 // M5). A business offers its customers the tools it deploys in prod with
 // tool.for "customers", and the entries of its public menu, carried over
-// as tools by migration 00560 (each named by its label, with a command
+// as tools by migration 00569 (each named by its label, with a command
 // made from it; a workflow that declares a customers' tool is that tool
 // instead). A customer reaches them in two places only: the business's own
 // WhatsApp number (menu, then a number) and their chat with the business
@@ -306,7 +306,7 @@ func pressCustomerButton(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor str
 var menuCommandWords = regexp.MustCompile(`[^a-z0-9]+`)
 
 // menuCommand is the command a public menu's label is given (as migration
-// 00560 gave those carried over): its words joined by dashes, starting
+// 00569 gave those carried over): its words joined by dashes, starting
 // with a letter, then -2, -3… past those taken, and past Taskiem's own
 // words in any language (as a tool's command is, wdcheck.ReservedCommand,
 // which reserves the routes' "buttons" too).

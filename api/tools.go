@@ -25,7 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
-// Your tools (made tools M1, decision 0070): a workflow deployed with a
+// Your tools (made tools M1, decision 0073): a workflow deployed with a
 // tool block is a tool of its business in that environment, listed in
 // workflow_tools by the transaction that deploys it. A member calls it by
 // its command: the form, then its care (answers at once with an echo of
@@ -57,7 +57,7 @@ type toolRow struct {
 	AlwaysAsk   bool           `json:"always_ask"`
 	Inputs      map[string]any `json:"inputs,omitempty"`
 	// Menu: a customers' tool carried over from the public menu (made
-	// tools T5, migration 00560): its workflow declares no tool, its name
+	// tools T5, migration 00569): its workflow declares no tool, its name
 	// is the menu's label, and it has no answer but how its run ended.
 	Menu bool `json:"-"`
 }

@@ -436,7 +436,8 @@ const PRODUCTS: [string, number, number, string, number][] = [
 ];
 // Hidden from customers (available off).
 const HIDDEN = ["Ofe nsala", "Grilled croaker fish"];
-// What Ada's Kitchen buys in: [name, stock, unit, reorder level, target, supplier].
+// What Ada's Kitchen buys in, counted and not sold (materials, stock items
+// with no product): [name, stock, unit, reorder level, target, supplier].
 const SUPPLIES: [string, number, string, number, number, string][] = [
   ["Rice, 25kg bag", 4, "bag", 10, 24, "Bayo Rice Mills"],
   ["Rice, 50kg bag", 6, "bag", 3, 10, "Bayo Rice Mills"],
@@ -651,10 +652,9 @@ async function main() {
     adaIds[name] = out.item.id;
   }
   for (const name of HIDDEN) await ada.try("hide " + name, "PATCH", `/v1/stock/items/${adaIds[name]}`, { available: false }, idem("h"));
-  for (const [name, qty, unit, reorder, target, supplier] of SUPPLIES) {
-    const out = await ada.must("POST", "/v1/stock/items", { name, quantity: qty, unit, reorder_level: reorder, target_level: target, supplier }, idem("s"));
+  for (const [name, qty, unit, reorder, target] of SUPPLIES) {
+    const out = await ada.must("POST", "/v1/stock/items", { name, quantity: qty, unit, reorder_level: reorder, target_level: target, material: true }, idem("s"));
     adaIds[name] = out.item.id;
-    await ada.try("supply off the menu " + name, "PATCH", `/v1/stock/items/${adaIds[name]}`, { available: false }, idem("h"));
   }
 
   // ---- sales over the last week, back-dated.
@@ -682,6 +682,10 @@ async function main() {
   await sup("Bayo Rice Mills", "0803 555 0101", "bayo");
   await sup("Mama Tunde's Market", "0805 555 0102", "mama");
   await sup("Zuri Atelier", "0809 555 0108", "zuri");
+  // Each supply's usual supplier, now that they are hers.
+  for (const [name, , , , , supplier] of SUPPLIES)
+    if (supplier === "Bayo Rice Mills" || supplier === "Mama Tunde's Market")
+      await ada.must("PATCH", `/v1/stock/items/${adaIds[name]}`, { supplier }, idem("sp"));
   const order = (
     await ada.must("POST", `/v1/supplier-prices/${linkIds.bayo.ada}/order`, {
       lines: [{ seller_item_id: bayoIds["Rice, 25kg bag"], quantity: 20, item_id: adaIds["Rice, 25kg bag"] }],
@@ -974,7 +978,7 @@ function backdateSales(tenant: string, sales: { key: string; at: string }[]) {
       ((date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') - make_interval(days => v.d) + make_interval(hours => v.h, mins => v.m)) AT TIME ZONE 'Africa/Lagos'))
     FROM (VALUES ${values}) AS v(k, d, h, m)
     WHERE s.tenant_id = ${q(tenant)} AND s.key = 'api-' || v.k;
-    UPDATE stock_movements m SET created_at = s.sold_at, done_at = s.sold_at FROM stock_sales s
+    UPDATE stock_movements m SET created_at = s.sold_at FROM stock_sales s
       WHERE m.tenant_id = s.tenant_id AND s.tenant_id = ${q(tenant)} AND m.reference = s.reference;
     SET session_replication_role = origin;`;
   try {

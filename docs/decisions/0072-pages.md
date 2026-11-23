@@ -11,7 +11,7 @@ Taskiem has screens for what it built: orders, stock, money, staff. A business a
 1. **A page is its own document, `page/v1`**, not part of `wd/v1` (§16, 1): a page draws from many tables (and later tools) and runs nothing, so tying it to one workflow would be wrong for most pages. Its schema is `schemas/page-v1.schema.json`, its contract [page/v1](../contracts/page-v1.md), its validator `engine/pages`. A page has a short `name` (its address and, later, `/name` in the chat), a `title`, an `icon`, `roles`, `filters` and `blocks`.
 2. **The parts are Taskiem's and fixed.** G1 draws a heading, a figure (a count, or a column added up, optionally this day, week or month's beside the one before), a list (grouped by a column too), a table, and a row's detail as a card; the founder put grouped lists and figures with a change in the first release, and the board and the chart later (§16, 5). The list's row and the detail are the same shapes as a made tool's `list` and `card` answers (`item`, `state`, `lines`), named once (`shapes/v1`). There is no free placing, no code, no style of a business's own.
 3. **A page shows what its maker chose, to those its roles let open it** (§16, 2). It reads with the business's connection, as a made tool's answer does, not with the rights of whoever opens it: reading with the viewer's rights would make most pages empty for the staff they are made for. In exchange:
-   - **who may open it** is the published version's `roles`: owners always; none named, everyone in the business; an API key acts as its owner (the rule of decision 0070's `roles`);
+   - **who may open it** is the published version's `roles`: owners always; none named, everyone in the business; an API key acts as its owner (the rule of decision 0073's `roles`);
    - **a personal column is masked** (a phone to its last four digits) unless the viewer also holds `table.read`; the mask is applied before any expression sees the row, and a search by such a viewer never reads a personal column;
    - **publishing says what it shows** ("Tickets: Title, Customer, Status") and to whom, and is audited with both;
    - **making or changing a page needs `table.read`** besides `page.edit`: its maker chooses what of the tables others will see.
@@ -24,7 +24,7 @@ Taskiem has screens for what it built: orders, stock, money, staff. A business a
 ## What G0 and G1 build
 
 - `schemas/page-v1.schema.json`, `engine/pages` (parse and check with problems in plain words that never say "block", "schema" or "query"; what to read for each part; rows shaped and masked; Show as a page), the [contract](../contracts/page-v1.md).
-- `pages` and `page_versions` under forced row-level security, and `tenant_limits.max_pages` (migration 00530).
+- `pages` and `page_versions` under forced row-level security, and `tenant_limits.max_pages` (migration 00539).
 - The API (`/v1/pages`: list, make from a document or a table, get, save the draft, publish, pin, delete, validate, view, a part's next rows or another order), in OpenAPI, the app's client and the [guide](../pages.md).
 - The web's Pages area, the page, the editor (no technical words) and **Show as a page** on a table; the app's Pages list and page. Editing stays on the web.
 

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -609,14 +610,19 @@ func SetPurchaseDeliverToTx(ctx context.Context, tx pgx.Tx, v Vault, tenant, id 
 
 // --- the buyer's purchase order, as the link reads it ---
 
-type purchaseLine struct {
-	ItemID    string `json:"item_id"`
-	Item      string `json:"item"`
-	Unit      string `json:"unit,omitempty"`
-	Quantity  int64  `json:"quantity"`
-	CostKobo  int64  `json:"cost_kobo"`
-	Received  int64  `json:"received"`
-	Delivered *int64 `json:"delivered,omitempty"`
+// purchaseLine is a line of the buyer's purchase order (purchase_lines,
+// stock.LinesTx): the seller's steps change its quantity, price and what
+// was delivered, never how the buyer treats it.
+type purchaseLine = stock.PurchaseLine
+
+// changeLine is a line of what the seller proposes instead, kept on the
+// purchase order (purchase_orders.change, by the lines' positions).
+type changeLine struct {
+	ItemID   string `json:"item_id"`
+	Item     string `json:"item"`
+	Unit     string `json:"unit,omitempty"`
+	Quantity int64  `json:"quantity"`
+	CostKobo int64  `json:"cost_kobo"`
 }
 
 type purchase struct {
@@ -628,7 +634,7 @@ type purchase struct {
 	Note          string
 	Status        string
 	SellerStatus  string
-	Change        []purchaseLine
+	Change        []changeLine
 	DeliveredAt   *time.Time
 	CancelAskedAt *time.Time
 	ShortAt       *time.Time
@@ -644,9 +650,9 @@ type purchase struct {
 
 func purchaseTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (purchase, error) {
 	var p purchase
-	var lines, change, short []byte
-	err := tx.QueryRow(ctx, `SELECT id, reference, link_id, lines, total_kobo, note, status, COALESCE(seller_status, ''), change, delivered_at, cancel_asked_at,
-		short_at, short_agreed_at, short, invoiced_at, offer FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &lines, &p.Total, &p.Note, &p.Status,
+	var change, short []byte
+	err := tx.QueryRow(ctx, `SELECT id, reference, link_id, total_kobo, note, status, COALESCE(seller_status, ''), change, delivered_at, cancel_asked_at,
+		short_at, short_agreed_at, short, invoiced_at, offer FROM purchase_orders WHERE id = $1 FOR UPDATE`, id).Scan(&p.ID, &p.Reference, &p.Link, &p.Total, &p.Note, &p.Status,
 		&p.SellerStatus, &change, &p.DeliveredAt, &p.CancelAskedAt, &p.ShortAt, &p.ShortAgreedAt, &short, &p.InvoicedAt, &p.Offer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, fmt.Errorf("%w: no such purchase order", ErrNotFound)
@@ -664,7 +670,8 @@ func purchaseTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (purchase, error) 
 			}
 		}
 	}
-	return p, json.Unmarshal(lines, &p.Lines)
+	p.Lines, err = stock.LinesTx(ctx, tx, p.ID)
+	return p, err
 }
 
 // settled reports whether the buyer's receipt of a delivery was settled
@@ -855,17 +862,15 @@ func WriteOrderTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID) 
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET seller_status = 'received', updated_at = now() WHERE id = $1`, id); err != nil {
 		return nil, err
 	}
-	// A line whose item the buyer linked to one of the seller's (L4)
-	// reaches the seller as that item: no name matching.
-	linked, err := sellerItemsOf(ctx, tx, buyer, *p.Link)
-	if err != nil {
-		return nil, err
-	}
+	// A line of one of the seller's own items (ordered from its price
+	// list or its shop) reaches the seller as that item: no name matching.
+	// Only what the seller would see goes through the door: never how the
+	// buyer treats the line, its stock item or its label (§7).
 	lines := make([]OrderLine, len(p.Lines))
 	for i, l := range p.Lines {
 		lines[i] = OrderLine{Item: l.Item, Unit: l.Unit, Quantity: l.Quantity, PriceKobo: l.CostKobo, ProposedKobo: l.CostKobo}
-		if id := linked[l.ItemID]; id != "" {
-			lines[i].ItemID, lines[i].Matched = id, "linked"
+		if l.SellerItemID != "" {
+			lines[i].ItemID, lines[i].Matched = l.SellerItemID, "linked"
 		}
 	}
 	detail, _ := json.Marshal(map[string]any{"reference": p.Reference})
@@ -1240,13 +1245,15 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 	}
 	var change []byte
 	if now == OrderChanged && len(o.Change) == len(p.Lines) {
-		pl := make([]purchaseLine, len(p.Lines))
+		pl := make([]changeLine, len(p.Lines))
 		for i, l := range p.Lines {
-			pl[i] = purchaseLine{ItemID: l.ItemID, Item: l.Item, Unit: l.Unit, Quantity: o.Change[i].Quantity, CostKobo: o.Change[i].PriceKobo}
+			pl[i] = changeLine{ItemID: l.ItemID, Item: l.Item, Unit: l.Unit, Quantity: o.Change[i].Quantity, CostKobo: o.Change[i].PriceKobo}
 		}
 		change, _ = json.Marshal(pl)
 	}
-	raw, _ := json.Marshal(p.Lines)
+	if err := stock.SaveLinesTx(ctx, tx, p.ID, p.Lines); err != nil {
+		return nil, err
+	}
 	counter := ""
 	if now == OrderChanged && was != OrderChanged {
 		counter = changeWords(o.Lines, o.Change, o.SellerNote)
@@ -1259,19 +1266,19 @@ func MirrorOrderTx(ctx context.Context, tx pgx.Tx, seller, id uuid.UUID) (*Told,
 		status = "cancelled"
 	}
 	keepAsk := o.CancelAskedAt != nil && live(now)
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET seller_status = $2, seller_note = NULLIF($3, ''), change = $4, lines = $5,
-		total_kobo = CASE WHEN $6 THEN $7 ELSE total_kobo END, status = $8,
-		confirmed_at = CASE WHEN $8 = 'confirmed' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END,
-		confirmed_how = CASE WHEN $8 = 'confirmed' THEN COALESCE(confirmed_how, 'supplier') ELSE confirmed_how END,
-		cancelled_at = CASE WHEN $8 = 'cancelled' THEN COALESCE(cancelled_at, now()) ELSE cancelled_at END,
-		delivered_at = CASE WHEN $9 THEN COALESCE(delivered_at, now()) ELSE delivered_at END,
-		cancel_asked_at = CASE WHEN $10 THEN cancel_asked_at END,
-		short_agreed_at = $11,
-		counter = CASE WHEN $12 <> '' THEN $12 ELSE counter END, counter_at = CASE WHEN $12 <> '' THEN now() ELSE counter_at END,
-		invoiced_at = CASE WHEN $13 THEN COALESCE(invoiced_at, now()) ELSE invoiced_at END,
-		deal_history = $14, deal_until = $15,
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET seller_status = $2, seller_note = NULLIF($3, ''), change = $4,
+		total_kobo = CASE WHEN $5 THEN $6 ELSE total_kobo END, status = $7,
+		confirmed_at = CASE WHEN $7 = 'confirmed' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END,
+		confirmed_how = CASE WHEN $7 = 'confirmed' THEN COALESCE(confirmed_how, 'supplier') ELSE confirmed_how END,
+		cancelled_at = CASE WHEN $7 = 'cancelled' THEN COALESCE(cancelled_at, now()) ELSE cancelled_at END,
+		delivered_at = CASE WHEN $8 THEN COALESCE(delivered_at, now()) ELSE delivered_at END,
+		cancel_asked_at = CASE WHEN $9 THEN cancel_asked_at END,
+		short_agreed_at = $10,
+		counter = CASE WHEN $11 <> '' THEN $11 ELSE counter END, counter_at = CASE WHEN $11 <> '' THEN now() ELSE counter_at END,
+		invoiced_at = CASE WHEN $12 THEN COALESCE(invoiced_at, now()) ELSE invoiced_at END,
+		deal_history = $13, deal_until = $14,
 		updated_at = now() WHERE id = $1`,
-		p.ID, now, o.SellerNote, change, raw, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter, o.InvoiceID != nil,
+		p.ID, now, o.SellerNote, change, accepted, total, status, now == OrderDelivered, keepAsk, o.ShortAgreedAt, counter, o.InvoiceID != nil,
 		dealJSON(o.DealHistory), o.DealUntil); err != nil {
 		return nil, err
 	}
@@ -1567,9 +1574,16 @@ func AcceptChangeTx(ctx context.Context, tx pgx.Tx, buyer, id uuid.UUID, by Acto
 		lines = append(lines, l)
 		total += l.Quantity * l.CostKobo
 	}
-	raw, _ := json.Marshal(lines)
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $2, total_kobo = $3, status = 'confirmed', confirmed_at = now(), confirmed_how = 'supplier',
-		seller_status = 'accepted', change = NULL, updated_at = now() WHERE id = $1`, id, raw, total); err != nil {
+	if len(lines) == 0 {
+		// Nothing of it can come: a confirmed order of no lines is no
+		// order. Cancel it instead.
+		return nil, fmt.Errorf("%w: their answer leaves nothing on %s; cancel it instead", ErrState, p.Reference)
+	}
+	if err := stock.SaveLinesTx(ctx, tx, id, lines); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET total_kobo = $2, status = 'confirmed', confirmed_at = now(), confirmed_how = 'supplier',
+		seller_status = 'accepted', change = NULL, updated_at = now() WHERE id = $1`, id, total); err != nil {
 		return nil, err
 	}
 	if err := stockAuditTx(ctx, tx, buyer, "purchase.change_accepted", p.Reference, id, by); err != nil {
@@ -2085,32 +2099,31 @@ func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUI
 	if err != nil {
 		return o, nil, err
 	}
+	// The buyer's lines, each treated as it remembers the seller's item,
+	// else as suggested: the buyer confirms them (ConfirmProposedTx).
 	pl := make([]purchaseLine, len(lines))
 	for i, x := range lines {
-		pl[i] = purchaseLine{Item: x.Item, Unit: x.Unit, Quantity: x.Quantity, CostKobo: x.PriceKobo}
+		pl[i] = purchaseLine{Item: x.Item, Unit: x.Unit, Quantity: x.Quantity, CostKobo: x.PriceKobo, SellerItemID: x.ItemID}
 	}
-	rawPL, _ := json.Marshal(pl)
-	if _, err := tx.Exec(ctx, `INSERT INTO purchase_orders (id, tenant_id, reference, supplier_id, lines, total_kobo, note, drafted_by, key, link_id, seller_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'proposed')`,
-		po, buyer, ref, supplier, rawPL, total, note, "link:"+name, "link-proposed:"+id.String(), link); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO purchase_orders (id, tenant_id, reference, supplier_id, total_kobo, note, drafted_by, key, link_id, seller_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'proposed')`,
+		po, buyer, ref, supplier, total, note, "link:"+name, "link-proposed:"+id.String(), link); err != nil {
+		return o, nil, err
+	}
+	if err := stock.PutPlacedLinesTx(ctx, tx, buyer, po, supplier, pl, "link:"+name); err != nil {
 		return o, nil, err
 	}
 	return o, &Told{Tenant: buyer, Event: "proposed", Reference: ref, From: name, Order: id, Purchase: po, Link: link, FromTenant: seller}, nil
 }
 
-// BuyerItem is one of the buyer's own items a proposed order's line is.
-type BuyerItem struct {
-	ID   string
-	Name string
-	Unit string
-}
-
 // ConfirmProposedTx confirms an order a linked supplier drafted for us, in
-// the buyer's scope: each line is said to be one of our own items (what
-// comes is received into it), and the order is accepted on both sides,
-// as the supplier proposed it, with where we have orders delivered. The
-// seller's stock is lowered once it commits (the caller's).
-func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID, items []BuyerItem, approver string, by Actor) (*Told, error) {
+// the buyer's scope: how each line is treated, one choice per line (nil:
+// as remembered or suggested; choices nil: all so), every line the buyer
+// had no memory of remembered as confirmed (stock.ConfirmLinesTx); and the
+// order is accepted on both sides, as the supplier proposed it, with where
+// we have orders delivered. The seller's stock is lowered once it commits
+// (the caller's).
+func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.UUID, choices []*stock.LineChoice, approver string, by Actor) (*Told, error) {
 	p, err := purchaseTx(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -2118,27 +2131,18 @@ func ConfirmProposedTx(ctx context.Context, tx pgx.Tx, v Vault, buyer, id uuid.U
 	if p.Link == nil || p.SellerStatus != OrderProposed || p.Status != "drafted" {
 		return nil, fmt.Errorf("%w: %s is not waiting for your Confirm", ErrState, p.Reference)
 	}
-	if len(items) != len(p.Lines) {
-		return nil, fmt.Errorf("%w: say which of your items each of the %d lines is", ErrInvalid, len(p.Lines))
+	if choices != nil && len(choices) != len(p.Lines) {
+		return nil, fmt.Errorf("%w: say how to treat each of the %d lines", ErrInvalid, len(p.Lines))
 	}
-	seen := map[string]bool{}
-	for i, it := range items {
-		if it.ID == "" || strings.TrimSpace(it.Name) == "" {
-			return nil, fmt.Errorf("%w: say which of your items %s is", ErrInvalid, p.Lines[i].Item)
-		}
-		if seen[it.ID] {
-			return nil, fmt.Errorf("%w: %s is on the order twice", ErrInvalid, it.Name)
-		}
-		seen[it.ID] = true
-		p.Lines[i].ItemID, p.Lines[i].Item, p.Lines[i].Unit = it.ID, it.Name, it.Unit
+	if _, err := stock.ConfirmLinesTx(ctx, tx, buyer, id, choices, approver); err != nil {
+		return nil, err
 	}
 	deliver, err := purchaseDeliverToTx(ctx, tx, v, buyer, id)
 	if err != nil {
 		return nil, err
 	}
-	raw, _ := json.Marshal(p.Lines)
-	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET lines = $2, status = 'confirmed', approved_by = $3, sent_at = now(), confirmed_at = now(),
-		confirmed_how = 'supplier', seller_status = 'accepted', updated_at = now() WHERE id = $1`, id, raw, approver); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'confirmed', approved_by = $2, sent_at = now(), confirmed_at = now(),
+		confirmed_how = 'supplier', seller_status = 'accepted', updated_at = now() WHERE id = $1`, id, approver); err != nil {
 		return nil, err
 	}
 	if err := stockAuditTx(ctx, tx, buyer, "purchase.confirmed", p.Reference, id, by); err != nil {

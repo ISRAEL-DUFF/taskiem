@@ -789,3 +789,67 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .tk-answer-note a { display: inline-block; margin-top: 6px; font-weight: 600; }
 /* Your tools after the built-in ones, under their own heading. */
 .tk-tools-sub { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+/* What Taskiem answered a "@Taskiem" typed in a business's conversation,
+   on our side only (Conversation.tsx TaskiemNote). */
+.tk-taskiem-note {
+  align-self: center; width: 92%; max-width: 520px; margin: 6px 0; padding: 12px 14px 6px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 2px 8px var(--chat-shadow);
+}
+.tk-taskiem-note-head { display: flex; align-items: center; gap: 8px; }
+.tk-taskiem-note-mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--brand); color: var(--brand-dark); }
+.tk-taskiem-note-mark svg { width: 14px; height: 14px; }
+.tk-taskiem-note-who { flex: 1; font-size: 12px; font-weight: 600; color: var(--muted); }
+.tk-taskiem-note-when { font-size: 12px; color: var(--muted); }
+.tk-taskiem-note-asked { margin: 8px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.tk-taskiem-note-answer { margin: 4px 0 0; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
+.tk-taskiem-note-open { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--tint-text); text-decoration: none; }
+.tk-taskiem-note-open:hover { text-decoration: underline; }
+.tk-menu-head > span:not(.tk-tile-icon) { flex: 1; min-width: 0; }
+.tk-menu-close { flex: none; align-self: flex-start; display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -8px -8px 0 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.tk-menu-close:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.tk-menu-close svg { width: 18px; height: 18px; }
+
+/* The picker's search box, kinds and Show more (menus-everywhere.md §7). */
+.tk-picker-search { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 2px 4px; padding: 0 14px; border-radius: 14px; background: var(--panel-2); color: var(--muted); }
+.tk-picker-search:focus-within { box-shadow: 0 0 0 2px var(--brand); }
+.tk-picker-search svg { width: 18px; height: 18px; flex: none; }
+.tk-picker-search input[type="search"] { flex: 1; min-width: 0; min-height: 0; margin: 0; border: 0; border-radius: 0; background: none; padding: 10px 0; font: inherit; font-size: 15px; color: var(--text); outline: none; box-shadow: none; -webkit-appearance: none; appearance: none; }
+/* Over the global soft field (styles.css "Fields without outlines"): the
+   picker's box is the field, so the input inside has no fill of its own. */
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):hover,
+.tk-picker .tk-picker-search input[type="search"]:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):focus { background: none; box-shadow: none; outline: none; }
+.tk-picker-chips { padding: 4px 2px 6px; }
+.tk-picker-note { margin: 0; padding: 10px; font-size: 13px; color: var(--muted); }
+.tk-picker-more { display: flex; justify-content: center; padding: 6px 0 2px; }
+
+/* The tools panel's other view, the topics' menu (menus-everywhere.md §4). */
+.tk-tools-view { padding: 0 0 10px; }
+.tk-tools-menu { overflow-y: auto; min-height: 0; }
+.tk-tools-menu .tk-menu { max-width: none; margin: 0; }
+/* What Taskiem said to a row pressed there, in a sheet. */
+.tk-action-answer { padding: 4px 20px 12px; }
+.tk-action-answer p { margin: 0; white-space: pre-line; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+.tk-action-answer-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* Today's "What would you like to do?" (menus-everywhere.md §5). */
+.home-actions { margin: 0 0 16px; }
+.home-actions > h2 { margin: 0 0 8px 4px; font-size: 20px; letter-spacing: -0.02em; }
+.home-actions .tk-menu { max-width: none; margin: 0; }
+
+/* Search everywhere (menus-everywhere.md §6). */
+.head-search { display: inline-grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; color: var(--text); background: var(--panel); }
+.head-search:hover { background: var(--panel-2); }
+.head-search svg { width: 20px; height: 20px; }
+.greeting { position: relative; }
+.greeting-search { position: absolute; top: 0; right: 0; }
+.greeting:has(.greeting-search) > h1, .greeting:has(.greeting-search) > p { padding-right: 52px; }
+.search-everywhere { max-width: 720px; }
+.search-everywhere-box { margin: 0 0 10px; }
+.search-everywhere .tk-chips { padding: 0 0 12px; }
+.search-group { margin: 14px 0 0; }
+.search-group > h2 { margin: 0 0 8px 4px; font-size: 18px; }
+.search-group .item { width: 100%; text-align: left; }
+.search-more { display: flex; justify-content: center; padding: 8px 0 0; }
+.search-hint { margin: 8px 4px; }

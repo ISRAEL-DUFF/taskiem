@@ -31,13 +31,8 @@ func TestPurchaseOrders(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t, map[string]int64{"rice": 0, "indomie": 0, "garri": 0})
 	p := w.purchases()
-	var costs []stock.Cost
-	p.Cost = func(_ context.Context, _ uuid.UUID, row string, kobo int64, _ string) error {
-		costs = append(costs, stock.Cost{ItemID: row, Kobo: kobo})
-		return nil
-	}
-	w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(3)}).ID)
-	w.apply(w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(4)}).ID)
+	w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(3)})
+	w.record(stock.Move{ItemID: "indomie", Item: "Indomie", Reason: stock.Received, Delta: n(4)})
 
 	var dangote stock.Supplier
 	w.in(func(tx pgx.Tx) error {
@@ -61,9 +56,9 @@ func TestPurchaseOrders(t *testing.T) {
 	}
 
 	items := []stock.Item{
-		{ID: "rice", Name: "Rice", Unit: "bag", Stock: n(3), Reorder: n(5), Target: n(20), CostKobo: n(4000000), Supplier: "Dangote Depot"},
-		{ID: "indomie", Name: "Indomie", Unit: "carton", Stock: n(4), Reorder: n(10), Target: n(50), CostKobo: n(850000), Supplier: "dangote depot"},
-		{ID: "garri", Name: "Garri", Stock: n(0), Reorder: n(2), Supplier: "Mama Garri"},
+		{ID: "rice", StockItemID: w.items["rice"].String(), Name: "Rice", Unit: "bag", Stock: n(3), Reorder: n(5), Target: n(20), CostKobo: n(4000000), Supplier: "Dangote Depot"},
+		{ID: "indomie", StockItemID: w.items["indomie"].String(), Name: "Indomie", Unit: "carton", Stock: n(4), Reorder: n(10), Target: n(50), CostKobo: n(850000), Supplier: "dangote depot"},
+		{ID: "garri", StockItemID: w.items["garri"].String(), Name: "Garri", Stock: n(0), Reorder: n(2), Supplier: "Mama Garri"},
 	}
 	var drafted []stock.Purchase
 	var skipped []string
@@ -157,9 +152,16 @@ func TestPurchaseOrders(t *testing.T) {
 	if err != nil || po.Status != stock.FullReceived || po.ReceivedAt == nil || po.ReceivedKobo != po.TotalKobo || w.tb.count("indomie") != 50 {
 		t.Fatalf("all: %+v %v", po, err)
 	}
-	if len(costs) != 3 || costs[1] != (stock.Cost{ItemID: "indomie", Kobo: 850000}) {
-		t.Fatalf("costs: %+v", costs)
-	}
+	// Each stock item's cost price is the order's, set with the receipt.
+	w.in(func(tx pgx.Tx) error {
+		for row, want := range map[string]int64{"rice": 4000000, "indomie": 850000} {
+			x, err := stock.StockItemTx(ctx, tx, w.env.Tenant, w.items[row])
+			if err != nil || x.CostKobo == nil || *x.CostKobo != want {
+				t.Errorf("%s cost: %+v %v", row, x.CostKobo, err)
+			}
+		}
+		return nil
+	})
 	// The receipt that completed it, retried (its answer lost): the same
 	// answer, not "received already"; a key's _ is no wildcard.
 	if again, err := p.Receive(ctx, w.env.Tenant, po.ID, map[string]int64{"rice": 7, "indomie": 46}, "user:owner", "r2"); err != nil ||
@@ -205,7 +207,7 @@ func TestPurchaseOrders(t *testing.T) {
 
 	// Cancelled: only before anything came.
 	w.in(func(tx pgx.Tx) error {
-		other, err := stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: dangote.ID, Lines: []stock.PurchaseLine{{ItemID: "garri", Item: "Garri", Quantity: 5, CostKobo: 100}},
+		other, err := stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: dangote.ID, Lines: []stock.PurchaseLine{{Item: "Garri", Quantity: 5, CostKobo: 100}},
 			Actor: "user:owner", Key: "d-2"})
 		if err != nil {
 			return err
@@ -216,7 +218,9 @@ func TestPurchaseOrders(t *testing.T) {
 		if _, err := stock.CancelTx(ctx, tx, w.env.Tenant, po.ID, "user:owner"); !errors.Is(err, stock.ErrPurchase) {
 			t.Errorf("cancel a received order: %v", err)
 		}
-		for _, bad := range [][]stock.PurchaseLine{nil, {{ItemID: "rice", Item: "Rice", Quantity: 0}}, {{ItemID: "rice", Item: "Rice", Quantity: 1}, {ItemID: "rice", Item: "Rice", Quantity: 1}}} {
+		rice := w.items["rice"]
+		twice := stock.PurchaseLine{Item: "Rice", Quantity: 1, Treatment: stock.AddToStock, StockItemID: &rice}
+		for _, bad := range [][]stock.PurchaseLine{nil, {{Item: "Rice", Quantity: 0}}, {twice, twice}} {
 			if _, err := stock.DraftTx(ctx, tx, w.env.Tenant, stock.DraftIn{Supplier: dangote.ID, Lines: bad, Actor: "user:owner", Key: uuid.NewString()}); !errors.Is(err, stock.ErrPurchase) {
 				t.Errorf("draft %+v: %v", bad, err)
 			}
@@ -224,6 +228,9 @@ func TestPurchaseOrders(t *testing.T) {
 		return nil
 	})
 }
+
+// ref is a pointer to id.
+func ref(id uuid.UUID) *uuid.UUID { return &id }
 
 // txErr runs fn in the tenant's transaction and answers its error.
 func txErr(w *world, fn func(pgx.Tx) error) error {

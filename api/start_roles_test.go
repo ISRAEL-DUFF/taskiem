@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// A workflow's roles hold on every way a person starts it (decision 0070):
+// A workflow's roles hold on every way a person starts it (decision 0073):
 // the API (the web's and the app's Run) and run in the chat, for members,
 // with owners always let through and keys acting as their owner.
 func TestStartRoles(t *testing.T) {

@@ -13,6 +13,8 @@ package api
 import (
 	"context"
 	"maps"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
@@ -25,9 +27,10 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/riders"
-	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // What an action does.
@@ -224,6 +227,13 @@ var chatActions = []chatAction{
 		Shortcut: "add 50 cartons of Indomie at 8,500", Tool: "stock", Add: true,
 		Fields: []chatField{f("what", "What came in? Say how many, like 50 cartons of Indomie.", "text"), opt(f("cost", "What did each cost? Send skip if you'd rather not say.", "money"))},
 		Make:   fill("add {what}[ at {cost}]"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
+	// Something new to count (what-a-business-buys §4.5): its words ask Do
+	// you sell it? (or, for something there already, a Yes), so it asks by
+	// itself.
+	{ID: "stock.new", Topic: "stock", Title: "Add something to count", Line: "Something new, sold or used: fabric, thread, bags", Icon: "stock", Does: doesAsks,
+		Opens: opensQuestions, Shortcut: "add 20 yards of ankara fabric",
+		Fields: []chatField{f("what", "What is it, and how many? Like 20 yards of ankara fabric.", "text")},
+		Make:   fill("add {what}"), may: both(permIn(PermTableEdit, areas.Stock), stockOn)},
 	{ID: "stock.adjust", Topic: "stock", Title: "Correct a count", Line: "Spoilt, missing, or counted wrong", Icon: "stock", Does: doesChanges, Opens: opensQuestions,
 		Shortcut: "adjust rice -2 spoilt",
 		Fields: []chatField{f("item", "Which item?", "item"), f("by", "By how many? Use a minus for less, like -2.", "signed"),
@@ -699,11 +709,10 @@ func (s *Server) choicesFor(ctx context.Context, c *chat, fl chatField) []string
 		if !s.Stock.Ready() {
 			return nil
 		}
-		cat, ok := s.Stock.Table.(stock.Catalogue)
-		if !ok {
+		if s.Stock.Catalogue == nil {
 			return nil
 		}
-		rows, m, err := cat.Rows(ctx, c.tenant.ID)
+		rows, m, err := s.Stock.Catalogue.Rows(ctx, c.tenant.ID)
 		if err != nil || m.Name == "" {
 			return nil
 		}
@@ -884,4 +893,93 @@ func (s *Server) chatActionChoices(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"fields": out})
+}
+
+// chatActionRun is POST /v1/chat/actions/{id}/run {values, link}: a row of
+// a menu pressed outside the Taskiem chat (menus-everywhere.md §3, E2): the
+// grid panel of a business's conversation, Today. It is read in the Taskiem
+// chat as the row's act: (or form:, with values) would be, and kept in its
+// history; the answer is what Taskiem said, for a sheet. With link (a
+// business's conversation), what it said is also kept there as a note only
+// this side sees, as "@Taskiem" leaves one.
+func (s *Server) chatActionRun(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	if p.UserID == uuid.Nil || p.TenantID == uuid.Nil {
+		s.fail(w, r, errForbidden)
+		return
+	}
+	var in struct {
+		Values map[string]string `json:"values"`
+		Link   *uuid.UUID        `json:"link"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeBody(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), p: p, tenant: tenantRef{ID: p.TenantID}}
+	c.lang = s.chooseLang(r.Context(), p.TenantID, c.addr, "")
+	a, ok := chatActionByID(chi.URLParam(r, "id"))
+	if !ok || !s.mayAct(c, s.chatAreas(r.Context(), c), a) {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	// Questions are asked only in the Taskiem chat: anywhere else, an
+	// action that takes values comes with them, from its form.
+	if len(a.Fields) > 0 && len(in.Values) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: fill in its form first", errBadRequest))
+		return
+	}
+	if len(in.Values) > len(a.Fields) {
+		s.fail(w, r, fmt.Errorf("%w: those are not this action's values", errBadRequest))
+		return
+	}
+	if in.Link != nil {
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			_, err := links.GetTx(r.Context(), tx, *in.Link)
+			return err
+		}); err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+	}
+	if !s.limiter("web-chat:"+p.UserID.String(), 3*time.Second, 20).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "slow down: a moment between messages")
+		return
+	}
+	title := word(c.lang.Tag, titleWordID(a), a.Title)
+	msg := whatsapp.Inbound{Type: "interactive", Reply: actPrefix + a.ID, Text: title}
+	if len(a.Fields) > 0 {
+		raw, err := json.Marshal(in.Values)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		var shown []string
+		for _, f := range a.Fields {
+			if v := strings.TrimSpace(in.Values[f.Key]); v != "" {
+				shown = append(shown, v)
+			}
+		}
+		msg.Reply = formPrefix + a.ID + ":" + string(raw)
+		if len(shown) > 0 {
+			msg.Text = title + ": " + strings.Join(shown, ", ")
+		}
+	}
+	said, err := s.taskiemRun(r.Context(), p, msg, nil)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := map[string]any{"messages": said}
+	if in.Link != nil {
+		note, err := s.taskiemNote(r.Context(), p, *in.Link, msg.Text, said, nil)
+		if err != nil {
+			s.fail(w, r, linkMessageErr(err))
+			return
+		}
+		out["note"] = note
+	}
+	writeJSON(w, http.StatusOK, out)
 }

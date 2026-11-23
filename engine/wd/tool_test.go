@@ -7,7 +7,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
-// The tool block (decision 0070) is held to the rules that need only the
+// The tool block (decision 0073) is held to the rules that need only the
 // definition (made tools §5, §7, §11, §12).
 func TestToolBlock(t *testing.T) {
 	doc := func(trigger, tool, inputs, outputs string) []byte {

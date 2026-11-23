@@ -61,6 +61,8 @@ getChatBriefing
 chatRefs
 chatActions
 chatActionChoices
+closeChatMenu
+runChatAction
 
 # Customers' conversations (M3)
 getCustomerChat
@@ -133,6 +135,10 @@ searchCustomerChats
 linkChatItems
 getStorefrontServices
 getStock
+# The Stock page's stock items, and what a product is counted by (S2)
+listStockItems
+putCountedBy
+deleteCountedBy
 
 # Find a business (M3)
 explore
@@ -417,3 +423,24 @@ viewPage
 getPageBlock
 actOnPage
 refreshPage
+# What a business buys U2a: the question on each line and its memory,
+# labels in Money settings (docs/spec/what-a-business-buys.md §6)
+setPurchaseLine
+listItemLinks
+putItemLink
+deleteItemLink
+listSupplierItems
+putSupplierItem
+deleteSupplierItem
+listSpendLabels
+makeSpendLabel
+renameSpendLabel
+mergeSpendLabel
+
+# What a business buys U3: Things we have, spending by label
+# (docs/spec/what-a-business-buys.md §5.3, §5.4)
+listThings
+getThing
+addThing
+patchThing
+getMoneySpending

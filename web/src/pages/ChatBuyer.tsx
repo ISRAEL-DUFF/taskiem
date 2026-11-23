@@ -30,8 +30,9 @@ import { ORDER_STEPS } from "../lib/cardframe";
 import { categoryChips, categoryTag } from "../lib/tools";
 import { breakWords, dealKobo, offWords } from "../lib/deals";
 import { answersDelivery } from "../lib/purchases";
-import { buyerSteps, sameName } from "../lib/tradeorders";
+import { buyerSteps } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
+import { ownLinked } from "../lib/pricelists";
 import type { Purchase } from "../lib/purchases";
 import type { StockView } from "../lib/stock";
 import type { Supplier } from "../lib/purchases";
@@ -41,6 +42,19 @@ import { ErrorBox, useAction, useLoad } from "../ui";
 import { initialsOf } from "./ChatAvatar";
 import { useConfirm } from "./ConfirmSheet";
 import { useBillPay } from "./PayByTransfer";
+import { fromMemory } from "../lib/treat";
+import {
+  LineTreatMark,
+  OrderLinesTreat,
+  orderBodies,
+  orderLineKeys,
+  TrackAskBox,
+  TreatQuestion,
+  useBillMarks,
+  useLabels,
+  useSheetTreat,
+  type Choices,
+} from "./TreatLine";
 
 // The buyer's tools in a conversation with a supplier (docs/spec/chat-tools.md
 // §5, phase 3): an order from their price list (the Buyer design), the
@@ -228,8 +242,7 @@ export function OrderSheet({
           ? `An offer is under their price, ${formatPrice(bag.total)}.`
           : "";
   const linkedTo = (sellerItem: string) =>
-    links.data?.item_links.find((l) => l.seller_item_id === sellerItem)
-      ?.item_id;
+    ownLinked(links.data?.item_links, sellerItem, own.data);
   // A line not linked to one of our items: which it is (the same name found
   // first), or a new item of ours.
   const ownFor = (it: PriceItem) =>
@@ -252,7 +265,22 @@ export function OrderSheet({
         return [of.item_id, of] as const;
       }),
     ).values(),
-  ].filter((it) => !linkedTo(it.item_id));
+  ].filter((it) => soldInSizes(it) && !linkedTo(it.item_id));
+  // Every other line is asked how to treat it (what a business buys §6),
+  // from what we remember of their item, else Taskiem's suggestion.
+  const treat = useSheetTreat(!browse);
+  const memoryOf = (seller: string) => {
+    const m = links.data?.item_links.find((x) => x.seller_item_id === seller);
+    return m ? fromMemory(m) : undefined;
+  };
+  const sizedLine = (it: OrderItem) => soldInSizes(lineProduct(it));
+  const treatedLines = bag.lines.filter((l) => !sizedLine(l.item));
+  const answered = treat.ready(
+    treatedLines.map((l) => ({
+      key: l.item.item_id,
+      memory: memoryOf(l.item.item_id),
+    })),
+  );
   // Which product's sizes are open to choose (the one Order was tapped on).
   const [grid, setGrid] = useState<string | undefined>(start?.itemId);
   // Their categories as chips; the list under their headings.
@@ -283,7 +311,7 @@ export function OrderSheet({
     keys: Record<string, string>;
   }>({ items: {}, orders: {}, keys: {} });
   const keyOf = (what: string) => (made.current.keys[what] ??= key());
-  const place = async () => {
+  const place = async (cs?: Choices) => {
     setBusy(true);
     setError(undefined);
     const m = made.current;
@@ -308,6 +336,14 @@ export function OrderSheet({
       const lines = [];
       for (const l of bag.lines) {
         const seller = l.item.item_id;
+        if (!sizedLine(l.item)) {
+          lines.push({
+            seller_item_id: seller,
+            quantity: l.quantity,
+            ...(await treat.body(seller, l.item.unit, cs)),
+          });
+          continue;
+        }
         // A size: ours is the product's, linked or chosen once for all its
         // sizes.
         const of = lineProduct(l.item);
@@ -331,12 +367,34 @@ export function OrderSheet({
       const what = JSON.stringify([lines, note.trim(), deal]);
       let order = m.orders[what];
       if (!order) {
-        const out = await postOnce<{ purchase: Purchase }>(
-          `/v1/supplier-prices/${encodeURIComponent(link)}/order`,
-          keyOf(`order-${what}`),
-          { lines, note: note.trim(), ...deal },
-        );
+        let out: { purchase: Purchase };
+        try {
+          out = await postOnce<{ purchase: Purchase }>(
+            `/v1/supplier-prices/${encodeURIComponent(link)}/order`,
+            keyOf(`order-${what}`),
+            { lines, note: note.trim(), ...deal },
+          );
+        } catch (e) {
+          // Many to keep track of: asked first (TrackAskBox).
+          if (treat.refused(e, bag.lines.map((l) => l.item.item_id))) {
+            setBusy(false);
+            return;
+          }
+          throw e;
+        }
         order = m.orders[what] = out.purchase;
+        const drafted = out.purchase;
+        await treat.remember(
+          drafted.id,
+          treatedLines.map((l) => ({
+            key: l.item.item_id,
+            unit: l.item.unit,
+            position:
+              drafted.lines?.find((x) => x.seller_item_id === l.item.item_id)
+                ?.position ?? bag.lines.indexOf(l),
+          })),
+          cs,
+        );
       }
       try {
         await post(`/v1/stock/purchases/${encodeURIComponent(order.id)}/send`);
@@ -469,7 +527,7 @@ export function OrderSheet({
                 type="button"
                 className="tk-cta"
                 disabled={
-                  busy || !loaded || stockOff || !!offerProblem
+                  busy || !loaded || stockOff || !!offerProblem || !answered
                 }
                 onClick={() => void place()}
               >
@@ -746,6 +804,42 @@ export function OrderSheet({
               </li>
             ))}
           </ul>
+          {treatedLines.length > 0 && (
+            <div data-testid="treat-lines">
+              <p className="tk-form-now">
+                How should we treat each? Said once, it is remembered for next
+                time.
+              </p>
+              {treatedLines.map((l) => (
+                <TreatQuestion
+                  key={l.item.item_id}
+                  item={l.item.name}
+                  supplier={business}
+                  category={lineProduct(l.item).category}
+                  data={treat.data}
+                  memory={memoryOf(l.item.item_id)}
+                  value={treat.choices[l.item.item_id]}
+                  onChange={treat.setter(l.item.item_id)}
+                />
+              ))}
+            </div>
+          )}
+          {treat.ask && (
+            <TrackAskBox
+              ask={treat.ask.ask}
+              busy={busy}
+              onYes={() =>
+                void place(
+                  treat.answer(true, memoryOf(treat.ask?.key ?? "")),
+                )
+              }
+              onRecord={() =>
+                void place(
+                  treat.answer(false, memoryOf(treat.ask?.key ?? "")),
+                )
+              }
+            />
+          )}
           {unlinkedProducts.length > 0 && (
             <>
               <p className="tk-form-now">
@@ -854,17 +948,27 @@ export function PurchaseView({
   const steps = buyerSteps(purchase);
   // Delivered and not yet said what came (a received order is done).
   const delivery = answersDelivery(purchase) && purchase.status !== "received";
-  const own = useLoad(
-    () =>
-      mode === "confirm"
-        ? get<StockView>("/v1/stock").then((r) => r.items)
-        : Promise.resolve(undefined),
-    [mode],
-  );
-  const [chosen, setChosen] = useState<Record<number, string>>({});
-  const pick = (i: number) =>
-    chosen[i] ?? sameName(own.data ?? [], purchase.lines[i]?.item ?? "");
-  const picks = purchase.lines.map((_, i) => pick(i));
+  // Confirming their quote asks how each line is treated (what a
+  // business buys §6); the lines show their label and where they went.
+  const treat = useSheetTreat(mode === "confirm");
+  const labels = useLabels();
+  const answered = treat.ready(orderLineKeys(purchase));
+  const confirmQuote = async (cs?: Choices) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const lines = await orderBodies(purchase, treat, cs);
+      await post(
+        `/v1/stock/purchases/${encodeURIComponent(purchase.id)}/confirm-proposed`,
+        { lines },
+      );
+      onSaved(`Confirmed ${purchase.reference}`);
+    } catch (e) {
+      if (!treat.refused(e, orderLineKeys(purchase).map((x) => x.key)))
+        setError(e);
+      setBusy(false);
+    }
+  };
   const [counts, setCounts] = useState<Record<number, string>>({});
   const countOf = (i: number) =>
     counts[i] ??
@@ -940,6 +1044,9 @@ export function PurchaseView({
               <li key={i}>
                 <span>
                   {l.quantity} × {l.item}
+                  {l.treatment && (
+                    <LineTreatMark line={l} labels={labels.data} />
+                  )}
                 </span>
                 <b>
                   {l.cost_kobo
@@ -955,38 +1062,21 @@ export function PurchaseView({
           </ul>
         )}
         {mode === "confirm" &&
-          (!own.data ? (
-            own.error ? (
-              <p className="tk-form-now">
-                Keep your stock on Taskiem to confirm it, so what comes is
-                received into your items.
-              </p>
-            ) : (
-              <KitLoading rows={2} label="Loading your items…" />
-            )
+          (!treat.data.ready ? (
+            <KitLoading rows={2} label="Loading your labels and stock…" />
           ) : (
-            <>
+            <div data-testid="treat-lines">
               <p className="tk-form-now">
-                Which of your items is each? What comes is received into it.
+                How should we treat each? Said once, it is remembered for next
+                time.
               </p>
-              {purchase.lines.map((l, i) => (
-                <KitField key={i} label={`Their ${l.item}`}>
-                  <select
-                    value={pick(i)}
-                    onChange={(e) =>
-                      setChosen({ ...chosen, [i]: e.target.value })
-                    }
-                  >
-                    <option value="">Choose your item</option>
-                    {(own.data ?? []).map((it) => (
-                      <option key={it.id} value={it.id}>
-                        {it.name}
-                      </option>
-                    ))}
-                  </select>
-                </KitField>
-              ))}
-            </>
+              <OrderLinesTreat
+                purchase={purchase}
+                treat={treat}
+                rememberable={false}
+                onAsked={confirmQuote}
+              />
+            </div>
           ))}
         {mode === "short" && (
           <>
@@ -1031,14 +1121,8 @@ export function PurchaseView({
             <button
               type="button"
               className="tk-cta"
-              disabled={busy || !own.data || picks.some((x) => !x)}
-              onClick={() =>
-                void act(
-                  "confirm-proposed",
-                  `Confirmed ${purchase.reference}`,
-                  { items: picks },
-                )
-              }
+              disabled={busy || !answered}
+              onClick={() => void confirmQuote()}
             >
               Confirm the order
             </button>
@@ -1174,6 +1258,7 @@ export function BillView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const hero = billHero(bill);
+  const mark = useBillMarks(bill.lines);
   const st = billStatus(bill.status);
   const due = bill.due_on
     ? new Date(bill.due_on).toLocaleDateString("en-GB", {
@@ -1232,6 +1317,7 @@ export function BillView({
             <li key={i}>
               <span>
                 {l.quantity} × {l.description}
+                {mark?.(l)}
               </span>
               <b>{formatPrice(Math.round(l.quantity * l.unit_kobo))}</b>
             </li>

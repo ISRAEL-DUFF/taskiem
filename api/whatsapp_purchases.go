@@ -339,6 +339,9 @@ type purchaseChat struct {
 	Amount   int64       `json:"amount,omitempty"`
 	How      string      `json:"how,omitempty"`
 	Drafted  []uuid.UUID `json:"drafted,omitempty"`
+	// Treat is the question on the lines of orders drafted in chat, asked
+	// before they are shown for Yes (chat_purchase_treat.go).
+	Treat *treatAsk `json:"treat,omitempty"`
 }
 
 var (
@@ -512,10 +515,7 @@ func (s *Server) waOrderFrom(ctx context.Context, c *chat, name string) error {
 	if len(drafted) == 0 {
 		return c.say(ctx, s, c.t("wa.order.none", "name", whatsapp.SafeText(sup.Name)))
 	}
-	x := drafted[0]
-	return s.shopAsk(ctx, c, &chatShop{Action: "stock_order", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID}}},
-		c.t("wa.order.confirm", "reference", x.Reference, "items", whatsapp.SafeText(x.Words()), "supplier", whatsapp.SafeText(x.Supplier),
-			"total", storefront.FormatNaira(x.TotalKobo)))
+	return s.orderAsk(ctx, c, []uuid.UUID{drafted[0].ID})
 }
 
 // waReceived answers "received 50 cartons of Indomie": against the open
@@ -610,8 +610,12 @@ func (s *Server) waPaidSupplier(ctx context.Context, c *chat, m []string) (bool,
 	if len(orders) == 0 {
 		return true, c.say(ctx, s, c.t("wa.paid.none", "name", whatsapp.SafeText(sup.Name)))
 	}
-	x := orders[0]
-	return true, s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
+	return true, s.askPaySupplier(ctx, c, sup, orders[0], amount, how)
+}
+
+// askPaySupplier asks Yes to a payment of amount on order x (stock_pay).
+func (s *Server) askPaySupplier(ctx context.Context, c *chat, sup stock.Supplier, x stock.Purchase, amount int64, how string) error {
+	return s.shopAsk(ctx, c, &chatShop{Action: "stock_pay", StockChat: &stockChat{Purchase: &purchaseChat{Purchase: x.ID, Amount: amount, How: how}}},
 		c.t("wa.paid.confirm", "supplier", whatsapp.SafeText(sup.Name), "amount", storefront.FormatNaira(amount), "how", c.t("sales.how_"+how),
 			"reference", x.Reference))
 }

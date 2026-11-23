@@ -11,7 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 )
 
-// Rows changed (pages §9, migration 00555): a table's rows are kept by
+// Rows changed (pages §9, migration 00564): a table's rows are kept by
 // Xenibase, so Taskiem records when it last wrote them, for an open page
 // over the table to be told (api/pages_live.go). One row a table, written
 // after the write, in a short transaction of its own; never a row's

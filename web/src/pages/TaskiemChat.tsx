@@ -227,6 +227,8 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     tools: chatTools,
     // Your tools (made tools M1): whether or not the built-in tools are on.
     madeTools: true,
+    // The tools panel's menu: as a row of the chat's own menus.
+    onAction: (reply, text) => say({ reply, text }),
     // With chat tools, "@" tags things and businesses in groups, and finds
     // businesses not yet linked (their card, with Connect); Taskiem is
     // who is being talked to, so it is not offered.
@@ -519,8 +521,18 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         break;
       }
     }
-    // The newest menu stays open; every other folds (chat-menus.md §6.1).
-    const lastMenu = [...list].reverse().find((m) => m.kind === "menu")?.id;
+    // The newest menu stays open while nothing has been said since it;
+    // every other folds (chat-menus.md §6.1; folding once the person types
+    // something else, 21 November 2026).
+    let lastMenu: string | undefined;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (!m || m.inbound) break;
+      if (m.kind === "menu") {
+        lastMenu = m.id;
+        break;
+      }
+    }
     return { pressed, answered, pressableId, lastMenu };
   }, [messages]);
 

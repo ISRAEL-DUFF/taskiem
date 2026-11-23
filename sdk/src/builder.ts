@@ -370,7 +370,7 @@ export interface WorkflowOptions {
   outputs?: (Omit<Output, "value"> & { value: Expr })[];
   /** Who may start it by hand: members holding one of these roles (owners always may). Left out: everyone who may start runs. */
   roles?: string[];
-  /** The workflow as a tool in the chat: its name, command, who it is for and what it answers with (decision 0070). */
+  /** The workflow as a tool in the chat: its name, command, who it is for and what it answers with (decision 0073). */
   tool?: Tool;
 }
 

@@ -235,19 +235,10 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 		return nil, err
 	}
 	// An item already on an open order is dealt with: no card.
-	onOrder := map[string]bool{}
+	var onOrder map[string]bool
 	if err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT l->>'item_id' FROM purchase_orders o, jsonb_array_elements(o.lines) l
-			WHERE o.tenant_id = $1 AND o.status IN ('drafted', 'sent', 'confirmed', 'part_received')`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		ids, err := pgx.CollectRows(rows, pgx.RowTo[*string])
-		for _, id := range ids {
-			if id != nil {
-				onOrder[*id] = true
-			}
-		}
+		var err error
+		onOrder, err = stock.OnOrderTx(ctx, tx, p.TenantID)
 		return err
 	}); err != nil {
 		return nil, err
@@ -258,7 +249,7 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 	byProduct := map[string][]stock.Item{}
 	var products []string
 	for _, it := range items {
-		if !it.Low() || onOrder[it.ID] || !it.Available && it.VariantOf != "" {
+		if !it.Low() || it.OnOrder(onOrder) || !it.Available && it.VariantOf != "" {
 			continue
 		}
 		if it.VariantOf != "" {
@@ -287,21 +278,34 @@ func (s *Server) lowStockAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 				return err
 			}
 			for _, l := range lists {
-				ls, err := links.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
+				// Their items the business remembers adding to a stock item:
+				// each of ours counted by it; a size of theirs, its product
+				// for our product's sizes.
+				ls, err := stock.ItemLinksTx(ctx, tx, p.TenantID, l.LinkID)
 				if err != nil {
 					return err
 				}
 				flat := links.Flat(l.Items)
 				for _, il := range ls {
-					if pi, ok := flat[il.SellerItemID]; ok && pi.Available {
-						if _, ok := from[il.ItemID]; !ok {
-							from[il.ItemID] = sells{supplier: l, item: pi}
-						}
+					pi, ok := flat[il.SellerItemID]
+					if !ok || !pi.Available || il.StockItemID == nil {
+						continue
 					}
-					for _, pi := range l.Items {
-						if pi.ItemID == il.SellerItemID && len(pi.Sizes) > 0 && pi.Available {
-							if _, ok := sized[il.ItemID]; !ok {
-								sized[il.ItemID] = sells{supplier: l, item: pi}
+					for _, it := range items {
+						if it.StockItemID != il.StockItemID.String() {
+							continue
+						}
+						if _, ok := from[it.ID]; !ok {
+							from[it.ID] = sells{supplier: l, item: pi}
+						}
+						if it.VariantOf == "" || pi.VariantOf == "" {
+							continue
+						}
+						for _, theirs := range l.Items {
+							if theirs.ItemID == pi.VariantOf && len(theirs.Sizes) > 0 && theirs.Available {
+								if _, ok := sized[it.VariantOf]; !ok {
+									sized[it.VariantOf] = sells{supplier: l, item: theirs}
+								}
 							}
 						}
 					}

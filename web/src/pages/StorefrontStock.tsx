@@ -18,6 +18,7 @@ import {
 import {
   PAID_HOW,
   REASON,
+  SHOW,
   addRequest,
   byHowLine,
   emptySale,
@@ -33,38 +34,62 @@ import {
   type UnsoldEntry,
   changeRequest,
   emptyItem,
-  itemForm,
   itemProblem,
-  itemSub,
   movePreview,
   moveProblem,
   moveRequest,
   movementSub,
   movementTitle,
+  quantity,
+  rowCount,
+  rowCounted,
+  rowEdit,
+  rowForm,
+  rowSub,
+  soldAsLine,
   stockLine,
+  stockList,
+  worthLine,
+  type Counted,
   type ItemForm,
   type MoveForm,
   type Movement,
   type MovementReason,
   type StockItem,
+  type StockItemRow,
+  type StockItemsView,
+  type StockShow,
   type StockView,
 } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
-import {
-  hasSizes,
-  label,
-  sizesLine,
-  sizesOf,
-  sizesWords,
-} from "../lib/variants";
+import { sizesWords } from "../lib/variants";
 import { CountsCard } from "./StockCounts";
 import { PurchasesCard } from "./StockPurchases";
 import { StorefrontTabs } from "./Storefront";
 
-/** A shop's stock (docs/stock.md): its items and how many are left, the
- * low ones first, and every change kept as a movement. */
+/** A shop's stock (docs/stock.md; what a business buys §4.5): what it
+ * counts, each stock item with what it is sold as (or Not sold), the low
+ * ones first, and every change kept as a movement. */
 export function StorefrontStock() {
   const view = useLoad(() => get<StockView>("/v1/stock"), []);
+  const v = view.data;
+  const [show, setShow] = useState<StockShow>("all");
+  const counted = useLoad(
+    () =>
+      v?.keeps_stock
+        ? get<StockItemsView>(`/v1/stock/stock-items?show=${show}`)
+        : Promise.resolve(null),
+    [v?.keeps_stock, show],
+  );
+  // The low card is of everything counted, whatever the filter shows.
+  const everything = useLoad(
+    () =>
+      v?.keeps_stock && show !== "all"
+        ? get<StockItemsView>("/v1/stock/stock-items?show=all")
+        : Promise.resolve(null),
+    [v?.keeps_stock, show],
+  );
+  const all = show === "all" ? counted.data : everything.data;
   const [item, setItem] = useState("");
   const [reason, setReason] = useState<MovementReason | "">("");
   const moves = useLoad(
@@ -75,11 +100,10 @@ export function StorefrontStock() {
     [item, reason],
   );
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<StockItem | null>(null);
-  const [moving, setMoving] = useState<StockItem | null>(null);
+  const [editing, setEditing] = useState<StockItemRow | null>(null);
+  const [moving, setMoving] = useState<StockItemRow | null>(null);
   const [selling, setSelling] = useState<{ entry?: UnsoldEntry } | null>(null);
   const act = useAction();
-  const v = view.data;
   const sales = useLoad(
     () =>
       v?.keeps_stock ? get<SalesDay>("/v1/stock/sales") : Promise.resolve(null),
@@ -87,16 +111,23 @@ export function StorefrontStock() {
   );
   const reload = () => {
     view.reload();
+    counted.reload();
+    everything.reload();
     moves.reload();
     sales.reload();
   };
-  const low = v?.items.filter((i) => i.low) ?? [];
-  const stuck = v?.stuck?.length ?? 0;
+  const low = all?.items.filter((r) => r.low) ?? [];
+  // What can be sold: products, not materials.
+  const sellable = v?.items.filter((i) => !i.material) ?? [];
+  const named = (id: string) =>
+    all?.items.find((r) => r.id === id)?.name ??
+    counted.data?.items.find((r) => r.id === id)?.name ??
+    "The item";
   return (
     <>
       <PageHeader
         title="Stock"
-        description="Your items and how many are left. Every change is kept, so a count can always be explained."
+        description="What you count and how many are left: what you sell, and what you use. Every change is kept, so a count can always be explained."
         actions={
           v?.keeps_stock && (
             <button
@@ -104,7 +135,7 @@ export function StorefrontStock() {
               className="primary"
               onClick={() => setAdding(true)}
             >
-              Add items
+              Add something to count
             </button>
           )
         }
@@ -119,8 +150,8 @@ export function StorefrontStock() {
           </h2>
           <p className="hint">
             {v.catalogue
-              ? `Taskiem keeps the count in your ${v.catalogue} table, adding the columns it needs: stock, unit, cost price, reorder level and supplier.`
-              : "Taskiem makes a products table for your items and keeps the count there. You need no page for it."}{" "}
+              ? `Taskiem counts your items itself, each change with its reason. Your ${v.catalogue} table keeps what you sell and its prices.`
+              : "Taskiem makes a products table for what you sell, and counts your items itself. You need no page for it."}{" "}
             On WhatsApp, send{" "}
             <strong>add 50 cartons of Indomie at 8,500</strong>.
           </p>
@@ -150,15 +181,8 @@ export function StorefrontStock() {
             <SalesToday
               day={sales.data}
               onSell={(entry) => setSelling({ entry })}
-              canSell={v.items.length > 0}
+              canSell={sellable.length > 0}
             />
-          )}
-          {stuck > 0 && (
-            <div className="notice" role="status">
-              {stuck === 1 ? "1 change has" : `${stuck} changes have`} not
-              reached your {v.catalogue} table yet. Taskiem sends{" "}
-              {stuck === 1 ? "it" : "them"} again by itself.
-            </div>
           )}
           <section className="card" aria-labelledby="stock-low">
             <h2 id="stock-low" style={{ marginTop: 0 }}>
@@ -166,27 +190,27 @@ export function StorefrontStock() {
             </h2>
             {low.length === 0 ? (
               <p className="hint">
-                {v.items.some((i) => i.reorder_level !== undefined)
+                {all?.items.some((r) => r.low_level !== null)
                   ? "Nothing is at or below its reorder level."
                   : "Give your items a reorder level, and they show here when they run low."}
               </p>
             ) : (
               <Items label="Low on stock">
-                {low.map((it) => (
+                {low.map((r) => (
                   <Row
-                    key={it.id}
-                    letter={it.name}
-                    title={it.name}
-                    side={<span className="badge warn">{stockLine(it)}</span>}
-                    sub={<span className="sub">{itemSub(it)}</span>}
+                    key={r.id}
+                    letter={r.name}
+                    title={r.name}
+                    side={<span className="badge warn">{rowCount(r)}</span>}
+                    sub={<span className="sub">{rowSub(r)}</span>}
                     testid="low-item"
                   >
                     <button
                       type="button"
                       className="small"
-                      onClick={() => setMoving(it)}
+                      onClick={() => setMoving(r)}
                     >
-                      Record stock<span className="sr-only"> of {it.name}</span>
+                      Record stock<span className="sr-only"> of {r.name}</span>
                     </button>
                   </Row>
                 ))}
@@ -197,72 +221,116 @@ export function StorefrontStock() {
           <CountsCard items={v.items} onChanged={reload} />
           <section className="card" aria-labelledby="stock-items">
             <h2 id="stock-items" style={{ marginTop: 0 }}>
-              Your items
+              What you count
             </h2>
-            {v.items.length === 0 ? (
-              <EmptyState icon="tables">
-                No items yet. Add what you sell, and how many you have.
-              </EmptyState>
-            ) : (
-              <Items label="Your items">
-                {deskRows(v.items).map(({ it, size, sizes }) => (
-                  <Row
-                    key={it.id}
-                    letter={size ? undefined : it.name}
-                    title={size ? label(it.variant, size.choices) : it.name}
-                    side={
-                      <span
-                        className={`badge ${it.low || (sizes && sizes.low > 0) ? "warn" : it.stock === null && !sizes ? "muted" : "ok"}`}
-                      >
-                        {sizes
-                          ? `${sizesWords(sizes.count)}${sizes.stock !== null ? ` · ${sizes.stock} in stock` : ""}${sizes.low ? ` · ${sizes.low} low` : ""}`
-                          : stockLine(it)}
-                      </span>
-                    }
-                    sub={
-                      <span className="sub">
-                        {size ? `Of ${size.name}` : itemSub(it)}
-                      </span>
-                    }
-                    testid={size ? "stock-size" : "stock-item"}
+            <div className="period-bar">
+              <div className="segmented" role="group" aria-label="Show">
+                {(Object.keys(SHOW) as StockShow[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={show === s}
+                    onClick={() => setShow(s)}
                   >
-                    {!sizes && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setMoving(it)}
-                      >
-                        Record stock
-                        <span className="sr-only"> of {it.name}</span>
-                      </button>
-                    )}
-                    {!size && (
-                      <button
-                        type="button"
-                        className="small"
-                        onClick={() => setEditing(it)}
-                      >
-                        Change<span className="sr-only"> {it.name}</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="small"
-                      onClick={() => setItem(it.id)}
-                    >
-                      History<span className="sr-only"> of {it.name}</span>
-                    </button>
-                  </Row>
+                    {SHOW[s]}
+                  </button>
                 ))}
-              </Items>
+              </div>
+            </div>
+            <ErrorBox error={counted.error} />
+            {!counted.data && !counted.error && (
+              <Skeleton rows={3} label="Loading what you count…" />
+            )}
+            {counted.data && counted.data.items.length === 0 && (
+              <EmptyState icon="tables">
+                {show === "sold"
+                  ? "Nothing you sell is counted yet."
+                  : show === "not_sold"
+                    ? "Nothing counted that you don't sell. Fabric, thread, packaging: add them and answer No to Do you sell it?"
+                    : "Nothing counted yet. Add what you sell, or what you use, and how many you have."}
+              </EmptyState>
+            )}
+            {counted.data && counted.data.items.length > 0 && (
+              <>
+                <p className="hint" data-testid="stock-worth">
+                  {worthLine(counted.data, show)}
+                </p>
+                <Items label="What you count">
+                  {stockList(counted.data.items).map((x) =>
+                    x.kind === "group" ? (
+                      <Row
+                        key={`g-${x.id}`}
+                        letter={x.name}
+                        title={x.name}
+                        side={
+                          <span className={`badge ${x.low ? "warn" : "ok"}`}>
+                            {`${sizesWords(x.sizes)} · ${quantity(x.count)} in stock${x.low ? ` · ${x.low} low` : ""}`}
+                          </span>
+                        }
+                        sub={
+                          <span className="sub">
+                            Each size and colour is counted on its own, below.
+                          </span>
+                        }
+                        testid="stock-group"
+                      />
+                    ) : (
+                      <Row
+                        key={x.row.id}
+                        letter={x.group ? undefined : x.row.name}
+                        icon={x.group ? "tables" : undefined}
+                        title={x.row.name}
+                        side={
+                          <span
+                            className={`badge ${x.row.low ? "warn" : "ok"}`}
+                          >
+                            {rowCount(x.row)}
+                          </span>
+                        }
+                        sub={
+                          <span className="sub">
+                            <span className="block" data-testid="sold-as">
+                              {x.group ? `Of ${x.group} · ` : ""}
+                              {soldAsLine(x.row)}
+                            </span>
+                            <span className="block">{rowSub(x.row)}</span>
+                          </span>
+                        }
+                        testid="stock-row"
+                      >
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setMoving(x.row)}
+                        >
+                          Record stock
+                          <span className="sr-only"> of {x.row.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setEditing(x.row)}
+                        >
+                          Change<span className="sr-only"> {x.row.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setItem(x.row.id)}
+                        >
+                          History<span className="sr-only"> of {x.row.name}</span>
+                        </button>
+                      </Row>
+                    ),
+                  )}
+                </Items>
+              </>
             )}
           </section>
           <section className="card" aria-labelledby="stock-moves">
             <div className="toolbar" style={{ marginBottom: 6 }}>
               <h2 id="stock-moves" className="grow" style={{ margin: 0 }}>
-                {item
-                  ? `${v.items.find((i) => i.id === item)?.name ?? "The item"}: every change`
-                  : "Every change"}
+                {item ? `${named(item)}: every change` : "Every change"}
               </h2>
               <label className="sr-only" htmlFor="stock-reason">
                 Why
@@ -302,13 +370,7 @@ export function StorefrontStock() {
                     key={m.id}
                     letter={m.item}
                     title={movementTitle(m)}
-                    side={
-                      <span
-                        className={`badge ${m.status === "pending" ? "warn" : m.reason === "outside" ? "info" : "muted"}`}
-                      >
-                        {REASON[m.reason]}
-                      </span>
-                    }
+                    side={<span className="badge muted">{REASON[m.reason]}</span>}
                     sub={<span className="sub">{movementSub(m)}</span>}
                     testid="movement"
                   />
@@ -319,8 +381,7 @@ export function StorefrontStock() {
         </>
       )}
       {adding && (
-        <ItemModal
-          item={null}
+        <AddModal
           onClose={() => setAdding(false)}
           onSaved={() => {
             setAdding(false);
@@ -329,8 +390,8 @@ export function StorefrontStock() {
         />
       )}
       {editing && (
-        <ItemModal
-          item={editing}
+        <ChangeModal
+          row={editing}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -340,7 +401,7 @@ export function StorefrontStock() {
       )}
       {selling && v && (
         <SaleModal
-          items={v.items}
+          items={sellable}
           entry={selling.entry}
           onClose={() => setSelling(null)}
           onSaved={() => {
@@ -351,7 +412,8 @@ export function StorefrontStock() {
       )}
       {moving && (
         <MoveModal
-          item={moving}
+          item={rowCounted(moving)}
+          name={moving.name}
           onClose={() => setMoving(null)}
           onSaved={() => {
             setMoving(null);
@@ -654,69 +716,93 @@ function SaleModal({
   );
 }
 
-/** Add an item with how many there are, or change one's name, unit, prices, levels and supplier. */
-function ItemModal({
-  item,
+/** Add something to count (what a business buys §4.5): its name, then Do
+ * you sell it? Yes makes its product too, counted by it (with a selling
+ * price, when there is one); No makes a material only. */
+function AddModal({
   onClose,
   onSaved,
 }: {
-  item: StockItem | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const adding = item === null;
-  const [f, setF] = useState<ItemForm>(() =>
-    item ? itemForm(item) : emptyItem(),
-  );
+  const [f, setF] = useState<ItemForm>(emptyItem);
+  const [sells, setSells] = useState<boolean | null>(null);
   const [key] = useState(() => crypto.randomUUID());
   const act = useAction();
   const set = (p: Partial<ItemForm>) => setF((x) => ({ ...x, ...p }));
-  const problem = itemProblem(f, adding);
-  const save = () =>
-    act.run(
-      async () => {
-        if (adding) await postOnce("/v1/stock/items", key, addRequest(f));
-        else await patch(`/v1/stock/items/${item.id}`, changeRequest(item, f));
-        onSaved();
-      },
-      adding ? `${f.name.trim()} added` : "Saved",
-    );
+  const problem =
+    itemProblem(sells ? f : { ...f, price: "" }, true) ??
+    (sells === null ? "Say whether you sell it." : null);
   return (
-    <Modal
-      title={adding ? "Add an item" : `Change ${item.name}`}
-      onClose={onClose}
-    >
+    <Modal title="Add something to count" onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void save();
+          if (sells === null) return;
+          void act.run(
+            async () => (
+              await postOnce("/v1/stock/items", key, addRequest(f, sells)),
+              onSaved()
+            ),
+            sells
+              ? `${f.name.trim()} added to your products`
+              : `Now counting ${f.name.trim()}`,
+          );
         }}
       >
-        <Field label="Name">
+        <Field label="What is it">
           <input
             value={f.name}
             maxLength={120}
+            placeholder="Ankara fabric"
             onChange={(e) => set({ name: e.target.value })}
             autoFocus
             autoComplete="off"
           />
         </Field>
-        {adding && (
-          <Field
-            label="How many you have"
-            hint="Recorded as goods received, so the count is explained from the start."
-          >
+        <fieldset className="sf-choices">
+          <legend>Do you sell it?</legend>
+          <label className="sf-radio">
             <input
-              value={f.quantity}
-              inputMode="numeric"
-              placeholder="50"
-              onChange={(e) => set({ quantity: e.target.value })}
+              type="radio"
+              name="sells"
+              checked={sells === true}
+              onChange={() => setSells(true)}
             />
-          </Field>
+            Yes, I sell it
+          </label>
+          <label className="sf-radio">
+            <input
+              type="radio"
+              name="sells"
+              checked={sells === false}
+              onChange={() => setSells(false)}
+            />
+            No, I don't
+          </label>
+        </fieldset>
+        {sells !== null && (
+          <p className="hint" data-testid="sells-hint">
+            {sells
+              ? "It is added to your products too, and selling it lowers its count."
+              : "Only counted: it is not added to your products, and customers never see it."}
+          </p>
         )}
         <Field
+          label="How many you have"
+          hint="Recorded as goods received, so the count is explained from the start."
+        >
+          <input
+            value={f.quantity}
+            inputMode="numeric"
+            placeholder="50"
+            onChange={(e) => set({ quantity: e.target.value })}
+          />
+        </Field>
+        <Field
           label="Unit"
-          hint="One word: bag, carton, piece. Leave it empty to count pieces."
+          hint="One word: yard, bag, carton, piece. Leave it empty to count pieces."
         >
           <input
             value={f.unit}
@@ -736,44 +822,20 @@ function ItemModal({
             onChange={(e) => set({ cost: e.target.value })}
           />
         </Field>
-        <Field
-          label="Selling price (₦)"
-          hint="Shown on your page once it is published. Without one, the item is not shown."
-        >
-          <input
-            value={f.price}
-            inputMode="decimal"
-            placeholder="9500"
-            onChange={(e) => set({ price: e.target.value })}
-          />
-        </Field>
-        <Field
-          label="Reorder at"
-          hint="When the count is this or less, the item is low and you are told each morning."
-        >
-          <input
-            value={f.reorder}
-            inputMode="numeric"
-            placeholder="10"
-            onChange={(e) => set({ reorder: e.target.value })}
-          />
-        </Field>
-        <Field label="Order up to" hint="What to order a low item back up to.">
-          <input
-            value={f.target}
-            inputMode="numeric"
-            placeholder="50"
-            onChange={(e) => set({ target: e.target.value })}
-          />
-        </Field>
-        <Field label="Supplier">
-          <input
-            value={f.supplier}
-            maxLength={120}
-            placeholder="Dangote Depot"
-            onChange={(e) => set({ supplier: e.target.value })}
-          />
-        </Field>
+        {sells && (
+          <Field
+            label="Selling price (₦)"
+            hint="Shown on your page once it is published. Without one, it is not shown."
+          >
+            <input
+              value={f.price}
+              inputMode="decimal"
+              placeholder="9500"
+              onChange={(e) => set({ price: e.target.value })}
+            />
+          </Field>
+        )}
+        <LevelFields f={f} set={set} />
         {problem && f.name !== "" && <p className="error-text">{problem}</p>}
         <ErrorBox error={act.error} />
         <div className="toolbar">
@@ -782,7 +844,153 @@ function ItemModal({
             className="primary"
             disabled={act.busy || !!problem}
           >
-            {adding ? "Add the item" : "Save"}
+            Add it
+          </button>
+          <button type="button" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Reorder at, order up to and the supplier, in the add and change forms. */
+function LevelFields({
+  f,
+  set,
+}: {
+  f: ItemForm;
+  set: (p: Partial<ItemForm>) => void;
+}) {
+  return (
+    <>
+      <Field
+        label="Reorder at"
+        hint="When the count is this or less, it is low and you are told each morning."
+      >
+        <input
+          value={f.reorder}
+          inputMode="numeric"
+          placeholder="10"
+          onChange={(e) => set({ reorder: e.target.value })}
+        />
+      </Field>
+      <Field label="Order up to" hint="What to order a low one back up to.">
+        <input
+          value={f.target}
+          inputMode="numeric"
+          placeholder="50"
+          onChange={(e) => set({ target: e.target.value })}
+        />
+      </Field>
+      <Field label="Supplier" hint="One of your suppliers, by name.">
+        <input
+          value={f.supplier}
+          maxLength={120}
+          placeholder="Dangote Depot"
+          onChange={(e) => set({ supplier: e.target.value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** Change a stock item: its unit, cost, levels and supplier; its name
+ * (a material's, or with its one product's); its selling price when it is
+ * sold as one product, one for one. */
+function ChangeModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: StockItemRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const edit = rowEdit(row);
+  const [before] = useState(() => rowForm(row));
+  const [f, setF] = useState<ItemForm>(before);
+  const act = useAction();
+  const set = (p: Partial<ItemForm>) => setF((x) => ({ ...x, ...p }));
+  const problem = itemProblem(f, false);
+  return (
+    <Modal title={`Change ${row.name}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void act.run(
+            async () => (
+              await patch(
+                `/v1/stock/items/${encodeURIComponent(edit.id)}`,
+                changeRequest(before, f),
+              ),
+              onSaved()
+            ),
+            "Saved",
+          );
+        }}
+      >
+        <p className="hint">{soldAsLine(row)}.</p>
+        {edit.name ? (
+          <Field label="Name">
+            <input
+              value={f.name}
+              maxLength={120}
+              onChange={(e) => set({ name: e.target.value })}
+              autoFocus
+              autoComplete="off"
+            />
+          </Field>
+        ) : (
+          <p className="hint">
+            {row.group_of
+              ? `Its name follows ${row.group_name || "its product"}.`
+              : "Its products' names and prices are changed in Products."}
+          </p>
+        )}
+        <Field
+          label="Unit"
+          hint="One word: yard, bag, carton, piece. Leave it empty to count pieces."
+        >
+          <input
+            value={f.unit}
+            maxLength={30}
+            placeholder="carton"
+            onChange={(e) => set({ unit: e.target.value })}
+          />
+        </Field>
+        <Field label="Cost price (₦)" hint="What you pay for one.">
+          <input
+            value={f.cost}
+            inputMode="decimal"
+            placeholder="8500"
+            onChange={(e) => set({ cost: e.target.value })}
+          />
+        </Field>
+        {edit.price && (
+          <Field
+            label="Selling price (₦)"
+            hint="Shown on your page once it is published. Without one, it is not shown."
+          >
+            <input
+              value={f.price}
+              inputMode="decimal"
+              placeholder="9500"
+              onChange={(e) => set({ price: e.target.value })}
+            />
+          </Field>
+        )}
+        <LevelFields f={f} set={set} />
+        {problem && <p className="error-text">{problem}</p>}
+        <ErrorBox error={act.error} />
+        <div className="toolbar">
+          <button
+            type="submit"
+            className="primary"
+            disabled={act.busy || !!problem}
+          >
+            Save
           </button>
           <button type="button" onClick={onClose}>
             Cancel
@@ -796,10 +1004,12 @@ function ItemModal({
 /** Goods received, an adjustment with a reason, or a count. */
 function MoveModal({
   item,
+  name,
   onClose,
   onSaved,
 }: {
-  item: StockItem;
+  item: Counted;
+  name: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -815,7 +1025,7 @@ function MoveModal({
   const problem = moveProblem(f);
   const preview = movePreview(item, f);
   return (
-    <Modal title={`Record stock of ${item.name}`} onClose={onClose}>
+    <Modal title={`Record stock of ${name}`} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -832,7 +1042,7 @@ function MoveModal({
           );
         }}
       >
-        <p className="hint">Now: {stockLine(item)}.</p>
+        <p className="hint">Now: {item.stock === null ? "no count yet" : quantity(item.stock, item.unit)}.</p>
         <fieldset className="sf-choices">
           <legend>What happened</legend>
           {(
@@ -948,25 +1158,4 @@ export function StockOffer() {
       </ul>
     </section>
   );
-}
-
-/** The desk's list: each product once; one sold in sizes and colours with
- * their count together, and its sizes on sale after it, each named by its
- * values ("42, Black") with its own stock and history. */
-function deskRows(items: StockItem[]) {
-  const out: {
-    it: StockItem;
-    size?: StockItem;
-    sizes?: ReturnType<typeof sizesLine>;
-  }[] = [];
-  for (const it of items) {
-    if (it.variant_of) continue;
-    if (!hasSizes(it)) {
-      out.push({ it });
-      continue;
-    }
-    out.push({ it, sizes: sizesLine(items, it.id) });
-    for (const z of sizesOf(items, it.id)) out.push({ it: z, size: it });
-  }
-  return out;
 }

@@ -600,7 +600,7 @@ func pagePublishFourEyes(ctx context.Context, tx pgx.Tx, p *Principal, page uuid
 // pinPage is PUT /v1/pages/{name}/pin: a published page shown in the
 // navigation under Your pages (§9), five at most. Pins are counted under
 // a per-business lock, so two at once cannot make a sixth; pin_order is
-// unique among pinned pages (migration 00530). Only a change is audited.
+// unique among pinned pages (migration 00539). Only a change is audited.
 func (s *Server) pinPage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Pinned bool `json:"pinned"`

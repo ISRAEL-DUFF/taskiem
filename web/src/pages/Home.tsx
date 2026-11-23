@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Sheet } from "../kit";
+import { MenuCard, useActionRun, useCatalogue } from "./ChatMenu";
 import { Link } from "react-router-dom";
 import { ApiError, get, type Approval, type RunSummary, type WorkflowSummary } from "../api";
 import { useAuth } from "../auth";
@@ -27,6 +29,10 @@ const orNull = <T,>(p: Promise<T>) => p.catch((e: unknown) => (e instanceof ApiE
  * what happened, and what still runs for them. */
 export function Home() {
   const { me, can } = useAuth();
+  // Today's menu: the topic open in a sheet, and a row's answer.
+  const [topic, setTopic] = useState<string>();
+  const { topics } = useCatalogue();
+  const action = useActionRun();
   const onboarding = useOnboarding().data;
   // A part the business turned off is not asked for (docs/spec/business-areas.md).
   const shop = can("storefront.manage") && areaOn(me?.areas, "orders");
@@ -67,6 +73,10 @@ export function Home() {
   return (
     <>
       <div className="greeting">
+        {/* Search everywhere (menus-everywhere.md §6). */}
+        <Link className="head-search greeting-search" to="/search" aria-label="Search everything">
+          <Icon name="search" />
+        </Link>
         <h1>
           {greeting()}
           {first ? `, ${first}` : ""}
@@ -120,6 +130,35 @@ export function Home() {
           )}
         </section>
       </div>
+
+      {/* What would you like to do? (menus-everywhere.md §5): the topics
+          used most, two rows of tiles; a tile's rows in a sheet, done
+          through the Taskiem chat. */}
+      <section className="home-actions" aria-labelledby="todo" data-testid="today-menu">
+        <h2 id="todo">What would you like to do?</h2>
+        <MenuCard
+          menu={{}}
+          open
+          head={false}
+          busy={false}
+          tiles={7}
+          onTopic={(id) => (setTopic(id), true)}
+          onReply={action.run}
+        />
+        {action.error && <p className="error" role="alert">{action.error}</p>}
+      </section>
+      {topic && (
+        <Sheet title={topics?.find((x) => x.id === topic)?.name ?? ""} onClose={() => setTopic(undefined)} testid="today-topic">
+          <MenuCard
+            menu={{ topic }}
+            open
+            head={false}
+            busy={false}
+            onReply={(reply, text) => (setTopic(undefined), action.run(reply, text))}
+          />
+        </Sheet>
+      )}
+      {action.sheet}
 
       <div className="home-grid">
         <div className="home-col">

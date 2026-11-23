@@ -80,7 +80,7 @@ The log's own copy in Taskiem's database is the record of reference: the `money_
 
 ### From chat
 
-Members with `invoice.manage` can record cash and expenses from WhatsApp or Telegram: `spent 12,000 on diesel at Total`, `expense 5000 fuel`, `cash in 20,000 till`, `cash out 3,000 float`. Taskiem shows the entry and records it on **yes**, once ([WhatsApp commands](whatsapp.md#for-people-using-taskiem-on-whatsapp)). In Pidgin, Yoruba, Hausa or Igbo, where that language is on, its own words work too, followed at once by the amount (`I spend 12,000 for diesel`, `mo ná 12,000 fún diesel`, `kuɗi ya shigo 20,000`, `ego pụrụ 3,000`); they are unreviewed drafts ([the words](whatsapp.md#invoices-and-money-in-other-languages)). Categories come from English words only.
+Members with `invoice.manage` can record cash and expenses from WhatsApp or Telegram: `spent 12,000 on diesel at Total`, `expense 5000 fuel`, `cash in 20,000 till`, `cash out 3,000 float`, and with the bought words (`I bought snacks for 8,000`, `we bought from Dangote 425,000`, `buy 3,000 diesel`; a quantity in a unit, `bought 10 bags of rice`, is stock counted in instead). Taskiem shows the entry and records it on **yes**, once ([WhatsApp commands](whatsapp.md#for-people-using-taskiem-on-whatsapp)). In Pidgin, Yoruba, Hausa or Igbo, where that language is on, its own words work too, followed at once by the amount (`I spend 12,000 for diesel`, `mo ná 12,000 fún diesel`, `kuɗi ya shigo 20,000`, `ego pụrụ 3,000`); they are unreviewed drafts ([the words](whatsapp.md#invoices-and-money-in-other-languages)). Categories come from English words only.
 
 The money that came in and the money that went out are also checked for [leaks](leaks.md).
 

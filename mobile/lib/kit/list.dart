@@ -18,8 +18,14 @@ import 'tap_area.dart';
 /// kit.css `.tk-search`: a pill of the soft ground, 46 px, the magnifier and
 /// the words; the ring while typing in it.
 class TkSearchBox extends StatefulWidget {
-  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12), this.fill});
+  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12), this.fill, this.onChanged, this.label});
   final TextEditingController controller;
+
+  /// The words typed (not those set by the screen).
+  final ValueChanged<String>? onChanged;
+
+  /// What a screen reader calls the box, when not its hint.
+  final String? label;
 
   /// The box's colour (a page's card colour on the ground); else soft.
   final Color? fill;
@@ -52,7 +58,7 @@ class _TkSearchBoxState extends State<TkSearchBox> {
       padding: widget.margin,
       child: TapField(
         child: Semantics(
-          label: widget.hint,
+          label: widget.label ?? widget.hint,
           child: Container(
             constraints: const BoxConstraints(minHeight: 46),
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -71,6 +77,7 @@ class _TkSearchBoxState extends State<TkSearchBox> {
                     child: TextField(
                       controller: widget.controller,
                       focusNode: _focus,
+                      onChanged: widget.onChanged,
                       textInputAction: TextInputAction.search,
                       cursorColor: t.text,
                       showCursor: !TkField.debugHideCaret,

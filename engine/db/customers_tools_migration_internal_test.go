@@ -9,7 +9,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-// Migration 00560 carries each public menu's entries over as customers'
+// Migration 00569 carries each public menu's entries over as customers'
 // tools: a command made from each label, unique in its business (another
 // business may have the same), starting with a letter, at most 24
 // characters, never one of Taskiem's own words or the routes' "buttons";
@@ -27,7 +27,7 @@ func TestCustomersToolsMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.UpTo(ctx, 558); err != nil {
+	if _, err := p.UpTo(ctx, 567); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -55,7 +55,7 @@ func TestCustomersToolsMigration(t *testing.T) {
 	entry(b, "00000000-0000-0000-0000-0000000000b6", "Pay a supplier", 1)
 	entry(b, "00000000-0000-0000-0000-0000000000b7", "Order", 2)
 	entry(b, "00000000-0000-0000-0000-0000000000b8", "Buttons", 3)
-	if _, err := p.UpTo(ctx, 560); err != nil {
+	if _, err := p.UpTo(ctx, 569); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]string{}
@@ -90,14 +90,14 @@ func TestCustomersToolsMigration(t *testing.T) {
 	if _, err := conn.Exec(ctx, `UPDATE whatsapp_public_workflows SET command = 'pay-a-supplier' WHERE label = 'Pay a supplier!'`); err == nil {
 		t.Error("two entries of a business share a command")
 	}
-	if _, err := p.DownTo(ctx, 558); err != nil {
+	if _, err := p.DownTo(ctx, 567); err != nil {
 		t.Fatal(err)
 	}
 	var n int
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM pg_proc WHERE proname = 'taskiem_customer_tool_tenants'`).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("after Down: %d %v", n, err)
 	}
-	if _, err := p.UpTo(ctx, 560); err != nil {
+	if _, err := p.UpTo(ctx, 569); err != nil {
 		t.Fatal(err)
 	}
 }

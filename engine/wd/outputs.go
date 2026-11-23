@@ -29,7 +29,7 @@ type Output struct {
 	Description string `json:"description"`
 	Value       string `json:"value"`
 	// Public marks an output a tool may show to customers and linked
-	// businesses (decision 0070); others are never shown to them.
+	// businesses (decision 0073); others are never shown to them.
 	Public bool `json:"public,omitempty"`
 	// PII marks the output personal data of a category ("phone",
 	// "account_number"): masked in an answer whatever its name.

@@ -163,6 +163,44 @@ Built in the app's own look (`TkAppLook` sheets, `TkSummary`, `TkSection`, `TkLi
 | A page (pages G1) | `chat/pages_page.dart` `PageScreen` | A row of Pages; Today's Your pages; `/pages/{name}` | Drawn by the server: a search (`TkSearchBox`) and choices, dates and Mine as `TkChips`; the main figure on a `TkTopCard` with its change as a `TkTrend`, the other figures as `TkHighlights`; a list in its groups as `TkSection`s with each row's state as a pill; a table as rows (first column the title, the rest under it); Show more as a `TkSmallButton`; a row's card in a `TkSheet` of `TkLines`; a part that needs fixing as a callout. Changing a page is on the web | [done 22 Nov] |
 | In Payrolla, on a staff member's page (P4a) | `chat/team_pages.dart` `StaffPersonPage` | Team › a person › Where we pay them | "In Payrolla: <name>" (or not linked yet) for those with payroll.read, opening Staff in Payrolla; Salaries for the rest | [done 22 Nov] |
 
+## 5f. What a business buys (stages S2 to U3, `what-a-business-buys.md`)
+
+Built in the app's own look from the start (`mobile-app-look.md`, Stock and supplies: `TkPageScreen`, `TkSection` and `TkListRow`, `TkFormSheet` in `TkAppLook`, `TkTopCard`, `TkCallout`, `TkChips`, `pickOneOf`, `askSure`), so listed for the founder's review rather than as web borrowings. **23 November (PR review):** the choice rows that used `TkRadio` (Do you sell it?, the three answers of the question, a thing's status, Paid in cash or by transfer) are now `TkListRow(chevron: false)` with an icon square and the kit's `TkTick`, as `mobile/CLAUDE.md` asks.
+
+| Screen | File | Reached from | Holds | Look today |
+| --- | --- | --- | --- | --- |
+| Stock (changes) | `chat/stock_page.dart` `StockPage` | A business's Go to › Stock | What you count (All, Sold, Not sold), Low and At cost tiles, Running low; a failed load of the stock items a `TkCallout`; the head's + only for `table.edit` | [fine] |
+| Add something to count | `chat/stock_items.dart` `AddToCountSheet` | Stock's + | Do you sell it? (ticked rows), name, unit, count, cost, price, levels, supplier | [fine] ticked rows since 23 Nov |
+| Counted by | `chat/stock_items.dart` `CountedByRow`, `CountedBySheet` | A product's form | Its stock item, how many a sale uses; Change, Count by none | [fine] |
+| The question on a line | `chat/treat_line.dart` `TreatQuestion`, `OpenLineQuestion`, `TreatSection` | An order's review, Confirm it, How each is treated | Just record it, Add to stock, Keep track of it (ticked rows), stock item, label, Remember for next time; shut to a few words once answered | [fine] ticked rows since 23 Nov |
+| Pick a label | `chat/treat_line.dart` `LabelPickSheet` | The question's Label, a thing's Label | Your labels by use, Suggested, a new one typed, No label | [fine] |
+| A new stock item | `chat/treat_line.dart` `NewStockItemSheet` | The question › Make a new one | Do you sell it? (ticked rows), name, unit | [fine] ticked rows since 23 Nov |
+| Put many on Things we have? | `chat/treat_line.dart` `askTrackMany` | A `track_ask` answer | One row each, or Just record them | [fine] |
+| Line marks | `chat/treat_line.dart` `LineMark` | Lines of an order to a supplier and of a bill | To stock or Things we have pill, the label; none on a bill line not matched to its order line | [fine] |
+| Their price list and their shop (changes) | `chat/order_sheet.dart` `OrderSheet` | Order from a supplier's chat, a link | Each bag line asked unless remembered | [fine] |
+| An order to a supplier (changes) | `chat/purchases_page.dart` `PurchasePage` | Supplies › an order | Confirm it (a supplier's draft), How each is treated, On Things we have | [fine] |
+| Their quote in a chat (changes) | `chat/purchase_view.dart` `PurchaseView` | A supplier's quote in Taskiem's chat | Confirm their quote with the question on each line | [fine] |
+| What you buy from them | `chat/supplier_items.dart` `SupplierItemsPage`, `_ItemSheet` | Supplies › Suppliers › a supplier | Each item remembered, changed or forgotten | [fine] |
+| Labels | `chat/labels_page.dart` `LabelsPage`, `_RenameSheet` | Money › Settings › Labels | Labels by use, Rename, Merge into another | [fine] |
+| Things we have | `chat/things_page.dart` `ThingsPage` | Money › Go to; an order's or a bill's On Things we have (that order's rows, asked by `order=`) | Top card (total, count, split by label), Newest first or By label, those no longer had | [fine] |
+| One of Things we have | `chat/things_page.dart` `ThingPage` | Things we have › a row | Cost and status card, status as five ticked rows, details, where it came from (the order, or Added by hand with its day) | [fine] ticked rows since 23 Nov |
+| Sold | `chat/things_page.dart` `SoldSheet` | A thing › Sold, Add what it sold for | The price, Paid in cash or by transfer (ticked rows) | [fine] ticked rows since 23 Nov |
+| Add something we have | `chat/things_page.dart` `AddThingSheet` | Things we have's + | Name, cost, when, from whom, label, serial, warranty, note | [fine] |
+| Spending by label | `chat/spending.dart` `SpendingCard`, `SpendingPage` | Money (the card), its See all | The split, the labels spent on most; by month, profit without Bought to keep | [fine] |
+| A bill (changes) | `chat/bills_page.dart` `BillPage` | Money › Bills › a bill | Line marks, On Things we have for `table.read` | [fine] |
+
+## 6. Shared parts the branch added or changed
+
+| Part | File | Note |
+| --- | --- | --- |
+| `TkListRow` gained `face:` | `kit/mobile.dart` | [fine] |
+| `TkTick`, a choice row's tick (`TkListRow(chevron: false, trailing: TkTick(on))`) | `kit/mobile.dart` | [fine] 23 Nov, in place of `TkRadio` on Stock and supplies' choices |
+| `TkLoadMore` (load more as the list nears its end) | `kit/load_more.dart` | [fine] |
+| Modal changes | `kit/modal.dart` | Web modals are still used by the screens above |
+| Polling that pauses in the background | `kit/polling.dart` | n/a |
+| Theme tokens (generated) | `theme/tokens.g.dart` | n/a |
+| Routing, pushes, links | `main.dart`, `app/applinks.dart`, `app/notify.dart`, `app/openers.dart`, `app/route.dart` | n/a |
+
 ## 5e. A form step for you (device fields D1, `docs/spec/device-fields.md`)
 
 | Screen | File | How it is reached | What it holds | Tag |

@@ -1668,7 +1668,7 @@ export interface NotifyMessageInput {
   title?: Val<string>;
 }
 export interface NotifyTellInput {
-  /** Up to three buttons (decision 0070, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
+  /** Up to three buttons (decision 0073, made tools §10), each opening one of the business's tools filled in, as whoever presses it, with that tool's care and roles: never running it by itself. once: the first run started from it spends it. Outside WhatsApp's 24-hour window the message goes without them */
   buttons?: Value;
   /** With to: members, their sign-in emails */
   members?: Value;
@@ -3056,7 +3056,7 @@ export interface StockMovementsInput {
   /** An item's row id; empty for every item */
   id?: Val<string>;
   limit?: Val<number>;
-  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "outside">;
+  reason?: Val<"order" | "sale" | "received" | "adjustment" | "count" | "moved">;
   /** RFC 3339 */
   since?: Val<string>;
 }

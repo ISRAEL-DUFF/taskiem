@@ -43,6 +43,9 @@ var Columns = []datatables.Column{
 	{Name: "source", Title: "Source", Type: "text", Required: true},
 	{Name: "note", Title: "Note", Type: "text"},
 	{Name: "corrects", Title: "Corrects entry", Type: "text"},
+	// The label's id (what a business buys §5.4): reports find its name,
+	// and the label it was merged into, when they are read.
+	{Name: "label_id", Title: "Label", Type: "text"},
 }
 
 // Rows writes and finds rows of a tenant's data tables project.
@@ -250,7 +253,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []waiting
 	err := db.InTenantTx(ctx, m.Log.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rs, err := tx.Query(ctx, `SELECT id, occurred_at, recorded_at, direction, kind, amount_kobo, fee_kobo, currency, status, channel, reference,
-			COALESCE(event, ''), payer, source, COALESCE(note, ''), corrects FROM money_entries
+			COALESCE(event, ''), payer, source, COALESCE(note, ''), corrects, label_id FROM money_entries
 			WHERE tenant_id = $1 AND mirrored_at IS NULL ORDER BY recorded_at, id LIMIT 200`, tenant)
 		if err != nil {
 			return err
@@ -259,7 +262,7 @@ func (m *Mirror) Tenant(ctx context.Context, tenant uuid.UUID) error {
 			var w waiting
 			e := &w.e
 			err := r.Scan(&e.ID, &e.OccurredAt, &e.RecordedAt, &e.Direction, &e.Kind, &e.AmountKobo, &e.FeeKobo, &e.Currency, &e.Status, &e.Channel,
-				&e.Reference, &e.Event, &w.payer, &e.Source, &e.Note, &e.Corrects)
+				&e.Reference, &e.Event, &w.payer, &e.Source, &e.Note, &e.Corrects, &e.LabelID)
 			return w, err
 		})
 		if err != nil {
@@ -390,6 +393,9 @@ func Row(e Entry) map[string]any {
 	}
 	if e.Corrects != nil {
 		r["corrects"] = e.Corrects.String()
+	}
+	if e.LabelID != nil {
+		r["label_id"] = e.LabelID.String()
 	}
 	return r
 }

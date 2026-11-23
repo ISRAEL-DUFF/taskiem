@@ -228,8 +228,8 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 	}
 	// Updates from a business for someone outside it (reach.go): its
 	// link's code, then the phone the bot asked for.
-	if code, ok := strings.CutPrefix(in.Text, "/start u_"); ok && u.Kind == "message" {
-		return s.reachStart(ctx, tg, reach.Telegram, addr, strings.TrimSpace(code))
+	if code, ok := reachStartCode(in.Text); ok && u.Kind == "message" {
+		return s.reachStart(ctx, tg, reach.Telegram, addr, code)
 	}
 	if u.Kind == "message" && u.Contact != nil {
 		if done, err := s.reachContact(ctx, u); done || err != nil {
@@ -538,4 +538,18 @@ func (s *Server) tgSendAlertItem(ctx context.Context, it whatsapp.OutboxItem) er
 	m := whatsapp.AlertMessage(name, kind, title, body, l, detail)
 	_, err = s.Telegram.Send(ctx, addr, whatsapp.Message{Text: m.Text})
 	return err
+}
+
+// reachStartCode is the code of a business's updates link opened in
+// Telegram: "/start u_" and then the code, nothing else. A link code of
+// one's own account (IssueLinkCode) is 32 random base64url characters and
+// may itself begin "u_" (one in 4,096), so the prefix alone is not enough:
+// only "u_" and a whole updates code is one.
+func reachStartCode(text string) (string, bool) {
+	code, ok := strings.CutPrefix(text, "/start u_")
+	code = strings.TrimSpace(code)
+	if !ok || !reach.CodeRe.MatchString(code) {
+		return "", false
+	}
+	return code, true
 }

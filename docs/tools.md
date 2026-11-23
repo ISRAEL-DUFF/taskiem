@@ -1,6 +1,6 @@
 # Your tools
 
-A workflow you start by hand can be a **tool**: something your people call from the chat by a word, like `/expense` or "spent 4,500 on diesel", and that answers there. It is the workflow's own block, `tool` ([the contract](contracts/wd-v1.md#tools), [decision 0070](decisions/0070-made-tools.md)); nothing about how the workflow runs changes.
+A workflow you start by hand can be a **tool**: something your people call from the chat by a word, like `/expense` or "spent 4,500 on diesel", and that answers there. It is the workflow's own block, `tool` ([the contract](contracts/wd-v1.md#tools), [decision 0073](decisions/0073-made-tools.md)); nothing about how the workflow runs changes.
 
 ## What a tool says about itself
 
@@ -63,7 +63,7 @@ A tool's card and list rows, and a Tell me message (`notify.tell` `buttons`, up 
 
 ## Customers' tools
 
-A tool with `"for": "customers"` is for the people who buy from you (made tools T5, [decision 0070](decisions/0070-made-tools.md) point 6). Your **public menu**'s entries are customers' tools too: migration 00560 carried each one over, named by its label, with a command made from the label (`Pay a supplier` is `pay-a-supplier`; one that clashes with another entry's, a tool's, or one of Taskiem's own words in any language, or `buttons`, gets `-2`: `Order` is `order-2`), and a new entry gets one the same way. A workflow that declares a tool is that tool instead of its menu entry: a customers' tool for customers, a members' tool for your members alone (its entry is no longer offered). No other tool's command may be a menu entry's (publishing says which), and no tool may be called `buttons`.
+A tool with `"for": "customers"` is for the people who buy from you (made tools T5, [decision 0073](decisions/0073-made-tools.md) point 6). Your **public menu**'s entries are customers' tools too: migration 00569 carried each one over, named by its label, with a command made from the label (`Pay a supplier` is `pay-a-supplier`; one that clashes with another entry's, a tool's, or one of Taskiem's own words in any language, or `buttons`, gets `-2`: `Order` is `order-2`), and a new entry gets one the same way. A workflow that declares a tool is that tool instead of its menu entry: a customers' tool for customers, a members' tool for your members alone (its entry is no longer offered). No other tool's command may be a menu entry's (publishing says which), and no tool may be called `buttons`.
 
 | | |
 | --- | --- |

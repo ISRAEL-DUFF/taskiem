@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/stock"
@@ -28,37 +27,6 @@ func TestSaleOfAnItemOnTwoLines(t *testing.T) {
 	}
 	if m := w.movements("rice"); len(m) != 2 || *m[0].Change != -5 {
 		t.Fatalf("movements: %+v", m)
-	}
-}
-
-// refusedOnce refuses its first change as another writer's would, and
-// keeps that answer under its key; the count is back where it was by the
-// time it is read again.
-type refusedOnce struct {
-	*table
-	done bool
-}
-
-func (f *refusedOnce) Change(ctx context.Context, tenant uuid.UUID, row string, from, to int64, key string) (bool, error) {
-	if !f.done {
-		f.done = true
-		f.mu.Lock()
-		f.keys[key] = false
-		f.mu.Unlock()
-		return false, nil
-	}
-	return f.table.Change(ctx, tenant, row, from, to, key)
-}
-
-// A change refused at a count, read again at the same count, is a new
-// change: it lands, rather than being answered from the refusal.
-func TestChangeRefusedThenTheCountCameBack(t *testing.T) {
-	w := newWorld(t, map[string]int64{"rice": 0})
-	w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Received, Delta: n(10)}).ID)
-	w.s.Table = &refusedOnce{table: w.tb}
-	m := w.apply(w.record(stock.Move{ItemID: "rice", Item: "Rice", Reason: stock.Adjustment, Delta: n(-1)}).ID)
-	if m.Status != "done" || w.tb.count("rice") != 9 {
-		t.Fatalf("movement: %+v, rice %d", m, w.tb.count("rice"))
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 	"github.com/israel-duff/taskiem/templates"
 )
 
-// Care is how much a tool asks before it runs (decision 0070, made tools
+// Care is how much a tool asks before it runs (decision 0073, made tools
 // §8), worked out from its steps, never declared by its author.
 type Care struct {
 	// Level: answers (every step that reaches outside only reads: it

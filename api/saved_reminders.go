@@ -29,7 +29,7 @@ import (
 // "once". A person's birthday is a date too. "my reminders" lists them;
 // "stop reminding me about @car" ends them. The date is read again from
 // the field each time, so a renewed insurance moves its reminder; a thing
-// removed takes its reminders with it (saved_reminders, migration 00501).
+// removed takes its reminders with it (saved_reminders, migration 00510).
 
 var (
 	remindWords   = regexp.MustCompile(`(?i)^\s*remind\s+(?:me|us)\b.*@([a-z0-9][a-z0-9_-]{0,31})`)

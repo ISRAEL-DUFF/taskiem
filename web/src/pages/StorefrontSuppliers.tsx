@@ -1,6 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, get, patch, post, put, whenOff } from "../api";
+import { ApiError, del, get, patch, post, put, whenOff } from "../api";
+import { useAuth } from "../auth";
+import {
+  choiceProblem,
+  choiceWords,
+  fromMemory,
+  type Choice,
+  type Remembered,
+} from "../lib/treat";
+import {
+  TreatQuestion,
+  resolveChoice,
+  useTreatData,
+  type Made,
+} from "./TreatLine";
 import {
   EmptyState,
   ErrorBox,
@@ -31,7 +45,6 @@ import { StorefrontTabs } from "./Storefront";
 import { SavedFill } from "./SavedFill";
 import { placeAddressFit, placeOffer, type PlaceOffer } from "../lib/saved";
 import { PlaceSaveOffer } from "./SaveAfter";
-import { useAuth } from "../auth";
 
 /** The business's suppliers (docs/stock.md "Suppliers and purchase
  * orders"): who it buys from, where their orders reach them, and what is
@@ -47,6 +60,7 @@ export function StorefrontSuppliers() {
   );
   const [editing, setEditing] = useState<Supplier | "new" | null>(null);
   const [linking, setLinking] = useState<Supplier | null>(null);
+  const [items, setItems] = useState<Supplier | null>(null);
   const act = useAction();
   const v = view.data;
   // What is owed to a linked supplier is its open bills alone (business
@@ -139,6 +153,14 @@ export function StorefrontSuppliers() {
                           onClick={() => setEditing(s)}
                         >
                           Change<span className="sr-only"> {s.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="small"
+                          onClick={() => setItems(s)}
+                        >
+                          What you buy
+                          <span className="sr-only"> from {s.name}</span>
                         </button>
                         {s.link_id && (
                           <Link
@@ -240,6 +262,9 @@ export function StorefrontSuppliers() {
             view.reload();
           }}
         />
+      )}
+      {items && (
+        <SupplierItemsModal supplier={items} onClose={() => setItems(null)} />
       )}
       <LinkedSuppliersOwed />
       <DeliverTo />
@@ -636,5 +661,151 @@ function LinkedSuppliersOwed() {
         ))}
       </Items>
     </section>
+  );
+}
+
+/** What the business remembers of a supplier's items (what a business
+ * buys §6): each one's treatment, stock item and label, changed here for
+ * orders drafted after, or forgotten (its next order asks again). A linked
+ * supplier's are its item links; another's, its items by name. */
+function SupplierItemsModal({
+  supplier,
+  onClose,
+}: {
+  supplier: Supplier;
+  onClose: () => void;
+}) {
+  const { can } = useAuth();
+  const manage = can("storefront.manage");
+  const path = supplier.link_id
+    ? `/v1/item-links/${encodeURIComponent(supplier.link_id)}`
+    : `/v1/stock/suppliers/${encodeURIComponent(supplier.id)}/items`;
+  const list = useLoad(
+    () =>
+      supplier.link_id
+        ? get<{ item_links: Remembered[] }>(path).then((r) => r.item_links)
+        : get<{ items: Remembered[] }>(path).then((r) => r.items),
+    [path],
+  );
+  const data = useTreatData();
+  const made = useRef<Made>(new Map());
+  const [editing, setEditing] = useState<{ m: Remembered; c?: Choice }>();
+  const act = useAction();
+  const idOf = (m: Remembered) => m.seller_item_id ?? m.name_key ?? m.name;
+  const save = () =>
+    void act
+      .run(async () => {
+        if (!editing?.c) return;
+        const body = await resolveChoice(editing.c, data, made.current);
+        await put(
+          path,
+          supplier.link_id
+            ? { seller_item_id: editing.m.seller_item_id, ...body }
+            : { name: editing.m.name, ...body },
+        );
+        setEditing(undefined);
+        list.reload();
+        data.reloadLabels();
+      }, `Saved: ${editing?.m.name ?? ""}`)
+      .then(() => undefined);
+  const forget = (m: Remembered) =>
+    confirm(`Forget ${m.name}? Its next order asks again.`) &&
+    void act.run(
+      async () => {
+        await del(
+          supplier.link_id
+            ? `${path}/${encodeURIComponent(m.seller_item_id ?? "")}`
+            : `${path}?name=${encodeURIComponent(m.name)}`,
+        );
+        list.reload();
+      },
+      `Forgot ${m.name}`,
+    );
+  return (
+    <Modal title={`What you buy from ${supplier.name}`} onClose={onClose}>
+      <p className="hint">
+        How each item is treated when it comes, and its label. A change is for
+        orders made after it; nothing already received moves.
+      </p>
+      <ErrorBox error={list.error ?? act.error} />
+      {!list.data ? (
+        !list.error && <Skeleton rows={2} label="Loading their items…" />
+      ) : list.data.length === 0 ? (
+        <p className="hint">
+          Nothing yet. The first order of each item asks how to treat it.
+        </p>
+      ) : (
+        <Items label={`What you buy from ${supplier.name}`}>
+          {list.data.map((m) =>
+            editing && idOf(editing.m) === idOf(m) ? (
+              <li key={idOf(m)} className="act-row" data-testid="supplier-item">
+                <div className="grow">
+                <TreatQuestion
+                  item={m.name}
+                  supplier={supplier.name}
+                  data={data}
+                  value={editing.c}
+                  onChange={(c) => setEditing({ m, c })}
+                  rememberable={false}
+                />
+                <div className="row-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={
+                      act.busy || !editing.c || !!choiceProblem(editing.c)
+                    }
+                    onClick={save}
+                  >
+                    Save<span className="sr-only"> {m.name}</span>
+                  </button>
+                  <button type="button" onClick={() => setEditing(undefined)}>
+                    Cancel
+                  </button>
+                </div>
+                </div>
+              </li>
+            ) : (
+              <Row
+                key={idOf(m)}
+                letter={m.name}
+                title={m.name}
+                sub={
+                  <span className="sub">
+                    {choiceWords(fromMemory(m), () => m.stock_item)}
+                  </span>
+                }
+                testid="supplier-item"
+              >
+                {manage && (
+                  <>
+                    <button
+                      type="button"
+                      className="small"
+                      onClick={() => setEditing({ m, c: fromMemory(m) })}
+                    >
+                      Change<span className="sr-only"> {m.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="small danger"
+                      disabled={act.busy}
+                      onClick={() => forget(m)}
+                    >
+                      Forget<span className="sr-only"> {m.name}</span>
+                    </button>
+                  </>
+                )}
+              </Row>
+            ),
+          )}
+        </Items>
+      )}
+      <div className="toolbar">
+        <button type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }

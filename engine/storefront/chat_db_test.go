@@ -23,8 +23,7 @@ import (
 func TestChatOrders(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
-	st := &fakeStock{n: map[string]int64{"1": 10, "2": 10}, keys: map[string]bool{}}
-	w.orders.Stock = st
+	st := newShelf(w, map[string]int64{"1": 10, "2": 10})
 	var mu sync.Mutex
 	var told []string
 	w.orders.ChatNotify = func(_ context.Context, _ uuid.UUID, o storefront.Order, text string) error {
@@ -66,12 +65,12 @@ func TestChatOrders(t *testing.T) {
 	if short, err := w.orders.LowerStock(ctx, w.env.Tenant, door.Reference); err != nil || len(short) != 0 {
 		t.Fatalf("lower: %v %v", short, err)
 	}
-	if st.n["1"] != 8 || st.n["2"] != 9 {
-		t.Fatalf("stock: %v", st.n)
+	if st.count("1") != 8 || st.count("2") != 9 {
+		t.Fatalf("stock: %d %d", st.count("1"), st.count("2"))
 	}
 	// Lowered once, however often it is asked.
-	if _, err := w.orders.LowerStock(ctx, w.env.Tenant, door.Reference); err != nil || st.n["1"] != 8 {
-		t.Fatalf("lowered twice: %v %v", st.n, err)
+	if _, err := w.orders.LowerStock(ctx, w.env.Tenant, door.Reference); err != nil || st.count("1") != 8 {
+		t.Fatalf("lowered twice: %d %v", st.count("1"), err)
 	}
 
 	// Paid by transfer: waits for its payment (on the storefront's order
@@ -102,8 +101,8 @@ func TestChatOrders(t *testing.T) {
 	if o := w.order(tr.Reference); o.Status != "paid" || o.PaidAt == nil {
 		t.Fatalf("paid: %+v", o)
 	}
-	if st.n["1"] != 6 || st.n["2"] != 8 {
-		t.Fatalf("stock after payment: %v", st.n)
+	if st.count("1") != 6 || st.count("2") != 8 {
+		t.Fatalf("stock after payment: %d %d", st.count("1"), st.count("2"))
 	}
 	if len(told) != 1 || !strings.Contains(told[0], "Paid, thank you: "+tr.Reference) {
 		t.Fatalf("told: %q", told)
@@ -123,8 +122,8 @@ func TestChatOrders(t *testing.T) {
 	if len(told) != 2 || !strings.Contains(told[1], late.Reference+" was not paid in time") {
 		t.Fatalf("told: %q", told)
 	}
-	if st.n["1"] != 6 {
-		t.Fatalf("a lapsed order's stock went: %v", st.n)
+	if st.count("1") != 6 {
+		t.Fatalf("a lapsed order's stock went: %d", st.count("1"))
 	}
 
 	// Its notices go in the thread, not by SMS.

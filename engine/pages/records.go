@@ -59,7 +59,7 @@ type RecordView struct {
 	// From is the SQL it reads (one table, aliased), Tenant its tenant
 	// column, Key a row's own key (shown as the row's id, and in its
 	// link), Seal the sealed envelope its personal columns are in, Changed
-	// when a row last changed (changed_at, migration 00555: the live
+	// when a row last changed (changed_at, migration 00564: the live
 	// notices, api/pages_live.go; never updated_at, which the shop's
 	// retention reads).
 	From, Tenant, Key, Seal, Changed string
@@ -136,7 +136,7 @@ var RecordViews = []RecordView{
 		// Deliveries (dispatch): each offer of an order to a rider, as the
 		// Riders screen lists them; the customer is the order's, sealed with
 		// it and masked for everyone. A row is a delivery; it links to its
-		// order. Changed by changed_at (migration 00571).
+		// order. Changed by changed_at (migration 00580).
 		Name: "deliveries", Title: "Deliveries", Words: "deliveries",
 		Area: areas.Storefront, Perm: access.StorefrontManage + "|" + access.OrderHandle,
 		From: "deliveries d", Tenant: "d.tenant_id", Key: "d.id::text",

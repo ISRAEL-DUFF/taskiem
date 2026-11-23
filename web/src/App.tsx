@@ -110,6 +110,8 @@ import {
   MoneyOverview,
   MoneyStatements,
 } from "./pages/Money";
+import { MoneyLabels } from "./pages/MoneyLabels";
+import { ThingPage, ThingsPage } from "./pages/Things";
 import {
   SchoolClasses,
   SchoolFamilies,
@@ -144,6 +146,7 @@ import {
 import { get } from "./api";
 import { AgentApp, AgentWorkspace, useAgentSession } from "./pages/Agent";
 import { Home } from "./pages/Home";
+import { SearchEverywhere } from "./pages/SearchEverywhere";
 import { Bell, useBellCount } from "./Bell";
 import { Toaster } from "./toast";
 import { NotificationSettings } from "./pages/NotificationSettings";
@@ -825,6 +828,7 @@ function SignedIn() {
                     }
                   />
                   <Route path="/home" element={<Home />} />
+                  <Route path="/search" element={<SearchEverywhere />} />
                   <Route
                     path="/start-something"
                     element={<StartSomething />}
@@ -950,6 +954,9 @@ function SignedIn() {
                   <Route path="/payroll" element={<PayrollPage />} />
                   <Route path="/payroll/runs/:run" element={<PayrollRunPage />} />
                   <Route path="/payroll/staff" element={<PayrollStaffPage />} />
+                  <Route path="/money/labels" element={<MoneyLabels />} />
+                  <Route path="/money/things" element={<ThingsPage />} />
+                  <Route path="/money/things/:id" element={<ThingPage />} />
                   <Route path="/schools" element={<Schools />} />
                   <Route path="/schools/import" element={<SchoolImport />} />
                   <Route

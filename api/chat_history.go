@@ -563,9 +563,11 @@ func (s *Server) taskiemChatRoutes(r chi.Router) {
 	r.Get("/chat-refs", s.chatRefs)
 	r.Get("/chat/actions", s.chatActionsList)
 	r.Get("/chat/actions/{id}/choices", s.chatActionChoices)
+	r.Post("/chat/actions/{id}/run", s.chatActionRun)
 	r.Get("/chat-card", s.chatCardGet)
 	r.Post("/taskiem-chat", s.taskiemSay)
 	r.Post("/taskiem-chat/files", s.taskiemSend)
+	r.Post("/taskiem-chat/menus/{id}/close", s.closeMenu)
 }
 
 // webMediaID names a file that came with a web message (chat.upload).
@@ -626,6 +628,7 @@ func (s *Server) taskiemRun(ctx context.Context, p *Principal, msg whatsapp.Inbo
 	s.chatHooks()
 	live := &webLive{user: p.UserID}
 	ctx = context.WithValue(ctx, webLiveKey{}, live)
+	s.settleMenus(ctx, p, msg)
 	c := &chat{ch: &webChannel{s: s, tenant: p.TenantID}, addr: webAddr(p.UserID), in: msg, upload: upload}
 	err := s.converse(ctx, c, p.UserID)
 	clear(upload) // the file is not kept
@@ -707,7 +710,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err := s.tx(r, func(tx pgx.Tx) error {
-		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+		sql := `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
 			WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now()`
 		args := []any{p.TenantID, p.UserID}
 		order := ` ORDER BY created_at DESC, id DESC LIMIT 50`
@@ -728,10 +731,11 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			m       TaskiemMessage
 			env     map[string]any
 			buttons []string
+			done    *string
 		}
 		got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 			var x row
-			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+			err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
 			return x, err
 		})
 		if err != nil {
@@ -747,6 +751,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 			default:
 				x.m.Text, _ = v.(string)
 			}
+			x.m.Text = menuWithDone(x.m.Kind, x.m.Text, x.done)
 			for _, b := range x.buttons {
 				x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
 			}
@@ -768,7 +773,7 @@ func (s *Server) taskiemHistory(w http.ResponseWriter, r *http.Request) {
 // after a time, oldest first (the live stream's look): the same rows and
 // words as GET /v1/taskiem-chat.
 func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, since time.Time, limit int) ([]TaskiemMessage, error) {
-	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at FROM chat_history
+	rows, err := tx.Query(ctx, `SELECT id, channel, inbound, kind, body, buttons, created_at, menu_done FROM chat_history
 		WHERE tenant_id = $1 AND user_id = $2 AND expires_at > now() AND created_at > $3 ORDER BY created_at, id LIMIT $4`, p.TenantID, p.UserID, since, limit)
 	if err != nil {
 		return nil, err
@@ -777,10 +782,11 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 		m       TaskiemMessage
 		env     map[string]any
 		buttons []string
+		done    *string
 	}
 	got, err := pgx.CollectRows(rows, func(rr pgx.CollectableRow) (row, error) {
 		var x row
-		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt)
+		err := rr.Scan(&x.m.ID, &x.m.Channel, &x.m.Inbound, &x.m.Kind, &x.env, &x.buttons, &x.m.CreatedAt, &x.done)
 		return x, err
 	})
 	if err != nil {
@@ -797,6 +803,7 @@ func (s *Server) taskiemSince(ctx context.Context, tx pgx.Tx, p *Principal, sinc
 		default:
 			x.m.Text, _ = v.(string)
 		}
+		x.m.Text = menuWithDone(x.m.Kind, x.m.Text, x.done)
 		for _, b := range x.buttons {
 			x.m.Buttons = append(x.m.Buttons, TaskiemButton{Title: b})
 		}

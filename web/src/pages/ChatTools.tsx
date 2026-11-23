@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { Prefill } from "../lib/intents";
 import type { Purchase } from "../lib/purchases";
@@ -29,6 +30,7 @@ import type { PageSummary } from "../lib/pages";
 import type { Table } from "../lib/tables";
 import type { TradeOrder } from "../lib/tradeorders";
 import {
+  CountAdd,
   OrderView,
   PriceListForm,
   ProductAdd,
@@ -225,6 +227,9 @@ export const extrasFor = (extras: ExtraTile[] | undefined, query: string) => {
 };
 
 /** The panel of tiles over the composer. */
+/** The panel's view used last, while the page is open. */
+let lastView: "tools" | "menu" = "tools";
+
 export function ToolsPanel({
   query,
   onOpen,
@@ -239,7 +244,13 @@ export function ToolsPanel({
   onOpenMade,
   pages = [],
   onOpenPage,
+  menu,
+  slashed = false,
 }: {
+  /** The topics' menu, as the panel's other view (menus-everywhere.md §4). */
+  menu?: ReactNode;
+  /** Opened by "/" typed (not the button): the tools, never the menu. */
+  slashed?: boolean;
   /** What follows "/" in the box, when it was typed. */
   query: string;
   onOpen: (k: ToolKey, from: DOMRect) => void;
@@ -264,6 +275,13 @@ export function ToolsPanel({
 }) {
   const more = extrasFor(extras, query);
   const { can, me } = useAuth();
+  // "/" and a word looks for a tool: the tools, whichever view was last.
+  const [view, setView] = useState(lastView);
+  const onMenu = !!menu && !slashed && !query && view === "menu";
+  const show = (v: "tools" | "menu") => {
+    lastView = v;
+    setView(v);
+  };
   // In a business's conversation, the tools about that business only
   // (docs/spec/business-chat-tools.md §3); the rest are in Taskiem's.
   const listed = builtIns
@@ -358,7 +376,8 @@ export function ToolsPanel({
     if (leaving) return;
     const out = (e: PointerEvent) => {
       const t = e.target as Element | null;
-      if (t && !t.closest(".tk-tools, .composer")) onClose();
+      // A sheet over it (a menu row's form) is not outside.
+      if (t && !t.closest(".tk-tools, .composer, .tk-sheet, .tk-veil, .modal")) onClose();
     };
     document.addEventListener("pointerdown", out);
     return () => document.removeEventListener("pointerdown", out);
@@ -380,7 +399,19 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
-      {tools.length + more.length + made.length + pages.length === 0 ? (
+      {menu && !slashed && !query && (
+        <div className="tk-chips tk-tools-view" role="group" aria-label="Show">
+          <button type="button" aria-pressed={!onMenu} onClick={() => show("tools")}>
+            Tools
+          </button>
+          <button type="button" aria-pressed={onMenu} onClick={() => show("menu")}>
+            What would you like to do?
+          </button>
+        </div>
+      )}
+      {onMenu ? (
+        <div className="tk-tools-menu">{menu}</div>
+      ) : tools.length + more.length + made.length + pages.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -492,7 +523,7 @@ export function ToolsPanel({
           ))}
         </div>
       )}
-      {recent.length > 0 && !query && (
+      {recent.length > 0 && !query && !onMenu && (
         <div className="tk-tools-recent">
           Recent
           {recent.map((t) => (
@@ -568,6 +599,8 @@ function Detail({
       <InvoiceAdd onSaved={onSaved} onCancel={onCancel} />
     ) : tool === "money" ? (
       <MoneyAdd onSaved={onSaved} onCancel={onCancel} />
+    ) : tool === "stock" ? (
+      <CountAdd onSaved={onSaved} onCancel={onCancel} />
     ) : (
       <ProductAdd onSaved={onSaved} />
     );
@@ -672,6 +705,7 @@ const ADDS: Partial<Record<ToolKey, string>> = {
   services: "Add service",
   invoices: "New invoice",
   money: "Add cash or expense",
+  stock: "Add something to count",
 };
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's

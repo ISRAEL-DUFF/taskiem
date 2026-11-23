@@ -159,7 +159,7 @@ func TestPayroll(t *testing.T) {
 // Someone who leaves the business, however they leave, takes their
 // Payrolla link and saved pay account with them: the employee is free for
 // the staff member who replaces them, and links left by removals before
-// this are cleared (00513) or ignored.
+// this are cleared (00522) or ignored.
 func TestPayrollLeavers(t *testing.T) {
 	ctx := context.Background()
 	w := newWAWorld(t)

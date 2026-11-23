@@ -95,7 +95,7 @@ type Principal struct {
 	// current permissions, and counts as them for four-eyes.
 	KeyOwner uuid.UUID
 	// KeyOwnerRoles are the key owner's roles now: only who may start a
-	// workflow (decision 0070, mayStart) reads them; a key gains nothing
+	// workflow (decision 0073, mayStart) reads them; a key gains nothing
 	// else from them.
 	KeyOwnerRoles []string
 	// AuthMethod is how the session signed in: password, passkey, sso or

@@ -158,7 +158,9 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
-    expect(find.text('Show again'), findsOneWidget);
+    // Said something else: the older folds to what happened, no way back in.
+    expect(find.text('Show again'), findsNothing);
+    expect(find.text('Riders · Not used'), findsOneWidget);
     await looks(t, 'taskiem-menu-riders');
 
     // A row that takes values: its form (M4), the areas offered as chips;
@@ -181,7 +183,49 @@ void main() {
     expect(said.last['reply'], startsWith('form:riders.add:'));
     expect(jsonDecode((said.last['reply'] as String).substring('form:riders.add:'.length)), {'name': 'Musa Bello', 'phone': '08031234567', 'areas': 'Yaba'});
     expect(said.last['text'], 'Add a rider: Musa Bello, 08031234567, Yaba');
-    expect(find.text('Show again'), findsNWidgets(2));
+    expect(find.text('Riders · You chose Add a rider'), findsOneWidget);
+    expect(find.text('Riders · Not used'), findsOneWidget);
+  });
+
+  testWidgets('a menu closed with its ✕ folds to "Closed, nothing done", told to the server; one the server kept as chosen stays so', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final closed = <String, Object?>{};
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/chat/actions') return http.Response(jsonEncode(_catalogue), 200);
+        if (req.method == 'POST' && req.url.path.startsWith('/v1/taskiem-chat/menus/')) {
+          closed[req.url.path] = req.body.isEmpty ? null : jsonDecode(req.body);
+          return http.Response('', 204);
+        }
+        if (req.method == 'GET' && req.url.path == '/v1/taskiem-chat') {
+          return http.Response(
+            jsonEncode({
+              'messages': [
+                _menu('m0', {'topic': 'riders', 'done': 'chose', 'chose': 'riders.list'}, '2026-11-11T13:20:00Z'),
+                {'id': 'i1', 'channel': 'web', 'inbound': true, 'kind': 'text', 'text': 'help', 'created_at': '2026-11-11T13:29:00Z'},
+                _menu('m1', {'line': 'Pick a topic.'}, '2026-11-11T13:30:00Z'),
+              ],
+            }),
+            200,
+          );
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    expect(find.text("Riders · You chose Your riders, and who's free"), findsOneWidget);
+    expect(find.text('What would you like to do?'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Close this menu'));
+    await settle(t);
+    expect(find.text('What would you like to do?'), findsNothing);
+    expect(find.text('Topics · Closed, nothing done'), findsOneWidget);
+    expect(closed.keys, ['/v1/taskiem-chat/menus/m1/close']);
+    await looks(t, 'taskiem-menu-closed');
   });
 
   testWidgets('review fixes: a failed menu tries again; a picked row keeps its values; an add row opens the add form', (t) async {

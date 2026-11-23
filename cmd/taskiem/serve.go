@@ -886,7 +886,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	// A business's saved things its workflows read, at each run's start
 	// (saved objects S3).
 	e.store.Saved = api.SavedResolver(e.store)
-	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
+	e.stock = &stock.Stock{Pool: pool, Catalogue: &storefront.XenibaseCatalogue{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
 	if e.orders, err = storefrontOrders(cfg, e, log); err != nil {
@@ -1489,8 +1489,8 @@ func serve(ctx context.Context, args []string) error {
 		// The money log, copied to each business's kept money_log table.
 		mirror := &moneylog.Mirror{Log: e.moneyLog(), Tables: e.tables(), Logger: log.With("component", "moneylog"),
 			Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}
-		// Stock movements still on their way to the catalogue table, and
-		// done ones copied to the kept stock_movements table.
+		// Stock movements and stock items copied to the kept stock_movements
+		// and stock_items tables, and sales matched to their money.
 		stockSweep := &stock.Sweeper{Stock: e.stock, Logger: log.With("component", "stock"),
 			Mirror: &stock.Mirror{Stock: e.stock, Tables: e.tables(), Logger: log.With("component", "stock"),
 				Rows: &moneylog.XenibaseRows{Registry: e.registry, Vault: e.vault, Guard: &egress.Guard{Logger: log}}}}
@@ -1883,7 +1883,6 @@ func (e *engine) chat(srv *api.Server) {
 	srv.Stock = e.stock
 	if e.purchases != nil {
 		srv.Purchases = e.purchases
-		e.purchases.Cost = srv.StockCost
 	}
 	if e.forms != nil {
 		keys := e.forms.Keys

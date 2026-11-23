@@ -31,7 +31,7 @@ render and compare.
 | --- | --- |
 | A page | `TkPageScreen(title:, backLabel: 'Back to X', titleSize: 30, children:)` (22 for one document). A tab: `TkScreen`. |
 | A group of rows | `TkSection(title:, children: [TkListRow(...)])` |
-| One row | `TkListRow(title:, sub:, icon: 'b-…', square: look.x, onTap:)`; `trailing:` for a switch or button, `chevron: false` for a choice with a tick |
+| One row | `TkListRow(title:, sub:, icon: 'b-…', square: look.x, onTap:)`; `trailing:` for a switch or button, `chevron: false, trailing: TkTick(on)` for a choice with a tick (never `TkRadio`) |
 | The card at the top | `TkTopCard`; `MyPhotoCard` for the person |
 | Fields | `TkFormGroup(title:, children: [TkKitField(label:, child:)])` |
 | A code | `CodeBoxes` (from `screens/sign_in.dart`), inside a `TkFormGroup` |

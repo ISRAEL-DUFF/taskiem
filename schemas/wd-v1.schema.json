@@ -66,7 +66,7 @@
       "minItems": 1,
       "maxItems": 20,
       "uniqueItems": true,
-      "description": "Who may start the workflow by hand (decision 0070): members holding one of these roles, beside run.start; owners always may. Held on every way a person starts it: the web and app's Run, the API, and run in the chat apps. Left out: everyone with run.start.",
+      "description": "Who may start the workflow by hand (decision 0073): members holding one of these roles, beside run.start; owners always may. Held on every way a person starts it: the web and app's Run, the API, and run in the chat apps. Left out: everyone with run.start.",
       "items": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9_]{1,47}$"
@@ -117,7 +117,7 @@
           },
           "public": {
             "type": "boolean",
-            "description": "A tool may show this output to customers and linked businesses (decision 0070); others are never shown to them."
+            "description": "A tool may show this output to customers and linked businesses (decision 0073); others are never shown to them."
           },
           "x-pii": {
             "type": "string",
@@ -2579,7 +2579,7 @@
       ]
     },
     "tool": {
-      "description": "The workflow as a tool in the chat (decision 0070, docs/spec/made-tools.md): its name, command, who it is for and what it answers with. Not part of what a run does. Who may use it is the workflow's roles.",
+      "description": "The workflow as a tool in the chat (decision 0073, docs/spec/made-tools.md): its name, command, who it is for and what it answers with. Not part of what a run does. Who may use it is the workflow's roles.",
       "type": "object",
       "additionalProperties": false,
       "required": [

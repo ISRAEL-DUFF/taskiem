@@ -5,7 +5,7 @@ import { addStep, doneWithStep, newWorkflow } from "./builder";
 // axe is injected into the page, which the Content Security Policy would refuse.
 test.use({ bypassCSP: true });
 
-// Who can start it (decision 0070): picked from the business's roles in
+// Who can start it (decision 0073): picked from the business's roles in
 // Settings, published with the workflow, and kept.
 test("an owner says who can start a workflow, and it is published with it", async ({ page }) => {
   await page.goto("/login?with=email");

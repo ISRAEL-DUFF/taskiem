@@ -631,7 +631,7 @@ type approverRole struct {
 // listApproverRoles answers GET /v1/approver-roles: the roles a step can
 // name, so nobody types one, and how many active members the business has.
 // With ?for=start, the roles that can start runs, for who can start a
-// workflow (decision 0070).
+// workflow (decision 0073).
 func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 	var out []approverRole
 	var members int
@@ -663,7 +663,7 @@ func (s *Server) listApproverRoles(w http.ResponseWriter, r *http.Request) {
 			counts[h.name] += h.n
 		}
 		if r.URL.Query().Get("for") == "start" {
-			// Who can start it (decision 0070): the roles that can start
+			// Who can start it (decision 0073): the roles that can start
 			// runs at all, built-in and the business's own; owners always
 			// may, so they are not listed.
 			for _, n := range access.Holding(PermRunStart) {

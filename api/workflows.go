@@ -672,7 +672,7 @@ func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
 		out["layout"] = json.RawMessage(layout)
 	}
 	if care != nil {
-		// A published tool's care (decision 0070), worked out from its steps.
+		// A published tool's care (decision 0073), worked out from its steps.
 		out["tool_care"] = json.RawMessage(care)
 	}
 	writeJSON(w, http.StatusOK, out)

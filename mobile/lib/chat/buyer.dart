@@ -253,8 +253,10 @@ Map<String, int> reorderQty(List<Map<String, dynamic>> lastLines, List<Map<Strin
   final out = <String, int>{};
   final orderable = flatItems(items);
   for (final l in lastLines) {
+    // The line's own item of theirs (U1), else by our item, else by name.
     final ours = l['item_id'] as String?;
-    final seller = links.where((x) => x['item_id'] == ours).map((x) => x['seller_item_id'] as String?).firstOrNull ??
+    final seller = l['seller_item_id'] as String? ??
+        links.where((x) => x['item_id'] != null && x['item_id'] == ours).map((x) => x['seller_item_id'] as String?).firstOrNull ??
         orderable.where((it) => it.name == l['item']).map((it) => it.id).firstOrNull;
     final it = orderable.where((x) => x.id == seller).firstOrNull;
     if (it != null && it.available) {

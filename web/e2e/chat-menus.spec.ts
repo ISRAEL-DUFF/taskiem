@@ -70,6 +70,9 @@ for (const width of [390, 360])
     await send(page, "help staff");
     await expect(menus(page)).toHaveCount(2);
     await expect(menus(page).first()).toHaveAttribute("data-folded", "1");
+    // Folded to what happened: no way back into a menu that is done.
+    await expect(menus(page).first()).toContainText("Products · Not used");
+    await expect(menus(page).first().getByRole("button")).toHaveCount(0);
     const staff = menus(page).last();
     await expect(staff).toHaveAttribute("data-topic", "staff");
 
@@ -89,6 +92,7 @@ for (const width of [390, 360])
     await form.getByRole("button", { name: "Give someone a task" }).click();
     await expect(form).toHaveCount(0);
     await expect(menus(page).last()).toHaveAttribute("data-folded", "1");
+    await expect(menus(page).last()).toContainText("Staff and tasks · You chose Give someone a task");
     await expect(pane(page).getByText("Give someone a task: Tunde, count the float by 7am", { exact: true }).first()).toBeVisible();
 
     // Not understood: the short answer, and the topics.
@@ -96,6 +100,14 @@ for (const width of [390, 360])
     await expect(pane(page).getByText("Sorry, I did not understand that.", { exact: true }).last()).toBeVisible();
     await expect(menus(page).last()).toHaveAttribute("data-topic", "");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+
+    // Its ✕: closed, nothing done; kept so after a reload, as the others.
+    await menus(page).last().getByRole("button", { name: "Close this menu" }).click();
+    await expect(menus(page).last()).toContainText("Topics · Closed, nothing done");
+    await page.reload();
+    await expect(menus(page).last()).toContainText("Topics · Closed, nothing done");
+    await expect(menus(page).first()).toContainText("Topics · Not used");
+    await expect(menus(page).nth(1)).toContainText("Staff and tasks · You chose Give someone a task");
   });
 
 // Review fixes: a menu whose catalogue could not be read says so and tries
@@ -151,4 +163,89 @@ test("a failed menu tries again; a picked row's values reach its form", async ({
   await card.getByRole("button", { name: /Record a sale/ }).click();
   const form = page.getByTestId("taskiem-action-form");
   await expect(form.getByLabel("What did you sell?")).toHaveValue("3 bags of rice");
+});
+
+// Menus everywhere, E3 (menus-everywhere.md §5): Today's "What would you
+// like to do?": the topics used most as tiles, "All topics" for the rest; a
+// tile's rows in a sheet; a row done through the Taskiem chat, its answer in
+// a sheet, kept in the Taskiem chat.
+for (const width of [390, 360])
+  test(`Today's menu, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    await page.goto("/home");
+    const menu = page.getByTestId("today-menu");
+    await expect(menu.getByRole("heading", { name: "What would you like to do?" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "All topics" })).toBeVisible();
+    await expect(menu.getByRole("button", { name: "Staff and tasks" })).toHaveCount(0);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`Today's menu (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await menu.getByRole("button", { name: "All topics" }).click();
+    await menu.getByRole("button", { name: "Staff and tasks" }).click();
+    const sheet = page.getByTestId("today-topic");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: /^Your tasks/ }).click();
+    const answer = page.getByTestId("action-answer");
+    await expect(answer).toBeVisible();
+    await expect(sheet).toHaveCount(0);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`an answer on Today (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    // Kept in the Taskiem chat.
+    await answer.getByRole("button", { name: "Taskiem chat" }).click();
+    await expect(pane(page).getByText("Your tasks", { exact: true }).first()).toBeVisible();
+  });
+
+// Menus everywhere, E4 (menus-everywhere.md §6): search everywhere, from
+// Today's head and the chats': one box; actions, chats, products, invoices,
+// orders and customers in groups; an action done, its answer in a sheet.
+for (const width of [390, 360])
+  test(`search everywhere, ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await signUp(page);
+    await page.goto("/home");
+    await page.getByRole("link", { name: "Search everything" }).click();
+    await expect(page).toHaveURL(/\/search$/);
+    const box = page.getByRole("searchbox", { name: "Search everything" });
+    await expect(box).toBeFocused();
+    await box.fill("task");
+    const actions = page.getByTestId("search-action");
+    await expect(actions.getByRole("button", { name: /Give someone a task/ })).toBeVisible();
+    if (width === 390) await page.screenshot({ path: "test-results/search-everywhere-phone.png" });
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      const vs = await axe(page);
+      expect(vs, describe(`search everywhere (${scheme})`, vs)).toEqual([]);
+    }
+    await page.emulateMedia({ colorScheme: "light" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    // A chip: only that kind.
+    await page.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "Invoices" }).click();
+    await expect(actions).toHaveCount(0);
+    await page.getByRole("group", { name: "Kinds" }).getByRole("button", { name: "All" }).click();
+    // An action: done, its answer in a sheet.
+    await actions.getByRole("button", { name: /Your tasks/ }).click();
+    await expect(page.getByTestId("action-answer")).toBeVisible();
+    // Nothing found, said so.
+    await page.getByTestId("action-answer").getByRole("button", { name: "Done" }).click();
+    await box.fill("zzqx");
+    await expect(page.getByText("Nothing found for “zzqx”.")).toBeVisible();
+  });
+
+test("search everywhere from the chats' head", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signUp(page);
+  await page.goto("/chat");
+  await page.getByRole("link", { name: "Search everything" }).click();
+  await expect(page.getByTestId("search-everywhere")).toBeVisible();
 });
