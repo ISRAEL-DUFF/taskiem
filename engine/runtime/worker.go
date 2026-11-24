@@ -1282,6 +1282,11 @@ func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) er
 				paths = capabilityOutputPaths(p)
 			case result.Type == history.StepCompleted:
 				paths = outputPIIPaths(p.conn, p.action) // what the manifest declares personal
+				// A data table's rows: only its personal columns
+				// (datatables.StepRows), by its definition now.
+				if v, paths, err = sealTableRows(ctx, w.Store.PII, tx, p.c.tenant, v, tableRows(p.sched, p.env, true), paths, p.taint); err != nil {
+					return err
+				}
 			}
 			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, paths, p.taint); err != nil {
 				return err

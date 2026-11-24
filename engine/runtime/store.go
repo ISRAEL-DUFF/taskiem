@@ -381,7 +381,7 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			payload.Run.CallbackKey = newCallbackKey()
 			paths = append(paths, callbackKeyPath)
 		}
-		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, paths, pii.Taint{})
+		sealed, err := s.sealPayload(ctx, tx, req.TenantID, payload, paths, pii.Taint{}, nil)
 		if err != nil {
 			return err
 		}
@@ -634,13 +634,15 @@ func (s *Store) decideInline(ctx context.Context, tx pgx.Tx, ref RunRef) error {
 				scheduled++
 			}
 			var paths []pii.Path
+			var rows *tableStep
 			if p, ok := ev.Payload.(history.ScheduledPayload); ok {
 				if paths, err = s.connectorPIIPaths(ctx, ref.TenantID, p); err != nil {
 					return err
 				}
 				paths = append(paths, aiTextPaths(p, taint)...)
+				rows = tableRows(p, run.env, false) // a data table's rows, column by column
 			}
-			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint)
+			sealed, err := s.sealPayload(ctx, tx, ref.TenantID, ev.Payload, paths, taint, rows)
 			if err != nil {
 				return err
 			}

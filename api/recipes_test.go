@@ -84,10 +84,10 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 	if tool := got["tool"].(map[string]any); tool["command"] != "price-of" || tool["changed"] != false {
 		t.Fatalf("installed: %v", got)
 	}
-	// What the run read from the table it sealed as personal data, so its
-	// words show masked here and in full on the run (docs/tools.md); its
-	// numbers as they are.
-	if a := start("price-of", map[string]any{"word": "rice"}); a["state"].(map[string]any)["text"] != "Found" || !strings.Contains(toJSON(a["lines"]), `"value":"45000"`) {
+	// A run seals only a table's personal columns (none here), so the
+	// row's words show in the answer as its numbers do (docs/privacy.md).
+	if a := start("price-of", map[string]any{"word": "rice"}); a["state"].(map[string]any)["text"] != "Found" || a["title"] != "Rice 50kg" ||
+		!strings.Contains(toJSON(a["lines"]), `"value":"45000"`) || !strings.Contains(toJSON(a["lines"]), `"value":"bag"`) || strings.Contains(toJSON(a), "•••") {
 		t.Errorf("look up: %v", a)
 	}
 	if a := start("price-of", map[string]any{"word": "yam"}); a["state"].(map[string]any)["text"] != "Not found" {
@@ -122,6 +122,10 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 	rows, _ := a["rows"].([]any)
 	if a["type"] != "list" || len(rows) != 2 {
 		t.Fatalf("list: %v", a)
+	}
+	// Each row's title, as the table holds it.
+	if j := toJSON(rows); !strings.Contains(j, "Printer jam") || !strings.Contains(j, "No Wi-Fi") || strings.Contains(j, "•••") {
+		t.Errorf("list's rows: %s", j)
 	}
 	token := rows[0].(map[string]any)["actions"].([]any)[0].(map[string]any)["token"].(string)
 	pressed := owner.must(200, "POST", "/v1/tools/buttons/"+token, nil)
