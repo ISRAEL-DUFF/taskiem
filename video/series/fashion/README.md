@@ -123,7 +123,7 @@ have. **Check** marks something to verify in the app before filming.
 - **Shows:** add by phone number from the Taskiem chat, Dami joins from
   WhatsApp, usual hours; give a task by tagging ("@Dami finish 12 aprons by
   Friday"); Done from the chat; Clock in; Handover at closing.
-- **Hero feature:** a task given by tagging, done from WhatsApp.
+- **Hero feature:** a task given from Tasks, done on Dami's phone.
 - **Length:** 75 s / 2:00. **Check:** Staff and Tasks pages are pages away from
   the chat; use the chat's views.
 - **Recap:** "A big order is coming. Zainab needs help."
