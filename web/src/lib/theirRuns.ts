@@ -68,7 +68,7 @@ export function withTheirRuns<T extends { id: string; created_at: string }>(
   const out: T[] = [...messages];
   for (const it of placed) {
     let i = out.length;
-    while (i > 0 && out[i - 1]!.created_at > it.created_at) i--;
+    while (i > 0 && (out[i - 1]?.created_at ?? "") > it.created_at) i--;
     out.splice(i, 0, it);
   }
   return out;

@@ -108,21 +108,23 @@ The spec is [pages](pages.md). Three of these are against the spec. **Built 24 N
 
 ## 8. Phase H6: made tools and saved things, the rest
 
+Status: **built 24 November 2026**, every task below (each row says what and its tests).
+
 The specs are [made tools](made-tools.md) and [saved objects](saved-objects.md).
 
 | Task | Item | Details |
 | --- | --- | --- |
-| **On the web, a customer's answer kept in the conversation** | `g-ct-webkeep` | As the app's TheirRuns: after Yes the sheet closes and the answer lands in the person's chat with the business (`web/src/pages/PersonChats.tsx`, `PersonTools.tsx` 189–227), kept on reload. |
-| **Optional inputs read from words** | `g-ct-chip` | `api/tools_read.go` 56–67 gives the model only what the chat form asks. Give it the optional inputs too, still shown before anything runs. |
-| **Retire the separate public menu: a business's customer menu is its customers' tools** | `g-ct-oldmenu` | Decided 24 November 2026: nothing is in production, so nothing is carried over. Remove the public-menu list (`whatsapp_public_workflows`, its `command` column and the carry-over in migration 00569, `PUT /v1/whatsapp/public-menu`, the menu's settings page on the web and in the app, and the code reading both lists in `api/tools_customers.go`). **menu** on WhatsApp, and the app's and web's Their tools, list the business's customers' tools only, each with its answer. The `public_menu` switch stays as the business's choice to offer customers' tools at all, or goes if customers' tools have their own switch; the docs (`docs/tools.md`, `docs/whatsapp.md`, made tools §11, decision 0073 point 6) say so. A new migration drops the table; 00569's down stays reversible. |
-| **Tool changes said in plain words** | `g-ct-later` | `engine/wdtext` says what changed in a tool (command, phrases, who it is for, the answer) in plain words, where the version history and review show changes. |
-| **A test file stating the answer** | `g-ct-later` | `wd-test/v1` gains an expected answer (text, card fields, list rows) checked by `engine/wdtest`. |
-| **A workflow sends a saved file** | `g-saved-wf` | `api/saved_runs.go` 131–134 gives a run the file's name and type only. Let a step attach a saved file (a message, an email), read at run start under the business's scope, never a person's own file. |
-| **Each run's use of a saved thing recorded** | `g-saved-wf` | A row for each saved thing a run read (which, when, which step), shown on the saved thing's page and the run. Migration. |
-| **Saved things in the SDK** | `g-saved-wf` | The SDK's `saved` root (types and helpers), as the server's `saved.*` expressions. |
-| **An address on an invoice made with @name** | `g-saved-addr` | Invoices hold name, phone and email only. Add an address (sealed with the customer), on the PDF, the web and the app, filled from a saved person's or business's place. Migration of the customer envelope. |
+| **On the web, a customer's answer kept in the conversation** | `g-ct-webkeep` | As the app's TheirRuns: after Yes the sheet closes and the answer lands in the person's chat with the business (`web/src/pages/PersonChats.tsx`, `PersonTools.tsx` 189–227), kept on reload. **Built:** `lib/theirRuns.ts`, `TheirRunCard`; `e2e/their-tools.spec.ts` (kept on a reload). |
+| **Optional inputs read from words** | `g-ct-chip` | `api/tools_read.go` 56–67 gives the model only what the chat form asks. Give it the optional inputs too, still shown before anything runs. **Built:** `whatsapp.ToolFields`, the reader and `POST /v1/tools/{command}/read`; `TestReaderFillsOptionalInputs`, `TestToolFields`. |
+| **Retire the separate public menu: a business's customer menu is its customers' tools** | `g-ct-oldmenu` | Decided 24 November 2026: nothing is in production, so nothing is carried over. Remove the public-menu list (`whatsapp_public_workflows`, its `command` column and the carry-over in migration 00569, `PUT /v1/whatsapp/public-menu`, the menu's settings page on the web and in the app, and the code reading both lists in `api/tools_customers.go`). **menu** on WhatsApp, and the app's and web's Their tools, list the business's customers' tools only, each with its answer. The `public_menu` switch stays as the business's choice to offer customers' tools at all, or goes if customers' tools have their own switch; the docs (`docs/tools.md`, `docs/whatsapp.md`, made tools §11, decision 0073 point 6) say so. A new migration drops the table; 00569's down stays reversible. **Built:** migration 00640 (list and switch dropped; its down brings both back empty); route, OpenAPI, the web's menu settings and the code reading both lists gone (the app had no menu page); the `public_menu` switch went too: a tool's `for: "customers"` is the one switch, on WhatsApp and in the app; `TestWhatsAppCustomerMenu`, `TestCustomerTools*`, `TestRetirePublicMenuMigration`. |
+| **Tool changes said in plain words** | `g-ct-later` | `engine/wdtext` says what changed in a tool (command, phrases, who it is for, the answer) in plain words, where the version history and review show changes. **Built:** `wdtext.Changes` in the version history (`GET /v1/workflows/{id}`, the editor's What changed) and the review (`GET /v1/publish-requests`, Approvals), words in en and drafts in ha, ig, pcm, yo; `TestChanges`, `TestToolChangesInPlainWords`, `e2e/h6.spec.ts`. A phrase such as "spent" is Taskiem's own word and refused for a tool, so the review's example is "It now also says 'diesel'". |
+| **A test file stating the answer** | `g-ct-later` | `wd-test/v1` gains an expected answer (text, card fields, list rows) checked by `engine/wdtest`. **Built:** `expect.answer`, drawn by `wd.DrawAnswer` (which the API now draws answers with); `TestCaseStatesTheAnswer`. |
+| **A workflow sends a saved file** | `g-saved-wf` | `api/saved_runs.go` 131–134 gives a run the file's name and type only. Let a step attach a saved file (a message, an email), read at run start under the business's scope, never a person's own file. **Built:** a saved file in a run is a week-long link signed in the business's storage at the run's start; `notify` tell and message take `file`; `TestSavedFileSentByWorkflow`, `TestMessageFile`. |
+| **Each run's use of a saved thing recorded** | `g-saved-wf` | A row for each saved thing a run read (which, when, which step), shown on the saved thing's page and the run. Migration. **Built:** migration 00641 `saved_uses`; `GET /v1/saved/{id}/runs`, the run's `saved`; web (Saved sheets, the run page) and app (Runs that read it, `saved-runs` pictures). |
+| **Saved things in the SDK** | `g-saved-wf` | The SDK's `saved` root (types and helpers), as the server's `saved.*` expressions. **Built:** `sdk/src/saved.ts` (types by kind, `SAVED_FIELDS`, `savedRef`), `saved` in `ROOTS` and `Context`; `saved.test.ts`. |
+| **An address on an invoice made with @name** | `g-saved-addr` | Invoices hold name, phone and email only. Add an address (sealed with the customer), on the PDF, the web and the app, filled from a saved person's or business's place. Migration of the customer envelope. **Built:** `invoicing.Customer.Address` (00642 says so; nothing carried over), filled from the saved person's place by `invoice @acme`; the new invoice PDF (`GET /v1/invoices/{id}/pdf`, there was none before), the web and the app show it, masked until revealed; `TestWhatsAppInvoiceSaved`, `TestInvoicePDF`, `e2e/h6.spec.ts`, the app's invoice test. |
 
-**Done when:** a customer's answer stays in their chat after a reload on the web; "log 4500 diesel at Total" fills an optional "where" input; **menu** on WhatsApp lists only the business's customers' tools, each answering, and no public-menu settings remain; a review of a changed tool says "now also says 'spent'"; a wd-test fails when the answer changes; a weekly workflow emails `@price-list`; a saved thing's page lists the runs that read it; and `invoice @acme 250k` prints Acme's address.
+**Done when** (each checked 24 November 2026): a customer's answer stays in their chat after a reload on the web; "log 4500 diesel at Total" fills an optional "where" input; **menu** on WhatsApp lists only the business's customers' tools, each answering, and no public-menu settings remain; a review of a changed tool says "now also says 'spent'"; a wd-test fails when the answer changes; a weekly workflow emails `@price-list`; a saved thing's page lists the runs that read it; and `invoice @acme 250k` prints Acme's address.
 
 ## 9. Phase H7: paying one person, finished
 
@@ -254,8 +256,8 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-deprec | §12 |
 | g-thing-suggest | H2 (done 24 November 2026) |
 | g-thing-extra | H2 (done 24 November 2026) |
-| g-saved-wf | H6 |
-| g-saved-addr | H6 |
+| g-saved-wf | H6 (built 24 November 2026) |
+| g-saved-addr | H6 (built 24 November 2026) |
 | g-saved-personal | §12 |
 | g-saved-review | §12 |
 | g-pay-wallet | §12 |
@@ -278,11 +280,11 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-ct-m6 | §11 M6 |
 | g-ct-linked | §12 |
 | g-ct-files | §12 |
-| g-ct-later | H6 (plain words, wd-test answer); §11 M6 (template library) |
-| g-ct-oldmenu | H6 (the public menu retired, §14) |
+| g-ct-later | H6 (plain words, wd-test answer: built 24 November 2026); §11 M6 (template library) |
+| g-ct-oldmenu | H6 (the public menu retired, §14: built 24 November 2026) |
 | g-ct-tg | §12 |
-| g-ct-webkeep | H6 |
-| g-ct-chip | Chip built (H1 fixes the doc); optional inputs H6 |
+| g-ct-webkeep | H6 (built 24 November 2026) |
+| g-ct-chip | Chip built (H1 fixes the doc); optional inputs H6 (built 24 November 2026) |
 | g-ct-waform | §12 |
 | g-scan-web | H3, done |
 | g-scan-wa | H3, done |

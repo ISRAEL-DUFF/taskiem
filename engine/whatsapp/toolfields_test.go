@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -33,7 +34,7 @@ func TestToolFields(t *testing.T) {
 		t.Errorf("required: %v %v", req, err)
 	}
 	// A required field no chat carries still refuses.
-	if _, err := ToolFields(json.RawMessage(`{"type":"object","required":["photo"],"properties":{"photo":{"type":"object"}}}`), nil); err != ErrInputsUnsupported {
+	if _, err := ToolFields(json.RawMessage(`{"type":"object","required":["photo"],"properties":{"photo":{"type":"object"}}}`), nil); !errors.Is(err, ErrInputsUnsupported) {
 		t.Errorf("required object: %v", err)
 	}
 }

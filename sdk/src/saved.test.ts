@@ -28,7 +28,7 @@ describe("saved", () => {
 
   it("sends a saved file with a message", () => {
     const def = workflow({ id: "wf_weekly", name: "Weekly prices", trigger: manual() })
-      .step("note", transform({ output: { text: ({ saved }) => saved.intro!.body } }))
+      .step("note", transform({ output: { text: savedRef("intro", "body") } }))
       .next(
         "send",
         notify.message({ email: "buyer@ada.test", message: ({ steps }) => steps.note.output.text, file: ({ saved }) => saved.price_list }),

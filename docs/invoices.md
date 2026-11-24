@@ -14,9 +14,11 @@ An invoice to a customer who is also a business on Taskiem, and linked to yours,
 
 Under **Invoices**, **New invoice** asks for:
 
-- **The customer**: a name, and a phone number or an email (or both) to send it to. Over the API, `customer.key` is the business's own key for them (`student:42`, up to 100 letters, digits and `:._/-`): invoices with the same key are one customer's in [matching](matching.md#customers-own-account-numbers), else invoices to the same phone (else email) are.
+- **The customer**: a name, and a phone number or an email (or both) to send it to, and where they are (`customer.address`, up to 300 characters, optional), printed on the invoice. `invoice @acme 250k` in the chat fills the name, the email (else the phone) and the address from the saved person or business `@acme` (build plan H6). Over the API, `customer.key` is the business's own key for them (`student:42`, up to 100 letters, digits and `:._/-`): invoices with the same key are one customer's in [matching](matching.md#customers-own-account-numbers), else invoices to the same phone (else email) are.
 - **What it is for**: an amount with a short description, or a list of items, each with a quantity and a price.
 - **When it is due** (optional), and a note for the customer (optional).
+
+**The PDF.** **Open the PDF** on an invoice (`GET /v1/invoices/{id}/pdf`) is the invoice as a document to print or attach: the business, the number, its state and dates, who it is to with their address, its lines, the total, what was paid and what is due. Made on demand, nothing kept; the customer's details are masked unless the person may see personal data and has shown them (`?reveal=true`, audited). The app's invoice shows the address on the customer's card.
 
 It is saved as a **draft** with the business's next number (`INV-0001` upwards). A draft can be changed. **Send** sends it to the customer by SMS and email, with the link to its page, and the invoice becomes **sent**. Sending again sends the same link. A customer who has had many messages in the last hour (five an hour, twenty a day, from any business) is not sent another: the invoice is sent all the same, its page works, and it says which messages went.
 
