@@ -259,24 +259,84 @@ func TestPayOnePersonFinished(t *testing.T) {
 	if res2.StatusCode != 404 {
 		t.Fatalf("a changed link: %d", res2.StatusCode)
 	}
+	getStatus := func(path string) int {
+		t.Helper()
+		res, err := http.Get(w.base + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		return res.StatusCode
+	}
+	// The link stops working 90 days after it was paid.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE payments SET finished_at = now() - interval '91 days' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if st := getStatus(rel); st != 404 {
+		t.Fatalf("an old receipt's link: %d", st)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE payments SET finished_at = now() WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	// An owner's own payment has no link to send.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE payments SET personal = true WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rc := owner.must(200, "GET", "/v1/payments/"+id+"/receipt", nil); rc["url"] != "" {
+		t.Fatalf("an owner's own payment's link: %v", rc["url"])
+	}
+	if st := getStatus(rel); st != 404 {
+		t.Fatalf("an owner's own payment by its link: %d", st)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE payments SET personal = false WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
 	owner.must(201, "POST", "/v1/payments/"+id+"/share", map[string]any{"where": "taskiem"})
 	if n := count(`SELECT count(*) FROM chat_history WHERE payment_id = $1 AND kind = 'receipt'`, id); n != 1 {
 		t.Fatalf("the receipt in the chat: %d", n)
 	}
 
 	// Sent back by the bank: the payment says so, and the rider is told.
-	back, _ := moneylog.FromEvent("paystack/main", "payout.reversed", map[string]any{"payout_id": "po_h7", "reason": "Account closed"})
+	back, _ := moneylog.FromEvent("paystack/main", "payout.reversed", map[string]any{"payout_id": "po_h7", "reason": "Account closed", "fee_kobo": float64(2500)})
 	if _, _, err := mlog.Record(ctx, biz, back); err != nil {
 		t.Fatal(err)
 	}
 	if x := owner.must(200, "GET", "/v1/payments/"+id, nil)["payment"].(map[string]any); x["status"] != "reversed" {
 		t.Fatalf("reversed: %v", x)
 	}
+	// The fee came back with it (the rail says so): its line is undone by
+	// one naming it; the payout's own line still carries no fee.
+	if n := count(`SELECT count(*) FROM money_entries f JOIN money_entries b ON b.corrects = f.id AND b.kind = 'fee' AND b.status = 'reversed' AND b.amount_kobo = 2500
+		WHERE f.tenant_id = $1 AND f.kind = 'fee' AND f.status = 'settled' AND f.reference = 'po_h7'`, biz); n != 1 {
+		t.Fatalf("the fee's line undone: %d", n)
+	}
+	if n := count(`SELECT count(*) FROM money_entries WHERE tenant_id = $1 AND kind = 'payout' AND reference = 'po_h7' AND fee_kobo IS NOT NULL`, biz); n != 0 {
+		t.Fatalf("a fee on the payout's lines: %d", n)
+	}
+	// A "paid you" card of this payment (a staff member's, as a person paid
+	// sees it) says how it stands now: sent back.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO chat_history (id, tenant_id, user_id, channel, inbound, kind, body, buttons, expires_at, payment_id)
+		SELECT gen_random_uuid(), tenant_id, user_id, channel, inbound, 'paid_you', body, buttons, expires_at, payment_id FROM chat_history WHERE payment_id = $1 AND kind = 'diary'`, id); err != nil {
+		t.Fatal(err)
+	}
+	cardStatus := ""
+	for _, m := range owner.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any) {
+		if mm := m.(map[string]any); mm["kind"] == "paid_you" && mm["payment"] == id {
+			cardStatus, _ = mm["payment_status"].(string)
+		}
+	}
+	if cardStatus != "reversed" {
+		t.Fatalf("the paid-you card after the bank sent it back: %q", cardStatus)
+	}
 	w.tick(t)
 	if m := w.graph.Last(t, musa); !strings.Contains(m.Text, "did not reach your account") {
 		t.Fatalf("told it came back: %+v", m)
 	}
 	owner.must(409, "GET", "/v1/payments/"+id+"/receipt", nil)
+	// Its link stops working once the bank sent it back.
+	if st := getStatus(rel); st != 404 {
+		t.Fatalf("a reversed payment's receipt link: %d", st)
+	}
 
 	// Try again: prepared again as it was asked for, to confirm; the
 	// sheet's Tell them in the chat, unticked, is kept as it is confirmed.
@@ -303,6 +363,24 @@ func TestPayOnePersonFinished(t *testing.T) {
 	if nq["fee_quote_kobo"] != nil {
 		t.Fatalf("no quote: %v", nq)
 	}
+	// The rail's answer heard before the payment knew its payout: that
+	// payout's line carries the fee, so the fee is not written again as a
+	// line of its own (never counted twice).
+	nqID := nq["id"].(string)
+	sent2 := owner.must(202, "POST", "/v1/payments/"+nqID+"/confirm", map[string]any{"passkey": stepUp(t, owner, key, "money.pay", "payment:"+nqID)})["payment"].(map[string]any)
+	early, ok := moneylog.FromPayout("paystack/main", map[string]any{"amount_kobo": float64(200_000)}, map[string]any{"payout_id": "po_early", "status": "settled", "fee_kobo": float64(1075)})
+	if !ok {
+		t.Fatal("no early entry")
+	}
+	if _, _, err := mlog.Record(ctx, biz, early); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.srv.PaymentsOps().Finish(ctx, biz, uuid.MustParse(sent2["run_id"].(string)), uuid.MustParse(nqID), "paid", "MUSA BELLO", "po_early", "", ptr(int64(1075)), "bank"); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(`SELECT count(*) FROM money_entries WHERE tenant_id = $1 AND reference = 'po_early' AND (kind = 'fee' OR fee_kobo IS NOT NULL)`, biz); n != 1 {
+		t.Fatalf("the fee counted once: %d", n)
+	}
 
 	// Taskiem wallet to Taskiem wallet: Bola Stores' wallet's number is
 	// paid wallet to wallet, at once, with no fee; Add money is the
@@ -312,16 +390,16 @@ func TestPayOnePersonFinished(t *testing.T) {
 	bolaAcct := fitting(t, "058", "098765432")
 	rails.names[bolaAcct] = "BOLA STORES"
 	for _, row := range []struct {
-		tenant         uuid.UUID
-		wallet, number string
-	}{{biz, "w_ada", "1100110011"}, {bolaID, "w_bola", bolaAcct}} {
+		tenant               uuid.UUID
+		wallet, number, bank string
+	}{{biz, "w_ada", "1100110011", "Access Bank"}, {bolaID, "w_bola", bolaAcct, "Guaranty Trust Bank"}} {
 		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO connections (id, tenant_id, environment, connector, name, auth_type, status)
 			VALUES ($1, $2, 'prod', 'iswallet', 'taskiem', 'api_key', 'active') ON CONFLICT DO NOTHING`, uuid.New(), row.tenant); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO receive_money (tenant_id, connection_id, mode, wallet_id, owner_type, account_reference, account_number, bank_name, account_name, created_by)
-			SELECT $1, id, 'test', $2, 'client_end_business', 'ref', $3, 'Wema Bank', 'Taskiem / Business', 'user:x' FROM connections WHERE tenant_id = $1 AND connector = 'iswallet'`,
-			row.tenant, row.wallet, row.number); err != nil {
+			SELECT $1, id, 'test', $2, 'client_end_business', 'ref', $3, $4, 'Taskiem / Business', 'user:x' FROM connections WHERE tenant_id = $1 AND connector = 'iswallet'`,
+			row.tenant, row.wallet, row.number, row.bank); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -329,6 +407,17 @@ func TestPayOnePersonFinished(t *testing.T) {
 	bal = owner.must(200, "GET", "/v1/payments/balance", nil)
 	if bal["wallet"] != true || bal["from"] != "your Taskiem wallet" || bal["add_money"].(map[string]any)["account_number"] != "1100110011" {
 		t.Fatalf("the wallet's balance: %v", bal)
+	}
+	// Bola's wallet number is kept findable (by its bank and number) as
+	// Bola's business reads its own wallet.
+	bola.must(200, "GET", "/v1/payments/balance", nil)
+	var walletKey string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT account_key FROM wallet_accounts WHERE tenant_id = $1`, bolaID).Scan(&walletKey); err != nil || strings.Contains(walletKey, bolaAcct) {
+		t.Fatalf("Bola's wallet kept: %q %v", walletKey, err)
+	}
+	// The same ten digits at another bank are another account: the bank.
+	if other := owner.must(201, "POST", "/v1/payments", map[string]any{"account_number": bolaAcct, "bank_name": "Access Bank", "amount_kobo": 500_000, "purpose": "stock"})["payment"].(map[string]any); other["route"] != "bank" {
+		t.Fatalf("the same number at another bank: %v", other)
 	}
 	wx := owner.must(201, "POST", "/v1/payments", map[string]any{"account_number": bolaAcct, "bank_name": "Guaranty Trust Bank", "amount_kobo": 500_000, "purpose": "stock"})["payment"].(map[string]any)
 	if wx["route"] != "wallet" || wx["fee_quote_kobo"] != float64(0) || strings.Contains(stringOf(wx), "w_bola") {
@@ -379,9 +468,15 @@ func TestPayOnePersonFinished(t *testing.T) {
 	if len(out) == 0 || !strings.Contains(out[len(out)-1].Text, "Pay CHIDI OKEKE (") {
 		t.Fatalf("a reply of pay: %+v", out)
 	}
+	// A reply of "pay" to a message with no account kept (a plan's
+	// reminder): read as "pay" is, paying for Taskiem, not a transfer.
+	_ = w.whatsapp(t, ada, "cancel")
+	plain := w.whatsapp(t, ada, "pay")
+	_ = w.whatsapp(t, ada, "cancel")
 	reply["context"] = map[string]any{"id": "wamid.nothing"}
-	if out := waMsg(reply, "wamid.reply2"); len(out) == 0 || !strings.Contains(out[len(out)-1].Text, "no account number I can read") {
-		t.Fatalf("a reply quoting nothing kept: %+v", out)
+	if out := waMsg(reply, "wamid.reply2"); len(out) == 0 || len(plain) == 0 || out[len(out)-1].Text != plain[len(plain)-1].Text ||
+		strings.Contains(out[len(out)-1].Text, "how much, and for what") {
+		t.Fatalf("a reply quoting nothing kept: %+v, as pay: %+v", out, plain)
 	}
 	// On Telegram, a reply of "pay" carries the words it quotes.
 	tg := w.telegram(t, adaTG, func(id int64) []byte {

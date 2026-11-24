@@ -6784,6 +6784,9 @@ paths:
                 send_receipt:
                   type: boolean
                   description: A receipt to send the person paid, for one not on Taskiem.
+                order_reference:
+                  type: string
+                  description: 'An order whose refund this pays back to its customer (Pay it back; needs storefront.manage): it is a refund, no more than the order owes (400 `over_owed`), one on its way or paid at a time (409 `refund_on_its_way`), the order waiting for a refund (409 `not_owed`); once paid, the order is refunded and its customer told.'
                 where:
                   type: string
                   description: 'The chat it was paid from, for its diary line: `taskiem` (the person''s own Taskiem chat) or a linked business''s link id. 400 `where` for a chat that is not theirs.'
@@ -49599,6 +49602,9 @@ components:
         balance_kobo:
           type: [integer, 'null']
           description: The balance when it was prepared, where the payments account says it (the sheet shows the balance after).
+        refund_order:
+          type: string
+          description: The order whose refund it pays back, when it does
     PayReceipt:
       type: object
       additionalProperties: false
@@ -50203,6 +50209,9 @@ components:
           type: string
           format: uuid
           description: The payment a diary line, receipt or paid_you card is about
+        payment_status:
+          type: string
+          description: 'On a paid_you card, how its payment stands now (paid, or reversed when the bank sent it back)'
         batch:
           type: string
           format: uuid

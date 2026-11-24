@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -109,16 +111,26 @@ func (s *Server) payFeeQuote(ctx context.Context, tenant uuid.UUID, rl invoicing
 	return nil
 }
 
-// walletRoute is the Taskiem wallet an account number is, when it is
-// another business's and rl can pay wallet to wallet: its wallet's id,
-// never shown; "" for the bank.
-func (s *Server) walletRoute(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, number string) string {
-	if !isTaskiemWallet(rl) || !rl.Maps("pay_wallet") {
+// walletAccountKey is the key a Taskiem wallet's number is found by: its
+// bank's code and the number together, hashed (wallet_accounts, 00651).
+// The same ten digits at another bank are another account.
+func walletAccountKey(bankCode, number string) string {
+	sum := sha256.Sum256([]byte(bankCode + ":" + number))
+	return hex.EncodeToString(sum[:])
+}
+
+// walletRoute is the Taskiem wallet an account number at a bank (its code
+// in rl's own list) is, when it is another business's and rl can pay
+// wallet to wallet: its wallet's id, never shown; "" for the bank.
+func (s *Server) walletRoute(ctx context.Context, tenant uuid.UUID, rl invoicing.Rail, number, bankCode string) string {
+	if !isTaskiemWallet(rl) || !rl.Maps("pay_wallet") || bankCode == "" {
 		return ""
 	}
+	// The paying wallet's own row says which mode it is in.
+	s.keepWalletAccount(ctx, tenant)
 	var wallet *string
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT taskiem_wallet_for_account($1, $2)`, tenant, number).Scan(&wallet)
+		return tx.QueryRow(ctx, `SELECT taskiem_wallet_for_account($1, $2)`, number, bankCode).Scan(&wallet)
 	}); err != nil {
 		s.Logger.Warn("payments: looking for a Taskiem wallet", "tenant", tenant, "err", err)
 		return ""
@@ -181,6 +193,7 @@ func (s *Server) getPayBalance(w http.ResponseWriter, r *http.Request) {
 		out.Available = &n
 	}
 	if out.Wallet {
+		s.keepWalletAccount(ctx, p.TenantID)
 		if err := s.tx(r, func(tx pgx.Tx) error {
 			var a addMoneyTo
 			var number, bank, name *string
@@ -222,4 +235,53 @@ func (s *Server) balanceCovers(ctx context.Context, tenant uuid.UUID, x payment)
 		return refusePay(http.StatusConflict, "short", shortWords(n, x.AmountKobo, x.FeeQuoteKobo))
 	}
 	return nil
+}
+
+// keepWalletAccount keeps the business's own Taskiem wallet number findable
+// for wallet to wallet (wallet_accounts): by its bank's code, found in the
+// Taskiem wallet's own bank list by the bank's name iswallet gave, and its
+// number. Without a code it is not kept, and payments to it go by bank.
+func (s *Server) keepWalletAccount(ctx context.Context, tenant uuid.UUID) {
+	var number, bankName, bankCode, wallet, mode *string
+	var kept bool
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT account_number, bank_name, bank_code, wallet_id, mode,
+			EXISTS (SELECT 1 FROM wallet_accounts w WHERE w.tenant_id = m.tenant_id AND w.wallet_id = m.wallet_id)
+			FROM receive_money m WHERE m.tenant_id = $1 AND m.environment = 'prod'`,
+			tenant).Scan(&number, &bankName, &bankCode, &wallet, &mode, &kept)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}); err != nil || number == nil || *number == "" || wallet == nil || mode == nil || kept && deref(bankCode) != "" {
+		if err != nil {
+			s.Logger.Warn("payments: reading the wallet's number", "tenant", tenant, "err", err)
+		}
+		return
+	}
+	code := deref(bankCode)
+	if code == "" && s.accountRails() != nil {
+		rl, err := s.accountRails().ResolveChannel(ctx, tenant, "iswallet/"+secrets.PlatformName, "pay_bank")
+		if err == nil {
+			if banks, err := s.savedBanks(ctx, tenant, rl); err == nil {
+				if m, ok := matchBank(bankItems(banks), deref(bankName)); ok {
+					code = m.Code
+				}
+			}
+		}
+	}
+	if code == "" {
+		return
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE receive_money SET bank_code = $2 WHERE tenant_id = $1 AND bank_code IS DISTINCT FROM $2`, tenant, code); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO wallet_accounts (tenant_id, account_key, wallet_id, mode) VALUES ($1, $2, $3, $4)
+			ON CONFLICT (tenant_id) DO UPDATE SET account_key = $2, wallet_id = $3, mode = $4, updated_at = now()`,
+			tenant, walletAccountKey(code, *number), *wallet, *mode)
+		return err
+	}); err != nil {
+		s.Logger.Warn("payments: keeping the wallet's number", "tenant", tenant, "err", err)
+	}
 }

@@ -53,6 +53,10 @@ type CheckIn struct {
 	BankCode      string
 	AccountNumber string
 	NeedsOK       bool
+	// Route and WalletID: how the run pays it (bank, or wallet to the
+	// wallet named), as the payment says (paying people H7).
+	Route    string
+	WalletID string
 }
 
 // New returns the connector; ops nil makes every action fail plainly.
@@ -158,6 +162,8 @@ func (a *actions) check(ctx context.Context, req connector.Request) (connector.R
 	in.BankCode, _ = req.Input["bank_code"].(string)
 	in.AccountNumber, _ = req.Input["account_number"].(string)
 	in.NeedsOK, _ = req.Input["needs_ok"].(bool)
+	in.Route, _ = req.Input["route"].(string)
+	in.WalletID, _ = req.Input["wallet_id"].(string)
 	out, err := a.ops.Check(ctx, c.Tenant, c.Run, id, in)
 	if err != nil {
 		return connector.Response{}, fatal(err)

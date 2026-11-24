@@ -8481,11 +8481,6 @@
       "text": "Ndị ọrụ na-akwụ naanị akaụntụ azụmahịa chekwara: rịọ onye nwe ya ka o chekwaa nke a mbụ.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
-    },
-    "wa.pay.fwd.none": {
-      "text": "Ozi ahụ enweghị nọmba akaụntụ m nwere ike ịgụ. Zigara m nkọwa akaụntụ ahụ, ma ọ bụ kwuo: *send 45k to 0123456789 gtbank*.",
-      "reviewed": false,
-      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

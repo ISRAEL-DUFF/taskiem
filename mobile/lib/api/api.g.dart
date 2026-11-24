@@ -4736,7 +4736,7 @@ class TaskiemChat {
 }
 
 class TaskiemMessage {
-  const TaskiemMessage({this.batch, this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, this.payment, required this.text});
+  const TaskiemMessage({this.batch, this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, this.payment, this.paymentStatus, required this.text});
 
   /// The batch of payments a diary line is about
   final String? batch;
@@ -4752,6 +4752,9 @@ class TaskiemMessage {
   final String kind;
   /// The payment a diary line, receipt or paid_you card is about
   final String? payment;
+  /// On a paid_you card, how its payment stands now (paid, or reversed when the
+  /// bank sent it back)
+  final String? paymentStatus;
   final String text;
 
   factory TaskiemMessage.fromJson(Map<String, dynamic> j) => TaskiemMessage(
@@ -4763,6 +4766,7 @@ class TaskiemMessage {
         inbound: j['inbound'] as bool,
         kind: j['kind'] as String,
         payment: j['payment'] == null ? null : j['payment'] as String,
+        paymentStatus: j['payment_status'] == null ? null : j['payment_status'] as String,
         text: j['text'] as String,
       );
 
@@ -4775,6 +4779,7 @@ class TaskiemMessage {
         'inbound': inbound,
         'kind': kind,
         'payment': ?payment,
+        'payment_status': ?paymentStatus,
         'text': text,
       };
 }
@@ -14926,7 +14931,7 @@ class ListPaymentsResponse {
 }
 
 class Payment {
-  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, this.balanceKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.feeQuoteKobo, this.finishedAt, this.firstPayment, required this.id, this.mayTell, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.riderId, this.route, this.runId, this.savedId, this.sendReceipt, this.staffId, required this.startedFrom, required this.status, this.tellPayee});
+  const Payment({required this.account, this.accountName, this.again, required this.amountKobo, this.awaitsYourOk, this.balanceKobo, required this.bankName, this.batchId, this.changedAccount, this.confirmedAt, this.confirmedBy, required this.createdAt, this.feeKobo, this.feeQuoteKobo, this.finishedAt, this.firstPayment, required this.id, this.mayTell, this.needsOk, this.note, required this.payee, required this.personal, required this.preparedBy, required this.purpose, this.purposeNote, this.reason, this.refundOrder, this.riderId, this.route, this.runId, this.savedId, this.sendReceipt, this.staffId, required this.startedFrom, required this.status, this.tellPayee});
 
   /// The account number masked (••6789).
   final String account;
@@ -14972,6 +14977,8 @@ class Payment {
   final String purpose;
   final String? purposeNote;
   final Object? reason;
+  /// The order whose refund it pays back, when it does
+  final String? refundOrder;
   /// The rider paid, when it was one
   final Object? riderId;
   /// How it goes: a bank transfer, or Taskiem wallet to Taskiem wallet (at
@@ -15013,6 +15020,7 @@ class Payment {
         purpose: j['purpose'] as String,
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
         reason: j['reason'],
+        refundOrder: j['refund_order'] == null ? null : j['refund_order'] as String,
         riderId: j['rider_id'],
         route: j['route'] == null ? null : j['route'] as String,
         runId: j['run_id'],
@@ -15051,6 +15059,7 @@ class Payment {
         'purpose': purpose,
         'purpose_note': ?purposeNote,
         'reason': ?reason,
+        'refund_order': ?refundOrder,
         'rider_id': ?riderId,
         'route': ?route,
         'run_id': ?runId,
@@ -15264,7 +15273,7 @@ class PayNameCheckResponseBanksItem {
 }
 
 class CreatePaymentRequest {
-  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.sendReceipt, this.staffId, this.tellPayee, this.where});
+  const CreatePaymentRequest({this.accountNumber, required this.amountKobo, this.bankName, this.from, this.mine, this.note, this.orderReference, this.payee, this.purpose, this.purposeNote, this.riderId, this.savedId, this.sendReceipt, this.staffId, this.tellPayee, this.where});
 
   /// An account not saved (pay.account), with bank_name; its name is checked
   /// with the bank as it is prepared. 409 `name_not_checked` when the bank did
@@ -15275,6 +15284,12 @@ class CreatePaymentRequest {
   final String? from;
   final bool? mine;
   final String? note;
+  /// An order whose refund this pays back to its customer (Pay it back; needs
+  /// storefront.manage): it is a refund, no more than the order owes (400
+  /// `over_owed`), one on its way or paid at a time (409 `refund_on_its_way`),
+  /// the order waiting for a refund (409 `not_owed`); once paid, the order is
+  /// refunded and its customer told.
+  final String? orderReference;
   final String? payee;
   final String? purpose;
   final String? purposeNote;
@@ -15303,6 +15318,7 @@ class CreatePaymentRequest {
         from: j['from'] == null ? null : j['from'] as String,
         mine: j['mine'] == null ? null : j['mine'] as bool,
         note: j['note'] == null ? null : j['note'] as String,
+        orderReference: j['order_reference'] == null ? null : j['order_reference'] as String,
         payee: j['payee'] == null ? null : j['payee'] as String,
         purpose: j['purpose'] == null ? null : j['purpose'] as String,
         purposeNote: j['purpose_note'] == null ? null : j['purpose_note'] as String,
@@ -15321,6 +15337,7 @@ class CreatePaymentRequest {
         'from': ?from,
         'mine': ?mine,
         'note': ?note,
+        'order_reference': ?orderReference,
         'payee': ?payee,
         'purpose': ?purpose,
         'purpose_note': ?purposeNote,

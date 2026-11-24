@@ -32,6 +32,10 @@ import (
 // The PDF is also at a link of its own, signed for that payment alone, for
 // the payer to send to the person paid.
 
+// receiptLinkDays is how long a receipt's own link works after it was
+// paid: long enough to send it and for it to be opened, not for ever.
+const receiptLinkDays = 90
+
 // receiptView is a payment's receipt.
 type receiptView struct {
 	Business  string    `json:"business"`
@@ -135,15 +139,22 @@ func (s *Server) getPaymentReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var rc receiptView
+	var x payment
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		rc, _, err = paidReceiptTx(r.Context(), tx, id, isOwnerOf(p))
+		rc, x, err = paidReceiptTx(r.Context(), tx, id, isOwnerOf(p))
 		return err
 	}); err != nil {
 		s.payFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"receipt": rc, "url": s.receiptURL(p.TenantID, id)})
+	// An owner's own payment has no link to send: it is theirs alone, and
+	// the link would answer nothing (the public receipt never reads one).
+	url := ""
+	if !x.Personal {
+		url = s.receiptURL(p.TenantID, id)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"receipt": rc, "url": url})
 }
 
 // getPaymentReceiptPDF is GET /v1/payments/{id}/receipt/pdf.
@@ -184,6 +195,11 @@ func (s *Server) publicPayReceipt(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	var pr payRefused
+	// The link works while the payment stands paid (a payment the bank
+	// sent back has no receipt), for receiptLinkDays after it was paid.
+	if err == nil && time.Since(rc.PaidAt) > receiptLinkDays*24*time.Hour {
+		err = pgx.ErrNoRows
+	}
 	if errors.Is(err, pgx.ErrNoRows) || errors.As(err, &pr) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return

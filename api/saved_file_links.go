@@ -184,5 +184,9 @@ func loggedPath(p string) string {
 	if rest, ok := strings.CutPrefix(p, "/v1/saved-files/"); ok && rest != "" {
 		return "/v1/saved-files/•"
 	}
+	// A payment's receipt link (payments_receipt.go): its token never logged.
+	if rest, ok := strings.CutPrefix(p, "/v1/pay-receipts/"); ok && rest != "" {
+		return "/v1/pay-receipts/•"
+	}
 	return p
 }

@@ -43,7 +43,7 @@ actions:
         needs_ok:      { type: string, description: "Why the owner's OK will be asked: limit, changed, or both; empty when none" }
   check:
     title: Check a payment before it is paid
-    description: For Taskiem's own pay-person workflow only, before it pays. Holds the run to its payment, refusing it unless the payment was sent with this very run, the run's input is the payment's own (amount, bank, account, whether the owner's OK was needed), and it was approved by whom it must be (the person who confirmed it within their limit; else an owner, not acting for one and not the payer).
+    description: For Taskiem's own pay-person workflow only, before it pays. Holds the run to its payment, refusing it unless the payment was sent with this very run, the run's input is the payment's own (amount, bank, account, route and wallet, whether the owner's OK was needed), and it was approved by whom it must be (the person who confirmed it within their limit; else an owner, not acting for one and not the payer).
     class: idempotent_write
     idempotency:
       field: idempotency_key
@@ -60,6 +60,8 @@ actions:
         bank_code:      { type: string }
         account_number: { type: string }
         needs_ok:       { type: boolean }
+        route:          { type: string, enum: [bank, wallet], description: "How the run pays it: bank (the default) or wallet" }
+        wallet_id:      { type: string, description: The Taskiem wallet paid, for wallet to wallet }
     output:
       type: object
       properties:

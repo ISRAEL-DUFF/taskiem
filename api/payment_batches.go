@@ -305,10 +305,11 @@ func (s *Server) batchRowsOf(ctx context.Context, tenant, id uuid.UUID, owner bo
 // one passkey for the batch; each row still prepared is then claimed and
 // sent as one payment is (within the payer's limit at once; over it, or to
 // a changed account or one staff never paid, waiting for the owner's OK).
-// A row refused now (the same payment again without again) stays prepared,
-// said in the results; one whose account (or the business's payments
-// account) changed since it was prepared is cancelled, said
-// account_changed (provider_changed), to be prepared again.
+// A row refused now (the same payment again without again, one not the
+// payer's to confirm) ends refused, with why, said in the results, so the
+// batch ends, and is told, when its other rows have; one whose account (or
+// the business's payments account) changed since it was prepared is
+// cancelled, said account_changed (provider_changed), to be prepared again.
 func (s *Server) confirmBatch(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.batchID(w, r)
 	if !ok {

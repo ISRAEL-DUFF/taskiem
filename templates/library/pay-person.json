@@ -187,7 +187,9 @@
           "amount_kobo": "=trigger.body.amount_kobo",
           "bank_code": "=trigger.body.bank_code",
           "account_number": "=trigger.body.account_number",
-          "needs_ok": "=trigger.body.needs_ok"
+          "needs_ok": "=trigger.body.needs_ok",
+          "route": "=trigger.body.?route.orValue('bank')",
+          "wallet_id": "=trigger.body.?wallet_id.orValue('')"
         },
         "needs": [
           "approve"

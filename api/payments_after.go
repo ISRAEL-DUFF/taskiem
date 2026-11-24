@@ -170,6 +170,17 @@ func (s *Server) afterPaymentTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.
 		return nil
 	}
 	if x.FeeKobo != nil && *x.FeeKobo > 0 && x.payoutRef != nil && *x.payoutRef != "" {
+		// A payout line written before the payment knew its payout (the
+		// rail's answer heard first) carries the fee itself: counted
+		// there, it is not written again as its own line.
+		var onPayout bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3
+			AND kind = 'payout' AND fee_kobo IS NOT NULL)`, tenant, x.provider, *x.payoutRef).Scan(&onPayout); err != nil || onPayout {
+			if err != nil {
+				return err
+			}
+			return s.tellPayeeTx(ctx, tx, tenant, x, "paid")
+		}
 		e := moneylog.FeeEntry(x.provider, *x.payoutRef, *x.FeeKobo, "Fee: "+payDiaryText(x))
 		if _, _, err := s.moneyLog().RecordTx(ctx, tx, tenant, e); err != nil && !errors.Is(err, moneylog.ErrInvalid) {
 			return err

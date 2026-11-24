@@ -8483,11 +8483,6 @@
       "text": "Àwọn òṣìṣẹ́ máa ń sanwó sí àwọn àkáǹtì tí iṣẹ́ náà ti fi pamọ́ nìkan: ní kí olówó fi èyí pamọ́ ná.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
-    },
-    "wa.pay.fwd.none": {
-      "text": "Ìfiránṣẹ́ yẹn kò ní nọ́ńbà àkáǹtì tí mo lè kà. Fi àlàyé àkáǹtì ránṣẹ́ sí mi, tàbí sọ pé: *send 45k to 0123456789 gtbank*.",
-      "reviewed": false,
-      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

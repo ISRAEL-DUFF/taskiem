@@ -8743,11 +8743,6 @@
       "text": "Staff fit only pay the accounts wey business don save: tell owner make e save dis one first.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
-    },
-    "wa.pay.fwd.none": {
-      "text": "Dat message no get account number wey I fit read. Forward the account details give me, or talk: *send 45k to 0123456789 gtbank*.",
-      "reviewed": false,
-      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

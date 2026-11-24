@@ -63,7 +63,9 @@ func (s *Server) waPayForward(ctx context.Context, c *chat) (bool, error) {
 		}
 		r := saved.Read(quoted)
 		if quoted == "" || r.Kind != saved.KindBankAccount || r.Details["account_number"] == "" {
-			return true, c.say(ctx, s, c.t("wa.pay.fwd.none"))
+			// Not a message with account details Taskiem kept (a reply of
+			// "pay" to a plan's reminder): the words go on, as "pay" does.
+			return false, nil
 		}
 		return true, s.payAskFor(ctx, c, r)
 	}

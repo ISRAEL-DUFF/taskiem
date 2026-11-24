@@ -139,6 +139,18 @@ func TestPayOnePerson(t *testing.T) {
 	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
 		t.Errorf("another amount passed the check")
 	}
+	// The route and the wallet are the payment's own too (H7): a bank
+	// payment is never sent to a wallet.
+	bad = good
+	bad.Route, bad.WalletID = "wallet", "w_someone"
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("a wallet route passed the check of a bank payment")
+	}
+	bad = good
+	bad.WalletID = "w_someone"
+	if _, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), bad); err == nil {
+		t.Errorf("a wallet passed the check of a bank payment")
+	}
 	if out, err := ops.Check(ctx, biz, uuid.MustParse(run), uuid.MustParse(id), good); err != nil || out["status"] != "sending" {
 		t.Fatalf("the payment's own run: %v %v", out, err)
 	}

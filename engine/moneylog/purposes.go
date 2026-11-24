@@ -69,7 +69,12 @@ func FeeEntry(channel, reference string, fee int64, description string) Entry {
 // paid, and to the person who prepared it from the chat: kinds payee_paid
 // and payment, as api/payments_after.go and payments_chat_result.go send
 // them.
-func reversedPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry) error {
+//
+// The fee stays the business's (Settled 4: the business bears it): its
+// line stands, unless the rail says the fee came back with the money
+// (feeBack, the reversal's fee_kobo); then a line of that much, reversed,
+// names the fee's line.
+func (l *Log) reversedPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry, feeBack *int64) error {
 	var id uuid.UUID
 	var told *string
 	var from, by string
@@ -81,6 +86,22 @@ func reversedPaymentTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	}
 	if err != nil {
 		return err
+	}
+	if feeBack != nil && *feeBack > 0 {
+		var fee uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = 'fee' AND status = 'settled'
+			ORDER BY recorded_at LIMIT 1`, tenant, e.Channel, e.Reference).Scan(&fee)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+		case err != nil:
+			return err
+		default:
+			back := FeeEntry(e.Channel, e.Reference, *feeBack, "Fee returned: "+e.Note)
+			back.Status, back.Event, back.Source, back.Corrects = "reversed", "payout.fee.reversed", e.Source, &fee
+			if _, _, err := l.RecordTx(ctx, tx, tenant, back); err != nil {
+				return err
+			}
+		}
 	}
 	if told != nil && *told == "paid" {
 		if _, err := tx.Exec(ctx, `UPDATE payments SET payee_told = 'reversed' WHERE id = $1`, id); err != nil {

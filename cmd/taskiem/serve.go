@@ -991,7 +991,7 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	invoiceOps.Set(invoicing.Service{Invoices: e.invoices})
 	// Payments' own records, for the pay-person workflow and a workflow's
 	// payments@1 prepare (P1), with the accounts people are paid from.
-	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault))
+	payOps.Set(api.PaymentsOps(e.store, e.invoices, reg, vault, e.orders))
 	wireOrderTransfers(e.invoices, e.orders)
 	// The Schools area's record (decision 0046), read by schools@1. Every
 	// payment part counted towards a school's invoice gets a receipt, and

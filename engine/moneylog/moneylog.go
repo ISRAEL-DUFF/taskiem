@@ -246,6 +246,8 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return same, false, err
 		}
 	}
+	// The fee a payout sent back returned with it, where the rail says.
+	feeBack := e.FeeKobo
 	if e.Kind == "payout" && e.Category == "" {
 		// A payment to a person (paying people): its payout says what it
 		// was for, and its fee is its own line (bank charges), written when
@@ -315,7 +317,7 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	}
 	if e.Kind == "payout" && e.Status == "reversed" {
 		// A payment to a person the bank sent back after it was paid.
-		if err := reversedPaymentTx(ctx, tx, tenant, e); err != nil {
+		if err := l.reversedPaymentTx(ctx, tx, tenant, e, feeBack); err != nil {
 			return uuid.Nil, false, err
 		}
 	}
@@ -369,6 +371,9 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		e.Direction, e.Kind, e.Reference = "out", "payout", str(fields, "payout_id")
 		e.Status = strings.TrimPrefix(event, "payout.")
 		e.Note = clip(str(fields, "reason"), 300)
+		// The fee that came back with it, where the rail says (paying
+		// people: the fee's own line is then undone too).
+		e.FeeKobo = kobo(fields, "fee_kobo")
 	case "refund.pending", "refund.processed", "refund.failed":
 		// Money out of the business back to a customer: its own movement,
 		// known by the payment refunded (the rail's refund reference is

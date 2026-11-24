@@ -1863,6 +1863,10 @@ export interface PaymentsCheckInput {
   bank_code: Val<string>;
   needs_ok: Val<boolean>;
   payment_id: Val<string>;
+  /** How the run pays it: bank (the default) or wallet */
+  route?: Val<"bank" | "wallet">;
+  /** The Taskiem wallet paid */
+  wallet_id?: Val<string>;
 }
 export interface PaymentsFinishInput {
   /** The bank's name for the account */

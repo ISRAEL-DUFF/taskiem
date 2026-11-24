@@ -880,11 +880,6 @@ reach_request_links.tenant_id
 reach_targets.channel
 reach_targets.target
 reach_targets.updated_at
-receive_money.account_number
-receive_money.environment
-receive_money.mode
-receive_money.tenant_id
-receive_money.wallet_id
 remote_subscriptions.checked_at
 remote_subscriptions.desired
 remote_subscriptions.next_attempt_at
@@ -1428,6 +1423,10 @@ users.status
 ussd_sessions.tenant_id
 voice_transcripts.expires_at
 voice_transcripts.id
+wallet_accounts.account_key
+wallet_accounts.mode
+wallet_accounts.tenant_id
+wallet_accounts.wallet_id
 webauthn_credentials.alg
 webauthn_credentials.id
 webauthn_credentials.public_key

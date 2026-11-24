@@ -8482,11 +8482,6 @@
       "text": "Ma'aikata suna biyan asusun da kasuwanci ya adana ne kawai: roƙi mai shi ya adana wannan tukuna.",
       "reviewed": false,
       "context": "Draft, not reviewed: A staff member forwarded account details not saved: staff pay the business's saved accounts only"
-    },
-    "wa.pay.fwd.none": {
-      "text": "Wannan saƙon ba shi da lambar asusu da zan iya karantawa. Tura min bayanan asusun, ko ka ce: *send 45k to 0123456789 gtbank*.",
-      "reviewed": false,
-      "context": "Draft, not reviewed: A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }

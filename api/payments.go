@@ -25,6 +25,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -49,8 +50,9 @@ const (
 	payOpApprove = "money.pay.approve"
 	// payShape is the pay-person workflow's version a business's is made
 	// from: a business's made from an older one is made again (2: the fee
-	// recorded, and wallet to wallet; paying people H7).
-	payShape = 2
+	// recorded, and wallet to wallet; 3: the check holds the route and the
+	// wallet; paying people H7).
+	payShape = 3
 )
 
 // paymentPurposes are what a payment may be for, as the money log keeps it.
@@ -154,6 +156,9 @@ type payment struct {
 	// or read (not kept): the sheet says the balance after.
 	BalanceKobo *int64 `json:"balance_kobo,omitempty"`
 
+	// RefundOrder: the order whose refund it pays back (Pay it back).
+	RefundOrder *string `json:"refund_order,omitempty"`
+
 	toWallet   *string
 	diaryWhere *string
 	payoutRef  *string
@@ -162,7 +167,7 @@ type payment struct {
 
 const paymentCols = `id, saved_id, personal, payee_title, bank_name, last4, account_name, amount_kobo, purpose, purpose_note, note, first_payment,
 	changed_account, needs_ok, status, reason, fee_kobo, run_id, started_from, prepared_by, confirmed_by, created_at, confirmed_at, finished_at, bank_code, account_sealed, rider_id, batch_id, staff_id, provider_channel,
-	fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where, payout_ref, payee_told`
+	fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where, payout_ref, payee_told, refund_order`
 
 func scanPayment(r pgx.Row) (payment, error) {
 	var x payment
@@ -170,7 +175,7 @@ func scanPayment(r pgx.Row) (payment, error) {
 	err := r.Scan(&x.ID, &x.SavedID, &x.Personal, &x.Payee, &x.BankName, &last4, &x.AccountName, &x.AmountKobo, &x.Purpose, &x.PurposeNote, &x.Note,
 		&x.FirstPayment, &x.ChangedAccount, &x.NeedsOK, &x.Status, &x.Reason, &x.FeeKobo, &x.RunID, &x.StartedFrom, &x.PreparedBy, &x.ConfirmedBy,
 		&x.CreatedAt, &x.ConfirmedAt, &x.FinishedAt, &x.bankCode, &x.sealed, &x.RiderID, &x.BatchID, &x.StaffID, &x.provider,
-		&x.FeeQuoteKobo, &x.Route, &x.toWallet, &x.TellPayee, &x.SendReceipt, &x.diaryWhere, &x.payoutRef, &x.payeeTold)
+		&x.FeeQuoteKobo, &x.Route, &x.toWallet, &x.TellPayee, &x.SendReceipt, &x.diaryWhere, &x.payoutRef, &x.payeeTold, &x.RefundOrder)
 	x.Account = "••" + last4
 	x.MayTell = payeeReachable(x)
 	return x, err
@@ -206,6 +211,10 @@ type payIn struct {
 	// (the person's Taskiem conversation) or a linked business's link id;
 	// none for a payment from Tools with no chat.
 	Where string `json:"where"`
+	// OrderReference: an order whose refund this pays back to the
+	// customer (Pay it back): for a refund, no more than is owed, one at a
+	// time, the order marked refunded once it is paid.
+	OrderReference string `json:"order_reference"`
 }
 
 // payRefused is a payment refused in words, with a code for the clients.
@@ -421,6 +430,11 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	if in.Purpose == "" {
 		in.Purpose = "other"
 	}
+	in.OrderReference = strings.TrimSpace(in.OrderReference)
+	if in.OrderReference != "" {
+		// An order's refund is a refund.
+		in.Purpose = "refund"
+	}
 	switch {
 	case !slices.Contains(paymentPurposes, in.Purpose):
 		return payment{}, refusePay(http.StatusBadRequest, "purpose", "Say what it is for: a bill, wages, a delivery, a refund, stock bought, or other.")
@@ -498,7 +512,7 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	// business's Taskiem wallet is paid wallet to wallet, at once and with
 	// no fee; else the fee where the payments account quotes it. A
 	// balance that does not cover the amount and its fee stops it here.
-	route, wallet := "bank", s.walletRoute(ctx, tenant, *rl, payee.bank.AccountNumber)
+	route, wallet := "bank", s.walletRoute(ctx, tenant, *rl, payee.bank.AccountNumber, code)
 	var fee *int64
 	if wallet != "" {
 		route, fee = "wallet", new(int64)
@@ -523,6 +537,11 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 	}
 	var x payment
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		if in.OrderReference != "" {
+			if err := refundFitsTx(ctx, tx, tenant, in.OrderReference, in.AmountKobo, uuid.Nil); err != nil {
+				return err
+			}
+		}
 		// A first payment to the account, as Approvals says it.
 		// A first payment to the account: never paid by the business, as
 		// the money log or its own payments know it. Staff need the owner's
@@ -576,11 +595,11 @@ func (s *Server) preparePayment(ctx context.Context, tenant, person uuid.UUID, o
 		id := uuid.Must(uuid.NewV7())
 		row := tx.QueryRow(ctx, `INSERT INTO payments (id, tenant_id, saved_id, personal, payee_title, bank_name, bank_code, account_sealed, last4, account_name,
 			amount_kobo, purpose, purpose_note, note, first_payment, changed_account, started_from, prepared_by, rider_id, staff_id, provider_channel,
-			fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NULLIF($24, ''), $25, $26, $27) RETURNING `+paymentCols,
+			fee_quote_kobo, route, to_wallet, tell_payee, send_receipt, diary_where, refund_order)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NULLIF($24, ''), $25, $26, $27, NULLIF($28, '')) RETURNING `+paymentCols,
 			id, tenant, payee.saved, payee.personal, payee.title, payee.bank.BankName, code, sealed, saved.Last4(payee.bank.AccountNumber), payee.checked,
 			in.AmountKobo, in.Purpose, strings.TrimSpace(in.PurposeNote), strings.TrimSpace(in.Note), first, changed, from, by, payee.rider, payee.staff, rl.Channel(),
-			fee, route, wallet, tell, in.SendReceipt, where)
+			fee, route, wallet, tell, in.SendReceipt, where, in.OrderReference)
 		if x, err = scanPayment(row); err != nil {
 			return err
 		}
@@ -637,6 +656,10 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	if in.OrderReference != "" && !p.Can(PermStorefrontManage) {
+		s.payFail(w, r, refusePay(http.StatusForbidden, "not_yours", "Paying back an order's refund is for those who manage the orders."))
+		return
+	}
 	x, err := s.preparePayment(r.Context(), p.TenantID, p.UserID, slices.Contains(p.Roles, "owner"), in, p.Actor())
 	if err != nil {
 		s.payFail(w, r, err)
@@ -1054,6 +1077,12 @@ func confirmCheckTx(ctx context.Context, tx pgx.Tx, p *Principal, owner bool, id
 	}
 	if x.Status != "prepared" {
 		return x, "", refusePay(http.StatusConflict, "not_prepared", "This payment was "+paymentStatusWords(x.Status)+" already.")
+	}
+	if x.RefundOrder != nil {
+		// Still owed, and not paid back by another meanwhile.
+		if err := refundFitsTx(ctx, tx, p.TenantID, *x.RefundOrder, x.AmountKobo, x.ID); err != nil {
+			return x, "", err
+		}
 	}
 	if x.Again, err = paidAgainTx(ctx, tx, p.TenantID, x); err != nil {
 		return x, "", err
@@ -1509,8 +1538,8 @@ func paymentStatusWords(st string) string {
 // PaymentsOps are the payments@1 connector's operations for the runs of
 // store, with the payments accounts invoices pays through: set wherever
 // runs run (the API, the workers).
-func PaymentsOps(store *runtime.Store, inv *invoicing.Invoices, reg *connector.Registry, vault *secrets.Vault) payconn.Ops {
-	return &payOps{s: &Server{Store: store, Invoices: inv, Registry: reg, Vault: vault}}
+func PaymentsOps(store *runtime.Store, inv *invoicing.Invoices, reg *connector.Registry, vault *secrets.Vault, orders *storefront.Orders) payconn.Ops {
+	return &payOps{s: &Server{Store: store, Invoices: inv, Registry: reg, Vault: vault, Orders: orders}}
 }
 
 // PaymentsOps are the payments@1 connector's operations through this
@@ -1561,7 +1590,12 @@ func (o *payOps) Check(ctx context.Context, tenant, run, id uuid.UUID, in paycon
 		if err != nil {
 			return err
 		}
-		if in.AmountKobo != x.AmountKobo || in.BankCode != x.bankCode || in.AccountNumber != fmt.Sprint(number) || in.NeedsOK != (x.NeedsOK != "") {
+		route := in.Route
+		if route == "" {
+			route = "bank"
+		}
+		if in.AmountKobo != x.AmountKobo || in.BankCode != x.bankCode || in.AccountNumber != fmt.Sprint(number) || in.NeedsOK != (x.NeedsOK != "") ||
+			route != x.Route || in.WalletID != deref(x.toWallet) {
 			return refused("the run's input is not the payment's")
 		}
 		if x.ConfirmedBy == nil {
@@ -1614,7 +1648,10 @@ func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, 
 		return nil, fmt.Errorf("%w: a payment ends paid, failed, unknown or rejected", payconn.ErrRefused)
 	}
 	var out map[string]any
+	var refunded string
+	var refundKobo int64
 	err := db.InTenantTx(ctx, o.s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		refunded, refundKobo = "", 0
 		var now string
 		if route != "" && route != "bank" && route != "wallet" {
 			return fmt.Errorf("%w: a payment goes by bank or wallet", payconn.ErrRefused)
@@ -1642,9 +1679,30 @@ func (o *payOps) Finish(ctx context.Context, tenant, run, id uuid.UUID, status, 
 		if err := o.s.afterPaymentTx(ctx, tx, tenant, id); err != nil {
 			return err
 		}
+		// Paid back an order's refund: the order is refunded.
+		var order *string
+		var amount int64
+		if err := tx.QueryRow(ctx, `SELECT refund_order, amount_kobo FROM payments WHERE id = $1 AND status = 'paid'`, id).Scan(&order, &amount); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if order != nil {
+			marked, err := storefront.RefundedByPaymentTx(ctx, tx, tenant, *order, id, amount)
+			if err != nil {
+				return err
+			}
+			if marked {
+				refunded, refundKobo = *order, amount
+			}
+		}
 		// Told in the chat it was prepared from, with its end (once).
 		return chatPayResultTx(ctx, tx, tenant, id)
 	})
+	if err == nil && refunded != "" && o.s.Orders != nil {
+		// The customer told, as Mark refunded tells them.
+		if e := o.s.Orders.TellRefunded(ctx, tenant, refunded, refundKobo); e != nil && o.s.Logger != nil {
+			o.s.Logger.Warn("payments: telling a refund's customer", "order", refunded, "err", e)
+		}
+	}
 	return out, err
 }
 
@@ -1675,7 +1733,8 @@ func (s *Server) payAgain(w http.ResponseWriter, r *http.Request) {
 			return refusePay(http.StatusForbidden, "not_yours", "Only who prepared this payment, or an owner, tries it again.")
 		}
 		in = payIn{SavedID: x.SavedID, RiderID: x.RiderID, StaffID: x.StaffID, Mine: x.Personal, AmountKobo: x.AmountKobo, Purpose: x.Purpose,
-			PurposeNote: x.PurposeNote, Note: x.Note, From: x.StartedFrom, TellPayee: &x.TellPayee, SendReceipt: x.SendReceipt, Where: deref(x.diaryWhere)}
+			PurposeNote: x.PurposeNote, Note: x.Note, From: x.StartedFrom, TellPayee: &x.TellPayee, SendReceipt: x.SendReceipt, Where: deref(x.diaryWhere),
+			OrderReference: deref(x.RefundOrder)}
 		if in.StaffID != nil {
 			in.SavedID = nil
 		}
@@ -1706,4 +1765,31 @@ func (s *Server) payAgain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"payment": x})
+}
+
+// refundFitsTx checks a payment may pay back an order's refund: the order
+// waits for one (held for the transaction), the amount is no more than it
+// owes, and no other payment of it is on its way or paid (but self).
+func refundFitsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, order string, amount int64, self uuid.UUID) error {
+	owed, err := storefront.RefundOwedTx(ctx, tx, tenant, order)
+	switch {
+	case errors.Is(err, storefront.ErrNoOrder):
+		return refusePay(http.StatusNotFound, "no_order", "There is no such order.")
+	case errors.Is(err, storefront.ErrDecision):
+		return refusePay(http.StatusConflict, "not_owed", order+" is not waiting for a refund.")
+	case err != nil:
+		return err
+	}
+	if amount > owed {
+		return refusePay(http.StatusBadRequest, "over_owed", fmt.Sprintf("%s owes its customer %s back: pay no more than that.", order, invoicing.Naira(owed)))
+	}
+	var busy bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM payments WHERE tenant_id = $1 AND refund_order = $2 AND id <> $3
+		AND status IN ('sending', 'waiting_ok', 'paid', 'unknown'))`, tenant, order, self).Scan(&busy); err != nil {
+		return err
+	}
+	if busy {
+		return refusePay(http.StatusConflict, "refund_on_its_way", order+"'s refund is already on its way, or paid.")
+	}
+	return nil
 }

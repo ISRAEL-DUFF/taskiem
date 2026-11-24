@@ -10068,11 +10068,6 @@
       "text": "Staff pay the business's saved accounts only: ask an owner to save this one first.",
       "reviewed": true,
       "context": "A staff member forwarded account details not saved: staff pay the business's saved accounts only"
-    },
-    "wa.pay.fwd.none": {
-      "text": "That message has no account number I can read. Forward me the account details, or say: *send 45k to 0123456789 gtbank*.",
-      "reviewed": true,
-      "context": "A reply of pay quoting a message with no account details Taskiem can read"
     }
   }
 }
