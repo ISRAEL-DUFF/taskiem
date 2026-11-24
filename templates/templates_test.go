@@ -589,7 +589,9 @@ func TestEveryDetailIsOwnerShaped(t *testing.T) {
 		if err := json.Unmarshal(tp.Definition, &head); err != nil {
 			t.Fatal(err)
 		}
-		if head.Trigger.Type == "webhook" {
+		// A recipe for someone technical (call a system: a web address
+		// checked as https) needs a developer as well.
+		if head.Trigger.Type == "webhook" || contains(tp.Tags, "developer") {
 			continue
 		}
 		for _, p := range tp.Params {

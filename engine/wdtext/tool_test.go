@@ -30,6 +30,19 @@ func TestDescribeReadsTheToolBack(t *testing.T) {
 	if text := Text(DescribeIn(def, nil, lang.PCM)); !strings.Contains(text, "Your customers fit use am") || !strings.Contains(text, "/fuel") {
 		t.Errorf("for customers, in Pidgin:\n%s", text)
 	}
+	// With roles, who may use it says them; for linked businesses, words
+	// of its own, not a change's (review M6, 7).
+	roles := strings.Replace(changesV1, `"trigger":{"type":"manual"},`, `"trigger":{"type":"manual"},"roles":["owner","manager"],`, 1)
+	if def, err = wd.Load([]byte(roles)); err != nil {
+		t.Fatal(err)
+	}
+	if text := Text(Describe(def, nil)); !strings.Contains(text, "• Only these can use it, besides the owners: owner, manager") || strings.Contains(text, "Your own people") {
+		t.Errorf("roles:\n%s", text)
+	}
+	linked := &wd.Definition{Tool: &wd.Tool{Name: "Prices", Command: "prices-now", For: wd.ToolForLinked}}
+	if got := Text(describer{lang: lang.EN}.tool(linked)); !strings.Contains(got, "Businesses you are linked with can use it") || strings.Contains(got, "can now use") {
+		t.Errorf("linked: %s", got)
+	}
 	plain := strings.Replace(changesV1, `"tool":{"name":"Log fuel","command":"fuel","about":"Record fuel","says":["fuel"],
 	  "answer":{"type":"text","text":"='Logged'"}},`, "", 1)
 	if def, err = wd.Load([]byte(plain)); err != nil {

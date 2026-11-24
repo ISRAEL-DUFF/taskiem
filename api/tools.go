@@ -68,6 +68,17 @@ func (t toolRow) Asks() string {
 	return t.Care.Level
 }
 
+// AsksFor is the care a call with input meets: a members' tool that asks
+// yes only for steps whose condition reads what it was asked (a list whose
+// row button marks a row) answers at once when none holds for input. The
+// owner's always ask still holds.
+func (t toolRow) AsksFor(input map[string]any) string {
+	if t.AlwaysAsk {
+		return t.Asks()
+	}
+	return t.Care.For(input)
+}
+
 const toolCols = `workflow_id, environment, version, command, name, about, says, icon, audience, roles, care, answer_type, always_ask`
 
 func scanTool(row pgx.Row) (toolRow, error) {
@@ -124,6 +135,17 @@ func (s *Server) writeToolIndex(ctx context.Context, tx pgx.Tx, tenant, wf uuid.
 	switch {
 	case err == nil:
 		return fmt.Errorf("%w: in %s, the command /%s is already %s's; choose another", errConflict, env, t.Command, other)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+	// A page is called by its name as a tool is by its command ("/" and
+	// the word, its short form in the chat), so one word is one of them
+	// (review M6, 3).
+	var page string
+	err = tx.QueryRow(ctx, `SELECT title FROM pages WHERE name = $1 LIMIT 1`, t.Command).Scan(&page)
+	switch {
+	case err == nil:
+		return fmt.Errorf("%w: /%s is already the page %s's word; choose another command", errConflict, t.Command, page)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}
@@ -281,7 +303,7 @@ func (s *Server) startTool(ctx context.Context, p *Principal, t toolRow, input m
 	if probs := s.inputProblems(t.Workflow, t.Version, def, raw); len(probs) > 0 {
 		return toolStart{}, toolInputError(probs)
 	}
-	out := toolStart{Care: t.Asks(), Values: toolValues(d, input)}
+	out := toolStart{Care: t.AsksFor(input), Values: toolValues(d, input)}
 	if out.Care == wdcheck.CareAnswers {
 		// A once button is spent by the run it starts.
 		if err := s.claimButton(ctx, p, button); err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
+	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/templates"
@@ -22,6 +23,34 @@ type Care struct {
 	// Because names the steps that set it, by id: the first that writes,
 	// and every one that moves money.
 	Because []string `json:"because,omitempty"`
+	// If, for a members' tool that asks yes only because of top-level
+	// steps that run when a condition over what it was asked holds
+	// (`"when": "=has(trigger.body.done)"`: a list whose row button marks
+	// a row), are those conditions: a call for which none holds answers
+	// at once, as Otherwise says (For). Nothing else relaxes care.
+	If        []string `json:"if,omitempty"`
+	Otherwise string   `json:"otherwise,omitempty"`
+}
+
+// triggerOnly reads a step's condition: only the trigger, never a step's
+// output, a setting or a saved thing, so it is known before the run.
+var triggerOnly = expr.MustNewWithRoots("trigger")
+
+// For is the care a call with input meets: Otherwise when every
+// condition of If is false for it, else Level. A condition that cannot be
+// read counts as true, so a doubt asks.
+func (c Care) For(input map[string]any) string {
+	if len(c.If) == 0 || c.Otherwise == "" {
+		return c.Level
+	}
+	act := map[string]any{"trigger": map[string]any{"body": input}}
+	for _, cond := range c.If {
+		holds, err := triggerOnly.EvalBool(cond, act)
+		if err != nil || holds {
+			return c.Level
+		}
+	}
+	return c.Otherwise
 }
 
 const (
@@ -62,7 +91,43 @@ func careOf(def *wd.Definition, reg connector.Lookup) Care {
 	if def.Tool != nil && def.Tool.Audience() != wd.ToolForMembers && c.Level == CareAnswers {
 		c.Level = CareYes
 	}
+	if c.Level == CareYes && def.Tool != nil && def.Tool.Audience() == wd.ToolForMembers {
+		c.If, c.Otherwise = guardedYes(def, reg)
+	}
 	return c
+}
+
+// guardedYes are the conditions of the steps that make a members' tool
+// ask yes, when each such step is a top-level one whose `when` reads only
+// the trigger: then a call for which none holds runs nothing that writes,
+// and answers at once. Nil when any step asks yes unconditionally (or
+// inside another step, whose own condition is not read here).
+func guardedYes(def *wd.Definition, reg connector.Lookup) ([]string, string) {
+	top := map[*wd.Step]bool{}
+	for _, st := range def.Steps {
+		top[st] = true
+	}
+	var conds []string
+	ok := true
+	def.Walk(func(st *wd.Step) {
+		if !ok || stepCare(st, reg) == CareAnswers {
+			return
+		}
+		if !top[st] || st.When == "" {
+			ok = false
+			return
+		}
+		refs, err := triggerOnly.References(st.When)
+		if err != nil || len(refs.Roots) == 0 {
+			ok = false
+			return
+		}
+		conds = append(conds, st.When)
+	})
+	if !ok || len(conds) == 0 {
+		return nil, ""
+	}
+	return conds, CareAnswers
 }
 
 // stepCare is one step's part in care. A step that reaches outside and

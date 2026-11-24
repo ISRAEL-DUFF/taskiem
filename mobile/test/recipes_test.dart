@@ -36,6 +36,7 @@ Map<String, dynamic> _recipe(String id, String title, String command, String car
   'params': [
     {'name': 'command', 'type': 'command', 'title': 'Its word', 'description': 'What people type to use it, after /.', 'required': true, 'default': command, 'example': command},
     {'name': 'table', 'type': 'string', 'title': 'Table', 'description': 'The table.', 'required': false, 'default': 'customers', 'example': 'customers', 'picker': 'table'},
+    {'name': 'roles', 'type': 'roles', 'title': 'Who can use it', 'description': 'The roles whose people may use it.', 'required': false, 'default': ['owner', 'manager'], 'example': ['owner', 'manager']},
     ...params,
   ],
   'steps': <Object>[],
@@ -121,6 +122,7 @@ void main() {
   setUpAll(loadFonts);
 
   test('a typed word is a command, and the words say what the tool is', () {
+    expect(rolesOf('Owner, Shift manager,, '), ['owner', 'shift_manager']);
     expect(commandOf(' /Find Customer '), 'find-customer');
     const tool = TemplateTool(about: 'a', answer: 'list', care: 'yes', command: 'today', companion: 'Daily report', for_: 'customers', name: 'Today');
     expect(recipeWords(tool), ['Your customers use it', 'Asks yes first', 'Says back a list', 'Comes with “Daily report”, a schedule whose button opens it']);
@@ -144,6 +146,9 @@ void main() {
     await t.tap(find.text('Look something up from the chat'));
     await settle(t);
     expect(find.text('Its word, after /'), findsOneWidget);
+    // Who can use it, shown and changeable (review M6, 4).
+    expect(find.text('Who can use it'), findsOneWidget);
+    expect(find.text('owner, manager'), findsOneWidget);
     expect(find.text('Says back a card', findRichText: true), findsNothing);
     expect(find.textContaining('Says back a card'), findsOneWidget);
     await looks(t, 'recipes-add');
@@ -151,6 +156,7 @@ void main() {
     await t.tap(find.text('Add it as a draft'));
     await settle(t);
     expect((api.sent.single['params'] as Map)['command'], 'find-customer');
+    expect((api.sent.single['params'] as Map)['roles'], ['owner', 'manager']);
     expect(find.text('Look something up: saved as a draft'), findsOneWidget);
     expect(find.text('/find-customer is taken, so it is called with /find-customer-2.'), findsOneWidget);
     // The toast has gone by the time the page is pictured.
@@ -160,7 +166,7 @@ void main() {
   });
 
   testWidgets('Ready-made tools: what a recipe needs with no default is asked', (t) async {
-    phone(t, 760);
+    phone(t, 1100);
     final api = _Api();
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: RecipesPage(auth: api.auth())));
     await settle(t);

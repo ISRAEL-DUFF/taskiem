@@ -26,7 +26,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
-	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
 	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
@@ -767,16 +766,13 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 	v.ReadBack = []wdtext.Line{}
 	if prop != nil {
 		v.Proposal = prop
-		var p struct {
-			Definition json.RawMessage `json:"definition"`
+		except := uuid.Nil
+		if v.Workflow != nil {
+			except = *v.Workflow
 		}
-		if json.Unmarshal(prop, &p) == nil && len(p.Definition) > 0 {
-			if def, err := wd.Load(p.Definition); err == nil {
-				if reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String()); err == nil {
-					v.ReadBack = wdtext.Describe(def, reg)
-				}
-			}
-		}
+		// The tool with the command it would be given, and the companion
+		// a recipe brings (review M6, 2).
+		v.ReadBack = s.readBackOf(r.Context(), principalFrom(r.Context()).TenantID, prop, except, lang.EN)
 	} else {
 		v.Proposal = json.RawMessage("null")
 	}
@@ -854,9 +850,10 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 	var wf uuid.UUID
 	var version int
 	var doc []byte
+	var rec *recipeInstall
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		wf, version, doc, err = s.saveAIBuildTx(r.Context(), tx, p, id, req.Name, req.Resolutions, func(action, target string, detail map[string]any) error {
+		wf, version, doc, rec, err = s.saveAIBuildTx(r.Context(), tx, p, id, req.Name, req.Resolutions, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
@@ -887,8 +884,12 @@ func (s *Server) aiSave(w http.ResponseWriter, r *http.Request) {
 		}
 		tables = append(tables, res)
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": version, "state": "draft", "ai_assisted": true,
-		"problems": nonNil(s.checkFor(r, doc)), "tables": tables})
+	out := map[string]any{"id": wf, "version": version, "state": "draft", "ai_assisted": true,
+		"problems": nonNil(s.checkFor(r, doc)), "tables": tables}
+	if rec != nil {
+		out["tool"] = rec
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // aiTableResult is what became of a table saved with an AI draft.
@@ -941,7 +942,8 @@ func (b *bodyRecorder) WriteHeader(int)             {}
 // settled by resolutions are a *mergeConflict. It never publishes. audit
 // records in the caller's channel (the web app or WhatsApp).
 func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id uuid.UUID, name string, resolutions map[string]wdmerge.Resolution,
-	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, error) {
+	audit func(action, target string, detail map[string]any) error) (uuid.UUID, int, []byte, *recipeInstall, error) {
+	var rec *recipeInstall
 	var wf uuid.UUID
 	var version int
 	var status, model, provider string
@@ -950,28 +952,28 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	var prop, base []byte
 	if err := tx.QueryRow(ctx, `SELECT status, workflow_id, proposal, model, provider, template_id, base_digest FROM ai_builds WHERE id = $1 FOR UPDATE`, id).
 		Scan(&status, &target, &prop, &model, &provider, &templateID, &base); err != nil {
-		return wf, 0, nil, err
+		return wf, 0, nil, nil, err
 	}
 	if status != "proposed" {
-		return wf, 0, nil, fmt.Errorf("%w: build is %s, not a proposal to save", errConflict, status)
+		return wf, 0, nil, nil, fmt.Errorf("%w: build is %s, not a proposal to save", errConflict, status)
 	}
 	var pr struct {
 		Definition json.RawMessage `json:"definition"`
 	}
 	if err := json.Unmarshal(prop, &pr); err != nil || len(pr.Definition) == 0 {
-		return wf, 0, nil, fmt.Errorf("%w: the proposal has no definition to save", errConflict)
+		return wf, 0, nil, nil, fmt.Errorf("%w: the proposal has no definition to save", errConflict)
 	}
 	doc, err := canonical(pr.Definition)
 	if err != nil {
-		return wf, 0, nil, err
+		return wf, 0, nil, nil, err
 	}
 	if target != nil {
 		wf = *target
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM workflows WHERE id = $1 FOR UPDATE`, wf).Scan(new(int)); err != nil {
-			return wf, 0, nil, err
+			return wf, 0, nil, nil, err
 		}
 		if err := s.refuseGitManaged(ctx, tx, wf); err != nil {
-			return wf, 0, nil, err
+			return wf, 0, nil, nil, err
 		}
 		var latest int
 		var latestDigest []byte
@@ -979,24 +981,24 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 		err := tx.QueryRow(ctx, `SELECT version, digest, definition FROM workflow_versions WHERE workflow_id = $1 ORDER BY version DESC LIMIT 1`, wf).
 			Scan(&latest, &latestDigest, &latestDef)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return wf, 0, nil, err
+			return wf, 0, nil, nil, err
 		}
 		version = latest + 1
 		if base != nil && latestDigest != nil && !bytes.Equal(base, latestDigest) {
 			var baseDef []byte
 			if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND digest = $2 ORDER BY version DESC LIMIT 1`, wf, base).
 				Scan(&baseDef); err != nil {
-				return wf, 0, nil, err
+				return wf, 0, nil, nil, err
 			}
 			out, conflicts, err := wdmerge.Merge(baseDef, doc, latestDef, resolutions)
 			if err != nil {
-				return wf, 0, nil, fmt.Errorf("%w: %w", errBadRequest, err)
+				return wf, 0, nil, nil, fmt.Errorf("%w: %w", errBadRequest, err)
 			}
 			if len(conflicts) > 0 {
-				return wf, 0, nil, &mergeConflict{conflicts: conflicts, latest: latest, digest: hex.EncodeToString(latestDigest)}
+				return wf, 0, nil, nil, &mergeConflict{conflicts: conflicts, latest: latest, digest: hex.EncodeToString(latestDigest)}
 			}
 			if doc, err = canonical(out); err != nil {
-				return wf, 0, nil, err
+				return wf, 0, nil, nil, err
 			}
 		}
 	} else {
@@ -1009,24 +1011,38 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 			name = d.Name
 		}
 		if name == "" {
-			return wf, 0, nil, fmt.Errorf("%w: name is required", errBadRequest)
+			return wf, 0, nil, nil, fmt.Errorf("%w: name is required", errBadRequest)
 		}
 		if wf, err = s.createWorkflowTx(ctx, tx, p, name); err != nil {
-			return wf, 0, nil, err
+			return wf, 0, nil, nil, err
 		}
 		version = 1
 		if err := audit("workflow.create", wf.String(), map[string]any{"name": name, "ai_build": id.String()}); err != nil {
-			return wf, 0, nil, err
+			return wf, 0, nil, nil, err
 		}
 	}
+	// A tool drafted gets a free command, as a recipe installed does; its
+	// own workflow's versions keep their word (review M6, 2).
+	if doc, rec, err = s.freeDraftCommandTx(ctx, tx, p.TenantID, doc, wf); err != nil {
+		return wf, 0, nil, nil, err
+	}
 	if err := insertVersionTx(ctx, tx, p.TenantID, wf, version, doc, nil, p.Actor(), ""); err != nil {
-		return wf, 0, nil, err
+		return wf, 0, nil, nil, err
+	}
+	// A draft started from a recipe brings its companion, as installing
+	// the recipe does.
+	if rec != nil {
+		if tpl, vals := draftRecipe(prop, rec.Command); tpl != nil {
+			if rec.Companion, err = s.installCompanionTx(ctx, tx, p, tpl, vals, audit); err != nil {
+				return wf, 0, nil, nil, err
+			}
+		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE workflow_versions SET ai_build_id = $3, template_id = $4 WHERE workflow_id = $1 AND version = $2`, wf, version, id, templateID); err != nil {
-		return wf, 0, nil, err
+		return wf, 0, nil, nil, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE ai_builds SET status = 'saved', saved_workflow_id = $2, saved_version = $3, saved_at = now() WHERE id = $1`, id, wf, version); err != nil {
-		return wf, 0, nil, err
+		return wf, 0, nil, nil, err
 	}
 	detail := map[string]any{"build": id.String(), "ai_assisted": true, "co_author": "ai:" + model, "state": "draft"}
 	if provider == "template" {
@@ -1037,7 +1053,7 @@ func (s *Server) saveAIBuildTx(ctx context.Context, tx pgx.Tx, p *Principal, id 
 	if templateID != nil {
 		detail["template"] = *templateID
 	}
-	return wf, version, doc, audit("ai.save", fmt.Sprintf("%s/%d", wf, version), detail)
+	return wf, version, doc, rec, audit("ai.save", fmt.Sprintf("%s/%d", wf, version), detail)
 }
 
 // createWorkflowTx creates an empty workflow named name in p's tenant,

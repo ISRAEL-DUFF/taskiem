@@ -157,7 +157,7 @@ func (s *Server) waToolReady(ctx context.Context, c *chat, data chatData) (bool,
 	if err != nil || t == nil {
 		return t == nil && err == nil, err
 	}
-	if t.Asks() != wdcheck.CareAnswers {
+	if t.AsksFor(data.Inputs) != wdcheck.CareAnswers {
 		return false, nil
 	}
 	data.Nonce = uuid.NewString()

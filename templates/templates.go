@@ -217,6 +217,9 @@ func (t *Template) IsRecipe() bool { return t.CommandParam() != nil }
 // letters, digits and dashes, starting with a letter (engine/wd).
 var ToolCommand = regexp.MustCompile(`^[a-z][a-z0-9-]{1,23}$`)
 
+// roleName is how a workflow's role is written (wd/v1 roles).
+var roleName = regexp.MustCompile(`^[a-z][a-z0-9_]{1,47}$`)
+
 // CapabilityPrefix marks a capability among a template's connectors:
 // capability:pay_bank is any rail that can pay bank accounts.
 const CapabilityPrefix = "capability:"
@@ -262,7 +265,7 @@ var pickers = map[string]bool{"sheet": false, "sheet_tab": true, "table": false,
 // choicesRe is a choice picker's connector and picker ("mailchimp:audiences").
 var choicesRe = regexp.MustCompile(`^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$`)
 
-var paramTypes = map[string]bool{"command": true, "string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
+var paramTypes = map[string]bool{"command": true, "roles": true, "string": true, "text": true, "integer": true, "number": true, "boolean": true, "time": true, "weekday": true, "connection": true}
 
 // Load reads every library/*.json file of fsys.
 func Load(fsys fs.FS) (*Library, error) {
@@ -586,6 +589,43 @@ func (p *Param) Coerce(v any) (any, error) {
 		v = "'" + strings.ReplaceAll(s, "'", "''") + "'"
 	}
 	switch p.Type {
+	case "roles":
+		// Who may start a recipe's tool (its workflow's roles): role names,
+		// as a list or typed with commas ("owner, manager").
+		var names []string
+		switch x := v.(type) {
+		case string:
+			names = strings.Split(x, ",")
+		case []string:
+			names = x
+		case []any:
+			for _, e := range x {
+				s, ok := e.(string)
+				if !ok {
+					return nil, errors.New("must be role names")
+				}
+				names = append(names, s)
+			}
+		default:
+			return nil, errors.New("must be role names")
+		}
+		out := []any{}
+		seen := map[string]bool{}
+		for _, n := range names {
+			n = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(n)), " ", "_")
+			if n == "" || seen[n] {
+				continue
+			}
+			if !roleName.MatchString(n) {
+				return nil, fmt.Errorf("%q is not a role's name", n)
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+		if len(out) == 0 || len(out) > 20 {
+			return nil, errors.New("must name 1 to 20 roles")
+		}
+		return out, nil
 	case "command":
 		// The word after "/": typed as a person says it ("Add Sale",
 		// "/add sale") and written as a command (add-sale).

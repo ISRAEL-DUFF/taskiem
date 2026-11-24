@@ -73,9 +73,14 @@ func (d describer) tool(def *wd.Definition) []Line {
 	case wd.ToolForCustomers:
 		out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_customers")})
 	case wd.ToolForLinked:
-		out = append(out, Line{Number: "•", Text: d.t("wd.change.for_linked")})
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_linked")})
 	default:
-		out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_members")})
+		// Who among the members, when the workflow says (its roles).
+		if len(def.Roles) > 0 {
+			out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_roles", "roles", strings.Join(def.Roles, ", "))})
+		} else {
+			out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_members")})
+		}
 	}
 	if asks := inputTitles(def); len(asks) > 0 {
 		out = append(out, Line{Number: "•", Text: d.t("wd.tool.asks", "fields", strings.Join(asks, ", "))})

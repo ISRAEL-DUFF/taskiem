@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandOf, installedWords, lineLabel, recipeWords, toParams, type TemplateParam } from "./templates";
+import { commandOf, initialValues, installedWords, lineLabel, recipeWords, toParams, type TemplateParam } from "./templates";
 
 // Recipes: templates that make a tool used from the chat (made tools §13,
 // build plan M6).
@@ -9,6 +9,13 @@ describe("recipes", () => {
     expect(commandOf("price-of")).toBe("price-of");
     const p: TemplateParam[] = [{ name: "command", type: "command", title: "Its word", description: "d", required: true, example: "add-sale" }];
     expect(toParams(p, { command: "/Find Customer" })).toEqual({ command: "find-customer" });
+  });
+  it("shows who may use it, and sends the roles typed as a list", () => {
+    const p: TemplateParam[] = [
+      { name: "roles", type: "roles", title: "Who can use it", description: "d", required: false, default: ["owner", "manager"], example: ["owner", "manager"] },
+    ];
+    expect(initialValues(p)).toEqual({ roles: "owner, manager" });
+    expect(toParams(p, { roles: "owner, staff ,," })).toEqual({ roles: ["owner", "staff"] });
   });
   it("says what the tool is in plain words", () => {
     expect(recipeWords({ name: "Look up", about: "a", for: "members", answer: "card", command: "find-customer", care: "answers" })).toEqual([

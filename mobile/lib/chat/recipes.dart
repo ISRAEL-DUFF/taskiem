@@ -31,6 +31,13 @@ Future<void> openRecipes(BuildContext context, Auth auth, {String backLabel = 'B
 /// A typed word as the server writes a command: "/Add Sale" is add-sale.
 String commandOf(String typed) => typed.trim().replaceFirst(RegExp(r'^/'), '').toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join('-');
 
+/// Roles typed with commas as a list: "owner, Shift manager" is
+/// [owner, shift_manager] (review M6, 4: who can use a recipe's tool).
+List<String> rolesOf(String typed) => [
+  for (final r in typed.split(','))
+    if (r.trim().isNotEmpty) r.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_'),
+];
+
 /// A recipe's tool in plain words, as the web says them.
 List<String> recipeWords(TemplateTool t) => [
   t.for_ == 'customers' ? 'Your customers use it' : 'Your team uses it',
@@ -168,19 +175,31 @@ class _InstallSheetState extends State<_InstallSheet> {
   bool _busy = false;
   String? _error;
 
-  // The parameters asked here: its word, and those the template has no
-  // default for. The pickers' ones (a table, a role) keep their defaults,
-  // chosen again on the web.
+  // The parameters asked here: its word, who can use it, and those the
+  // template has no default for. The pickers' ones (a table, a column)
+  // keep their defaults, chosen again on the web.
   List<TemplateParam> get _asked => [
     for (final p in widget.template.params)
-      if (p.type == 'command' || (p.required && p.default_ == null)) p,
+      if (p.type == 'command' || p.type == 'roles' || (p.required && p.default_ == null)) p,
   ];
 
   @override
   void initState() {
     super.initState();
-    _fields = {for (final p in _asked) p.name: TextEditingController(text: p.type == 'command' ? '${p.default_ ?? p.example ?? ''}' : '')};
+    _fields = {for (final p in _asked) p.name: TextEditingController(text: _start(p))};
   }
+
+  // A field's first words: its word, or who can use it, as the recipe has
+  // them ("owner, manager").
+  static String _start(TemplateParam p) => switch (p.type) {
+    'command' => '${p.default_ ?? p.example ?? ''}',
+    'roles' => switch (p.default_ ?? p.example) {
+      final List<dynamic> l => l.join(', '),
+      final Object v => '$v',
+      null => '',
+    },
+    _ => '',
+  };
 
   @override
   void dispose() {
@@ -198,7 +217,11 @@ class _InstallSheetState extends State<_InstallSheet> {
         setState(() => _error = '${p.title} is needed.');
         return;
       }
-      params[p.name] = p.type == 'command' ? commandOf(v) : v;
+      params[p.name] = switch (p.type) {
+        'command' => commandOf(v),
+        'roles' => rolesOf(v),
+        _ => v,
+      };
     }
     setState(() => (_busy = true, _error = null));
     try {
@@ -233,7 +256,11 @@ class _InstallSheetState extends State<_InstallSheet> {
           children: [
             for (final p in _asked)
               TkKitField(
-                label: p.type == 'command' ? 'Its word, after /' : p.title,
+                label: switch (p.type) {
+                  'command' => 'Its word, after /',
+                  'roles' => 'Who can use it',
+                  _ => p.title,
+                },
                 hint: p.description,
                 child: TkTextBox(controller: _fields[p.name]!, max: p.maxLength ?? 300),
               ),

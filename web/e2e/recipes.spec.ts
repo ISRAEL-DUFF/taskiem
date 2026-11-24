@@ -45,6 +45,8 @@ test("the library's recipes make a tool, called by the word chosen at install", 
   await expect(tool).toContainText("Answers at once: it only reads");
   await expect(tool).toContainText("Says back a card");
   await expect(page.getByLabel("Steps")).toContainText("• Use it from the chat with /find-customer: Look up");
+  // Who can use it: shown, and changeable, owners and managers unless others are chosen.
+  await expect(page.getByLabel("Who can use it (optional)")).toHaveValue("owner, manager");
   const word = `stock-${Date.now() % 100000}`;
   await page.getByLabel("Its word").fill(`/${word.replace("-", " ")}`);
   await page.getByRole("button", { name: "Create draft" }).click();

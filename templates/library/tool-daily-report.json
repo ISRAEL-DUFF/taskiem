@@ -10,6 +10,7 @@
   "connectors": ["xenibase@1", "notify@1"],
   "params": [
     {"name": "command", "type": "command", "title": "Its word", "description": "What people type to see today's list, after /. Letters, numbers and dashes.", "required": true, "default": "sales-today", "example": "sales-today"},
+    {"name": "roles", "type": "roles", "title": "Who can use it", "description": "The roles whose people may use it from the chat; owners always may. It reads your table, so keep it to those who may see it.", "required": false, "default": ["owner", "manager"], "example": ["owner", "manager"]},
     {"name": "table", "type": "string", "title": "Table", "description": "The table it counts.", "required": false, "default": "sales", "example": "sales", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
     {"name": "title_column", "type": "string", "title": "Each row shows", "description": "The column each row of the list is named by.", "required": false, "default": "what", "example": "what", "picker": "column", "from": "table"},
     {"name": "amount_column", "type": "string", "title": "Adds up", "description": "The column of amounts it adds up.", "required": false, "default": "amount", "example": "amount", "picker": "column", "from": "table"},
@@ -23,6 +24,7 @@
     "name": "Today's list",
     "description": "Lists the rows added to a table today.",
     "trigger": {"type": "manual"},
+    "roles": "{{roles}}",
     "inputs": {"schema": {"type": "object", "properties": {}}},
     "outputs": [
       {"name": "rows", "type": "list", "title": "Today", "description": "Today's rows",

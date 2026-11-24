@@ -2,7 +2,7 @@
   "id": "tool-list-and-act",
   "title": "A list to act on from the chat",
   "summary": "A tool: type its word and see the rows of your table that are still open, each with a button that marks it done.",
-  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word (\"/open-tickets\") and it lists the rows of your table whose state is open, ten in the chat and every one on the web and in the app. Each row has a button that changes its state to done, marks that row, and shows the list again. Since its button changes a row, it asks yes before it runs. Choose the word it is called by, the table, the state column and its two values when you install it; if the word is taken, it gets the next free one (open-tickets-2) and says so.",
+  "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word (\"/open-tickets\") and it lists the rows of your table whose state is open, ten in the chat and every one on the web and in the app. Each row has a button that changes its state to done, marks that row, and shows the list again. The list answers at once; a row's button asks yes before it marks the row. Choose the word it is called by, the table, the state column and its two values when you install it; if the word is taken, it gets the next free one (open-tickets-2) and says so.",
   "category": "tools",
   "tags": ["tool", "list", "data table"],
   "requires": ["tool", "command", "type", "button"],
@@ -10,6 +10,7 @@
   "connectors": ["xenibase@1"],
   "params": [
     {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "open-tickets", "example": "open-tickets"},
+    {"name": "roles", "type": "roles", "title": "Who can use it", "description": "The roles whose people may use it from the chat; owners always may. It reads your table, so keep it to those who may see it.", "required": false, "default": ["owner", "manager"], "example": ["owner", "manager"]},
     {"name": "table", "type": "string", "title": "Table", "description": "The table it lists.", "required": false, "default": "tickets", "example": "tickets", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
     {"name": "title_column", "type": "string", "title": "Each row shows", "description": "The column each row is named by, such as title.", "required": false, "default": "title", "example": "title", "picker": "column", "from": "table"},
     {"name": "state_column", "type": "string", "title": "State column", "description": "The column that says where a row is, such as status.", "required": false, "default": "status", "example": "status", "picker": "column", "from": "table"},
@@ -23,6 +24,7 @@
     "name": "List and act",
     "description": "Lists the open rows of a table, each with a button that marks it done.",
     "trigger": {"type": "manual"},
+    "roles": "{{roles}}",
     "inputs": {"schema": {"type": "object", "properties": {
       "done": {"type": "integer", "title": "Row to mark", "minimum": 1}}}},
     "outputs": [
@@ -41,9 +43,10 @@
     },
     "steps": [
       {"id": "mark", "type": "connector", "name": "Mark the row pressed", "connector": "xenibase@1", "action": "update_rows", "connection": "data_tables",
-       "input": {"table": "{{table}}", "filters": [{"column": "id", "op": "eq", "value": "=has(trigger.body.done) ? int(trigger.body.done) : 0"}], "max_affected": 1, "set": {"{{state_column}}": "{{done_state}}"}}},
-      {"id": "find", "type": "connector", "name": "Read the open rows", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables", "needs": ["mark"],
-       "input": {"table": "{{table}}", "filters": [{"column": "{{state_column}}", "op": "eq", "value": "{{open_state}}"}], "order": [{"column": "created_at"}], "limit": 50}}
+       "when": "=has(trigger.body.done)",
+       "input": {"table": "{{table}}", "filters": [{"column": "id", "op": "eq", "value": "=trigger.body.done"}], "max_affected": 1, "set": {"{{state_column}}": "{{done_state}}"}}},
+      {"id": "find", "type": "connector", "name": "Read the open rows", "connector": "xenibase@1", "action": "read_rows", "connection": "data_tables",
+       "input": {"table": "{{table}}", "filters": [{"column": "{{state_column}}", "op": "eq", "value": "{{open_state}}"}, {"column": "id", "op": "neq", "value": "=has(trigger.body.done) ? trigger.body.done : 0"}], "order": [{"column": "created_at"}], "limit": 50}}
     ],
     "settings": {"timeout": "5m"}
   }

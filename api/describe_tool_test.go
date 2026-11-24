@@ -112,7 +112,10 @@ func TestDescribeItMakesAWorkingTool(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("draft: %+v", msgs)
 	}
-	for _, want := range []string{"Use it from the chat with /our-prices: Our prices", "Your customers can use it, and see only what it marks for them"} {
+	for _, want := range []string{"Use it from the chat with /our-prices: Our prices", "Your customers can use it, and see only what it marks for them",
+		// The builder's warning in its own words (review M6, 1): the public
+		// output is copied from a saved thing.
+		"Every customer who uses it would see Prices, which comes from something you keep to yourself"} {
 		if !strings.Contains(msgs[0].Text, want) {
 			t.Errorf("chat read back lacks %q:\n%s", want, msgs[0].Text)
 		}

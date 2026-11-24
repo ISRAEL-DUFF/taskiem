@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/israel-duff/taskiem/engine/capability"
@@ -134,18 +135,26 @@ func customerToolFindings(def *wd.Definition, reg connector.Lookup) []Warning {
 		case refs.Roots["env"] || refs.Roots["secrets"]:
 			from = "a setting of the business"
 		default:
-			for id := range refs.Steps {
-				st := steps[id]
-				switch {
-				case st == nil:
-				case personalOutput(reg, st):
-					from = fmt.Sprintf("step %q, whose output is personal data", id)
-				case readsKept(st):
-					from = fmt.Sprintf("step %q, which reads a saved thing or a setting of the business", id)
+			// The data's whole way to the output (review M6, 1): a step
+			// the output reads, the steps its own inputs read, and so on.
+			seen := map[string]bool{}
+			ids := sortedKeys(refs.Steps)
+			for len(ids) > 0 && from == "" {
+				id := ids[0]
+				ids = ids[1:]
+				if seen[id] {
+					continue
 				}
-				if from != "" {
+				seen[id] = true
+				st := steps[id]
+				if st == nil {
+					continue
+				}
+				if why := privateSource(reg, st); why != "" {
+					from = fmt.Sprintf("step %q, %s", id, why)
 					break
 				}
+				ids = append(ids, stepsRead(st)...)
 			}
 		}
 		if from != "" {
@@ -153,6 +162,71 @@ func customerToolFindings(def *wd.Definition, reg connector.Lookup) []Warning {
 				Message: fmt.Sprintf("output %q is marked public, so every customer who uses the tool sees it, and it is read from %s; mark it public only if any customer may see it", o.Name, from)})
 		}
 	}
+	return out
+}
+
+// privateSource says why a step's output may hold what a customer should
+// not see: a connector whose output its manifest marks personal data (a
+// table's rows), a payment rail's answer, another system's answer (an http
+// step), code or a container (whose output cannot be read), another run's
+// outputs, a person's answers (a form, a callback, a signal), or a saved
+// thing or a setting read by the step; "" when none. A step inside a
+// control step counts for it: a foreach's output is its body's.
+func privateSource(reg connector.Lookup, st *wd.Step) string {
+	switch st.Type {
+	case "http":
+		return "which reads another system's answer"
+	case "code", "container":
+		return "whose output Taskiem cannot read"
+	case "capability":
+		return "which reads a payment rail's answer"
+	case "subflow", "template":
+		return "which reads another workflow's outputs"
+	case "form", "callback", "signal":
+		return "which reads what a person or a system sent"
+	}
+	if personalOutput(reg, st) {
+		return "whose output is personal data"
+	}
+	if readsKept(st) {
+		return "which reads a saved thing or a setting of the business"
+	}
+	for _, sub := range st.Children() {
+		for _, c := range sub {
+			if why := privateSource(reg, c); why != "" {
+				return why
+			}
+		}
+	}
+	return ""
+}
+
+// stepRef finds a step an expression reads: steps.<id> or steps.?<id>.
+var stepRef = regexp.MustCompile(`\bsteps\.\??([a-z][a-z0-9_]*)`)
+
+// stepsRead are the steps a step's expressions read, by id, in order.
+func stepsRead(st *wd.Step) []string {
+	raw, err := json.Marshal(st)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range stepRef.FindAllSubmatch(raw, -1) {
+		if id := string(m[1]); !seen[id] && id != st.ID {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
 	return out
 }
 

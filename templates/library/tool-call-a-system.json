@@ -10,7 +10,7 @@
   "connectors": [],
   "params": [
     {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "check-order", "example": "check-order"},
-    {"name": "address", "type": "string", "title": "Web address", "description": "The address it reads, starting with https.", "required": true, "example": "https://api.example.com/orders", "max_length": 300},
+    {"name": "address", "type": "string", "title": "Web address", "description": "The address it reads, starting with https://, with no name or password in it (keep those in a secret).", "required": true, "example": "https://api.example.com/orders", "max_length": 300, "pattern": "^https://[^/@\\s:]+(:[0-9]{1,5})?(/[^@\\s]*)?$"},
     {"name": "first_field", "type": "string", "title": "Shows first", "description": "A field of the answer it shows, such as status.", "required": false, "default": "status", "example": "status", "max_length": 60},
     {"name": "second_field", "type": "string", "title": "Shows next", "description": "Another field of the answer it shows.", "required": false, "default": "updated", "example": "updated", "max_length": 60}
   ],

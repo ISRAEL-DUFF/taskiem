@@ -10,6 +10,12 @@
       "expect": {"status": "completed", "answer": {"title": "Ada Obi", "state": {"text": "Found"}, "lines": [{"label": "phone", "value": "08031234567"}, {"label": "email", "value": "ada@example.com"}]}}
     },
     {
+      "name": "a % or _ typed is looked for as itself, not as any letters",
+      "trigger": {"body": {"word": "50%_off"}},
+      "mocks": {"find": {"output": {"rows": []}}},
+      "expect": {"status": "completed", "inputs": {"find": {"filters": [{"column": "name", "op": "ilike", "value": "%50\\%\\_off%"}]}}}
+    },
+    {
       "name": "says when nothing matches",
       "trigger": {"body": {"word": "Zed"}},
       "mocks": {"find": {"output": {"rows": []}}},

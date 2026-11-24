@@ -4,7 +4,7 @@
 export interface TemplateParam {
   name: string;
   /** command: a recipe's tool's word after "/" (made tools §13). */
-  type: "command" | "string" | "text" | "integer" | "number" | "boolean" | "time" | "weekday" | "connection";
+  type: "command" | "roles" | "string" | "text" | "integer" | "number" | "boolean" | "time" | "weekday" | "connection";
   title: string;
   description: string;
   required: boolean;
@@ -155,7 +155,7 @@ export const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday",
 export function initialValues(params: TemplateParam[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of params) {
-    out[p.name] = p.default === undefined || p.default === null ? "" : String(p.default);
+    out[p.name] = p.default === undefined || p.default === null ? "" : Array.isArray(p.default) ? p.default.join(", ") : String(p.default);
   }
   return out;
 }
@@ -197,6 +197,10 @@ export function toParams(params: TemplateParam[], values: Record<string, string>
       }
       case "boolean":
         out[p.name] = raw === "true";
+        break;
+      case "roles":
+        // Who may use a recipe's tool: role names, typed with commas.
+        out[p.name] = raw.split(",").map((r) => r.trim()).filter(Boolean);
         break;
       case "command":
         out[p.name] = commandOf(raw);

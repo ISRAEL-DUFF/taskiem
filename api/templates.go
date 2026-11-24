@@ -256,23 +256,10 @@ func (s *Server) instantiateTemplate(w http.ResponseWriter, r *http.Request) {
 	var doc []byte
 	var rec *recipeInstall
 	err := s.tx(r, func(tx pgx.Tx) error {
-		audit := func(action, target string, detail map[string]any) error {
-			return auditTx(r, tx, action, target, detail)
-		}
-		params := req.Params
-		if t.IsRecipe() {
-			var err error
-			if params, rec, err = s.recipeCommandTx(r.Context(), tx, t, params); err != nil {
-				return err
-			}
-		}
 		var err error
-		if wf, doc, err = s.instantiateTx(r.Context(), tx, p, t, params, req.Name, audit); err != nil {
-			return err
-		}
-		if rec != nil && t.Companion != nil {
-			rec.Companion, err = s.installCompanionTx(r.Context(), tx, p, t, params, audit)
-		}
+		wf, doc, rec, err = s.installTemplateTx(r.Context(), tx, p, t, req.Params, req.Name, func(action, target string, detail map[string]any) error {
+			return auditTx(r, tx, action, target, detail)
+		})
 		return err
 	})
 	var pe templates.ErrParams
@@ -308,11 +295,34 @@ type companionMade struct {
 	Name string    `json:"name"`
 }
 
+// installTemplateTx fills a template and saves it as a draft workflow, as
+// the template library, an embedded app and the AI builder's save all do
+// (review M6, 2): a recipe's command is the one asked for or the next free
+// one, and its companion is saved beside it as its own draft.
+func (s *Server) installTemplateTx(ctx context.Context, tx pgx.Tx, p *Principal, t *templates.Template, params map[string]any, name string,
+	audit func(action, target string, detail map[string]any) error) (uuid.UUID, []byte, *recipeInstall, error) {
+	var rec *recipeInstall
+	if t.IsRecipe() {
+		var err error
+		if params, rec, err = s.recipeCommandTx(ctx, tx, p.TenantID, t, params); err != nil {
+			return uuid.Nil, nil, nil, err
+		}
+	}
+	wf, doc, err := s.instantiateTx(ctx, tx, p, t, params, name, audit)
+	if err != nil {
+		return uuid.Nil, nil, nil, err
+	}
+	if rec != nil && t.Companion != nil {
+		if rec.Companion, err = s.installCompanionTx(ctx, tx, p, t, params, audit); err != nil {
+			return uuid.Nil, nil, nil, err
+		}
+	}
+	return wf, doc, rec, nil
+}
+
 // recipeCommandTx gives a recipe the command asked for (its default when
-// none is), or the next free one when it is taken: one of Taskiem's own
-// words, a deployed tool's in any environment, or another workflow's
-// version's (a recipe installed twice), with -2, -3… after it.
-func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, t *templates.Template, params map[string]any) (map[string]any, *recipeInstall, error) {
+// none is), or the next free one when it is taken (freeToolCommandTx).
+func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, t *templates.Template, params map[string]any) (map[string]any, *recipeInstall, error) {
 	cp := t.CommandParam()
 	out := map[string]any{}
 	for k, v := range params {
@@ -330,26 +340,54 @@ func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, t *templates.Te
 		return nil, nil, templates.ErrParams{{Param: cp.Name, Message: err.Error()}}
 	}
 	base := asked.(string)
+	given, err := s.freeToolCommandTx(ctx, tx, tenant, base, uuid.Nil)
+	if err != nil {
+		if errors.Is(err, errCommandsTaken) {
+			return nil, nil, templates.ErrParams{{Param: cp.Name, Message: "is taken; choose another word"}}
+		}
+		return nil, nil, err
+	}
+	out[cp.Name] = given
+	return out, &recipeInstall{Asked: base, Command: given, Changed: given != base}, nil
+}
+
+// errCommandsTaken: the word and its next 98 are all taken.
+var errCommandsTaken = errors.New("every command made from the word is taken")
+
+// freeToolCommandTx is base, or the next free word made from it (-2, -3…),
+// for a new tool of the business: free when it is none of Taskiem's own
+// words, no deployed tool's in any environment, no other workflow's
+// version's (a recipe installed twice does not clash with its own draft),
+// and no page's name, since a page is called by its name the same way
+// (review M6, 3). except is the workflow the tool is for, whose own
+// versions may keep their word. A lock per business holds from the check
+// to the transaction's end, so two installs at once get two words (review
+// M6, 5).
+func (s *Server) freeToolCommandTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, base string, except uuid.UUID) (string, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':tool-command', 0))`, tenant.String()); err != nil {
+		return "", err
+	}
 	taken := func(c string) (bool, error) {
 		if wdcheck.ReservedCommand(c) {
 			return true, nil
 		}
 		var used bool
-		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workflow_tools WHERE command = $1)
-			OR EXISTS (SELECT 1 FROM workflow_versions WHERE definition->'tool'->>'command' = $1)`, c).Scan(&used)
+		err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM workflow_tools WHERE command = $1 AND workflow_id <> $2)
+			OR EXISTS (SELECT 1 FROM workflow_versions WHERE definition->'tool'->>'command' = $1 AND workflow_id <> $2)
+			OR EXISTS (SELECT 1 FROM pages WHERE name = $1)`, c, except).Scan(&used)
 		return used, err
 	}
 	given := base
 	for n := 2; ; n++ {
 		used, err := taken(given)
 		if err != nil {
-			return nil, nil, err
+			return "", err
 		}
 		if !used {
-			break
+			return given, nil
 		}
 		if n > 99 {
-			return nil, nil, templates.ErrParams{{Param: cp.Name, Message: "is taken; choose another word"}}
+			return "", errCommandsTaken
 		}
 		suffix := "-" + strconv.Itoa(n)
 		stem := base
@@ -358,8 +396,6 @@ func (s *Server) recipeCommandTx(ctx context.Context, tx pgx.Tx, t *templates.Te
 		}
 		given = stem + suffix
 	}
-	out[cp.Name] = given
-	return out, &recipeInstall{Asked: base, Command: given, Changed: given != base}, nil
 }
 
 // installCompanionTx saves a recipe's companion (a schedule whose button
@@ -512,24 +548,43 @@ func (s *Server) embedInstantiate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
 		return
 	}
+	// A recipe's companion is installed with it, so the app must allow
+	// what it uses too.
+	if comp, err := t.InstantiateCompanion(req.Params); err == nil && comp != nil {
+		more, err := checkUses(p.EndUser, comp)
+		if err != nil {
+			s.fail(w, r, fmt.Errorf("%w: %w", errBadRequest, err))
+			return
+		}
+		bad = append(bad, more...)
+	}
 	if len(bad) > 0 {
 		notAllowed(w, bad)
 		return
 	}
 	var wf uuid.UUID
 	var doc []byte
+	var rec *recipeInstall
 	err = s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		wf, doc, err = s.instantiateTx(r.Context(), tx, p, t, req.Params, req.Name, func(action, target string, detail map[string]any) error {
+		wf, doc, rec, err = s.installTemplateTx(r.Context(), tx, p, t, req.Params, req.Name, func(action, target string, detail map[string]any) error {
 			return auditTx(r, tx, action, target, detail)
 		})
 		return err
 	})
+	if errors.As(err, &pe) {
+		paramsRefused(w, pe)
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"id": wf, "version": 1, "state": "draft", "template": t.ID, "problems": nonNil(s.checkFor(r, doc))})
+	out := map[string]any{"id": wf, "version": 1, "state": "draft", "template": t.ID, "problems": nonNil(s.checkFor(r, doc))}
+	if rec != nil {
+		out["tool"] = rec
+	}
+	writeJSON(w, http.StatusCreated, out)
 }
 
 // checkTemplateIDs refuses ids that are not in the library (embed apps'

@@ -10,6 +10,7 @@
   "connectors": ["xenibase@1"],
   "params": [
     {"name": "command", "type": "command", "title": "Its word", "description": "What people type to use it, after /. Letters, numbers and dashes.", "required": true, "default": "add-sale", "example": "add-sale"},
+    {"name": "roles", "type": "roles", "title": "Who can use it", "description": "The roles whose people may use it from the chat; owners always may. It reads your table, so keep it to those who may see it.", "required": false, "default": ["owner", "manager"], "example": ["owner", "manager"]},
     {"name": "table", "type": "string", "title": "Table", "description": "The table rows are added to. Taskiem makes it if it does not exist.", "required": false, "default": "records", "example": "records", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"}
   ],
   "tables": [
@@ -25,6 +26,7 @@
     "name": "Add a record",
     "description": "Adds a row to one table, with a sentence back.",
     "trigger": {"type": "manual"},
+    "roles": "{{roles}}",
     "inputs": {"schema": {"type": "object", "required": ["what"], "properties": {
       "what": {"type": "string", "title": "What", "minLength": 1, "maxLength": 200},
       "amount": {"type": "number", "title": "Amount", "minimum": 0},

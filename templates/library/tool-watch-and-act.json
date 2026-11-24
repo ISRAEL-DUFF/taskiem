@@ -10,6 +10,7 @@
   "connectors": ["xenibase@1", "notify@1"],
   "params": [
     {"name": "command", "type": "command", "title": "Its word", "description": "What people type to mark a row handled, after /. Letters, numbers and dashes.", "required": true, "default": "handle", "example": "handle"},
+    {"name": "roles", "type": "roles", "title": "Who can use it", "description": "The roles whose people may use it from the chat; owners always may. It reads your table, so keep it to those who may see it.", "required": false, "default": ["owner", "manager"], "example": ["owner", "manager"]},
     {"name": "table", "type": "string", "title": "Table", "description": "The table it watches.", "required": false, "default": "items", "example": "items", "pattern": "^[a-z][a-z0-9_]{0,62}$", "picker": "table"},
     {"name": "title_column", "type": "string", "title": "Each row is called", "description": "The column a row is named by in the message.", "required": false, "default": "name", "example": "name", "picker": "column", "from": "table"},
     {"name": "watch_column", "type": "string", "title": "Watches", "description": "The number column it watches, such as quantity.", "required": false, "default": "quantity", "example": "quantity", "picker": "column", "from": "table"},
@@ -26,6 +27,7 @@
     "name": "Mark it handled",
     "description": "Marks one row of a table handled.",
     "trigger": {"type": "manual"},
+    "roles": "{{roles}}",
     "inputs": {"schema": {"type": "object", "required": ["row"], "properties": {
       "row": {"type": "integer", "title": "Row", "minimum": 1}}}},
     "outputs": [

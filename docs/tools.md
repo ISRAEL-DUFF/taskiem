@@ -33,6 +33,8 @@ Worked out from its steps when it is published, never chosen by whoever made it:
 | **Asks yes** | Anything else: it writes, sends, asks a person, waits, runs code | What will run, and **Yes** |
 | **Asks yes and a passkey** | A step moves money out of the business | **Yes**, then a passkey (on WhatsApp, Telegram and Slack, the link to confirm) |
 
+**Care for each call.** A tool that asks yes only because of steps that run when something it was asked holds (a list whose row button marks a row: `"when": "=has(trigger.body.done)"`, reading only the trigger) answers at once when none holds for the call (the plain list), and asks yes when one does (marking a row). Care keeps those conditions with it (`care.if`); a condition that cannot be read counts as true, and nothing else relaxes care.
+
 Some actions outside payments spend the business's money all the same (airtime from its balance): they ask for a passkey too. An owner may make a tool **always ask** (`PUT /v1/tools/{command}/settings`), never less careful than its steps. A tool's run counts against the plan's run limits as any run.
 
 ## In words

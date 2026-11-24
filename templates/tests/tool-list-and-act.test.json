@@ -6,8 +6,8 @@
     {
       "name": "lists the open rows, each with its button",
       "trigger": {"body": {}},
-      "mocks": {"mark": {"output": {"affected": 0, "rows": []}}, "find": {"output": {"rows": [{"id": 3, "title": "Printer jam", "status": "open"}, {"id": 4, "title": "No Wi-Fi", "status": "open"}]}}},
-      "expect": {"status": "completed", "answer": {"title": "Still open", "rows": [{"title": "Printer jam"}, {"title": "No Wi-Fi"}]}}
+      "mocks": {"find": {"output": {"rows": [{"id": 3, "title": "Printer jam", "status": "open"}, {"id": 4, "title": "No Wi-Fi", "status": "open"}]}}},
+      "expect": {"status": "completed", "steps": {"mark": "skipped"}, "answer": {"title": "Still open", "rows": [{"title": "Printer jam"}, {"title": "No Wi-Fi"}]}}
     },
     {
       "name": "a row's button marks it and lists the rest",

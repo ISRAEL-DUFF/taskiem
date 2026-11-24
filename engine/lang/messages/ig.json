@@ -6464,6 +6464,36 @@
       "reviewed": false,
       "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
     },
+    "wd.tool.for_linked": {
+      "text": "Azụmahịa ndị unu jikọrọ nwere ike iji ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the businesses linked with this one"
+    },
+    "wd.tool.for_roles": {
+      "text": "Naanị ndị a nwere ike iji ya, na-agụnyeghị ndị nwe ya: {roles}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: only members with these roles may use its tool (owners always may); {roles} is a list of role names"
+    },
+    "wd.tool.companion": {
+      "text": "Ọ na-abịa na {name}, usoro oge nke bọtịnụ ya na-emeghe ya, echekwara dị ka draft n'akụkụ ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A drafted tool read back: the recipe it started from brings a schedule, saved as a draft beside it, whose button opens the tool; {name} is the schedule's name"
+    },
+    "wa.build.warn_customer_output": {
+      "text": "Onye ahịa ọ bụla jiri ya ga-ahụ {output}, nke si n'ihe ị na-edebere onwe gị. Lelee na ọ bụ maka ha.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: Before saving a drafted tool for customers: an output it shows every customer is read from something the business keeps (a saved thing, a setting, a table's rows); {output} is the output's name"
+    },
+    "wa.build.tool_taken": {
+      "text": "E were {asked} ugbu a, ya mere a na-akpọ ya {command}.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool: the command it asked for was taken (one of Taskiem's words, another tool's or a page's), so it was given the next free one; {asked} and {command} are like /prices"
+    },
+    "wa.build.tool_companion": {
+      "text": "Echekwara usoro oge ya, {name}, dị ka draft kwa.",
+      "reviewed": false,
+      "context": "Draft, not reviewed: After saving a drafted tool started from a recipe: the recipe's schedule was saved as a draft too; {name} is its name"
+    },
     "wd.change.roles": {
       "text": "Naanị ọrụ ndị a nwere ike ịmalite ya ugbu a: {roles}",
       "reviewed": false,

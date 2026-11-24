@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -93,6 +95,16 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 	if a := start("price-of", map[string]any{"word": "yam"}); a["state"].(map[string]any)["text"] != "Not found" {
 		t.Errorf("look up, none: %v", a)
 	}
+	// One letter would walk the table: two at least (review M6, 4).
+	owner.must(422, "POST", "/v1/tools/price-of/start", map[string]any{"input": map[string]any{"word": "r"}})
+	// It is for its roles: owners and managers, unless others are chosen.
+	if v := owner.must(200, "GET", "/v1/workflows/"+got["id"].(string)+"/versions/1", nil); !strings.Contains(toJSON(v["definition"]), `"roles":["owner","manager"]`) {
+		t.Errorf("roles: %v", v["definition"])
+	}
+	staff := w.member(t, owner, "staff@recipes.test", "operator")
+	if e := staff.must(403, "POST", "/v1/tools/price-of/start", map[string]any{"input": map[string]any{"word": "rice"}}); !strings.Contains(toJSON(e), "only") {
+		t.Errorf("a member outside its roles: %v", e)
+	}
 	// The same recipe again: the next free command, said so.
 	again := owner.must(201, "POST", "/v1/templates/tool-look-up/instantiate", map[string]any{"params": map[string]any{"command": "price-of"}})
 	if tool := again["tool"].(map[string]any); tool["command"] != "price-of-2" || tool["changed"] != true || tool["asked"] != "price-of" {
@@ -118,6 +130,11 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 
 	// List and act: the open rows, each with a button that marks it done.
 	install("tool-list-and-act", map[string]any{"command": "open-tickets"})
+	// A plain list only reads: it answers at once (review M6, 7).
+	if plain := owner.must(201, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": map[string]any{}}); plain["care"] != "answers" || plain["run_id"] == nil {
+		t.Errorf("a plain list asks: %v", plain)
+	}
+	w.env.Drain(t)
 	a := start("open-tickets", map[string]any{})
 	rows, _ := a["rows"].([]any)
 	if a["type"] != "list" || len(rows) != 2 {
@@ -131,6 +148,10 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 	pressed := owner.must(200, "POST", "/v1/tools/buttons/"+token, nil)
 	if pressed["command"] != "open-tickets" {
 		t.Fatalf("pressed: %v", pressed)
+	}
+	// Marking a row writes: it asks yes first.
+	if mark := owner.must(200, "POST", "/v1/tools/open-tickets/start", map[string]any{"input": pressed["inputs"]}); mark["care"] != "yes" || mark["confirm"] == nil {
+		t.Errorf("marking a row answers at once: %v", mark)
 	}
 	if a := start("open-tickets", pressed["inputs"].(map[string]any)); len(toList(a["rows"])) != 1 {
 		t.Errorf("after marking one: %v", a)
@@ -159,10 +180,16 @@ func TestRecipesInstallPublishAndRun(t *testing.T) {
 	}
 
 	// Call a system: two chosen fields of what it answers.
-	sys := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+	sys := httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(rw).Encode(map[string]any{"status": "shipped " + r.URL.Query().Get("q"), "updated": "today", "hidden": "x"})
 	}))
 	t.Cleanup(sys.Close)
+	// Its address is https (review M6, 7): the test's own server, trusted here.
+	pool := x509.NewCertPool()
+	pool.AddCert(sys.Certificate())
+	w.env.Egress.TLS = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	owner.must(400, "POST", "/v1/templates/tool-call-a-system/instantiate", map[string]any{"params": map[string]any{"command": "check-x", "address": "http://api.example.com/x"}})
+	owner.must(400, "POST", "/v1/templates/tool-call-a-system/instantiate", map[string]any{"params": map[string]any{"command": "check-x", "address": "https://me:secret@api.example.com/x"}})
 	owner.must(204, "POST", "/v1/egress", map[string]any{"environment": "prod", "host": "127.0.0.1"})
 	install("tool-call-a-system", map[string]any{"command": "check-order", "address": sys.URL + "/orders"})
 	if a := start("check-order", map[string]any{"value": "AD-12"}); a["title"] != "AD-12" || !strings.Contains(toJSON(a["lines"]), "shipped AD-12") || strings.Contains(toJSON(a), `"x"`) {

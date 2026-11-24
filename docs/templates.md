@@ -93,18 +93,20 @@ A **recipe** is a template that makes a [tool](tools.md), a workflow people call
 
 | Id | Kind | What it does | Asks before it runs |
 | --- | --- | --- | --- |
-| `tool-look-up` | Look up | Finds the first row of a table whose chosen column matches the words, and answers with a card: that row's name and two more of its columns | Nothing: it only reads |
+| `tool-look-up` | Look up | Finds the first row of a table whose chosen column matches the words (two letters at least; a `%` or `_` typed is looked for as itself), and answers with a card: that row's name and two more of its columns | Nothing: it only reads |
 | `tool-add-a-record` | Record | Adds a row (what, amount, note) to one table, made with it if it is missing, with a sentence back | Yes |
-| `tool-list-and-act` | Pick | Lists a table's rows in a state (open), ten in the chat and all on the web and in the app, each with a **Mark it done** button that calls the tool again with that row (once) | Yes |
+| `tool-list-and-act` | Pick | Lists a table's rows in a state (open), ten in the chat and all on the web and in the app, each with a **Mark it done** button that calls the tool again with that row (once) | Nothing for the list; yes to mark a row (its write runs only `when` a row is given, and care is read for each call) |
 | `tool-ask-for-approval` | Do, Decide | A request with a reason; the people with the role chosen decide with Approve and Reject; the asker is told in the chat they asked from | Yes |
 | `tool-tell-the-team` | Do | A message to everyone with a role, and how many it reached | Yes |
-| `tool-call-a-system` | Look up (for someone technical) | Reads a web address with the words as `q`, and shows two chosen fields of the answer as a card | Nothing: a `GET` |
+| `tool-call-a-system` | Look up (for someone technical) | Reads a web address (`https://` only, with no name or password in it) with the words as `q`, and shows two chosen fields of the answer as a card | Nothing: a `GET` |
 | `tool-daily-report` | Report | The tool lists today's rows of a table; with it comes a schedule that tells the role chosen, every day at a time, how many rows today and the total of a column, with a **See the list** button that opens the tool | Nothing |
 | `tool-watch-and-act` | Watch | The tool marks a row handled; with it comes a schedule that looks every day for rows at or below a level and tells the role, with a **Deal with it** button (once) that opens the tool on the first | Yes |
 
-- **The command, at install.** `POST /v1/templates/{id}/instantiate` takes the word as typed (`/Add Sale` is `add-sale`) or the recipe's own when none is given. When it is taken (one of Taskiem's own words in any language, a deployed tool's in any environment, or another workflow version's, so a recipe installed twice does not clash with its own draft) the recipe gets the next free one, `add-sale-2`, `-3`…, and the answer says so: `tool: {asked, command, changed}`.
+- **Who can use it.** The recipes that read or write a table (look up, add a record, list and act, daily report, watch and act) have a `roles` parameter, the workflow's roles: owners and managers unless others are chosen, shown and changeable at install on the web and in the app, since a tool reads with the business's connections whoever calls it.
+- **The command, at install.** `POST /v1/templates/{id}/instantiate` takes the word as typed (`/Add Sale` is `add-sale`) or the recipe's own when none is given. When it is taken (one of Taskiem's own words in any language, a deployed tool's in any environment, another workflow version's, so a recipe installed twice does not clash with its own draft, or a page's name, since a page is called by its name the same way) the recipe gets the next free one, `add-sale-2`, `-3`…, and the answer says so: `tool: {asked, command, changed}`.
 - **A companion.** The daily report and watch and act are two workflows: a schedule cannot be a tool, so the schedule (the template's `companion`) is installed beside the tool as its own draft workflow, filled with the same values, its button naming the tool's command (`tool.companion: {id, name}` in the answer). Publish both.
 - **What a run reads from a table** is sealed by its columns: a table's personal columns (a phone, an email, a column marked personal) show masked (•••) in a tool's answer, and in full on the run to whoever may reveal them; its other columns, words and numbers, show as they are, so the look-up recipe answers with a product's name and price and list and act with each ticket's title ([privacy: data tables in a run](privacy.md#data-tables-in-a-run)). Until 24 November 2026 every value read from a table was sealed, and words showed masked.
+- **Every way in.** The library's install, an embedded app's end user (whose app must allow what the companion uses too) and the AI builder's save all go through one path (`installTemplateTx`, `freeToolCommandTx`): the free word under a lock per business, so two installs at once get two words, and the companion saved beside the tool. A tool cannot be published with a page's word.
 - **Retrieval.** Recipes `require` the words tool, command, type or button, so the AI builder offers one only for a goal about something used from the chat.
 - **Tests.** Each has its own workflow tests (`templates/tests/tool-*.test.json`, stating the answer), `TestRecipes` (each a tool called by its command, the companions' buttons), `TestTemplatesInstantiateCheckDryRunAndRoundTrip` (companions too), and `TestRecipesInstallPublishAndRun` (`api/recipes_test.go`): each installed, published and run as a tool on the real server, its answer drawn.
 
@@ -116,6 +118,7 @@ Each template has named, typed and described parameters:
 
 | Type | Accepts |
 | --- | --- |
+| `roles` | Who may use a recipe's tool (its workflow's `roles`): role names, as a list or typed with commas (`owner, manager`) |
 | `command` | A recipe's tool's word after `/`: 2 to 24 lower-case letters, digits and dashes, starting with a letter, written so from what a person types (`/Find Customer` is `find-customer`); one per template, and only a recipe has one |
 | `string`, `text` | One line (at most 200 characters unless the template says otherwise) or several (900); an optional pattern or list of values |
 | `integer`, `number` | Numbers, also as typed by people ("1,000", "₦2,500.50"), within the template's minimum and maximum |
