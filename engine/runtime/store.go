@@ -348,8 +348,10 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 		paths := triggerPaths(def)
 		if who, err := uuid.Parse(req.StartedBy); err == nil && fork == nil {
 			// A tool's location input is the member who started it, and
-			// sealed under them (device fields §5).
-			paths = pii.LocationsOwnedBy(paths, &pii.Owner{Category: "member", Value: who.String()})
+			// sealed under them (device fields §5): its own device inputs
+			// only, never another location the trigger carries (a
+			// customer's address stays the customer's).
+			paths = deviceLocationsOwned(def, paths, &pii.Owner{Category: "member", Value: who.String()})
 		}
 		var saved map[string]any
 		var savedPaths []pii.Path

@@ -35,6 +35,30 @@ func triggerPaths(def *wd.Definition) []pii.Path {
 	return out
 }
 
+// deviceLocationsOwned gives the trigger's location device inputs (a
+// tool's top-level location inputs, wd.DeviceInputs) their owner; every
+// other path, another location the inputs declare included, is left as
+// it is.
+func deviceLocationsOwned(def *wd.Definition, paths []pii.Path, by *pii.Owner) []pii.Path {
+	locs := map[string]bool{}
+	for name, kind := range wd.DeviceInputs(def) {
+		if kind == wd.DeviceLocation {
+			locs[name] = true
+		}
+	}
+	if len(locs) == 0 {
+		return paths
+	}
+	out := make([]pii.Path, len(paths))
+	for i, p := range paths {
+		if p.Category == pii.CategoryLocation && len(p.Segments) == 4 && p.Segments[0] == "trigger" && p.Segments[1] == "body" && locs[p.Segments[2]] {
+			p.By = by
+		}
+		out[i] = p
+	}
+	return out
+}
+
 // invoicePaths are an invoice trigger's personal parts (docs/invoices.md):
 // the customer, as the invoice keeps them sealed, and the page link, which
 // opens the invoice to whoever holds it.
