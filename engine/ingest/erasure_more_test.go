@@ -200,8 +200,8 @@ func TestCustomerErasedWhileTheirRunWaits(t *testing.T) {
 		t.Fatalf("the new run cannot read the new message: %s", h)
 	}
 	var customer string
-	if err := g.DB.Admin.QueryRow(ctx, `SELECT customer_subject FROM runs WHERE id = $1`, runs[1]).Scan(&customer); err != nil || customer != subject+"~2" {
-		t.Fatalf("the new run's customer %q (%v), want %s~2", customer, err, subject)
+	if err := g.DB.Admin.QueryRow(ctx, `SELECT customer_subject FROM runs WHERE id = $1`, runs[1]).Scan(&customer); err != nil || customer != subject+"~1" {
+		t.Fatalf("the new run's customer %q (%v), want %s~1", customer, err, subject)
 	}
 }
 

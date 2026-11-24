@@ -1634,7 +1634,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p), Files: w.files(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)

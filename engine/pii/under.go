@@ -79,7 +79,7 @@ func (u *under) SealTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, categor
 	if err != nil {
 		return nil, err
 	}
-	if own == u.base {
+	if BaseSubject(own) == u.base {
 		// The customer themselves: under the key they hold now.
 		return u.sealUnder(ctx, tx, tenant, u.subject, category, value)
 	}
@@ -110,7 +110,7 @@ func (u *under) OpenTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, envelop
 // the generation they are on.
 func (u *under) SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
 	own, err := u.ss.SubjectForTx(ctx, tx, tenant, category, value)
-	if err == nil && own == u.base {
+	if err == nil && BaseSubject(own) == u.base {
 		return u.subject, nil
 	}
 	return own, err
@@ -137,7 +137,7 @@ func Received(c Cipher) Cipher {
 	if c == nil {
 		return nil
 	}
-	return &received{c: c, tolerant: true}
+	return wrapReceived(&received{c: c, tolerant: true})
 }
 
 // Current is Received refusing (ErrErased) the value of a person erased
@@ -147,7 +147,29 @@ func Current(c Cipher) Cipher {
 	if c == nil {
 		return nil
 	}
-	return &received{c: c}
+	return wrapReceived(&received{c: c})
+}
+
+// wrapReceived keeps the cipher underneath's SubjectSealer, so text that
+// names known people, or has an owner, is still sealed under them.
+func wrapReceived(r *received) Cipher {
+	if ss, ok := r.c.(SubjectSealer); ok {
+		return &receivedSubjects{received: r, ss: ss}
+	}
+	return r
+}
+
+type receivedSubjects struct {
+	*received
+	ss SubjectSealer
+}
+
+func (r *receivedSubjects) SubjectForTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, category string, value any) (string, error) {
+	return r.ss.SubjectForTx(ctx, tx, tenant, category, value)
+}
+
+func (r *receivedSubjects) SealUnderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, subject, category string, value any) (map[string]any, error) {
+	return r.ss.SealUnderTx(ctx, tx, tenant, subject, category, value)
 }
 
 type received struct {

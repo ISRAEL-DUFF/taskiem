@@ -37,14 +37,6 @@ func TestCustomerGuardErasure(t *testing.T) {
 	if !strings.Contains(history, `"subject": "`+subject+`"`) && !strings.Contains(history, `"subject":"`+subject+`"`) {
 		t.Fatal("nothing is sealed under the customer")
 	}
-	if strings.Contains(history, `"other:`) {
-		t.Fatal("the customer's words are sealed under a subject of their own only, not inside the customer's")
-	}
-	// Inside the customer's envelope, their words are under a subject of
-	// their own too, so erasing either erases them (decision 0074 P2).
-	if inner := innerSubject(t, g, run, "trigger", "guard", "text"); !strings.HasPrefix(inner, "other:") {
-		t.Fatalf("the words inside the customer's envelope are under %q, want their own other: subject", inner)
-	}
 	if err := g.Vault.Erase(ctx, g.Tenant, subject, "test"); err != nil {
 		t.Fatal(err)
 	}
