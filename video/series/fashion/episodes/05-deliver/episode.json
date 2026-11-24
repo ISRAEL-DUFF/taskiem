@@ -43,5 +43,28 @@
     "title": "Your team",
     "headline": "Your *team*"
   },
-  "narration": {}
+  "narration": {
+    "deliver": {
+      "en": [
+        "Nneka's order needs a rider.",
+        "She taps Assign rider.",
+        "Emeka is free and covers Surulere.",
+        "Later, the Orders tab lists the order.",
+        "Emeka is offered it.",
+        "Emeka accepts.",
+        "He picks it up. On the way.",
+        "Delivered, with the time."
+      ],
+      "pcm": [
+        "Nneka order need rider.",
+        "She tap Assign rider.",
+        "Emeka free and e dey cover Surulere.",
+        "Later, the Orders tab go list the order.",
+        "Dem offer Emeka the delivery.",
+        "Emeka accept.",
+        "E pick am up. E dey road.",
+        "E don deliver, with the time."
+      ]
+    }
+  }
 }

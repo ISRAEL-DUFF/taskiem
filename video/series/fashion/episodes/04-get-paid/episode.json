@@ -6,7 +6,8 @@
   "sub": "Send an invoice, and match the money when it arrives.",
   "mood": "sparse",
   "films": [
-    "get-paid"
+    "send-invoice",
+    "match-payment"
   ],
   "recap": {
     "en": "Nneka's outfit is ordered. Now, how does Zainab get paid?",
@@ -43,5 +44,46 @@
     "title": "Deliver",
     "headline": "*Deliver*"
   },
-  "narration": {}
+  "narration": {
+    "send-invoice": {
+      "en": [
+        "Nneka's outfit is done.",
+        "Zainab opens the tools.",
+        "She taps Invoices, then New invoice.",
+        "Who it is for, and a phone number.",
+        "Then what it is for, and how much: eighty-five thousand naira.",
+        "Send it: Nneka gets a pay link by text.",
+        "The invoice shows as Sent."
+      ],
+      "pcm": [
+        "Nneka outfit don ready.",
+        "Zainab open the tools.",
+        "She tap Invoices, then New invoice.",
+        "Who e be for, and phone number.",
+        "Then wetin e be for, and how much: eighty-five thousand naira.",
+        "Send am: Nneka go get pay link for text.",
+        "The invoice show as Sent."
+      ]
+    },
+    "match-payment": {
+      "en": [
+        "Nneka pays by transfer.",
+        "Zainab opens the tools, then Money.",
+        "She taps To match.",
+        "Nneka's payment: eighty-five thousand naira.",
+        "She taps Match to an invoice, and picks the one it pays.",
+        "Match it, and the payment counts towards the invoice.",
+        "Back in Invoices, it shows as Paid."
+      ],
+      "pcm": [
+        "Nneka pay by transfer.",
+        "Zainab open the tools, then Money.",
+        "She tap To match.",
+        "Nneka payment: eighty-five thousand naira.",
+        "She tap Match to an invoice, and pick the one wey e pay.",
+        "Match am, and the payment go count for the invoice.",
+        "Back for Invoices, e show as Paid."
+      ]
+    }
+  }
 }

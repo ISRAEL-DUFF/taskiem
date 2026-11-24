@@ -6,7 +6,8 @@
   "sub": "Link with a supplier and order from their price list.",
   "mood": "sparse",
   "films": [
-    "your-suppliers"
+    "find-a-supplier",
+    "reorder"
   ],
   "recap": {
     "en": "To sew fifty uniforms, Zainab needs more cloth.",

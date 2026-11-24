@@ -43,5 +43,28 @@
     "title": "Keep it safe",
     "headline": "Keep it *safe*"
   },
-  "narration": {}
+  "narration": {
+    "know-your-numbers": {
+      "en": [
+        "Every morning, Zainab opens Today.",
+        "Money in, against a usual Thursday.",
+        "Sales by the hour show when it came in.",
+        "Orders today, and what is waiting.",
+        "Under Needs you: one to approve, one to match.",
+        "How did the week go?",
+        "She taps How we did this week.",
+        "Up seventeen percent on last week."
+      ],
+      "pcm": [
+        "Every morning, Zainab dey open Today.",
+        "Money wey don enter, against usual Thursday.",
+        "Sales by the hour show when e enter.",
+        "Orders today, and wetin dey wait.",
+        "Under Needs you: one to approve, one to match.",
+        "How the week go?",
+        "She tap How we did this week.",
+        "Up seventeen percent on last week."
+      ]
+    }
+  }
 }

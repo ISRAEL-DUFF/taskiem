@@ -6,7 +6,8 @@
   "sub": "A price list, an offer, and a deal within your limits.",
   "mood": "sparse",
   "films": [
-    "sell-to-businesses"
+    "price-list",
+    "a-deal"
   ],
   "recap": {
     "en": "Ada's Kitchen wants a price for fifty uniforms.",
@@ -43,5 +44,44 @@
     "title": "Know your numbers",
     "headline": "Know your *numbers*"
   },
-  "narration": {}
+  "narration": {
+    "price-list": {
+      "en": [
+        "Zainab shares a price list with Ada's Kitchen.",
+        "She adds a lower price for more.",
+        "From fifty uniforms, sixteen thousand naira each.",
+        "Then Save.",
+        "On the product, she sets a lowest price: fifteen thousand naira.",
+        "Save. Staff like Dami can agree down to it, never under."
+      ],
+      "pcm": [
+        "Zainab share price list with Ada's Kitchen.",
+        "She add lower price for more.",
+        "From fifty uniform, sixteen thousand naira each.",
+        "Then Save.",
+        "For the product, she set lowest price: fifteen thousand naira.",
+        "Save. Staff like Dami fit agree down to am, never under."
+      ]
+    },
+    "a-deal": {
+      "en": [
+        "Ada's Kitchen makes an offer for sixty uniforms.",
+        "Dami counters at nine hundred and twelve thousand naira.",
+        "He sends it.",
+        "Ada counters lower, under the lowest price.",
+        "Dami cannot accept it. It waits for Zainab's OK.",
+        "Zainab sees it under Needs you.",
+        "She agrees, and the deal is done."
+      ],
+      "pcm": [
+        "Ada's Kitchen make offer for sixty uniform.",
+        "Dami counter for nine hundred and twelve thousand naira.",
+        "He send am.",
+        "Ada counter lower, under the lowest price.",
+        "Dami no fit accept am. E dey wait for Zainab OK.",
+        "Zainab see am under Needs you.",
+        "She agree, and the deal don do."
+      ]
+    }
+  }
 }
