@@ -321,9 +321,14 @@ func (s *Server) connectPayroll(w http.ResponseWriter, r *http.Request) {
 // reconnectOAuthTx moves the connection a reconnect request names onto the
 // tokens just granted: its credentials replaced (the key goes), made an
 // OAuth connection, active again.
+//
+// The key itself stays live in Payrolla: the Connect API has no way for a
+// key to end itself (POST /oauth/revoke takes only OAuth tokens), so a
+// Payrolla connection that held a key tells the owners to delete it in
+// Payrolla, Settings → Connected apps.
 func (s *Server) reconnectOAuthTx(ctx context.Context, tx pgx.Tx, req *secrets.OAuthRequest, c *connector.Connector, creds map[string]string, expiresAt *time.Time) error {
-	var connID, env, name string
-	err := tx.QueryRow(ctx, `SELECT connector, environment, name FROM connections WHERE id = $1 FOR UPDATE`, *req.Replaces).Scan(&connID, &env, &name)
+	var connID, env, name, was string
+	err := tx.QueryRow(ctx, `SELECT connector, environment, name, auth_type FROM connections WHERE id = $1 FOR UPDATE`, *req.Replaces).Scan(&connID, &env, &name, &was)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && (connID != c.Manifest.ID || env != req.Environment || name != req.Name) {
 		return fmt.Errorf("%w: the connection you were reconnecting is gone; connect again", errConflict)
 	}
@@ -333,7 +338,15 @@ func (s *Server) reconnectOAuthTx(ctx context.Context, tx pgx.Tx, req *secrets.O
 	if err := s.Vault.ReplaceCredentialsTx(ctx, tx, req.Tenant, *req.Replaces, creds, req.Person); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `UPDATE connections SET auth_type = 'oauth2', expires_at = $2 WHERE id = $1`, *req.Replaces, expiresAt)
+	if _, err := tx.Exec(ctx, `UPDATE connections SET auth_type = 'oauth2', expires_at = $2 WHERE id = $1`, *req.Replaces, expiresAt); err != nil {
+		return err
+	}
+	if c.Manifest.ID != payrollaID || was != "api_key" {
+		return nil
+	}
+	_, err = alerts.TellOwners(ctx, tx, req.Tenant, alerts.Alert{Kind: "payrolla_old_key", Dedup: req.ID.String(), Title: "Delete Taskiem's old Payrolla key",
+		Body: "Payrolla is connected in one step now, so Taskiem no longer uses its old key. That key still works in Payrolla until you delete it: in Payrolla, Settings → Connected apps.",
+		Link: "/payroll/settings"})
 	return err
 }
 

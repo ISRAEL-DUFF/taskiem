@@ -276,6 +276,10 @@ func TestPayrollaConnectInOneStep(t *testing.T) {
 		t.Fatalf("webhooks after reconnecting %v", hooks)
 	}
 	owner.must(200, "GET", "/v1/payroll", nil)
+	// No key was left behind: nothing to delete in Payrolla.
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM alerts WHERE kind = 'payrolla_old_key'`).Scan(&told); err != nil || told != 0 {
+		t.Fatalf("told of an old key %d times: %v", told, err)
+	}
 
 	// A refresh token Payrolla refuses ends the connection.
 	f.EndTokenChains()
@@ -339,6 +343,12 @@ func TestPayrollaKeyConnectionAndReconnect(t *testing.T) {
 	}
 	if hooks := f.Webhooks(f.OAuthConn()); len(hooks) != 1 {
 		t.Fatalf("webhooks on the new tokens: %v", hooks)
+	}
+	// Payrolla has no way for a key to end itself: the owner is told to
+	// delete it there, once.
+	if n, body := told(t, w, personID(t, owner), "Delete Taskiem's old Payrolla key"), noticeBody(t, w, personID(t, owner), "Delete Taskiem's old Payrolla key"); n != 1 ||
+		!strings.Contains(body, "in Payrolla, Settings → Connected apps") {
+		t.Fatalf("told of the old key %d times: %q", n, body)
 	}
 	owner.must(200, "GET", "/v1/payroll/approvers", nil)
 	// Connected in one step, Taskiem gives linked staff its own payslip
