@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { approveAction, board, buttons, chart, figure, heading, list, moveAction, page, signalAction, status, table, toolAction, type PageBlock } from "./page.js";
+import { approveAction, board, buttons, chart, figure, heading, list, moveAction, page, signalAction, status, table, toolAction, type PageBlock, type PageSource } from "./page.js";
 
 // The page builder (docs/spec/pages.md §12): a page/v1 document written in
 // code, its expressions compiled to CEL, its part kinds those the schema
@@ -10,12 +10,16 @@ interface Schema {
 }
 const schema = JSON.parse(readFileSync(new URL("../../schemas/page-v1.schema.json", import.meta.url), "utf8")) as Schema;
 
+// Every field a part's source may have, as the SDK's PageSource types it:
+// the schema and the type change together (G5 added saved, coming, within).
+const sourceFields = { filters: true, inputs: true, order: true, output: true, records: true, table: true, tool: true, uses: true, saved: true, coming: true, within: true } satisfies Record<keyof PageSource, true>;
+
 const kinds = { heading: true, figure: true, list: true, table: true, buttons: true, status: true, board: true, chart: true } satisfies Record<PageBlock["type"], true>;
 
 describe("page builder", () => {
   it("has the schema's part kinds and source fields", () => {
     expect(Object.keys(kinds).sort()).toEqual([...schema.$defs.block.properties.type.enum].sort());
-    expect(Object.keys(schema.$defs.source.properties).sort()).toEqual(["filters", "inputs", "order", "output", "records", "table", "tool", "uses"]);
+    expect(Object.keys(schema.$defs.source.properties).sort()).toEqual(Object.keys(sourceFields).sort());
   });
 
   it("writes a page, its expressions as CEL", () => {
