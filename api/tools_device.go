@@ -48,7 +48,7 @@ func (s *Server) toolDefinition(ctx context.Context, tenant uuid.UUID, t toolRow
 // readToolDevices reads a start's device inputs for run: the files it
 // names taken (given back by release when the start fails), each input
 // as the run keeps it. A start with no device inputs is returned as it is.
-func (s *Server) readToolDevices(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel string) (map[string]any, map[string]forms.HeldFile, error) {
+func (s *Server) readToolDevices(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel string, start forms.ToolStartKey) (map[string]any, map[string]forms.HeldFile, error) {
 	d, err := s.toolDefinition(ctx, p.TenantID, t)
 	if err != nil {
 		return nil, nil, err
@@ -67,13 +67,13 @@ func (s *Server) readToolDevices(ctx context.Context, p *Principal, t toolRow, i
 		if s.Forms == nil {
 			return nil, nil, toolInputError{"files cannot be taken here"}
 		}
-		if files, err = s.Forms.TakeToolFiles(ctx, p.TenantID, p.UserID, t.Command, ids); errors.Is(err, forms.ErrHeldFile) {
+		if files, err = s.Forms.TakeToolFiles(ctx, p.TenantID, p.UserID, t.Command, ids, start); errors.Is(err, forms.ErrHeldFile) {
 			return nil, nil, toolInputError{err.Error()}
 		} else if err != nil {
 			return nil, nil, err
 		}
 	}
-	if why := forms.ReadToolInputs(schema, out, channel, files, time.Now()); why != "" {
+	if why := forms.ReadToolInputs(schema, out, deviceChannel(p, channel), files, time.Now()); why != "" {
 		if s.Forms != nil {
 			if err := s.Forms.ReleaseToolFiles(ctx, p.TenantID, files); err != nil {
 				return nil, nil, err
@@ -82,6 +82,55 @@ func (s *Server) readToolDevices(ctx context.Context, p *Principal, t toolRow, i
 		return nil, nil, toolInputError{why}
 	}
 	return out, files, nil
+}
+
+// devicePerson reports whether p is a person signed in to the app or the
+// web, whose device may answer (device fields §17's trust model): never
+// an API key, a run, an agent or a customer's session.
+func devicePerson(p *Principal) bool {
+	return p != nil && p.UserID != uuid.Nil && p.KeyID == uuid.Nil && p.Run == uuid.Nil && p.Agent == nil && p.EndUser == nil
+}
+
+// phoneApp reports whether p is a person in the phone app: its own
+// session token, not the web's cookie. Only its photo is the camera's.
+func phoneApp(p *Principal) bool { return devicePerson(p) && !p.viaCookie }
+
+// deviceChannel is the channel a start's device inputs are read as: a
+// chat's, the app's or the web's for a person, else the API's (a claim).
+func deviceChannel(p *Principal, channel string) string {
+	switch {
+	case channel == forms.AppWhatsApp || channel == forms.AppTelegram:
+		return channel
+	case devicePerson(p):
+		return "app"
+	}
+	return forms.ChannelAPI
+}
+
+// toolNamesFiles reports whether a start names a held file ({file}).
+func toolNamesFiles(input map[string]any) bool {
+	for _, v := range input {
+		if m, ok := v.(map[string]any); ok && m["file"] != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// startedBefore is the run a start with this trigger and dedup key made
+// already, if one did.
+func (s *Server) startedBefore(ctx context.Context, tenant uuid.UUID, trigger, dedup string) (uuid.UUID, bool, error) {
+	if dedup == "" {
+		return uuid.Nil, false, nil
+	}
+	var run uuid.UUID
+	err := db0(ctx, s, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT run_id FROM trigger_receipts WHERE tenant_id = $1 AND trigger_id = $2 AND dedup_key = $3`, tenant, trigger, dedup).Scan(&run)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	return run, err == nil, err
 }
 
 // deviceInputWords is a device input in words, for what a tool will run
@@ -140,6 +189,16 @@ func (s *Server) holdToolFileRoute(w http.ResponseWriter, r *http.Request) {
 		s.toolRefused(w, r, err, chi.URLParam(r, "command"))
 		return
 	}
+	// A person sends a file a tap at a time: a few a minute.
+	if !s.limiter("tool-files:"+p.UserID.String(), 6*time.Second, forms.MaxHeldToolFiles+2).Allow() {
+		w.Header().Set("Retry-After", "60")
+		writeErr(w, http.StatusTooManyRequests, "too many files at once: wait a minute and send it again")
+		return
+	}
+	// Files a start took whose run was not set on them at once: given to it.
+	if err := s.Forms.AttachTakenToolFiles(r.Context(), p.TenantID); err != nil {
+		s.Logger.Warn("tools: giving runs their files", "tenant", p.TenantID, "err", err)
+	}
 	d, err := s.toolDefinition(r.Context(), p.TenantID, t)
 	if err != nil {
 		s.fail(w, r, err)
@@ -176,8 +235,12 @@ func (s *Server) holdToolFileRoute(w http.ResponseWriter, r *http.Request) {
 		}
 		prop, _ := props[field].(map[string]any)
 		u := forms.Upload{Meta: forms.FileMeta{Field: field, Name: hs[0].Filename, Type: http.DetectContentType(data), Size: int64(len(data))}, Data: data}
-		ref, why, err := s.Forms.HoldToolFile(r.Context(), p.TenantID, p.UserID, t.Command, field, prop, u, "app", strings.TrimSpace(r.FormValue("app")) == "app")
+		ref, why, err := s.Forms.HoldToolFile(r.Context(), p.TenantID, p.UserID, t.Command, field, prop, u, deviceChannel(p, ""), strings.TrimSpace(r.FormValue("app")) == "app" && phoneApp(p))
 		clear(data)
+		if errors.Is(err, forms.ErrTooManyHeld) {
+			writeErr(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
 		if err != nil {
 			s.fail(w, r, err)
 			return

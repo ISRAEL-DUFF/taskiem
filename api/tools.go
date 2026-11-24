@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/forms"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/wd"
@@ -379,27 +380,48 @@ func (s *Server) confirmTool(ctx context.Context, p *Principal, t toolRow, confi
 // runTool starts tool t's run as p, recorded with the tool's command and
 // the channel, under the plan's run limits as any run.
 func (s *Server) runTool(ctx context.Context, p *Principal, t toolRow, input map[string]any, channel, dedup string) (uuid.UUID, bool, error) {
+	trigger := "tool/" + t.Workflow.String()
+	if dedup != "" {
+		// The same start sent again (its Idempotency-Key, a chat's nonce):
+		// its run, before its files are asked for a second time.
+		if run, ok, err := s.startedBefore(ctx, p.TenantID, trigger, dedup); err != nil || ok {
+			return run, false, err
+		}
+	} else if toolNamesFiles(input) {
+		// A start naming files has a key of its own, so its files are
+		// known as this start's until the run is set on them.
+		dedup = "files:" + uuid.NewString()
+	}
 	// A location, a photo and a signature read as a form step's answers
-	// are (tools_device.go); the files named taken for this run.
-	input, files, err := s.readToolDevices(ctx, p, t, input, channel)
+	// are (tools_device.go); the files named taken for this start.
+	start := forms.ToolStartKey{Trigger: trigger, Dedup: dedup}
+	input, files, err := s.readToolDevices(ctx, p, t, input, channel, start)
 	if err != nil {
+		if run, ok, err2 := s.startedBefore(ctx, p.TenantID, trigger, dedup); err2 == nil && ok && dedup != "" {
+			return run, false, nil // started by the same start meanwhile
+		}
 		return uuid.Nil, false, err
 	}
 	ref, created, err := s.Store.StartRun(ctx, runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: t.Workflow, Version: t.Version, Environment: t.Environment,
 		Trigger:   map[string]any{"type": "manual", "body": input, "tool": t.Command, "channel": channel},
-		StartedBy: p.Actor(), TriggerID: "tool/" + t.Workflow.String(), DedupKey: dedup, DevicesRead: true,
+		StartedBy: p.Actor(), TriggerID: trigger, DedupKey: dedup, DevicesRead: true,
 	})
-	if len(files) > 0 {
-		if err != nil || !created {
-			// Not started, or started before with its own: given back.
-			err = errors.Join(err, s.Forms.ReleaseToolFiles(ctx, p.TenantID, files))
-		} else {
-			err = s.Forms.AttachToolFiles(ctx, p.TenantID, files, ref.ID)
-		}
-	}
 	if err != nil {
+		if len(files) > 0 {
+			// Not started: given back.
+			err = errors.Join(err, s.Forms.ReleaseToolFiles(context.WithoutCancel(ctx), p.TenantID, files))
+		}
 		return uuid.Nil, false, err
+	}
+	if len(files) > 0 {
+		// The run has its files. Should this fail, the run is still
+		// started: AttachTakenToolFiles gives them to it later, and they
+		// are kept meanwhile.
+		actx := context.WithoutCancel(ctx)
+		if aerr := s.Forms.AttachToolFiles(actx, p.TenantID, files, ref.ID); aerr != nil {
+			s.Logger.Error("tools: giving a run its files", "tenant", p.TenantID, "run", ref.ID, "err", aerr)
+		}
 	}
 	err = db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
 		// A start from a chat is told its answer there by the run watch;

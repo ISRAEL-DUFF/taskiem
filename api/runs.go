@@ -145,7 +145,7 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	// tool's start, so here it is unavailable.
 	if d, err := s.definitionFor(wf, version, def); err == nil && len(wd.DeviceInputs(d)) > 0 {
 		if body, ok := input.(map[string]any); ok {
-			if why := forms.ReadToolInputs(toolInputsSchema(d), body, "app", nil, time.Now()); why != "" {
+			if why := forms.ReadToolInputs(toolInputsSchema(d), body, deviceChannel(p, ""), nil, time.Now()); why != "" {
 				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": "input does not match the workflow's inputs schema", "problems": []string{why}})
 				return
 			}

@@ -187,8 +187,8 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 	if channel != forms.AppWhatsApp && channel != forms.AppTelegram {
 		return false, nil
 	}
-	// A code asked for here: only the person's next message is it
-	// (g-scan-wa); whatever that message is, the asking ends with it.
+	// A code asked for here (g-scan-wa): a message in the next ten minutes
+	// that can be a code is it (codeWords); the asking ends when it comes.
 	if q, field, err := s.Forms.ChatCodeWaiting(ctx, forms.ChatAsker{Tenant: c.tenant.ID, User: c.p.UserID, Roles: c.p.Roles}, channel); err != nil {
 		return false, err
 	} else if q != nil && codeWords(c) {
@@ -197,6 +197,10 @@ func (s *Server) formChatAnswer(ctx context.Context, c *chat) (bool, error) {
 			return true, c.say(ctx, s, q.Title+" has been answered already.")
 		}
 		if err != nil {
+			return true, err
+		}
+		// The code came: nothing more is taken as it.
+		if err := s.Forms.ChatDisarm(ctx, q.Tenant, q.Request, c.p.UserID); err != nil {
 			return true, err
 		}
 		return true, s.formChatAdded(ctx, c, *q, added)

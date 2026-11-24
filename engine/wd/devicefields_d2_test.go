@@ -97,4 +97,11 @@ func TestScanInputValues(t *testing.T) {
 	if it := body["item"].(map[string]any); it["source"] != "typed" {
 		t.Fatalf("a source in the body: %v", it)
 	}
+	// Started by no person (an API key, a run): a format is kept, but the
+	// code is typed, never the camera's (H3 review's trust model).
+	body = map[string]any{"item": map[string]any{"text": "6151100093217", "format": "ean_13"}}
+	d.ReadScanInputBy(body, false)
+	if it := body["item"].(map[string]any); it["source"] != "typed" || it["format"] != "ean_13" {
+		t.Fatalf("an API key's scan: %v", it)
+	}
 }

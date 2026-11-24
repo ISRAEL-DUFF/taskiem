@@ -9,9 +9,9 @@ import (
 )
 
 // A stock code typed on WhatsApp (build-plan-gaps H3, g-scan-wa): a form
-// step's scan is asked there as words to type, and only the person's next
-// message in that chat is taken as the code: never a command word, and a
-// message after another one is not it. With a location, the code is asked
+// step's scan is asked there as words to type, and a message in that chat
+// within ten minutes that can be a code is taken as it: never a command
+// word, never a menu's number, never once the ten minutes are up. With a location, the code is asked
 // once the location is in.
 const countInChat = `{"schema":"wd/v1","id":"wf_countchat","version":1,"name":"Count","trigger":{"type":"manual"},
  "inputs":{"schema":{"type":"object","properties":{"keeper":{"type":"string"}}}},
@@ -49,16 +49,12 @@ func TestStockCodeTypedOnWhatsApp(t *testing.T) {
 	if got := w.graph.Last(t, number).Text; !strings.Contains(got, "To fill in: Count the shelf") || !strings.Contains(got, "Type the code as your next message here (the code on the item's pack)") {
 		t.Fatalf("the ask: %q", got)
 	}
-	// A command word is not the code, and it was the next message: the
-	// digits after it are not taken either.
+	// A command word is not the code; the asking stays, so the digits
+	// after it, still within its ten minutes, are (H3 review).
 	w.waSend(t, number, whatsapptest.Text("status"))
-	w.waSend(t, number, whatsapptest.Text("6151100093217"))
 	if !pending(run) {
-		t.Fatal("a message after the next one was taken as the code")
+		t.Fatal("a command word was taken as the code")
 	}
-
-	// Asked again: the next message, digits as a barcode is, is the code.
-	run = ask(wf)
 	if got := lastText(w.waSend(t, number, whatsapptest.Text("6151100093217"))); !strings.Contains(got, "Sent to Acme: Count the shelf") {
 		t.Fatalf("the code: %q", got)
 	}
@@ -84,6 +80,17 @@ func TestStockCodeTypedOnWhatsApp(t *testing.T) {
 	w.env.Drain(t)
 	if out := doneOutput(t, owner, run); out["text"] != "036000291452" || out["source"] != "typed" {
 		t.Fatalf("with a place: %v", out)
+	}
+
+	// Past its ten minutes, a message is not the code: the person moved
+	// on, or is talking to another business on the same number.
+	late := ask(wf)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE form_chat_answers SET asked_at = now() - interval '11 minutes' WHERE asking IS NOT NULL`); err != nil {
+		t.Fatal(err)
+	}
+	w.waSend(t, number, whatsapptest.Text("6151100093217"))
+	if !pending(late) {
+		t.Fatal("a code typed after the asking ended was taken")
 	}
 
 	// A menu waiting for a number keeps its number: digits are not the code.

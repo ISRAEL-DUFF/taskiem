@@ -573,14 +573,15 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if done, err := s.toolDeviceAnswer(ctx, c); done || err != nil {
 		return err
 	}
-	// A location or a photo answering a form step, or "send" for one
-	// waiting on its require_source (forms_chat.go).
-	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
+	// A run's question of one choice answered by its button or its words
+	// (forms_starter.go): before a code asked for, so a choice's word is
+	// never taken as a code.
+	if done, err := s.formChoiceAnswer(ctx, c, in.Text); done || err != nil {
 		return err
 	}
-	// A run's question of one choice answered by its button or its words
-	// (forms_starter.go).
-	if done, err := s.formChoiceAnswer(ctx, c, in.Text); done || err != nil {
+	// A location or a photo answering a form step, a code asked for, or
+	// "send" for one waiting on its require_source (forms_chat.go).
+	if done, err := s.formChatAnswer(ctx, c); done || err != nil {
 		return err
 	}
 	// A completed WhatsApp form carries its flow token.

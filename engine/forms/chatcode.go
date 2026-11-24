@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,10 +16,13 @@ import (
 // A code typed in WhatsApp or Telegram (build-plan-gaps H3, g-scan-wa): a
 // form step's scan is asked there as words to type, once the question's
 // location and photo are in, and only the person's next message in that
-// chat is taken as the code (ChatCodeWaiting): never a command word, and
-// never a bare number while a menu waits for one (the api decides that).
-// asking names the field on the person's draft and asking_in the chats it
-// was asked in; any next message in one of them clears it there.
+// chat in the next CodeAskFor that can be a code is taken as it
+// (ChatCodeWaiting): never a command word, never a bare number while a
+// menu waits for one, never a reply to a question waiting on a choice
+// (the api decides that). asking names the field on the person's draft,
+// asking_in the chats it was asked in and asked_at when; it ends when the
+// code comes (ChatDisarm) or the time is up, and is asked again whenever
+// the question is.
 
 // CodeField is the scan field a chat asks next, as a code to type: the
 // question's typed-allowed scan, once every location and photo it asks is
@@ -38,12 +42,25 @@ func CodeField(schema map[string]any, have map[string]bool) string {
 	return code
 }
 
-// ChatArm marks field as asked of user in channel: their next message
-// there is its code.
+// CodeAskFor is how long a code asked for in a chat waits for it: the
+// person's messages there in that time that are words a code can be
+// (api's codeWords) are taken as it; past it, none is.
+const CodeAskFor = 10 * time.Minute
+
+// ChatDisarm ends what was asked of user for request: the code came.
+func (s *Service) ChatDisarm(ctx context.Context, tenant, request, user uuid.UUID) error {
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE form_chat_answers SET asking = NULL, asking_in = '{}' WHERE request_id = $1 AND user_id = $2`, request, user)
+		return err
+	})
+}
+
+// ChatArm marks field as asked of user in channel: their messages there
+// in the next CodeAskFor that can be a code are its code.
 func (s *Service) ChatArm(ctx context.Context, tenant, request, user uuid.UUID, field, channel string) error {
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO form_chat_answers (request_id, tenant_id, user_id, asking, asking_in) VALUES ($1, $2, $3, $4, ARRAY[$5])
-			ON CONFLICT (request_id, user_id) DO UPDATE SET asking = $4,
+		_, err := tx.Exec(ctx, `INSERT INTO form_chat_answers (request_id, tenant_id, user_id, asking, asking_in, asked_at) VALUES ($1, $2, $3, $4, ARRAY[$5], now())
+			ON CONFLICT (request_id, user_id) DO UPDATE SET asking = $4, asked_at = now(),
 			  asking_in = CASE WHEN $5 = ANY (form_chat_answers.asking_in) THEN form_chat_answers.asking_in ELSE form_chat_answers.asking_in || $5 END,
 			  updated_at = now()`, request, tenant, user, field, channel)
 		return err
@@ -61,10 +78,16 @@ func (s *Service) ChatCodeWaiting(ctx context.Context, who ChatAsker, channel st
 	}
 	var got []armed
 	take := func(tx pgx.Tx, tenant uuid.UUID, through bool, from string) error {
-		rows, err := tx.Query(ctx, `WITH old AS (SELECT request_id, asking FROM form_chat_answers WHERE user_id = $1 AND $2 = ANY (asking_in) FOR UPDATE)
-			UPDATE form_chat_answers c SET asking_in = array_remove(c.asking_in, $2), asking = CASE WHEN cardinality(array_remove(c.asking_in, $2)) = 0 THEN NULL ELSE c.asking END
-			FROM old, form_requests r JOIN tenants t ON t.id = r.tenant_id WHERE c.request_id = old.request_id AND c.user_id = $1 AND r.id = c.request_id
-			RETURNING r.id, r.title, r.schema, r.created_at, r.status, old.asking, t.name`, who.User, channel)
+		// An asking lasts CodeAskFor from when it was made: past that, a
+		// message is never taken as the code (the person has moved on, or
+		// is talking to another business on the same number).
+		if _, err := tx.Exec(ctx, `UPDATE form_chat_answers SET asking = NULL, asking_in = '{}' WHERE user_id = $1 AND asking IS NOT NULL AND asked_at <= now() - $2::interval`,
+			who.User, CodeAskFor.String()); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT r.id, r.title, r.schema, r.created_at, r.status, c.asking, t.name
+			FROM form_chat_answers c JOIN form_requests r ON r.id = c.request_id JOIN tenants t ON t.id = r.tenant_id
+			WHERE c.user_id = $1 AND $2 = ANY (c.asking_in) AND c.asking IS NOT NULL`, who.User, channel)
 		if err != nil {
 			return err
 		}

@@ -142,3 +142,33 @@ func TestToolTakesLocationPhotoAndSignature(t *testing.T) {
 		t.Fatalf("the pin in the history: %s", raw)
 	}
 }
+
+// H3 review: a start sent again with its Idempotency-Key is answered
+// with the run it made, its files never asked for a second time; and a
+// person holds no more than forms.MaxHeldToolFiles files for a tool that
+// no start has used.
+func TestToolFilesRetriedAndHeldFew(t *testing.T) {
+	w := deviceWorld(t)
+	w.forms.Files = sniffedFiles{}
+	owner := w.tenant(t, "Acme", "owner@visit-retry.test")
+	tunde := addMember(t, w.world, owner, "tunde", "operator")
+	publishFlow(t, owner, siteVisitTool)
+
+	_, photo := toolFile(t, tunde, "proof", "photo.jpg", doorJPEG, true)
+	start := map[string]any{"input": map[string]any{
+		"where": map[string]any{"lat": 6.5243, "lng": 3.3792}, "proof": map[string]any{"file": photo["file"].(map[string]any)["id"]}}}
+	first := tunde.must(201, "POST", "/v1/tools/visit/start", start, "Idempotency-Key", "visit-retry-1")["run_id"]
+	code, again := tunde.do("POST", "/v1/tools/visit/start", start, "Idempotency-Key", "visit-retry-1")
+	if code >= 300 || again["run_id"] != first {
+		t.Fatalf("the same start again: %d %v (first %v)", code, again, first)
+	}
+
+	for i := 0; i < 10; i++ {
+		if code, res := toolFile(t, tunde, "proof", "p.jpg", doorJPEG, true); code != 201 {
+			t.Fatalf("file %d: %d %v", i+1, code, res)
+		}
+	}
+	if code, res := toolFile(t, tunde, "proof", "p.jpg", doorJPEG, true); code != 429 {
+		t.Fatalf("an eleventh file held: %d %v", code, res)
+	}
+}

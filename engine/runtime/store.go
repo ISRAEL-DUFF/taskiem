@@ -247,7 +247,10 @@ func (s *Store) startIn(ctx context.Context, tx pgx.Tx, req StartRequest, ref *R
 			}
 		}
 		if fork == nil {
-			req.Trigger = withScanRead(def, req.Trigger, req.DevicesRead)
+			// A member's start is their user id; anything else (an API key,
+			// a run, a schedule) is no person's device.
+			_, perr := uuid.Parse(req.StartedBy)
+			req.Trigger = withScanRead(def, req.Trigger, req.DevicesRead, perr == nil)
 		}
 		// Capability steps run as the rails the environment's connections
 		// are, pinned now so the run never changes rail; a fork keeps the
@@ -1561,7 +1564,7 @@ func dbTx(ctx context.Context, s *Store, tenant uuid.UUID, fn func(pgx.Tx) error
 // keeps it (device fields §7, D2): {state, source, text, format}, its
 // source set here from whether the phone gave a format, never from the
 // body. The caller's maps are left as they were.
-func withScanRead(def *wd.Definition, raw any, devicesRead bool) any {
+func withScanRead(def *wd.Definition, raw any, devicesRead, person bool) any {
 	trigger, ok := raw.(map[string]any)
 	if !ok {
 		return raw
@@ -1577,7 +1580,7 @@ func withScanRead(def *wd.Definition, raw any, devicesRead bool) any {
 	for k, v := range body {
 		b[k] = v
 	}
-	changed := def.ReadScanInput(b)
+	changed := def.ReadScanInputBy(b, person)
 	if !devicesRead {
 		for name, kind := range wd.DeviceInputs(def) {
 			if _, ok := b[name]; ok && kind != wd.DeviceScan {

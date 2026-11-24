@@ -63,7 +63,9 @@ func TestOneTimePageAnswersTheDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := stepPayload(t, opened, "done")["output"].(map[string]any)
-	if out["where"] != "device" || out["signed"] != "drawn" || out["item"] != "camera" || out["app"] != "link" {
+	// The page's code is typed whatever the page says of its camera: a
+	// browser's word is not a scan (device fields §17, H3 review).
+	if out["where"] != "device" || out["signed"] != "drawn" || out["item"] != "typed" || out["app"] != "link" {
 		t.Fatalf("the one-time page's answer: %v", out)
 	}
 	var raw []byte

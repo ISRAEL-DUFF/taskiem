@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
@@ -75,6 +76,9 @@ func (s *Server) toolDeviceAnswer(ctx context.Context, c *chat) (bool, error) {
 		u := forms.Upload{Meta: forms.FileMeta{Field: f.Name, Name: "photo", Type: http.DetectContentType(raw), Size: int64(len(raw))}, Data: raw}
 		ref, why, err := s.Forms.HoldToolFile(ctx, c.tenant.ID, c.p.UserID, data.Tool, f.Name, prop, u, channel, false)
 		clear(raw)
+		if errors.Is(err, forms.ErrTooManyHeld) {
+			return true, c.say(ctx, s, c.t("wa.run.does_not_fit", "reason", whatsapp.SafeText(err.Error()), "prompt", f.PromptIn(c.lang.Tag)))
+		}
 		if err != nil {
 			return true, err
 		}

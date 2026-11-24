@@ -35,6 +35,14 @@ type HeldFile struct {
 	Source string
 }
 
+// MaxHeldToolFiles is how many files a person may hold for one tool that
+// no start has taken yet.
+const MaxHeldToolFiles = 10
+
+// ErrTooManyHeld is a file sent for a tool while the person holds
+// MaxHeldToolFiles for it that no start has used.
+var ErrTooManyHeld = fmt.Errorf("you have sent %d files for this tool that no start has used yet: use them, or send more in a day", MaxHeldToolFiles)
+
 // ErrHeldFile is a start naming a file that is not the person's for this
 // tool's input, was taken by another start, or waited too long.
 var ErrHeldFile = errors.New("that file was not sent for this input, or was used already: take it again")
@@ -49,6 +57,17 @@ func (s *Service) HoldToolFile(ctx context.Context, tenant, user uuid.UUID, comm
 	kind := wd.DeviceKind(prop)
 	if kind != wd.DevicePhoto && kind != wd.DeviceSignature {
 		return FileRef{}, fmt.Sprintf("%q takes no file", field), nil
+	}
+	// A person holds a few files for a tool at once, not a store of them.
+	var held int
+	if err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM tool_input_files WHERE user_id = $1 AND command = $2 AND taken_at IS NULL AND created_at > now() - $3::interval`,
+			user, command, ToolFileHold.String()).Scan(&held)
+	}); err != nil {
+		return FileRef{}, "", err
+	}
+	if held >= MaxHeldToolFiles {
+		return FileRef{}, "", ErrTooManyHeld
 	}
 	ref := NewReference()
 	u.Meta.Field = field
@@ -102,7 +121,14 @@ func (s *Service) HoldToolFile(ctx context.Context, tenant, user uuid.UUID, comm
 // user's run of command: each sent by them for that input, not taken by
 // another start, and less than a day old. Taken once: release them
 // (ReleaseToolFiles) when the start fails.
-func (s *Service) TakeToolFiles(ctx context.Context, tenant, user uuid.UUID, command string, want map[string]string) (map[string]HeldFile, error) {
+// ToolStartKey names a start: its trigger and dedup key, as the run's
+// trigger receipt has them. The same start sent again takes its files
+// again (and is answered with its run).
+type ToolStartKey struct {
+	Trigger, Dedup string
+}
+
+func (s *Service) TakeToolFiles(ctx context.Context, tenant, user uuid.UUID, command string, want map[string]string, start ToolStartKey) (map[string]HeldFile, error) {
 	out := map[string]HeldFile{}
 	if len(want) == 0 {
 		return out, nil
@@ -115,10 +141,12 @@ func (s *Service) TakeToolFiles(ctx context.Context, tenant, user uuid.UUID, com
 			}
 			var h HeldFile
 			var sum []byte
-			err = tx.QueryRow(ctx, `UPDATE tool_input_files t SET taken_at = now() FROM form_files f
+			// Untaken, or taken by this same start (sent again).
+			err = tx.QueryRow(ctx, `UPDATE tool_input_files t SET taken_at = now(), taken_trigger = $6, taken_dedup = $7 FROM form_files f
 				WHERE t.id = $1 AND f.id = t.id AND t.user_id = $2 AND t.command = $3 AND t.field = $4
-				  AND t.taken_at IS NULL AND t.created_at > now() - $5::interval
-				RETURNING t.source, f.name, f.type, f.size, f.sha256`, fid, user, command, field, ToolFileHold.String()).
+				  AND (t.taken_at IS NULL OR (t.taken_trigger = $6 AND t.taken_dedup = $7))
+				  AND t.created_at > now() - $5::interval
+				RETURNING t.source, f.name, f.type, f.size, f.sha256`, fid, user, command, field, ToolFileHold.String(), start.Trigger, start.Dedup).
 				Scan(&h.Source, &h.Ref.Name, &h.Ref.Type, &h.Ref.Size, &sum)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("%w (%s)", ErrHeldFile, field)
@@ -128,6 +156,11 @@ func (s *Service) TakeToolFiles(ctx context.Context, tenant, user uuid.UUID, com
 			}
 			h.Ref.ID, h.Ref.SHA256 = fid.String(), hex.EncodeToString(sum)
 			out[field] = h
+			// Taken: kept as long as a run keeps its data, should its run
+			// not be set on it at once (AttachTakenToolFiles sets it later).
+			if _, err := tx.Exec(ctx, `UPDATE form_submissions SET retain_until = GREATEST(retain_until, now() + interval '90 days') WHERE id = (SELECT submission_id FROM tool_input_files WHERE id = $1) AND run_id IS NULL`, fid); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -144,7 +177,24 @@ func (s *Service) ReleaseToolFiles(ctx context.Context, tenant uuid.UUID, files 
 		return nil
 	}
 	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE tool_input_files SET taken_at = NULL WHERE id = ANY ($1)`, ids)
+		if _, err := tx.Exec(ctx, `UPDATE tool_input_files SET taken_at = NULL, taken_trigger = NULL, taken_dedup = NULL WHERE id = ANY ($1)`, ids); err != nil {
+			return err
+		}
+		// Held again for its day, from when it was sent.
+		_, err := tx.Exec(ctx, `UPDATE form_submissions s SET retain_until = t.created_at + $2::interval FROM tool_input_files t
+			WHERE t.submission_id = s.id AND t.id = ANY ($1) AND s.run_id IS NULL`, ids, ToolFileHold.String())
+		return err
+	})
+}
+
+// AttachTakenToolFiles gives every file a start took to the run that
+// start made (its trigger receipt), where that was not done at once: a
+// failure after the run started never leaves its files to expire.
+func (s *Service) AttachTakenToolFiles(ctx context.Context, tenant uuid.UUID) error {
+	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE form_submissions s SET run_id = r.run_id, status = 'started', note = NULL, retain_until = NULL, updated_at = now()
+			FROM tool_input_files t JOIN trigger_receipts r ON r.tenant_id = t.tenant_id AND r.trigger_id = t.taken_trigger AND r.dedup_key = t.taken_dedup
+			WHERE t.submission_id = s.id AND t.taken_at IS NOT NULL AND s.run_id IS NULL AND r.run_id IS NOT NULL`)
 		return err
 	})
 }
@@ -198,7 +248,7 @@ func ToolFileIDs(schema map[string]any, input map[string]any) map[string]string 
 // A scan is left to the run (wd.ReadScanInput). The second value refuses
 // the input in plain words.
 func ReadToolInputs(schema map[string]any, input map[string]any, channel string, files map[string]HeldFile, now time.Time) string {
-	if channel != AppWhatsApp && channel != AppTelegram {
+	if channel != AppWhatsApp && channel != AppTelegram && channel != ChannelAPI {
 		channel = "app"
 	}
 	sub := Submission{Channel: channel}

@@ -425,7 +425,13 @@ func (d *Definition) scanInputProblems(body []byte) []string {
 // {state, source, text, format}: a code with a format was read by the
 // camera, one without was typed. The source is set here, never taken
 // from the body (device fields §3). Answers whether body changed.
-func (d *Definition) ReadScanInput(body map[string]any) bool {
+func (d *Definition) ReadScanInput(body map[string]any) bool { return d.ReadScanInputBy(body, true) }
+
+// ReadScanInputBy is ReadScanInput for a start by a person in the app or
+// the web (person), whose code with a format was read by the camera, or
+// by anyone else (an API key, a run), whose code is typed whatever it
+// says (device fields §17's trust model).
+func (d *Definition) ReadScanInputBy(body map[string]any, person bool) bool {
 	name, _, ok := ScanInput(d)
 	if !ok || body == nil {
 		return false
@@ -445,7 +451,10 @@ func (d *Definition) ReadScanInput(body map[string]any) bool {
 		out["text"], _ = t["text"].(string)
 		out["source"] = "typed"
 		if f, _ := t["format"].(string); f != "" {
-			out["format"], out["source"] = f, "camera"
+			out["format"] = f
+			if person {
+				out["source"] = "camera"
+			}
 		}
 	default:
 		return false
