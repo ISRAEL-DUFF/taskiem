@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError, get, post, postOnce, put, type JSONSchema } from "../api";
+import { ApiError, get, post, postOnce, put, upload, type JSONSchema } from "../api";
+import { toolFileValue, toolInputFiles } from "../lib/forms";
 import { useAuth } from "../auth";
 import { SchemaForm } from "../forms/SchemaForm";
 import { Icon } from "../icons";
@@ -481,10 +482,25 @@ export function ToolRunner({
     setPhase({ at: "run", run: id, values: shown, echo });
     onStarted?.(id);
   };
+  // The input as sent: a photo or a signature sent first, then named by
+  // its id (build-plan-gaps H3); the confirm sends the same.
+  const sent = useRef<Record<string, unknown>>(undefined);
+  const prepare = async () => {
+    const { rest, files } = toolInputFiles(input ?? {});
+    for (const f of files) {
+      const form = new FormData();
+      form.append(f.name, f.file, f.file.name || "photo.jpg");
+      const r = await upload<{ file: { id: string } }>(path(tool.command, "files"), form);
+      rest[f.name] = toolFileValue(r.file.id, f.signed_by);
+    }
+    sent.current = rest;
+    return rest;
+  };
   const start = () =>
     act(async () => {
+      const body = await prepare();
       const r = await postOnce<ToolStart>(path(tool.command, "start"), key.current, {
-        input: input ?? {},
+        input: body,
         // The web's Taskiem conversation also keeps the answer's words.
         answer_in_chat: true,
         ...(button && { button }),
@@ -497,7 +513,7 @@ export function ToolRunner({
       const send = (proof: Record<string, unknown>) =>
         post<{ run_id: string }>(path(tool.command, "confirm"), {
           confirm: s.confirm,
-          input: input ?? {},
+          input: sent.current ?? input ?? {},
           ...proof,
         });
       let r: { run_id: string };

@@ -670,7 +670,8 @@ export function deviceSummary(kind: DeviceKind, v: unknown): string {
       ? `Location read, to within ${m.accuracy_m} m.`
       : "Location read.";
   if (typeof m.address === "string") return `Address typed: ${m.address}`;
-  if (typeof m.text === "string") return `Code: ${m.text}`;
+  if (typeof m.text === "string")
+    return typeof m.format === "string" ? `Code scanned: ${m.text}` : `Code: ${m.text}`;
   return "";
 }
 
@@ -707,6 +708,61 @@ export function answerParts(answers: Record<string, unknown>): {
     } else json[k] = v;
   }
   return { json, files };
+}
+
+/** The code formats a scan takes, as the server names them. */
+export const SCAN_FORMATS = ["qr", "ean_13", "ean_8", "upc_a", "upc_e", "code_128"] as const;
+
+/** The browser's barcode reader's name for a format, as the server's
+ * (BarcodeDetector says qr_code); undefined for one a scan never takes. */
+export function scanFormatOf(browser: string): string | undefined {
+  const f = browser === "qr_code" ? "qr" : browser;
+  return (SCAN_FORMATS as readonly string[]).includes(f) ? f : undefined;
+}
+
+/** The formats a scan field takes: its own, else every one. */
+export function scanFormatsOf(p: FieldSchema | undefined): string[] {
+  const f = (p as { formats?: unknown } | undefined)?.formats;
+  return Array.isArray(f) && f.length
+    ? f.filter((x): x is string => typeof x === "string")
+    : [...SCAN_FORMATS];
+}
+
+/** Whether this browser can scan with the camera: a barcode reader of its
+ * own (no outside library: build-plan-gaps §14) and a camera to ask. */
+export function canScanWithCamera(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "BarcodeDetector" in window &&
+    !!navigator.mediaDevices?.getUserMedia
+  );
+}
+
+/**
+ * A tool start's input split for sending (build-plan-gaps H3): each photo
+ * or signature to send first (POST /v1/tools/{command}/files), with the
+ * signer's name kept beside it, and the rest as it is.
+ */
+export function toolInputFiles(input: Record<string, unknown>): {
+  rest: Record<string, unknown>;
+  files: { name: string; file: File; signed_by?: string }[];
+} {
+  const rest: Record<string, unknown> = {};
+  const files: { name: string; file: File; signed_by?: string }[] = [];
+  for (const [k, v] of Object.entries(input)) {
+    if (typeof File !== "undefined" && v instanceof File)
+      files.push({ name: k, file: v });
+    else if (isSigned(v))
+      files.push({ name: k, file: v.file, signed_by: v.signed_by.trim() });
+    else rest[k] = v;
+  }
+  return { rest, files };
+}
+
+/** What a start names for a file sent first: {file: id}, and a
+ * signature's signer beside it. */
+export function toolFileValue(id: string, signedBy?: string) {
+  return signedBy ? { file: id, signed_by: signedBy } : { file: id };
 }
 
 /**
