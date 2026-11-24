@@ -81,11 +81,35 @@ class Film:
         self.says = [c for c in self.meta["cues"] if c["kind"] == "say"]
 
 
+FILM_OPTS = {}
+
+
+def with_overrides(film, sdir, work_root):
+    """A film whose captions are replaced by video/series/<series>/captions/<film>.json, if there is one."""
+    ov = sdir / "captions" / f"{film.name}.json"
+    if not ov.exists():
+        return film
+    work = Path(work_root) / "_work" / f"ov-{film.name}"
+    work.mkdir(parents=True, exist_ok=True)
+    for i in range(film.meta["frames"]):
+        link = work / f"f{i:05d}.png"
+        if not link.is_symlink() and not link.exists():
+            os.symlink(film.dir / f"f{i:05d}.png", link)
+    meta = dict(film.meta)
+    meta["cues"] = [c for c in film.meta["cues"] if c["kind"] != "say"] + [{"kind": "say", **c} for c in json.loads(ov.read_text())]
+    meta["cues"].sort(key=lambda c: c["t"])
+    (work / "cues.json").write_text(json.dumps(meta, indent=1))
+    nf = Film(work.parent, work.name)
+    nf.name = film.name
+    return nf
+
+
 def compose(film, out, shape, captions, theme="light", force=False):
     if out.exists() and not force:
         return out
     spec = SHAPES[shape]
-    cmd = ["python3", COMPOSE, "--frames", film.dir, "--out", out, "--canvas", spec["canvas"], "--phone-height", spec["phone_height"], "--theme", theme]
+    opts = FILM_OPTS.get(film.name, {})
+    cmd = ["python3", COMPOSE, "--frames", film.dir, "--out", out, "--canvas", spec["canvas"], "--phone-height", spec["phone_height"], "--theme", opts.get("theme", theme), "--time", opts.get("time", "13:00")]
     if captions:
         cmd.append("--captions")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -145,7 +169,7 @@ def build_episode(ep, series, args, out_root, cast):
         films.append(make_reel(ep["reel"], args.films, work))
         films[0].name = f"reel-{num:02d}"
     else:
-        films = [Film(args.films, f) for f in ep["films"]]
+        films = [with_overrides(Film(args.films, f), args.sdir, out_root) for f in ep["films"]]
 
     # clean footage and captioned preview, per film, per shape
     shapes = [s for s in args.shapes.split(",")]
@@ -283,6 +307,9 @@ def main():
     args = ap.parse_args()
 
     sdir = HERE / args.series
+    args.sdir = sdir
+    if (sdir / "films.json").exists():
+        FILM_OPTS.update({k: v for k, v in json.loads((sdir / "films.json").read_text()).items() if not k.startswith("_")})
     series = json.loads((sdir / "series.json").read_text())
     out = Path(args.out) / f"series-{args.series}"
     out.mkdir(parents=True, exist_ok=True)

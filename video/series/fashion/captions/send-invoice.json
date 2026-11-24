@@ -1,0 +1,31 @@
+[
+ {
+  "t": 0.0,
+  "text": "Nneka's outfit is done. Zainab asks for the money.",
+  "who": "Zainab · Zuri Atelier"
+ },
+ {
+  "t": 2.6,
+  "text": "Zainab opens the chat's tools, where her invoices live."
+ },
+ {
+  "t": 4.6,
+  "text": "She taps Invoices, then New invoice to make one for Nneka."
+ },
+ {
+  "t": 8.2,
+  "text": "Who it is for: Nneka Eze, and her phone number."
+ },
+ {
+  "t": 12.0,
+  "text": "What it is for, and how much: ₦85,000."
+ },
+ {
+  "t": 16.4,
+  "text": "Tap Send it. Taskiem texts Nneka the invoice with a pay link."
+ },
+ {
+  "t": 20.2,
+  "text": "Back in Invoices, INV-0008 for Nneka Eze shows as Sent."
+ }
+]

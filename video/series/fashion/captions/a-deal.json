@@ -1,0 +1,32 @@
+[
+ {
+  "t": 0.0,
+  "text": "Ada's Kitchen offers ₦864,000 for 60 uniforms. Dami sees it.",
+  "who": "Dami · Zuri Atelier"
+ },
+ {
+  "t": 3.4,
+  "text": "Dami taps Counter and types ₦912,000. Taskiem shows the share off."
+ },
+ {
+  "t": 8.4,
+  "text": "He sends it."
+ },
+ {
+  "t": 11.0,
+  "text": "Ada counters back at ₦876,000. That is under Zuri's lowest price."
+ },
+ {
+  "t": 14.6,
+  "text": "Dami taps Accept, but he cannot go below the lowest price. It waits for Zainab's OK."
+ },
+ {
+  "t": 19.1,
+  "text": "Zainab sees it under Needs you, with the price and why.",
+  "who": "Zainab · Zuri Atelier"
+ },
+ {
+  "t": 22.3,
+  "text": "She taps Agree ₦876,000. The deal is agreed, and the card goes."
+ }
+]

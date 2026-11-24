@@ -1,0 +1,31 @@
+[
+ {
+  "t": 0.0,
+  "text": "Nneka's transfer arrives, but it names no invoice at all.",
+  "who": "Zainab · Zuri Atelier"
+ },
+ {
+  "t": 2.6,
+  "text": "Zainab opens the chat's tools, then taps Money."
+ },
+ {
+  "t": 6.6,
+  "text": "She taps To match: money that is not on an invoice yet."
+ },
+ {
+  "t": 8.8,
+  "text": "She opens Nneka's payment: ₦85,000, from her bank transfer."
+ },
+ {
+  "t": 11.8,
+  "text": "Tap Match to an invoice, then pick the one it pays: INV-0008."
+ },
+ {
+  "t": 16.5,
+  "text": "Tap Match it, and the payment counts towards INV-0008."
+ },
+ {
+  "t": 20.7,
+  "text": "Back in Invoices, INV-0008 for Nneka Eze now shows Paid."
+ }
+]
