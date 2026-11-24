@@ -1,0 +1,71 @@
+{
+  "number": 1,
+  "slug": "open-your-shop",
+  "title": "Open your shop",
+  "headline": "Open your *shop*",
+  "sub": "Sign up, tell Taskiem about your business, and be found.",
+  "mood": "sparse",
+  "films": [
+    "open-your-shop",
+    "be-found"
+  ],
+  "narration": {
+    "open-your-shop": {
+      "en": [
+        "Meet Zainab. She runs Zuri Atelier, a tailoring business in Surulere, and today she joins Taskiem.",
+        "",
+        "She types the code Taskiem sends to her WhatsApp.",
+        "First, Taskiem asks her to agree to the terms.",
+        "This is a business, so she picks A business.",
+        "What is the business called? Zuri Atelier.",
+        "Then her own name.",
+        "What does she sell? Fashion, number three.",
+        "How do customers pay? Cash and bank transfer.",
+        "Done: Zuri Atelier is on Taskiem."
+      ],
+      "pcm": [
+        "Meet Zainab. She dey run Zuri Atelier, tailor business for Surulere, and today she dey join Taskiem.",
+        "",
+        "She dey type the code wey Taskiem send to her WhatsApp.",
+        "First, Taskiem go ask her make she agree to the terms.",
+        "Na business, so she pick A business.",
+        "Wetin be the business name? Zuri Atelier.",
+        "Then her own name.",
+        "Wetin she dey sell? Fashion, number three.",
+        "How customers dey pay? Cash and bank transfer.",
+        "E don do: Zuri Atelier don dey Taskiem."
+      ]
+    }
+  },
+  "bridge": {
+    "en": "Her shop is open, but the shelves are empty. What does she put on them?",
+    "pcm": "Shop don open, but shelf dey empty. Wetin she go put for inside?"
+  },
+  "next": {
+    "number": 2,
+    "title": "Put your goods in",
+    "headline": "Put your *goods* in"
+  },
+  "flow": [
+    {
+      "id": "E1-C1",
+      "who": "Zainab Yusuf",
+      "purpose": "cold open: a busy tailor with a buzzing phone",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Measures a length of indigo-and-gold Ankara across a cutting table with her tape measure while her phone buzzes again and again beside her; she glances at it, laughs softly and shakes her head",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara, two sewing machines, a rack of finished outfits in plastic covers, a window on a yellow-painted wall",
+      "camera": "slow push-in, eye-level, medium shot"
+    },
+    {
+      "id": "E1-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "bridge: an empty rack, a pile of fabric",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Looks at an empty clothes rack, then at a tall stack of folded Ankara fabric on the table, and nods slowly with her hands on her hips",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara, a nearly empty clothes rack, a window on a yellow-painted wall",
+      "camera": "medium shot from the side, then a gentle pan to the fabric"
+    }
+  ]
+}
