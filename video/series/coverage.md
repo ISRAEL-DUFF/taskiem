@@ -35,9 +35,11 @@ so we must not film it as working.
 | Saved things (`@name`), made tools, pages, device fields (scan, sign) | Built (made tools M0-M5, pages, saved) | **Proposed** | "Episode 11: Automate the rest" (replan 9) |
 | Schools (fees, account numbers, clearance, gate) | Built | **Covered (series 4)** | `series/schools` |
 | People chat, groups, ordering together | Built | **Draft** | `series/everyone` |
-| **Paying people** (pay a bill, pay one person, batches), payroll | Built **against fakes** | **Wait** | Do not film until a real wallet |
-| Stock apart from products | Not built | **Wait** | |
-| Updates (Status, Channels) | Spec only | **Wait** | |
+| **Paying people**: pay a bill by transfer, pay one person (limits, passkey), pay from a message, batches of up to 100, saved accounts, reading account details from a photo | Built (web, app, server; the bank connection is a stand-in in the demo) | **Not covered, film it** | New chapter "Pay people" (section 7) |
+| **Payroll on Payrolla** (connect in one step, staff and pay from Taskiem, this month's payroll approved and locked) | **On the way**: P4b-1 to P4b-3 built on branch `ccr-87497aa3-gf060z`, not yet on main (decision 0074 accepted 24 Nov) | **Not covered, film when merged** | In "Pay people" or its own episode |
+| **Stock apart from products** (stock items you count but never sell; purchases of anything with a label and a use; receiving; "Things we have") | **Built** (S1a, S1b, S2 web and app, U1, U2a web; decision 0070) | **Not covered, film it** | New chapter "What you buy" (section 7) |
+| Updates (Status and Channels, as WhatsApp's) | **Not built, deliberately**: the founder deferred it on 12 November ("not built for now"), no code on main or any branch | Wait | Film when it is built |
+| **Helpdesk and tickets** (storefront tickets, a ticket kit, a helpdesk on WhatsApp and email) | Built (tickets on main, the kit and mail polling on branch `ccr-e260e63d-tickets`) | **Not covered, film it** | New chapter "Support your customers" (section 7) |
 
 ## 2. Channels
 
@@ -89,3 +91,33 @@ Electrical and electronics are **later**.
 1. Is the engine and builder a priority audience now, or after the shop series?
 2. Do we cover Telegram, Slack and USSD, or only WhatsApp?
 3. Is "complete coverage" a goal, or is "the best 80% for each audience" enough?
+
+## 7. Corrections and additions, 24 November 2026
+
+The first version of this audit labelled several things "Wait" from the docs
+alone. Checked against the code and the branches:
+
+| I said | The code says |
+| --- | --- |
+| Paying people and payroll: wait, "against fakes" | The web pages (`Payments`, `PayBatch`, `PayByTransfer`, `PayCollect`, `Payroll`), the app screens (`pay_*`, `payroll_page`) and the API (`api/payments*.go`, `payment_batches.go`) exist. Only the **bank connection** is a stand-in, as the demo's WhatsApp and SMS already are. We can film it in the demo world. Payroll's next slices are on a branch, not yet on main |
+| Stock apart from products: not built | **Built.** Migrations 00501 (stock items), 00503 (purchase lines), 00504 (receipts), 00590 (barcode); the app has `stock_items`, `purchases_page`, `purchase_view`. The doc I read said "not built" because it was written before the build |
+| Updates (Status and Channels): spec only | **Still not built**, and the founder said so: "not built for now" (12 November). There is no code for it on main or on any branch I can find. If you have a branch I have missed, tell me |
+
+**One caution on payments:** filming payments in the demo is fine. A *public*
+film that says "pay your suppliers from Taskiem" should wait until a real
+wallet is connected (the build plan's D6 and D7 before launch); the narration
+says "in the demo" or stays on the steps, not on live money, until then.
+
+### New chapters for the spine (proposed)
+
+| Chapter | What it teaches | Built? |
+| --- | --- | --- |
+| **Pay people** | Pay a bill by transfer in the chat; save an account as `@bayo`, name checked with the bank; pay one person with a limit and a passkey; pay from a message; pay several at once; read account details from a photo; payroll | Built (payroll next) |
+| **What you buy** | Things you count but never sell (fabric, flour, thread); buying anything with a label and what it is for; receiving; "Things we have"; stock counts | Built |
+| **Support your customers** | Tickets from the storefront, a helpdesk on WhatsApp and email | Built (kit on a branch) |
+| **Automate the rest** | Made tools, pages, saved things, scan and sign | Built (M0 to M5) |
+| **Your online shop** | The public shop page, domains, embedding | Built |
+| **Where your money went** | Reports, leaks, statements, spending | Built |
+
+These join the ten chapters, so each series would have up to sixteen. Not every
+business needs all of them; each series picks the ones it uses.
