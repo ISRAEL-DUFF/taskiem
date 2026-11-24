@@ -17262,7 +17262,8 @@ class TemplateParam {
   final String title;
   /// command is a recipe's tool's word after / (made tools §13), written as a
   /// command (Add Sale is add-sale); installing gives the next free one when it
-  /// is taken.
+  /// is taken. roles is who may use a recipe's tool, as role names in a list or
+  /// typed with commas (owner, manager).
   final String type;
 
   factory TemplateParam.fromJson(Map<String, dynamic> j) => TemplateParam(
