@@ -1,0 +1,297 @@
+# Forms that sell: a business's products in its forms, and following up a form left half-filled
+
+Status: **plan; not built, and nothing here is decided.** Written 24 November 2026 from a screen recording the founder shared (§4) and read against the code the same day (§3, §15). §12 lists what the founder has to decide, each with a recommendation. Builds on [forms](../forms.md) ([decision 0037](../decisions/0037-forms.md)), [fronts](fronts.md) ([0059](../decisions/0059-fronts.md)), [storefronts](storefronts.md) ([0036](../decisions/0036-storefronts.md)), [embed sites](../embed-sites.md), [updates for people outside](../updates.md) ([0039](../decisions/0039-reaching-people-outside.md)), [dispatch](../dispatch.md) and [no technical steps](no-technical-steps.md).
+
+**What Taskiem is for** ([0068, amendment](../decisions/0068-taskiem-for-everyone.md#amendment-2026-11-19-what-taskiem-is-for)): this plan is weighed by what it saves a seller. A trader who sells one product by pay-on-delivery through a page on their own website today keeps the page, the form, the orders and the follow-ups in four places or in none. After this plan the form is Taskiem's, the orders are orders, and a buyer who typed their number and left is followed up without anyone noticing they left.
+
+## 1. Summary
+
+A business can embed a Taskiem form on its own website today. What it cannot do is put **its products** in that form: a form has text, numbers, choices and files, never an item with a price, a package to choose, a total to see. A seller with a catalogue in Taskiem who wants an order form on their site must use the storefront's own order view, which is the storefront's, not a form of theirs, and offers a basket, never "1 for ₦25,000, 2 for ₦45,000, 3 for ₦65,000".
+
+This plan gives forms two things:
+
+1. **Products in a form.** A form may sell: one product or a few, as a basket or as **packages** at bundle prices, with the total worked out from the catalogue (never from the form), the delivery fee from the area the buyer picks, pay on delivery or pay now, and a submission that is a real order: in Orders, in the money log, offered to riders, under the order workflow. The form stays the business's own, is drawn in its look, and embeds where its forms embed today. A new **kind of front**, *One product*, makes the whole landing page in the video from a catalogue row: the promise line, the headline, the photos, the feature chips, the price bar, the form.
+2. **Following up a form left half-filled.** When a buyer types a phone or an email and does not send the form, Taskiem keeps that one fact and what they were buying, waits, and follows up once, by the channel they gave: WhatsApp where the person can be reached there, else SMS, else email, with a link that opens the form again with their choice kept. The seller sees how many left and how many came back. Nothing else they typed is kept, and the buyer can stop with one word.
+
+Both halves hold to the rules every public page keeps: prices and totals are Taskiem's, personal data is sealed, the host site reads nothing, and a public form cannot be made into a phishing kit.
+
+## 2. Words used here
+
+| Word | Meaning |
+| --- | --- |
+| **Hosted form** | A workflow's form trigger, at `/f/<id>`, embeddable at `/embed/f/<id>` on a verified website ([forms](../forms.md)) |
+| **Action** | A form of a front that starts a workflow: Order now, Book, Ask a question ([fronts](fronts.md) §5.3). An action's form is a hosted form drawn under the storefront's look |
+| **Front** | A page of the storefront: blocks and actions. The home front is what the storefront page shows ([fronts](fronts.md) §5.1) |
+| **A form that sells** | A form with a product field (§5). Its submission is an order |
+| **Package** | One of a few bundles of a product at a price of its own: 1 for ₦25,000, 2 for ₦45,000 (§5.2) |
+| **Left half-filled** | A form where a contact field was filled in and the form was not sent within the wait (§6) |
+| **The follow-up** | The one message Taskiem sends to someone who left a form half-filled, and the link in it that brings them back |
+
+Owners never see "hosted form", "action" or "widget". On their screens a form **sells** something, a buyer **left without ordering**, and Taskiem **followed up**.
+
+## 3. Where we are
+
+Read against the code on 24 November 2026.
+
+| Today | Where | What this plan needs from it |
+| --- | --- | --- |
+| A hosted form's fields: text, number, money, email, phone, URL, date and time, choices, a choice from a data table, yes or no, consent, files, hidden and prefilled fields | [forms](../forms.md), `engine/publicweb/formfields.go`, `hostedforms.go` | No product, price, basket or total. **The gap the founder named** |
+| A front's action form draws on the front's list with four fields: **basket**, **time**, **dates and quantity**, **quantity against a count**; prices from the catalogue copy, the price check, claims under the list's lock | [fronts](fronts.md) §5.4, `engine/storefront/answers.go` (`Widgets`), `engine/publicweb/forms.go` | The basket is products in a form already, as one list with quantities. No packages, no one-product form, no feature chips |
+| An action's form is a hosted form: the same schema, the same renderer, `trigger.answers` apart from `trigger.submission`, one workflow per action | [0059](../decisions/0059-fronts.md) points 2 and 5 | A form that sells is an action; a hosted form becomes one |
+| The storefront embeds on a verified website: the page, the catalogue, one action's form (`action:<kind>`, `/embed/<slug>/a/<action>`), or a button that opens it in an overlay; `?item=` pre-fills one product; `channel: embed` on the submission; `postMessage` events carry no answers | [storefronts](storefronts.md) §6.11, [embed sites](../embed-sites.md), `engine/publicweb/publicweb.go` (`/embed/` is stripped before routing), `static/form-embed.js` | The embed exists for an action's form. It needs the one-product form and the packages field |
+| Delivery areas with a fee each; the buyer picks one and the fee joins the total; pay at the door by an account number or cash; riders | [dispatch](../dispatch.md), [storefronts](../storefronts.md) | The video's "delivery fee by state" and pay on delivery are built |
+| Kinds of front as presets: a table shape, a form, a workflow template, settings and chat words, checked against one schema | `engine/storefront/kinds/*.json` (shop, food, hire, spaces, tickets, classes, quotes, questions, callbacks, custom) | A new kind, *One product* |
+| A hosted form's state between pages lives in a signed token in the page, not on the server; the public host holds no vault key and writes submissions to an inbox the `api` role takes within a second | `engine/publicweb/hostedforms.go` (`hstate`), `form_inbox`, `storefront_inbox` | Nothing of a form is kept before it is sent. Left half-filled is new, and must go through the inbox |
+| Reach codes: the public host mints one-time codes with the person's phone **sealed with the public key for the api role**, and an unproven (typed) phone reaches its own submission only | [0039](../decisions/0039-reaching-people-outside.md) points 3 and 4, `engine/publicweb/reach.go`, `reach_request_links` | The precedent for keeping a typed contact without a vault key, and the rule that bounds who it may reach |
+| `notify@1` `message` reaches a person by their linked app, else the run's own submission link, else SMS, else email; outside WhatsApp's window the `taskiem_update` utility template; cross-tenant per-person limits | [updates](../updates.md), [whatsapp templates](../whatsapp.md#templates) | The follow-up is this step. A typed number that never wrote to the business is reached by SMS, not WhatsApp, unless §6.4's decision allows a template |
+| The public host's guards: a signed one-time token, a honeypot, time taken, per-address and per-form limits, a Nigerian phone check | `formguard`, `FormSubmissionsPerIP`, `FormSubmissionsPerForm` | The same guards on a left-half-filled record |
+| `once_per` phone or email; `verify` with a code | [forms](../forms.md) | A verified phone is a proven one; a typed one is not |
+| Storefront order limits by plan, embed sites by plan (10; 1 on Shop, 3 on Shop Plus) | [moderation](../moderation.md#plans) | Left-half-filled records and follow-ups need limits of their own (§6.5) |
+| Nothing records a form a person opened and did not send | checked: no autosave, partial or abandoned anything in `engine/publicweb`, `engine/forms`, the docs | §6 is new ground |
+
+## 4. The case: the video
+
+A 90-second screen recording of a pay-on-delivery landing page on a seller's own site (`ismartyshop.vercel.app/ear-cleaner`), as a Nigerian cash-on-delivery seller runs one today:
+
+1. **The page:** a red promise line ("Payment on delivery available nationwide + free delivery today only"), a "Pay on delivery" badge, "Limited stock: 14 units left today", a headline and a reason to buy, a product video, four feature chips, and a sticky bar with the promo price and **Order now (pay on delivery)**.
+2. **The form, under the page:** "Deliveries take 24 to 48 hours within Lagos and 2 to 4 days outside Lagos"; the product named with a "Secure checkout" badge; three steps: **Select package** (1 item for ₦25,000, 2 for ₦45,000, 3 for ₦65,000, free delivery), **Contact details** (full name, phone "required for verification", email optional), **Delivery destination** (state, street address); then the subtotal, the delivery fee, the total payable on delivery, a warning not to order unless ready to receive in 2 to 4 days, **Order now**, and "Having trouble filling the form? Order via WhatsApp".
+3. **The narration** (the founder's account): when a buyer fills in a phone or an email and forgets to send the form, the system follows up by WhatsApp, SMS or email, by what they filled in.
+
+What of this Taskiem has: the promise and stock lines (a front's text block), the photos, pay on delivery, delivery areas with fees, the order pipeline, embedding on the seller's site. What it lacks: the packages, a form that sells one product with the chips and the price bar, the WhatsApp fallback as part of the form, and the follow-up.
+
+## 5. Products in a form
+
+### 5.1 A form that sells is an action of a front
+
+Decision 0059 settled that **forms are the only mechanism for an action** and that an action's form is a hosted form. This plan keeps to it from the other side: **a hosted form that sells becomes an action**. There is one renderer, one price check, one order pipeline and one submissions table, and a form with a product field is never a second way to take an order.
+
+Two ways in, meeting in the same place:
+
+| From | What the owner does | What happens |
+| --- | --- | --- |
+| **A workflow's form** (the builder, the Forms page) | **Sell something with this form**: picks a product (or a few) from the catalogue, and how (as a basket, or as packages) | The form becomes an action of the home front (or a front the owner picks), its workflow the action's workflow, as 0059's editor does when a workflow is given "a new action". Its address stays; the storefront's `/a/<action>` address is added. The form draws under the storefront's look from then on |
+| **The storefront** (Fronts, chat) | **Add an order form** to a front, or **Sell `<product>` on a page** (§5.4) | An action with a product field, as today's order form is, with packages where asked |
+
+A form that sells is refused where its business has the Storefront area off, since orders, the catalogue and the look live there: the owner is offered to turn it on, as templates offer today.
+
+### 5.2 The product field, and packages
+
+Two fields draw on the catalogue. The first exists; the second is new.
+
+| Field | Schema | What the buyer sees | What the run gets |
+| --- | --- | --- | --- |
+| **basket** (exists) | `{"type":"array","x-form":{"widget":"basket","list":"<block>","min":1}}`, with a new `items: ["<row>", …]` to show only those rows | The listed items with quantities and a running total | As today: `lines`, `total_kobo`, `trigger.submission` |
+| **packages** (new) | `{"type":"object","x-form":{"widget":"packages","list":"<block>","item":"<row>","packages":[{"qty":1,"price_kobo":2500000,"label":"1 item + free delivery"},{"qty":2,"price_kobo":4500000},{"qty":3,"price_kobo":6500000}]}}` | One product, named with its photo and line, and a choice of packages with their prices; the chosen one's total below | `{row_id, item, qty, package_kobo, unit_price_kobo}` as one line of `lines`, `total_kobo`, `trigger.submission` |
+
+Rules:
+
+- **A package's price is the price.** It is kept with the action's form, published with the storefront, and the server prices the submission from it, never from the form's numbers, as the basket is priced from the catalogue copy. A package may not be dearer per unit than the catalogue's price for the item unless the owner says so when publishing (a warning, not a refusal: a bundle may carry a gift).
+- **Stock.** A package of three takes three of the item's stock, as a basket line of three does. A package the stock cannot fill is shown greyed with "Not enough in stock", and refused on the server.
+- **At most six packages**, each a quantity and a price, with an optional label; the label is drawn by Taskiem from the quantity and the price when none is given ("2 items · ₦45,000").
+- **Sizes and colours.** Where the item has sizes or colours ([chat categories and variants](chat-categories-and-variants.md)), the package asks for one choice per unit, or one for all, as the owner sets.
+- **Delivery.** The form's delivery area field is the storefront's (an area and its fee, or **Free** where the storefront says so), and the fee joins the total under the packages, as it does in the basket. "Free delivery" in a package's label is the owner's words; the fee the storefront charges for the area is what is added, so a seller who means free delivery sets the areas' fees to nothing, which the editor offers.
+- **The warning line** ("Do not order if you are not ready to receive it in 2 to 4 days") is the action's `notice`, drawn in the storefront's warning tone above the button, with a default the owner may change or clear.
+- **Pay on delivery** is the action's payment setting as today (pay now, pay after acceptance, pay at the door). The video's form is pay at the door.
+
+### 5.3 One product, pre-chosen
+
+An action's form whose basket or packages field names a single `item` draws that product at the top (name, photo, line, the storefront's "Secure checkout" mark where payment is connected) and never asks the buyer to pick a product. `?item=` on the link keeps working for forms that take any item.
+
+### 5.4 The *One product* kind of front
+
+A kind, as the others are, so the whole page in the video is made from a catalogue row and the owner never assembles blocks:
+
+| Part | What it is | From |
+| --- | --- | --- |
+| The promise line | A text block in the storefront's accent, at the top ("Pay on delivery nationwide") | A setting of the front, with a default |
+| The stock line | "Only 14 left" from the item's stock, where stock is kept and the owner turns it on; never a made-up number | The catalogue |
+| The headline and the reason to buy | A text block: the item's name and description, or the owner's own words | The catalogue row, editable |
+| Photos or a video | The item's photos; a video where the owner adds one to the row | The catalogue row (media) |
+| Feature chips | Up to six short lines with an icon from the fixed set | A setting of the front |
+| The price bar | The package's price, or the item's, with **Order now**, fixed to the bottom on a phone | The action |
+| The form | The action's form with the packages field, contact details, the delivery area, the notice, the button | The action |
+| **Order via WhatsApp** | Under the button: a link that opens WhatsApp to the business's own number, or the shared number with the business's code, with the product named in the first message; the conversation then takes the order as the customer door does ([Taskiem for everyone](taskiem-for-everyone.md)) | The business's number, as the storefront's **Chat with us** is |
+
+The kind's table is `products` (shared with Shop), so a seller with a shop adds a One product front for a hero item without copying it. Its workflow template is `storefront-order` with pay at the door, and its chat words are `sell <product> on a page` and `add a page for <product>`.
+
+The page is drawn by the storefront's renderer in the storefront's look, so there is no new page builder, and it embeds as any front does: the page, the form alone, or a button.
+
+### 5.5 Embedding the form that sells
+
+Nothing new in the mechanism ([storefronts](storefronts.md) §6.11): the script and the element, a plain frame, or a button that opens the form in an overlay, on a verified website only. What is added:
+
+- the embed snippet for **one action**, offered on the action's page and under **Your website** in Settings, so the owner copies the form that sells and not the whole page;
+- the `postMessage` event `storefront:submitted` carries the action and the reference as today, and nothing of the buyer;
+- the frame's height follows the packages field as it opens.
+
+A seller whose site is a page builder that allows no script uses the plain frame, as today.
+
+### 5.6 What the run gets
+
+As any action's run: `trigger.body` with the reference, the customer, `lines` (the package as one line with its quantity and package price), `total_kobo` with the delivery fee, the payment; `trigger.submission`; `trigger.answers` for the action's own questions. The default order workflow runs unchanged: the owner accepts or declines in chat, the customer is told, the order is offered to riders where the business has them, pay at the door at the door.
+
+## 6. Left half-filled
+
+### 6.1 What is kept, and when
+
+A buyer who has typed a **contact** (a phone or an email in a field the form marks as the respondent's) and does not send the form within the **wait** leaves a form half-filled. Taskiem keeps, for that form:
+
+- the contact as typed, sealed by the public host with the public key for the `api` role, as reach codes are;
+- what they were buying: the chosen package or the basket's lines, and the delivery area if chosen;
+- the form, the front, the site it was embedded on, and the time;
+- **nothing else they typed.** Not their name, not the address, not any answer. A name is needed for nothing and an address is personal data with no purpose once the form is not sent.
+
+How the public host knows:
+
+- The page sends a small **keep** request (a beacon) when the contact field loses focus with a valid value, and again when the page is hidden or left, carrying only the contact, the product choice and the form's signed state token. It is sent only after the contact is valid (a Nigerian phone, or an email) and only when the form has not been sent.
+- The record is written through the inbox, as submissions are, and the `api` role takes it: one row per form and contact, replaced by a later keep, deleted by a submission from the same contact on the same form.
+- A form sent within the wait deletes its record before any follow-up. A form sent after the follow-up closes the record as **came back**.
+- No JavaScript, no keep: a form filled in without scripts has no abandonment, and loses nothing else.
+
+### 6.2 Consent and the words on the form
+
+A form that follows up says so where the contact is asked, in the storefront's quiet tone, under the field: **"We may message you about your order on WhatsApp or by text or email. Reply STOP to stop."** The words are Taskiem's, in the form's language, and the owner may turn the follow-up off, not reword the line. A form with the follow-up off shows no line and keeps nothing.
+
+The follow-up is about **the order the buyer started**, not an offer: it names the product and the package, offers the link back, and nothing else. It is not marketing to a list, and a left-half-filled record is never a lead list for anything but this one message.
+
+### 6.3 The wait, and the message
+
+| Setting | Default | Range |
+| --- | --- | --- |
+| The wait after the last keep | 30 minutes | 10 minutes to 24 hours |
+| Messages | One | One. A second nudge is a decision for later (§12, 5) |
+| The link's life | 7 days | Fixed |
+
+The message, in the storefront's language, from the business's name: *"[Ada's Kitchen] You started an order for the Smart Visual Ear Cleaner Kit (2 items, ₦45,000) and did not finish. Finish it here: <link>. Reply STOP to stop."* On WhatsApp with a button **Finish my order** where the template allows.
+
+The link opens the form again with the package and the area chosen and the contact filled in, in the same frame if the buyer came from the seller's site (the link goes to the seller's page with the form, where the storefront knows it, else to the storefront's own address). It is one-time for the restore and seven days long; after that the form opens plain.
+
+### 6.4 By which channel
+
+The follow-up is the `notify@1` `message` step, so it reaches the person as [updates](../updates.md) do, in that step's order, with one change for a typed contact that never wrote to the business:
+
+| The contact | Reached by |
+| --- | --- |
+| A phone that has linked an app with this business, or wrote to its own number within 24 hours | WhatsApp or Telegram, as today |
+| A phone the buyer typed, with nothing linked | **SMS**, counted in the plan's texts. WhatsApp only where the business has its own number and Meta has approved a template for this message (§12, 3); until then SMS |
+| An email, and no phone | Email |
+| Both | The phone's channel, with the email left out, so one message is sent |
+
+A phone the buyer typed is **unproven** (0039 point 3): the message reaches it about this one form and nothing else, and the link in it opens this one form. It never binds the number to a contact of the business, and a reply to it, on WhatsApp or by SMS, does not open the business's customer conversation unless the person's own reply does.
+
+### 6.5 Limits and stopping
+
+- One follow-up per contact per form in seven days; one left-half-filled record per contact per form at a time.
+- Keeps are guarded as submissions are: the signed token, the honeypot, the per-address and per-form buckets, and a bucket of their own (`FormKeepsPerIP`), so a script cannot fill a business's inbox or spend its texts.
+- Follow-ups count against the plan's monthly texts (SMS) or the WhatsApp template count, as the step's messages do, and a plan limit `form_followups` caps them a month (200 on the lowest plan is a starting figure).
+- **STOP** by SMS or WhatsApp, or the email's unsubscribe link, stops every follow-up to that contact from that business, and is honoured by `message` as the existing stop is.
+- The person who was followed up can ask the business to delete what it kept; the owner's **Erase this person** covers it.
+
+### 6.6 What the owner sees
+
+- On the form's and the action's page: **Left without ordering** this week (a count), **Followed up** (how many), **Came back** (how many ordered after the message), and the list, each row the product, the package, when, the channel, and the contact masked (the last four digits, the email's domain). Opening a row shows nothing more.
+- In the chat: an alert when people leave a form today ("3 people left your order form today; 2 were followed up"), with the form's page behind it, as other alerts open their pages.
+- Nothing of a left-half-filled record reaches the AI builder or a page's or tool's reads: it is not a table, and `taskiem_public` and the `api` role read it through narrow functions only.
+
+### 6.7 Retention and erasure
+
+A left-half-filled record is kept for 7 days after its last keep, then deleted, whether or not it was followed up. The count of **Came back** is kept as a number on the form, not as the record. Erasing a person erases their records as it erases their submissions. The records are not exported with the storefront's orders.
+
+## 7. What the AI builder and the templates learn
+
+- **Templates:** `storefront-order` gains the follow-up as a setting of the action (off by default for actions that exist, on for a One product front); a template `storefront-one-product` makes the front, its action and its workflow from one catalogue row.
+- **The builder:** "sell my ear cleaner on a page, pay on delivery, 1 for 25k, 2 for 45k, 3 for 65k, and follow up anyone who leaves" drafts the One product front, its packages and the follow-up setting, read back in plain words. The builder is given product names and prices, never a buyer's contact.
+- **Chat:** `sell <product> on a page` makes the front from chat with the one-person approval rule, as `turn on orders` does; `page <product> on`, `follow-ups on` and `follow-ups off` for the action.
+
+## 8. Security and abuse
+
+| Concern | Control |
+| --- | --- |
+| A form that fakes a price or a total | Prices are the packages published with the storefront and the catalogue copy; the server prices every submission; the form's numbers are never read (0059 point 2, as today) |
+| A keep used to harvest or spam | A keep carries a contact and a product choice only, is guarded like a submission, is one per contact per form, and leads to one message in seven days about that one form |
+| A follow-up as unsolicited marketing | The words are Taskiem's and name the order the person started; the consent line is on the form; STOP is honoured across the business; nothing is sent to a list |
+| A typed number that is someone else's | The message reaches the number about this one form, with a link that restores a product choice and nothing personal; it binds nothing and opens no conversation (0039 point 3) |
+| Personal data kept without purpose | Only the contact and the product choice are kept, sealed for the `api` role, for 7 days; names, addresses and answers are never kept before a form is sent |
+| The host site reading the form | A frame, as today: the host site's scripts cannot read it, and `postMessage` carries no answers |
+| A phishing page in the form's look | The same checks as every public form and storefront: a verified email, reserved and look-alike names, the Report link, operator suspension |
+| A WhatsApp follow-up outside the window | Only by an approved template on the business's own number, once Meta's category for it is known (§13); otherwise SMS |
+| Cost | Follow-ups count against the plan's texts and templates and a limit of their own; a form's keeps count against nothing but their bucket |
+
+## 9. Tests
+
+| Test | What it proves |
+| --- | --- |
+| The packages field | Drawn with the item and its packages; the server prices the chosen package from the published form, refuses one the stock cannot fill, adds the area's fee, writes one line with the package's price; the price check never reads the form's numbers; `trigger.body` and `trigger.submission` as §5.6 |
+| A hosted form that sells | **Sell something with this form** makes an action of the front, keeps the form's address, draws it under the storefront's look; its workflow runs on the storefront trigger; the Storefront area off refuses it with the offer to turn it on |
+| One product | The kind's front from a catalogue row: every part of §5.4 drawn on the web and in the app's parity test, in the three themes, at 360 and 390 px with axe; **Order via WhatsApp** opens the right number with the product named |
+| Embedding | The action's form framed on a verified site, the snippet from Settings; the height event follows the packages field; the submitted event carries the action and reference and nothing else; an unverified site refused |
+| Left half-filled | A keep after a valid contact only; a keep refused without the token, past the buckets, or after the form was sent; one record per contact and form; a submission deletes the record; the wait, then one message, by the right channel for each row of §6.4; the restore link opens the form with the choice kept, once, within 7 days; STOP stops; the record purged at 7 days; erasure |
+| The owner's view | The counts and the masked list; the chat alert; nothing in the AI builder's inputs or a page's reads (isolation test, as data tables have) |
+| Plain words | The form's consent line and the follow-up's words in the five languages, against the plain-words list |
+| Migrations | Down and up for the new tables |
+
+## 10. Storage and API
+
+- **`storefront_actions`** gains `packages` (in the form's schema, so nothing new) and the follow-up settings: `followup_on`, `followup_wait`. **`storefront_fronts`** gains the One product kind's settings (the promise line, the chips) as the kind's options do.
+- **`form_left`** (new): tenant, form or action, front, embed site, the contact sealed for the `api` role, a keyed hash of the contact for the one-per-contact rule (as reach contacts are keyed), the product choice, `last_keep_at`, `followed_up_at`, `came_back_at`, `expires_at`. Under forced row-level security; the public host writes through the inbox and reads nothing; the `api` role reads through narrow functions.
+- **The public host:** `POST /a/<action>/keep` and `/f/<id>/keep` (a beacon), `GET /r/<restore token>` (the form restored).
+- **API:** `GET /v1/storefront/actions/{id}/left` (the counts and the masked list), `PATCH /v1/storefront/actions/{id}` (the follow-up settings, the packages through the form), `GET /v1/forms/{id}/left` the same for a hosted form that sells; the embed snippet for one action in `GET /v1/storefront/embed`. OpenAPI and the app's client as always.
+- **The follow-up** is a run of a managed workflow (`storefront-followup`, the server's, not the owner's to edit) started by the `api` role when the wait passes, with `notify@1` `message` and the restore link; its run is the audit of what was sent, where and whether it came back.
+
+## 11. Phases
+
+| Phase | What | Done when |
+| --- | --- | --- |
+| L0 | The decision; the packages field in the forms schema, the contract and the validator; `items` on the basket; the One product kind's schema; the keep and `form_left` tables and functions; nothing drawn yet | A form with packages validates or is refused for the right reason; a keep is stored and purged |
+| L1 | **Products in a form:** the packages field drawn on the web and the public host, the one-product form, the total with the area's fee, the notice; **Sell something with this form** in the builder; the embed snippet for one action; the submission as an order | A seller embeds a form selling one product in three packages on their site, a buyer orders two for pay at the door, the order reaches Orders, the owner accepts in chat, a rider is offered it |
+| L2 | **One product:** the kind, its template, its chat words, the page drawn with the promise line, the chips, the price bar and **Order via WhatsApp**; the app's parity test | `sell <product> on a page` makes the page in the video from a catalogue row, on the web and in the app |
+| L3 | **Left half-filled:** the keep, the consent line, the wait, the follow-up by SMS and email, the restore link, STOP, the counts and the list, the chat alert, retention | A buyer who typed a phone and left gets one text after 30 minutes and finishes the order from its link; the owner sees it under **Came back** |
+| L4 | **WhatsApp follow-ups** by template on the business's own number, once the category is settled; a second nudge if decided | A buyer on the business's own number is followed up on WhatsApp with **Finish my order** |
+
+L1 is the first thing worth showing, and it is what the founder named. L3 can be built beside L2.
+
+## 12. For the founder to decide
+
+| # | Question | Recommendation |
+| --- | --- | --- |
+| 1 | Products in a hosted form directly, or a form that sells becomes an action of a front? | **An action.** One renderer, one price check, one order pipeline, one submissions table, and 0059's rule stands. The owner never sees the difference: **Sell something with this form** does it |
+| 2 | Packages as a field of their own, or a basket with fixed quantities? | **A field of their own.** A package has a price that is not the unit price times the quantity, and the buyer chooses one, not quantities |
+| 3 | Does a typed phone get a WhatsApp follow-up? | **Not until** the business has its own number and Meta has approved a template whose category is known (utility or marketing decides its price and rules: §13). SMS from the first day; WhatsApp when linked already. The founder's account says WhatsApp; the rules say when |
+| 4 | The wait before following up | **30 minutes**, the owner choosing from 10 minutes to 24 hours |
+| 5 | One message, or a second nudge later? | **One** in this plan. A second message needs a reason beyond "they did not answer", and the cost is the business's |
+| 6 | Is the follow-up on by default? | **On for a One product front, off for actions that exist**, since those owners did not ask and their forms show no consent line yet |
+| 7 | What is kept from a form left half-filled? | **The contact and the product choice only**, for 7 days. Not the name, not the address |
+| 8 | The kind's name | **One product.** "Landing page" is the trade's word; "One product" says what it is |
+| 9 | A plan limit on follow-ups | **Yes**, `form_followups`: 200 a month on the lowest plan, with the texts counted as texts |
+| 10 | **Order via WhatsApp** on the page: the business's own number only, or the shared number too? | **Both**, as the storefront's chat link does today: the own number where there is one, else the shared number with the business's code |
+
+## 13. Needs a person
+
+| Item | Who |
+| --- | --- |
+| The decisions of §12 | The founder |
+| Meta's category for a "finish your order" template (utility or marketing), its wording, and whether a URL button to the restore link is allowed | Whoever holds the WhatsApp Business Account |
+| The consent line and the follow-up's words, in the five languages, against the plain-words rules; whether Nigeria's data protection rules need more than the line on the form for one message about an order the person started | Product, native speakers, whoever owns privacy |
+| The fixed set of chip icons for One product | Design |
+| Whether "Only N left" from stock is shown by default or opt-in, given the trade's habit of made-up counts | The founder |
+
+## 14. What this is not
+
+- **Not a page builder.** One product is a preset drawn by the storefront's renderer; the owner sets words, photos and chips, never layout or style.
+- **Not a second order path.** A form that sells is an action; nothing takes an order but an action's submission.
+- **Not tracking.** No pixel, no analytics on the seller's site, no record of who opened the page. A keep is sent only after a buyer typed a valid contact into Taskiem's own form.
+- **Not a lead list.** Left-half-filled records lead to one message about one order and are purged in seven days; they are not exported, not searched, not given to the AI.
+- **Not marketing messages.** Offers to past customers are [Taskiem for everyone](taskiem-for-everyone.md)'s, with their opt-in and their two a week; this plan sends one message about an order the person started.
+
+## 15. What a review of this plan changed
+
+The plan was read against the code on the day it was written. What that found:
+
+| Was (first draft) | Is |
+| --- | --- |
+| A product field added to hosted forms, with its own pricing | A form that sells becomes an action of a front, so the basket's pricing, the price check, claims, the order pipeline and the submissions table are reused and 0059's "forms are the only mechanism for an action" holds from both sides (§5.1) |
+| The follow-up "on WhatsApp, SMS or email, by what they filled in" | By the `message` step's order, with the rule of 0039 point 3 that a typed phone is unproven: SMS first for a typed number, WhatsApp where linked already or, later, by an approved template on the business's own number (§6.4) |
+| The form's state autosaved on the server | A hosted form's state lives in a signed token in the page, and the public host holds no vault key; so a keep carries the contact and the product choice only, sealed with the `api` role's public key as reach codes are, through the inbox (§6.1) |
+| Everything typed kept, to restore the form whole | The contact and the product choice only; the restore fills those and the buyer types the rest again (§6.1, §12, 7) |
+| "Free delivery" as a package property | The storefront's delivery areas and fees are what is charged; the label is the owner's words, and the editor offers to set the fees to nothing (§5.2) |
+| The embed as new work | The storefront embeds one action's form on a verified site already; what is new is the snippet per action and the packages field's height (§5.5) |
