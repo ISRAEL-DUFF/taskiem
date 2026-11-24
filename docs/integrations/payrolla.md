@@ -63,7 +63,7 @@ A refused key says what to do: `scope_required` (make a key with Read payroll an
 
 ## What is not here yet
 
-Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), proposed; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). None is built yet:
+Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built so far: 1–3; 4 and 5 are next.
 
 1. **Connecting in one step** (P4b-1), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-1-connect-in-one-step-keep-keys-reconnect-link-approvers)), live once Payrolla registers Taskiem:
    - OAuth 2.0 with PKCE, with sign-up in the same step (`POST /v1/payroll/connect`; Payrolla sends the browser back to `/v1/payrolla/callback`);
