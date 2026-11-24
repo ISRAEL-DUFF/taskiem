@@ -31,6 +31,7 @@ import 'invoices_page.dart' show shortDay;
 import 'payroll_run.dart' show PayrollRunPage, PayrollThisMonth;
 
 export 'payroll_run.dart' show PayrollRunPage;
+import 'payroll_schedules.dart' show openPayrollSchedules;
 import 'payroll_settings.dart' show PayrollSettingsPage;
 import 'payroll_team.dart' show openMyPay, openPayrollChanges, openPayrollTeam;
 import 'words.dart' show CardTone, naira;
@@ -311,8 +312,16 @@ class _PayrollPageState extends State<PayrollPage> {
                 onTap: () => unawaited(_push(context, PayrollStaffPage(auth: _auth, backLabel: 'Back to Payroll'))),
               ),
               TkListRow(
+                title: 'Tax and pension',
+                sub: 'PAYE, pension, NHF and NHIS to pay',
+                subLines: 1,
+                icon: 'b-receipt',
+                square: look.blue,
+                onTap: () => unawaited(openPayrollSchedules(context, _auth)),
+              ),
+              TkListRow(
                 title: 'Payroll settings',
-                sub: 'Connecting, and who approves',
+                sub: 'Connecting, setup, and who approves',
                 subLines: 1,
                 icon: 'b-tools',
                 square: look.violet,

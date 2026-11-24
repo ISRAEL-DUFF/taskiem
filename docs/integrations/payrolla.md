@@ -82,7 +82,7 @@ Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-
 
    Approving is no longer a link into Payrolla, and there is no Taskiem-signed approval: Payrolla chose its own code instead.
 4. **After locking** (P4b-4): the payment's progress, the wallet's shortfall, **Pay now**, **Pay the failed ones again**, and payslips as Taskiem's own cards.
-5. **Settings and the tax and pension schedules** (P4b-5).
+5. **Settings and the tax and pension schedules** (P4b-5), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-5-settings-and-the-tax-and-pension-schedules); `/v1/payroll/settings` and `/v1/payroll/schedules`, Payrolla's `reports:read`): the setup read-only, and each payroll's schedules with pension PINs shown only with a passkey.
 
 **Also not here yet:**
 

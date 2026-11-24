@@ -27,6 +27,7 @@ import '../kit/sheet.dart';
 import '../screens/sign_in.dart' show CodeBoxes;
 import '../theme/look.dart';
 import 'groups.dart' show askSure;
+import 'payroll_schedules.dart' show openPayrollSetup;
 
 /// How the business's Payrolla is connected.
 enum PayrollConnectionState { none, ended, key, oneStep }
@@ -171,6 +172,14 @@ class _PayrollSettingsPageState extends State<PayrollSettingsPage> {
         return [
           TkSection(title: 'Payrolla', inset: 56, children: [
             TkListRow(title: company.isEmpty ? 'Your company' : company, sub: 'Connected with a key', icon: 'b-calendar', square: look.teal, chevron: false),
+            TkListRow(
+              title: 'How payroll is set up',
+              sub: 'Pay days, tax and pension',
+              subLines: 1,
+              icon: 'b-tools',
+              square: look.teal,
+              onTap: () => unawaited(openPayrollSetup(context, _auth)),
+            ),
           ]),
           if (owner) ...[
             TkCallout(
@@ -192,6 +201,14 @@ class _PayrollSettingsPageState extends State<PayrollSettingsPage> {
               icon: 'b-calendar',
               square: look.lime,
               chevron: false,
+            ),
+            TkListRow(
+              title: 'How payroll is set up',
+              sub: 'Pay days, tax and pension',
+              subLines: 1,
+              icon: 'b-tools',
+              square: look.teal,
+              onTap: () => unawaited(openPayrollSetup(context, _auth)),
             ),
           ]),
         ];

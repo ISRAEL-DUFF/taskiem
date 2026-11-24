@@ -176,6 +176,7 @@ Within a stage, phases that do not need each other may be built at once by separ
     - the settings, read-only;
     - the PAYE, pension, NHF and NHIS schedules (`reports:read`), treated like payslips: `payroll.read`, never in a message, pension PINs masked.
     - Done when: an owner sees November's schedules and the settings behind them without opening Payrolla.
+    - **Status (24 November 2026): built** against the fake Payrolla ([as built](chat-pay-people.md#p4b-5-settings-and-the-tax-and-pension-schedules)): the settings in plain words with Change in Payrolla; each payroll's PAYE, pension, NHF and NHIS schedules with a line per person, pension PINs and PFAs masked until a passkey shows them (recorded), a spreadsheet when asked; `reports:read` missing said in words; "payroll settings" and "pension schedule for november" in the chat; on the web and in the app.
   - **Tests:** against a fake Payrolla that follows its current OpenAPI file, and Payrolla's test company with an unfunded wallet; never real money.
   - **Still in Payrolla:** changing settings, correcting a locked run, cancelling an approved run, and changing a phone number.
 - **The chat apps:** the WhatsApp, Telegram and Slack words for paying one person and several, with confirmation by link, or by the PIN within its limit ("send @driver 45k" on WhatsApp opens the sheet by link).
