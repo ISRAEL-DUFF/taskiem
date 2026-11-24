@@ -1,3 +1,4 @@
+import { SavedSourceForm } from "./PageEditorG5";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { del, get, post, put } from "../api";
@@ -429,6 +430,8 @@ function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; 
     if ((k === "tool-list" || k === "tool-chart" || k === "tool-board") &&feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
     if (OWN_TABLE_KINDS.includes(k) && own.length === 0) return "No table of your own yet";
     if (k === "status" && choices.workflows.length === 0) return "No workflow is in use yet";
+    if (k === "saved-list" && !(choices.saved_kinds ?? []).length) return "No kind of saved things made yet";
+    if (k === "saved-list") return "";
     if (k === "buttons" && choices.tools.length === 0 && !choices.workflows.some((w) => w.signals.length || w.approvals.length)) return "No tool or workflow to press yet";
     if (k === "status" || k === "buttons" || k.startsWith("tool-")) return "";
     return k !== "heading" && tables.length === 0 ? "No table yet" : "";
@@ -505,6 +508,7 @@ function PartForm({ part, tables, choices, filters, onChange }: { part: Part; ta
     );
   }
   if (part.type === "status") return <StatusForm part={part} choices={choices} onChange={onChange} />;
+  if (part.source?.saved !== undefined) return <SavedSourceForm part={part} kinds={choices.saved_kinds ?? []} onChange={onChange} />;
   if (part.source?.tool !== undefined && part.type === "figure") {
     return (
       <div className="pg-part-form">

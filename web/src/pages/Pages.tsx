@@ -8,6 +8,7 @@ import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, 
 import { Decide } from "./Approvals";
 import { useConfirm } from "./ConfirmSheet";
 import { MadeToolSheet } from "./MadeToolSheet";
+import { DescribePageModal, StartersModal } from "./PageStarters";
 import { Board, Chart, type Move } from "./PageG4";
 import {
   stillWorking,
@@ -59,6 +60,8 @@ export const pageIcon = (icon: string) => ICONS[icon] ?? (icon || "tables");
 export function Pages() {
   const list = useLoad(() => get<PageList>("/v1/pages"), []);
   const [making, setMaking] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [describing, setDescribing] = useState(false);
   const data = list.data;
   return (
     <>
@@ -71,6 +74,14 @@ export function Pages() {
               <button className="primary" onClick={() => setMaking(true)}>
                 <Icon name="plus" />
                 New page
+              </button>
+              <button onClick={() => setStarting(true)}>
+                <Icon name="dashboard" />
+                From a starter
+              </button>
+              <button onClick={() => setDescribing(true)}>
+                <Icon name="sparkle" />
+                Describe it
               </button>
               <FromFile />
             </>
@@ -110,6 +121,8 @@ export function Pages() {
         </Items>
       )}
       {making && <NewPage onClose={() => setMaking(false)} />}
+      {starting && <StartersModal onClose={() => setStarting(false)} />}
+      {describing && <DescribePageModal onClose={() => setDescribing(false)} />}
     </>
   );
 }

@@ -3,6 +3,7 @@
 // file has the page's types, and the editor's work on its document in
 // plain words: no "block", "source" or "query" ever reaches the owner.
 
+import { savedListPart, savedPartWords, type ChoiceKind } from "./pages_g5";
 import type { Column, Table } from "./tables";
 
 export type Tone = "plain" | "good" | "warn" | "bad";
@@ -25,6 +26,10 @@ export interface Source {
   tool?: string;
   inputs?: Record<string, unknown>;
   output?: string;
+  /** G5: the business's saved things of a kind it made (by name), in the order a date field comes, within some days. */
+  saved?: string;
+  coming?: string;
+  within?: number;
 }
 
 /** A button (G2): a tool's form, a signal to a run, or a run's approval. */
@@ -609,10 +614,11 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "chart", words: "A chart", hint: "Bars or a line: a total by week, or by kind" },
   { kind: "tool-chart", words: "A chart a tool works out", hint: "Bars or a line of the rows a tool answers with" },
   { kind: "tool-board", words: "A board a tool works out", hint: "The rows a tool answers with, in columns; moving a card runs a tool" },
+  { kind: "saved-list", words: "A list of saved things", hint: "Things of a kind you made, like Generators, with their dates coming up" },
 ];
 
 /** The kinds that need no table (a tool, a run, or nothing feeds them). */
-export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart", "tool-board"];
+export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart", "tool-board", "saved-list"];
 
 /** The kinds that read only a business's own table, never Taskiem's records. */
 export const OWN_TABLE_KINDS = ["board", "chart"];
@@ -639,6 +645,8 @@ export interface ChoiceWorkflow {
 export interface PageChoices {
   tools: ChoiceTool[];
   workflows: ChoiceWorkflow[];
+  /** G5: the business's kinds of saved things, names and fields only. */
+  saved_kinds?: ChoiceKind[];
 }
 
 /** The tools that may feed a part showing one figure, or a list. */
@@ -822,6 +830,8 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
         chart: { kind: "bars", label: "=item.name", value: "=item.total" },
       };
     }
+    case "saved-list":
+      return savedListPart(choices?.saved_kinds?.[0], freeId(parts, "saved"));
     case "buttons":
       return { id: freeId(parts, "buttons"), type: "buttons", actions: [] };
     case "status":
@@ -880,6 +890,7 @@ export function partWords(p: Part, tables: Table[]): string {
   const t = tables.find((x) => x.name === p.source?.table);
   const from = t ? t.title || t.name : p.source?.table ?? "";
   const where = (p.source?.filters ?? []).length ? `, only some rows` : "";
+  if (p.source?.saved) return savedPartWords(p, []);
   if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : p.type === "chart" ? "A chart" : p.type === "board" ? "A board" : "A list"} worked out by /${p.source.tool}`;
   switch (p.type) {
     case "heading":
