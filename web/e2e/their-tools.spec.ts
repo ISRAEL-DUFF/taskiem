@@ -162,6 +162,10 @@ test("a customer uses a business's tools in their chat: a form, Yes, the answer 
   // A form; Next shows what will run; nothing starts before Yes.
   await theirs.getByTestId("their-tool-order-status").click();
   const sheet = page.getByTestId("their-tool-sheet");
+  // The tools menu closing as the tool opens does not hand the focus back
+  // to the message box behind the sheet: what is typed goes in the form.
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(sheet).toBeFocused();
   await sheet.getByLabel("Order number").fill("A-100");
   await check(page, "their tool's form", 390);
   await sheet.getByRole("button", { name: "Next" }).click();
