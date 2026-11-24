@@ -18,7 +18,7 @@
     "test_pass_rate": 0.9969,
     "valid_first_try_and_tests_pass_rate": 0.9969,
     "requirements_rate": 0.2555,
-    "property_pass_rate": 0.7817,
+    "property_pass_rate": 0.7801,
     "strict_rate": 0.2555,
     "policy_violations": 0,
     "attempts_with_policy_violations": 0,
@@ -28,8 +28,8 @@
     "trigger_accuracy": 0.5639,
     "template_starts": 271,
     "usage": {
-      "input_tokens": 15703245,
-      "output_tokens": 17971,
+      "input_tokens": 15702735,
+      "output_tokens": 17972,
       "cache_creation_tokens": 0,
       "cache_read_tokens": 0
     },
@@ -1024,7 +1024,7 @@
     "inputs_declared": {
       "cases": 10,
       "valid_first_try_and_tests_pass_rate": 0,
-      "requirements_rate": 0.8,
+      "requirements_rate": 0.7,
       "strict_rate": 0,
       "policy_violations": 0
     },
@@ -5275,7 +5275,7 @@
       "step_recall": 1,
       "trigger_ok": false,
       "properties": {
-        "inputs_declared": true,
+        "inputs_declared": false,
         "no_inline_secrets": true
       },
       "requirements": false,
@@ -5283,13 +5283,14 @@
       "missing": [
         "prembly@1",
         "termii@1",
-        "trigger form"
+        "trigger form",
+        "inputs_declared: the workflow declares no inputs schema"
       ],
-      "template": "kyc-bvn-check",
+      "template": "debtor-reminder-sms",
       "model": "heuristic",
       "usage": {
-        "input_tokens": 57872,
-        "output_tokens": 32,
+        "input_tokens": 57362,
+        "output_tokens": 33,
         "cache_creation_tokens": 0,
         "cache_read_tokens": 0
       }
