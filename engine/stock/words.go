@@ -38,6 +38,12 @@ func Singular(u string) string {
 // (or in none) takes one of it for each one bought.
 var countUnits = map[string]bool{"": true, "piece": true, "pc": true, "unit": true, "item": true, "each": true, "one": true, "no": true}
 
+// measureUnits measure rather than count: a line bought with no unit of
+// its own, into a stock item counted in one of them, asks how much one is.
+var measureUnits = map[string]bool{"g": true, "gram": true, "kg": true, "kilo": true, "kilogram": true, "mg": true, "ml": true, "cl": true, "l": true,
+	"litre": true, "yard": true, "metre": true, "meter": true, "m": true, "cm": true, "mm": true, "inch": true, "foot": true, "feet": true,
+	"ft": true, "lb": true, "oz": true}
+
 // unitKey is a unit as AskUses compares it: lower case, for one.
 func unitKey(u string) string { return strings.ToLower(Singular(strings.TrimSpace(u))) }
 
@@ -45,15 +51,19 @@ func unitKey(u string) string { return strings.ToLower(Singular(strings.TrimSpac
 // none was said), going into a stock item counted in stockUnit, asks how
 // many of the stock item one of it is (what a business buys §6;
 // build-plan-gaps H2, g-uses-ask): the stock item is counted in another
-// unit (grams, yards) and nothing says it yet (uses, a product's own, is
-// 1). The web (lib/treat.ts askUses) and the app (treat_line.dart
-// askUses) ask by the same rule.
+// unit (a bag into grams) and nothing says it yet (uses, a product's own,
+// is 1). A line with no unit asks only of a stock item measured (grams,
+// yards), not of one counted in bags or cartons. The web (lib/treat.ts
+// askUses) and the app (treat_line.dart askUses) ask by the same rule.
 func AskUses(lineUnit, stockUnit string, uses int64) bool {
 	if uses > 1 {
 		return false
 	}
-	s := unitKey(stockUnit)
-	return !countUnits[s] && unitKey(lineUnit) != s
+	s, l := unitKey(stockUnit), unitKey(lineUnit)
+	if countUnits[s] || l == s {
+		return false
+	}
+	return l != "" || measureUnits[s]
 }
 
 func isUnit(w string) bool {

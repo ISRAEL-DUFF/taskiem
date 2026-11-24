@@ -135,12 +135,18 @@ export function singular(u: string): string {
   return u;
 }
 
+/** The units that measure rather than count (stock.measureUnits). */
+const MEASURE_UNITS = new Set(
+  "g gram kg kilo kilogram mg ml cl l litre yard metre meter m cm mm inch foot feet ft lb oz".split(" "),
+);
+
 const unitKey = (u: string | undefined) => singular((u ?? "").trim()).toLowerCase();
 
 /** Whether a line bought in lineUnit, going into a stock item counted in
  * stockUnit, asks how many of the stock item one of it is (g-uses-ask):
- * counted in another unit (grams, yards) with nothing saying it yet. The
- * server's stock.AskUses, and the app's askUses, by the same rule. */
+ * counted in another unit (a bag into grams) with nothing saying it yet;
+ * a line with no unit asks only of a stock item measured (grams, yards).
+ * The server's stock.AskUses, and the app's askUses, by the same rule. */
 export function askUses(
   lineUnit: string | undefined,
   stockUnit: string | undefined,
@@ -148,7 +154,9 @@ export function askUses(
 ): boolean {
   if ((uses ?? 1) > 1) return false;
   const s = unitKey(stockUnit);
-  return !COUNT_UNITS.has(s) && unitKey(lineUnit) !== s;
+  const l = unitKey(lineUnit);
+  if (COUNT_UNITS.has(s) || l === s) return false;
+  return l !== "" || MEASURE_UNITS.has(s);
 }
 
 /** The uses question: "How many g is one bag?" (one of the item when the

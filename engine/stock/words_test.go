@@ -18,6 +18,9 @@ func TestAskUses(t *testing.T) {
 	}{
 		{"bag", "g", 1, true},
 		{"", "g", 1, true},
+		{"", "yards", 1, true},
+		{"", "bag", 1, false},
+		{"tin", "carton", 1, true},
 		{"bags", "kg", 0, true},
 		{"yard", "yards", 1, false},
 		{"Bags", "bag", 1, false},

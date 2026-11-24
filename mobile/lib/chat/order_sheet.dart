@@ -644,6 +644,7 @@ class _OrderSheetState extends State<OrderSheet> {
               item: l.item.name,
               supplier: _biz,
               quantity: l.quantity,
+              unit: l.item.unit,
               value: _treatOf(l.item),
               choices: _choices,
               asked: _memory(l.item.id) == null,

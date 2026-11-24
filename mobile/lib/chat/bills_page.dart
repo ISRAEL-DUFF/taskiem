@@ -319,7 +319,8 @@ class _BillPageState extends State<BillPage> with Polling {
     // Not matched to an order line (no seller item, or not on it): nothing
     // is known of how it is treated, so no mark, not "Not labelled".
     if (o == null) return null;
-    final label = _labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '';
+    // The server names the label kept, so one merged since shows as it.
+    final label = _str(o['label']).isNotEmpty ? _str(o['label']) : (_labels!.where((x) => x.id == o['label_id']).map((x) => x.name).firstOrNull ?? '');
     return LineMark(how: _str(o['treatment']), label: label);
   }
 

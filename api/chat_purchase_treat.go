@@ -76,7 +76,7 @@ type treatAsk struct {
 	// StockUnit is the unit its stock item is counted in, when it asks
 	// how many of it one of the line is (stock.AskUses).
 	StockUnit string `json:"stock_unit,omitempty"`
-	Label     string           `json:"label,omitempty"`
+	Label     string `json:"label,omitempty"`
 	// Offered are the stock items or labels offered, by number.
 	Offered []treatOffer `json:"offered,omitempty"`
 }

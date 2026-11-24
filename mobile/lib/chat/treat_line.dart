@@ -46,15 +46,26 @@ class Treat {
   /// As the business remembers a supplier's item.
   factory Treat.ofMemory(ItemMemory m) => Treat(how: m.treatment, stockItemId: m.stockItemId, stockItem: m.stockItem ?? '', uses: m.uses < 1 ? 1 : m.uses, labelId: m.labelId, label: m.label ?? '');
 
-  /// As an order's line has it, names from what the question offers.
-  factory Treat.ofLine(Map<String, dynamic> l, TreatChoices c) => Treat(
-    how: _str(l['treatment']).isEmpty ? 'record' : _str(l['treatment']),
-    stockItemId: l['stock_item_id'] as String?,
-    stockItem: c.stockName(l['stock_item_id'] as String?),
-    uses: _int(l['uses']) < 1 ? 1 : _int(l['uses']),
-    labelId: l['label_id'] as String?,
-    label: c.labelName(l['label_id'] as String?),
-  );
+  /// As an order's line has it, names from what the question offers. Its
+  /// label is the server's name of the label kept ([lineLabel]); a line
+  /// still to confirm with none pre-selects the server's suggestion for
+  /// its name, made when it is confirmed (§6).
+  factory Treat.ofLine(Map<String, dynamic> l, TreatChoices c) {
+    var labelId = l['label_id'] as String?;
+    var label = lineLabel(l, c);
+    if ((labelId ?? '').isEmpty && l['unconfirmed'] == true) {
+      final s = c.suggestedLabel(_str(l['item']));
+      if (s != null) (labelId, label) = (s.id, s.name);
+    }
+    return Treat(
+      how: _str(l['treatment']).isEmpty ? 'record' : _str(l['treatment']),
+      stockItemId: l['stock_item_id'] as String?,
+      stockItem: c.stockName(l['stock_item_id'] as String?),
+      uses: _int(l['uses']) < 1 ? 1 : _int(l['uses']),
+      labelId: labelId,
+      label: label,
+    );
+  }
 
   Treat copyWith({String? how, String? stockItemId, String? stockItem, int? uses, String? labelId, String? label, bool noLabel = false}) => Treat(
     how: how ?? this.how,
@@ -79,6 +90,49 @@ class Treat {
     if ((labelId ?? '').isNotEmpty) 'label_id': labelId,
   };
 }
+
+/// A line's label as cards show it: the server's name of the label kept
+/// (`label`: a label merged since shows as the one kept), else its id among
+/// the business's labels; '' for none.
+String lineLabel(Map<String, dynamic> l, TreatChoices c) {
+  final s = _str(l['label']);
+  return s.isNotEmpty ? s : c.labelName(l['label_id'] as String?);
+}
+
+/// A unit word for one: bags, bag; boxes, box (stock.Singular).
+String singularUnit(String u) {
+  final l = u.toLowerCase();
+  if (l.length > 3 && l.endsWith('ies')) return '${u.substring(0, u.length - 3)}y';
+  if (['xes', 'ches', 'shes', 'sses'].any(l.endsWith)) return u.substring(0, u.length - 2);
+  if (l.length > 2 && l.endsWith('s') && !l.endsWith('ss')) return u.substring(0, u.length - 1);
+  return u;
+}
+
+const _countUnits = {'', 'piece', 'pc', 'unit', 'item', 'each', 'one', 'no'};
+
+/// Units that measure rather than count (stock.measureUnits).
+const _measureUnits = {
+  'g', 'gram', 'kg', 'kilo', 'kilogram', 'mg', 'ml', 'cl', 'l', 'litre', 'yard', 'metre', 'meter', 'm', 'cm', 'mm', 'inch', 'foot', 'feet', 'ft', 'lb', 'oz', //
+};
+
+String _unitKey(String? u) => singularUnit((u ?? '').trim()).toLowerCase();
+
+/// Whether a line bought in [lineUnit], going into a stock item counted in
+/// [stockUnit], asks how many of the stock item one of it is: counted in
+/// another unit (a bag into grams); a line with no unit asks only of a
+/// stock item measured (grams, yards). The server's stock.AskUses and the
+/// web's askUses, by the same rule.
+bool askUses(String? lineUnit, String? stockUnit, [int uses = 1]) {
+  if (uses > 1) return false;
+  final s = _unitKey(stockUnit);
+  final l = _unitKey(lineUnit);
+  if (_countUnits.contains(s) || l == s) return false;
+  return l.isNotEmpty || _measureUnits.contains(s);
+}
+
+/// "How many g is one bag?" (one of the item when the line has no unit).
+String usesQuestion(String stockUnit, String? lineUnit, String item) =>
+    'How many $stockUnit is one ${(lineUnit ?? '').trim().isEmpty ? item : singularUnit(lineUnit!.trim())}?';
 
 /// The three answers, as said.
 String treatWords(String how) => switch (how) {
@@ -128,14 +182,53 @@ class TreatChoices extends ChangeNotifier {
   String labelName(String? id) => id == null ? '' : (labels?.where((l) => l.id == id).map((l) => l.name).firstOrNull ?? '');
 
   /// A first guess for an item never ordered before (§6): a stock item of
-  /// the same name is Add to stock, else Just record it; the label is one
-  /// of the business's sharing a word with the item's name.
+  /// the same name is Add to stock, else Just record it; the label is the
+  /// server's first suggestion for the name ([suggestedLabel]: the
+  /// business's own, or a new name, made when the line is saved), and
+  /// until it comes one of the business's sharing a word with the name.
   Treat suggest(String item) {
     final k = item.trim().toLowerCase();
     final s = stock?.where((r) => r.name.trim().toLowerCase() == k).firstOrNull;
+    final server = suggestedLabel(item);
+    if (server != null) {
+      return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: server.id, label: server.name);
+    }
     final words = k.split(RegExp('[^a-z0-9]+')).where((w) => w.length > 2).toSet();
     final l = labels?.where((l) => l.name.toLowerCase().split(RegExp('[^a-z0-9]+')).any(words.contains)).firstOrNull;
     return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: l?.id, label: l?.name ?? '');
+  }
+
+  /// The server's suggestions, by name (null: none, or not come yet).
+  final Map<String, ({String? id, String name})?> _suggested = {};
+  bool _gone = false;
+
+  /// The server's first label suggestion for [item]
+  /// (`GET /v1/money/labels?item=`): asked once per name, listeners told
+  /// when it comes. Its id is none for a name not yet a label.
+  ({String? id, String name})? suggestedLabel(String item) {
+    final k = item.trim().toLowerCase();
+    if (k.isEmpty) return null;
+    if (!_suggested.containsKey(k)) {
+      _suggested[k] = null;
+      () async {
+        try {
+          final r = await auth.api.listSpendLabels(item: item.trim());
+          final f = r.suggestions.firstOrNull;
+          if (f == null || _gone) return;
+          _suggested[k] = (id: f.labelId, name: f.name);
+          notifyListeners();
+        } on Object {
+          // No suggestion: the guess by words stands.
+        }
+      }();
+    }
+    return _suggested[k];
+  }
+
+  @override
+  void dispose() {
+    _gone = true;
+    super.dispose();
   }
 
   /// The label's id, making a label typed as new.
@@ -210,9 +303,14 @@ class TreatQuestion extends StatefulWidget {
     this.locked = false,
     this.foot,
     this.quantity,
+    this.unit,
   });
   final String item;
   final String supplier;
+
+  /// The unit the line is bought in ("bag"): a stock item counted in
+  /// another asks how many of it one is ([askUses]).
+  final String? unit;
   final Treat value;
   final TreatChoices choices;
 
@@ -239,6 +337,36 @@ class TreatQuestion extends StatefulWidget {
 
 class _TreatQuestionState extends State<TreatQuestion> {
   late bool _open = widget.asked;
+
+  /// How many of the stock item one is, as typed.
+  late final _uses = TextEditingController(text: widget.value.uses > 1 ? '${widget.value.uses}' : '');
+
+  @override
+  void initState() {
+    super.initState();
+    _uses.addListener(() {
+      final t = _uses.text.trim().replaceAll(',', '');
+      final n = int.tryParse(t);
+      final uses = n != null && n >= 1 && n <= 1000000 ? n : 1;
+      if (uses != _v.uses) _set(_v.copyWith(uses: uses));
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _uses.dispose();
+    super.dispose();
+  }
+
+  bool get _badUses {
+    final t = _uses.text.trim().replaceAll(',', '');
+    final n = int.tryParse(t);
+    return t.isNotEmpty && (n == null || n < 1 || n > 1000000);
+  }
+
+  /// The chosen stock item's unit, when one is chosen.
+  String? get _stockUnit => _v.how == 'stock' ? widget.choices.stock?.where((r) => r.id == _v.stockItemId).map((r) => r.unit).firstOrNull : null;
 
   @override
   void didUpdateWidget(TreatQuestion old) {
@@ -386,6 +514,12 @@ class _TreatQuestionState extends State<TreatQuestion> {
             field: false,
             label: 'Stock item',
             child: TkPickBox(label: 'Stock item for ${widget.item}', shown: _v.stockItem.isEmpty ? 'Choose…' : _v.stockItem, onTap: _pickStock),
+          ),
+        if (_stockUnit != null && askUses(widget.unit, _stockUnit))
+          TkKitField(
+            label: usesQuestion(_stockUnit!, widget.unit, widget.item),
+            hint: _badUses ? 'A whole number, like 1000.' : '${_v.stockItem.isEmpty ? 'It' : _v.stockItem} is counted in $_stockUnit. Said once, it is remembered.',
+            child: TkTextBox(controller: _uses, max: 9, plain: true, size: 15, height: 46, hint: 'Like 1000'),
           ),
         TkKitField(
           field: false,
@@ -683,7 +817,7 @@ class LineMark extends StatelessWidget {
 /// `lines`): each line changed or asked, with its fields (a label typed as
 /// new made first); null for one taken as it is.
 Future<List<Map<String, Object?>?>> confirmLines(TreatChoices c, List<Map<String, dynamic>> lines, Map<int, Treat> chosen) async => [
-  for (var i = 0; i < lines.length; i++) chosen[i] != null ? (await c.made(chosen[i]!)).fields() : (lines[i]['unconfirmed'] == true ? Treat.ofLine(lines[i], c).fields() : null),
+  for (var i = 0; i < lines.length; i++) chosen[i] != null ? (await c.made(chosen[i]!)).fields() : (lines[i]['unconfirmed'] == true ? (await c.made(Treat.ofLine(lines[i], c))).fields() : null),
 ];
 
 /// The question on a line of an order not yet received (§6, "After it
@@ -763,6 +897,7 @@ class _OpenLineQuestionState extends State<OpenLineQuestion> {
       item: item,
       supplier: _str(widget.purchase['supplier']),
       quantity: _int(_l['quantity']),
+      unit: _str(_l['unit']),
       value: _v,
       choices: widget.choices,
       asked: _unconfirmed && !locked,

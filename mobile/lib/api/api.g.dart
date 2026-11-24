@@ -17793,7 +17793,7 @@ class DealStepLinesItem {
 /// One line of a purchase order, as the business sees it (what a business buys
 /// §5): its treatment, stock item and label are never sent to the supplier
 class PurchaseLine {
-  const PurchaseLine({required this.costKobo, this.delivered, required this.id, required this.item, required this.itemId, this.labelId, required this.position, required this.quantity, required this.received, this.sellerItemId, this.stockItemId, required this.treatment, this.unconfirmed, this.unit, required this.uses});
+  const PurchaseLine({required this.costKobo, this.delivered, required this.id, required this.item, required this.itemId, this.label, this.labelId, required this.position, required this.quantity, required this.received, this.sellerItemId, this.stockItemId, required this.treatment, this.unconfirmed, this.unit, required this.uses});
 
   /// The price of one
   final int costKobo;
@@ -17805,6 +17805,9 @@ class PurchaseLine {
   /// linked supplier's item, else the stock item of a stock line, else the
   /// line's own id
   final String itemId;
+  /// The name of the label kept for label_id (a merged label followed to the
+  /// one kept); none without a label
+  final String? label;
   final String? labelId;
   /// Its place on the order, from 0; the order's change and short are by it
   final int position;
@@ -17832,6 +17835,7 @@ class PurchaseLine {
         id: j['id'] as String,
         item: j['item'] as String,
         itemId: j['item_id'] as String,
+        label: j['label'] == null ? null : j['label'] as String,
         labelId: j['label_id'] == null ? null : j['label_id'] as String,
         position: (j['position'] as num).toInt(),
         quantity: (j['quantity'] as num).toInt(),
@@ -17850,6 +17854,7 @@ class PurchaseLine {
         'id': id,
         'item': item,
         'item_id': itemId,
+        'label': ?label,
         'label_id': ?labelId,
         'position': position,
         'quantity': quantity,
@@ -18335,37 +18340,45 @@ class AddThingResponse {
 }
 
 class PatchThingRequest {
-  const PatchThingRequest({this.clearLabel, this.labelId, this.note, this.salePaidHow, this.salePriceKobo, this.serial, this.status, this.warrantyUntil});
+  const PatchThingRequest({this.clearLabel, this.clearSupplier, this.labelId, this.note, this.salePaidHow, this.salePriceKobo, this.serial, this.status, this.supplierId, this.warrantyUntil});
 
   final bool? clearLabel;
+  /// Takes its supplier off (not said)
+  final bool? clearSupplier;
   final String? labelId;
   final String? note;
   final String? salePaidHow;
   final int? salePriceKobo;
   final String? serial;
   final String? status;
+  /// From whom it came, one of the business's suppliers
+  final String? supplierId;
   /// A date (YYYY-MM-DD); empty clears it
   final String? warrantyUntil;
 
   factory PatchThingRequest.fromJson(Map<String, dynamic> j) => PatchThingRequest(
         clearLabel: j['clear_label'] == null ? null : j['clear_label'] as bool,
+        clearSupplier: j['clear_supplier'] == null ? null : j['clear_supplier'] as bool,
         labelId: j['label_id'] == null ? null : j['label_id'] as String,
         note: j['note'] == null ? null : j['note'] as String,
         salePaidHow: j['sale_paid_how'] == null ? null : j['sale_paid_how'] as String,
         salePriceKobo: j['sale_price_kobo'] == null ? null : (j['sale_price_kobo'] as num).toInt(),
         serial: j['serial'] == null ? null : j['serial'] as String,
         status: j['status'] == null ? null : j['status'] as String,
+        supplierId: j['supplier_id'] == null ? null : j['supplier_id'] as String,
         warrantyUntil: j['warranty_until'] == null ? null : j['warranty_until'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'clear_label': ?clearLabel,
+        'clear_supplier': ?clearSupplier,
         'label_id': ?labelId,
         'note': ?note,
         'sale_paid_how': ?salePaidHow,
         'sale_price_kobo': ?salePriceKobo,
         'serial': ?serial,
         'status': ?status,
+        'supplier_id': ?supplierId,
         'warranty_until': ?warrantyUntil,
       };
 }

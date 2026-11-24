@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/purchases_page.dart';
+import 'package:taskiem/chat/treat_line.dart' show askUses, usesQuestion;
 import 'package:taskiem/kit/page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -592,6 +593,62 @@ void main() {
     expect(find.text('How should we treat it?'), findsNothing, reason: 'closed once confirmed');
     expect(find.bySemanticsLabel('Confirm how Diesel is treated'), findsNothing);
     await t.pump(const Duration(seconds: 5));
+  });
+
+  // H2 g-label-merge: a line's label merged since shows as the one kept,
+  // as the server names it, not Not labelled.
+  testWidgets('a line labelled with a merged label shows the label kept', (t) async {
+    await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(link: '', lines: [
+        {..._line(0, 'Biscuits', received: 2, label: 'lb-snacks'), 'label': 'Staff welfare'},
+      ]),
+    );
+    expect(find.text('Staff welfare'), findsWidgets);
+    expect(find.text('Not labelled'), findsNothing);
+  });
+
+  // H2 g-uses-ask: into a stock item counted in another unit, how many of
+  // it one is is asked, and sent with the line.
+  testWidgets('malt in crates into a stock item counted in bottles asks how many bottles one crate is', (t) async {
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(link: '', lines: [
+        {..._line(0, 'Malt', treatment: 'stock', stock: 'si-malt', unconfirmed: true), 'unit': 'crates'},
+      ]),
+    );
+    expect(find.text('How many bottle is one crate?'), findsOneWidget);
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^How many bottle is one crate')), matching: find.byType(EditableText)), '24');
+    await t.pump();
+    await snap(t, 'purchase-uses');
+    await t.tap(find.bySemanticsLabel('Confirm how Malt is treated'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH')).single, 'PATCH /v1/stock/purchases/P1/lines/0 {"treatment":"stock","stock_item_id":"si-malt","uses":24,"label_id":"lb-pack"}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  test('askUses: asked only of a stock item counted in another unit', () {
+    // The same cases as engine/stock TestAskUses and lib/treat.test.ts.
+    for (final (line, stock, uses, ask) in [
+      ('bag', 'g', 1, true),
+      ('', 'g', 1, true),
+      ('', 'yards', 1, true),
+      ('', 'bag', 1, false),
+      ('tin', 'carton', 1, true),
+      ('bags', 'kg', 0, true),
+      ('yard', 'yards', 1, false),
+      ('Bags', 'bag', 1, false),
+      ('bag', '', 1, false),
+      ('bag', 'pcs', 1, false),
+      ('carton', 'piece', 1, false),
+      ('bag', 'g', 1000, false),
+    ]) {
+      expect(askUses(line, stock, uses), ask, reason: '$line into $stock');
+    }
+    expect(usesQuestion('g', 'bags', 'Rice'), 'How many g is one bag?');
+    expect(usesQuestion('g', '', 'Rice'), 'How many g is one Rice?');
   });
 
   testWidgets('a line that came meanwhile: locked, said, read again', (t) async {
