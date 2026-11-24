@@ -860,7 +860,7 @@ class _AddThingSheetState extends State<AddThingSheet> {
     try {
       // A suggested label not yet a label is made now.
       final l = _labelNow;
-      final labelId = l == null ? null : (await _choices.made(Treat(labelId: l.id, label: l.name))).labelId;
+      final labelId = l == null ? null : (await _choices.madeOrNone(Treat(labelId: l.id, label: l.name))).labelId;
       final r = await widget.auth.api.addThing(
         body: AddThingRequest(
           name: _name.text.trim(),

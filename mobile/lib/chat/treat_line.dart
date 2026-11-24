@@ -35,7 +35,17 @@ int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 /// stock (into [stockItemId], [uses] of it a line) or track. A label named
 /// with no [labelId] is made when the line is saved.
 class Treat {
-  const Treat({this.how = 'record', this.stockItemId, this.stockItem = '', this.uses = 1, this.labelId, this.label = ''});
+  const Treat({
+    this.how = 'record',
+    this.stockItemId,
+    this.stockItem = '',
+    this.uses = 1,
+    this.labelId,
+    this.label = '',
+    this.usesKept = false,
+    this.usesAsked = false,
+    this.usesOk = true,
+  });
   final String how;
   final String? stockItemId;
   final String stockItem;
@@ -43,8 +53,18 @@ class Treat {
   final String? labelId;
   final String label;
 
+  /// [uses] is the stock item's own, as remembered or on the order line:
+  /// sent though not asked here, until the stock item changes.
+  final bool usesKept;
+
+  /// How many of the stock item one is was asked ([askUses]); [usesOk]
+  /// whether it is answered with a whole number (H2 review fix 2).
+  final bool usesAsked;
+  final bool usesOk;
+
   /// As the business remembers a supplier's item.
-  factory Treat.ofMemory(ItemMemory m) => Treat(how: m.treatment, stockItemId: m.stockItemId, stockItem: m.stockItem ?? '', uses: m.uses < 1 ? 1 : m.uses, labelId: m.labelId, label: m.label ?? '');
+  factory Treat.ofMemory(ItemMemory m) =>
+      Treat(how: m.treatment, stockItemId: m.stockItemId, stockItem: m.stockItem ?? '', uses: m.uses < 1 ? 1 : m.uses, labelId: m.labelId, label: m.label ?? '', usesKept: m.uses > 1);
 
   /// As an order's line has it, names from what the question offers. Its
   /// label is the server's name of the label kept ([lineLabel]); a line
@@ -64,20 +84,45 @@ class Treat {
       uses: _int(l['uses']) < 1 ? 1 : _int(l['uses']),
       labelId: labelId,
       label: label,
+      usesKept: _int(l['uses']) > 1,
+      // Asked of its stock item already, as the question will show it: a
+      // line read again is never a change of the person's.
+      usesAsked: _str(l['treatment']) == 'stock' && askUses(_str(l['unit']), c.stockUnit(l['stock_item_id'] as String?), _int(l['uses'])),
+      usesOk: !(_str(l['treatment']) == 'stock' && askUses(_str(l['unit']), c.stockUnit(l['stock_item_id'] as String?), _int(l['uses']))),
     );
   }
 
-  Treat copyWith({String? how, String? stockItemId, String? stockItem, int? uses, String? labelId, String? label, bool noLabel = false}) => Treat(
-    how: how ?? this.how,
-    stockItemId: stockItemId ?? this.stockItemId,
-    stockItem: stockItem ?? this.stockItem,
-    uses: uses ?? this.uses,
-    labelId: noLabel ? null : (labelId ?? this.labelId),
-    label: noLabel ? '' : (label ?? this.label),
-  );
+  Treat copyWith({
+    String? how,
+    String? stockItemId,
+    String? stockItem,
+    int? uses,
+    String? labelId,
+    String? label,
+    bool noLabel = false,
+    bool? usesKept,
+    bool? usesAsked,
+    bool? usesOk,
+  }) {
+    // Another stock item drops how many of the last one a line was (H2
+    // review fix 3): it is asked again of the new one, if at all.
+    final other = stockItemId != null && stockItemId != this.stockItemId;
+    return Treat(
+      how: how ?? this.how,
+      stockItemId: stockItemId ?? this.stockItemId,
+      stockItem: stockItem ?? this.stockItem,
+      uses: uses ?? (other ? 1 : this.uses),
+      labelId: noLabel ? null : (labelId ?? this.labelId),
+      label: noLabel ? '' : (label ?? this.label),
+      usesKept: usesKept ?? (other ? false : this.usesKept),
+      usesAsked: usesAsked ?? this.usesAsked,
+      usesOk: usesOk ?? (other ? !(usesAsked ?? this.usesAsked) : this.usesOk),
+    );
+  }
 
-  /// Whether it can be saved: a stock line names its stock item.
-  bool get ready => how != 'stock' || (stockItemId ?? '').isNotEmpty;
+  /// Whether it can be saved: a stock line names its stock item, and
+  /// answers how many of it one is when that was asked.
+  bool get ready => how != 'stock' || ((stockItemId ?? '').isNotEmpty && (!usesAsked || usesOk));
 
   bool same(Treat o) => how == o.how && (how != 'stock' || (stockItemId == o.stockItemId && uses == o.uses)) && labelId == o.labelId && label == o.label;
 
@@ -86,7 +131,8 @@ class Treat {
   Map<String, Object?> fields() => {
     'treatment': how,
     if (how == 'stock') 'stock_item_id': stockItemId,
-    if (how == 'stock' && uses > 1) 'uses': uses,
+    // Only what was asked and answered, or the stock item's own.
+    if (how == 'stock' && uses > 1 && (usesAsked || usesKept)) 'uses': uses,
     if ((labelId ?? '').isNotEmpty) 'label_id': labelId,
   };
 }
@@ -178,6 +224,9 @@ class TreatChoices extends ChangeNotifier {
 
   bool get ready => stock != null && labels != null;
 
+  /// A stock item's unit (null when none is chosen, or not known).
+  String? stockUnit(String? id) => id == null ? null : stock?.where((r) => r.id == id).map((r) => r.unit).firstOrNull;
+
   String stockName(String? id) => id == null ? '' : (stock?.where((r) => r.id == id).map((r) => r.name).firstOrNull ?? '');
   String labelName(String? id) => id == null ? '' : (labels?.where((l) => l.id == id).map((l) => l.name).firstOrNull ?? '');
 
@@ -186,16 +235,18 @@ class TreatChoices extends ChangeNotifier {
   /// server's first suggestion for the name ([suggestedLabel]: the
   /// business's own, or a new name, made when the line is saved), and
   /// until it comes one of the business's sharing a word with the name.
-  Treat suggest(String item) {
+  Treat suggest(String item, {String? unit}) {
     final k = item.trim().toLowerCase();
     final s = stock?.where((r) => r.name.trim().toLowerCase() == k).firstOrNull;
+    // Into a stock item of its name counted in another unit: asked.
+    final asked = s != null && askUses(unit, s.unit);
     final server = suggestedLabel(item);
     if (server != null) {
-      return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: server.id, label: server.name);
+      return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: server.id, label: server.name, usesAsked: asked, usesOk: !asked);
     }
     final words = k.split(RegExp('[^a-z0-9]+')).where((w) => w.length > 2).toSet();
     final l = labels?.where((l) => l.name.toLowerCase().split(RegExp('[^a-z0-9]+')).any(words.contains)).firstOrNull;
-    return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: l?.id, label: l?.name ?? '');
+    return Treat(how: s == null ? 'record' : 'stock', stockItemId: s?.id, stockItem: s?.name ?? '', labelId: l?.id, label: l?.name ?? '', usesAsked: asked, usesOk: !asked);
   }
 
   /// The server's suggestions, by name (null: none, or not come yet).
@@ -237,6 +288,29 @@ class TreatChoices extends ChangeNotifier {
     final l = await auth.api.makeSpendLabel(body: SpendLabelName(name: t.label.trim()));
     if (!(labels ?? const []).any((x) => x.id == l.id)) labels = [...?labels, l];
     return t.copyWith(labelId: l.id, label: l.name);
+  }
+
+  /// [made], or the answer without its label when the label cannot be
+  /// made (refused, or failed): the line still goes.
+  Future<Treat> madeOrNone(Treat t) async {
+    try {
+      return await made(t);
+    } on ApiError {
+      return t.copyWith(noLabel: true);
+    }
+  }
+
+  /// The new labels shown on each item's question, as the person saw them.
+  final Map<String, String> _shown = {};
+
+  /// The question on [item] showed [label] (a name not yet a label).
+  void shown(String item, String label) => _shown[item.trim().toLowerCase()] = label;
+
+  /// [t] as the person saw it: a label not yet made that they were never
+  /// shown on [item] is left off.
+  Treat seenOnly(String item, Treat t) {
+    if ((t.labelId ?? '').isNotEmpty || t.label.isEmpty || _shown[item.trim().toLowerCase()] == t.label) return t;
+    return t.copyWith(noLabel: true);
   }
 
   void added(StockItemRow? r) {
@@ -345,13 +419,15 @@ class _TreatQuestionState extends State<TreatQuestion> {
   void initState() {
     super.initState();
     _uses.addListener(() {
-      final t = _uses.text.trim().replaceAll(',', '');
-      final n = int.tryParse(t);
-      final uses = n != null && n >= 1 && n <= 1000000 ? n : 1;
-      if (uses != _v.uses) _set(_v.copyWith(uses: uses));
+      if (_quiet) return;
+      final n = _usesTyped;
+      _set(_v.copyWith(uses: n ?? 1, usesOk: n != null));
       setState(() {});
     });
   }
+
+  /// While the box is cleared for another stock item: no answer from it.
+  bool _quiet = false;
 
   @override
   void dispose() {
@@ -359,10 +435,39 @@ class _TreatQuestionState extends State<TreatQuestion> {
     super.dispose();
   }
 
-  bool get _badUses {
-    final t = _uses.text.trim().replaceAll(',', '');
-    final n = int.tryParse(t);
-    return t.isNotEmpty && (n == null || n < 1 || n > 1000000);
+  /// The whole number typed (commas only as thousands), else null.
+  int? get _usesTyped {
+    final raw = _uses.text.trim();
+    if (!RegExp(r'^(\d{1,3}(,\d{3})+|\d+)$').hasMatch(raw)) return null;
+    final n = int.tryParse(raw.replaceAll(',', ''));
+    return n != null && n >= 1 && n <= 1000000 ? n : null;
+  }
+
+  bool get _badUses => _uses.text.trim().isNotEmpty && _usesTyped == null;
+
+  /// Whether this answer asks how many of its stock item one is.
+  bool get _asks => _stockUnit != null && askUses(widget.unit, _stockUnit);
+
+  /// Keeps the answer's [Treat.usesAsked] as the question shows it, after
+  /// the frame (a sheet's Save waits for it: [Treat.ready]).
+  void _syncAsked() {
+    if (!_open || widget.locked) return;
+    final ask = _asks;
+    if (ask == _v.usesAsked || widget.onChanged == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _asks == _v.usesAsked) return;
+      _set(_v.copyWith(usesAsked: _asks, usesOk: !_asks || _usesTyped != null));
+    });
+  }
+
+  /// Another stock item: its box emptied, asked afresh (review fix 3).
+  void _otherStock(String id, String name) {
+    if (id != _v.stockItemId) {
+      _quiet = true;
+      _uses.clear();
+      _quiet = false;
+    }
+    _set(_v.copyWith(how: 'stock', stockItemId: id, stockItem: name));
   }
 
   /// The chosen stock item's unit, when one is chosen.
@@ -392,14 +497,14 @@ class _TreatQuestionState extends State<TreatQuestion> {
     );
     if (pick == null || !mounted) return;
     if (pick != 'new') {
-      _set(_v.copyWith(how: 'stock', stockItemId: pick, stockItem: c.stockName(pick)));
+      _otherStock(pick, c.stockName(pick));
       return;
     }
     final made = await showTkSheet<({String id, String name})>(context, (_) => NewStockItemSheet(auth: c.auth, name: widget.item));
     if (made == null || !mounted) return;
     // Read again, so it is offered on the other lines too.
     await c.load();
-    _set(_v.copyWith(how: 'stock', stockItemId: made.id, stockItem: made.name));
+    _otherStock(made.id, made.name);
   }
 
   Future<void> _pickLabel() async {
@@ -436,6 +541,9 @@ class _TreatQuestionState extends State<TreatQuestion> {
 
   @override
   Widget build(BuildContext context) {
+    _syncAsked();
+    // A new label shown on the line, so confirming may make it.
+    if ((_v.labelId ?? '').isEmpty && _v.label.isNotEmpty) widget.choices.shown(widget.item, _v.label);
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final head = Text.rich(
@@ -515,7 +623,7 @@ class _TreatQuestionState extends State<TreatQuestion> {
             label: 'Stock item',
             child: TkPickBox(label: 'Stock item for ${widget.item}', shown: _v.stockItem.isEmpty ? 'Choose…' : _v.stockItem, onTap: _pickStock),
           ),
-        if (_stockUnit != null && askUses(widget.unit, _stockUnit))
+        if (_asks)
           TkKitField(
             label: usesQuestion(_stockUnit!, widget.unit, widget.item),
             hint: _badUses ? 'A whole number, like 1000.' : '${_v.stockItem.isEmpty ? 'It' : _v.stockItem} is counted in $_stockUnit. Said once, it is remembered.',
@@ -816,8 +924,20 @@ class LineMark extends StatelessWidget {
 /// The lines of a supplier's draft confirmed (`confirm-proposed`'s
 /// `lines`): each line changed or asked, with its fields (a label typed as
 /// new made first); null for one taken as it is.
+///
+/// A label not yet made is made only when the person saw it on the line
+/// (a suggestion that came after they looked is left off), and a label
+/// that cannot be made (making one needs invoice.manage or table.edit,
+/// more than confirming does) leaves the line without it rather than
+/// failing the whole confirm (H2 review fix 5).
 Future<List<Map<String, Object?>?>> confirmLines(TreatChoices c, List<Map<String, dynamic>> lines, Map<int, Treat> chosen) async => [
-  for (var i = 0; i < lines.length; i++) chosen[i] != null ? (await c.made(chosen[i]!)).fields() : (lines[i]['unconfirmed'] == true ? (await c.made(Treat.ofLine(lines[i], c))).fields() : null),
+  for (var i = 0; i < lines.length; i++)
+    if (chosen[i] case final t?)
+      (await c.madeOrNone(t)).fields()
+    else if (lines[i]['unconfirmed'] == true)
+      (await c.madeOrNone(c.seenOnly(_str(lines[i]['item']), Treat.ofLine(lines[i], c)))).fields()
+    else
+      null,
 ];
 
 /// The question on a line of an order not yet received (§6, "After it
@@ -851,7 +971,7 @@ class _OpenLineQuestionState extends State<OpenLineQuestion> {
   Future<void> _save({bool many = false}) async {
     setState(() => _busy = true);
     try {
-      final tr = await widget.choices.made(_v);
+      final tr = await widget.choices.madeOrNone(_v);
       await widget.auth.transport.send(
         'PATCH',
         '/v1/stock/purchases/${Uri.encodeComponent(_str(widget.purchase['id']))}/lines/${_int(_l['position'])}',

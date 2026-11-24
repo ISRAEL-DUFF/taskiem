@@ -88,6 +88,14 @@ export interface Choice {
   label: string;
   /** Said yes to putting more than 50 on Things we have. */
   trackMany?: boolean;
+  /** Asked how many of the stock item one is (askUses): the question
+   * ("How many g is one bag?"); none when not asked. */
+  usesAsk?: string;
+  /** What was typed for it is not a whole number. */
+  usesBad?: boolean;
+  /** Its uses are the stock item's own, as remembered or on the order
+   * line: sent though not asked here, until the stock item changes. */
+  usesKept?: boolean;
   /** For a remembered item changed on one order: kept for next time too. */
   remember?: boolean;
 }
@@ -99,6 +107,7 @@ export const fromMemory = (m: Remembered): Choice => ({
   treatment: m.treatment,
   stockItemId: m.stock_item_id,
   uses: m.uses > 1 ? m.uses : undefined,
+  usesKept: m.uses > 1 || undefined,
   label: m.label ?? "",
 });
 
@@ -111,6 +120,7 @@ export const fromLine = (
   treatment: l.treatment ?? "record",
   stockItemId: l.treatment === "stock" ? l.stock_item_id : undefined,
   uses: (l.uses ?? 1) > 1 ? l.uses : undefined,
+  usesKept: (l.uses ?? 1) > 1 || undefined,
   label: lineLabel(l, labels),
 });
 
@@ -166,9 +176,12 @@ export const usesQuestion = (stockUnit: string, lineUnit: string | undefined, it
 
 /** Why a uses typed will be refused, or "" (empty is 1). */
 export function usesProblem(s: string): string {
-  const t = s.trim().replace(/,/g, "");
-  if (t === "") return "";
-  if (!/^\d+$/.test(t) || Number(t) < 1 || Number(t) > 1_000_000) return "A whole number, like 1000.";
+  const raw = s.trim();
+  if (raw === "") return "";
+  // Commas only as thousands: "50,000" is a number, "2,5" is not.
+  if (!/^(\d{1,3}(,\d{3})+|\d+)$/.test(raw)) return "A whole number, like 1000.";
+  const n = Number(raw.replace(/,/g, ""));
+  if (n < 1 || n > 1_000_000) return "A whole number, like 1000.";
   return "";
 }
 
@@ -236,6 +249,12 @@ export function choiceProblem(c: Choice): string {
     if (c.sells && c.price?.trim() && !(feeKobo(c.price) > 0))
       return "A selling price in naira, like 25,000.";
   }
+  // Asked how many of the stock item one is: answered, as a whole number
+  // (H2 review fix 2), before the line can go.
+  if (c.usesAsk) {
+    if (c.usesBad) return "How many is a whole number, like 1000.";
+    if (!c.uses) return `Say: ${c.usesAsk}`;
+  }
   return "";
 }
 
@@ -284,7 +303,10 @@ export function lineBody(
   const out: LineBody = { treatment: c.treatment };
   if (c.treatment === "stock") {
     out.stock_item_id = ids.stockItemId;
-    if (c.uses && c.uses > 1) out.uses = c.uses;
+    // Only what was asked and answered, or the stock item's own as
+    // remembered (H2 review fix 3): uses left from another stock item are
+    // never sent.
+    if ((c.usesAsk || c.usesKept) && c.uses && c.uses > 1) out.uses = c.uses;
   }
   if (ids.labelId) out.label_id = ids.labelId;
   if (c.treatment === "track" && c.trackMany) out.track_many = true;

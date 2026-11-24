@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { get, patch, post, postOnce } from "../api";
+import { ApiError, get, patch, post, postOnce } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { thingsOfLine } from "../lib/things";
@@ -113,8 +113,16 @@ export async function resolveChoice(
     const k = `label:${name.toLowerCase()}`;
     labelId = made.get(k);
     if (!labelId) {
-      labelId = (await post<SpendLabel>("/v1/money/labels", { name })).id;
-      made.set(k, labelId);
+      // Making a label needs invoice.manage or table.edit, more than
+      // drafting or confirming may (H2 review fix 5): refused or failed,
+      // the line goes without it rather than failing the whole order.
+      try {
+        labelId = (await post<SpendLabel>("/v1/money/labels", { name })).id;
+        made.set(k, labelId);
+      } catch (e) {
+        if (!(e instanceof ApiError)) throw e;
+        labelId = undefined;
+      }
     }
   }
   let stockItemId = c.stockItemId;
@@ -191,16 +199,32 @@ export function TreatQuestion({
   );
   // Not remembered: Taskiem's suggestion, once, as the starting answer.
   const seeded = useRef(false);
+  // The answer Taskiem seeded, while the person has not changed it.
+  const seed = useRef<Choice>(undefined);
   useEffect(() => {
     if (memory || value || seeded.current || !data.ready || !sugg.data) return;
     seeded.current = true;
-    onChange(
-      suggested
-        ? { ...suggested, label: suggested.label || (sugg.data[0]?.name ?? "") }
-        : suggestChoice(item, data.stockItems, data.tracked, sugg.data),
-      true,
-    );
+    seed.current = suggested
+      ? { ...suggested, label: suggested.label || (sugg.data[0]?.name ?? "") }
+      : suggestChoice(item, data.stockItems, data.tracked, sugg.data);
+    onChange(seed.current, true);
   }, [memory, value, suggested, data.ready, data.stockItems, data.tracked, sugg.data, item, onChange]);
+  // Whether the answer asks how many of its stock item one is (askUses):
+  // kept on the answer, so a sheet's Save waits for it (choiceProblem)
+  // and only an answer asked is sent (lineBody).
+  const unitOf = (v: Choice | undefined) =>
+    v?.treatment === "stock" && v.stockItemId && v.stockItemId !== NEW_STOCK
+      ? data.stockItems?.find((s) => s.id === v.stockItemId)?.unit
+      : undefined;
+  const su = open ? unitOf(value) : undefined;
+  const usesAsk = su !== undefined && askUses(unit, su) ? usesQuestion(su, unit, item) : undefined;
+  useEffect(() => {
+    if (!value || value.usesAsk === usesAsk) return;
+    const wasSeed = value === seed.current;
+    const next = { ...value, usesAsk };
+    if (wasSeed) seed.current = next;
+    onChange(next, wasSeed);
+  }, [value, usesAsk, onChange]);
   const stockName = (sid: string) =>
     data.stockItems?.find((s) => s.id === sid)?.name;
   const head = (
@@ -243,12 +267,17 @@ export function TreatQuestion({
       </div>
     );
   const c = value;
-  const set = (patch: Partial<Choice>) => onChange({ ...c, ...patch });
+  // Another stock item drops how many of the last one a line was (H2
+  // review fix 3): it is asked again of the new one, if at all.
+  const set = (patch: Partial<Choice>) => {
+    if (patch.stockItemId !== undefined && patch.stockItemId !== c.stockItemId) {
+      patch = { ...patch, uses: undefined, usesBad: false, usesKept: false };
+      setUsesText("");
+    }
+    onChange({ ...c, ...patch });
+  };
   // The chosen stock item's unit (none for a new one, made in the line's).
-  const stockUnit =
-    c.treatment === "stock" && c.stockItemId && c.stockItemId !== NEW_STOCK
-      ? data.stockItems?.find((s) => s.id === c.stockItemId)?.unit
-      : undefined;
+  const stockUnit = su;
   const problem = choiceProblem(c);
   const picks = labelChoices(data.labels, sugg.data);
   return (
@@ -302,18 +331,20 @@ export function TreatQuestion({
               <option value={NEW_STOCK}>A new stock item…</option>
             </select>
           </label>
-          {stockUnit !== undefined && askUses(unit, stockUnit) && (
+          {stockUnit !== undefined && usesAsk && (
             <label className="field" data-testid="treat-uses">
-              <span>{usesQuestion(stockUnit, unit, item)}</span>
+              <span>{usesAsk}</span>
               <input
                 inputMode="numeric"
                 value={usesText}
                 placeholder="Like 1000"
                 aria-describedby={`${id}-uses-hint`}
+                aria-invalid={!!usesProblem(usesText)}
                 onChange={(e) => {
                   setUsesText(e.target.value);
+                  const bad = !!usesProblem(e.target.value);
                   const t = e.target.value.trim().replace(/,/g, "");
-                  set({ uses: !usesProblem(t) && t !== "" ? Number(t) : undefined });
+                  set({ uses: !bad && t !== "" ? Number(t) : undefined, usesBad: bad });
                 }}
               />
               <small className="hint" id={`${id}-uses-hint`}>

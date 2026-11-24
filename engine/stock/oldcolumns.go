@@ -416,8 +416,8 @@ func mapEntries(expr string) []mapEntry {
 	}
 	for i := 0; i < len(expr); {
 		c := expr[i]
-		switch {
-		case c == '\'' || c == '"':
+		switch c {
+		case '\'', '"':
 			s, end, ok := str(i)
 			if !ok {
 				return out
@@ -437,9 +437,9 @@ func mapEntries(expr string) []mapEntry {
 			}
 			prev = '"'
 			continue
-		case c == '{' || c == '[' || c == '(':
+		case '{', '[', '(':
 			stack = append(stack, c)
-		case c == '}' || c == ']' || c == ')':
+		case '}', ']', ')':
 			if len(stack) > 0 {
 				stack = stack[:len(stack)-1]
 			}

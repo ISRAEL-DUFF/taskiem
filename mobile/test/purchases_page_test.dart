@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/purchases_page.dart';
-import 'package:taskiem/chat/treat_line.dart' show askUses, usesQuestion;
+import 'package:taskiem/chat/treat_line.dart' show Treat, TreatChoices, askUses, usesQuestion;
 import 'package:taskiem/kit/page.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -620,13 +620,73 @@ void main() {
       ]),
     );
     expect(find.text('How many bottle is one crate?'), findsOneWidget);
-    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^How many bottle is one crate')), matching: find.byType(EditableText)), '24');
+    final box = find.descendant(of: find.bySemanticsLabel(RegExp('^How many bottle is one crate')), matching: find.byType(EditableText));
+    final confirm = find.bySemanticsLabel('Confirm how Malt is treated');
+    // Review fix 2: not answered, or not a whole number: nothing is sent.
+    for (final not in ['', '2,5', '1.5']) {
+      await t.enterText(box, not);
+      await t.pump();
+      await t.tap(confirm, warnIfMissed: false);
+      await settle(t);
+      expect(sent.where((s) => s.startsWith('PATCH')), isEmpty, reason: 'sent with "$not"');
+    }
+    expect(find.text('A whole number, like 1000.'), findsOneWidget);
+    await t.enterText(box, '24');
     await t.pump();
     await snap(t, 'purchase-uses');
-    await t.tap(find.bySemanticsLabel('Confirm how Malt is treated'));
+    await t.tap(confirm);
     await settle(t);
     expect(sent.where((s) => s.startsWith('PATCH')).single, 'PATCH /v1/stock/purchases/P1/lines/0 {"treatment":"stock","stock_item_id":"si-malt","uses":24,"label_id":"lb-pack"}');
     await t.pump(const Duration(seconds: 5));
+  });
+
+  // Review fix 3: another stock item drops the last one's answer: not
+  // sent, and asked afresh where the new one asks.
+  testWidgets('another stock item: how many of the last one is not sent', (t) async {
+    final sent = await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(link: '', lines: [
+        {..._line(0, 'Malt', treatment: 'stock', stock: 'si-malt', unconfirmed: true), 'unit': 'crates'},
+      ]),
+    );
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^How many bottle is one crate')), matching: find.byType(EditableText)), '24');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel(RegExp('^Stock item for Malt')));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Ankara shirt (L)').last);
+    await settle(t);
+    expect(find.textContaining('How many'), findsNothing, reason: 'counted in pieces: not asked');
+    await t.tap(find.bySemanticsLabel('Confirm how Malt is treated'));
+    await settle(t);
+    expect(sent.where((s) => s.startsWith('PATCH')).single, 'PATCH /v1/stock/purchases/P1/lines/0 {"treatment":"stock","stock_item_id":"si-shirt-l","label_id":"lb-pack"}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  // Review fix 5: a new label is made only when it was shown, and one that
+  // cannot be made (a role that may confirm but not make labels) leaves
+  // the line without it.
+  testWidgets('a new label that cannot be made: the line goes without it', (t) async {
+    late ChatsData chats;
+    await open(
+      t,
+      (c) {
+        chats = c;
+        return PurchasePage(auth: c.auth, id: 'P1', follow: false);
+      },
+      purchase: _purchase(link: '', lines: [_line(0, 'Diesel', unconfirmed: true)]),
+      answer: (req) => req.method == 'POST' && req.url.path == '/v1/money/labels'
+          ? http.Response(jsonEncode({'error': 'requires table.edit'}), 403, headers: {'content-type': 'application/json'})
+          : null,
+    );
+    final c = TreatChoices(chats.auth);
+    const fuel = Treat(label: 'Fuel');
+    expect(c.seenOnly('Diesel', fuel).label, '', reason: 'never shown');
+    c.shown('Diesel', 'Fuel');
+    expect(c.seenOnly('Diesel', fuel).label, 'Fuel');
+    final made = await t.runAsync(() => c.madeOrNone(fuel));
+    expect(made!.label, '');
+    expect(made.fields(), {'treatment': 'record'});
   });
 
   test('askUses: asked only of a stock item counted in another unit', () {

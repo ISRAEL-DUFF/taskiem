@@ -297,13 +297,17 @@ test("what is remembered, changed and forgotten on the Suppliers page", async ({
   const q = dialog.getByTestId("treat");
   await q.getByRole("radio", { name: /Add to stock/ }).check();
   await q.getByLabel("Which stock item?").selectOption("si-fabric");
+  // Fabric is counted in yards: how many one is must be said first.
+  const save = dialog.getByRole("button", { name: `Save ${machine.name}` });
+  await expect(save).toBeDisabled();
+  await q.getByLabel(`How many yard is one ${machine.name}?`).fill("2");
   await axeAt(page, "a supplier's item changed");
-  await dialog.getByRole("button", { name: `Save ${machine.name}` }).click();
+  await save.click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]).toEqual({
     method: "PUT",
     path: "/v1/item-links/l1",
-    body: { seller_item_id: "sm", treatment: "stock", stock_item_id: "si-fabric", label_id: "lab-m" },
+    body: { seller_item_id: "sm", treatment: "stock", stock_item_id: "si-fabric", uses: 2, label_id: "lab-m" },
   });
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
 
@@ -596,6 +600,20 @@ test("rice in bags into a stock item counted in grams asks how many grams one ba
   const uses = q.getByLabel("How many g is one bag?");
   await expect(uses).toBeVisible();
   await expect(q.getByTestId("treat-uses")).toContainText("Rice is counted in g.");
+  const draft = page.getByRole("button", { name: "Draft the order" });
+  // Review fix 2: asked, it waits for an answer, and a bad one stops it.
+  await expect(draft).toBeDisabled();
+  await uses.fill("2,5");
+  await expect(q.getByTestId("treat-uses")).toContainText("A whole number, like 1000.");
+  await expect(draft).toBeDisabled();
+  await uses.fill("50,000");
+  await expect(draft).toBeEnabled();
+  // Review fix 3: another stock item drops it; asked again of that one.
+  await q.getByLabel("Which stock item?").selectOption("si-fabric");
+  await expect(q.getByLabel("How many yard is one bag?")).toHaveValue("");
+  await expect(draft).toBeDisabled();
+  await q.getByLabel("Which stock item?").selectOption("si-rice");
+  await expect(uses).toHaveValue("");
   await uses.fill("50,000");
   await q.getByLabel("Label", { exact: true }).fill("Stock bought");
   await axeAt(page, "how many grams one bag is");
@@ -611,4 +629,33 @@ test("rice in bags into a stock item counted in grams asks how many grams one ba
   await page.getByRole("button", { name: "Draft the order" }).click();
   await expect(page).toHaveURL(/\/purchases\/p2$/);
   expect(orders[1]).toEqual({ lines: [{ seller_item_id: "rc", quantity: 2 }] });
+});
+
+// H2 review fix 5: someone who may order but not make labels: the new
+// label is refused, and the line goes without it, not the order failing.
+test("a new label refused: the line goes without it", async ({ page }) => {
+  await signUp(page);
+  labelsServer(page);
+  await stockAndThings(page);
+  await page.route("**/v1/money/labels", (route) =>
+    route.request().method() === "POST" ? route.fulfill(json({ error: "requires table.edit" }, 403)) : route.fallback(),
+  );
+  const orders: unknown[] = [];
+  await page.route("**/v1/supplier-prices?**", (route) =>
+    route.fulfill(json({ suppliers: [{ link: "l1", business: "Singer Ltd", name: "Trade prices", updated_at: now, items: [machine] }] })),
+  );
+  await page.route("**/v1/item-links/l1", (route) => route.fulfill(json({ item_links: [] })));
+  await page.route("**/v1/supplier-prices/l1/order", async (route) => {
+    orders.push(route.request().postDataJSON());
+    return route.fulfill(json({ purchase: { id: "p1", lines: [] } }, 201));
+  });
+  await page.route("**/v1/stock/purchases/p*", (route) => route.fulfill(json({ error: "not found" }, 404)));
+  await page.goto("/storefront/suppliers/l1/prices");
+  await page.getByLabel(`How many ${machine.name}`).fill("1");
+  const q = page.getByTestId("treat");
+  await q.getByRole("radio", { name: /Keep track of it/ }).check();
+  await q.getByLabel("Label", { exact: true }).fill("Big machines");
+  await page.getByRole("button", { name: "Draft the order" }).click();
+  await expect(page).toHaveURL(/\/purchases\/p1$/);
+  expect(orders[0]).toEqual({ lines: [{ seller_item_id: "sm", quantity: 1, treatment: "track" }] });
 });

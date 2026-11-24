@@ -139,7 +139,7 @@ describe("the question on a line bought", () => {
       label_id: "l2",
       track_many: true,
     });
-    expect(lineBody({ treatment: "stock", uses: 6, label: "", trackMany: true }, { stockItemId: "s1" })).toEqual({
+    expect(lineBody({ treatment: "stock", uses: 6, usesAsk: "How many bottle is one pack?", label: "", trackMany: true }, { stockItemId: "s1" })).toEqual({
       treatment: "stock",
       stock_item_id: "s1",
       uses: 6,
@@ -299,12 +299,31 @@ describe("how many of a stock item one is (H2 g-uses-ask)", () => {
     expect(usesProblem("")).toBe("");
     expect(usesProblem("half")).toBe("A whole number, like 1000.");
     expect(usesProblem("0")).toBe("A whole number, like 1000.");
+    expect(usesProblem("2,5")).toBe("A whole number, like 1000.");
+    expect(usesProblem("1.5")).toBe("A whole number, like 1000.");
+    expect(usesProblem("50 kg")).toBe("A whole number, like 1000.");
   });
-  it("sends uses with a stock line", () => {
-    expect(lineBody({ treatment: "stock", stockItemId: "si-rice", uses: 50_000, label: "" }, { stockItemId: "si-rice" })).toEqual({
+  const ask = "How many g is one bag?";
+  it("sends uses with a stock line, only when asked (review fix 3)", () => {
+    expect(lineBody({ treatment: "stock", stockItemId: "si-rice", uses: 50_000, usesAsk: ask, label: "" }, { stockItemId: "si-rice" })).toEqual({
       treatment: "stock",
       stock_item_id: "si-rice",
       uses: 50_000,
     });
+    // The stock item's own, as remembered or on the order line: sent.
+    const kept = fromLine({ treatment: "stock", stock_item_id: "si-malt", uses: 6 }, []);
+    expect(lineBody(kept, { stockItemId: "si-malt" })).toEqual({ treatment: "stock", stock_item_id: "si-malt", uses: 6 });
+    // Kept from another stock item, not asked of this one: not sent.
+    expect(lineBody({ treatment: "stock", stockItemId: "si-malt", uses: 50_000, label: "" }, { stockItemId: "si-malt" })).toEqual({
+      treatment: "stock",
+      stock_item_id: "si-malt",
+    });
+  });
+  it("waits for an answer while asked, and refuses a bad one (review fix 2)", () => {
+    const base = { treatment: "stock" as const, stockItemId: "si-rice", label: "", usesAsk: ask };
+    expect(choiceProblem(base)).toBe(`Say: ${ask}`);
+    expect(choiceProblem({ ...base, usesBad: true })).toBe("How many is a whole number, like 1000.");
+    expect(choiceProblem({ ...base, uses: 50_000 })).toBe("");
+    expect(choiceProblem({ ...base, usesAsk: undefined })).toBe("");
   });
 });
