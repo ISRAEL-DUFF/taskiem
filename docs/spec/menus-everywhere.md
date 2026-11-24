@@ -1,7 +1,8 @@
 # Menus everywhere, and a picker that searches
 
-Status: built (E1–E4), 21 November 2026. Follows [Menus in the chat](chat-menus.md)
-(M1–M4, built) and [Chat tools](chat-tools.md).
+Status: built (E1–E4), 21 November 2026; saved things and services in search
+everywhere built in H4, 24 November 2026 ("What H4 built"). Follows [Menus in
+the chat](chat-menus.md) (M1–M4, built) and [Chat tools](chat-tools.md).
 
 ## 1. Why
 
@@ -222,7 +223,33 @@ The picker over the message box ("/product", "/invoice", "@"):
   invoice, a bill, an order or a purchase opens its own page; a product opens
   the stock list.
 - **Not in E4**: the words of messages (each conversation's own search has
-  them), saved things, and services.
+  them), saved things, and services (the last two built in H4).
+
+## What H4 built (24 November 2026)
+
+[Build plan, gaps](build-plan-gaps.md) §6, `g-search-saved`.
+
+- **The server's search** (`GET /v1/chat-refs`) takes two more kinds, asked
+  for by name only (with no kind it answers the picker's kinds, as before):
+  `service`, the business's services (to those who may manage its page, as
+  its services list), with the price and minutes; and `saved`, the person's
+  own saved things and their business's (`api/chat_refs_saved.go`), each
+  read in its own scope, matched by its name or its kind's words ("mum",
+  "bank account", a made-up kind's name), and answered with **its name, its
+  kind and whose it is only**: never its title, its hint, an account's
+  number or anything it holds, as the picker and the model are told them.
+  Another person's, another business's, and an API key's or an embed app's
+  user's (who have none) are never read; a member gets the business's and
+  only their own. "Show more" goes on by the cursor, as the other kinds.
+- **Search everywhere** (web `SearchEverywhere.tsx`, app
+  `search_everywhere.dart`) has **Services** and **Saved** chips and groups:
+  All asks the refs, the services and the saved things each on its own, so
+  one kind's many never crowd out another's few; three of each, Show more to
+  the chip. A service shows its price and minutes and opens the bookings
+  page; a saved thing shows "@name", its kind and "Yours" or "The
+  business's" (web `lib/found.ts`, app `foundTag`) and opens the saved
+  things: in the app the person's own or the business's list, on the web
+  the Saved page, which now shows the person's own beside the business's.
 
 ## 10. Phases
 

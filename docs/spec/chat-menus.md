@@ -1,6 +1,6 @@
 # Menus in the chat: showing people what they can do
 
-Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 to M4 are built** (21 November 2026; see "What M1 built" to "What M4 built" at the end). It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
+Status: **settled** (21 November 2026), written with the founder, who took every recommendation in §2. **M1 to M4 are built** (21 November 2026; see "What M1 built" to "What M4 built" at the end); the rest of §6.1, §8.3 and §9 (a typed command counted, the topics' words in each language, Telegram's and Slack's layouts) was built in H4 (24 November 2026, "What H4 built"). It follows [the model's help with a message nothing recognised](../languages.md) (PR #217, built 20 November 2026), which it extends.
 
 Builds on: [chat tools](chat-tools.md) (the tools panel, the tool sheets, the forms), [business chat tools](business-chat-tools.md), [the phone app's look](mobile-app-look.md) (Direction B), [saved objects](saved-objects.md) (`@name`), [Schools in the chat](schools-in-the-chat.md), [languages](../languages.md) (the word lists, the model's routing).
 
@@ -340,8 +340,8 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 
 - **The model picks from the catalogue** (`engine/ai/understand`, `api/chat_understand.go`). It is told the person's own catalogue (each action's id, what it does, its values and an example) and the other commands, and answers an `action` with the values it understood, a `topic` with the action it leans to, a `command` outside the catalogue, a question, or what Taskiem cannot do. An action with every value it needs is done as the row would be (a Yes first when it changes something); with some, those are said back ("Add a rider: Musa.") and the rest asked; a value of the wrong shape, or a choice that is not one of the action's, is asked again. A topic shows its menu with the leaned-to action first and its command as the tip. An id the person may not use is refused and recorded as such.
 - The message reaches the model redacted, as before: a phone number or an account number in it is never a value the model can give, so it is asked.
-- **Topics by their words** when no model can read the message (§8.3): each topic has words, English and Pidgin, matched as the start of a word ("okada", "carton", "owe"); the one topic with the most, and no tie, shows its menu, on every channel. The words are in the catalogue (`topicHints`), not yet in each language's word lists.
-- **The most used first** (§6.1): a row pressed, or an action the model picked, is counted per person and business by day (`chat_action_uses`, migration 00499: the action's id and a count, nothing else; days past thirty deleted as the next use is counted). Each topic's actions, and the topics, come most used first in the last thirty days, in the menus, the catalogue and what the model is told. A command typed in full is not counted yet.
+- **Topics by their words** when no model can read the message (§8.3): each topic has words, English and Pidgin, matched as the start of a word ("okada", "carton", "owe"); the one topic with the most, and no tie, shows its menu, on every channel. The words were in the catalogue (`topicHints`) until H4 moved them to each language's word lists.
+- **The most used first** (§6.1): a row pressed, or an action the model picked, is counted per person and business by day (`chat_action_uses`, migration 00499: the action's id and a count, nothing else; days past thirty deleted as the next use is counted). Each topic's actions, and the topics, come most used first in the last thirty days, in the menus, the catalogue and what the model is told. A command typed in full is counted since H4.
 
 ## What M3 built (21 November 2026)
 
@@ -350,7 +350,7 @@ Each phase is its own pull request and leaves the chat working: M1 alone already
 - **Numbers** still work everywhere: a menu's row by its place, among the rows as sent.
 - The test WhatsApp server checks WhatsApp's own limits on a list (ten rows, a button of 20, titles of 24, lines of 72).
 
-Not done: two buttons to a row on Telegram for the topics (one to a row for now); Slack shows every row rather than five and "More…".
+Not done in M3, built in H4: two buttons to a row on Telegram for the topics; five rows and "More…" on Slack.
 
 ## What M4 built (21 November 2026)
 
@@ -366,3 +366,12 @@ Not done: two buttons to a row on Telegram for the topics (one to a row for now)
 ## What U2b added (22 November 2026)
 
 - **The question on what is bought** ([what a business buys](what-a-business-buys.md) §6, In chat): an order drafted in chat (`order 1 sewing machine from Singer Ltd`, `@`/`#` mentions, `order from …`) asks, before its Yes and one line at a time, about each line the business's memory does not know: **How should we treat it?** (Just record it, Add to stock, Keep track of it), for Add to stock **Which stock item?** (five items, materials included, and **A new one**, which asks Do you sell it?), then **Label** (three, **Another** to type one, **No label**). Buttons on Telegram, Slack and in the Taskiem chat; on WhatsApp reply buttons for three, a list beyond. A number, or the words typed or spoken, answer too (`keep track of it, machines`, `add to stock, lace`, `just record it`, in the person's language and English). It is not an action of the catalogue: the order's own command asks it.
+
+## What H4 built (24 November 2026)
+
+[Build plan, gaps](build-plan-gaps.md) §6.
+
+- **A typed command counts toward most used** (§6.1, `g-menu-used`; `api/chat_typed.go`): a catalogue command typed in full is a use of its action, in every chat (the Taskiem chat, WhatsApp, Telegram, Slack), counted as a row pressed is (`chat_action_uses`). Which action a message is comes from the catalogue itself: each action's command as its `Make` writes it, read back as a pattern ("invoice {who} {amount} for {for}" is "invoice … … for …", a choice as its choices), the surest pattern winning ("order … to …" over "order …"), and the shortcut of an action with no values; the other languages' commands by their word lists (`ìwé owó …` is Send an invoice). It counts only once the message was read as that command: a message nothing read (the model's, a topic's menu, the short answer) counts nothing, and a press or the model's pick is counted where it always was, never twice. "@Tunde count the float by 7am", a command of values only, is counted where it is read. A test holds every action's command to its action. "invoice …" typed three times puts Send an invoice first in Money.
+- **The topics' words in each language** (§8.3, `g-menu-words`): out of Go (`topicHints`) into `engine/lang/intents/<language>.json` under `topics`, English reviewed, Pidgin, Yoruba, Igbo and Hausa drafts. With no model, the person's language is matched first, then English, without case, accents or tone marks: *owo* in Yoruba is the Money topic. A test holds each language's topics to the catalogue, with words for every one.
+- **Telegram** (§9, `g-menu-tg`): the topics menu's buttons two to a row (a message's `Columns`); a topic's first five rows one to a row, then **All N**, which shows every one.
+- **Slack** (§9, `g-menu-slack`): five buttons at most, then **More…** for the next five, for the topics and for a topic's rows (`topic:<topic>:more@<from>`). On both, More… and All N are chosen by their number too.

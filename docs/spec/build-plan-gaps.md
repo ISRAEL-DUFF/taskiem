@@ -74,7 +74,7 @@ The spec is [device fields](device-fields.md). Two of these are against the spec
 
 **Done when:** a delivery confirmed on a rider's phone shows the pin, the photo and the signature on the app's Confirm card; a customer answers a location and a signature on the one-time page from a text; a stock code is typed on WhatsApp; an "Add a site visit" tool takes a location from the app's sheet; and erasing the respondent leaves no readable location in the run.
 
-## 6. Phase H4: menus and search
+## 6. Phase H4: menus and search — done 24 November 2026
 
 The specs are [chat menus](chat-menus.md) and menus everywhere. Three of these are against the spec.
 
@@ -87,6 +87,8 @@ The specs are [chat menus](chat-menus.md) and menus everywhere. Three of these a
 | **Slack: five rows, then More…** | `g-menu-slack` | `api/slack.go` 126–146 puts every button in one block. |
 
 **Done when:** "invoice" typed three times puts New invoice first in the menu; "owo" finds the Money topic in Yoruba; searching a saved thing's name finds it; Telegram's topic menu is two buttons to a row; and a Slack topic of nine rows shows five and More….
+
+**As built** (every task; [chat menus](chat-menus.md#what-h4-built-24-november-2026), [menus everywhere](menus-everywhere.md#what-h4-built-24-november-2026)): a command typed in full counts in every chat, its action read back from the catalogue's own commands (`api/chat_typed.go`; "invoice …" typed three times puts Send an invoice first in Money, `TestChatMenusTypedCommandsCount`); the topics' words in `engine/lang/intents/*.json` (`topics`), drafts for pcm, yo, ig and ha, the person's language first ("owo" is Money in Yoruba, `TestChatMenusTopicWordsInTheirLanguage`); `GET /v1/chat-refs` `kind=saved` (names, kinds and owner only; the person's own and their business's) and `kind=service`, in search everywhere on the web and in the app with Show more (`TestSearchFindsSavedAndServices`, the Playwright and app tests); Telegram's topics two to a row and a topic's five then All N (`TestTelegramMenuLayout`); Slack's five then More… for topics and a topic's rows (`TestSlackMenuFiveThenMore`). No migration was needed.
 
 ## 7. Phase H5: pages, the rest of G1 to G3
 
@@ -237,10 +239,10 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-label-merge | H2 (done 24 November 2026) |
 | g-dev-link | H3 |
 | g-dev-confirm | H3 |
-| g-menu-used | H4 |
-| g-menu-words | H4 |
+| g-menu-used | H4 (built) |
+| g-menu-words | H4 (built) |
 | g-menu-nocmd | Built; H1 fixes the doc |
-| g-search-saved | H4 |
+| g-search-saved | H4 (built) |
 | g-pages-mine | H5 |
 | g-pages-runs | H5 |
 | g-pages-tick | H5 |
@@ -289,8 +291,8 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-scan-sense | §12 |
 | g-scan-echo | Built; H1 fixes the doc |
 | g-menu-lang | H8 |
-| g-menu-tg | H4 |
-| g-menu-slack | H4 |
+| g-menu-tg | H4 (built) |
+| g-menu-slack | H4 (built) |
 | g-menu-later | §12 |
 | g-search-notnow | §12 |
 | g-doc-saved | H1 |
