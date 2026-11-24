@@ -426,7 +426,7 @@ function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; 
   // What a kind needs that the business may not have yet, in words.
   const lacks = (k: string): string => {
     if (k === "tool-figure" && feedingTools(choices, "figure").length === 0) return "None of your tools only looks up a figure yet";
-    if ((k === "tool-list" || k === "tool-chart") && feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
+    if ((k === "tool-list" || k === "tool-chart" || k === "tool-board") &&feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
     if (OWN_TABLE_KINDS.includes(k) && own.length === 0) return "No table of your own yet";
     if (k === "status" && choices.workflows.length === 0) return "No workflow is in use yet";
     if (k === "buttons" && choices.tools.length === 0 && !choices.workflows.some((w) => w.signals.length || w.approvals.length)) return "No tool or workflow to press yet";
@@ -585,7 +585,7 @@ function PartForm({ part, tables, choices, filters, onChange }: { part: Part; ta
   );
   const conditions = <Conditions part={part} table={t} onChange={onChange} />;
   // A board and a chart (G4): PageEditorG4.tsx.
-  if (part.type === "board") return <BoardForm part={part} tables={tables} choices={choices} conditions={conditions} onChange={onChange} />;
+  if (part.type === "board") return <BoardForm part={part} tables={tables} choices={choices} filters={filters} conditions={conditions} onChange={onChange} />;
   if (part.type === "chart") return <ChartForm part={part} tables={tables} choices={choices} filters={filters} conditions={part.source?.tool ? null : conditions} onChange={onChange} />;
   if (part.type === "figure") {
     return (

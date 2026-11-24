@@ -188,11 +188,13 @@ These were planned and not started. They come after H2 to H8, in this order, as 
 - **The AI builder's schema, property rules and `evals/builder` cases** for tools, in English and Pidgin.
 - **Done when:** Describe it produces a working tool from one sentence, naming a saved thing.
 
-### G4: board and chart (`g-pages-g4`)
+### G4: board and chart (`g-pages-g4`) — done 24 November 2026
 
-- **Board:** a list in columns by a choice (Open, Doing, Done), fed by a table or a tool; moving a card to another column runs a tool (held to the tool's roles and care, as a page button is), on the web by drag and by keyboard, in the app by a menu on the card.
-- **Chart:** bars or a line, one measure over time or by a group, fed by a table's sum by period or a tool's list output with a label and a number; drawn on the server's figures, accessible (a table behind it), in both themes; in the app too.
+- **Board** (done)**:** a list in columns by a choice (Open, Doing, Done), fed by a table or a tool; moving a card to another column runs a tool (held to the tool's roles and care, as a page button is), on the web by drag and by keyboard, in the app by a menu on the card.
+- **Chart** (done)**:** bars or a line, one measure over time or by a group, fed by a table's sum by period or a tool's list output with a label and a number; drawn on the server's figures, accessible (a table behind it), in both themes; in the app too.
 - **Done when:** a ticket dragged from Open to Doing runs its tool, and expenses show by week.
+
+**Built 24 November 2026**, both, on the server, the web (drag and keyboard), the app (a card's menu) and the chat's short form; page definitions checked by the server, the editor on the web: [pages.md, As built (G4)](pages.md#18c-as-built-board-and-chart-g4). No migration. Tests: `TestPagesBoardAndChart` (the Done when, with the database), the engine's, vitest `pages_g4.test.ts`, Playwright `pages-g4.spec.ts`, Flutter `page_g4_test.dart` with pictures `page-board`, `page-board-menu`, `page-chart`.
 
 ### G5: starters, Describe it and saved things as a source (`g-pages-g5`)
 
@@ -287,7 +289,7 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-pay-payroll | §12 |
 | g-pay-momo | §12 |
 | g-photo-phone | §12 |
-| g-pages-g4 | §11 G4 |
+| g-pages-g4 | §11 G4 (built 24 November 2026) |
 | g-pages-g5 | §11 G5 |
 | g-pages-editor | H5, done 24 November 2026 |
 | g-pages-notif | H5, done 24 November 2026 |

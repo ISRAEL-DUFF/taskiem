@@ -254,6 +254,18 @@ test("a board and a chart are added in the editor, in plain words, and checked b
   // The move tool exists from the test before; a fresh run makes it.
   const tools = await (await page.request.get("/v1/page-choices", { headers: H })).json();
   if (!(tools as { tools: { command: string }[] }).tools.some((t) => t.command === "move-ticket")) await publish(page, moveTool);
+  // A tool that only reads, answering with jobs: a board it works out.
+  await publish(page, {
+    schema: "wd/v1",
+    id: "wf_e2eopenjobs",
+    version: 1,
+    name: "Open jobs",
+    trigger: { type: "manual" },
+    inputs: { schema: { type: "object", properties: {} } },
+    outputs: [{ name: "jobs", type: "list", title: "Jobs", description: "Open ones", value: "=steps.find.output.jobs" }],
+    tool: { name: "Open jobs", command: "open-jobs", about: "The open jobs", answer: { type: "list", from: "jobs", title: "Open jobs", item: { title: "=item.title" } } },
+    steps: [{ id: "find", type: "transform", config: { output: { jobs: [{ ref: "J-1", title: "Fix the gate", status: "open" }] } } }],
+  });
   const doc = { page: "page/v1", name: "jobs-board", title: "Jobs board", blocks: [{ id: "head", type: "heading", title: "Jobs" }] };
   expect((await page.request.post("/v1/pages", { headers: H, data: { document: doc } })).status()).toBe(201);
 
@@ -294,6 +306,19 @@ test("a board and a chart are added in the editor, in plain words, and checked b
   await c.getByLabel("How many weeks, up to now").fill("6");
   await c.getByLabel("Drawn as").selectOption({ label: "A line" });
   await page.getByRole("button", { name: "Done", exact: false }).first().click();
+
+  // A board of the jobs a tool answers with, each card's ref given to the move.
+  await addPart("A board a tool works out");
+  const tb = form();
+  await expect(tb.getByLabel("Worked out by which tool")).toHaveValue("open-jobs");
+  await expect(tb.getByLabel("Each card's title is the answer's")).toHaveValue("title");
+  await expect(tb.getByLabel("In columns by the answer's")).toHaveValue("status");
+  await tb.getByLabel("Opens which tool").selectOption({ label: "Move ticket" });
+  await expect(tb.getByRole("combobox", { name: "Status", exact: true })).toHaveValue("to");
+  await tb.getByRole("combobox", { name: "Ticket", exact: true }).selectOption({ label: "From the card" });
+  await tb.getByLabel("Ticket: its name in the tool's rows").fill("ref");
+  await page.getByRole("button", { name: "Done", exact: false }).first().click();
+  await expect(page.getByText("A board worked out by /open-jobs")).toBeVisible();
   await expect(page.getByText("Board of Jobs in columns by Status: Open, Doing, Finished; moving a card opens /move-ticket")).toBeVisible();
   await expect(page.getByText("A line of Amount added up in Jobs, by week")).toBeVisible();
 
@@ -317,6 +342,12 @@ test("a board and a chart are added in the editor, in plain words, and checked b
       ],
       move: { label: "Move", tool: "move-ticket", inputs: { ref: "=row.id", status: "=to" } },
     },
+  });
+  expect(sent.document.blocks[3]).toMatchObject({
+    type: "board",
+    source: { tool: "open-jobs", output: "jobs" },
+    item: { title: "=item.title" },
+    board: { column: "status", move: { tool: "move-ticket", inputs: { ref: "=item.ref", status: "=to" } } },
   });
   expect(sent.document.blocks[2]).toMatchObject({ type: "chart", naira: true, source: { table: "jobs" }, chart: { kind: "line", of: "amount_kobo", by: "done_on", period: "week", last: 6 } });
   await expect(page.getByText("Draft saved")).toBeVisible();

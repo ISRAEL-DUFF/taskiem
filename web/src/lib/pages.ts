@@ -608,10 +608,11 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "board", words: "A board", hint: "Rows in columns, like Open, Doing and Done; moving a card runs a tool" },
   { kind: "chart", words: "A chart", hint: "Bars or a line: a total by week, or by kind" },
   { kind: "tool-chart", words: "A chart a tool works out", hint: "Bars or a line of the rows a tool answers with" },
+  { kind: "tool-board", words: "A board a tool works out", hint: "The rows a tool answers with, in columns; moving a card runs a tool" },
 ];
 
 /** The kinds that need no table (a tool, a run, or nothing feeds them). */
-export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart"];
+export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart", "tool-board"];
 
 /** The kinds that read only a business's own table, never Taskiem's records. */
 export const OWN_TABLE_KINDS = ["board", "chart"];
@@ -795,6 +796,19 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
         title: tool?.name || "List",
         source: { tool: tool?.command ?? "", output: out?.name ?? "" },
         item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
+      };
+    }
+    case "tool-board": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      const own = tool?.list && tool.list.from === out?.name ? tool.list : undefined;
+      return {
+        id: freeId(parts, "board"),
+        type: "board",
+        title: tool?.name || "Board",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
+        board: { column: "status", columns: BOARD_START.map((c) => ({ ...c })) },
       };
     }
     case "tool-chart": {
@@ -1161,11 +1175,11 @@ export function moveExpr(v: MoveFrom): string | undefined {
 }
 
 /** A move tool's first values: an input named for the board's column (or a status) gets the column the card goes to; one named for the card's number gets it. */
-export function moveInputs(tool: ChoiceTool | undefined, column: string): Record<string, unknown> | undefined {
+export function moveInputs(tool: ChoiceTool | undefined, column: string, fromTool = false): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
   for (const i of tool?.inputs ?? []) {
     if (i.name === column || /status|state|stage|column/.test(i.name)) out[i.name] = "=to";
-    else if (/^(id|ref|row|number|ticket)$/.test(i.name)) out[i.name] = "=row.id";
+    else if (!fromTool && /^(id|ref|row|number|ticket)$/.test(i.name)) out[i.name] = "=row.id";
   }
   return Object.keys(out).length ? out : undefined;
 }

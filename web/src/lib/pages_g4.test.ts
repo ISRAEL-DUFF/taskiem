@@ -54,6 +54,13 @@ describe("a board (G4)", () => {
     expect(b.item?.title).toBe("=row.title");
     const tool = { command: "move-ticket", name: "Move ticket", answers: false, outputs: [], inputs: [{ name: "ref", title: "Ticket", personal: false }, { name: "status", title: "Status", personal: false }, { name: "note", title: "Note", personal: false }] };
     expect(moveInputs(tool, "status")).toEqual({ ref: "=row.id", status: "=to" });
+    // On a board a tool works out, a card has no row: only the column it goes to is filled.
+    expect(moveInputs(tool, "status", true)).toEqual({ status: "=to" });
+    const tb = newPart("tool-board", undefined, [b], {
+      tools: [{ command: "open-jobs", name: "Open jobs", answers: true, outputs: [{ name: "jobs", title: "Jobs", type: "list" }], inputs: [] }],
+      workflows: [],
+    });
+    expect(tb).toMatchObject({ id: "board_2", type: "board", source: { tool: "open-jobs", output: "jobs" }, item: { title: "=item.name" }, board: { column: "status" } });
     expect(moveFrom("=to")).toEqual({ from: "to" });
     expect(moveExpr({ from: "to" })).toBe("=to");
     expect(moveExpr({ from: "column", column: "title" })).toBe("=row.title");
