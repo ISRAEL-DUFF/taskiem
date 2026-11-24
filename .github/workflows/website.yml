@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
+          # The site needs no packages; don't look for a package manager to cache.
+          package-manager-cache: false
       # The outside facts are repository variables (Settings > Secrets and
       # variables > Actions > Variables); each is left off the site while empty.
       - name: Build the site

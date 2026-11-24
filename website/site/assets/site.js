@@ -10,12 +10,12 @@
 
   // light or dark: the reader's choice, remembered; light until they choose
   const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
-  try { const t = localStorage.getItem("tk-theme"); if (t === "dark" || t === "light") root.dataset.theme = t; } catch (e) {}
+  try { const t = localStorage.getItem("tk-theme"); if (t === "dark" || t === "light") root.dataset.theme = t; } catch { /* storage blocked: light until chosen */ }
   const theme = $("#theme");
   if (theme) theme.addEventListener("click", () => {
     const next = isDark() ? "light" : "dark";
     root.dataset.theme = next;
-    try { localStorage.setItem("tk-theme", next); } catch (e) {}
+    try { localStorage.setItem("tk-theme", next); } catch { /* storage blocked: not remembered */ }
   });
 
   // the phone menu
