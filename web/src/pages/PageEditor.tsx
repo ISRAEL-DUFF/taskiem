@@ -28,6 +28,7 @@ import {
   recordTables,
   runsWords,
   NO_TABLE_KINDS,
+  OWN_TABLE_KINDS,
   feedingTools,
   isRecords,
   type PageChoices,
@@ -43,6 +44,7 @@ import {
 import type { Table } from "../lib/tables";
 import { DrawnPageView } from "./Pages";
 import { ActionsForm, PlaceForm, RowStatusForm, StatusForm, TitlePick, ToolSourceForm } from "./PageEditorParts";
+import { BoardForm, ChartForm } from "./PageEditorG4";
 
 // The page editor (pages §10, 5): no technical words on the way. An owner
 // adds parts (a count, a total, a list, a table, a heading; and, pages H5,
@@ -417,10 +419,15 @@ function WhoMayOpen({ roles, known, onChange }: { roles: string[]; known: Approv
 function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; parts: Part[]; choices: PageChoices; onClose: () => void; onAdd: (p: Part) => void }) {
   const [kind, setKind] = useState("count");
   const [table, setTable] = useState(tables[0]?.name ?? "");
+  // A board and a chart read the business's own tables, never Taskiem's records.
+  const own = tables.filter((t) => !isRecords(t.name));
+  const offered = OWN_TABLE_KINDS.includes(kind) ? own : tables;
+  const picked = offered.find((t) => t.name === table) ?? offered[0];
   // What a kind needs that the business may not have yet, in words.
   const lacks = (k: string): string => {
     if (k === "tool-figure" && feedingTools(choices, "figure").length === 0) return "None of your tools only looks up a figure yet";
-    if (k === "tool-list" && feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
+    if ((k === "tool-list" || k === "tool-chart") && feedingTools(choices, "list").length === 0) return "None of your tools only looks up rows yet";
+    if (OWN_TABLE_KINDS.includes(k) && own.length === 0) return "No table of your own yet";
     if (k === "status" && choices.workflows.length === 0) return "No workflow is in use yet";
     if (k === "buttons" && choices.tools.length === 0 && !choices.workflows.some((w) => w.signals.length || w.approvals.length)) return "No tool or workflow to press yet";
     if (k === "status" || k === "buttons" || k.startsWith("tool-")) return "";
@@ -431,7 +438,7 @@ function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onAdd(newPart(kind, NO_TABLE_KINDS.includes(kind) ? undefined : tables.find((t) => t.name === table), parts, choices));
+          onAdd(newPart(kind, NO_TABLE_KINDS.includes(kind) ? undefined : picked, parts, choices));
         }}
       >
         <fieldset className="sf-choices">
@@ -447,8 +454,8 @@ function AddPart({ tables, parts, choices, onClose, onAdd }: { tables: Table[]; 
         </fieldset>
         {!NO_TABLE_KINDS.includes(kind) && (
           <Field label="From which table, or Taskiem's orders or invoices?">
-            <select value={table} onChange={(e) => setTable(e.target.value)}>
-              {tables.map((t) => (
+            <select value={picked?.name ?? ""} onChange={(e) => setTable(e.target.value)}>
+              {offered.map((t) => (
                 <option key={t.name} value={t.name}>
                   {t.title || t.name}
                 </option>
@@ -577,6 +584,9 @@ function PartForm({ part, tables, choices, filters, onChange }: { part: Part; ta
     </Field>
   );
   const conditions = <Conditions part={part} table={t} onChange={onChange} />;
+  // A board and a chart (G4): PageEditorG4.tsx.
+  if (part.type === "board") return <BoardForm part={part} tables={tables} choices={choices} conditions={conditions} onChange={onChange} />;
+  if (part.type === "chart") return <ChartForm part={part} tables={tables} choices={choices} filters={filters} conditions={part.source?.tool ? null : conditions} onChange={onChange} />;
   if (part.type === "figure") {
     return (
       <div className="pg-part-form">

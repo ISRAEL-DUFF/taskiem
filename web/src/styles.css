@@ -2708,3 +2708,40 @@ a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
 .pc-their-run-head { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; color: var(--text); }
 .pc-their-run .hint { margin: 0; }
 .pc-their-run-head svg { width: 16px; height: 16px; flex: none; color: var(--brand); }
+
+/* Pages G4: a board (columns side by side on a wide screen, one under another on a phone) and a chart (plain SVG, the money screens' colour). */
+.pg-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pg-lane { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-lane h3 { margin: 0; font-size: 14px; }
+.pg-lane.target { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pg-lane-empty { margin: 0; }
+.pg-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pg-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; min-width: 0; }
+.pg-card[draggable="true"] { cursor: grab; }
+.pg-card.dragging { opacity: 0.5; }
+.pg-card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.pg-card-open { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; border: 0; background: none; box-shadow: none; font: inherit; text-align: left; color: var(--text); min-width: 0; }
+.pg-card-open:disabled { opacity: 1; cursor: inherit; }
+.pg-card-open .title { font-weight: 600; overflow-wrap: anywhere; }
+.pg-card-open .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.pg-card-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+.pg-card-move svg { width: 14px; height: 14px; }
+.pg-chart { position: relative; width: 100%; min-width: 0; }
+.pg-chart-svg { display: block; overflow: visible; }
+.pg-chart-grid { stroke: var(--border); stroke-width: 1; }
+.pg-chart-base { stroke: var(--muted); stroke-width: 1; opacity: 0.6; }
+.pg-chart-tick, .pg-chart-label { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pg-chart-bar { fill: var(--chart-in); }
+.pg-chart-bar.on { opacity: 0.8; }
+.pg-chart-line { fill: none; stroke: var(--chart-in); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pg-chart-dot { fill: var(--chart-in); stroke: var(--panel); stroke-width: 2; }
+.pg-chart-dot.on { r: 6; }
+.pg-chart-hit { fill: transparent; }
+.pg-chart-tip { position: absolute; transform: translate(-50%, -100%); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; box-shadow: 0 4px 14px rgb(0 0 0 / 12%); white-space: nowrap; font-size: 13px; }
+.pg-chart-tip strong { color: var(--text); }
+.pg-chart-tip span { color: var(--muted); }
+.pg-chart-table summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.pg-chart-figures { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+.pg-chart-figures th, .pg-chart-figures td { padding: 6px 0; border-bottom: 1px solid var(--border); text-align: left; font-weight: 400; }
+.pg-chart-figures thead th { color: var(--muted); }
+.pg-chart-figures td, .pg-chart-figures thead th:last-child { text-align: right; font-variant-numeric: tabular-nums; }

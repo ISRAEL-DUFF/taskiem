@@ -40,7 +40,7 @@ export interface PageActionDef {
 
 export interface Part {
   id: string;
-  type: "heading" | "figure" | "list" | "table" | "buttons" | "status";
+  type: "heading" | "figure" | "list" | "table" | "buttons" | "status" | "board" | "chart";
   title?: string;
   text?: string;
   label?: string;
@@ -63,6 +63,32 @@ export interface Part {
   workflow?: string;
   /** H5: each row shows where a run of workflow is (its number in a column, or what it waits for). */
   status?: { workflow: string; run?: string; to?: string };
+  /** G4: a board's columns by a choice, and the tool a card moved runs. */
+  board?: BoardDef;
+  /** G4: what a chart shows. */
+  chart?: ChartDef;
+}
+
+/** A board's columns (G4): the choice they are by, each column's value and
+ * heading, and the tool a card moved opens (its values may read "=to", the
+ * column it goes to). */
+export interface BoardDef {
+  column: string;
+  columns: { value: string; label?: string }[];
+  move?: PageActionDef;
+}
+
+/** What a chart shows (G4): over time (by a date column, a period and how
+ * many) or by a group (a column of words), counted or added up (of); or a
+ * tool's rows, each a label and a number. */
+export interface ChartDef {
+  kind: "bars" | "line";
+  of?: string;
+  by?: string;
+  period?: "day" | "week" | "month";
+  last?: number;
+  label?: string;
+  value?: string;
 }
 
 export interface PageFilterDef {
@@ -309,6 +335,36 @@ export interface DrawnPart {
   error?: string;
   /** In place of a part over Taskiem's records: "You cannot see orders.", or its area is off. */
   unavailable?: string;
+  /** A board (G4): its columns with their first cards, and the move. */
+  lanes?: DrawnLane[];
+  move?: { label: string; tool: string; disabled?: string };
+  /** A chart (G4), every figure worked out by the server. */
+  kind?: "bars" | "line";
+  points?: ChartPoint[];
+  ticks?: { value: number; shown: string; share: number }[];
+  zero?: number;
+  label_head?: string;
+  value_head?: string;
+  summary?: string;
+}
+
+/** One of a board's columns as drawn. */
+export interface DrawnLane {
+  value: string;
+  label: string;
+  count: number;
+  rows: DrawnRow[];
+  more?: string | null;
+}
+
+/** One of a chart's bars or points: its place on the scale (share, 0 to 1) is the server's. */
+export interface ChartPoint {
+  label: string;
+  long: string;
+  value: number;
+  shown: string;
+  share: number;
+  tick: boolean;
 }
 
 export interface DrawnFilter {
@@ -549,10 +605,16 @@ export const PART_KINDS: { kind: string; words: string; hint: string }[] = [
   { kind: "tool-list", words: "A list a tool works out", hint: "The rows a tool answers with" },
   { kind: "buttons", words: "Buttons", hint: "Up to three for the whole page, like New ticket" },
   { kind: "status", words: "Where a run is", hint: "Waiting, done or stopped, and who it waits for" },
+  { kind: "board", words: "A board", hint: "Rows in columns, like Open, Doing and Done; moving a card runs a tool" },
+  { kind: "chart", words: "A chart", hint: "Bars or a line: a total by week, or by kind" },
+  { kind: "tool-chart", words: "A chart a tool works out", hint: "Bars or a line of the rows a tool answers with" },
 ];
 
 /** The kinds that need no table (a tool, a run, or nothing feeds them). */
-export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status"];
+export const NO_TABLE_KINDS = ["heading", "tool-figure", "tool-list", "buttons", "status", "tool-chart"];
+
+/** The kinds that read only a business's own table, never Taskiem's records. */
+export const OWN_TABLE_KINDS = ["board", "chart"];
 
 // --- the tools and workflows a page may use (GET /v1/page-choices) ---
 
@@ -735,6 +797,17 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
         item: { title: own?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) },
       };
     }
+    case "tool-chart": {
+      const tool = feedingTools(choices ?? { tools: [], workflows: [] }, "list")[0];
+      const out = tool?.outputs.find((o) => o.type === "list");
+      return {
+        id: freeId(parts, "chart"),
+        type: "chart",
+        title: tool?.name || "Chart",
+        source: { tool: tool?.command ?? "", output: out?.name ?? "" },
+        chart: { kind: "bars", label: "=item.name", value: "=item.total" },
+      };
+    }
     case "buttons":
       return { id: freeId(parts, "buttons"), type: "buttons", actions: [] };
     case "status":
@@ -761,6 +834,29 @@ export function newPart(kind: string, t: Table | undefined, parts: { id: string 
     }
     case "table":
       return { id: freeId(parts, "table"), type: "table", title: t?.title || t?.name || "Table", source: { table }, columns: any.slice(0, 3).map((c) => ({ column: c.name })) };
+    case "board": {
+      const title = text[0]?.name ?? any[0]?.name ?? "";
+      const by = columnsFor(t, "group").find((c) => /status|state|stage/.test(c.name)) ?? columnsFor(t, "group")[0];
+      return {
+        id: freeId(parts, "board"),
+        type: "board",
+        title: t?.title || t?.name || "Board",
+        source: { table },
+        item: { title: showColumn(title) || "='#' + row.id" },
+        board: { column: by?.name ?? "", columns: BOARD_START.map((c) => ({ ...c })) },
+      };
+    }
+    case "chart": {
+      const date = columnsFor(t, "date").find((c) => c.name !== "created_at") ?? columnsFor(t, "date")[0];
+      const num = columnsFor(t, "sum")[0];
+      return {
+        id: freeId(parts, "chart"),
+        type: "chart",
+        title: num ? `${num.words} by week` : "How many by week",
+        source: { table },
+        chart: { kind: "bars", by: date?.name ?? "created_at", period: "week", last: 8, ...(num ? { of: num.name } : {}) },
+      };
+    }
   }
   return { id: freeId(parts, "count"), type: "figure", label: t?.title || t?.name || "How many", value: "count", source: { table } };
 }
@@ -770,7 +866,7 @@ export function partWords(p: Part, tables: Table[]): string {
   const t = tables.find((x) => x.name === p.source?.table);
   const from = t ? t.title || t.name : p.source?.table ?? "";
   const where = (p.source?.filters ?? []).length ? `, only some rows` : "";
-  if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : "A list"} worked out by /${p.source.tool}`;
+  if (p.source?.tool) return `${p.type === "figure" ? p.label ?? "A figure" : p.type === "chart" ? "A chart" : p.type === "board" ? "A board" : "A list"} worked out by /${p.source.tool}`;
   switch (p.type) {
     case "heading":
       return `Heading: ${p.title ?? ""}`;
@@ -786,6 +882,10 @@ export function partWords(p: Part, tables: Table[]): string {
       return `List of ${from}${p.group ? `, in groups by ${columnWords(t, p.group.column)}` : ""}${where}`;
     case "table":
       return `Table of ${from}: ${(p.columns ?? []).map((c) => c.label || columnWords(t, c.column)).join(", ")}${where}`;
+    case "board":
+      return `Board of ${from} in columns by ${columnWords(t, p.board?.column ?? "")}: ${(p.board?.columns ?? []).map((c) => c.label || c.value).join(", ")}${p.board?.move?.tool ? `; moving a card opens /${p.board.move.tool}` : ""}${where}`;
+    case "chart":
+      return `${p.chart?.kind === "line" ? "A line" : "Bars"} of ${p.chart?.of ? `${columnWords(t, p.chart.of)} added up` : "how many"} in ${from}, ${p.chart?.period ? `by ${p.chart.period}` : `by ${columnWords(t, p.chart?.by ?? "")}`}${where}`;
   }
   return p.type;
 }
@@ -850,7 +950,7 @@ export function withUses(doc: PageDoc, tables: Table[]): PageDoc {
     ...doc,
     blocks: doc.blocks.map((b) => {
       if (!b.source) return b;
-      if (b.type !== "list" && b.type !== "table") return { ...b, source: docSource(b.source) };
+      if (b.type !== "list" && b.type !== "table" && b.type !== "board") return { ...b, source: docSource(b.source) };
       const t = tables.find((x) => x.name === b.source?.table);
       const uses = filters.filter((f) => filterFits(f, t)).map((f) => f.id);
       const source = { ...b.source };
@@ -988,4 +1088,84 @@ export function liveQueue(read: (ids: string[], all: boolean) => Promise<void> |
       pending = new Set();
     },
   };
+}
+
+// --- a board and a chart (G4) ---
+
+/** A new board's columns, until the owner names their own. */
+export const BOARD_START: { value: string; label: string }[] = [
+  { value: "open", label: "Open" },
+  { value: "doing", label: "Doing" },
+  { value: "done", label: "Done" },
+];
+
+/** The column next to one (by -1 to the left, 1 to the right), for moving a card by the keyboard; the same at either end. */
+export function laneStep(lanes: string[], at: string, by: -1 | 1): string {
+  const i = lanes.indexOf(at);
+  if (i < 0) return lanes[0] ?? at;
+  return lanes[Math.min(lanes.length - 1, Math.max(0, i + by))] ?? at;
+}
+
+/** What a screen reader is told while a card is moved by the keyboard. */
+export function moveWords(step: "picked" | "over" | "dropped" | "left", card: string, lane: string, from?: string): string {
+  switch (step) {
+    case "picked":
+      return `${card} picked up, in ${lane}. Left and right arrows choose a column, Enter moves it there, Escape leaves it.`;
+    case "over":
+      return lane === from ? `${card} stays in ${lane}.` : `Move ${card} to ${lane}?`;
+    case "dropped":
+      return `Moving ${card} to ${lane}.`;
+    case "left":
+      return `${card} left in ${lane}.`;
+  }
+}
+
+/** Where each bar or point is drawn in a plot of this width and height,
+ * from the server's places on its scale (share, zero): nothing is worked
+ * out here but the pixels. */
+export function chartLayout(points: ChartPoint[], zero: number, width: number, height: number) {
+  const n = Math.max(1, points.length);
+  const band = width / n;
+  const bar = Math.max(4, Math.min(24, band - 8));
+  const y = (share: number) => height - share * height;
+  return points.map((p, i) => {
+    const cx = band * i + band / 2;
+    const top = Math.min(y(p.share), y(zero));
+    const bottom = Math.max(y(p.share), y(zero));
+    return { cx, x: cx - bar / 2, w: bar, y: y(p.share), top, h: bottom - top, band, up: p.share >= zero };
+  });
+}
+
+/** A bar's outline: 4px round at its data end, square on its foot (pages G4, as the money screens' bars). */
+export function barPath(x: number, top: number, w: number, h: number, up: boolean): string {
+  if (h <= 0) return "";
+  const r = Math.min(4, w / 2, h);
+  if (up) {
+    return `M${x},${top + h}V${top + r}Q${x},${top} ${x + r},${top}H${x + w - r}Q${x + w},${top} ${x + w},${top + r}V${top + h}Z`;
+  }
+  const b = top + h;
+  return `M${x},${top}V${b - r}Q${x},${b} ${x + r},${b}H${x + w - r}Q${x + w},${b} ${x + w},${b - r}V${top}Z`;
+}
+
+/** Where a board's move value comes from: the column the card goes to, or as a button's (the card's column, words, asked). */
+export type MoveFrom = { from: "to" } | ValueFrom;
+
+/** A move's value read back for the editor: null when written another way (a file). */
+export function moveFrom(v: unknown): MoveFrom | null {
+  return v === "=to" ? { from: "to" } : valueFrom(v);
+}
+
+/** A move's value as the document keeps it. */
+export function moveExpr(v: MoveFrom): string | undefined {
+  return v.from === "to" ? "=to" : valueExpr(v);
+}
+
+/** A move tool's first values: an input named for the board's column (or a status) gets the column the card goes to; one named for the card's number gets it. */
+export function moveInputs(tool: ChoiceTool | undefined, column: string): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const i of tool?.inputs ?? []) {
+    if (i.name === column || /status|state|stage|column/.test(i.name)) out[i.name] = "=to";
+    else if (/^(id|ref|row|number|ticket)$/.test(i.name)) out[i.name] = "=row.id";
+  }
+  return Object.keys(out).length ? out : undefined;
 }

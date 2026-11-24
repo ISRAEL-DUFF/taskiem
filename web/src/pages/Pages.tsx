@@ -8,6 +8,7 @@ import { EmptyState, ErrorBox, Field, Items, Item, Modal, PageHeader, Skeleton, 
 import { Decide } from "./Approvals";
 import { useConfirm } from "./ConfirmSheet";
 import { MadeToolSheet } from "./MadeToolSheet";
+import { Board, Chart, type Move } from "./PageG4";
 import {
   stillWorking,
   workedWords,
@@ -474,6 +475,7 @@ export function DrawnPageView({
             onOpen={(r) => setOpen({ ...r, part: p.id })}
             tick={ticks[p.id] ?? 0}
             onPress={preview ? undefined : press.press}
+            onMove={preview ? undefined : press.move}
             onChanged={onRefresh}
           />
         ),
@@ -520,8 +522,11 @@ function usePagePress(name: string, draft: boolean, values: Record<string, strin
   const [approval, setApproval] = useState<Approval | null>(null);
   const q = [filtersParam(values), draft ? "draft=1" : ""].filter(Boolean).join("&");
   const path = `/v1/pages/${name}/act${q ? `?${q}` : ""}`;
-  const press = async (block: string, row: string | undefined, a: DrawnAction) => {
-    const body = { block, action: a.index, ...(row !== undefined && { row }) };
+  const press = (block: string, row: string | undefined, a: DrawnAction) => pressBody(a, { block, action: a.index, ...(row !== undefined && { row }) });
+  // A board's card moved to another column (G4): the board's move tool,
+  // given filled in by the server as a row's button is.
+  const move = (block: string, row: string, to: string) => pressBody({ index: 0, label: "Move", kind: "tool" }, { block, action: 0, row, to });
+  const pressBody = async (a: DrawnAction, body: Record<string, unknown>) => {
     try {
       const r = await post<ActResult>(path, body);
       if (r.kind === "tool" && r.tool) {
@@ -553,7 +558,7 @@ function usePagePress(name: string, draft: boolean, values: Record<string, strin
       {approval && <Decide a={approval} decision="approved" showSubject onClose={() => setApproval(null)} onDone={() => (setApproval(null), reload())} />}
     </>
   );
-  return { press, node };
+  return { press, move, node };
 }
 
 /** A page's or a row's button: greyed, with why, when it is not this person's. */
@@ -667,6 +672,7 @@ function Part({
   onOpen,
   tick,
   onPress,
+  onMove,
   onChanged,
 }: {
   part: DrawnPart;
@@ -676,6 +682,7 @@ function Part({
   onOpen: (r: DrawnRow) => void;
   tick: number;
   onPress?: Press;
+  onMove?: Move;
   onChanged: () => void;
 }) {
   if (part.broken) {
@@ -759,6 +766,10 @@ function Part({
           )}
         </section>
       );
+    case "board":
+      return <Board part={part} name={name} draft={draft} values={values} onOpen={onOpen} onPress={onPress} onMove={onMove} />;
+    case "chart":
+      return <Chart part={part} />;
   }
   return <Rows part={part} name={name} draft={draft} values={values} onOpen={onOpen} tick={tick} onPress={onPress} onChanged={onChanged} />;
 }

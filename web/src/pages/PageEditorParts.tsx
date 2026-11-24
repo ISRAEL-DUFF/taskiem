@@ -319,7 +319,8 @@ export function ActionsForm({ actions, row, filters, choices, onChange }: { acti
 
 /** A part a tool works out: which tool, which of its answers, the values it is given. */
 export function ToolSourceForm({ part, choices, filters, onChange }: { part: Part; choices: PageChoices; filters: PageFilterDef[]; onChange: (p: Part) => void }) {
-  const kind = part.type === "list" ? "list" : "figure";
+  // A list, and a chart (G4), show a tool's list; a figure one of its answers.
+  const kind = part.type === "figure" ? "figure" : "list";
   const tools = feedingTools(choices, kind);
   const tool: ChoiceTool | undefined = choices.tools.find((t) => t.command === part.source?.tool);
   const outputs = (tool?.outputs ?? []).filter((o) => (kind === "list" ? o.type === "list" : o.type !== "list" && o.type !== "object"));
@@ -338,7 +339,7 @@ export function ToolSourceForm({ part, choices, filters, onChange }: { part: Par
           onChange({
             ...part,
             source: { tool: command, output: out?.name ?? "" },
-            ...(kind === "list" ? { item: { title: own?.title || part.item?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) } } : { label: part.label || out?.title }),
+            ...(part.type === "list" ? { item:{ title: own?.title || part.item?.title || "=item.name", ...(own?.sub ? { sub: own.sub } : {}) } } : part.type === "figure" ? { label: part.label || out?.title } : {}),
           });
         }}
       />
