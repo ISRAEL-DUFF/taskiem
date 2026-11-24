@@ -36,6 +36,7 @@ import 'saved_files.dart';
 import 'saved_import.dart' show SavedImportSheet;
 import 'saved_kinds.dart';
 import 'words.dart' show CardTone;
+import 'saved_runs.dart' show SavedRunsSection;
 
 /// A name as typed, as the server keeps it: no @, lowercase, spaces as "-".
 String cleanSavedName(String typed) => typed.trim().toLowerCase().replaceFirst(RegExp('^@'), '').replaceAll(RegExp(r'[\s_]+'), '-');
@@ -1018,6 +1019,7 @@ class _SavedThingSheetState extends State<SavedThingSheet> {
             TkKitField(label: 'Note', hint: 'Optional, for your own reference', child: TkTextBox(controller: _note, max: 200)),
           ],
         ),
+        if (_x != null && !widget.api.mine) SavedRunsSection(auth: widget.api.auth, id: _x.id),
         if (_error != null) TkCallout(leading: TkSquare('b-warn', color: look.red), title: _error!, color: look.red),
       ],
     );

@@ -26,7 +26,7 @@ Map<String, dynamic> _invoice({String status = 'sent', bool disputed = false, St
   'status': status,
   'kind': 'invoice',
   'disputed': disputed,
-  'customer': {'name': 'Bisi Ade', 'phone': '+234*******567', 'email': '', 'key': key},
+  'customer': {'name': 'Bisi Ade', 'phone': '+234*******567', 'email': '', 'address': '••• Yaba', 'key': key},
   'lines': [
     {'description': 'Jollof rice tray', 'quantity': 2, 'unit_kobo': 1500000},
     {'description': 'Delivery', 'quantity': 1, 'unit_kobo': 200000},
@@ -151,7 +151,7 @@ void main() {
                 return ok({
                   'invoice': {
                     ...x,
-                    'customer': {...x['customer'] as Map, 'phone': '+2348031234567', 'email': 'bisi@example.com'},
+                    'customer': {...x['customer'] as Map, 'phone': '+2348031234567', 'email': 'bisi@example.com', 'address': '4 Allen Avenue, Yaba'},
                   },
                 });
               }
@@ -263,9 +263,13 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/invoices/I1/payments/P1/undo {}');
 
+    // The customer's address (build plan H6): masked, then shown.
+    expect(t.widget<Text>(find.byKey(const Key('invoice-customer-address'))).data, '••• Yaba');
     await t.tap(find.bySemanticsLabel('Show customer details'));
     await settle(t);
     expect(sent.last, 'REVEAL');
+    expect(t.widget<Text>(find.byKey(const Key('invoice-customer-address'))).data, '4 Allen Avenue, Yaba');
+    await snap(t, 'invoice-address');
     expect(find.bySemanticsLabel('Call +2348031234567'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
