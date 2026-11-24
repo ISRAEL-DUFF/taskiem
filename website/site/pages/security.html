@@ -1,0 +1,191 @@
+<!--page {"title": "Security · Taskiem", "description": "Payments wait for your yes and your PIN, staff work within limits you set, every action is on a record that can be checked, customers' details are sealed, and money moves exactly once.", "path": "/security"}-->
+<style>
+/* approvals: a request climbs its levels */
+.ladder{display:grid;gap:10px}
+.lrow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:16px;background:var(--ground);border:1.5px solid var(--line);animation:lr 8s infinite;animation-delay:calc(var(--k) * 1.3s)}
+.lrow .av{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--pine);color:var(--lime);font-weight:800;font-size:13px}
+.lrow b{display:block;font-size:15px;color:var(--head)}
+.lrow small{font-size:13px;color:var(--muted)}
+.lrow .st{font-size:12.5px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--line);color:var(--muted);animation:lst 8s infinite;animation-delay:calc(var(--k) * 1.3s)}
+@keyframes lr{0%,8%{border-color:var(--line)}12%,85%{border-color:var(--acc)}95%,100%{border-color:var(--line)}}
+@keyframes lst{0%,8%{background:var(--line);color:var(--muted)}12%,85%{background:var(--pine);color:var(--lime)}95%,100%{background:var(--line);color:var(--muted)}}
+.lrow .st{display:grid;min-width:84px;text-align:center}
+.lrow .st i{grid-area:1/1;font-style:normal;animation:swapA 8s infinite;animation-delay:inherit}
+.lrow .st i + i{animation-name:swapB}
+@keyframes swapA{0%,8%{opacity:1}12%,85%{opacity:0}95%,100%{opacity:1}}
+@keyframes swapB{0%,8%{opacity:0}12%,85%{opacity:1}95%,100%{opacity:0}}
+.lreq{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.lreq b{font-size:19px;color:var(--head);letter-spacing:-.02em}
+.lreq span{font-family:var(--f-mono);font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.lpaid{margin-top:6px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:14px;background:var(--lime);color:var(--pine);font-weight:800;animation:lpaid 8s infinite}
+@keyframes lpaid{0%,52%{opacity:0;transform:translateY(8px)}58%,85%{opacity:1;transform:none}95%,100%{opacity:0}}
+/* the record: a chain that grows and checks itself */
+.chain{display:flex;flex-direction:column;gap:0}
+.blk{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);font-size:14px;color:rgba(255,255,255,.9)}
+.blk + .blk{margin-top:18px}
+.blk + .blk::before{content:"";position:absolute;left:28px;top:-19px;height:18px;border-left:2px dashed rgba(200,241,105,.5)}
+.blk code{font-family:var(--f-mono);font-size:12px;color:var(--lime)}
+.blk small{font-family:var(--f-mono);font-size:11.5px;color:rgba(255,255,255,.55)}
+.blk.new{animation:blknew 6s var(--spring) infinite}
+@keyframes blknew{0%,10%{opacity:0;transform:translateY(-14px) scale(.96)}18%,90%{opacity:1;transform:none}100%{opacity:0}}
+.verify{margin-top:16px;display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--lime)}
+.verify i{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 10px var(--lime);animation:blink 1.2s infinite}
+/* private: a value stays masked until someone allowed reveals it, and that is recorded */
+.pii{display:grid;gap:8px}
+.pii .r{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center;padding:12px 14px;border-radius:14px;background:var(--ground);border:1px solid var(--line);font-size:14.5px}
+.pii .r span:first-child{color:var(--muted);font-size:13px}
+.pii .v{position:relative;font-family:var(--f-mono);color:var(--ink);height:1.4em;overflow:hidden}
+.pii .v i{position:absolute;inset:0;font-style:normal;animation:mask 7s infinite}
+.pii .v i + i{animation-name:unmask}
+@keyframes mask{0%,40%{opacity:1}46%,70%{opacity:0}76%,100%{opacity:1}}
+@keyframes unmask{0%,40%{opacity:0}46%,70%{opacity:1}76%,100%{opacity:0}}
+.reveal-log{margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--mint-tint);font-size:13.5px;color:var(--head);animation:rlog 7s infinite}
+@keyframes rlog{0%,42%{opacity:0;transform:translateY(6px)}48%,90%{opacity:1;transform:none}100%{opacity:0}}
+/* once: a retry is recognised */
+.once{display:grid;gap:10px}
+.tx1{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px;border-radius:16px;background:var(--ground);border:1px solid var(--line);font-size:14.5px}
+.tx1 b{color:var(--head)}
+.tx1 .tag{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--pine);color:var(--lime)}
+.tx1.retry{border-style:dashed;animation:retry 6s infinite}
+.tx1.retry .tag{background:var(--amber);color:var(--pine)}
+@keyframes retry{0%,30%{opacity:0;transform:translateX(-20px)}38%,85%{opacity:1;transform:none}95%,100%{opacity:0}}
+.once p{font-size:13.5px;color:var(--muted);text-align:center}
+</style>
+{{HEADER}}
+<main>
+  <section class="hero phero">
+    <div class="hero-bleed" id="hero">
+      <div class="wrap">
+        <div class="hero-panel">
+          <div class="hero-copy">
+            <p class="label">Security</p>
+            <h1 style="margin-top:16px">Built to be trusted <em>with money.</em></h1>
+            <p class="lede">Payments wait for your yes. Staff work within limits you set. Every action is on a record that can be checked, and customers' details are sealed.</p>
+            <div class="cta-row">
+              <a class="btn btn-lime btn-big mag" href="/contact" data-go="web">Start free <span class="arr">→</span></a>
+              <a class="btn btn-ghost btn-big mag" href="#approvals">How approvals work</a>
+            </div>
+          </div>
+          <div class="pvis" aria-hidden="true">
+            <div class="pad">
+              <p class="label">Approve with your PIN</p>
+              <h3>November salaries · 8 people</h3>
+              <p class="amt num">₦1,240,000</p>
+              <div class="pins"><i style="--d:.6s"></i><i style="--d:1.1s"></i><i style="--d:1.6s"></i><i style="--d:2.1s"></i></div>
+              <div class="keys"><span class="k" style="--d:.6s">1</span><span>2</span><span>3</span><span class="k" style="--d:2.1s">4</span><span>5</span><span>6</span><span>7</span><span class="k" style="--d:1.6s">8</span><span class="k" style="--d:1.1s">9</span><span></span><span>0</span><span>⌫</span></div>
+              <div class="approved"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Approved · paying 8 people</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <section class="frow" id="approvals" data-reveal>
+      <div class="fcopy">
+        <p class="label">Approvals</p>
+        <h2 class="h2">The right people say yes, in the right order.</h2>
+        <p>An approval can name who decides and how many must agree, or follow a policy that picks the approvers by the amount. Levels go in order, and a request that waits too long is passed up.</p>
+        <ul>
+          <li>Nobody approves their own request, and one person decides only one level.</li>
+          <li>Each yes can ask for your PIN, a passkey or an authenticator code.</li>
+          <li>Publishing a workflow can need a second person too.</li>
+        </ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="lreq"><b>Pay Dangote Stores · ₦514,000</b><span>Over ₦250,000</span></div>
+          <div class="ladder">
+            <div class="lrow" style="--k:0"><span class="av">TA</span><span><b>Tunde, manager</b><small>Level 1 · approves up to ₦250,000</small></span><span class="st"><i>Waiting</i><i>Approved</i></span></div>
+            <div class="lrow" style="--k:1"><span class="av">AO</span><span><b>Ada, owner</b><small>Level 2 · with her PIN</small></span><span class="st"><i>Waiting</i><i>Approved</i></span></div>
+          </div>
+          <div class="lpaid">Approved twice · sent once</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">The record</p>
+        <h2 class="h2">Every action, on a record no one can quietly change.</h2>
+        <p>Who approved what, what was paid, who looked at a customer's details, what changed and when. Each entry is linked to the one before it, so the record can be checked end to end and handed to your accountant or auditor.</p>
+        <ul>
+          <li>Reports for approvals, payments, personal data, changes and secrets.</li>
+          <li>Every use of a stored key is recorded, too.</li>
+        </ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard dark">
+          <div class="chain">
+            <div class="blk new"><span>Ada approved P-1188</span><code>9c1e…</code><small>10:22</small></div>
+            <div class="blk"><span>Tunde approved P-1188</span><code>4f0a…</code><small>10:20</small></div>
+            <div class="blk"><span>Payout ₦514,000 sent once</span><code>b72d…</code><small>10:23</small></div>
+            <div class="blk"><span>Funmi viewed a phone number</span><code>e85c…</code><small>09:58</small></div>
+          </div>
+          <p class="verify"><i></i>Record checked · nothing changed</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow" data-reveal>
+      <div class="fcopy">
+        <p class="label">Privacy</p>
+        <h2 class="h2">Customers' details stay sealed.</h2>
+        <p>Phone numbers, emails, BVNs, NINs, account and card numbers are found by themselves and sealed under each person's own key. They're hidden in logs and history, and the AI never sees them. Showing one is a choice that is recorded.</p>
+        <ul>
+          <li>Forgetting a customer destroys their key, and needs a passkey or code.</li>
+          <li>Each business's records are kept apart from every other's.</li>
+        </ul>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="pii">
+            <div class="r"><span>Customer</span><span class="v">Amaka Obi</span></div>
+            <div class="r"><span>Phone</span><span class="v"><i>0803 *** 4417</i><i>0803 211 4417</i></span></div>
+            <div class="r"><span>BVN</span><span class="v">•••••••••••</span></div>
+          </div>
+          <div class="reveal-log">✓ Shown to Ada for one call · 10:42 · recorded</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frow flip" data-reveal>
+      <div class="fcopy">
+        <p class="label">Exactly once</p>
+        <h2 class="h2">Money moves once. Even when the network doesn't.</h2>
+        <p>If a connection drops halfway through a payment, Taskiem tries again in a way the bank recognises, so nobody is paid twice. Every action Taskiem takes with your money is marked for what it is, and handled with that care.</p>
+      </div>
+      <div class="fvis" aria-hidden="true">
+        <div class="fcard">
+          <div class="once">
+            <div class="tx1"><span><b>₦85,000 to Kunle</b> · salary</span><span class="tag">Sent</span></div>
+            <div class="tx1 retry"><span><b>Retry after a dropped line</b></span><span class="tag">Recognised</span></div>
+            <p>Kunle was paid once.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><p class="label">And the rest</p><h2 class="h2">Your team, your rules.</h2></div>
+      <ul class="facts" data-reveal>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 11l2 2 4-4"/></svg></span><b>Roles that fit</b><span>Built-in roles for owners, managers, cashiers and accountants, or your own. Nobody can give a permission they don't have.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><b>Cover while you're away</b><span>Hand your approvals to someone you trust for up to 90 days.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></svg></span><b>Sign in your way</b><span>Single sign-on and automatic team set-up for larger businesses.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5.5c0 4.5-3 8-7 9.5-4-1.5-7-5-7-9.5V6z"/></svg></span><b>A one-person business</b><span>Approve your own payments while you work alone. A second person is asked again once you have one.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l3 3"/></svg></span><b>Your own keys</b><span>On Enterprise, keep the keys to your data in your own key vault.</span></li>
+        <li class="fact"><span class="tr-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span><b>Take it with you</b><span>Download your tables as a spreadsheet, and export the record for your auditor, any time.</span></li>
+      </ul>
+      <p class="honest">Certifications, and where production data is kept, will be listed here once they are final.</p>
+    </section>
+
+    <section class="pclose">
+      <div class="in">
+        <h2>Run your money with people you trust.</h2>
+        <div class="cta-row"><a class="btn btn-lime btn-big mag" href="/contact" data-go="web">Start free <span class="arr">→</span></a><a class="btn btn-ghost btn-big mag" href="/contact">Ask a question</a></div>
+      </div>
+    </section>
+  </div>
+</main>
+{{FOOTER}}

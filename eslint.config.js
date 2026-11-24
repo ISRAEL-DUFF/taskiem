@@ -69,6 +69,18 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", setTimeout: "readonly", performance: "readonly", requestAnimationFrame: "readonly", IntersectionObserver: "readonly", ResizeObserver: "readonly" },
     },
   },
+  // The website (website/site/README.md) and experiment 3's preview: the builds run on Node, the scripts in browsers.
+  {
+    files: ["website/site/*.mjs", "website/experiment-3/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly" } },
+  },
+  {
+    files: ["website/site/assets/*.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { window: "readonly", document: "readonly", localStorage: "readonly", addEventListener: "readonly", matchMedia: "readonly", IntersectionObserver: "readonly", CustomEvent: "readonly", innerHeight: "readonly" },
+    },
+  },
   // The engineering atlas (docs/atlas/README.md): its build runs on Node,
   // its page script in browsers.
   {
