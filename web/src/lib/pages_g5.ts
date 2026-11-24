@@ -92,13 +92,17 @@ export function madeWords(m: BundleMade): string[] {
   return out;
 }
 
+/** The name a field is read by on a page: one keyed as a saved thing's own
+ * (id, name, title, coming, created_at, updated_at) is field_<key>. */
+export const savedColumn = (key: string) => (["id", "name", "title", "coming", "created_at", "updated_at"].includes(key) ? `field_${key}` : key);
+
 /** The date fields of a kind a list may be put in order by (never a private one). */
 export const comingFields = (k: ChoiceKind | undefined) => (k?.fields ?? []).filter((f) => f.type === "date" && !f.private);
 
 /** A new list of a kind's saved things: in the order its first date comes, each saying when. */
 export function savedListPart(k: ChoiceKind | undefined, id: string): Part {
   const date = comingFields(k)[0];
-  const lines = (k?.fields ?? []).filter((f) => f.type !== "file").slice(0, 11).map((f) => ({ label: f.label, value: `=row.${f.key}` }));
+  const lines = (k?.fields ?? []).filter((f) => f.type !== "file").slice(0, 11).map((f) => ({ label: f.label, value: `=row.${savedColumn(f.key)}` }));
   return {
     id,
     type: "list",

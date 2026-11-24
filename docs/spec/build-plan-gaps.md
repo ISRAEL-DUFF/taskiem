@@ -215,6 +215,8 @@ Needs M6.
 
 Where it differs from the plan: Describe it is on the web, where pages are made (the spec names no chat for it); the app adds pages from starters and draws every part, and changes them on the web, as before. A starter's figures count where things are (Open, Done) rather than "done this week": a row changed through a tool keeps its `updated_at` in Xenibase unless something sets it, so a figure by when a row changed would not be true.
 
+**Review fixes (24 November 2026):** a drafted tool over an existing table is made over it; Taskiem's kept tables and roles the business lacks are refused in a draft; the plan's room is checked before anything is made; a build is saved, naming its page, before publishing, and publishing's troubles are said, not errors; tool words are given under the business's lock in the transaction that saves them, every asked name kept apart and renamed once; a saved field keyed `id` (or another of a thing's own names) is read as `field_id`; change tools take only the values the page gives; roles are said and checked; an API key under four-eyes gets drafts and asks nothing ([pages.md §18d](pages.md#18d-as-built-starters-describe-it-and-saved-things-g5), "Review fixes"). Tests `TestG5ReviewFixes`, `TestDescribeItOverAnExistingTable`, `TestBundleRoomAndPublishing`, `TestBundleWordsUnderTheLock`.
+
 ## 12. Not built by this plan, and what each waits for
 
 | Item | What | Waits for |

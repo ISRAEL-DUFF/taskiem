@@ -255,3 +255,56 @@ func TestSavedSource(t *testing.T) {
 		t.Errorf("shows: %v", s)
 	}
 }
+
+// Review of G5: a field keyed as a thing's own (an "ID") never takes the
+// thing's place; tools renamed all at once; a change tool's choices are
+// the page's own; who may use a tool is said.
+func TestG5ReviewFixes(t *testing.T) {
+	kind := SavedKind{Name: "Car", Fields: []SavedField{{Key: "id", Label: "ID", Type: "text"}, {Key: "title", Label: "Title", Type: "text"}}}
+	doc := `{"page":"page/v1","name":"cars","title":"Cars","blocks":[{"id":"l","type":"list","source":{"saved":"Car"},"item":{"title":"=row.title","sub":"=row.field_id"}}]}`
+	page, ps := Parse([]byte(doc))
+	if len(ps) > 0 {
+		t.Fatal(ps)
+	}
+	if ps := Check(page, Env{SavedKind: func(string) (SavedKind, bool) { return kind, true }}); len(ps) > 0 {
+		t.Fatal(ps)
+	}
+	v := Values{Set: map[string]string{}, Now: time.Now()}
+	read := page.ReadSaved(page.Blocks[0], kind, []SavedThing{{ID: "thing-1", Name: "van", Title: "Van", Values: map[string]string{"id": "LND-1", "title": "Field title"}}}, v)
+	shown := ShapeSaved(page.Blocks[0], kind, read, v)
+	if read.Rows[0]["id"] != "thing-1" || shown[0].ID != "thing-1" || shown[0].Title != "Van" || shown[0].Sub != "LND-1" {
+		t.Errorf("a field keyed id: %v %+v", read.Rows[0], shown[0])
+	}
+
+	// add becomes add-3 and add-2 stays: one mapping, applied once.
+	p2, _ := Parse([]byte(`{"page":"page/v1","name":"x","title":"X","blocks":[{"id":"b","type":"buttons","actions":[{"label":"A","tool":"add"},{"label":"B","tool":"add-2"}]}]}`))
+	p2.RenameTools(map[string]string{"add": "add-3", "add-2": "add-2"})
+	if a := p2.Blocks[0].Actions; a[0].Tool != "add-3" || a[1].Tool != "add-2" {
+		t.Errorf("renamed: %+v", a)
+	}
+
+	// The choices the page gives a change tool: a board's columns, its buttons' words.
+	st, _ := StarterNamed("tickets-desk")
+	tp, _ := Parse(st.Page)
+	if c := tp.ToolChoices("move-ticket"); strings.Join(c["status"], ",") != "open,doing,done" {
+		t.Errorf("board: %v", c)
+	}
+	lv, _ := StarterNamed("leave")
+	lp, _ := Parse(lv.Page)
+	if c := lp.ToolChoices("decide-leave"); strings.Join(c["status"], ",") != "approved,declined" || len(c["ref"]) != 0 {
+		t.Errorf("buttons: %v", c)
+	}
+	spec := lv.Tools[1]
+	spec.Choices = lp.ToolChoices("decide-leave")
+	tbl, _ := lv.TableNamed(spec.Table)
+	raw, _ := spec.Definition(tbl)
+	if !strings.Contains(string(raw), `"enum":["approved","declined"]`) {
+		t.Errorf("enum: %s", raw)
+	}
+	if w := spec.Words(tbl); !strings.HasSuffix(w, "; owners and admins only") {
+		t.Errorf("roles said: %s", w)
+	}
+	if w := strings.Join(lv.Words(), "\n"); !strings.Contains(w, "owners and admins only") {
+		t.Errorf("starter words: %s", w)
+	}
+}

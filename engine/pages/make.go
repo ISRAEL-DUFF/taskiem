@@ -74,6 +74,10 @@ type ToolSpec struct {
 	Roles   []string       `json:"roles,omitempty"`
 	Recipe  string         `json:"recipe,omitempty"`
 	Params  map[string]any `json:"params,omitempty"`
+	// Choices are, for a change tool, the values the page gives a column
+	// it asks (a board's columns, the words its buttons fill in): its form
+	// takes only these (Page.ToolChoices). Set when it is made.
+	Choices map[string][]string `json:"-"`
 }
 
 // toolCommandRe is a tool's command (made tools §5).
@@ -244,6 +248,13 @@ func (s ToolSpec) Definition(t TableSpec) (json.RawMessage, error) {
 		for _, c := range t.Columns {
 			if slices.Contains(s.Asks, c.Name) {
 				props[c.Name] = inputSchema(c)
+				if vals := s.Choices[c.Name]; len(vals) > 0 && c.Type == "text" {
+					enum := make([]any, len(vals))
+					for i, v := range vals {
+						enum[i] = v
+					}
+					props[c.Name].(map[string]any)["enum"] = enum
+				}
 				required = append(required, c.Name)
 				set[c.Name] = "=trigger.body." + c.Name
 			}
@@ -310,7 +321,7 @@ func (s ToolSpec) Words(t TableSpec) string {
 		for _, c := range s.Asked(t) {
 			asks = append(asks, columnSpecTitle(c))
 		}
-		return fmt.Sprintf("/%s (%s): adds a row to %s, asking for %s", s.Command, s.Name, title, andList(asks))
+		return fmt.Sprintf("/%s (%s): adds a row to %s, asking for %s%s", s.Command, s.Name, title, andList(asks), s.rolesWords())
 	case "change":
 		var what []string
 		for _, c := range t.Columns {
@@ -320,9 +331,72 @@ func (s ToolSpec) Words(t TableSpec) string {
 				what = append(what, columnSpecTitle(c))
 			}
 		}
-		return fmt.Sprintf("/%s (%s): changes a row of %s: %s", s.Command, s.Name, title, andList(what))
+		return fmt.Sprintf("/%s (%s): changes a row of %s: %s%s", s.Command, s.Name, title, andList(what), s.rolesWords())
 	}
-	return fmt.Sprintf("/%s (%s): the ready-made tool %s", s.Command, s.Name, s.Recipe)
+	return fmt.Sprintf("/%s (%s): the ready-made tool %s%s", s.Command, s.Name, s.Recipe, s.rolesWords())
+}
+
+// rolesWords says who may use a tool when not everyone may: "; owners
+// and admins only".
+func (s ToolSpec) rolesWords() string {
+	if len(s.Roles) == 0 {
+		return ""
+	}
+	var who []string
+	for _, r := range s.Roles {
+		w := strings.ReplaceAll(r, "_", " ")
+		if !strings.HasSuffix(w, "s") {
+			w += "s"
+		}
+		who = append(who, w)
+	}
+	return "; owners and " + andList(who) + " only"
+}
+
+// ToolChoices are, for the tool command, the values the page gives each
+// of its inputs where it gives only words: a board's columns for an input
+// its move gives the column (=to), and the words its buttons fill in. An
+// input the page fills with anything else (a row's column) is left out.
+func (p *Page) ToolChoices(command string) map[string][]string {
+	out := map[string][]string{}
+	open := map[string]bool{}
+	add := func(k, v string) {
+		if !slices.Contains(out[k], v) {
+			out[k] = append(out[k], v)
+		}
+	}
+	take := func(a Action, board *Board) {
+		if a.Tool != command {
+			return
+		}
+		for k, raw := range a.Inputs {
+			v, ok := raw.(string)
+			switch {
+			case !ok:
+				open[k] = true
+			case v == "=to" && board != nil:
+				for _, c := range board.Columns {
+					add(k, c.Value)
+				}
+			case strings.HasPrefix(v, "="):
+				open[k] = true
+			default:
+				add(k, v)
+			}
+		}
+	}
+	for _, b := range p.Blocks {
+		for _, a := range b.Actions {
+			take(a, nil)
+		}
+		if b.Board != nil && b.Board.Move != nil {
+			take(*b.Board.Move, b.Board)
+		}
+	}
+	for k := range open {
+		delete(out, k)
+	}
+	return out
 }
 
 func columnSpecTitle(c ColumnSpec) string {
@@ -332,20 +406,25 @@ func columnSpecTitle(c ColumnSpec) string {
 	return c.Name
 }
 
-// RenameTable makes a page read table new in place of old.
-func (p *Page) RenameTable(old, new string) {
+// RenameTables makes a page read each table by its new name, all at
+// once: a name given to one is never taken again for another.
+func (p *Page) RenameTables(names map[string]string) {
 	for i := range p.Blocks {
-		if s := p.Blocks[i].Source; s != nil && s.Table == old {
-			s.Table = new
+		if s := p.Blocks[i].Source; s != nil {
+			if n, ok := names[s.Table]; ok && s.Table != "" {
+				s.Table = n
+			}
 		}
 	}
 }
 
-// RenameTool makes a page press, or read, the tool new in place of old.
-func (p *Page) RenameTool(old, new string) {
+// RenameTools makes a page press, or read, each tool by its new command,
+// all at once (a tool renamed add-2 is never then re-pointed by another
+// renamed from add-2).
+func (p *Page) RenameTools(commands map[string]string) {
 	ren := func(a *Action) {
-		if a.Tool == old {
-			a.Tool = new
+		if n, ok := commands[a.Tool]; ok && a.Tool != "" {
+			a.Tool = n
 		}
 	}
 	for i := range p.Blocks {
@@ -356,8 +435,10 @@ func (p *Page) RenameTool(old, new string) {
 		if b.Board != nil && b.Board.Move != nil {
 			ren(b.Board.Move)
 		}
-		if b.Source != nil && b.Source.Tool == old {
-			b.Source.Tool = new
+		if b.Source != nil && b.Source.Tool != "" {
+			if n, ok := commands[b.Source.Tool]; ok {
+				b.Source.Tool = n
+			}
 		}
 	}
 }

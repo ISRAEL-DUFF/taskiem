@@ -307,18 +307,22 @@ func (s *Server) checkPageDraft(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if err != nil {
 		return append(ps, builder.Problem{Path: "/", Message: "the business's limits could not be read"})
 	}
-	all := slices.Clone(tables)
+	// Taskiem's own tables (stock, the books) are not the model's to
+	// build on: it is never told of them, and a draft naming one is refused.
+	var all []datatables.Table
 	specs := map[string]pages.TableSpec{}
+	kept := map[string]bool{}
 	for _, t := range tables {
-		spec := pages.TableSpec{Name: t.Name, Title: t.Title}
-		for _, c := range t.Columns {
-			spec.Columns = append(spec.Columns, pages.ColumnSpec{Name: c.Name, Title: c.Title, Type: c.Type, Required: c.Required})
+		if t.KeptBy != "" {
+			kept[t.Name] = true
+			continue
 		}
-		specs[t.Name] = spec
+		all = append(all, t)
+		specs[t.Name] = tableSpecOf(t)
 	}
 	for i, t := range b.Tables {
 		at := fmt.Sprintf("/tables/%d", i)
-		if _, has := specs[t.Name]; has {
+		if _, has := specs[t.Name]; has || kept[t.Name] {
 			ps = append(ps, builder.Problem{Path: at + "/name", Message: fmt.Sprintf("the business has a table called %s already: use it, or name the new one differently", t.Name)})
 			continue
 		}
@@ -352,6 +356,10 @@ func (s *Server) checkPageDraft(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		}
 		if why := t.Check(tbl); why != "" {
 			ps = append(ps, builder.Problem{Path: at, Message: why})
+			continue
+		}
+		if why := memberRolesProblem(ctx, tx, t.Roles); why != "" {
+			ps = append(ps, builder.Problem{Path: at + "/roles", Message: fmt.Sprintf("the tool /%s: %s", t.Command, why)})
 			continue
 		}
 		if c, err := s.freeToolCommandTx(ctx, tx, tenant, t.Command, uuid.Nil, given); err != nil || c != t.Command {
@@ -390,6 +398,22 @@ func (s *Server) checkPageDraft(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		ps = append(ps, builder.Problem{Path: "/page" + p.Path, Message: p.Message})
 	}
 	return ps
+}
+
+// memberRolesProblem says why a drafted tool's roles cannot be ("" when
+// they can): each must be one of the business's own roles for its people
+// (built in, or made), never anyone outside it.
+func memberRolesProblem(ctx context.Context, tx pgx.Tx, roles []string) string {
+	for _, r := range roles {
+		if rolePermissions[r] != nil {
+			continue
+		}
+		var has bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM roles WHERE name = $1)`, r).Scan(&has); err != nil || !has {
+			return fmt.Sprintf("who may use it names %s, which is not one of the business's roles", r)
+		}
+	}
+	return ""
 }
 
 // pageBuildView is a page build as the web reads it.
@@ -447,7 +471,13 @@ func (s *Server) pageBuildReview(ctx context.Context, tx pgx.Tx, prop *builder.P
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"makes": nonNil(b.Words()), "uses": []string{}, "shows": []string{}, "title": "", "parts": []string{}}
+	var own []pages.TableSpec
+	for _, t := range tables {
+		if t.KeptBy == "" {
+			own = append(own, tableSpecOf(t))
+		}
+	}
+	out := map[string]any{"makes": nonNil(b.WordsOver(own)), "uses": []string{}, "shows": []string{}, "title": "", "parts": []string{}}
 	page, _ := pages.Parse(b.Page)
 	if page == nil {
 		return out, nil
@@ -536,9 +566,10 @@ func (s *Server) makePageBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, _ := pageDraftBundle(prop.PageDraft)
-	made, err := s.installBundle(r, b, req.Publish, map[string]any{"build": id.String()})
+	made, err := s.makeBundle(r, b, map[string]any{"build": id.String()})
 	if err != nil {
-		// Not made: the draft may be made again.
+		// Not made (the plan had no room, a permission lacked, a table
+		// could not be made): the draft may be made again.
 		_ = s.tx(r, func(tx pgx.Tx) error {
 			_, err := tx.Exec(r.Context(), `UPDATE ai_builds SET status = 'proposed', saved_at = NULL WHERE id = $1 AND page_name IS NULL`, id)
 			return err
@@ -546,12 +577,19 @@ func (s *Server) makePageBuild(w http.ResponseWriter, r *http.Request) {
 		s.bundleFail(w, r, made, err)
 		return
 	}
+	// Made: the build names its page before anything is published, so it
+	// is never made twice whatever publishing does.
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `UPDATE ai_builds SET page_name = $2 WHERE id = $1`, id, made.Page)
+		_, err := tx.Exec(r.Context(), `UPDATE ai_builds SET page_name = $2, status = 'saved' WHERE id = $1`, id, made.Page)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if req.Publish {
+		made = s.publishBundle(r, made)
+	} else {
+		made.Waiting = "Saved as drafts: publish the tools and the page when they are right."
 	}
 	writeJSON(w, http.StatusCreated, made)
 }

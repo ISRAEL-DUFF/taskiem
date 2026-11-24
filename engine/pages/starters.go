@@ -99,7 +99,11 @@ func (b Bundle) TableNamed(name string) (TableSpec, bool) {
 // Words say what a bundle makes, a line each: "The table Tickets: Title,
 // Customer, Email, Priority, Status", "/new-ticket (New ticket): adds a
 // row to Tickets, asking for …".
-func (b Bundle) Words() []string {
+func (b Bundle) Words() []string { return b.WordsOver(nil) }
+
+// WordsOver is Words where a tool works on one of the business's own
+// tables (own), as Describe it may draft.
+func (b Bundle) WordsOver(own []TableSpec) []string {
 	var out []string
 	for _, t := range b.Tables {
 		var cols []string
@@ -113,7 +117,12 @@ func (b Bundle) Words() []string {
 		out = append(out, "The table "+title+": "+strings.Join(cols, ", "))
 	}
 	for _, s := range b.Tools {
-		t, _ := b.TableNamed(s.Table)
+		t, ok := b.TableNamed(s.Table)
+		for _, x := range own {
+			if !ok && x.Name == s.Table {
+				t, ok = x, true
+			}
+		}
 		out = append(out, s.Words(t))
 	}
 	return out

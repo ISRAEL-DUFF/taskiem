@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newPart, partWords, PART_KINDS, NO_TABLE_KINDS } from "./pages";
-import { buildStage, comingFields, madeWords, partsWords, savedListPart, savedPartWords, type ChoiceKind } from "./pages_g5";
+import { buildStage, comingFields, madeWords, partsWords, savedColumn, savedListPart, savedPartWords, type ChoiceKind } from "./pages_g5";
 
 const generator: ChoiceKind = {
   name: "Generator",
@@ -13,6 +13,12 @@ const generator: ChoiceKind = {
 };
 
 describe("pages G5", () => {
+  it("reads a field keyed as a thing's own by another name", () => {
+    expect(savedColumn("id")).toBe("field_id");
+    expect(savedColumn("size")).toBe("size");
+    expect(savedListPart({ name: "Car", fields: [{ key: "id", label: "ID", type: "text", private: false }] }, "s").detail?.lines?.[0]?.value).toBe("=row.field_id");
+  });
+
   it("says a page's parts in a line", () => {
     expect(partsWords(["figure", "figure", "buttons", "board"])).toBe("figures, buttons and a board");
     expect(partsWords(["list"])).toBe("a list");

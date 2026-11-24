@@ -113,6 +113,9 @@ func sameJSON(a, b any) bool {
 }
 
 func andList(words []string) string {
+	if len(words) == 0 {
+		return "nothing"
+	}
 	if len(words) == 1 {
 		return words[0]
 	}

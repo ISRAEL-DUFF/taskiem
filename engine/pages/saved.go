@@ -82,13 +82,26 @@ func (k SavedKind) Table() datatables.Table {
 		datatables.Column{Name: "title", Title: "Name", Type: "text"})
 	for _, f := range k.Fields {
 		typ := savedColumnType(f)
-		if typ == "" || f.Key == "name" || f.Key == "title" || f.Key == "coming" {
+		if typ == "" {
 			continue
 		}
-		t.Columns = append(t.Columns, datatables.Column{Name: f.Key, Title: f.Label, Type: typ, Personal: f.Sensitive || f.Type == "bank_account"})
+		t.Columns = append(t.Columns, datatables.Column{Name: SavedColumn(f.Key), Title: f.Label, Type: typ, Personal: f.Sensitive || f.Type == "bank_account"})
 	}
 	t.Columns = append(t.Columns, datatables.Column{Name: "coming", Title: "When it comes", Type: "text"})
 	return t
+}
+
+// savedOwn are the names a saved thing's row has of its own: a field
+// keyed one of them is read as field_<key> (a field labelled "ID" never
+// takes the place of the thing's own id).
+var savedOwn = []string{"id", "name", "title", "coming", "created_at", "updated_at"}
+
+// SavedColumn is the column a field's key is read as on a page.
+func SavedColumn(key string) string {
+	if slices.Contains(savedOwn, key) {
+		return "field_" + key
+	}
+	return key
 }
 
 // field is the kind's field by key.
@@ -214,12 +227,12 @@ func (p *Page) ReadSaved(b Block, k SavedKind, things []SavedThing, v Values) Sa
 		if !x.Updated.IsZero() {
 			row["updated_at"] = x.Updated.UTC().Format(time.RFC3339Nano)
 		}
-		for _, c := range t.Columns {
-			if c.Name == "name" || c.Name == "title" || c.Name == "coming" {
+		for _, f := range k.Fields {
+			if savedColumnType(f) == "" {
 				continue
 			}
-			if val, ok := x.Values[c.Name]; ok && val != "" {
-				row[c.Name] = val
+			if val, ok := x.Values[f.Key]; ok && val != "" {
+				row[SavedColumn(f.Key)] = val
 			}
 		}
 		ok := true

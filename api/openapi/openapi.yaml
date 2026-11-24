@@ -63364,7 +63364,7 @@ components:
                 format: uuid
               state:
                 type: string
-                description: draft, published, pending_approval, not_ready or in_the_app.
+                description: draft, published, pending_approval (four-eyes asks another person), not_ready, in_the_app (published through Git) or forbidden (four-eyes, and the caller is no person).
             additionalProperties: false
         published:
           type: boolean
