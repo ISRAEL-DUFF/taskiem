@@ -147,6 +147,84 @@ func TestPagesMineOnAPhoneColumn(t *testing.T) {
 	}
 }
 
+// Review of H5: a choice filter on a personal column (a page published
+// before Check refused one) is hidden from a viewer without table.read,
+// and a value they send for it reaches nothing: not a tool's values over
+// filters, not the page's parts. Someone who may read the table keeps it.
+func TestPagesHiddenFilterValuesLetGo(t *testing.T) {
+	defer api.SetPageToolWait(0)()
+	w := newTablesWorld(t)
+	owner := w.tenant(t, "Acme", "owner@h5hidden.test")
+	owner.must(201, "PUT", "/v1/roles/desk", map[string]any{"permissions": []string{"run.start"}})
+	desk := addMember(t, w.world, owner, "desk", "desk")
+	tbl := owner.must(201, "POST", "/v1/tables", ticketsTable)["id"].(string)
+	owner.must(201, "POST", "/v1/tables/"+tbl+"/rows", map[string]any{"rows": []map[string]any{
+		{"title": "Printer jam", "phone": "2348012345678"}, {"title": "No ink", "phone": "2348098765432"},
+	}})
+	publishWF(t, owner, "Echo", toolDef("wf_echo", "Echo", "echo-it", "", `{"who":{"type":"string","title":"Who"}}`,
+		`[{"name":"rows","type":"list","title":"Rows","description":"Rows","value":"=steps.look.output.rows"}]`,
+		`{"type":"text","text":"done"}`,
+		`{"id":"look","type":"transform","config":{"output":{"rows":[{"name":"=\"got \" + (has(trigger.body.who) ? trigger.body.who : \"nothing\")"}]}}}`))
+	doc := map[string]any{"page": "page/v1", "name": "hidden", "title": "Hidden", "roles": []string{"desk"},
+		"blocks": []map[string]any{
+			{"id": "all", "type": "list", "source": map[string]any{"table": "tickets", "order": []map[string]any{{"column": "title"}}}, "item": map[string]any{"title": "=row.title"}},
+			{"id": "echo", "type": "list", "source": map[string]any{"tool": "echo-it", "output": "rows", "inputs": map[string]any{"who": "=filters.ph"}}, "item": map[string]any{"title": "=item.name"}},
+		}}
+	owner.must(201, "POST", "/v1/pages", map[string]any{"document": doc})
+	owner.must(200, "POST", "/v1/pages/hidden/publish", nil)
+	// As published before Check refused it: a choice on the phone column.
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE page_versions SET document = jsonb_set(document, '{filters}',
+		'[{"id":"ph","type":"choice","column":"phone","options":[{"value":"2348012345678"}]}]') WHERE page_id = (SELECT id FROM pages WHERE name = 'hidden')`); err != nil {
+		t.Fatal(err)
+	}
+	ph := map[string]any{"ph": "2348012345678"}
+	read := func(c *client) string {
+		v := viewOf(t, c, "hidden", ph)
+		if b := blockOf(t, v, "echo"); b["working"] != nil {
+			w.env.Drain(t)
+			v = viewOf(t, c, "hidden", ph)
+		}
+		return toJSON(blockOf(t, v, "echo")["rows"])
+	}
+	if got := read(desk); strings.Contains(got, "2348012345678") || !strings.Contains(got, "got nothing") {
+		t.Errorf("a hidden filter's value reached the tool for staff: %s", got)
+	}
+	// The owner's value reaches the tool (its answer then masks the number
+	// as every answer's words are).
+	if got := read(owner); strings.Contains(got, "got nothing") {
+		t.Errorf("the owner's filter: %s", got)
+	}
+}
+
+// Review of H5: the editor's choices hold to roles. Someone who may change
+// pages but is not in a tool's roles, and does not read workflows, is not
+// shown that tool, nor a workflow they may not start; the owner is.
+func TestPageChoicesHoldToRoles(t *testing.T) {
+	w := newTablesWorld(t)
+	owner := w.tenant(t, "Acme", "owner@h5choices.test")
+	owner.must(201, "PUT", "/v1/roles/pager", map[string]any{"permissions": []string{"page.edit", "run.start"}})
+	pager := addMember(t, w.world, owner, "pager", "pager")
+	transform := `{"id":"look","type":"transform","config":{"output":{"n":1}}}`
+	out := `[{"name":"n","type":"integer","title":"N","description":"N","value":"=steps.look.output.n"}]`
+	publishWF(t, owner, "Payroll sums", toolDef("wf_paysums", "Payroll sums", "payroll-sums", `["manager"]`, `{}`, out, `{"type":"text","text":"x"}`, transform))
+	publishWF(t, owner, "Open sums", toolDef("wf_opensums", "Open sums", "open-sums", "", `{}`, out, `{"type":"text","text":"x"}`, transform))
+	signal := func(id, name, roles string) json.RawMessage {
+		return json.RawMessage(`{"schema":"wd/v1","id":"` + id + `","version":1,"name":"` + name + `","trigger":{"type":"manual"}` + roles + `,
+			"steps":[{"id":"wait","type":"signal","config":{"event":"confirm","correlation":"=trigger.body.ref","pages":true}}]}`)
+	}
+	publishWF(t, owner, "Pay out", signal("wf_payout", "Pay out", `,"roles":["manager"]`))
+	publishWF(t, owner, "Deliveries", signal("wf_deliv", "Deliveries", ""))
+
+	mine := toJSON(pager.must(200, "GET", "/v1/page-choices", nil))
+	if strings.Contains(mine, "payroll-sums") || strings.Contains(mine, `"Pay out"`) || !strings.Contains(mine, "open-sums") || !strings.Contains(mine, `"Deliveries"`) {
+		t.Errorf("a pager's choices: %s", mine)
+	}
+	all := toJSON(owner.must(200, "GET", "/v1/page-choices", nil))
+	if !strings.Contains(all, "payroll-sums") || !strings.Contains(all, `"Pay out"`) {
+		t.Errorf("the owner's choices: %s", all)
+	}
+}
+
 // g-pages-runs: the page's settings estimate its tools' runs a day: views
 // a day over the last seven days (a viewer once a minute, as their answer
 // is kept) times the tools its parts start, beside the plan's limits; only
@@ -182,13 +260,34 @@ func TestPagesRunsEstimate(t *testing.T) {
 		t.Errorf("a viewer read the editor's choices: %d", s)
 	}
 
+	// Eight days are kept, today and the seven before: the first view of a
+	// day lets the ninth go (review of H5).
+	ctx := context.Background()
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO page_views (tenant_id, page_id, day, views)
+		SELECT tenant_id, id, (now() AT TIME ZONE 'Africa/Lagos')::date - 8, 900 FROM pages WHERE name = 'desk'
+		UNION ALL SELECT tenant_id, id, (now() AT TIME ZONE 'Africa/Lagos')::date - 7, 900 FROM pages WHERE name = 'desk'`); err != nil {
+		t.Fatal(err)
+	}
 	// Desk opens it three times in a minute (one view), Ops once.
 	for range 3 {
 		viewOf(t, desk, "desk", nil)
 	}
 	viewOf(t, ops, "desk", nil)
+	var kept []int
+	rows, err := w.env.DB.Admin.Query(ctx, `SELECT (now() AT TIME ZONE 'Africa/Lagos')::date - day FROM page_views WHERE page_id = (SELECT id FROM pages WHERE name = 'desk') ORDER BY day`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var d int
+		_ = rows.Scan(&d)
+		kept = append(kept, d)
+	}
+	rows.Close()
+	if len(kept) != 2 || kept[0] != 7 || kept[1] != 0 {
+		t.Errorf("days kept (days back): %v, want [7 0]", kept)
+	}
 	// Five days ago it was opened 26 times; ten days ago is past the week.
-	ctx := context.Background()
 	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO page_views (tenant_id, page_id, day, views)
 		SELECT tenant_id, id, (now() AT TIME ZONE 'Africa/Lagos')::date - 5, 26 FROM pages WHERE name = 'desk'
 		UNION ALL SELECT tenant_id, id, (now() AT TIME ZONE 'Africa/Lagos')::date - 10, 500 FROM pages WHERE name = 'desk'`); err != nil {

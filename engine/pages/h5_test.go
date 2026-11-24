@@ -8,6 +8,22 @@ import (
 	"github.com/israel-duff/taskiem/engine/datatables"
 )
 
+// A value for a filter hidden from a viewer (a choice on a personal column,
+// a page published before Check refused one) is let go before anything
+// reads it; a viewer with table.read keeps it (review of H5).
+func TestVisibleFilters(t *testing.T) {
+	p := parseOK(t, `{"page": "page/v1", "name": "desk", "title": "Desk",
+	  "filters": [{"id": "ph", "type": "choice", "column": "phone", "options": [{"value": "2348012345678"}]}, {"id": "q", "type": "search"}],
+	  "blocks": [{"id": "list", "type": "list", "source": {"table": "tickets", "uses": ["ph", "q"]}, "item": {"title": "=row.title"}}]}`)
+	set := map[string]string{"ph": "2348012345678", "q": "jam"}
+	if got := p.VisibleFilters(set, []datatables.Table{tickets}, false); len(got) != 1 || got["q"] != "jam" {
+		t.Errorf("a viewer without table.read: %v", got)
+	}
+	if got := p.VisibleFilters(set, []datatables.Table{tickets}, true); len(got) != 2 {
+		t.Errorf("a viewer with table.read: %v", got)
+	}
+}
+
 // A row's own status (build-plan-gaps H5, g-pages-rowstatus): a list's or
 // a table's rows each name a run of a workflow, by a column's run number,
 // by what it waits for, or by the page's address.

@@ -64,14 +64,15 @@ type pageChoiceWorkflow struct {
 // listPageChoices is GET /v1/page-choices.
 func (s *Server) listPageChoices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	p := principalFrom(ctx)
 	tools := []pageChoiceTool{}
 	flows := []pageChoiceWorkflow{}
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if tools, err = s.pageChoiceTools(ctx, tx); err != nil {
+		if tools, err = s.pageChoiceTools(ctx, tx, p); err != nil {
 			return err
 		}
-		flows, err = s.pageChoiceWorkflows(ctx, tx)
+		flows, err = s.pageChoiceWorkflows(ctx, tx, p)
 		return err
 	}); err != nil {
 		s.fail(w, r, err)
@@ -80,7 +81,7 @@ func (s *Server) listPageChoices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tools": tools, "workflows": flows})
 }
 
-func (s *Server) pageChoiceTools(ctx context.Context, tx pgx.Tx) ([]pageChoiceTool, error) {
+func (s *Server) pageChoiceTools(ctx context.Context, tx pgx.Tx, p *Principal) ([]pageChoiceTool, error) {
 	rows, err := tx.Query(ctx, `SELECT `+toolCols+` FROM workflow_tools WHERE environment = $1 AND audience = 'members' ORDER BY name, command LIMIT 200`, pageToolEnv)
 	if err != nil {
 		return nil, err
@@ -91,6 +92,11 @@ func (s *Server) pageChoiceTools(ctx context.Context, tx pgx.Tx) ([]pageChoiceTo
 	}
 	out := []pageChoiceTool{}
 	for _, t := range all {
+		// A tool the editor may not start is not theirs to see: its values
+		// and answers are what its roles keep (review of H5).
+		if !mayStart(p, t.Roles) {
+			continue
+		}
 		var def []byte
 		if err := tx.QueryRow(ctx, `SELECT definition FROM workflow_versions WHERE workflow_id = $1 AND version = $2`, t.Workflow, t.Version).Scan(&def); err != nil {
 			return nil, err
@@ -123,7 +129,7 @@ func (s *Server) pageChoiceTools(ctx context.Context, tx pgx.Tx) ([]pageChoiceTo
 	return out, nil
 }
 
-func (s *Server) pageChoiceWorkflows(ctx context.Context, tx pgx.Tx) ([]pageChoiceWorkflow, error) {
+func (s *Server) pageChoiceWorkflows(ctx context.Context, tx pgx.Tx, p *Principal) ([]pageChoiceWorkflow, error) {
 	rows, err := tx.Query(ctx, `SELECT w.id, w.name, d.version, v.definition FROM workflows w
 		JOIN deployments d ON d.workflow_id = w.id AND d.environment = $1
 		JOIN workflow_versions v ON v.workflow_id = w.id AND v.version = d.version
@@ -156,6 +162,11 @@ func (s *Server) pageChoiceWorkflows(ctx context.Context, tx pgx.Tx) ([]pageChoi
 		}
 		d, err := s.definitionFor(f.id, f.ver, f.def)
 		if err != nil {
+			continue
+		}
+		// A workflow's steps are for those who read workflows; anyone else
+		// sees only the workflows their role may start (review of H5).
+		if !p.Can(PermWorkflowRead) && !mayStart(p, d.Roles) {
 			continue
 		}
 		c := pageChoiceWorkflow{Name: f.name, Signals: []string{}, Approvals: []pageChoiceStep{}}

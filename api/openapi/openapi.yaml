@@ -41309,9 +41309,9 @@ paths:
       - Pages
       summary: The tools and workflows a page may use
       description: >-
-        What the editor's plain-words path offers beside the tables (pages H5): the business's members' tools in use, whether each
-        answers at once (only those feed a part), their outputs and the values they ask (a personal one is never kept on a page
-        as a fixed value); and its workflows in use (one name each), with the signals a page may send them (a signal step with
+        What the editor's plain-words path offers beside the tables (pages H5): the business's members' tools in use that the caller
+        may start (their roles), whether each answers at once (only those feed a part), their outputs and the values they ask (a personal one is never kept on a page
+        as a fixed value); and its workflows in use (one name each; every one to a caller with workflow.read, else only those their role may start), with the signals a page may send them (a signal step with
         "pages": true) and the approval steps they wait at. Names and types only. For the editor (page.edit); publishing checks
         every choice again.
       security:

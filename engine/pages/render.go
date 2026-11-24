@@ -310,6 +310,25 @@ func (p *Page) HiddenFilter(f Filter, tables []datatables.Table, personal bool) 
 	return false
 }
 
+// VisibleFilters is what a viewer set, but for the filters HiddenFilter
+// keeps from them: a value for one is let go before anything reads it
+// (a part's conditions, a tool's values over filters, the page's link),
+// so a viewer without table.read narrows nothing by a personal column.
+func (p *Page) VisibleFilters(set map[string]string, tables []datatables.Table, personal bool) map[string]string {
+	if personal || len(set) == 0 {
+		return set
+	}
+	out := make(map[string]string, len(set))
+	for k, v := range set {
+		i := slices.IndexFunc(p.Filters, func(f Filter) bool { return f.ID == k })
+		if i >= 0 && p.HiddenFilter(p.Filters[i], tables, false) {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
 // RankedByPersonal says whether part b's rows, read in this order (nil:
 // the part's own), are ranked by a column the viewer may not read: the
 // part's own order may name a personal column (its maker chose it), and

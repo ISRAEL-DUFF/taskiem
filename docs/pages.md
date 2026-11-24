@@ -117,7 +117,7 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `GET /v1/pages/{name}/live` | Server-sent events while the page is open: `changed` names the parts to read again (no data), at most once in two seconds |
 | `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open |
 | `POST /v1/pages/{name}/refresh` | What tools worked out on the page for you is let go, so it is worked out again |
-| `GET /v1/page-choices` | Your tools (whether each only reads, its answers and values) and workflows (the signals a page may send them, their approvals) by name, for the editor (`page.edit`) |
+| `GET /v1/page-choices` | The tools you may use (whether each only reads, its answers and values) and the workflows (the signals a page may send them, their approvals; all of them if you read workflows, else those you may start) by name, for the editor (`page.edit`) |
 | `GET /v1/page-records` | Your orders, invoices, deliveries, customers and staff as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |

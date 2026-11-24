@@ -829,6 +829,9 @@ func (s *Server) openPage(w http.ResponseWriter, r *http.Request) (*pageCtx, boo
 			}
 		}
 	}
+	// A filter hidden from this viewer is applied for no one's values but
+	// those who may see it (review of H5).
+	set = pc.page.VisibleFilters(set, pc.tables, viewer.Personal)
 	vals, ps := pc.page.FilterValues(set, viewer, time.Now())
 	if len(ps) > 0 {
 		pageProblems(w, http.StatusBadRequest, ps[0].Message, ps)

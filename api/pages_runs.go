@@ -53,8 +53,8 @@ func (s *Server) countPageView(ctx context.Context, p *Principal, page uuid.UUID
 			RETURNING xmax = 0`, p.TenantID, page, day).Scan(&first); err != nil {
 			return err
 		}
-		if first { // a new day: only the last eight are kept
-			_, err := tx.Exec(ctx, `DELETE FROM page_views WHERE page_id = $1 AND day < $2::date - 8`, page, day)
+		if first { // a new day: only eight are kept, today and the seven before (the estimate reads seven)
+			_, err := tx.Exec(ctx, `DELETE FROM page_views WHERE page_id = $1 AND day <= $2::date - 8`, page, day)
 			return err
 		}
 		return nil

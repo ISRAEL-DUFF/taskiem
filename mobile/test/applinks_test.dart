@@ -2,6 +2,7 @@
 // server's addresses the app opens, and a link that waits.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/app/applinks.dart';
@@ -52,6 +53,17 @@ void main() {
     expect(page('https://taskiem.example/pages/Disks'), isNull);
     expect(page('https://taskiem.example/pages/disks/edit'), isNull);
     expect(pageRouteOf('tickets', pageFiltersOf), (name: 'tickets', filters: null));
+  });
+
+  // The phone hands the app a page's link, never its editor's
+  // (/pages/<name>/edit stays on the web).
+  test('Android opens a page’s link in the app, not its editor', () {
+    final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    expect(manifest, contains('android:pathAdvancedPattern="/pages/[a-z][a-z0-9-]+"'));
+    expect(manifest, isNot(contains('android:pathPrefix="/pages')));
+    final pattern = RegExp(r'^/pages/[a-z][a-z0-9-]+$');
+    expect(pattern.hasMatch('/pages/disks'), isTrue);
+    expect(pattern.hasMatch('/pages/disks/edit'), isFalse);
   });
 
   test('You’s pages open the app: the chats, a chat, Orders, an order, Discover, a profile', () {

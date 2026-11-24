@@ -112,7 +112,7 @@ func (s *Server) pageShortForm(ctx context.Context, name string, set map[string]
 	viewer.Personal = p.Can(PermTableRead)
 	// Filters set by a notification's button: a value the page refuses
 	// (a choice it no longer offers) is left out, as the page does.
-	pc.values, _ = pc.page.FilterValues(set, viewer, time.Now())
+	pc.values, _ = pc.page.FilterValues(pc.page.VisibleFilters(set, pc.tables, viewer.Personal), viewer, time.Now())
 
 	var figures []string
 	var list []string
