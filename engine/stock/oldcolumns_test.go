@@ -89,6 +89,47 @@ func TestOldColumnsIn(t *testing.T) {
 	}
 }
 
+// g-old-cols: a column named inside an expression ("=…") is found as well:
+// a select, a filter's column, filters and an order given whole, set, row
+// and rows given as an expression, a column passed as a string; a value
+// that merely holds the word is not.
+func TestOldColumnsInExpressions(t *testing.T) {
+	c := catalogueNamed("products", map[string]string{"stock": "qty"})
+	step := func(action, input string) []byte {
+		return flow("", `{"id":"s","type":"connector","connector":"xenibase@1","action":"`+action+`","connection":"data_tables","input":{"table":"products",`+input+`}}`)
+	}
+	for _, tc := range []struct {
+		name string
+		doc  []byte
+		want string
+	}{
+		{"a select as an expression", step("read_rows", `"select":"='name, ' + (trigger.body.all ? 'qty, cost_price' : 'unit')"`),
+			"s reads stock(qty); s reads unit(unit); s reads cost_price(cost_price)"},
+		{"a select in double quotes", step("read_rows", `"select":"=\"name,qty\""`), "s reads stock(qty)"},
+		{"a filter's column as an expression", step("query_rows", `"filters":[{"column":"=trigger.body.low ? 'reorder_level' : 'name'","op":"gt","value":0}]`),
+			"s reads reorder_level(reorder_level)"},
+		{"filters given whole", step("query_rows", `"filters":"=[{'column': 'qty', 'op': 'lt', 'value': trigger.body.n}]"`), "s reads stock(qty)"},
+		{"one filter of the list as an expression", step("query_rows", `"filters":["={'column': 'target_level', 'op': 'gt', 'value': 0}"]`),
+			"s reads target_level(target_level)"},
+		{"an order as an expression", step("query_rows", `"order":"=[{\"column\": \"cost_price\"}]"`), "s reads cost_price(cost_price)"},
+		{"a filter's value is not a column", step("query_rows", `"filters":[{"column":"name","op":"eq","value":"='qty'"}],"select":"name"`), ""},
+		{"set as an expression", step("update_rows", `"key":"7","set":"={'qty': trigger.body.n, 'note': 'unit'}"`), "s sets stock(qty)"},
+		{"set as a map built in a ternary", step("update_rows", `"key":"7","set":"=trigger.body.cost > 0 ? {\"cost_price\": trigger.body.cost} : {}"`),
+			"s sets cost_price(cost_price)"},
+		{"a row as an expression", step("insert_rows", `"row":"={'name': trigger.body.name, 'supplier': trigger.body.from}"`), "s sets supplier(supplier)"},
+		{"rows as an expression", step("insert_rows", `"rows":"=trigger.body.items.map(i, {'name': i.name, 'qty': i.n})"`), "s sets stock(qty)"},
+		{"one of the rows as an expression", step("upsert_rows", `"rows":["={'name': 'x', 'reorder_level': 3}"],"on_conflict":["=trigger.body.key ? 'name' : 'unit'"]`),
+			"s reads unit(unit); s sets reorder_level(reorder_level)"},
+		{"the kept copy by expression is not", flow("", `{"id":"s","type":"connector","connector":"xenibase@1","action":"read_rows","input":{"table":"stock_items","select":"='count, qty'"}}`), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if g := got(stock.OldColumnsIn(tc.doc, c)); g != tc.want {
+				t.Fatalf("got %q, want %q", g, tc.want)
+			}
+		})
+	}
+}
+
 // What replaces each use (§4.3).
 func TestOldColumnsInstead(t *testing.T) {
 	for _, tc := range []struct{ col, uses, has string }{
