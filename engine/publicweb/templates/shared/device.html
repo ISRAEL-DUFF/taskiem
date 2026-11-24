@@ -1,0 +1,49 @@
+{{/* A device field on a form step's one-time page (formdevice.go,
+static/form-device.js): the question's why first, then the button that
+asks the browser, at the tap. What needs no script works without it: an
+address or a code typed, a photo chosen, I can't answer this. */}}
+{{define "hdevice"}}<fieldset class="device" data-device="{{.Device}}" data-input="{{.Input}}"{{with .Formats}} data-formats="{{.}}"{{end}}>
+<legend>{{.Label}}{{if .Required}} <span class="req" aria-hidden="true">*</span>{{else}} <span class="hint">(optional)</span>{{end}}</legend>
+{{with .Why}}<p class="hint device-why">Why: {{.}}</p>{{end}}
+{{- if eq .Device "location"}}
+<input type="hidden" name="{{.Input}}.lat" value="{{.Lat}}" data-lat>
+<input type="hidden" name="{{.Input}}.lng" value="{{.Lng}}" data-lng>
+<input type="hidden" name="{{.Input}}.acc" value="{{.Acc}}" data-acc>
+<input type="hidden" name="{{.Input}}.at" value="{{.At}}" data-at>
+<input type="hidden" name="{{.Input}}.fix" value="{{.Fix}}" data-fix>
+<input type="hidden" name="{{.Input}}.state" value="{{.State}}" data-state>
+<button class="btn btn-block device-go" type="button" data-locate hidden>Use my location</button>
+<p class="device-got" role="status" data-got>{{.Got}}</p>
+{{if .AllowTyped}}<label for="{{.ID}}-address">Or type the address</label>
+<input id="{{.ID}}-address" type="text" name="{{.Input}}.address" value="{{.Address}}" maxlength="500" autocomplete="street-address">
+{{else}}<noscript><p class="hint">Reading your location needs JavaScript. Tick I can't answer this to go on.</p></noscript>
+{{end}}
+{{- else if eq .Device "photo"}}
+{{with .Held}}<p class="hint">Attached: {{.}}. Take or choose another to replace it.</p>{{end}}
+<label for="{{.ID}}">Take a photo, or choose one</label>
+<input id="{{.ID}}" type="file" name="{{.Input}}" accept="image/jpeg,image/png" capture="environment">
+{{- else if eq .Device "signature"}}
+{{with .Held}}<p class="hint">Signed. Sign again below to replace it.</p>{{end}}
+<div class="device-pad" data-pad hidden>
+<canvas class="device-canvas" width="600" height="220" aria-label="Sign here with your finger or the mouse" role="img" data-canvas></canvas>
+<button class="btn-link" type="button" data-clear>Clear</button>
+</div>
+<input class="device-file" type="file" name="{{.Input}}" accept="image/png" data-padfile hidden>
+<noscript><p class="hint">Signing needs JavaScript. Tick I can't answer this to go on.</p></noscript>
+{{if .AskName}}<label for="{{.ID}}-signer">Name of who signed</label>
+<input id="{{.ID}}-signer" type="text" name="{{.Input}}.signed_by" value="{{.SignedBy}}" maxlength="120" autocomplete="name">
+{{end}}
+{{- else if eq .Device "scan"}}
+<input type="hidden" name="{{.Input}}.format" value="{{.Format}}" data-format>
+<button class="btn btn-block device-go" type="button" data-scan hidden>Scan with the camera</button>
+<div class="device-camera" data-camera hidden><video class="device-video" playsinline muted data-video></video>
+<button class="btn-link" type="button" data-stop>Stop the camera</button></div>
+<p class="device-got" role="status" data-got>{{.Got}}</p>
+{{if .AllowTyped}}<label for="{{.ID}}">{{if .Format}}The code{{else}}Type the code{{end}}</label>
+<input id="{{.ID}}" type="text" name="{{.Input}}" value="{{.Value}}" maxlength="2000" autocomplete="off" data-code>
+{{else}}<input type="hidden" name="{{.Input}}" value="{{.Value}}" data-code>
+<noscript><p class="hint">This code must be scanned, which needs JavaScript. Tick I can't answer this to go on.</p></noscript>
+{{end}}
+{{- end}}
+<label class="check device-cant"><input type="checkbox" name="{{.Input}}.cant" value="true"{{if .Cant}} checked{{end}}> I can't answer this</label>
+</fieldset>{{end}}

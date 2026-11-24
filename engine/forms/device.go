@@ -93,7 +93,9 @@ func clip(s string, n int) string {
 // (§3); the form host's page asks no device yet.
 func answerable(kind, channel string) bool {
 	switch channel {
-	case "app":
+	case "app", "direct", "embed":
+		// The member API; the form host's page asks every kind too
+		// (build-plan-gaps H3, publicweb formdevice.go).
 		return true
 	case AppWhatsApp, AppTelegram:
 		return kind == wd.DeviceLocation || kind == wd.DevicePhoto

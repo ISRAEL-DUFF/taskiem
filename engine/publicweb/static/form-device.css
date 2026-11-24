@@ -1,0 +1,25 @@
+/* Device fields on a form step's one-time page (formdevice.go,
+   form-device.js): a location, a photo, a signature pad and a code, each
+   at the person's tap. The theme's own colours carry through: only the
+   pad (ink on white, in every theme, as the app's) and the camera's view
+   have their own. */
+.device { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 8px; }
+.device legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.device-why { margin: 0; }
+.device-got:empty { display: none; }
+.device-got { margin: 0; font-weight: 600; }
+.device-pad { display: grid; gap: 6px; justify-items: start; }
+.device-canvas {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  aspect-ratio: 600 / 220;
+  background: #fff;
+  border: 1px solid #8a8f98;
+  border-radius: 12px;
+  touch-action: none;
+}
+.device-camera { display: grid; gap: 6px; justify-items: start; }
+.device-video { width: 100%; max-width: 480px; border-radius: 12px; background: #000; }
+.device-cant { font-weight: 400; }
+[hidden] { display: none !important; }
