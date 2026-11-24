@@ -26,6 +26,7 @@ import {
   withUses,
   editorDoc,
   recordTables,
+  runsWords,
   type RecordView,
   type DrawnPage,
   type PageDetail,
@@ -168,6 +169,17 @@ export function PageEditor() {
                 <span>Pin to the menu (up to five pages)</span>
               </label>
             )}
+            {(() => {
+              const runs = runsWords(d.runs);
+              return (
+                runs && (
+                  <p className={runs.over ? "warning" : "hint"} role="note" data-testid="page-runs">
+                    {runs.line}
+                    {runs.over && " That is more than your plan allows: fewer tools on the page, or a bigger plan."}
+                  </p>
+                )
+              );
+            })()}
           </section>
 
           <section className="card">

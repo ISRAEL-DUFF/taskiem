@@ -279,6 +279,18 @@ func (s *Server) getPage(w http.ResponseWriter, r *http.Request) {
 			env = &e
 		}
 		out = pageDetail(p, pg, env)
+		if p.Can(PermPageEdit) {
+			// The page's settings: about how many runs its tools start a
+			// day (the draft's tools, as it is being changed).
+			doc := pg.Draft
+			if doc == nil {
+				doc = pg.Published
+			}
+			page, _ := pages.Parse(doc)
+			if out["runs"], err = s.pageRunsEstimate(r.Context(), tx, p.TenantID, pg.ID, page); err != nil {
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
 		s.fail(w, r, err)
@@ -855,6 +867,9 @@ func (s *Server) viewPage(w http.ResponseWriter, r *http.Request) {
 	pc, ok := s.openPage(w, r)
 	if !ok {
 		return
+	}
+	if !pc.draft {
+		s.countPageView(r.Context(), principalFrom(r.Context()), pc.row.ID) // pages_runs.go
 	}
 	blocks := []map[string]any{}
 	for i, b := range pc.page.Blocks {

@@ -112,6 +112,35 @@ export interface PageDetail extends PageSummary {
   draft_at?: string;
   problems?: PageProblem[];
   shows?: string[];
+  /** The page's settings: about how many runs its tools start a day. */
+  runs?: PageRuns;
+}
+
+export interface PageRuns {
+  views_a_day: number;
+  tools: number;
+  runs_a_day: number;
+  runs_per_day?: number;
+  runs_per_month?: number;
+}
+
+/** The estimate of a page's runs a day, in words (pages §13): "About 40
+ * runs a day: 20 views a day, 2 tools each. Your plan allows 500 a day." */
+export function runsWords(r: PageRuns | undefined): { line: string; over: boolean } | null {
+  if (!r || r.tools === 0) return null;
+  const n = (x: number) => x.toLocaleString("en-NG");
+  const each = r.tools === 1 ? "1 tool each" : `${n(r.tools)} tools each`;
+  const views = r.views_a_day === 0 ? "no views yet in the last week" : `${n(r.views_a_day)} ${r.views_a_day === 1 ? "view" : "views"} a day`;
+  let line = `About ${n(r.runs_a_day)} ${r.runs_a_day === 1 ? "run" : "runs"} a day from this page: ${views}, ${each}. Each person's answer is kept for a minute.`;
+  let over = false;
+  if (r.runs_per_day && r.runs_per_day > 0) {
+    over = r.runs_a_day > r.runs_per_day;
+    line += ` Your plan allows ${n(r.runs_per_day)} runs a day for everything.`;
+  } else if (r.runs_per_month && r.runs_per_month > 0) {
+    over = r.runs_a_day * 30 > r.runs_per_month;
+    line += ` Your plan allows ${n(r.runs_per_month)} runs a month for everything (about ${n(r.runs_a_day * 30)} a month from this page).`;
+  }
+  return { line, over };
 }
 
 export interface PageList {

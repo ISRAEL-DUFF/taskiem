@@ -62629,6 +62629,25 @@ components:
           type: array
           items:
             type: string
+        runs:
+          type: object
+          description: >-
+            For page.edit holders on GET: about how many runs the page's tools start a day (pages §13): the page's views a day over
+            the last seven days (a viewer counted once a minute, as a tool's answer is kept), times the tools its parts start
+            (the draft's, when there is one), beside the plan's run limits (0: none).
+          required: [views_a_day, tools, runs_a_day]
+          properties:
+            views_a_day:
+              type: integer
+            tools:
+              type: integer
+            runs_a_day:
+              type: integer
+            runs_per_day:
+              type: integer
+            runs_per_month:
+              type: integer
+          additionalProperties: false
       additionalProperties: false
     PageVersion:
       type: object
