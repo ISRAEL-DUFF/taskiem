@@ -25,17 +25,19 @@ import {
 } from "../lib/personchat";
 import { formatPrice } from "../lib/storefront";
 import { addressLine, addressProblem, chosenAddress, keepProblem, MAX_ADDRESSES, SAVED_LINE_MAX, type SavedAddress } from "../lib/youorders";
-import { type PressedButton, type ToolStart, type ToolValue } from "../lib/toolanswer";
+import { type PressedButton, type ToolStart } from "../lib/toolanswer";
+import type { KeptTheirRun } from "../lib/theirRuns";
 import { ErrorBox, useLoad } from "../ui";
-import { toast } from "../toast";
 import { AnswerView, useAnswer } from "./MadeToolSheet";
 
 // The tools of a person's chat with a business (docs/spec/taskiem-for-
 // everyone.md §8.3): Their shop, Book, Your orders with them and Pay,
 // behind the tools button, each a sheet; and Their tools, the business's
-// tools for its customers (made tools T5): a form, Yes always, the answer
-// from what the business made public. Everything goes through the
-// customer door (GET/POST /v1/me/chats/{id}/…).
+// tools for its customers (made tools T5): a form, Yes always, then the
+// sheet closes and the answer, from what the business made public, goes
+// into the conversation in its place, kept there on a reload (build plan
+// H6, lib/theirRuns.ts). Everything goes through the customer door
+// (GET/POST /v1/me/chats/{id}/…).
 
 export type PersonTool = "shop" | "book" | "orders" | "pay";
 
@@ -126,43 +128,29 @@ export function ToolsMenu({
   );
 }
 
-type TheirPhase = { at: "form" } | { at: "yes"; start: ToolStart } | { at: "run"; run: string; values: ToolValue[] };
+type TheirPhase = { at: "form" } | { at: "yes"; start: ToolStart };
 
 /** One of their tools: its form, then what will run and Yes (a customer
- * always says yes), then its answer, from what the business made public. A
- * button on the answer opens another of their tools, filled in. */
+ * always says yes); then the sheet closes and onStarted puts the run into
+ * the conversation, where its answer comes (TheirRunCard). */
 export function TheirToolSheet({
   chat,
-  tools,
   start,
   from,
+  onStarted,
   onClose,
 }: {
   chat: string;
-  /** Their tools: a button opens one of these. */
-  tools: CustomerTool[];
   start: { tool: CustomerTool; values?: Record<string, unknown> };
   from?: DOMRect | null;
+  /** The run started, to keep in the conversation. */
+  onStarted: (r: KeptTheirRun) => void;
   onClose: () => void;
 }) {
-  const [open, setOpen] = useState({ ...start, n: 0 });
-  const tool = open.tool;
+  const tool = start.tool;
   return (
     <Sheet title={tool.name} sub={tool.about} from={from} onClose={onClose} testid="their-tool-sheet">
-      <TheirToolRunner
-        key={`${tool.command}:${open.n}`}
-        chat={chat}
-        tool={tool}
-        values={open.values}
-        onOpen={(command, values) => {
-          const t = tools.find((x) => x.command === command);
-          if (!t) {
-            toast("This isn't available any more.", "error");
-            return;
-          }
-          setOpen((o) => ({ tool: t, values, n: o.n + 1 }));
-        }}
-      />
+      <TheirToolRunner chat={chat} tool={tool} values={start.values} onStarted={onStarted} />
     </Sheet>
   );
 }
@@ -171,12 +159,12 @@ function TheirToolRunner({
   chat,
   tool,
   values,
-  onOpen,
+  onStarted,
 }: {
   chat: string;
   tool: CustomerTool;
   values?: Record<string, unknown>;
-  onOpen: (command: string, values: Record<string, unknown>) => void;
+  onStarted: (r: KeptTheirRun) => void;
 }) {
   const [input, setInput] = useState<Record<string, unknown> | undefined>(values);
   const [phase, setPhase] = useState<TheirPhase>({ at: "form" });
@@ -185,8 +173,6 @@ function TheirToolRunner({
   const schema = tool.inputs as JSONSchema | undefined;
   const fields = Object.keys(schema?.properties ?? {}).length > 0;
   const path = (what: string) => `${base(chat)}/tools/${encodeURIComponent(tool.command)}/${what}`;
-  const run = phase.at === "run" ? phase.run : undefined;
-  const { answer, error: answerError } = useAnswer(run, (r) => `${base(chat)}/runs/${encodeURIComponent(r)}/answer`);
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(undefined);
@@ -206,31 +192,8 @@ function TheirToolRunner({
   const yes = (s: ToolStart) =>
     act(async () => {
       const r = await post<{ run_id: string }>(path("confirm"), { confirm: s.confirm, input: input ?? {} });
-      setPhase({ at: "run", run: r.run_id, values: s.values });
+      onStarted({ id: r.run_id, command: tool.command, name: tool.name, at: new Date().toISOString(), values: s.values });
     });
-  const press = (token: string) => post<PressedButton>(`${base(chat)}/tools/buttons/${encodeURIComponent(token)}`);
-
-  if (phase.at === "run")
-    return (
-      <div className="tk-sheet-list tk-form-body">
-        {answer ? (
-          <AnswerView
-            answer={answer}
-            run={phase.run}
-            name={tool.name}
-            customer={{ press }}
-            onOpenTool={(command, v) => onOpen(command, v ?? {})}
-          />
-        ) : answerError ? (
-          <ErrorBox error={answerError} />
-        ) : (
-          <div className="tk-answer-note" role="status" data-testid="tool-answer" data-status="running">
-            <p>Working on it…</p>
-          </div>
-        )}
-        <p className="tk-form-now">Your reference is {phase.run.slice(0, 8).toUpperCase()}.</p>
-      </div>
-    );
 
   if (phase.at === "yes")
     return (
@@ -286,6 +249,35 @@ function TheirToolRunner({
         </button>
       </div>
     </>
+  );
+}
+
+/** A run of one of their tools in the conversation (build plan H6): its
+ * answer, from what the business made public, read until the run ends and
+ * read again when the page is opened again; a button on it opens another
+ * of their tools, filled in. */
+export function TheirRunCard({ chat, run, onOpen }: { chat: string; run: KeptTheirRun; onOpen: (command: string, values: Record<string, unknown>) => void }) {
+  const { answer, error } = useAnswer(run.id, (r) => `${base(chat)}/runs/${encodeURIComponent(r)}/answer`);
+  const press = (token: string) => post<PressedButton>(`${base(chat)}/tools/buttons/${encodeURIComponent(token)}`);
+  return (
+    <div className="pc-their-run" data-testid="their-run" data-run={run.id}>
+      <p className="pc-their-run-head">
+        <Icon name="bolt" />
+        <span>{run.name}</span>
+      </p>
+      {answer ? (
+        <AnswerView answer={answer} run={run.id} name={run.name} customer={{ press }} onOpenTool={(command, v) => onOpen(command, v ?? {})} />
+      ) : error ? (
+        <p className="tk-field-error" role="alert">
+          {theirErrorWords(error)}
+        </p>
+      ) : (
+        <div className="tk-answer-note" role="status" data-testid="tool-answer" data-status="running">
+          <p>Working on it…</p>
+        </div>
+      )}
+      <p className="hint">Your reference is {run.id.slice(0, 8).toUpperCase()}.</p>
+    </div>
   );
 }
 

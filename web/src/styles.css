@@ -2682,3 +2682,7 @@ a.treat-went { text-decoration: underline; text-underline-offset: 2px; }
 .run-saved { display: block; }
 .saved-runs { margin: 12px 0; }
 .saved-runs h3 { margin: 0 0 6px; font-size: 1rem; }
+.pc-their-run { display: grid; gap: 6px; min-width: min(280px, 70vw); }
+.pc-their-run-head { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 600; color: var(--text); }
+.pc-their-run .hint { margin: 0; }
+.pc-their-run-head svg { width: 16px; height: 16px; flex: none; color: var(--brand); }
