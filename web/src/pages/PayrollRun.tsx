@@ -24,8 +24,10 @@ import {
   type PayrollRun,
   type PayrollTone,
 } from "../lib/payroll";
+import { paymentCounts, paymentTone, type RunPayment } from "../lib/payslip";
 import {
   CODE_AGAIN,
+  actionPath,
   actionWords,
   adjustmentBody,
   adjustmentWords,
@@ -91,7 +93,7 @@ export function RunCodeSheet({
     void confirm.run(async () => {
       try {
         // Each try at a code is its own submission.
-        const d = await post<RunDecided>(path(run.run_id, `/${action}`), { challenge_id: sent?.challenge.challenge_id, code: typed, key: newKey() });
+        const d = await post<RunDecided>(path(run.run_id, `/${actionPath(action)}`), { challenge_id: sent?.challenge.challenge_id, code: typed, key: newKey() });
         onDone(d.words);
       } catch (e) {
         if (e instanceof ApiError && CODE_AGAIN.has(String(e.body.code ?? ""))) setAgain(true);
@@ -105,6 +107,16 @@ export function RunCodeSheet({
         {action === "lock" && (
           <p className="warning" data-testid="payroll-lock-warning">
             {lockWarning(payDay)}
+          </p>
+        )}
+        {action === "pay_now" && (
+          <p className="warning" data-testid="payroll-pay-now-warning">
+            Payrolla pays everyone now instead of on {payDay}.
+          </p>
+        )}
+        {action === "retry_failed" && (
+          <p className="hint" data-testid="payroll-retry-note">
+            Each payment that failed goes again to the person's current account. Payments the bank returned are not sent again.
           </p>
         )}
         {!sent && (
@@ -334,13 +346,52 @@ function Breakdown({ line }: { line: PayrollLineFull }) {
   );
 }
 
+/** A locked payroll's payment: its state in words, the counts, Pay now
+ * before the date and Pay the failed ones again, each with a code. */
+function PaymentPanel({ payment, onAct }: { payment: RunPayment; onAct: (a: "pay_now" | "retry_failed") => void }) {
+  const counts = paymentCounts(payment);
+  return (
+    <section className="card" aria-labelledby="payroll-payment-h" data-testid="payroll-payment" data-status={payment.status}>
+      <h2 id="payroll-payment-h">Payment</h2>
+      <p>
+        <Pill label={payment.words} tone={paymentTone(payment)} testid="payroll-payment-words" />
+      </p>
+      {counts && <p className="hint">{counts}</p>}
+      {payment.status === "AWAITING_FUNDS" && (
+        <p className="hint" data-testid="payroll-add-money">
+          Add money to your Payrolla wallet. Payrolla pays as soon as it's in.
+        </p>
+      )}
+      {payment.cannot_pay && (payment.status === "SCHEDULED" || payment.failed > 0) && (
+        <p className="hint" data-testid="payroll-cannot-pay">
+          In Payrolla you can't send payments. Ask the owner.
+        </p>
+      )}
+      {(payment.may_pay_now || payment.may_retry) && (
+        <div className="toolbar">
+          {payment.may_pay_now && (
+            <button type="button" className="primary" onClick={() => onAct("pay_now")} data-testid="payroll-pay-now">
+              Pay now
+            </button>
+          )}
+          {payment.may_retry && (
+            <button type="button" className="primary" onClick={() => onAct("retry_failed")} data-testid="payroll-retry">
+              Pay the failed ones again
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** /payroll/runs/:run: one payroll, each person's pay and its breakdown,
  * the changes to it, and approving and locking it with Payrolla's code. */
 export function PayrollRunPage() {
   const { run = "" } = useParams();
   const navigate = useNavigate();
   const view = useLoad(() => get<PayrollRunFull>(path(run)), [run]);
-  const [sheet, setSheet] = useState<"approve" | "lock" | "reject" | "adjust" | "cancel" | { leave: PayrollLineFull }>();
+  const [sheet, setSheet] = useState<RunAction | "reject" | "adjust" | "cancel" | { leave: PayrollLineFull }>();
   const [said, setSaid] = useState<string>();
   const [problem, setProblem] = useState<string>();
   const act = useAction();
@@ -426,7 +477,8 @@ export function PayrollRunPage() {
               )}
             </div>
           )}
-          {d.funding && d.funding.short_by_kobo > 0 && d.funding.words && (
+          {d.payment && d.payment.status !== "NOT_SCHEDULED" && <PaymentPanel payment={d.payment} onAct={(a) => setSheet(a)} />}
+          {d.funding && d.funding.short_by_kobo > 0 && d.funding.words && !d.payment && (
             <div className="warning" role="note" data-testid="payroll-short">
               {d.funding.words}
             </div>
@@ -509,6 +561,13 @@ export function PayrollRunPage() {
                           {l.staff && (
                             <span className="block">
                               <Link to={`/staff/${encodeURIComponent(l.staff.user_id)}`}>Staff: {l.staff.name}</Link>
+                            </span>
+                          )}
+                          {d.payment?.may_payslips && l.payslip_id && (
+                            <span className="block">
+                              <Link to={`/payroll/payslips/${encodeURIComponent(l.payslip_id)}`} data-testid="payroll-line-payslip">
+                                Payslip<span className="sr-only">: {l.name}</span>
+                              </Link>
                             </span>
                           )}
                         </span>
@@ -603,7 +662,9 @@ export function PayrollRunPage() {
               </button>
             </div>
           )}
-          {(sheet === "approve" || sheet === "lock") && <RunCodeSheet run={s} action={sheet} onClose={() => setSheet(undefined)} onDone={decided} />}
+          {(sheet === "approve" || sheet === "lock" || sheet === "pay_now" || sheet === "retry_failed") && (
+            <RunCodeSheet run={s} action={sheet} onClose={() => setSheet(undefined)} onDone={decided} />
+          )}
           {sheet === "reject" && <RejectSheet run={s} onClose={() => setSheet(undefined)} onDone={decided} />}
           {sheet === "adjust" && <AdjustSheet run={run} lines={d.lines} onClose={() => setSheet(undefined)} onDone={changed} />}
           {typeof sheet === "object" && <LeaveOutSheet run={run} line={sheet.leave} onClose={() => setSheet(undefined)} onDone={changed} />}
@@ -706,7 +767,7 @@ export function PayrollRunCard({ id, period }: { id: string; period: string }) {
   const [said, setSaid] = useState<string>();
   const d = view.data;
   const s = d?.run.summary;
-  const next = s && d?.may?.approve ? nextDecision(s.status) : null;
+  const next: RunAction | null = s && d?.may?.approve ? (nextDecision(s.status) ?? (d.payment?.may_retry ? "retry_failed" : null)) : null;
   const done = (words: string) => {
     setSheet(undefined);
     setSaid(words);
@@ -728,7 +789,12 @@ export function PayrollRunCard({ id, period }: { id: string; period: string }) {
               {w}
             </p>
           ))}
-          {d?.funding && d.funding.short_by_kobo > 0 && <p className="warning">Your Payrolla wallet is short by {naira(d.funding.short_by_kobo)}.</p>}
+          {d?.funding && d.funding.short_by_kobo > 0 && !d.payment && <p className="warning">Your Payrolla wallet is short by {naira(d.funding.short_by_kobo)}.</p>}
+          {d?.payment && d.payment.status !== "NOT_SCHEDULED" && d.payment.status !== "SCHEDULED" && (
+            <p className="sub" data-testid="payroll-card-payment">
+              <Pill label={d.payment.words} tone={paymentTone(d.payment)} />
+            </p>
+          )}
           {said && (
             <p role="status" data-testid="payroll-card-said">
               {said}
@@ -749,7 +815,7 @@ export function PayrollRunCard({ id, period }: { id: string; period: string }) {
               Open
             </Link>
           </div>
-          {(sheet === "approve" || sheet === "lock") && <RunCodeSheet run={s} action={sheet} onClose={() => setSheet(undefined)} onDone={done} />}
+          {sheet && sheet !== "reject" && <RunCodeSheet run={s} action={sheet} onClose={() => setSheet(undefined)} onDone={done} />}
           {sheet === "reject" && <RejectSheet run={s} onClose={() => setSheet(undefined)} onDone={done} />}
         </>
       )}

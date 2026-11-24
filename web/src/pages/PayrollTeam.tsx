@@ -10,6 +10,7 @@ import { ApiError, get, patch, post } from "../api";
 import { EmptyState, ErrorBox, Field, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { naira } from "../lib/invoices";
 import { codeDigits, newKey } from "../lib/payroll";
+import { MyPayslips } from "./Payslip";
 import {
   NEW_CODE,
   addBody,
@@ -741,6 +742,7 @@ export function MyPayPage() {
           )}
         </section>
       )}
+      {me && <MyPayslips />}
       {changing && (
         <MyAccountSheet
           onClose={() => setChanging(false)}
