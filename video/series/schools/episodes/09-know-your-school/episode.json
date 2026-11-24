@@ -1,0 +1,72 @@
+{
+  "number": 9,
+  "slug": "know-your-school",
+  "title": "Know your school",
+  "headline": "Know your *school*",
+  "sub": "The School tab, the daily close and the morning briefing.",
+  "mood": "sparse",
+  "films": [
+    "school-overview"
+  ],
+  "recap": {
+    "en": "The term is under way.",
+    "pcm": "The term don start."
+  },
+  "bridge": {
+    "en": "Money, names, who did what. How does the school keep it safe?",
+    "pcm": "Money, names, who do wetin. How the school go keep am safe?"
+  },
+  "next": {
+    "number": 10,
+    "title": "Keep it safe, and start next term",
+    "headline": "Keep it *safe*, and start next term"
+  },
+  "flow": [
+    {
+      "id": "E9-C1",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "she reads the morning briefing",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Sips tea at her desk, reads her phone with her glasses down, then gives a slow nod",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light",
+      "camera": "medium shot, slow push-in, soft morning light"
+    },
+    {
+      "id": "E9-C2",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he reads the close",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Frowns slightly at a phone, taps a calculator, then exhales and gives a small smile",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "school-overview": {
+      "en": [
+        "Mr Ibe opens Taskiem.",
+        "School shows fees collected, of what the term expects.",
+        "Below, who owes, by how late.",
+        "At the bottom, the last day's close.",
+        "It does not reconcile.",
+        "Each thing to fix is in words, with the amount.",
+        "Fix it, beside the cash waiting for a second person.",
+        "Back in Chats, Taskiem waits.",
+        "The briefing: fees collected, the close, who is cleared, and what waits."
+      ],
+      "pcm": [
+        "Mr Ibe open Taskiem.",
+        "School dey show fees wey dem don collect, of wetin the term dey expect.",
+        "Below, who dey owe, by how late.",
+        "For the bottom, the last day close.",
+        "E no reconcile.",
+        "Each thing to fix dey for words, with the amount.",
+        "Fix it, beside the cash wey dey wait for second person.",
+        "Back for Chats, Taskiem dey wait.",
+        "The briefing: fees collected, the close, who don clear, and wetin dey wait."
+      ]
+    }
+  }
+}

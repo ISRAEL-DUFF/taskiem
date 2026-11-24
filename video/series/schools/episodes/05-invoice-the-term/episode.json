@@ -1,0 +1,70 @@
+{
+  "number": 5,
+  "slug": "invoice-the-term",
+  "title": "Invoice the term",
+  "headline": "Invoice the *term*",
+  "sub": "One invoice per student, sent exactly once.",
+  "mood": "sparse",
+  "films": [
+    "school-invoice-term"
+  ],
+  "recap": {
+    "en": "Fees are set.",
+    "pcm": "Fees don set."
+  },
+  "bridge": {
+    "en": "The bills are out. How will parents pay?",
+    "pcm": "Bills don out. How parents go pay?"
+  },
+  "next": {
+    "number": 6,
+    "title": "Get paid",
+    "headline": "Get *paid*"
+  },
+  "flow": [
+    {
+      "id": "E5-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he is about to send the bills",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Looks at his phone, takes a breath, then taps and sits back with a relieved smile",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium shot, eye-level"
+    },
+    {
+      "id": "E5-C2",
+      "who": "Mrs Bimpe Lawal",
+      "purpose": "a parent receives the bill",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Stops in a clinic corridor as her phone buzzes, reads it with a small frown, then nods and starts typing",
+      "setting": "a pale green clinic corridor in Ikorodu with a nurses' station and a wall clock",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "school-invoice-term": {
+      "en": [
+        "No bills are out yet.",
+        "Open First term, the current term.",
+        "Invoice the term.",
+        "First, the plan: three hundred and ninety-six students.",
+        "Who is left out, and why.",
+        "Keep as drafts: nothing is sent.",
+        "Or send now.",
+        "Invoice and send. Each student is invoiced once."
+      ],
+      "pcm": [
+        "Bill never out yet.",
+        "Open First term, the current term.",
+        "Invoice the term.",
+        "First, the plan: three hundred and ninety-six students.",
+        "Who dem leave out, and why.",
+        "Keep as drafts: nothing go send.",
+        "Or send now.",
+        "Invoice and send. Each student go get invoice once."
+      ]
+    }
+  }
+}

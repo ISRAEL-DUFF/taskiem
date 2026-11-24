@@ -1,0 +1,84 @@
+{
+  "number": 8,
+  "slug": "resumption-day-at-the-gate",
+  "title": "Resumption day at the gate",
+  "headline": "Resumption day at the *gate*",
+  "sub": "Clearance worked out for every child; one phone at the gate.",
+  "mood": "sparse",
+  "films": [
+    "school-gate"
+  ],
+  "recap": {
+    "en": "It is resumption morning.",
+    "pcm": "Na resumption morning."
+  },
+  "bridge": {
+    "en": "At night, the day's money has to add up. Does it?",
+    "pcm": "For night, the day money must add up. E dey add?"
+  },
+  "next": {
+    "number": 9,
+    "title": "Know your school",
+    "headline": "Know your *school*"
+  },
+  "flow": [
+    {
+      "id": "E8-C1",
+      "who": "Mallam Audu",
+      "purpose": "he waits at the gate",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Stands at the green gate holding a phone in both hands at chest height, then lifts one hand to wave a child in",
+      "setting": "the green iron gate of Bright Hill Academy in Ikorodu: a cream two-storey classroom block with a pine-green stripe, a red-earth yard, a flame tree, a gatehouse with a folding stool",
+      "camera": "medium shot, eye-level, morning light"
+    },
+    {
+      "id": "E8-C2",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he watches the gate",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Stands in the office doorway with his phone, watches the yard, and gives a slow reassured nod",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium shot, eye-level"
+    }
+  ],
+  "narration": {
+    "school-gate": {
+      "en": [
+        "Resumption day. He taps Cleared.",
+        "Clearance is worked out, never set by hand.",
+        "He opens JSS one A.",
+        "Amaka owes, but met the principal.",
+        "He taps Clear.",
+        "He types why. It is kept with his name.",
+        "Until the end of term.",
+        "Clear them.",
+        "Cleared, with the reason kept.",
+        "She now sits under Cleared.",
+        "Mallam Audu's phone shows only the gate.",
+        "A child arrives. He types a few letters.",
+        "Cleared: come in. No amount.",
+        "He checks another child.",
+        "See the bursar. She goes to the office."
+      ],
+      "pcm": [
+        "Resumption day. E tap Cleared.",
+        "Dem dey work out clearance, nobody dey set am by hand.",
+        "E open JSS one A.",
+        "Amaka dey owe, but dem don meet the principal.",
+        "E tap Clear.",
+        "E type why. Dem keep am with im name.",
+        "Until end of term.",
+        "Clear dem.",
+        "Cleared, and dem keep the reason.",
+        "She don dey under Cleared now.",
+        "Mallam Audu phone dey show only the gate.",
+        "Child reach. E type few letters.",
+        "Cleared: come in. No amount.",
+        "E check another child.",
+        "See the bursar. She go go the office."
+      ]
+    }
+  }
+}

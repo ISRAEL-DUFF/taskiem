@@ -1,0 +1,72 @@
+{
+  "number": 4,
+  "slug": "set-the-fees",
+  "title": "Set the fees",
+  "headline": "Set the *fees*",
+  "sub": "Copy last term's fees, change one amount, save.",
+  "mood": "sparse",
+  "films": [
+    "school-fees"
+  ],
+  "recap": {
+    "en": "Four hundred students are in.",
+    "pcm": "Four hundred students don enter."
+  },
+  "bridge": {
+    "en": "Fees are set. Now every family needs a bill.",
+    "pcm": "Fees don set. Now every family need bill."
+  },
+  "next": {
+    "number": 5,
+    "title": "Invoice the term",
+    "headline": "Invoice the *term*"
+  },
+  "flow": [
+    {
+      "id": "E4-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he works out the fees",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Taps numbers into a calculator, checks a printed fee list, nods and smiles as the total comes out right",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "over-the-shoulder, then close-up"
+    },
+    {
+      "id": "E4-C2",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "she reads the new fees",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Reads a single printed page, taps it once with her pen and gives a small approving nod",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light",
+      "camera": "medium close-up, locked-off"
+    }
+  ],
+  "narration": {
+    "school-fees": {
+      "en": [
+        "First term needs its fees.",
+        "Open Classes, terms and fees.",
+        "Then Fees for First term.",
+        "JSS one A is empty. Copy from last term.",
+        "Three required, one optional.",
+        "Tap Transport to see who pays.",
+        "Optional. Done.",
+        "Tuition rises to eighty-five thousand naira.",
+        "Save. Every student pays one hundred and two thousand naira."
+      ],
+      "pcm": [
+        "First term need im fees.",
+        "Open Classes, terms and fees.",
+        "Then Fees for First term.",
+        "JSS one A empty. Copy from last term.",
+        "Three dey required, one dey optional.",
+        "Tap Transport make you see who dey pay.",
+        "E dey optional. Done.",
+        "Tuition go up to eighty-five thousand naira.",
+        "Save. Every student go pay one hundred and two thousand naira."
+      ]
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "number": 2,
+  "slug": "classes-sessions-and-terms",
+  "title": "Classes, sessions and terms",
+  "headline": "Classes, sessions and *terms*",
+  "sub": "Classes with arms, the 2026/2027 year, First term started.",
+  "mood": "sparse",
+  "films": [
+    "school-classes-terms"
+  ],
+  "recap": {
+    "en": "Bright Hill's people are set. Now its classes and its terms.",
+    "pcm": "Bright Hill people don set. Now im classes and terms."
+  },
+  "bridge": {
+    "en": "The structure is in place. Four hundred students need to go in, with their parents.",
+    "pcm": "The structure don set. Four hundred students need enter, with their parents."
+  },
+  "next": {
+    "number": 3,
+    "title": "Students and families",
+    "headline": "Students and *families*"
+  },
+  "flow": [
+    {
+      "id": "E2-C1",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "she plans the year",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Taps a term planner twice with her fountain pen, then writes a date and looks up, satisfied",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light",
+      "camera": "close-up on her hands then her face, locked-off"
+    },
+    {
+      "id": "E2-C2",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "the roll of students waits",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Opens a thick green fee ledger, turns a few pages, then looks up at a tall stack of paper class lists with a slow breath",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium shot, eye-level"
+    }
+  ],
+  "narration": {
+    "school-classes-terms": {
+      "en": [
+        "Mrs Fashola sets up classes and terms.",
+        "On School, she opens Classes, terms and fees.",
+        "Classes are listed. She adds one.",
+        "She chooses A class.",
+        "JSS three, arm A.",
+        "JSS three A joins the classes.",
+        "Now the school year.",
+        "Twenty twenty-six, twenty twenty-seven, filled in.",
+        "Then a term.",
+        "First term, with its dates.",
+        "It starts on the seventh of September.",
+        "It ends on the eighteenth of December.",
+        "Fees are due on the twenty-first of September.",
+        "First term is planned, not yet started.",
+        "Now, Start.",
+        "One term runs at a time. Starting enrols everyone.",
+        "Four hundred and eighteen students enrolled."
+      ],
+      "pcm": [
+        "Mrs Fashola dey set up classes and terms.",
+        "For School, she open Classes, terms and fees.",
+        "Classes dey there. She add one.",
+        "She choose A class.",
+        "JSS three, arm A.",
+        "JSS three A join the classes.",
+        "Now the school year.",
+        "Twenty twenty-six, twenty twenty-seven, don fill.",
+        "Then a term.",
+        "First term, with im dates.",
+        "E start for seventh of September.",
+        "E end for eighteenth of December.",
+        "Fees due for twenty-first of September.",
+        "First term dey planned, e never start.",
+        "Now, Start.",
+        "One term dey run at a time. To start am go enrol everybody.",
+        "Four hundred and eighteen students don enrol."
+      ]
+    }
+  }
+}

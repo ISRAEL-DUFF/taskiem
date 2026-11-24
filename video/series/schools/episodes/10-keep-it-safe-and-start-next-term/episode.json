@@ -1,0 +1,91 @@
+{
+  "number": 10,
+  "slug": "keep-it-safe-and-start-next-term",
+  "title": "Keep it safe, and start next term",
+  "headline": "Keep it *safe*, and start next term",
+  "sub": "Names shown only to those who may see them; a new term in minutes.",
+  "mood": "sparse",
+  "films": [
+    "school-safe-next-term"
+  ],
+  "recap": {
+    "en": "Names, phones, money. How does Bright Hill keep it safe?",
+    "pcm": "Names, phones, money. How Bright Hill go keep am safe?"
+  },
+  "closing": {
+    "en": "That is a term at Bright Hill. Start your free trial.",
+    "pcm": "Na so one term for Bright Hill be. Start your free trial."
+  },
+  "flow": [
+    {
+      "id": "E10-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he guards the names",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Turns his phone face-down on the desk, looks up and gives a firm but kind look",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium close-up, locked-off"
+    },
+    {
+      "id": "E10-C2",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "the year ends",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Closes her term planner, folds her hands and smiles quietly at the empty yard through the window",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light",
+      "camera": "medium shot, slow pull-back"
+    },
+    {
+      "id": "E10-C3",
+      "who": "Mallam Audu",
+      "purpose": "closing: the school at dusk",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Closes and locks the green iron gate at dusk, waves up at someone off-screen and smiles",
+      "setting": "the green iron gate of Bright Hill Academy in Ikorodu: a cream two-storey classroom block with a pine-green stripe, a red-earth yard, a flame tree, a gatehouse with a folding stool, evening light",
+      "camera": "slow pull-back, wide shot"
+    }
+  ],
+  "narration": {
+    "school-safe-next-term": {
+      "en": [
+        "Funmi is a clerk. Her role may not see names.",
+        "Names are hidden: each child is an admission number.",
+        "Even the parent's phone number is masked.",
+        "On Mr Ibe's phone, his role may see names, so they show.",
+        "Full name and parent's phone.",
+        "At year end, he opens Classes, terms and fees.",
+        "Promotion: each class moves up to the next.",
+        "Exceptions are listed, and he can change one.",
+        "Dami repeats, and stays in Primary four.",
+        "He promotes the year, and confirms. It happens once.",
+        "Back to Classes and terms.",
+        "The new year's First term: Fees.",
+        "Its fees are empty. Copy from last term.",
+        "The fees are copied.",
+        "Then he starts First term, and confirms.",
+        "Every active student is enrolled."
+      ],
+      "pcm": [
+        "Funmi na clerk. Her role no fit see names.",
+        "Dem hide names: each child na admission number.",
+        "Even the parent phone number dem mask am.",
+        "For Mr Ibe phone, im role fit see names, so dem show.",
+        "Full name and parent phone.",
+        "For year end, e open Classes, terms and fees.",
+        "Promotion: each class go move up to the next one.",
+        "Dem list exceptions, and e fit change one.",
+        "Dami go repeat, and e go stay for Primary four.",
+        "E promote the year, and confirm. E happen once.",
+        "Back to Classes and terms.",
+        "The new year First term: Fees.",
+        "Im fees empty. Copy from last term.",
+        "Dem don copy the fees.",
+        "Then e start First term, and confirm.",
+        "Every active student don enrol."
+      ]
+    }
+  }
+}

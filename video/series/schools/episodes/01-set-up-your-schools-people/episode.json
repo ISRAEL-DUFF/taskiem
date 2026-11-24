@@ -1,0 +1,80 @@
+{
+  "number": 1,
+  "slug": "set-up-your-schools-people",
+  "title": "Set up your school's people",
+  "headline": "Set up your *school's people*",
+  "sub": "Schools on, a bursar and a gateman invited with the right roles.",
+  "mood": "sparse",
+  "films": [
+    "school-open"
+  ],
+  "recap": {
+    "en": "Bright Hill Academy has a proprietor, a bursar and a gate.",
+    "pcm": "Bright Hill Academy get proprietor, bursar and gate."
+  },
+  "bridge": {
+    "en": "The school's people are in. Where are the classes and terms?",
+    "pcm": "School people don enter. Where the classes and terms dey?"
+  },
+  "next": {
+    "number": 2,
+    "title": "Classes, sessions and terms",
+    "headline": "Classes, sessions and *terms*"
+  },
+  "flow": [
+    {
+      "id": "E1-C1",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "she owns the school and Schools is on",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Sits at her desk, slides her glasses down, reads her phone, then gives a slow nod and a small smile",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light",
+      "camera": "medium shot, slow push-in, soft morning light"
+    },
+    {
+      "id": "E1-C2",
+      "who": "Mallam Audu",
+      "purpose": "the gate before resumption",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Unlocks the green iron gate and swings it open to an empty yard, then looks up at the classrooms with a gentle smile",
+      "setting": "the green iron gate of Bright Hill Academy in Ikorodu: a cream two-storey classroom block with a pine-green stripe, a red-earth yard, a flame tree, a gatehouse with a folding stool",
+      "camera": "wide to medium shot, eye-level, early light"
+    }
+  ],
+  "narration": {
+    "school-open": {
+      "en": [
+        "Schools is on at Bright Hill Academy.",
+        "In School, she opens School settings.",
+        "Schools is on: students, fees, the gate.",
+        "Large cash waits for a second person.",
+        "Then Team, and Add staff.",
+        "Mr Ibe is the bursar: name, number, role.",
+        "The role is Bursar, added when Schools is turned on.",
+        "He is invited on WhatsApp.",
+        "Mallam Audu, the gateman, gets the Gate role.",
+        "He picks Gate.",
+        "The invitation goes out.",
+        "Both wait until they say yes.",
+        "Audu's phone opens on the gate screen only."
+      ],
+      "pcm": [
+        "Schools don dey on for Bright Hill Academy.",
+        "For School, she open School settings.",
+        "Schools dey on: students, fees, the gate.",
+        "Big cash go wait for second person.",
+        "Then Team, and Add staff.",
+        "Mr Ibe na bursar: name, number, role.",
+        "The role na Bursar. Dem add am when Schools dey on.",
+        "Dem go invite am for WhatsApp.",
+        "Mallam Audu, the gateman, get Gate role.",
+        "E pick Gate.",
+        "The invitation go out.",
+        "Dem both go wait until dem talk yes.",
+        "Audu phone go open for gate screen only."
+      ]
+    }
+  }
+}

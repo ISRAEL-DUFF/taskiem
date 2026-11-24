@@ -1,0 +1,78 @@
+{
+  "number": 3,
+  "slug": "students-and-families",
+  "title": "Students and families",
+  "headline": "Students and *families*",
+  "sub": "A spreadsheet becomes four hundred students, each with a family.",
+  "mood": "sparse",
+  "films": [
+    "school-students"
+  ],
+  "recap": {
+    "en": "The terms are ready.",
+    "pcm": "The terms don ready."
+  },
+  "bridge": {
+    "en": "Students are in. What do their parents owe?",
+    "pcm": "Students don enter. Wetin dem parents owe?"
+  },
+  "next": {
+    "number": 4,
+    "title": "Set the fees",
+    "headline": "Set the *fees*"
+  },
+  "flow": [
+    {
+      "id": "E3-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "a stack of paper lists",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Lifts a pile of paper class lists, lets it fall back onto the desk with a tired laugh, and pushes his glasses up with one knuckle",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium close-up, eye-level"
+    },
+    {
+      "id": "E3-C2",
+      "who": "Mrs Bimpe Lawal",
+      "purpose": "a parent is added to the family",
+      "seconds": 4,
+      "goes": "bridge, after the footage",
+      "action": "Walks along a clinic corridor between shifts, checks her phone with a quick smile and tucks it into her tote bag",
+      "setting": "a pale green clinic corridor in Ikorodu with a nurses' station and a wall clock",
+      "camera": "tracking shot, medium, eye-level"
+    }
+  ],
+  "narration": {
+    "school-students": {
+      "en": [
+        "Bright Hill has no students in Taskiem yet.",
+        "Open Students.",
+        "Tap upload.",
+        "Choose the file with your list.",
+        "Taskiem checks every line.",
+        "Save: three hundred and ninety-nine students.",
+        "Add one more.",
+        "Tobi Lawal, with his admission number.",
+        "His class is JSS one A. Now his guardian.",
+        "For her phone, choose Mrs Bimpe Lawal from Saved.",
+        "Her number fills in.",
+        "Tobi opens with his family attached."
+      ],
+      "pcm": [
+        "Bright Hill no get student for Taskiem yet.",
+        "Open Students.",
+        "Tap upload.",
+        "Choose the file wey get your list.",
+        "Taskiem dey check every line.",
+        "Save: three hundred and ninety-nine students.",
+        "Add one more.",
+        "Tobi Lawal, with im admission number.",
+        "Im class na JSS one A. Now im guardian.",
+        "For her phone, choose Mrs Bimpe Lawal from Saved.",
+        "Her number go fill in.",
+        "Tobi open with im family join am."
+      ]
+    }
+  }
+}

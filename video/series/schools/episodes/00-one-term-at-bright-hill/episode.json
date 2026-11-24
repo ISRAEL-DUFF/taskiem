@@ -1,0 +1,152 @@
+{
+  "number": 0,
+  "slug": "one-term-at-bright-hill",
+  "title": "One term at Bright Hill",
+  "headline": "One term at *Bright Hill*",
+  "sub": "Fees, payments, the gate and the close, all run beside the school's chats.",
+  "mood": "build",
+  "reel": [
+    {
+      "film": "school-open",
+      "from": 13.6,
+      "to": 25.6,
+      "tag": "Episode 1 · Set up your school's people",
+      "caption": "Mr Ibe and Mallam Audu are invited, each with the right role.",
+      "narration": {
+        "en": "Mrs Fashola invites her bursar and her gateman, each with the right role.",
+        "pcm": "Mrs Fashola invite her bursar and her gateman, each with the right role."
+      }
+    },
+    {
+      "film": "school-classes-terms",
+      "from": 50.1,
+      "to": 63.0,
+      "tag": "Episode 2 · Classes, sessions and terms",
+      "caption": "First term starts, and every student is enrolled.",
+      "narration": {
+        "en": "When First term starts, every student is enrolled.",
+        "pcm": "When First term start, every student don enrol."
+      }
+    },
+    {
+      "film": "school-students",
+      "from": 12.4,
+      "to": 24.4,
+      "tag": "Episode 3 · Students and families",
+      "caption": "A spreadsheet becomes the whole school.",
+      "narration": {
+        "en": "A spreadsheet becomes the whole school, children grouped into families.",
+        "pcm": "Spreadsheet go turn to the whole school, children group into families."
+      }
+    },
+    {
+      "film": "school-fees",
+      "from": 10.7,
+      "to": 22.7,
+      "tag": "Episode 4 · Set the fees",
+      "caption": "Last term's fees, copied in one tap.",
+      "narration": {
+        "en": "Last term's fees come in with one tap.",
+        "pcm": "Last term fees go come in with one tap."
+      }
+    },
+    {
+      "film": "school-invoice-term",
+      "from": 6.4,
+      "to": 18.2,
+      "tag": "Episode 5 · Invoice the term",
+      "caption": "The plan comes first, then one invoice each.",
+      "narration": {
+        "en": "The plan comes first, before anyone is invoiced.",
+        "pcm": "The plan go come first, before dem invoice anybody."
+      }
+    },
+    {
+      "film": "school-get-paid",
+      "from": 16.8,
+      "to": 30.5,
+      "tag": "Episode 6 · Get paid",
+      "caption": "Large cash waits for a second person.",
+      "narration": {
+        "en": "Large cash waits for a second person, and she approves it.",
+        "pcm": "Large cash go wait for second person, and she go approve am."
+      }
+    },
+    {
+      "film": "school-debtors",
+      "from": 13.6,
+      "to": 25.6,
+      "tag": "Episode 7 · Chase what is owed",
+      "caption": "Reminders go to the families who are late.",
+      "narration": {
+        "en": "Reminders go to the families who are late, in the school's own words.",
+        "pcm": "Reminders go go to the families wey late."
+      }
+    },
+    {
+      "film": "school-gate",
+      "from": 46.0,
+      "to": 60.0,
+      "tag": "Episode 8 · Resumption day",
+      "caption": "At the gate: come in, or see the bursar.",
+      "narration": {
+        "en": "At the gate, one tap says come in, or see the bursar.",
+        "pcm": "For gate, one tap go talk say come in, or see the bursar."
+      }
+    },
+    {
+      "film": "school-overview",
+      "from": 12.0,
+      "to": 24.0,
+      "tag": "Episode 9 · Know your school",
+      "caption": "The day's close says what does not add up.",
+      "narration": {
+        "en": "The day's close says what does not add up, and how to fix it.",
+        "pcm": "The day close go talk wetin no add up, and how to fix am."
+      }
+    },
+    {
+      "film": "school-safe-next-term",
+      "from": 4.5,
+      "to": 16.5,
+      "tag": "Episode 10 · Keep it safe",
+      "caption": "Names show only for people who may see them.",
+      "narration": {
+        "en": "Names show only for people who may see them.",
+        "pcm": "Names go show only for people wey fit see dem."
+      }
+    }
+  ],
+  "bridge": {
+    "en": "It starts with the school's people.",
+    "pcm": "Everything start with the school people."
+  },
+  "next": {
+    "number": 1,
+    "title": "Set up your school's people",
+    "headline": "Set up your *school's people*"
+  },
+  "flow": [
+    {
+      "id": "E0-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "cold open: a stack of fee books and a ringing phone",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Sits behind a stack of green fee ledgers while a desk phone rings and his own phone buzzes; he pushes up his glasses, looks at both and breathes out with a tired smile",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "slow push-in, medium shot, warm morning light"
+    },
+    {
+      "id": "E0-C2",
+      "who": "Mrs Tolulope Fashola",
+      "purpose": "closing: the school at the end of term",
+      "seconds": 5,
+      "goes": "closing, after the footage",
+      "action": "Stands at her office window above the empty yard, checks her phone, smiles with quiet pride and folds her hands",
+      "setting": "the proprietor's office at Bright Hill Academy: a bookshelf, a framed school crest, a term planner on a dark desk, soft morning light, late afternoon light",
+      "camera": "slow pull-back, medium shot"
+    }
+  ],
+  "narration": {}
+}

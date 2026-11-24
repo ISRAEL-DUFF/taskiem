@@ -60,3 +60,19 @@ Naira is "NYE-rah". Say prices as words ("forty-three thousand naira").
 | aso-oke | AH-shoh OH-keh | The woven cloth |
 | owambe | oh-WAHM-beh | A party |
 | gele | GEH-leh | A headwrap |
+
+## Schools series: more names (to confirm with a native speaker)
+
+Fashola, Chukwudi Ibe, Audu, Danjuma and Ikorodu are in the table above.
+
+| Name | Say it | Notes |
+| --- | --- | --- |
+| Bright Hill Academy | as in English | The school |
+| Tolulope | toh-loo-LOH-peh | Mrs Fashola's first name (Yoruba) |
+| Bimpe Lawal | BEEM-peh lah-WAHL | Mrs Lawal (Yoruba); Tobi (TOH-bee) is her son |
+| Segun | SEH-goon | Mr Danjuma's first name (Yoruba) |
+| Okafor | oh-KAH-foh | Mr Okafor, a parent who promises a day (Igbo) |
+| Ibe | EE-beh | Mr Ibe (the bursar), stress on the first syllable |
+| Mallam | MAH-lam | A title of respect (Hausa) |
+| Dayo | DAH-yoh | Mr Danjuma's son |
+| JSS | "J S S" (letters) | Junior secondary school: say "J S S one A" |

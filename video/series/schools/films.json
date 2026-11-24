@@ -1,0 +1,34 @@
+{
+ "_note": "Phone clock for each film when composing (default 13:00, light); end trims a film (seconds).",
+ "school-open": {
+  "time": "13:00"
+ },
+ "school-classes-terms": {
+  "time": "13:00"
+ },
+ "school-students": {
+  "time": "09:30"
+ },
+ "school-fees": {
+  "time": "09:30"
+ },
+ "school-invoice-term": {
+  "time": "13:15"
+ },
+ "school-get-paid": {
+  "time": "13:15"
+ },
+ "school-debtors": {
+  "time": "22:11"
+ },
+ "school-gate": {
+  "time": "22:27"
+ },
+ "school-overview": {
+  "time": "07:05",
+  "end": 36.4
+ },
+ "school-safe-next-term": {
+  "time": "10:30"
+ }
+}

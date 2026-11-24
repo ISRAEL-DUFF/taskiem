@@ -1,0 +1,82 @@
+{
+  "number": 6,
+  "slug": "get-paid",
+  "title": "Get paid",
+  "headline": "Get *paid*",
+  "sub": "A transfer lands on the right child; cash waits for a second person.",
+  "mood": "sparse",
+  "films": [
+    "school-get-paid"
+  ],
+  "recap": {
+    "en": "The bills are out.",
+    "pcm": "Bills don out."
+  },
+  "bridge": {
+    "en": "Some parents have not paid. Who, and how late?",
+    "pcm": "Some parents never pay. Who, and how late?"
+  },
+  "next": {
+    "number": 7,
+    "title": "Chase what is owed",
+    "headline": "Chase what is *owed*"
+  },
+  "flow": [
+    {
+      "id": "E6-C1",
+      "who": "Mrs Bimpe Lawal",
+      "purpose": "she pays by transfer",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Types on her phone with her thumb while walking, then stops, presses a hand to her chest and smiles in relief",
+      "setting": "a pale green clinic corridor in Ikorodu with a nurses' station and a wall clock",
+      "camera": "tracking shot then close-up"
+    },
+    {
+      "id": "E6-C2",
+      "who": "Mr Segun Danjuma",
+      "purpose": "he brings cash",
+      "seconds": 4,
+      "goes": "between the films, or after the footage",
+      "action": "Hands a thick brown envelope across a wooden desk with both hands and a nod, then laughs and slaps the desk lightly",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "two-shot over the desk, eye-level"
+    }
+  ],
+  "narration": {
+    "school-get-paid": {
+      "en": [
+        "Mr Ibe opens Students.",
+        "He opens Tobi Lawal.",
+        "His own account number: a transfer lands on him by itself.",
+        "Send it to the family.",
+        "Mr Danjuma brings cash for Dayo.",
+        "Record cash on Dayo's page.",
+        "Sixty thousand naira.",
+        "A second person must approve.",
+        "Post the payment: sent for approval.",
+        "On Mrs Fashola's phone, it says Needs your OK.",
+        "Who asks, what for, how much.",
+        "She taps Approve for the details.",
+        "She is the second person. Approve.",
+        "Approved, and the cash counts."
+      ],
+      "pcm": [
+        "Mr Ibe open Students.",
+        "E open Tobi Lawal.",
+        "Im own account number: transfer go land on am by itself.",
+        "Send am to the family.",
+        "Mr Danjuma bring cash for Dayo.",
+        "Record cash for Dayo page.",
+        "Sixty thousand naira.",
+        "Second person must approve.",
+        "Post the payment: e don go for approval.",
+        "For Mrs Fashola phone, e say Needs your OK.",
+        "Who ask, for wetin, how much.",
+        "She tap Approve make she see the details.",
+        "She na the second person. Approve.",
+        "Dem approve am, and the cash count."
+      ]
+    }
+  }
+}

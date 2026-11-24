@@ -1,0 +1,90 @@
+{
+  "number": 7,
+  "slug": "chase-what-is-owed",
+  "title": "Chase what is owed",
+  "headline": "Chase what is *owed*",
+  "sub": "Debtors by days late, reminders, a promise and a payment plan.",
+  "mood": "sparse",
+  "films": [
+    "school-debtors"
+  ],
+  "recap": {
+    "en": "Some families have not paid.",
+    "pcm": "Some families never pay."
+  },
+  "bridge": {
+    "en": "Resumption day. Who may come in?",
+    "pcm": "Resumption day. Who fit enter?"
+  },
+  "next": {
+    "number": 8,
+    "title": "Resumption day at the gate",
+    "headline": "Resumption day at the *gate*"
+  },
+  "flow": [
+    {
+      "id": "E7-C1",
+      "who": "Mr Chukwudi Ibe",
+      "purpose": "he reads who owes",
+      "seconds": 4,
+      "goes": "before the footage",
+      "action": "Reads his phone with his lips moving silently, then shakes his head slowly with a gentle, firm look",
+      "setting": "the bursar's office at Bright Hill Academy in Ikorodu: a wooden desk under a ceiling fan, grey filing cabinets, green fee ledgers stacked, a window onto the yard",
+      "camera": "medium close-up, eye-level, evening lamp light"
+    },
+    {
+      "id": "E7-C2",
+      "who": "Mrs Bimpe Lawal",
+      "purpose": "she asks for a plan",
+      "seconds": 4,
+      "goes": "after the footage",
+      "action": "Reads a message on her phone, lets out a breath, and gives a small hopeful smile",
+      "setting": "a pale green clinic corridor in Ikorodu with a nurses' station and a wall clock",
+      "camera": "close-up, eye-level"
+    }
+  ],
+  "narration": {
+    "school-debtors": {
+      "en": [
+        "School shows what is still owed.",
+        "Then Debtors and reminders.",
+        "Families are aged by how late they are.",
+        "Seven to fourteen days late.",
+        "Two families are ticked.",
+        "The reminder fits: Firmer.",
+        "He checks it, and sends to two.",
+        "Both are told. Each shows Reminder two.",
+        "Mr Okafor replies with a day.",
+        "He records a promise for that day.",
+        "Promise recorded.",
+        "Under Chasing: the reminder, and the promise.",
+        "Back in Debtors, he opens Tobi Lawal.",
+        "Mrs Lawal asked for a payment plan.",
+        "Three parts of thirty-four thousand naira were asked.",
+        "He approves it in two parts instead.",
+        "Two parts, fifty-one thousand each.",
+        "The family is told, and the plan shows."
+      ],
+      "pcm": [
+        "School dey show wetin dem still owe.",
+        "Then Debtors and reminders.",
+        "Dem group families by how late dem be.",
+        "Seven to fourteen days late.",
+        "Dem tick two families.",
+        "The reminder fit: Firmer.",
+        "E check am, and send to two.",
+        "Dem tell both. Each one show Reminder two.",
+        "Mr Okafor reply with one day.",
+        "E record promise for that day.",
+        "Promise don record.",
+        "Under Chasing: the reminder, and the promise.",
+        "Back for Debtors, e open Tobi Lawal.",
+        "Mrs Lawal ask for payment plan.",
+        "Dem ask for three parts of thirty-four thousand naira.",
+        "E approve am for two parts instead.",
+        "Two parts, fifty-one thousand each.",
+        "Dem tell the family, and the plan show."
+      ]
+    }
+  }
+}
