@@ -46,7 +46,7 @@ The structure is defined by `schemas/connector-v1.schema.json`; `connectors/pays
 22. **Call time** (an addition; [customer assistant](../spec/voice-assistant.md) V3). A `read` action may declare `call_timeout`, 1 to 300 seconds, when one call can take longer than the worker's usual bound (`CallTimeout`, 30 s): hearing a long voice note or speaking a long reply (`speech@1`). The worker waits that long, and the task's heartbeat keeps its lease meanwhile. A write may not declare it, since a write's deadline also decides when reconciling may conclude it was never sent.
 23. **Conversation** (an addition; [customer assistant](../spec/voice-assistant.md) V6, [keeping a customer assistant safe](../assistant-guard.md)). A chat channel's webhook trigger may declare `conversation`: how to read an event as a customer's new message, for a workflow's customer guard. Its expressions read the event like the trigger's others:
     - `sender`: who wrote, the id send actions reply to; empty when the event is not a customer's new message;
-    - `sender_category`: its personal-data category, as erasure names a person;
+    - `sender_category`: its personal-data category, as erasure names a person (`phone`, `email`, or `chat_id` for a chat's own id, never `other`, which is no one's);
     - `private`: a one-to-one chat;
     - `kind`: `text`, `voice`, `audio`, `image`, `video`, `document`, `sticker`, `location`, `contact`, `reaction`, `button` or `other`;
     - `text`: its words (a caption, a button's title).

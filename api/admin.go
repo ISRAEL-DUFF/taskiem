@@ -629,9 +629,9 @@ func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, e
 //
 // A value names a person however it was written where it was sealed: a
 // phone number as WhatsApp gives it (2348031234567), with + or a leading
-// 0; a number as a number or as a string (a Telegram chat id). Each form
-// is erased, in its category and as "other" (a chat's sender may be
-// declared so), wherever it has a key. A subject id is erased with its
+// 0; a number as a number or as a string (a Telegram chat id, category
+// chat_id). Each form is erased wherever it has a key. A subject id is
+// erased with its
 // later generations (a person who came back), whichever generation is
 // named. It answers 404 only when nothing at all was found to erase.
 func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
@@ -676,6 +676,18 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		if subjects, err = s.Vault.SubjectsFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
 			s.fail(w, r, err)
 			return
+		}
+		// And the ways our own channels write it (a chat id as a number or
+		// a string, a number with + or 0), each where it has a key.
+		for _, f := range eraseForms(req.Category, req.Value) {
+			id, err := s.Vault.SubjectFor(r.Context(), p.TenantID, req.Category, f)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if !slices.Contains(subjects, id) {
+				subjects = append(subjects, id)
+			}
 		}
 		subject = subjects[0]
 	}

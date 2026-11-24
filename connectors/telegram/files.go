@@ -81,7 +81,7 @@ func (c *client) getFile(ctx context.Context, req connector.Request) (connector.
 	// the sender so erasing them deletes it.
 	var about []connector.FileSubject
 	if who := strings.TrimSpace(str(req.Input, "sender")); who != "" {
-		about = append(about, connector.FileSubject{Category: "other", Value: who})
+		about = append(about, connector.FileSubject{Category: "chat_id", Value: who})
 	}
 	ref, err := req.Files.Put(ctx, name, data, true, about...)
 	if err != nil {

@@ -122,7 +122,7 @@ func (s *Server) startTestTurn(w http.ResponseWriter, r *http.Request) {
 			cfg = assistant.Defaults()
 		}
 		msg = assistant.Message{Channel: testChannel(p.Actor(), a.Workflow, a.Environment), Dedup: uuid.NewString(),
-			Sender: sender, SenderCategory: "other", Private: true, Kind: "text", Text: req.Text}
+			Sender: sender, SenderCategory: assistant.ChatID, Private: true, Kind: "text", Text: req.Text}
 		if d, err = (&assistant.Guard{Mode: s.AssistantMode}).Decide(ctx, tx, sealer, p.TenantID, cfg, msg); err != nil {
 			return err
 		}
@@ -156,9 +156,9 @@ func (s *Server) startTestTurn(w http.ResponseWriter, r *http.Request) {
 	ref, _, err := s.Store.StartRun(r.Context(), runtime.StartRequest{
 		TenantID: p.TenantID, WorkflowID: a.Workflow, Version: version, Environment: a.Environment,
 		Trigger: trig, StartedBy: p.Actor(), TriggerID: "test-chat/" + a.Workflow.String(), DedupKey: msg.Dedup,
-		Customer: &runtime.Customer{Category: "other", Value: sender}, Sandbox: true,
+		Customer: &runtime.Customer{Category: assistant.ChatID, Value: sender}, Sandbox: true,
 		Conversation: &runtime.ConversationRef{Channel: msg.Channel, Dedup: msg.Dedup},
-		TriggerPII: []pii.Path{{Segments: []string{"guard", "sender"}, Category: "other"}, {Segments: []string{"guard", "text"}, Category: "other"},
+		TriggerPII: []pii.Path{{Segments: []string{"guard", "sender"}, Category: assistant.ChatID}, {Segments: []string{"guard", "text"}, Category: "other"},
 			{Segments: []string{"item", "message", "from"}, Category: "other"}, {Segments: []string{"item", "message", "text", "body"}, Category: "other"},
 			{Segments: []string{"body", "message", "text"}, Category: "other"}, {Segments: []string{"body", "message", "chat", "id"}, Category: "other"}},
 	})

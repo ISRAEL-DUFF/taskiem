@@ -169,7 +169,7 @@ actions:
       properties:
         file: { type: object, description: "The run file's reference: file, name, type, size, sha256" }
     pii:
-      - { field: sender, category: other }
+      - { field: sender, category: chat_id }
       - { field: output.file.name, category: other }
   send_voice:
     title: Send a voice message
@@ -403,7 +403,7 @@ triggers:
     # audio is fetched before the run can wait in a queue.
     conversation:
       sender: '=has(body.message) ? string(body.message.chat.id) : ""'
-      sender_category: other
+      sender_category: chat_id
       private: '=has(body.message) && body.message.chat.type == "private"'
       kind: >-
         =!has(body.message) ? "other"

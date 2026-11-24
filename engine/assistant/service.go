@@ -29,13 +29,18 @@ func (s *Service) now() time.Time {
 }
 
 // SenderCategory is a channel's senders' personal-data category: a
-// WhatsApp sender is a phone number; a Telegram chat id is other.
+// WhatsApp sender is a phone number; a Telegram chat id is a chat_id, a
+// person's own subject (never "other", which is no one's).
 func SenderCategory(channel string) string {
 	if strings.HasPrefix(channel, "whatsapp@") {
 		return "phone"
 	}
-	return "other"
+	return ChatID
 }
+
+// ChatID is the personal-data category of a chat's id for a person (a
+// Telegram chat): each is its own subject, erased by that id.
+const ChatID = "chat_id"
 
 func (s *Service) subject(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, channel, sender string) (string, error) {
 	return s.Vault.LiveSubjectTx(ctx, tx, tenant, SenderCategory(channel), sender)

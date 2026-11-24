@@ -12,9 +12,8 @@ import (
 )
 
 // Erasing a person by their number erases every way it was sealed: as
-// WhatsApp gives it, with + or a leading 0, as "other" (a chat sender may
-// be declared so), and a number given as a number reaches it sealed as a
-// string (a Telegram chat id). A subject named by its generation erases
+// WhatsApp gives it, with + or a leading 0; and a number given as a number
+// reaches it sealed as a string (a Telegram chat id, category chat_id). A subject named by its generation erases
 // the person; nothing found at all is 404 (decision 0074 P2).
 func TestEraseForms(t *testing.T) {
 	ctx := context.Background()
@@ -52,7 +51,6 @@ func TestEraseForms(t *testing.T) {
 	sealed := []map[string]any{
 		seal(tenant, "phone", "2348031234567"),
 		seal(tenant, "phone", "+2348031234567"),
-		seal(tenant, "other", "2348031234567"),
 	}
 	bola := seal(tenant, "phone", "2348039876543")
 	// A message from Ada buffered for a run that is not waiting yet.
@@ -85,8 +83,8 @@ func TestEraseForms(t *testing.T) {
 
 	// A chat id given as a number, sealed as a string.
 	owner, tenant, secret = business()
-	chat := seal(tenant, "other", "777001")
-	if out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "other", "value": 777001, "totp": codeAfter(secret, 1)}); out["erased"] != true || open(tenant, chat) == nil {
+	chat := seal(tenant, "chat_id", "777001")
+	if out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "chat_id", "value": 777001, "totp": codeAfter(secret, 1)}); out["erased"] != true || open(tenant, chat) == nil {
 		t.Fatalf("a chat id given as a number: %v", out)
 	}
 

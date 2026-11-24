@@ -48,7 +48,7 @@ triggers:
       - { field: body.text, category: other }
     conversation:
       sender: =body.from
-      sender_category: other
+      sender_category: chat_id
       private: '=true'
       kind: '="text"'
       text: =body.text

@@ -118,7 +118,7 @@ func (h *Handler) guardEvent(ctx context.Context, t target, ev eventItem, s subs
 	}
 	cat := ev.conv.category
 	if cat == "" {
-		cat = "other"
+		cat = assistant.ChatID
 	}
 	return guarded{start: true, trigger: g, outcome: d.Outcome, channel: msg.Channel, dedup: msg.Dedup,
 		customer: &runtime.Customer{Category: cat, Value: ev.conv.sender},

@@ -766,6 +766,7 @@
                   "name",
                   "address",
                   "card",
+                  "chat_id",
                   "other"
                 ]
               }
@@ -1142,7 +1143,7 @@
           "description": "A chat channel's trigger: how to read an event as a customer's new message, for a workflow's customer guard (rule 23). Expressions over the event like the trigger's others; an empty sender means it is not a customer's new message.",
           "properties": {
             "sender": { "$ref": "#/$defs/expr" },
-            "sender_category": { "type": "string", "enum": ["phone", "email", "other"] },
+            "sender_category": { "type": "string", "enum": ["phone", "email", "chat_id", "other"] },
             "private": { "$ref": "#/$defs/expr" },
             "kind": { "$ref": "#/$defs/expr" },
             "text": { "$ref": "#/$defs/expr" },

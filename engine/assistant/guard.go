@@ -226,7 +226,7 @@ func (g *Guard) decide(ctx context.Context, tx pgx.Tx, sealer Sealer, tenant uui
 	}
 	cat := m.SenderCategory
 	if cat == "" {
-		cat = "other"
+		cat = ChatID
 	}
 	subject, sealed, err := customerKey(ctx, tx, sealer, tenant, cat, m.Sender)
 	if err != nil {

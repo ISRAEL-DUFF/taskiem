@@ -98,7 +98,7 @@ func TestGetFileKeepsTheVoiceNote(t *testing.T) {
 	}
 	ref := r.Output.(map[string]any)["file"].(map[string]any)
 	// Tied to whoever sent it, so erasing them deletes it.
-	if who := fs.About(ref["file"].(string)); who.Category != "other" || who.Value != "42" {
+	if who := fs.About(ref["file"].(string)); who.Category != "chat_id" || who.Value != "42" {
 		t.Fatalf("about %v", who)
 	}
 	kept, personal := fs.Kept(ref["file"].(string))
