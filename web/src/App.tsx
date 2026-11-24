@@ -69,6 +69,8 @@ import { Guide, Start } from "./pages/Start";
 import { OnboardingProvider, useOnboarding } from "./onboarding";
 import { Keys } from "./pages/Keys";
 import { TablePage, Tables } from "./pages/Tables";
+import { Knowledge, KnowledgeSourcePage } from "./pages/Knowledge";
+import { ConversationPage, Conversations } from "./pages/Conversations";
 import { PageScreen, Pages, pageIcon } from "./pages/Pages";
 import { PageEditor } from "./pages/PageEditor";
 import { Storefront } from "./pages/Storefront";
@@ -537,6 +539,10 @@ function SignedIn() {
     ["/forms/requests", "To fill in", "inbox", toFill > 0, String(toFill)],
     ["/runs", "Activity", "activity", can("run.read")],
     ["/tables", "Tables", "tables", can("table.read")],
+    // What the assistant answers customers from (decision 0074 D12).
+    ["/knowledge", "What your assistant knows", "templates", can("secret.manage")],
+    // What customers said to the assistant, and answering them (V7).
+    ["/conversations", "Conversations", "chat", can("conversation.read")],
     // The business's own screens (pages/Pages.tsx).
     ["/pages", "Pages", "dashboard", true],
     // Other businesses on Taskiem (business links, pages/Links.tsx).
@@ -853,6 +859,10 @@ function SignedIn() {
                   <Route path="/workflows/:id" element={<Editor />} />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/tables" element={<Tables />} />
+                  <Route path="/knowledge" element={<Knowledge />} />
+                  <Route path="/knowledge/:id" element={<KnowledgeSourcePage />} />
+                  <Route path="/conversations" element={<Conversations />} />
+                  <Route path="/conversations/view" element={<ConversationPage />} />
                   <Route path="/tables/:id" element={<TablePage />} />
                   <Route path="/pages" element={<Pages />} />
                   <Route path="/pages/:name" element={<PageScreen />} />

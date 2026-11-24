@@ -35,9 +35,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/history"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/telemetry"
+	"github.com/israel-duff/taskiem/engine/tunnel"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -160,6 +162,9 @@ type Worker struct {
 	// AI runs ai steps (the "ai" queue, decision 0050); nil: they fail as
 	// not set up.
 	AI *AISteps
+	// RunFiles keeps the files a run's connectors fetch or make
+	// (docs/files.md); nil gives connectors no file store.
+	RunFiles *runfiles.Service
 }
 
 func (w *Worker) defaults() {
@@ -482,6 +487,7 @@ const (
 type plan struct {
 	c        claim
 	env      string
+	workflow uuid.UUID
 	sched    history.ScheduledPayload
 	pins     map[string]string // connector versions the run started with
 	stepType string
@@ -502,6 +508,13 @@ type plan struct {
 	scrub    []string          // secret values used by this attempt; never written to history
 	secrets  map[string]string // secrets read by this attempt, by name
 	creds    map[string]string // the connection's credentials, once read
+	// sentBefore is how many earlier attempts of the step recorded an
+	// EffectIntent: how often it may already have been sent.
+	sentBefore int
+	// turnIn and turnOut are a connector step's input and output, for the
+	// conversation's record (turns.go).
+	turnIn  map[string]any
+	turnOut any
 
 	// settle: the step starts nothing new (it was cancelled, its run has
 	// ended, or decide scheduled the attempt only to settle an earlier
@@ -591,6 +604,21 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		}
 		if err != nil {
 			return err
+		}
+		if result.Type == history.StepCompleted && p.conn != nil {
+			// A send found done on reconcile (the provider had it): it was
+			// said to the customer as much as one answered at once.
+			if in, err := w.resolveSecrets(ctx, p); err == nil {
+				if input, ok := in.(map[string]any); ok {
+					var out any
+					if v, err := expr.DecodeJSON(result.Payload); err == nil {
+						if m, ok := v.(map[string]any); ok {
+							out = m["output"]
+						}
+					}
+					p.turnIn, p.turnOut = input, out
+				}
+			}
 		}
 	}
 	if p.mode == modeSend {
@@ -712,6 +740,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion, status FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest, &status); err != nil {
 			return err
 		}
+		p.workflow = wfID
 		def, err := w.Store.runDefinition(ctx, tx, wfID, version, digest)
 		if err != nil {
 			return err
@@ -844,6 +873,7 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				return err
 			}
 		}
+		p.sentBefore = len(intents)
 		if n := len(intents); n > 0 {
 			last, lastAttempt := intents[n-1], intentAttempts[n-1]
 			p.group = last.AttemptGroup
@@ -852,10 +882,18 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 			}
 			p.intentAt = intentTimes[n-1]
 			var next effects.Next
+			lost := false
 			if prev, ok := outcomes[lastAttempt]; ok && lastAttempt != c.attempt {
 				next = effects.AfterError(p.class, kindOf(prev.Kind))
+				lost = kindOf(prev.Kind) == effects.KindUnknownOutcome
 			} else {
 				next = effects.OnOpenIntent(p.class) // the attempt that wrote it never reported back
+				lost = true
+			}
+			// A chat reply whose one send was lost is sent once more
+			// (decision 0074 D11); a second loss parks as before.
+			if next == effects.Park && lost && n == 1 && resendIfLost(p) {
+				next = effects.Retry
 			}
 			switch next {
 			case effects.Reconcile:
@@ -1280,11 +1318,29 @@ func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) er
 				paths = capabilityOutputPaths(p)
 			case result.Type == history.StepCompleted:
 				paths = outputPIIPaths(p.conn, p.action) // what the manifest declares personal
+				if p.conn != nil {
+					tp, err := tablePIIPaths(ctx, tx, p.c.tenant, p.conn.Manifest.ID, p.action, p.sched.Input, true)
+					if err != nil {
+						return err
+					}
+					paths = append(paths, tp...)
+				}
 			}
-			if v, err = pii.Seal(ctx, w.Store.PII, tx, p.c.tenant, v, paths, p.taint); err != nil {
+			cipher, err := w.Store.runCipher(ctx, tx, p.c.run)
+			if err != nil {
 				return err
 			}
-			if payload, err = pii.SealDetected(ctx, w.Store.PII, tx, p.c.tenant, v, p.taint); err != nil {
+			if result.Type == history.StepCompleted && p.stepType == "ai" && pii.CustomerOf(cipher) != "" {
+				// What a model answered in a customer's run is made from
+				// what they said: every text of it is sealed under them.
+				if m, ok := v.(map[string]any); ok {
+					paths = append(paths, stringPaths(m["output"], []string{"output"}, "other")...)
+				}
+			}
+			if v, err = pii.Seal(ctx, cipher, tx, p.c.tenant, v, paths, p.taint); err != nil {
+				return err
+			}
+			if payload, err = pii.SealDetected(ctx, cipher, tx, p.c.tenant, v, p.taint); err != nil {
 				return err
 			}
 		}
@@ -1315,6 +1371,12 @@ func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) er
 					return err
 				}
 			}
+		}
+		// What the step said to the run's customer goes in their
+		// conversation (V7), with its result: before the run can end on it,
+		// and never lost between the two.
+		if result.Type == history.StepCompleted && p.turnIn != nil {
+			w.recordTurn(ctx, tx, p, p.turnIn, p.turnOut)
 		}
 		return w.Store.decideInline(ctx, tx, RunRef{ID: p.c.run, TenantID: p.c.tenant})
 	})
@@ -1356,7 +1418,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Rotate: w.rotate(p), Files: w.files(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -1498,6 +1560,17 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 	if err != nil {
 		return w.secretFailure(p, err)
 	}
+	// A test conversation's run runs no container or http step that could
+	// change something: each answers a simulated output (sandbox.go). Code
+	// runs: it can only read (host.fetch takes GET and HEAD), and a
+	// recipe's steps that shape a message must behave as they will.
+	if p.conn == nil && (p.stepType == "container" || p.stepType == "http") && p.class != effects.Read {
+		if sim, ok, err := w.simulateStep(ctx, p); err != nil {
+			return w.classify(p, fmt.Errorf("checking for a test run: %w: %w", err, effects.ErrNotSent))
+		} else if ok {
+			return completedEvent(p.c, sim, false)
+		}
+	}
 	if p.stepType == "code" {
 		w.scrubCodeSecrets(ctx, p)
 		// The sandbox enforces the step's own time limit.
@@ -1517,7 +1590,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		// Its own timeout per call; the heartbeat keeps the lease.
 		return w.aiEvent(ctx, p, in)
 	}
-	deadline := time.Now().Add(w.CallTimeout)
+	deadline := time.Now().Add(w.readTimeout(p))
 	if p.class.IsWrite() {
 		deadline = p.intentAt.Add(w.CallTimeout)
 		if !time.Now().Before(deadline) {
@@ -1536,11 +1609,19 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		if p.class.IsWrite() && p.field != "" && !strings.HasPrefix(p.field, "header:") {
 			input[p.field] = p.key
 		}
+		// A test conversation's run (Talk to it here) sends nothing: a
+		// write is answered with a simulated output (sandbox.go).
+		if sim, ok, err := w.simulate(ctx, p); err != nil {
+			return w.classify(p, fmt.Errorf("checking for a test run: %w: %w", err, effects.ErrNotSent))
+		} else if ok {
+			p.turnIn, p.turnOut = input, sim
+			return completedEvent(p.c, sim, false)
+		}
 		creds, err := w.credentials(ctx, p)
 		if err != nil {
 			return w.secretFailure(p, err)
 		}
-		hc, err := w.client(ctx, p, w.CallTimeout)
+		hc, err := w.client(ctx, p, time.Until(deadline))
 		if err != nil {
 			return w.secretFailure(p, err)
 		}
@@ -1553,13 +1634,14 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p), Files: w.files(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
 		}
 		out = resp.Output
 		p.drift = drift.Check(p.conn.Manifest, p.action, out)
+		p.turnIn, p.turnOut = input, out
 		if p.conn.Manifest.ID == datatables.Connector {
 			// An open page over the table is told (pages §9); a failure
 			// here only leaves it to be pulled to refresh.
@@ -1638,12 +1720,24 @@ func (w *Worker) classify(p *plan, err error) history.Event {
 		return ev // code and container steps read their secrets before running
 	}
 	kind := effects.Classify(err)
-	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[effects.AfterError(p.class, kind)]
+	after := effects.AfterError(p.class, kind)
+	if after == effects.Park && kind == effects.KindUnknownOutcome && p.sentBefore == 0 && resendIfLost(p) {
+		// The first send of a chat reply whose answer was lost: send it
+		// once more rather than leave the customer waiting on a person
+		// (decision 0074 D11). It stays marked as maybe applied, so a
+		// later failure still parks.
+		after = effects.Retry
+	}
+	next := map[effects.Next]string{effects.Retry: "retry", effects.Reconcile: "reconcile", effects.Park: "park", effects.Fail: "fail"}[after]
 	e := history.Error{Kind: kind.String(), Message: err.Error(), Next: next, MaybeApplied: p.class.MayHaveApplied(kind)}
 	// A provider that said when to come back (Retry-After) is not asked sooner.
 	var ra interface{ RetryAfterDelay() time.Duration }
 	if errors.As(err, &ra) && kind == effects.KindRetryable {
 		e.RetryAfterMS = ra.RetryAfterDelay().Milliseconds()
+	}
+	var coded *connector.CodedError
+	if errors.As(err, &coded) {
+		e.Code = coded.Code
 	}
 	raw, _ := json.Marshal(history.FailedPayload{Error: e})
 	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
@@ -1796,6 +1890,20 @@ func (w *Worker) policy(ctx context.Context, p *plan, creds map[string]string) (
 	return pol, nil
 }
 
+// readTimeout bounds a call: CallTimeout, or longer for a read action
+// that declares its own call_timeout (hearing a long voice note). The
+// heartbeat keeps the lease meanwhile.
+func (w *Worker) readTimeout(p *plan) time.Duration {
+	if p.conn != nil && !p.class.IsWrite() {
+		if a, ok := p.conn.Manifest.Actions[p.action]; ok {
+			if d := time.Duration(a.CallTimeout) * time.Second; d > w.CallTimeout {
+				return d
+			}
+		}
+	}
+	return w.CallTimeout
+}
+
 // client returns an egress-guarded HTTP client for this task.
 func (w *Worker) client(ctx context.Context, p *plan, timeout time.Duration) (*http.Client, error) {
 	creds := map[string]string{}
@@ -1818,9 +1926,33 @@ func (w *Worker) dialer(ctx context.Context, p *plan, creds map[string]string) (
 	if err != nil {
 		return nil, err
 	}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return w.Egress.DialContext(ctx, pol, network, addr)
-	}, nil
+	// A connection that names a tunnel reaches its host through the
+	// customer's bastion (decision 0013); otherwise through the guard.
+	d, err := tunnel.Dialer(w.Egress, pol, creds)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// resendIfLost reports whether the step asked for a lost send to be sent
+// once more and its action allows it (decision 0074 D11): both must say
+// so, and only an unsafe write qualifies.
+func resendIfLost(p *plan) bool {
+	if p.conn == nil || p.class != effects.UnsafeWrite || p.step == nil || p.step.Effect == nil || !p.step.Effect.ResendIfLost {
+		return false
+	}
+	a, ok := p.conn.Manifest.Actions[p.action]
+	return ok && a.ResendIfLost
+}
+
+// files is the run's file store, as its connectors see it.
+func (w *Worker) files(p *plan) connector.Files {
+	if w.RunFiles == nil {
+		return nil
+	}
+	run, wf := p.c.run, p.workflow
+	return w.RunFiles.For(runfiles.Owner{Tenant: p.c.tenant, Environment: p.env, Workflow: &wf, Run: &run})
 }
 
 // heartbeat extends the lease while the task runs and cancels the task's

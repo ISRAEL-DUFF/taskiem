@@ -5,11 +5,13 @@ package builtin
 import (
 	"github.com/israel-duff/taskiem/connectors/africastalking"
 	"github.com/israel-duff/taskiem/connectors/anchor"
+	assistantconn "github.com/israel-duff/taskiem/connectors/assistant"
 	"github.com/israel-duff/taskiem/connectors/bills"
 	"github.com/israel-duff/taskiem/connectors/breet"
 	"github.com/israel-duff/taskiem/connectors/brevo"
 	"github.com/israel-duff/taskiem/connectors/dojah"
 	"github.com/israel-duff/taskiem/connectors/email"
+	"github.com/israel-duff/taskiem/connectors/files"
 	"github.com/israel-duff/taskiem/connectors/flutterwave"
 	"github.com/israel-duff/taskiem/connectors/form"
 	"github.com/israel-duff/taskiem/connectors/gmail"
@@ -17,6 +19,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/interswitch"
 	"github.com/israel-duff/taskiem/connectors/invoices"
 	"github.com/israel-duff/taskiem/connectors/iswallet"
+	"github.com/israel-duff/taskiem/connectors/knowledge"
 	"github.com/israel-duff/taskiem/connectors/lenco"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/mailchimp"
@@ -35,6 +38,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/paystack"
 	"github.com/israel-duff/taskiem/connectors/postgres"
 	"github.com/israel-duff/taskiem/connectors/prembly"
+	"github.com/israel-duff/taskiem/connectors/privatehttp"
 	"github.com/israel-duff/taskiem/connectors/quickbooks"
 	"github.com/israel-duff/taskiem/connectors/remita"
 	"github.com/israel-duff/taskiem/connectors/resend"
@@ -43,6 +47,7 @@ import (
 	"github.com/israel-duff/taskiem/connectors/schools"
 	"github.com/israel-duff/taskiem/connectors/sftp"
 	"github.com/israel-duff/taskiem/connectors/slack"
+	"github.com/israel-duff/taskiem/connectors/speech"
 	"github.com/israel-duff/taskiem/connectors/stock"
 	"github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/connectors/telegram"
@@ -134,6 +139,18 @@ type Options struct {
 	// Email binds the inbound email platform connector (docs/email.md);
 	// nil: its actions fail plainly.
 	Email email.Ops
+	// Files binds the run files platform connector (docs/files.md); nil:
+	// its actions fail plainly.
+	Files files.Ops
+	// Speech binds the speech platform connector (docs/speech.md); nil:
+	// hearing and speaking fail plainly.
+	Speech speech.Ops
+	// Knowledge binds what the assistant knows (docs/knowledge.md); nil:
+	// its actions fail plainly.
+	Knowledge knowledge.Ops
+	// Assistant binds the customer assistant's actions
+	// (docs/assistant-guard.md); nil: all but check_reply fail plainly.
+	Assistant assistantconn.Ops
 	// Notify delivers Tell me messages (notify@1) to the business's own
 	// people; nil: they fail plainly.
 	Notify notify.Teller
@@ -182,6 +199,7 @@ func Register(r *connector.Registry, o Options) error {
 		mysql.New(),
 		s3.New(s3.Options{BaseURL: o.S3URL}),
 		sftp.New(),
+		privatehttp.New(),
 		storefront.New(o.Storefront),
 		riders.New(o.Riders),
 		bills.New(o.Bills),
@@ -192,6 +210,10 @@ func Register(r *connector.Registry, o Options) error {
 		schools.New(o.Schools),
 		form.New(o.Forms),
 		email.New(o.Email),
+		files.New(o.Files),
+		speech.New(o.Speech),
+		knowledge.New(o.Knowledge),
+		assistantconn.New(o.Assistant),
 		notify.New(o.Notify),
 	} {
 		if err := r.Register(c); err != nil {

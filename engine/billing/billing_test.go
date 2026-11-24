@@ -7,9 +7,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1194,5 +1196,34 @@ func TestDunningWaitsForPendingCharge(t *testing.T) {
 	}
 	if w.mail.count("payment due") == 0 {
 		t.Fatal("no reminder while the charge was pending")
+	}
+}
+
+// nextNumber is the invoice number after prev (PREFIX-YEAR-NNNNNN) for an
+// invoice issued in year: the next in sequence within prev's year, or the
+// year's first.
+func nextNumber(t *testing.T, prev string, year int) string {
+	t.Helper()
+	parts := strings.Split(prev, "-")
+	if len(parts) != 3 {
+		t.Fatalf("invoice number %q", prev)
+	}
+	y, err1 := strconv.Atoi(parts[1])
+	n, err2 := strconv.Atoi(parts[2])
+	if err1 != nil || err2 != nil {
+		t.Fatalf("invoice number %q", prev)
+	}
+	if year != y {
+		n = 0
+	}
+	return fmt.Sprintf("%s-%d-%06d", parts[0], year, n+1)
+}
+
+func TestNextNumber(t *testing.T) {
+	if got := nextNumber(t, "TKM-2026-000001", 2026); got != "TKM-2026-000002" {
+		t.Errorf("same year: %s", got)
+	}
+	if got := nextNumber(t, "TKM-2026-000041", 2027); got != "TKM-2027-000001" {
+		t.Errorf("next year: %s", got)
 	}
 }

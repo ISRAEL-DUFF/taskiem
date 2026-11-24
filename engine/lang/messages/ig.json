@@ -8208,6 +8208,166 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "speech.cannot_hear.empty": {
+      "text": "Ndo, anụghị m ihe ọ bụla n'ozi olu ahụ. Biko depụta ya ọzọ ma ọ bụ dee ozi gị.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Ndo, ozi olu ahụ dị ogologo karịa. Biko ziga nke dị mkpụmkpụ ma ọ bụ dee ozi gị.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Ndo, enweghị m ike ịkpọ ozi olu ahụ. Biko depụta ya ọzọ ma ọ bụ dee ozi gị.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Ndo, enweghị m ike ige ozi olu ugbu a. Biko dee ozi gị, m ga-aza gị.",
+      "reviewed": false
+    },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Tinye *{name}* na {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Malite idebe ngwa ahịa na *{name}*: {qty}{cost}? Taskiem ga-eme tebụl products maka ngwa ahịa gị.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "Edekọọla maka *{name}*. Ọ ga-eru tebụl products gị n'oge na-adịghị anya.",
+      "reviewed": false
+    },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Ndeewo! Ị na-akparịta ụka na onye enyemaka akpaaka nke {business}. Ọ na-agụ ozi gị ma na-ege ozi olu gị iji zaa gị. Zaghachi PERSON ka gị na mmadụ na {business} kwurịta, ma ọ bụ STOP ka onye enyemaka kwụsị.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ị zitela ọtụtụ ozi n'oge dị mkpirikpi. Biko chere ntakịrị, aga m azaghachi gị ọzọ.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "Ọ dị mma. Onye enyemaka agaghị azaghachi gị ọzọ. Zaghachi START ka ịmalite ya ọzọ.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Nnọọ ọzọ! Onye enyemaka ga-azaghachi gị ọzọ. Kedu ka m ga-esi nyere gị aka?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "Ọ dị mma, agwala m mmadụ na {business} ka ọ zaa gị. Ha ga-aza gị ebe a ozugbo ha nwere ike.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Ndo, ọ bụ naanị ozi ederede ka m nwere ike ịgụ na ozi olu ka m nwere ike ige. Biko dee ozi gị ma ọ bụ zite ozi olu.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Ka m lelee ya na ndị otu anyị, aga m alọghachikwute gị.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Azịza AI atụmatụ gị nyere gị maka ọnwa a agwụla, ya mere usoro AI nke ọrụ a ga-akwụsị ruo ọnwa ọzọ: nke nwere azịza nnọchi ga-eji ya (onye inyeaka gị ga-agwa ndị ahịa na mmadụ ga-alaghachikwute ha). Lelee atụmatụ gị, ma ọ bụ jụọ onye na-agba Taskiem gị.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Olu atụmatụ gị nyere gị maka ọnwa a agwụla, ya mere ọrụ a enweghị ike ịnụ ozi olu ma ọ bụ iji olu zaa ruo ọnwa ọzọ: a ga-arịọ ndị ahịa zitere otu ka ha dee ya. Lelee atụmatụ gị, ma ọ bụ jụọ onye na-agba Taskiem gị.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} anaghị ezitere Taskiem ozi ọrụ a: {why}. Taskiem ka na-anwa; lelee njikọ ahụ na Connections, ma jikọọ bot ahụ ọzọ ma ọ bụrụ na agbanwere ya na BotFather.",
+      "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} agbanyeghị maka azụmahịa a, ya mere ọrụ a enweghị ike ime ihe ọ chọrọ na ya. Onye nwe ya na-agbanye ya na Settings, What your business uses.",
+      "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Naanị ndị na-elekọta ntọala {org} nwere ike ịgbakwunye ihe onye inyeaka ya maara.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Gbakwunye akwụkwọ maka onye inyeaka gị na weebụ: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Ihe onye inyeaka gị maara adịghị na Taskiem a.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Akwụkwọ ahụ buru ibu nke ukwuu ịgụ site na nkata. Gbakwunye ya na weebụ: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Akwụkwọ ahụ bụ foto na-enweghị ederede, Taskiem enweghịkwa ike ịgụ ya ugbu a. Zite nke nwere ederede ị nwere ike ịhọrọ, ma ọ bụ dee ihe ọ na-ekwu.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Enweghị m ike ịgụ akwụkwọ ahụ. Zite faịlụ PDF ma ọ bụ Word (.docx) na-enweghị okwuntughe.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Agbakwunyela m {name} na ihe onye inyeaka gị maara. A malitebeghị iji ya: lelee ya pịa Use this ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Ana m na-agụ {name} maka onye inyeaka gị…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Agụla m {name} ọhụrụ maka onye inyeaka gị. A malitebeghị iji nke ọhụrụ: lelee ya pịa Use this ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Agbakwunyela m {name} na ihe onye inyeaka gị maara, mana a ka na-agụ ya. Lee ya mgbe otu nkeji gasịrị pịa Use this ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Enweghị m ike ịgbakwunye akwụkwọ ahụ: {why}. Lee ihe onye inyeaka gị maara ebe a: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Nke ahụ bụ akwụkwọ Word ochie (.doc), nke Taskiem na-enweghị ike ịgụ. Chekwaa ya dị ka .docx ma ọ bụ PDF zitekwa ya ọzọ.",
+      "reviewed": false
     }
   }
 }

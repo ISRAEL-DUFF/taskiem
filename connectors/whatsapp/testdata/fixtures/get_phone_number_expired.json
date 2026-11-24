@@ -4,6 +4,9 @@
   "path": "/106540352242922",
   "headers": {
    "Authorization": "Bearer EAAtest"
+  },
+  "query": {
+   "fields": "id,display_phone_number,verified_name,quality_rating,code_verification_status,messaging_limit_tier,status,name_status"
   }
  },
  "response": {

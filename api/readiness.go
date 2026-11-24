@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -17,14 +18,18 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/access"
 	"github.com/israel-duff/taskiem/engine/ai/builder"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/expansion"
 	"github.com/israel-duff/taskiem/engine/expr"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/policy"
+	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/templates"
 )
@@ -144,6 +149,8 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 	savedUse := map[string][]*wd.Step{} // saved things by expression (saved objects S3)
 	var tables, roles []use
 	var caps []*wd.Step // capability steps: their connection is any rail that can
+	var speechSteps, aiSteps []*wd.Step
+	areaSteps := map[areas.Area][]*wd.Step{} // steps of a part of Taskiem a business turns on (I4)
 	var policies []use
 	readExprs := func(st *wd.Step, v any) {
 		walkExpressions(v, func(src string) {
@@ -192,12 +199,21 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if st.Form != nil && st.Form.To.Role != "" {
 			roles = append(roles, use{st, st.Form.To.Role})
 		}
+		if st.Type == "ai" {
+			aiSteps = append(aiSteps, st)
+		}
+		if a, ok := areas.ConnectorArea(st.Connector); ok && st.Connector != "" {
+			areaSteps[a] = append(areaSteps[a], st)
+		}
 		if st.Type == "capability" {
 			caps = append(caps, st)
 			return
 		}
 		if st.Connector == "" {
 			return
+		}
+		if strings.HasPrefix(st.Connector, "speech@") {
+			speechSteps = append(speechSteps, st)
 		}
 		c, ok := reg.Get(st.Connector)
 		if !ok || c.Manifest.Auth.Type == "" || c.Manifest.Auth.Type == "none" {
@@ -214,6 +230,20 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 			}
 		}
 	})
+	// The trigger's own connection (decision 0074 C9): a workflow that
+	// starts on a provider's events needs that provider connected, as a
+	// step that calls it does.
+	if d.Trigger.Type == "connector_event" {
+		ref, _ := d.Trigger.Config["connector"].(string)
+		if c, ok := reg.Get(ref); ok && c.Manifest.Auth.Type != "" && c.Manifest.Auth.Type != "none" {
+			name, _ := d.Trigger.Config["connection"].(string)
+			conns = append(conns, struct {
+				step            *wd.Step
+				connector, name string
+				service         string
+			}{nil, c.Manifest.ID, name, c.Manifest.Name})
+		}
+	}
 	// Roles named by the policies the approvals use.
 	for _, u := range policies {
 		var doc []byte
@@ -280,6 +310,43 @@ func (s *Server) readinessWith(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		if len(caps) > 0 {
 			if err := capabilityNeeds(ctx, tx, l, env, caps, reg, add); err != nil {
 				return nil, err
+			}
+		}
+		// Files customers send are scanned before a run keeps them; with no
+		// scanner on this Taskiem every one is refused (decision 0074 gap 7).
+		if s.Media == nil || s.Media.Scanner == nil {
+			for _, c := range conns {
+				if c.step != nil && personFileAction[c.connector+"/"+c.step.Action] {
+					add(key{"setup", "file_scanner", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+						Message: tr(l, "ready.file_scanner")}, c.step)
+				}
+			}
+		}
+		if err := s.speechNeeds(ctx, tx, tenant, env, l, speechSteps, add); err != nil {
+			return nil, err
+		}
+		if err := s.allowanceNeeds(ctx, tx, tenant, env, l, aiSteps, speechSteps, add); err != nil {
+			return nil, err
+		}
+		if err := areaNeeds(ctx, tx, tenant, env, l, d, areaSteps, add); err != nil {
+			return nil, err
+		}
+		if err := deliveryNeeds(ctx, tx, tenant, env, l, d, reg, add); err != nil {
+			return nil, err
+		}
+		if d.Trigger.Type == "connector_event" {
+			// Meta sends WhatsApp messages only to a callback URL set by
+			// hand in its App Dashboard (decision 0074 C8): say exactly
+			// what to set. Not blocking: Taskiem cannot see Meta's side.
+			if ref, _ := d.Trigger.Config["connector"].(string); ref == "whatsapp@1" {
+				name, _ := d.Trigger.Config["connection"].(string)
+				q := "?env=" + url.QueryEscape(env)
+				if name != "" {
+					q += "&connection=" + url.QueryEscape(name)
+				}
+				hook := s.hooksBase() + "/" + tenant.String() + "/connectors/whatsapp@1/messages" + q
+				add(key{"setup", "whatsapp_callback", "whatsapp", env}, readyNeed{Service: "WhatsApp", Problem: "setup",
+					Message: tr(l, "ready.whatsapp_callback", "service", "WhatsApp", "url", hook)}, nil)
 			}
 		}
 		if d.Trigger.Type == "capability_event" {
@@ -456,6 +523,10 @@ func walkExpressions(v any, fn func(string)) {
 		}
 	}
 }
+
+// personFileAction are the connector actions that keep a file a person
+// sent (scanned before it is kept).
+var personFileAction = map[string]bool{"whatsapp/get_media": true, "telegram/get_file": true}
 
 // needMessage says a need in plain words.
 func needMessage(l lang.Tag, kind, problem, service, name string) string {
@@ -840,4 +911,186 @@ func railsFor(reg connector.Lookup, uses string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// speechNeeds: a workflow that hears or speaks (speech@1, docs/speech.md)
+// needs the service on this Taskiem and the owner's "Voice in workflows"
+// switch on; without either every such step fails at once.
+func (s *Server) speechNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, steps []*wd.Step, add func(readyKey, readyNeed, *wd.Step)) error {
+	if len(steps) == 0 {
+		return nil
+	}
+	uses := false
+	for _, st := range steps {
+		switch st.Action {
+		case "transcribe":
+			uses = true
+			if !s.Speech.CanHear() {
+				add(readyKey{"setup", "speech_hear", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+					Message: tr(l, "ready.speech_hear")}, st)
+			}
+		case "speak":
+			uses = true
+			if !s.Speech.CanSpeak() {
+				add(readyKey{"setup", "speech_speak", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "setup", Blocking: true,
+					Message: tr(l, "ready.speech_speak")}, st)
+			}
+		}
+	}
+	if !uses {
+		return nil // cannot_hear needs neither
+	}
+	on := false
+	err := tx.QueryRow(ctx, `SELECT workflow_voice FROM tenant_channel_settings WHERE tenant_id = $1`, tenant).Scan(&on)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	if !on {
+		for _, st := range steps {
+			if st.Action == "transcribe" || st.Action == "speak" {
+				add(readyKey{"setting", "voice_in_workflows", "", env}, readyNeed{Service: "Taskiem", Problem: "off", Blocking: true,
+					Message: tr(l, "ready.voice_in_workflows")}, st)
+			}
+		}
+	}
+	return nil
+}
+
+// allowanceNeeds: this month's allowance for AI answers or for voice used
+// up (decision 0074 D7, L10). Not blocking: an ai step answers with its
+// fallback and a voice note with the fixed answers until the month turns
+// (AI answers beyond it are billed on a plan with overage, and no need is
+// shown then).
+func (s *Server) allowanceNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, ai, voice []*wd.Step, add func(readyKey, readyNeed, *wd.Step)) error {
+	if len(ai) == 0 && len(voice) == 0 {
+		return nil
+	}
+	lim, err := s.Store.LimitsFor(ctx, tenant)
+	if err != nil {
+		return err
+	}
+	if len(ai) > 0 && lim.AIStepMonthlyTokens > 0 {
+		used, err := runtime.AIStepTokensThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		billed := false
+		if s.Billing != nil {
+			if rate, err := s.Billing.AIOverage(ctx, tenant); err == nil && rate > 0 {
+				billed = true
+			}
+		}
+		if used >= lim.AIStepMonthlyTokens && !billed {
+			for _, st := range ai {
+				add(readyKey{"setup", "ai_allowance", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "limit",
+					Message: tr(l, "ready.ai_allowance")}, st)
+			}
+		}
+	}
+	hears := false
+	for _, st := range voice {
+		hears = hears || st.Action == "transcribe" || st.Action == "speak"
+	}
+	if hears && lim.SpeechSecondsMonthly > 0 {
+		u, err := speech.UsageThisMonth(ctx, tx, tenant)
+		if err != nil {
+			return err
+		}
+		if int64(u.Seconds()) >= lim.SpeechSecondsMonthly {
+			for _, st := range voice {
+				if st.Action == "transcribe" || st.Action == "speak" {
+					add(readyKey{"setup", "voice_allowance", "taskiem", env}, readyNeed{Service: "Taskiem", Problem: "limit",
+						Message: tr(l, "ready.voice_allowance")}, st)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// deliveryNeeds: a chat trigger whose provider sends its messages to an
+// address Taskiem registers (a Telegram bot's webhook, set when the
+// workflow is deployed) that the provider refused or stopped sending to.
+// Not blocking: Taskiem keeps trying, and a new token mends most.
+func deliveryNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, d *wd.Definition, reg connector.Lookup, add func(readyKey, readyNeed, *wd.Step)) error {
+	if d.Trigger.Type != "connector_event" {
+		return nil
+	}
+	ref, _ := d.Trigger.Config["connector"].(string)
+	trig, _ := d.Trigger.Config["trigger"].(string)
+	c, ok := reg.Get(ref)
+	if !ok {
+		return nil
+	}
+	spec, ok := c.Manifest.Triggers[trig]
+	if !ok || !spec.PerConnection() {
+		return nil
+	}
+	name, _ := d.Trigger.Config["connection"].(string)
+	if name == "" {
+		// The connection the subscription names, as deploying resolved it
+		// (remote.DeclareInUse): the only active one.
+		rows, err := tx.Query(ctx, `SELECT name FROM connections WHERE tenant_id = $1 AND environment = $2 AND connector = $3 AND status = 'active' ORDER BY name LIMIT 2`,
+			tenant, env, c.Manifest.ID)
+		if err != nil {
+			return err
+		}
+		active, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		if len(active) == 1 {
+			name = active[0]
+		}
+	}
+	subs, err := remote.List(ctx, tx, `environment = $1 AND connector = $2 AND trigger_name = $3 AND desired = 'present' AND (connection IS NULL OR connection = $4)`,
+		env, c.Ref(), trig, name)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		switch sub.Health {
+		case "failed", "broken", "missing", "paused", "failing":
+			why := ""
+			if sub.LastError != nil {
+				why = pii.Redact(*sub.LastError)
+			} else if sub.StatusReason != nil {
+				why = *sub.StatusReason
+			}
+			svc := c.Manifest.Name
+			add(readyKey{"setup", "delivery", c.Manifest.ID, env}, readyNeed{Service: svc, Problem: "reconnect", Connector: c.Manifest.ID,
+				Message: tr(l, "ready.delivery", "service", svc, "why", why)}, nil)
+			return nil
+		}
+	}
+	return nil
+}
+
+// areaNeeds: a step (or the trigger) of a part of Taskiem the business
+// has turned off (invoices are Money, stock@1 Stock: decision 0074 I4).
+// Such a step fails at once, so publishing waits for it to be turned on.
+func areaNeeds(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, l lang.Tag, d *wd.Definition, steps map[areas.Area][]*wd.Step,
+	add func(readyKey, readyNeed, *wd.Step)) error {
+	trig, trigOK := areas.TriggerArea(d.Trigger.Type)
+	for _, a := range areas.All {
+		if len(steps[a]) == 0 && (!trigOK || trig != a) {
+			continue
+		}
+		on, err := areas.Enabled(ctx, tx, tenant, a)
+		if err != nil {
+			return err
+		}
+		if on {
+			continue
+		}
+		k := readyKey{"setting", "area_" + string(a), "", env}
+		n := readyNeed{Service: "Taskiem", Problem: "off", Blocking: true, Message: tr(l, "ready.area_off", "area", areas.Name(a))}
+		if trigOK && trig == a {
+			add(k, n, nil)
+		}
+		for _, st := range steps[a] {
+			add(k, n, st)
+		}
+	}
+	return nil
 }

@@ -130,7 +130,7 @@ func (o *OpenAI) Transcribe(ctx context.Context, a Audio) (Transcript, error) {
 		}
 		_ = json.Unmarshal(raw, &e)
 		// The provider's message may quote the request; only its kind is kept.
-		return Transcript{}, fmt.Errorf("voice: the transcription service answered %s (%s %v)", resp.Status, e.Error.Type, e.Error.Code)
+		return Transcript{}, &ServiceError{Service: "transcription", Status: resp.StatusCode, Kind: fmt.Sprintf("%s %v", e.Error.Type, e.Error.Code)}
 	}
 	var out struct {
 		Text      string `json:"text"`

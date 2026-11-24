@@ -1,38 +1,45 @@
 {
-  "id": "subscription-outage-notice",
-  "title": "Tell your subscribers about an outage",
-  "summary": "When your network tool reports a problem, text every active subscriber (or just one area) what is wrong.",
-  "description": "Your monitoring or network tool calls this workflow's web address with a message, and optionally an area, sending the key Taskiem shows with the workflow. Every active subscriber in your subscribers table (only those in that area, when you name one) gets the message by SMS from your business. Call it again to say it is fixed. Each call is sent once, even if your tool repeats it. One run covers up to 1,000 subscribers: if you have more, you are told.",
+  "id": "subscription-notice",
+  "title": "Tell your subscribers something",
+  "summary": "When something happens, such as a fault, a closure or a change, text every active subscriber (or just one area) what to know.",
+  "description": "Another tool of yours (a monitoring tool, your booking system, a form, a person with a button) calls this workflow's web address with a message, and optionally an area, sending the key Taskiem shows with the workflow. Every active subscriber in your subscribers table (only those in that area, when you name one) gets the message by SMS from your business. Use it for an outage and its fix, a closed day, a new price or anything else they should know. Each call is sent once, even if your tool repeats it. One run covers up to 1,000 subscribers.",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
     "outage",
     "sms",
-    "alerts",
-    "customers"
+    "customers",
+    "announcement"
   ],
   "keywords": [
+    "notice",
+    "notify",
+    "announce",
+    "announcement",
+    "tell everyone",
+    "everyone",
+    "message all",
+    "subscribers",
+    "members",
     "outage",
     "down",
-    "network",
     "fault",
     "problem",
-    "service",
-    "interruption",
+    "closed",
+    "closure",
+    "maintenance",
+    "price change",
     "internet",
     "isp",
     "broadband",
-    "maintenance",
-    "notice",
-    "announce",
-    "announcement",
-    "subscribers",
-    "everyone"
+    "gym",
+    "membership",
+    "service"
   ],
   "requires": [
     "subscribers",
-    "outage",
-    "network down"
+    "notice",
+    "tell everyone"
   ],
   "connectors": [
     "xenibase@1",
@@ -45,17 +52,17 @@
       "title": "Business name",
       "description": "How your customers know you; it starts every message.",
       "required": true,
-      "example": "Fibre Link",
+      "example": "Sunrise Fitness",
       "max_length": 60
     },
     {
       "name": "path",
       "type": "string",
       "title": "Web address path",
-      "description": "The path your network tool calls.",
+      "description": "The path the other tool calls.",
       "required": false,
-      "default": "/network/notice",
-      "example": "/network/notice",
+      "default": "/subscribers/notice",
+      "example": "/subscribers/notice",
       "pattern": "^/[A-Za-z0-9/_.-]{1,80}$"
     },
     {
@@ -80,8 +87,8 @@
     "schema": "wd/v1",
     "id": "wf_subscriptionOutageNotice",
     "version": 1,
-    "name": "Tell your subscribers about an outage",
-    "description": "Texts every active subscriber, or those in one area, the message your network tool sends.",
+    "name": "Tell your subscribers something",
+    "description": "Texts every active subscriber, or those in one area, the message another tool of yours sends.",
     "trigger": {
       "type": "webhook",
       "config": {

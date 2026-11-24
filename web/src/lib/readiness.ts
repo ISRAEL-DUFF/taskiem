@@ -4,14 +4,27 @@
 // this decides how the web app offers each one.
 
 export interface ReadyNeed {
-  kind: "connection" | "variable" | "secret" | "table" | "role" | "field" | "saved";
+  kind: "connection" | "variable" | "secret" | "table" | "role" | "field" | "setup" | "setting" | "saved";
   /** "" for a connection a step does not name. */
   name: string;
   connector?: string;
   service?: string;
-  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); never blocking.
+  /** support: the connection's service must turn a feature on for the business (Paystack's Pay with Transfer); setup: something to set in the service's own dashboard (Meta's callback URL). Never blocking.
    * invalid: a saved thing's name no saved thing can have; the message says so. */
-  problem: "missing" | "expired" | "disabled" | "ambiguous" | "nobody" | "chat_id" | "cannot" | "support" | "invalid";
+  problem:
+    | "missing"
+    | "expired"
+    | "disabled"
+    | "ambiguous"
+    | "nobody"
+    | "chat_id"
+    | "cannot"
+    | "support"
+    | "setup"
+    | "off"
+    | "limit"
+    | "reconnect"
+    | "invalid";
   environment: string;
   steps: { id: string; name: string }[];
   /** Publishing waits for it: a run would fail at once. */
@@ -37,7 +50,13 @@ export interface Readiness {
 
 /** The fix a need offers, done in place. */
 export type Fix =
-  | { kind: "connect"; connector: string; environment: string; name: string; service: string }
+  | {
+      kind: "connect";
+      connector: string;
+      environment: string;
+      name: string;
+      service: string;
+    }
   | { kind: "connect_rail"; rails: string[]; environment: string; name: string }
   | { kind: "choose_connection"; connector: string; service: string }
   | { kind: "set_variable"; environment: string; name: string }
@@ -47,6 +66,14 @@ export type Fix =
   | { kind: "ask_phone"; field: string }
   | { kind: "save_thing"; name: string }
   | { kind: "ask_support"; service: string }
+  /** Something to do outside Taskiem (a provider's dashboard): the message says what. */
+  | { kind: "outside"; service: string }
+  /** A switch the owner turns on in Settings (Voice in workflows). */
+  | { kind: "turn_on"; setting: string }
+  /** This month's allowance used up: a bigger plan, or wait for the month to turn. */
+  | { kind: "plan" }
+  /** A provider stopped sending messages (a bot's webhook refused): check or connect it again. */
+  | { kind: "reconnect"; service: string }
   /** Nothing to do here but what the message says. */
   | { kind: "none" };
 
@@ -56,21 +83,53 @@ export const DEFAULT_CONNECTION = "main";
 export function fixFor(n: ReadyNeed): Fix {
   switch (n.kind) {
     case "connection":
-      if (n.problem === "support") return { kind: "ask_support", service: n.service ?? n.connector ?? "" };
-      if (n.capability && n.problem !== "ambiguous") return { kind: "connect_rail", rails: n.rails ?? [], environment: n.environment, name: n.name || DEFAULT_CONNECTION };
-      if (n.capability) return { kind: "choose_connection", connector: "", service: n.service ?? "" };
-      if (n.problem === "ambiguous") return { kind: "choose_connection", connector: n.connector ?? "", service: n.service ?? n.connector ?? "" };
-      return { kind: "connect", connector: n.connector ?? "", environment: n.environment, name: n.name || DEFAULT_CONNECTION, service: n.service ?? n.connector ?? "" };
+      if (n.problem === "support")
+        return { kind: "ask_support", service: n.service ?? n.connector ?? "" };
+      if (n.capability && n.problem !== "ambiguous")
+        return {
+          kind: "connect_rail",
+          rails: n.rails ?? [],
+          environment: n.environment,
+          name: n.name || DEFAULT_CONNECTION,
+        };
+      if (n.capability)
+        return {
+          kind: "choose_connection",
+          connector: "",
+          service: n.service ?? "",
+        };
+      if (n.problem === "ambiguous")
+        return {
+          kind: "choose_connection",
+          connector: n.connector ?? "",
+          service: n.service ?? n.connector ?? "",
+        };
+      return {
+        kind: "connect",
+        connector: n.connector ?? "",
+        environment: n.environment,
+        name: n.name || DEFAULT_CONNECTION,
+        service: n.service ?? n.connector ?? "",
+      };
     case "variable":
       return { kind: "set_variable", environment: n.environment, name: n.name };
     case "secret":
       return { kind: "set_secret", environment: n.environment, name: n.name };
     case "table":
-      return n.table ? { kind: "make_table", name: n.name, table: n.table } : { kind: "make_table", name: n.name };
+      return n.table
+        ? { kind: "make_table", name: n.name, table: n.table }
+        : { kind: "make_table", name: n.name };
     case "role":
       return { kind: "give_role", role: n.name };
     case "field":
       return { kind: "ask_phone", field: n.name };
+    case "setup":
+      if (n.problem === "limit") return { kind: "plan" };
+      if (n.problem === "reconnect")
+        return { kind: "reconnect", service: n.service ?? n.connector ?? "" };
+      return { kind: "outside", service: n.service ?? n.connector ?? "" };
+    case "setting":
+      return { kind: "turn_on", setting: n.name };
     case "saved":
       // A business's saved thing the workflow reads (saved.price_list is
       // @price-list); a name no saved thing can have is the workflow's to fix.
@@ -91,7 +150,11 @@ export function needsToShow(needs: ReadyNeed[], advanced = false): ReadyNeed[] {
   const key = (n: ReadyNeed) => `${n.kind}/${n.name}/${n.connector ?? ""}`;
   const seen = new Set<string>();
   const out: ReadyNeed[] = [];
-  const sorted = [...needs].sort((a, b) => Number(b.blocking) - Number(a.blocking) || Number(b.environment === "prod") - Number(a.environment === "prod"));
+  const sorted = [...needs].sort(
+    (a, b) =>
+      Number(b.blocking) - Number(a.blocking) ||
+      Number(b.environment === "prod") - Number(a.environment === "prod"),
+  );
   for (const n of sorted) {
     if (n.environment !== "prod" && !n.blocking && !advanced) continue;
     if (seen.has(key(n))) continue;

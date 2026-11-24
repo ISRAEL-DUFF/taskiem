@@ -133,3 +133,22 @@ func TestMaskerPhones(t *testing.T) {
 		t.Errorf("an amount after a phone: %s", got)
 	}
 }
+
+// A conversation's words go through; its identifiers do not.
+func TestMaskKeepingWords(t *testing.T) {
+	taint := Taint{}
+	taint.Add("Abeg una get rice? Call me on 08031234567", "other")
+	taint.Add("Adaeze Okafor", "name")
+	m := NewMasker(taint)
+	got := m.MaskKeepingWords("Abeg una get rice? Call me on 08031234567")
+	if !strings.Contains(got, "Abeg una get rice?") || strings.Contains(got, "08031234567") || !strings.Contains(got, "[[phone_1]]") {
+		t.Fatalf("masked %q", got)
+	}
+	if got := m.MaskKeepingWords("I am Adaeze Okafor"); got != "I am [[name_1]]" {
+		t.Fatalf("a name: %q", got)
+	}
+	// The whole message is still masked where words are not let through.
+	if got := m.Mask("Abeg una get rice? Call me on 08031234567"); strings.Contains(got.(string), "rice") {
+		t.Fatalf("Mask let the words through: %v", got)
+	}
+}

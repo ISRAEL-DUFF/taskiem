@@ -8208,6 +8208,166 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "speech.cannot_hear.empty": {
+      "text": "Abeg no vex, I no hear anything for that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Abeg no vex, that voice note too long for me. Abeg send short one or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Abeg no vex, I no fit play that voice note. Abeg record am again or type your message.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Abeg no vex, I no fit listen to voice note now. Abeg type your message, I go reply you.",
+      "reviewed": false
+    },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Add *{name}* with {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Start to keep stock with *{name}*: {qty}{cost}? Taskiem go make products table for your items.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "E don record for *{name}*. E go reach your products table soon.",
+      "reviewed": false
+    },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Hello! Na {business} automatic assistant you dey chat with. E dey read your message and listen to your voice note to answer you. Reply PERSON if you wan talk to person for {business}, or STOP make the assistant stop.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "You don send plenty message for short time. Abeg wait small, I go answer you again.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "OK. The assistant no go answer you again. Reply START if you wan make e start again.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Welcome back! The assistant go dey answer you again. Wetin I fit do for you?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "OK, I don tell person for {business} make dem answer you. Dem go reply you for here as dem fit.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Sorry, na only text message I fit read and voice note I fit listen. Abeg type your message or send voice note.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Make I check am with the team, I go come back to you.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Di AI answers wey your plan give you for dis month don finish, so di AI steps for dis workflow go stop until next month: di one wey get fallback go use am (your assistant go tell customers say person go get back to dem). Check your plan, or ask di person wey dey run your Taskiem.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Di voice wey your plan give you for dis month don finish, so dis workflow no fit hear voice notes or answer with voice until next month: customers wey send one go dey asked make dem write am. Check your plan, or ask di person wey dey run your Taskiem.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} no dey send dis workflow messages come Taskiem: {why}. Taskiem go still dey try; check di connection for Connections, and connect di bot again if dem change am for BotFather.",
+      "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} never dey on for dis business, so dis workflow no fit do wetin e need from am. Owner fit on am for Settings, What your business uses.",
+      "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Na only di people wey dey manage {org} settings fit add to wetin im assistant sabi.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Add documents for your assistant for web: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Wetin your assistant sabi no dey dis Taskiem.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Dat document too big to read from chat. Add am for web: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Dat document na scan wey no get text, and Taskiem no fit read scan yet. Send one wey get text wey you fit select, or type wetin e talk.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "I no fit read dat document. Send PDF or Word (.docx) file wey no get password.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "I don add {name} to wetin your assistant sabi. Dem never dey use am: check am and press Use this for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "I dey read {name} for your assistant…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "I don read di new {name} for your assistant. Dem never dey use di new one: check am and press Use this for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "I don add {name} to wetin your assistant sabi, but I still dey read am. Look am after one minute and press Use this for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "I no fit add dat document: {why}. See wetin your assistant sabi for here: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Dat na old Word document (.doc) wey Taskiem no fit read. Save am as .docx or PDF and send am again.",
+      "reviewed": false
     }
   }
 }

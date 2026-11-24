@@ -1,8 +1,8 @@
 {
   "id": "subscription-reconnect-on-payment",
-  "title": "Switch a subscriber back on when they pay",
-  "summary": "When an invoice that covers a month is paid in full, find the subscriber by phone, switch them back on if they were off, move their renewal date on, and thank them.",
-  "description": "Starts the moment one of your invoices is paid in full. Looks the customer up in your subscribers table by their phone number (the last ten digits, so +234 and 0 numbers match). If they are there, their renewal date moves on by the days you choose (from today, or from their current date if it is later), they are marked active, and, if they had been switched off, they are switched back on by calling the address your system gives for that. Then they get a text saying they are back. A payment smaller than the subscriber's monthly price (an equipment sale, a part-payment that finished an old invoice) renews no one. Invoices for people who are not subscribers do nothing, and neither does a switched-off subscriber with no account on your system filled in. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses).",
+  "title": "Switch a subscriber back on, on your system, when they pay",
+  "summary": "When an invoice that covers a month is paid in full, find the subscriber by phone, switch them back on in your own system if they were off, move their renewal date on, and thank them.",
+  "description": "Starts the moment one of your invoices is paid in full. Looks the customer up in your subscribers table by their phone number (the last ten digits, so +234 and 0 numbers match). If they are there, their renewal date moves on by the days you choose (from today, or from their current date if it is later), they are marked active, and, if they had been switched off, they are switched back on by calling the address your system gives for that. Then they get a text saying they are back. A payment smaller than the subscriber's monthly price (an equipment sale, a part-payment that finished an old invoice) renews no one. Invoices for people who are not subscribers do nothing, and neither does a switched-off subscriber with no account on your system filled in. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). A subscriber with no account reference is renewed and marked active without calling your system. For a business with no system to switch things on in, use \"Renew a subscriber when they pay\".",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -12,19 +12,22 @@
     "payment"
   ],
   "keywords": [
-    "reconnect",
-    "switch on",
-    "restore",
+    "activate",
     "back on",
-    "paid",
-    "payment",
-    "subscription",
-    "subscriber",
-    "renew",
+    "billing panel",
+    "broadband",
     "internet",
     "isp",
-    "broadband",
-    "activate"
+    "paid",
+    "payment",
+    "radius",
+    "reconnect",
+    "renew",
+    "restore",
+    "router",
+    "subscriber",
+    "subscription",
+    "switch on"
   ],
   "requires": [
     "subscribers",
@@ -224,8 +227,8 @@
               ]
             },
             {
-              "name": "was_on",
-              "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0 && !(has(steps.find.output.rows[0].status) && steps.find.output.rows[0].status == 'suspended')",
+              "name": "no_system_call",
+              "when": "=has(steps.find.output.rows) && size(steps.find.output.rows) > 0 && !(has(steps.find.output.rows[0].status) && steps.find.output.rows[0].status == 'suspended' && has(steps.find.output.rows[0].account_ref) && steps.find.output.rows[0].account_ref != null && string(steps.find.output.rows[0].account_ref) != '')",
               "steps": [
                 {
                   "id": "renew_on",

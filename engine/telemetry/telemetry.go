@@ -57,6 +57,34 @@ var (
 	ChatStreamPolls = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_chat_stream_polls_total", Help: "Looks the open chat streams made at what changed (about one a second each).",
 	})
+	// FileScanSeconds is how long the malware check of a file a person
+	// sent takes (run files, decision 0074): it is part of every voice
+	// reply's wait.
+	FileScanSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_file_scan_seconds", Help: "Time to scan a file a person sent before a run keeps it.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+	})
+	// RunFilesKept counts run files kept, by whether a person sent them and
+	// by outcome (kept, refused, over_allowance).
+	RunFilesKept = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_run_files_total", Help: "Run files offered for keeping, by origin and outcome.",
+	}, []string{"origin", "outcome"})
+	// AIStepFallbacks counts ai steps that answered with their fallback
+	// because the model could not, by the failure's kind.
+	AIStepFallbacks = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_ai_step_fallbacks_total", Help: "AI steps answered with their fallback, by why the model could not answer.",
+	}, []string{"kind"})
+	// SpeechRequests counts speech@1's calls (docs/speech.md), by kind
+	// (hear, speak) and outcome (done, not_heard, refused, failed).
+	SpeechRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_speech_requests_total", Help: "Speech requests from workflows, by kind and outcome.",
+	}, []string{"kind", "outcome"})
+	// SpeechSeconds is how long the speech service took, by kind: part of
+	// every voice reply's wait.
+	SpeechSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "taskiem_speech_duration_seconds", Help: "Time the speech service took to hear a voice note or speak a reply.",
+		Buckets: []float64{0.25, 0.5, 1, 2, 3, 5, 8, 13, 20, 30},
+	}, []string{"kind"})
 	ChatStreamPollSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_chat_stream_poll_duration_seconds", Help: "Time one chat stream look took (its database transaction).",
 		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1},

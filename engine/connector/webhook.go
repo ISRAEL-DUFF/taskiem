@@ -42,6 +42,8 @@ type TriggerSpec struct {
 	// Registration remote: Taskiem creates, updates and deletes the
 	// provider's subscription itself (decision 0021), and verifies
 	// deliveries with the secret the provider returned, kept in the vault.
+	// connection: one subscription per connection; connection_when_used:
+	// the same, held only while a deployed workflow uses it.
 	Registration string `json:"registration"`
 	// Options is the JSON Schema of the workflow trigger's options
 	// (tables, columns...), given to the registrar and the enricher.
@@ -78,7 +80,54 @@ type TriggerSpec struct {
 	// Example is a delivery as a run sees it ({body, item}), for dry runs
 	// and the docs: a split trigger's item cannot be guessed.
 	Example *TriggerExample `json:"example,omitempty"`
+	// Conversation, on a chat channel's trigger, says how to read an event
+	// as a customer's message, for a workflow's customer guard (decision
+	// 0074 V6; rule 23).
+	Conversation *ConversationSpec `json:"conversation,omitempty"`
 }
+
+// ConversationSpec reads an event as a customer's message: expressions
+// over the event (body, item) like the trigger's others. An event whose
+// Sender is empty is not a customer's new message.
+type ConversationSpec struct {
+	// Sender is who wrote: a stable id on the channel (a WhatsApp number,
+	// a Telegram chat id), the same value send actions reply to.
+	Sender string `json:"sender"`
+	// SenderCategory is the sender's personal-data category (phone,
+	// other), as erasure names a person.
+	SenderCategory string `json:"sender_category"`
+	// Private is true for a one-to-one chat with the business.
+	Private string `json:"private"`
+	// Kind is the message's kind: text, voice, audio, image, video,
+	// document, sticker, location, contact, reaction, button, or other.
+	Kind string `json:"kind"`
+	// Text is what it says (a text, a caption, a button's words), for the
+	// guard's words (STOP, a person) and the language of its answers.
+	Text string `json:"text"`
+	// Media is the id of a voice note or audio the guard fetches before
+	// the run can wait in a queue, with Fetch, a read action taking it as
+	// FetchInput (and sender) and answering {file}.
+	Media      string `json:"media,omitempty"`
+	Fetch      string `json:"fetch,omitempty"`
+	FetchInput string `json:"fetch_input,omitempty"`
+	// Reply is how a person answers a customer by hand (V7): the action
+	// that sends text (its input fields To and Text), and, for WhatsApp,
+	// Template, the action that sends an approved template, used outside
+	// the 24-hour window, and Templates, the read action that lists them.
+	Reply *ReplySpec `json:"reply,omitempty"`
+}
+
+// ReplySpec is how a person answers a customer by hand.
+type ReplySpec struct {
+	Action    string `json:"action"`
+	To        string `json:"to"`
+	Text      string `json:"text"`
+	Template  string `json:"template,omitempty"`
+	Templates string `json:"templates,omitempty"`
+}
+
+// ConversationKinds are the kinds of message a conversation reads.
+var ConversationKinds = []string{"text", "voice", "audio", "image", "video", "document", "sticker", "location", "contact", "reaction", "button", "other"}
 
 // TriggerExample is an example delivery: its body and, for a split
 // trigger, one item.
@@ -162,8 +211,20 @@ type RouteSpec struct {
 func (t TriggerSpec) Remote() bool { return t.Registration == "remote" }
 
 // PerConnection reports whether Taskiem registers this trigger at the
-// provider once for each connection, whichever workflows use it.
-func (t TriggerSpec) PerConnection() bool { return t.Registration == "connection" }
+// provider once for each connection, whichever workflows use it: from
+// when the connection is saved (registration: connection), or only while
+// a deployed workflow uses it (connection_when_used).
+func (t TriggerSpec) PerConnection() bool {
+	return t.Registration == "connection" || t.Registration == "connection_when_used"
+}
+
+// WhenUsed reports whether a connection's subscription to this trigger is
+// held only while a workflow deployed in its environment starts on it
+// (registration: connection_when_used): declared when such a workflow is
+// deployed and released when the last one leaves, never when the
+// connection is saved, so a connection used only by steps leaves the
+// provider as it found it (a Telegram bot's one webhook).
+func (t TriggerSpec) WhenUsed() bool { return t.Registration == "connection_when_used" }
 
 // Registered reports whether Taskiem registers this trigger at the
 // provider at all, so the connector supplies a registrar for it.

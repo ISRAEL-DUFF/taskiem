@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"maps"
 	"math"
 	"slices"
 	"sort"
@@ -147,6 +148,10 @@ func (l *Library) Match(goal string, n int) []Match {
 	for _, w := range goalSeq {
 		goalWords[w] = true
 	}
+	// The goal's words in one order, so a score sums the same way on every
+	// call (a float sum in map order varies in its last bits, and two
+	// templates scoring alike swapped places from run to run).
+	words := slices.Sorted(maps.Keys(goalWords))
 	total := float64(len(l.list))
 	var out []Match
 	for i, t := range l.list {
@@ -160,7 +165,7 @@ func (l *Library) Match(goal string, n int) []Match {
 		// Only keywords and tags count here, so another template merely
 		// mentioning the word in its description does not take it away.
 		distinctive := false
-		for w := range goalWords {
+		for _, w := range words {
 			if v := ix.weights[i][w]; v > 0 {
 				df := ix.df[w]
 				if v >= 2 {
@@ -218,6 +223,9 @@ func (l *Library) MatchFor(goal string, n int, holds map[string]bool) []Match {
 	var out []Match
 	at := map[string]int{}
 	for _, m := range l.Match(goal, 0) {
+		if m.Template.Closed(holds) {
+			continue
+		}
 		if by := m.Template.ReplacedWhere.By(holds); by != "" {
 			if t, ok := l.Get(by); ok {
 				if _, seen := at[by]; !seen {

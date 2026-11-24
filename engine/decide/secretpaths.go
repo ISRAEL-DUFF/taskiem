@@ -2,6 +2,7 @@ package decide
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/israel-duff/taskiem/engine/capability"
 	"github.com/israel-duff/taskiem/engine/expr"
@@ -151,4 +152,31 @@ func AuthoredSecretPaths(s *wd.Step, p history.ScheduledPayload) []string {
 		return mappedSecretPaths(s.Capability.Input, resolved, kept, p.Capability.Steps, p.Input)
 	}
 	return kept
+}
+
+// shiftHistoryPaths moves the secret paths under /history down by drop
+// turns, once the first drop turns were cut; paths in the turns cut go.
+func shiftHistoryPaths(paths []string, drop int) []string {
+	out := paths[:0]
+	for _, p := range paths {
+		rest, ok := strings.CutPrefix(p, "/history/")
+		if !ok {
+			out = append(out, p)
+			continue
+		}
+		idx, tail, _ := strings.Cut(rest, "/")
+		n, err := strconv.Atoi(idx)
+		if err != nil {
+			continue
+		}
+		if n -= drop; n < 0 {
+			continue
+		}
+		q := "/history/" + strconv.Itoa(n)
+		if tail != "" {
+			q += "/" + tail
+		}
+		out = append(out, q)
+	}
+	return out
 }

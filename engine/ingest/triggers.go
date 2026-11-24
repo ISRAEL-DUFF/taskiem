@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/robfig/cron/v3"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -122,6 +123,14 @@ type eventConfig struct {
 	events                         []string
 	options                        map[string]any
 	remote                         bool
+	// whenUsed: the connection's subscription is held while a workflow
+	// deployed with this trigger uses it (connection_when_used), for every
+	// event the trigger sends (sends).
+	whenUsed bool
+	sends    []string
+	// guard is the customer guard (decision 0074 V6), on a trigger whose
+	// manifest reads its events as customers' messages.
+	guard *assistant.Config
 }
 
 type scheduleConfig struct {
@@ -173,6 +182,17 @@ func parseEvent(c map[string]any, reg connector.Lookup) (eventConfig, error) {
 		}
 	}
 	e.remote = spec.Remote()
+	e.whenUsed, e.sends = spec.WhenUsed(), spec.Events
+	if g, ok := c["guard"]; ok {
+		if spec.Conversation == nil {
+			return e, fmt.Errorf("trigger %q of %s does not carry customers' messages, so it takes no guard", e.trigger, e.connector)
+		}
+		cfg, err := assistant.ParseConfig(g)
+		if err != nil {
+			return e, err
+		}
+		e.guard = &cfg
+	}
 	opts, given := c["options"]
 	if given {
 		if e.options, ok = opts.(map[string]any); !ok {
@@ -290,10 +310,40 @@ func Sync(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, version int, def
 	return SyncEnvironments(ctx, tx, tenant, wf, envs, version, def, reg, now)
 }
 
+// DeleteTriggers removes wf's registered triggers from envs, in the
+// transaction that undeploys or redeploys it. The connections'
+// subscriptions its connector triggers used are checked afterwards: one
+// held only while used (connection_when_used) is released by the
+// reconciler once no deployed workflow uses it.
+func DeleteTriggers(ctx context.Context, tx pgx.Tx, wf uuid.UUID, envs []string) error {
+	rows, err := tx.Query(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = ANY ($2)
+		RETURNING environment, COALESCE(connector, ''), COALESCE(trigger_name, '')`, wf, envs)
+	if err != nil {
+		return err
+	}
+	type used struct{ env, connector, trigger string }
+	gone, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (used, error) {
+		var u used
+		return u, r.Scan(&u.env, &u.connector, &u.trigger)
+	})
+	if err != nil {
+		return err
+	}
+	for _, u := range gone {
+		if u.connector == "" || u.trigger == "" {
+			continue
+		}
+		if err := remote.CheckUse(ctx, tx, u.env, u.connector, u.trigger); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SyncEnvironments replaces a workflow's triggers in the given environments
 // only, with those of the version deployed there.
 func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs []string, version int, def *wd.Definition, reg connector.Lookup, now time.Time) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM triggers WHERE workflow_id = $1 AND environment = ANY ($2)`, wf, envs); err != nil {
+	if err := DeleteTriggers(ctx, tx, wf, envs); err != nil {
 		return err
 	}
 	if err := Check(def, reg); err != nil {
@@ -336,15 +386,38 @@ func SyncEnvironments(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, envs
 				VALUES ($1, $2, $3, $4, $5, 'webhook', $6, $7, NULLIF($8, ''), $9, $10)`, id, tenant, wf, version, env, w.path, w.auth, w.dedup, WebhookSecret(def), w.options.stored())
 		case "connector_event":
 			e := ev
-			var opts []byte
+			var opts, guard []byte
 			if e.options != nil {
 				opts, _ = json.Marshal(e.options)
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options)
-				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts)
+			if e.guard != nil {
+				guard, _ = json.Marshal(e.guard.Map())
+				// One assistant per channel: two guarded workflows on one
+				// number or bot would each count, notice and answer every
+				// customer.
+				var other string
+				err := tx.QueryRow(ctx, `SELECT w.name FROM triggers t JOIN workflows w ON w.id = t.workflow_id
+					WHERE t.tenant_id = $1 AND t.environment = $2 AND t.type = 'connector_event' AND t.connector = $3 AND t.trigger_name = $4
+					AND t.guard IS NOT NULL AND t.workflow_id <> $5 AND COALESCE(t.connection, '') = $6 LIMIT 1`,
+					tenant, env, e.connector, e.trigger, wf, e.connection).Scan(&other)
+				if err == nil {
+					return fmt.Errorf("%q already answers customers on this %s connection in %s; a channel has one assistant: unpublish it first", other, e.connector, env)
+				}
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO triggers (id, tenant_id, workflow_id, version, environment, type, connector, trigger_name, events, connection, options, guard)
+				VALUES ($1, $2, $3, $4, $5, 'connector_event', $6, $7, $8, NULLIF($9, ''), $10, $11)`, id, tenant, wf, version, env, e.connector, e.trigger, e.events, e.connection, opts, guard)
 			if err == nil && e.remote {
 				_, err = remote.Declare(ctx, tx, tenant, wf, env, version, remote.Declaration{
 					Connector: e.connector, Trigger: e.trigger, Connection: e.connection, Events: e.events, Options: e.options})
+			}
+			// A connection's subscription held while used (a Telegram
+			// bot's webhook) is declared, or repaired, by each workflow
+			// deployed on it; the workflows on one connection share it.
+			if err == nil && e.whenUsed {
+				_, err = remote.DeclareInUse(ctx, tx, tenant, env, e.connector, e.trigger, e.connection, e.sends)
 			}
 		case "capability_event":
 			err = registerCapabilityEvent(ctx, tx, tenant, wf, version, env, c, reg)

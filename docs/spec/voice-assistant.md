@@ -1,0 +1,626 @@
+# Customer voice assistant on WhatsApp and Telegram: gaps and build plan
+
+Date: 2026-11-08 · Status: **for review; decisions taken (section 4), nothing built** · Owner: @EaziDeFi
+
+*Reviewed on 2026-11-08: 32 gaps, 3 decisions and 2 people items added (marked ⊕), two sections added (3.10 knowledge, 3.11 engine, schema and rollout), milestones V2 to V8 extended and V10 added.*
+
+A business wants an assistant its **customers** talk to on the business's WhatsApp number or Telegram bot, by text or voice note. It answers in the customer's language, remembers the conversation, replies by voice when spoken to, and, later, answers questions from the business's own records (a balance, a payment's status) without ever moving money on its own. The reference is an n8n build ("n8n Voice Assistant for WhatsApp and Telegram"), which this plan was checked against step by step.
+
+This page lists **everything Taskiem does not have** for that, with the evidence in the code, then a build plan in milestones. It was written from a read of the repository at `0fdb46e` plus PR 154 on 8 November 2026. Nothing here is built.
+
+## 1. What the assistant must do
+
+| # | Behaviour | From the reference |
+| --- | --- | --- |
+| B1 | Receive a customer's message on a business's WhatsApp number and Telegram bot | Telegram and WhatsApp triggers |
+| B2 | Reduce both to one shape: channel, conversation key, sender, text or voice, media reference | Normalize |
+| B3 | Fetch a voice note's audio | TG Download Voice; WA Get Media URL, Download Media |
+| B4 | Transcribe it, Pidgin included | Prep Audio, Whisper |
+| B5 | Answer with a model, given the last messages of this conversation | AI Agent with Postgres memory |
+| B6 | Reply by voice when the customer spoke, by text when they typed | Reply as voice?, Text to Speech, send audio |
+| B7 | Send the reply on the channel it came from, inside WhatsApp's 24-hour window | send nodes |
+| B8 | Serve only allowed customers, or everyone, as the business chooses | allowlist IF |
+| B9 | Tell the business when it fails | error workflow |
+| B10 | Cap cost and length (reply length, audio length, spend) | Step 6.4 |
+| B11 | Later: read-only tools over the business's records; money moves only after a separate confirmation the model cannot skip | Step 7 |
+| B12 | Be testable before going live, and debuggable after (which step failed, what was said) | Step 5, Executions |
+
+## 2. What already exists and can be used as it is
+
+- **Channels as connectors.** `whatsapp@1` (send text, template, media by link or media id, interactive, mark as read; inbound `messages` trigger with signature check, batch `split`, dedup on the message id, correlation on the sender) and `telegram@1` (send message, photo, document; `update` trigger with secret-token check, dedup on `update_id`, correlation on the chat id). An inbound voice note arrives as its media id (WhatsApp `trigger.item.message.audio.id`; Telegram `trigger.body.message.voice.file_id`), never its bytes.
+- **Branching, loops, waiting.** `branch`, `foreach`, `wait`, `signal` (a run can wait for the same sender's next message by correlation), `on_error`.
+- **One conversation at a time.** `settings.concurrency_key` with `max_concurrency` (`engine/runtime/concurrency.go`): keyed on the sender, a second message waits behind the first, FIFO.
+- **Composition.** `subflow` steps and callable workflows (decisions 0048, 0049): two entry workflows can call one shared assistant workflow with no extra polling hop.
+- **The `ai` step** (decision 0050): one prompt, typed JSON answer, Claude by default, personal data masked with placeholders put back, the tenant's monthly AI budget, the owner's switch, the plan's `ai` feature.
+- **Tables** through `xenibase@1`: insert, read with filters, `order desc` and `limit`, delete by filter. Enough to keep the last N messages per conversation.
+- **List blocks** (PR 154): `groupBy`, `joinBy` and friends for shaping history and records.
+- **Pieces inside Taskiem's own chat that a workflow cannot reach yet:** media download from Meta (`engine/whatsapp/media.go`), Telegram `getFile` (`engine/telegram/client.go`), speech-to-text (`engine/voice`: OpenAI-compatible provider, size and Ogg duration caps, sealed transcripts with retention), language detection (`engine/lang.Detect`), media storage (`engine/media`, Xenibase buckets, signed URLs), malware scanning (ClamAV).
+- **Failure alerts** to owners by WhatsApp, Telegram or email without any rule; alert rules by email, Slack, WhatsApp, webhook.
+- **Fast enough engine path.** Runs start inside the webhook request and workers wake on `NOTIFY`; measured on a dev machine, a short run with three fake provider calls finishes at p95 257 ms (`docs/performance.md`). Model, transcription and speech calls will dominate.
+
+## 3. Everything missing
+
+Each gap says what is missing, the evidence, and how much it matters: **Blocker** (the assistant cannot work without it), **Launch** (needed before a real customer uses it), **Later**.
+
+### 3.1 Channels
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| C1 | `whatsapp@1` cannot fetch inbound media (media id → URL → bytes) | Actions are `get_phone_number`, `list_templates`, `send_text`, `send_template`, `send_media`, `send_interactive`, `mark_as_read` (`connectors/whatsapp/manifest.yaml:30-187`) | Blocker |
+| C2 | `whatsapp@1` cannot upload media (`POST /{phone_number_id}/media`); `send_media` takes only a public link or an existing media id | `whatsapp.go:249-280` | Blocker for voice replies |
+| C3 | `whatsapp@1` cannot send a voice note (`"voice": true`, OGG/Opus); audio goes out as an audio file | audio object carries only `link` or `id` | Launch |
+| C4 | `telegram@1` has no `getFile`/download | `connectors/telegram/telegram.go:47-58` | Blocker |
+| C5 | `telegram@1` has no `sendVoice` or `sendAudio`, and no multipart upload (photo and document by URL or file id only) | same | Blocker for voice replies |
+| C6 | No typing or "recording" indicator on either channel (WhatsApp typing indicator, Telegram `sendChatAction`) | not in either connector | Launch (a 5-second silence reads as broken) |
+| C7 | The `telegram@1` `update` trigger is not registered with Telegram on publish; someone must call `set_webhook` | not `registration: remote` (decision 0021); `docs/integrations/telegram.md:41-45` | Launch |
+| C8 | The `whatsapp@1` trigger is registered by hand in Meta's App Dashboard (callback URL, verify token, `messages` field); nothing guides an owner, and readiness does not flag it | `docs/integrations/whatsapp.md:50-56`; `needs_developer` only for `webhook` triggers (`api/templates.go:121`) | Launch |
+| C9 | Readiness does not check a `connector_event` trigger's own connection (only steps' connections) | `api/readiness.go:161-203, 272-276` | Launch |
+| C10 | A number connected to Taskiem's own channel (own numbers, public menus) cannot also feed `whatsapp@1`: Meta allows one callback URL per app, and the two paths are separate (`/channels/whatsapp/n/<id>` vs `/hooks/<tenant>/connectors/whatsapp@1/messages`) | `engine/whatsapp/graph.go:1-5`; no bridge into `connector_event` | Decision (D1) |
+| C11 | Taskiem's shared platform number and platform bot cannot serve a business's customers: non-members get STOP/START or the public menu (own number only), and free text or voice never starts a business's workflow | `api/whatsapp_chat.go:460-542`; `api/whatsapp_public.go:94-120`; `docs/updates.md:49-53`; decision 0039 | Decision (D1) |
+| C12 | The `whatsapp` trigger type in wd/v1 is an enum value with no config, no ingest path and no runs | `schemas/wd-v1.schema.json:1449`; nothing starts a run with it | Clean-up or build (D1) |
+| C13 | No 24-hour-window tracking for a tenant's own `whatsapp@1` connection; a reply after the window fails with Meta's 131047 as fatal; no fall-back to a template | `whatsapp.go:113-135`; window tracking exists only for the platform channel (`engine/whatsapp/platform.go:301-325`) | Launch |
+| C14 | No template submission or status sync for a tenant's own WhatsApp account (only `list_templates`) | manifest; registry is Taskiem's own | Later (the assistant only answers) |
+| C15 | Telegram's 1 message per second per chat is not modelled | `telegram@1` rate limit is 30/s per connection only | Later |
+| C16 | No connector fixture or test of an inbound voice note on either channel; `docs/integrations/whatsapp.md:69,73` still describes the pre-`split` payload | | Launch (docs fix is small) |
+| C17 ⊕ | A connection without `app_secret` (WhatsApp) or `webhook_secret` (Telegram) receives nothing: every delivery is refused as unsigned (`engine/connector/webhook.go`), which is safe, but both fields are optional and nothing tells the owner why the assistant is silent | `connectors/whatsapp/manifest.yaml:22`; `connectors/telegram/manifest.yaml:16` | Launch (readiness) |
+| C18 ⊕ | The WhatsApp trigger also delivers `status.*` events and Telegram every update kind (edited messages, channel posts, callback queries, group messages); nothing in a recipe yet limits the assistant to new messages in private chats, so a bot added to a Telegram group would answer everyone | `events` on `connector_event`; Telegram `update` | Launch |
+| C19 ⊕ | No defined handling for message kinds other than text and voice: image, video, document, sticker, location, contact, reaction, button reply, unsupported. Each needs a fixed answer or a silent drop, decided per kind | | Launch |
+| C20 ⊕ | Replies longer than a channel allows (4,096 characters on both) are refused, not split | `send_text`/`send_message` limits | Launch |
+| C21 ⊕ | A media download must happen soon: Meta's media URLs last minutes and Telegram's file links an hour, and Telegram bots cannot fetch files over 20 MB. A run that waits in a queue (concurrency, backlog) can find the voice note gone | provider rules | Launch (download first, store, then queue) |
+| C22 ⊕ | A number on the WhatsApp Cloud API cannot be used in the WhatsApp Business app at the same time unless Meta's coexistence applies to it, so staff who answer from the app on their phone lose that number. Owners must be told before connecting | Meta's rules; not in any Taskiem doc | Launch (guide, decision) |
+| C23 ⊕ | No watch on the number's quality rating or messaging limit; a business whose assistant annoys people can be throttled by Meta without knowing | `get_phone_number` returns `quality_rating`; nothing reads it on a schedule | Built (V10) |
+
+### 3.2 Files and audio inside a run
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| F1 | No file reference type in wd/v1: forms and email attachments carry `{id, name, type, size, sha256}` with their own `file_url` actions, but there is no shared kind a step can pass to another | `docs/forms.md:64`, `docs/email.md:41,50` | Blocker |
+| F2 | No place a workflow can store a file it made or fetched (audio in, audio out); `engine/media` is used by storefront, forms, chat only | `engine/media/media.go` | Blocker |
+| F3 | Step outputs are capped at 256 KB inline and the object-storage copy (`payload_ref`) is not built; a 30-second voice note in base64 is near or over the cap | `worker.go:605-633`; spec 4.9 | Blocker unless audio travels by reference (F1, F2) |
+| F4 | The `http` step sends JSON only and reads at most 256 KB as text; no multipart, no binary, so it cannot call a speech API as a fall-back | `engine/runtime/httpstep.go:39-80` | Not needed if T1 and T2 are built |
+| F5 | No scanning, type or duration check for audio a workflow stores (ClamAV is wired for forms and email; Ogg duration is checked only in the chat path) | `cmd/taskiem/forms.go:17-30`; `engine/voice` | Launch |
+| F6 | No retention for files a workflow stores (voice notes are personal data) | | Launch |
+| F7 ⊕ | (Decided in V3: the provider emits Opus; `speak` checks it is mono Ogg/Opus; AMR is not heard until a transcoder exists.) No audio conversion. Speech providers return MP3 or Opus in various containers; a WhatsApp voice note must be OGG/Opus mono (and plays inline only under 512 KB), a Telegram voice note OGG/Opus. Taskiem has no transcoder (no ffmpeg; the sandbox runs JavaScript and Python in WebAssembly) | `engine/sandbox`; no `ffmpeg`/`opus` code | Blocker for voice replies unless the provider emits OGG/Opus mono |
+| F8 ⊕ | Where stored audio lives (Xenibase storage region) is not stated; voice is personal data of Nigerian subjects | `docs/media.md` | Launch (people + docs) |
+
+### 3.3 Speech
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| T1 | No step or connector action that transcribes; `engine/voice` is imported only by `api/` and `cmd/` | `api/whatsapp_voice.go`, `api/languages.go` | Blocker |
+| T2 | No text-to-speech anywhere: no provider, no interface, no configuration | searched: tts, speech synthesis, `/audio/speech` | Blocker for voice replies |
+| T3 | Transcription is not metered or counted against any budget (only rate-limited and logged); speech would not be either | `voice_transcripts` only | Launch |
+| T4 | No speech provider under a data-processing agreement; whether OpenAI accepts WhatsApp's Ogg/Opus is untested | `docs/needs-people.md` L5; `docs/languages.md:82` | Launch (people) |
+| T5 | Pidgin has no speech language hint (the provider guesses); Yoruba, Hausa, Igbo transcription and speech quality are unknown; no recordings to test with | `engine/lang/lang.go:44-58` | Launch (people) |
+| T6 | No voices chosen or tested for Nigerian English or Pidgin; no way to pick one per business | | Launch |
+| T7 | The tenant's `voice_notes` switch covers Taskiem's chat only; nothing governs speech in workflows | `api/languages.go:352` | Launch |
+| T8 ⊕ | No fixed text for "I could not hear that" (empty, too long, unreadable audio, provider down), in the five languages | | Launch |
+
+### 3.4 The model
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| A1 | The `ai` step sends one user message; it cannot take a conversation (turns), though `engine/ai` supports `[]Message` | `engine/runtime/aistep.go:189-194, 267-277` | Launch (history can be packed into the prompt meanwhile) |
+| A2 | No per-step reply length (max tokens is fixed at 8192 by the worker), temperature or system prompt; the system prompt is a constant | `aistep.go:49-56, 157-159`; `serve.go:1456` | Launch (cost and spoken length) |
+| A3 | No tool calling | nothing in `engine/ai` | Not needed (D4: fixed routing instead) |
+| A4 | Text only: no audio or image input to the model | `engine/ai/anthropic.go` | Later |
+| A5 | Masking catches phones, emails, BVN, NIN and cards in free text, but not names or 10-digit account numbers; history read from a table may not be sealed as known personal data (`pii.sealAt` seals scalars, not row objects) | `engine/pii/detect.go:42-69, 331`; `engine/pii/pii.go:211-213` | Launch (decide what the model may see, D6) |
+| A6 | The default model is the building model (`claude-opus-5-5`, effort high); a quick spoken reply wants a small fast model, which needs `TASKIEM_AI_STEP_MODELS` set in each deployment and named in the recipe | `engine/ai/ai.go:170, 241, 264-268` | Launch |
+| A7 | Building, intent routing and ai steps share one monthly token budget; an assistant could starve the builder | `engine/runtime/limits.go:632` | Launch (D7) |
+| A8 | `ai_monthly_tokens` of 0 means "no check", not "none"; Shop plans lack the `ai` feature; only Enterprise has AI overage; `docs/operations.md` and `docs/ai.md` disagree on what happens over budget | `aistep.go` (`if limit > 0`); `deploy/plans.yaml` | Launch (decide and fix docs) |
+| A9 | No language detection a workflow can use (`lang.Detect` is chat-only), so "answer in the customer's language" rests on the prompt alone | `engine/lang/intents.go:306-350` | Launch |
+| A10 | Each ai step takes two database transactions and a budget reservation before the call, and up to two model rounds; the latency of a voice round trip has never been measured | `aistep.go:163-188` | Launch (measure) |
+| A11 ⊕ | Prompt injection: a customer's message is instructions to the model as much as the owner's prompt. With no tools (D4) the harm is limited to what the model says, but it can still be talked into promises (prices, refunds) the business never made | | Launch (reply policy, L6) |
+| A12 ⊕ | When the AI budget runs out, is switched off, or the provider is down, the step fails and the customer hears nothing; there is no fall-back answer without a model | `aistep.go` failure kinds | Launch |
+| A13 ⊕ | The AI builder and its evaluation suite know nothing of assistants: "make me a WhatsApp assistant" will not retrieve the recipe or draft one sensibly | `engine/ai/builder`, `tools/aieval` | Built (V10) |
+
+### 3.5 Memory and state
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| M1 | No conversation memory for workflows; Taskiem's `chat_history` and `chat_sessions` belong to members' chat and are not readable by workflows | `api/chat_history.go`; migration 00295 | Blocker (a table works, M2) |
+| M2 | No known table shape for conversations (`templates/tables/` has none) | | Blocker for the recipe |
+| M3 | No expiry for table rows; old messages stay until a scheduled workflow deletes them | `docs/data-tables.md` | Launch |
+| M4 | No key-value state across runs (last language, last channel, "awaiting PIN") apart from tables | expression roots `trigger, steps, run, env, secrets, item, index` | Later (a table works) |
+| M5 | A table's message text is not declared personal, so a conversation kept in a table is readable in clear by anyone who can read tables | table columns are personal only for `phone` and `email` by default | Launch |
+| M6 ⊕ | Conversation rows and run history have different lifetimes (table rows until deleted, runs by plan), so erasing or expiring one leaves the other | | Launch (one retention rule, V5) |
+
+### 3.6 Privacy, consent and records
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| P1 | The `whatsapp@1` and `telegram@1` triggers declare no `pii`: message text, profile names, Telegram chat ids and usernames are kept in clear in run history (the sender's phone is caught by the detector) | `connectors/whatsapp/manifest.yaml:186-211`; Instagram declares them (`connectors/meta/instagram.yaml:224-228`) | Launch |
+| P2 | No erasure of everything about one customer (messages sealed as `other` are their own subjects, not erased with the phone) | `engine/secrets/subjects.go:26-40` | Launch |
+| P3 | No consent rule for recording and processing a customer's voice, no notice wording, no opt-out word for the assistant | `docs/compliance.md` covers reports and anchors only; decision 0039 defers a business's own bot | Launch (people + code) |
+| P4 | Model provider terms and whether prompts may leave Nigeria are open (AI1); the speech provider's too (L5); terms and DPA under the NDPA (P4-B4) | `docs/needs-people.md:132-135, 156` | Launch (people) |
+| P5 | No conversation view: a business sees what its assistant said only by opening each run; Taskiem keeps no message to a customer by design ("A message to a customer … is never kept") | `docs/whatsapp.md:332-337`; `Run.tsx` | Launch |
+| P6 | Starter keeps run history 7 days; with no archive configured nothing is purged; retention of transcripts in workflows is undefined | `deploy/plans.yaml`; `docs/operations.md:75` | Launch (decide) |
+| P7 ⊕ | The threat model has no entry for customer-facing chat (spoofed senders, a customer reading another's data, prompt injection, voice replay) | `docs/security/threat-model.md` | Launch |
+
+### 3.7 Limits, cost and abuse
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| L1 | No limit per customer for connector triggers: one sender can start unlimited runs (ingest limits are per tenant; per-number limits exist only on Taskiem's channel) | `docs/operations.md`; `docs/whatsapp.md:316` | Launch |
+| L2 | `max_running_runs` counts runs waiting on a signal: Starter 5, Growth 25. A design that waits for the customer's next message holds a slot per customer | `docs/operations.md` plan limits | Launch (D3) |
+| L3 | No audio length check before transcription in workflows (the chat path has one) | | Launch |
+| L4 | No cost view: AI tokens are counted, transcription and speech are not, WhatsApp sends on a tenant's own app are not counted by Taskiem | | Launch |
+| L5 | No debounce: a customer who sends three short messages gets three answers | | Built (V10) |
+| L6 | No moderation of what the assistant says to customers (moderation covers storefronts) | `docs/moderation.md` | Launch (D6) |
+| L7 ⊕ | A reply send is an `unsafe_write`: if the answer from Meta or Telegram is lost, the step parks for an operator and the customer gets nothing, possibly for hours. A chat reply needs a different rule (retry once and accept a rare duplicate, or check the message id) | `docs/contracts/action-classes.md`; `send_text` class | Launch (D11) |
+| L8 ⊕ | Queued runs count against `max_queued_runs`; a busy assistant with one conversation at a time per sender can fill the backlog and get 429 for everyone in the tenant | `docs/operations.md` | Launch |
+| L9 ⊕ | No capacity number for many conversations at once: each message is five to eight steps with three slow calls; the engine's measured knee is about 20 runs per second on a dev machine | `docs/performance.md:148` | Launch (measure) |
+| L10 ⊕ | No alert at a share of the allowance (80 %, 100 %) for AI tokens and speech; "plan limit reached" fires only at the limit | `docs/alerts.md` | Launch |
+| L11 ⊕ | No kill switch: an owner cannot pause the assistant for everyone at once without unpublishing workflows, and Taskiem cannot pause it for a tenant | | Launch |
+
+### 3.8 Identity and money (the "fintech tools")
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| I1 | No way to map a customer's phone or Telegram chat to their record in the business (account, wallet, invoices) apart from a table the business keeps | `invoices@1` has no lookup by phone; `list` returns no customer details | Blocker for tools |
+| I2 | No capability for "this customer's balance" or "this customer's recent transactions": `balance` is the business's or a wallet's; `list_credits` is the business's | `schemas/capabilities-v1.json`; `iswallet` and `mono` have raw `list_transactions` | Blocker for tools |
+| I3 | No PIN or step-up for people who are not members; the only check for an outsider is a form's one-time code, and the form link goes out by SMS or email, not WhatsApp | `engine/wd/form.go:57`; WhatsApp PIN is members' only | Blocker for any write |
+| I4 | Areas gate `invoices@1`, `stock@1`, `storefront@1` steps when a part is off; an assistant that reads them depends on those parts being on | `engine/areas/areas.go:216-231` | Launch (readiness should say so) |
+
+### 3.9 Building, recipes, field agents
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| R1 | A template is one workflow; the assistant is at least three (WhatsApp entry, Telegram entry, shared assistant) plus tables; there is no bundle | `templates/templates.go:141-188` | Blocker for "one recipe" |
+| R2 | A callable template needs run inputs; event-started workflows are not callable | decision 0047 point 1 | Shapes R1 |
+| R3 | No `assistant` (or similar) template category | free string; none in use | Later |
+| R4 | Field agents cannot install templates or manage connections today; areas phase 6 is in review | `docs/agents.md:32-41` | Launch if agents set it up |
+| R5 | The plain builder edits only the `ai` step's prompt and `personal_data`; input and output schema are JSON under Advanced; `on_error` is JSON | `web/src/canvas/StepPanel.tsx:569-645` | Launch for owners |
+| R6 | New step kinds (speech, file) need a catalogue entry, a look and a panel each | `catalog.ts`, `look.ts`, `StepPanel.tsx` | with each step |
+| R7 | Workflow tests take JSON mocks only and do not run a connector's `split`/`dedup`; there is no check that a hand-written trigger sample matches the manifest | `engine/wdtest/wdtest.go:51, 71-80` | Launch |
+| R8 | No end-to-end test of a real voice round trip (Meta, Telegram, speech, model) and no latency number for one | `docs/performance.md` | Launch |
+| R9 | No guide for owners or field agents (Meta app, callback URL, Telegram bot, what customers are told) | | Launch |
+| R10 ⊕ | No way to try the assistant before going live except from a real phone: no "talk to it here" in the web, no test sender | | Launch |
+| R11 ⊕ | Fixed customer-facing texts (notice, limit reached, could not hear, opted out, closed window) need catalogue entries in five languages, drafts until reviewed | `engine/lang/messages` | Launch |
+
+### 3.10 What the assistant knows ⊕
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| K1 ⊕ | Nothing gives the model the business's own facts: opening hours, address, prices, products, policies. The reference guide answers general questions only; a business assistant that cannot say when the shop opens is not useful | no retrieval in `engine/ai` or the `ai` step | Blocker |
+| K2 ⊕ | The facts already exist in Taskiem in several places (storefront card and hours, catalogue tables, fronts, the business's settings) but no step reads them as one "what the business is" summary | `engine/storefront`, data tables | Launch |
+| K3 ⊕ | No place for the owner to write answers to common questions (FAQ), returns policy, delivery areas | | Launch |
+| K4 ⊕ | The prompt is capped at 256 KB, and a website plus files plus a catalogue will not fit; no search to send only the passages that answer the question | `maxAIQuestion` (`aistep.go:300`) | Blocker once outside sources are in (D12): search moves into the first release |
+| K5 ⊕ | No "hand me to a person": the customer cannot ask for a human, and no member is told to take over | | Launch |
+| K6 ⊕ | No way to read the business's own website: no page fetcher for content (only verification fetches for embed sites), no HTML-to-text, no refresh. The site must be one the business has proven it owns (embed sites already verify origins by DNS or file) | `engine/embedsites` verifies origins only | Launch (D12) |
+| K7 ⊕ | (V5b: PDF and Word text extraction, `engine/knowledge/extract`; V10: from a document sent in chat.) Still: a scanned menu needs OCR, and the `ai` step takes no images (A4) | `engine/pdf/pdf.go` | Launch (D12; OCR later) |
+| K8 ⊕ | Google Sheets can be read (`googlesheets@1` `get_values`); Google Docs and Drive files cannot (the Google connection asks only for `drive.file`, and there is no Drive or Docs connector) | `connectors/googlesheets/manifest.yaml:38` | Launch for Sheets; Drive and Docs need a connector |
+| K9 ⊕ | Connected systems: items and prices from books exist as the `books_items` capability (QuickBooks, Zoho Books); there is no connector for shop platforms (Shopify, WooCommerce, Jumia) | `schemas/capabilities-v1.json:603` | Launch for books; shop platforms later |
+| K10 ⊕ | No knowledge store: nowhere to keep what each source said as text, split into passages, with its source, when it was read, and a way to delete it; no owner review before a new or changed source is used | | Blocker (D12) |
+| K11 ⊕ | Text from outside (a website, a file) can carry instructions aimed at the model; it must be treated as quoted material, never as instructions, and checked like a customer's message | | Launch |
+
+### 3.11 Engine, schema and rollout ⊕
+
+| # | Gap | Evidence | Weight |
+| --- | --- | --- | --- |
+| E1 ⊕ | Every new wd/v1 field (file references, ai `history`, `max_tokens`, `system`) must reach the JSON schema, the Go model and validator, the TypeScript SDK and its compiler, `wdtext` read-back, `wdcheck`, the AI builder's rules and the canvas; and stay deterministic for replay | `schemas/wd-v1.schema.json`, `engine/wd`, `sdk/src/wd.ts`, `engine/wdtext`, `engine/ai/builder` | Blocker (with each change) |
+| E2 ⊕ | Moving media download and transcription out of `api/` (D1) touches the members' voice-note path, which has its own tests and limits; it must keep working unchanged | `api/whatsapp_voice.go` | Launch |
+| E3 ⊕ | ~~A new business area (D10)~~: dropped, the assistant is plain workflows (Q3) | | Not needed |
+| E4 ⊕ | No staged rollout: no per-tenant beta flag for assistants and no platform-wide off switch for speech or assistant runs | | Launch |
+| E5 ⊕ | No metrics for assistants: round-trip time per channel, transcription and speech time, failures by kind, cost per conversation | `engine/telemetry` | Launch |
+
+## 4. Decisions to take before building
+
+| # | Decision | Options | Recommendation |
+| --- | --- | --- | --- |
+| D1 | **Which door customers come in by** (decided: own app and bot, Q2) | (a) the tenant's own `whatsapp@1`/`telegram@1` connection (own Meta app, own bot), as workflows; (b) extend Taskiem's own channel (own numbers already download media, transcribe, track the 24-hour window) with an "assistant" mode that starts a business's workflow; (c) both | (a) for the first release: it is the workflow product, it needs no Meta business verification by Taskiem (W1), and it keeps each business's number its own. Move the media, speech and window pieces out of `api/` into packages both paths use, so (b) can follow. Remove or define the dead `whatsapp` trigger (C12) |
+| D2 | **One recipe or several** (decided: three templates, one callable) | (a) a template bundle (new); (b) one entry workflow per channel, each a template, calling a callable assistant template; (c) one template per channel with the assistant inlined | (b): no new template concept, and the assistant logic is written once. Callable templates need run inputs (R2), which the shared assistant has |
+| D3 | **How a conversation continues** (decided: one run per message) | (a) one run per message, memory in a table; (b) one long run per conversation waiting on the next message by `signal` | (a): a waiting run holds a `max_running_runs` slot (L2), and a run per message is simpler to see, retry and erase. Serialise per sender with `concurrency_key` |
+| D4 | **Tools** (decided: fixed routing) | (a) model tool calling (new in `engine/ai` and wd); (b) the model classifies the request into a fixed list, a `branch` runs the step for it, a second ai step words the reply | (b) for the first release: identity always comes from the trigger, never the model, and no step moves money because a model said so. Revisit (a) only with a design review |
+| D5 | **Speech provider** (decided: OpenAI-compatible, account chosen with the DPA) | OpenAI (transcription and speech), a self-hosted OpenAI-compatible server, others | Keep the `engine/voice` interface (OpenAI-compatible) and add speech to it; the provider is chosen with the DPA (P4, L5). Test Ogg/Opus first |
+| D6 | **What the model sees and says** (decided: message through, ids masked, replies checked) | masked by default (names not caught) vs letting the message through by `personal_data` | Customers' own messages must reach the model to be answered: let `text` through by `personal_data` (audited), keep phones and ids as placeholders, never send a customer's record fields unless a tool step put them there. Add a short refusal policy to the prompt and a check on the reply (L6) |
+| D7 | **Whose budget** (decided: a separate assistant allowance) | share the tenant's AI budget; a separate assistant budget; per-message pricing | A separate monthly allowance for assistant runs (tokens plus speech seconds), so the builder is never starved (A7) |
+| D8 | **Money** (decided: never moves from a conversation in this plan) | read-only tools first; writes later behind a non-member confirmation (I3) | Read-only only in this plan. Writes need their own plan |
+| D9 | **Who sets it up** (decided: owners now, field agents later) | owners, field agents, Taskiem staff | Field agents, once phase 6 or a narrower permission exists (R4); owners with a guide meanwhile |
+| D11 ⊕ | **A lost answer to a reply send** (L7) (decided: retry once, chat replies only) | park for an operator (today); retry once and accept a rare duplicate; look the message up first | Retry once on a lost answer for chat replies only, marked in the step; never for money or templates |
+| D12 ⊕ | **Where the business's facts come from** (K1 to K3, K6 to K11) (decided: knowledge sources, inside Taskiem and outside it) | the storefront and catalogue only; a new "About my business" page with FAQ; both | **Knowledge sources** (answered: "the data can come from Taskiem or externally"). Inside Taskiem: the storefront card, hours and catalogue, data tables the owner picks, and an FAQ page. Outside: the business's own website, uploaded files (PDF, documents), Google Sheets and Drive, and other systems through connectors (books items, later shop platforms). Every source is read into one store the assistant searches, refreshed on a schedule, and shown to the owner before it is used |
+| D13 ⊕ | **Hand-over to a person** (K5) (decided: a word plus the model's offer) | none; a word ("agent", "person") that pauses the assistant for that customer and tells members | The word, plus the model may suggest it when unsure; pausing is per customer, resumed from the conversations page |
+| D10 | **Where it sits in What your business uses** (decided: plain workflows, Q3) | always on; a new area "Assistant" | Plain workflows, no area. Consent and cost are covered by the AI and voice switches, the beta flag, consent at first contact and the owner's pause |
+
+## 5. Build plan
+
+Milestones in order. Each lists what is built, its tests and docs. Nothing in a later milestone is needed by an earlier one. People items are in section 6.
+
+### V0. Decisions and clean-up
+
+**Built** (2026-11-08): [decision 0074](../decisions/0074-customer-assistant.md); `docs/integrations/whatsapp.md` describes the split events and `trigger.item`; `docs/operations.md` agrees with `docs/ai.md` that ai steps fail over budget; the `whatsapp` trigger is refused on save and publish (`checkRetiredTriggers`, kept in the schema so saved versions read), gone from the builder's cards and the evaluation suite's trigger list, and documented in the wd-v1 contract and the builder guide.
+
+- Record D1 to D13, all decided on 2026-11-08, as decision 0074 ("Customer assistant").
+- Fix stale docs: `docs/integrations/whatsapp.md` (one event per delivery, `entry[0]`), `docs/operations.md` vs `docs/ai.md` on AI over budget.
+- Remove the dead `whatsapp` trigger type from wd/v1, or define it (D1).
+
+### V1. Files in runs
+
+**Built** (2026-11-08), see [Files in runs](../files.md): the reference `{file, name, type, size, sha256}` (plain JSON: no wd/v1 schema change was needed); `engine/runfiles` with `run_files` (migration 00591), checks on type, size, Ogg length and malware for what a person sent, 30 days capped by the plan, a sweep every 10 minutes; `connector.Request.Files` for every connector call in a run; `files@1` (`link`, `delete`). The file reference is not itself personal data (an id and a name); the content stays in storage and is marked personal. Erasing a customer's files with the rest of their data was brought forward from V6 by the review below (gap 16).
+
+- A **file reference** kind in wd/v1: `{file: <id>, name, type, size, sha256}` in trigger bodies and step outputs, never the bytes (F1).
+- A **run files** store on `engine/media`: private bucket, per tenant, signed links on request, a retention per workflow capped by plan (F2, F6), sealed as personal data when it came from a person.
+- Type, size and (for Ogg) duration checks on store; ClamAV for anything a person sent (F5).
+- `files@1` platform connector: `link` (a signed URL for a reference, minutes long), `delete`.
+- Tests: a file stored by one step and read by another; expiry; refusal over size; erase.
+- Docs: wd-v1 contract "Files".
+
+### V2. Channel actions
+
+**Built** (2026-11-08), in seven commits:
+1. `whatsapp@1`: `get_media` (Meta's media host only, digest-checked, kept as a person's run file), `upload_media`, `send_typing`, and `send_media` with a run `file` and `voice: true` (C1, C2, C3, C6).
+2. `telegram@1`: `get_file` (up to a bot's 20 MB; the token never in errors), `send_voice`, `send_audio` (a run file uploaded with the message), `send_chat_action` (C4, C5, C6). `connector.DoMultipart` shares the JSON calls' error rules.
+3. Both triggers declare their personal data; a test sends a signed delivery on each channel and finds nothing in the clear (P1).
+4. The Telegram bot's webhook is set when the connection is saved (registration per connection: a bot has one webhook), with a derived secret so re-applying keeps it; removed with the connection (C7). Changed after review (option A): the trigger is `registration: connection_when_used`, so the webhook is set only while a published workflow in that environment starts on the bot's updates (declared by the deployment, released by the reconciler when the last such workflow is unpublished) and a bot used only to send is never touched; one webhook per bot, shared by every workflow on it; a bot connected in two environments with workflows on both fails in the second, in plain words ("use one bot per environment"), instead of moving the webhook back and forth; the health check also reports failing for a delivery error in the last hour with nothing pending.
+5. Readiness covers a trigger's own connection (C9) and gives the exact Meta callback address (a new non-blocking `setup` need) (C8); a connection's check warns when a trigger cannot be received for want of its signing secret (C17). Deviation: readiness never decrypts credentials, so a missing app secret is a warning on the connection's check, not a publish refusal.
+6. `chunks(text, max)` splits a long reply at sentence ends; a recipe sends each piece in a `foreach` (C20). Deviation: no splitting inside a send, which would make one write several.
+7. `effect.resend_if_lost` with the action's `resend_if_lost` sends a lost chat reply once more; a second loss parks; publishing refuses it elsewhere (L7, D11). This answers action-classes' Phase 1 open question for chat replies.
+
+- `whatsapp@1`: `get_media` (id → file reference: URL lookup then download from Meta's host only, size-capped, sha256 checked; reuses `engine/whatsapp/media.go`), `upload_media` (file reference → media id), `send_media` gains `voice: true` for OGG/Opus audio, `send_typing` (C1, C2, C3, C6).
+- `telegram@1`: `get_file` (file id → file reference), `send_voice` and `send_audio` by file reference (multipart), `send_chat_action` (C4, C5, C6).
+- `telegram@1` `update` trigger registered on publish (decision 0021's remote registration) (C7).
+- Triggers declare `pii`: sender ids, names, text, media ids (P1).
+- Readiness checks a `connector_event` trigger's connection, flags "set the callback URL in Meta" with the exact URL and verify token, and refuses an assistant without `app_secret` or `webhook_secret` (C8, C9, C17).
+- Long replies split at sentence ends under each channel's limit (C20).
+- Retry once on a lost answer for chat reply sends, behind a step setting (L7, D11).
+- Fixtures: inbound voice note on each channel; tests of each new action against recorded shapes.
+
+#### Review of V1 and V2 (2026-11-08)
+
+V1 and V2 were reviewed for gaps before V3; 21 were found and all are fixed on the same branch.
+
+| # | Gap | Fix |
+| --- | --- | --- |
+| 1 | A run's `concurrency_key` (often a customer's number) was stored as written | Stored as a keyed hash, never the value; the declared category keys it ([architecture](architecture.md)) |
+| 2 | Saving a Telegram connection took over the bot's webhook, even for a bot used only to send, and two environments fought over one bot | Option A: `registration: connection_when_used`; set only while a published workflow starts on the bot's updates; a second environment fails in plain words (item 4) |
+| 3 | `files@1 link` put a working download link in run history | The link is declared personal and sealed; later steps still read it |
+| 4 | WhatsApp downloads had no size cap before reading | 25 MB, and 16 MB for audio, checked before and while reading |
+| 5 | A "voice note" could be Ogg Vorbis, which neither app plays as a voice message | `media.IsOpus` checked by WhatsApp's `upload_media`/`send_media` and Telegram's `send_voice` |
+| 6 | The "cannot receive messages" warning only came from **Check** | Saving, pasting and adding to a connection answer `warnings`; the web app shows them |
+| 7 | A Taskiem with no malware scanner refused every customer file only at run time | Readiness: a blocking `setup/file_scanner` need, in plain words |
+| 8 | Repair's worker had no run file store | `api.Server.RunFiles`, given to repair's worker |
+| 9 | AAC and AMR voice notes (older phones) were refused | Kept, with frame checks |
+| 10 | `chunks` counted characters where the channels count UTF-16 units | `chunks(text, max, "utf16")` |
+| 11 | `resend_if_lost` on a step with `retry.max: 0` could never resend | Publishing refuses it |
+| 12 | No cap on how much an organisation's runs could keep | 1 GB of new files a day per organisation |
+| 13 | A customer's file kept the name it was sent with | Kept under a neutral name |
+| 14 | Meta's media redirects to its CDN were refused; typing was refused on some accounts; the upload type was not Meta's | Redirects followed to Meta's hosts only (in the egress list); typing falls back to a read receipt; `audio/ogg` |
+| 15 | Owner warnings carried technical words from field labels | Labels in plain words; the explanation in brackets is left out of warnings |
+| 16 | Erasing a customer left their files until expiry | `get_media`/`get_file` take `sender`; erasure deletes the files at once (expiring them first, so a storage failure leaves nothing readable) |
+| 17 | Telegram's health check missed a webhook that had just started failing | A delivery error in the last hour reports failing |
+| 18 | WhatsApp media was looked up without the number | `?phone_number_id=` on the lookup |
+| 19 | Docs behind the code | Files, WhatsApp, Telegram, readiness, wd/v1 and action classes updated |
+| 20 | No test of a whole voice round trip | `TestWhatsAppVoiceRoundTrip`: fake Graph API, get_media, a speech stand-in, send_media as a voice note |
+| 21 | No measure of scanning or of files kept | `taskiem_file_scan_seconds`, `taskiem_run_files_total` |
+
+### V3. Speech steps
+
+**Built** (2026-11-08), see [Speech in workflows](../speech.md):
+- `engine/voice` speaks through the OpenAI-compatible speech API (`TASKIEM_SPEECH_*`, a short list of voices) (T2).
+- `engine/speech` sits behind the owner's **Voice in workflows** switch (Settings; `tenant_channel_settings.workflow_voice`, separate from chat voice notes) (T7). It has a monthly allowance of seconds heard and spoken (`speech_seconds_monthly`, separate from AI tokens; placeholders per plan until VP7) and counts usage per month (`speech_usage`, migration 00593) and in metrics (T3, D7).
+- `speech@1` offers `transcribe`, `speak` and `cannot_hear` (T1, T2).
+- A voice note that cannot be heard completes the step with a fixed answer in the customer's language, drafted in all five (T8).
+- Readiness blocks a workflow that hears or speaks while the switch is off or the service is missing.
+- Tests: a WhatsApp voice note heard, answered, spoken and sent back as a voice note through the engine, with fakes. A nightly live check (`speech-live.yml`) speaks Ogg/Opus with the real provider and hears it back, which answers T4's Ogg question once the secret is set (VP1).
+- **F7, decided:** no transcoder. The provider is asked for Opus, and `speak` refuses an answer that is not mono Ogg/Opus rather than send a note neither app plays. AMR voice notes are kept as files but not heard until a transcoder exists.
+- **Deviations:**
+  - The transcript's retention is the run's (sealed in run history like the customer's messages), not a separate transcript store. Like their messages, it is sealed under a key of its own and is not yet erased with the customer: that is P2, in V6.
+  - A voice per business (T6) waits for VP4's recordings: workflows pick from the voices this Taskiem offers.
+
+- `engine/voice` gains a speech (text-to-speech) interface and an OpenAI-compatible provider; configuration `TASKIEM_SPEECH_*` (T2).
+- `speech@1` platform connector: `transcribe` (file reference → text, language guess; caps on length and size; sealed transcript; retention) and `speak` (text → file reference, OGG/Opus or MP3, voice from a short allowed list) (T1, T2, T6, L3).
+- Metering: seconds transcribed and characters spoken per tenant, counted like AI tokens, with a monthly allowance (T3, L4).
+- A tenant switch "Voice in workflows", separate from the chat's voice notes (T7).
+- Output OGG/Opus mono from the provider where it can; otherwise a transcoder (a vetted static encoder run in the container step runner, or a provider that emits Opus), decided by a spike before V3 (F7).
+- Fixed answers for audio that cannot be heard, in five languages (T8, R11).
+- Tests with the fake provider; a recorded Ogg/Opus sample through the real provider in a nightly check (T4).
+
+
+#### Review of V3 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| Every connector call is cut at 30 s, so hearing a long voice note or speaking a long reply would be cut short, retried and billed again on each attempt, never finishing | A read action may declare `call_timeout` (1 to 300 s, [connector/v1](../contracts/connector-v1.md) rule 22); `transcribe` and `speak` declare 180 s, and the services' clients allow 175 s |
+| The allowance was read, then counted after the call: calls at the same moment could all pass the last seconds | Seconds are reserved in one statement before the service is asked and settled after (given back when it fails); a concurrency test |
+| A spoken reply outlived the customer's erasure until its expiry | `speak` takes `customer` (and `customer_kind`); a run file a step made can now be tied to a person too, so erasing them deletes it |
+| The plan said transcripts are erased with the customer | They are sealed under keys of their own, like the customer's messages: P2, in V6. The plan and the guide now say so |
+| AAC voice notes are sent to the service as M4A | Untested until recordings exist (VP4); listed under "Not yet" in the guide |
+
+### V4. The model step, made fit for conversation
+
+**Built** (2026-11-08):
+- **A conversation in the ai step** (A1, A2): wd/v1 `history` (the last 50 `{role, text}` turns, masked like the prompt), `system` (the business's instruction, after Taskiem's rules, which it cannot change) and `max_tokens`. These go through schema, Go, SDK, read-back, checks, builder rule 21 and the canvas, and the harness replays every test run.
+- **`fallback`** (A12): the output when the model cannot answer, checked against `output_schema` when saved and when used. It is used at once for budget, off, refusal or a never-matching answer, and on the last attempt when the provider is down. A mistake in the step itself (`invalid_step`) never gets it.
+- **`language(text[, otherwise])`** (A9), on chat's detection. English is sure only with three of its common words and nothing of the other languages.
+- **`ai_step_monthly_tokens`** (A7, A8, D7), migration 00594. AI steps spend it and never building's `ai_monthly_tokens`. 0 means AI steps are off, and it, not the `ai` feature, decides, so a shop's plan can run an assistant without AI building. Overage is billed per budget, and plans carry placeholders until VP7.
+- **`claude-haiku-5-5`** is offered for AI steps by default on Anthropic (A6).
+- **`tools/replybench`** (A10) measures delivery to reply for text and voice, and with many conversations at once. The runs to record are in [performance](../performance.md#replies-to-customers-decision-0074-a10).
+- **Not done here:**
+  - The numbers themselves: they need staging with real providers (VP5).
+  - A11, the reply policy: in V6.
+
+- `ai` step gains `history` (a list of `{role, text}` turns, capped), `max_tokens`, and a `system` instruction (kept under Taskiem's own fixed rules) (A1, A2).
+- A `language` expression function over `lang.Detect`, so a workflow knows the customer's language before the model answers (A9).
+- A small, fast model offered for ai steps by default in deployments that run assistants (A6).
+- Separate assistant allowance from the builder's budget (A7, D7); fix "0 means no check" for plans without AI (A8).
+- A fall-back answer when the model cannot answer (budget, switched off, provider down) (A12).
+- Measure: time from webhook to reply, text and voice, on staging with real providers, and a capacity run with many conversations at once; record both in `docs/performance.md` (A10, R8, L9).
+- Each wd/v1 change through schema, Go, SDK, read-back, checks, builder rules and canvas, with replay tests (E1).
+
+
+#### Review of V4 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| A step with a fallback and `retry.max_duration` could give up before its last attempt, leaving the customer with nothing | Saving refuses the pair |
+| A long `history` was kept whole with the scheduled step, though only the last 50 turns are sent | The decider keeps only the last 50 |
+| Billing showed a plan with AI steps off (allowance 0) as unlimited | No meter for a limit whose 0 turns it off; Settings' plan-limits note says 0 can mean off |
+| Settings still said "Your plan does not include AI" for AI steps | "Your plan has no allowance for AI steps" |
+| `replybench` mixed this machine's clock with the server's | It estimates the difference from the server's `Date` header and says when it is over two seconds |
+| Turns read from a table (V5) are masked only where the run already knows the value as personal (A5) | For V5: the conversations table's columns are personal, so what they hold is sealed and known |
+
+### V5. Memory and the conversations table
+
+**Built** (2026-11-08):
+- **A5, personal columns sealed cell by cell:** a run that writes or reads a data table has the table's personal columns (and its phone and email columns) sealed one cell at a time, in rows, `set` and filter values. Before, the manifest could only declare whole rows, which are never sealed.
+- **D6, the customer's words through:** an ai step may name `history` in `personal_data`. The turns' words then reach the model with identifiers still placeholders (`MaskKeepingWords`). The call's record redacts known values before patterns, which also fixed the record of answers and fields let through.
+- **The known table `conversations`** (M2, M5): its words and who said them are personal. It is kept with the business's conversations and is not offered as a list in chat.
+- **Row expiry** (M3): `keep_days` or `keep_with_conversations` on any table, set when it is made or on its page. An hourly sweep in the api role reads only ids and deletes exactly those (migration 00595).
+- **One rule** (M6, Q4): the owner's `conversation_days`, 30 by default and capped by the plan, kept on the Voice in workflows card. The conversations table follows it, runs with `settings.retention: "conversations"` follow it, and a run's files now end with their run.
+- **Erasure** (P2, in part): erasing by number or chat id deletes the person's conversation rows in every form the number takes, even with no sealed key. Their messages sealed in run histories still need P2's full erase action (V6).
+- **Tests:** turns sealed in history and heard with their words; the last N turns in order (`reverse()`); expiry by days and with conversations, within the plan; erasure.
+
+- Known table `conversations`: conversation key, channel, sender, role, text (personal), language, created_at (M2, M5).
+- Row expiry for tables (days to keep, enforced by a sweep), set to 30 days for this table by default (M3, Q4).
+- History read as sealed values when the column is personal, so it is masked before the model like other personal data (A5).
+- One retention rule for a conversation: rows, transcripts, files and runs expire together, 30 days by default, changeable by the owner within the plan's limit (M6, Q4).
+- Tests: last N turns per conversation in order; expiry; erasure of a customer's rows with their phone (P2).
+
+
+#### Review of V5 (2026-11-08)
+
+| Found | Fix |
+| --- | --- |
+| A filter written as a list (`in` with `values`) on a personal column was not sealed | Its values are sealed like a single filter value |
+| The sweep read the first 1,000 tables due and never reached the rest | It reads them a page at a time (migration 00596) |
+| Changing how long conversations are kept left runs already ended (and their files) at the old date, so they no longer went with the rows | The change moves them too |
+| Settings showed the owner's days where the plan caps them lower (a Shop plan keeps runs 7 days) | It shows the days in effect |
+| Ending a run updated its files by run alone, missing the index | By tenant and run |
+| The read-back said a step "sees history as they are" | "the conversation's words (its numbers, emails and names stay hidden)" |
+| The AI builder's rule did not let a conversation's words through, so its drafts would hand the model placeholders | Rule 21 names `personal_data: ["history"]` and how to read the table |
+
+### V5b. Knowledge sources (D12)
+
+- A **knowledge store** per business: each source's text split into passages with the source, the time it was read and a link back; replaced whole on each refresh; deleted with the source (K10).
+- **Search** over the passages (Postgres full-text first, in Taskiem's database under forced row-level security), so a question sends only the passages that answer it (K4).
+- `knowledge@1` platform connector: `search` (question → passages with their sources) for the assistant, `refresh` for a source.
+- Sources inside Taskiem: the storefront card, hours and catalogue; data tables the owner picks; an **About my business** page with FAQ and policies the owner writes (K1 to K3).
+- Sources outside:
+  - **The business's website**, only an origin it has verified (embed-site verification), fetched through the egress guard, a page limit, HTML to text, refreshed daily (K6).
+  - **Files**: PDF and DOCX text extraction from files the owner uploads or sends by chat; scanned documents refused with a plain message until OCR exists (K7).
+  - **Google Sheets** through `googlesheets@1`; Drive and Docs once a Drive connector exists (K8).
+  - **Connected systems**: items and prices through the `books_items` capability (K9).
+- The owner sees what each source gave before it is used, and when it last changed; a source that fails to refresh keeps its last text and alerts once.
+- Passages from outside are quoted to the model as material, never as instructions, and the reply check applies to anything they lead to (K11).
+- Tests: each source kind against fixtures; refresh replaces; deletion removes; search finds the right passage; a page with injected instructions does not change what the assistant does.
+
+**Built** (2026-11-08), see [What your assistant knows](../knowledge.md):
+- **Store and search** (`engine/knowledge`, migration 00597): `knowledge_sources` and `knowledge_passages` under forced row-level security. Passages are at most 1,200 characters (2,000 per source, 50 sources per business), and a GIN index covers the words. Search uses Postgres full text with the `simple` dictionary, matching any word or a word's start, ranked with `ts_rank_cd`, over approved sources that are not paused.
+- **Approval.** Text read before the owner approves waits as pending passages. After approval, a refresh replaces the text in use at once. The About page is approved as written. A failed read keeps the last text, records the reason and alerts once a day (`knowledge_source`). A digest tells when the text changed.
+- **Readers** (`api/knowledge_readers.go`, `api/knowledge_website.go`, `engine/knowledge/extract`):
+  - About;
+  - storefront (card, hours, catalogue with prices);
+  - a table's non-personal columns;
+  - the verified website, re-checked on each read: egress guard, same origin, `robots.txt`, `TaskiemBot/1.0`, at most 50 pages, boilerplate and login/cart pages dropped;
+  - PDF and DOCX uploads (text only; a scan is refused in plain words);
+  - a `googlesheets@1` range;
+  - books through the `books_items` capability.
+- **Refresh and API.** The `api` role refreshes due sources every 5 minutes through `taskiem_knowledge_due`. The API is `/v1/knowledge*` (`secret.manage`, audited as `knowledge.source.*`), and the page is **What your assistant knows** (`/knowledge`) with **Try a question**.
+- **`knowledge@1`.** `search` returns `found`, `passages` and `material`; `refresh` asks for a read within minutes. Material is quoted between `<<material N ...>>` and `<<end of material N>>`, a passage cannot close its own quote, and every ai step's fixed rules say quoted material is never instructions (K11; tested with a passage that carries an injected instruction).
+- **Not done here (moved to V10):** OCR, Drive and Docs, shop platforms, and adding a document by sending it in chat (today it is uploaded on the page).
+- **The website crawl** follows a first-page redirect to the site's www/bare twin only when the business has verified the twin too (changed by the review below).
+- **Extraction limits:** the PDF reader is Taskiem's own bounded reader (no decryption, no LZW, no reading order across columns), and elements hidden only by a CSS class are kept.
+
+**Review of V5b** (2026-11-08). These were found and fixed:
+- **Documents could stop the server.**
+  - A PDF under 1 KB with a crafted width table looped about 2^64 times, and a Go out-of-memory error cannot be recovered from.
+  - Character maps could multiply the text a hundredfold, broken objects were rescanned in quadratic time, and repeated or unfiltered streams escaped the decode budget.
+  - Now: character codes are checked before conversion and character-map entries are capped; bytes scanned are counted; streams are charged for every use and cached; content parsing has document-wide limits and a 30-second clock; two documents are read at once per server.
+  - Invisible PDF text and hidden Word text are left out, unless invisible text is all there is (a scan's OCR layer).
+- **Races.**
+  - A pause during a read was undone.
+  - An approval during a read either approved text the owner never saw, or left stale passages that a later approval brought back.
+  - Now: approval is decided under the source's row lock; an approved read replaces every passage; **Use this** names the reading the owner looked at (`read_at`) and is refused (409) if the source was read again since.
+  - One read per source at a time, across replicas (an advisory lock); the refresh loop rechecks that a source is still due, reads four at a time, and gives each read 5 minutes.
+  - A refresh asked for during a read is kept.
+  - Adding sources is serialised per business, so the limit of 50 holds.
+- **Failures went unrecorded.**
+  - The failure write used the request's expired context, and a 500-byte cut could split a character (Postgres rejected the write). The source then stayed "Not read yet", was retried every 5 minutes, and no one was alerted.
+  - Now: the write uses its own context; messages are cut on characters, in plain words ("it took too long to read", "the storefront is not published yet").
+  - The owners are alerted once when a source starts failing, not daily.
+  - A source whose table, website verification or storefront is gone stops being used, rather than serving its last text for ever.
+- **Outside text unreviewed.**
+  - After the first approval, new settings (another sheet, table, page, or a new document) went into use unseen.
+  - Now: a changed config waits for **Use this** again (`reapprove`), and the approved text stays in use until then.
+  - A page's title or a source's name could close the material quote, and look-alike markers (`＜＜`, `≪`, `«`) are now written safe too.
+- **Readers.**
+  - A table source read only its first 500 rows (`next` for `next_cursor`).
+  - The storefront source read the unpublished, unmoderated draft; it now reads the published card and is not used while suspended.
+  - A verified bare domain that redirects to `www.` could never be read through the egress guard; the twin is now allowed when it is verified too.
+  - A table is bound by id and rechecked for being kept; its columns are fixed when the source is saved.
+  - A sheet's contact-detail columns are left out and phone numbers, emails and identity numbers are masked; the sheet's link is accepted and escaped.
+  - Erasing a customer asks table and sheet sources to be read again.
+- **Search.** Yoruba tone marks and Indic vowel signs split words: marks are now part of a word, and text is normalised to one Unicode form. `max_chars` counts characters.
+- **API and page.**
+  - Audit runs in the change's own transaction, with resume, refresh and the approved reading recorded.
+  - Secret reads name the owner who pressed a button.
+  - A read while the owner waits fits the server's timeouts (90 s, with the write deadline extended); an upload has 10 minutes to arrive.
+  - A patch to a paused source no longer answers 400 after saving.
+  - **Read it again** works at most once a minute.
+  - A document gets a new version on its page instead of a second source.
+  - The page:
+    - picks tables and websites from the knowledge list itself (a member with `secret.manage` alone could not see websites);
+    - offers **Use this** whenever something waits (also after a failed read);
+    - asks before deleting;
+    - takes a sheet's link and an optional connection.
+  - `List` no longer loads every document's text.
+  - The crawler's `robots.txt` groups and percent-encoding follow RFC 9309.
+  - The user agent no longer names a page that does not exist.
+
+Left as they are:
+- Text hidden by a site's style sheets or a Word character style is still read: the owner's review is what catches it.
+- A source over 2,000 passages keeps its first 2,000, as docs/knowledge.md says; the page does not point it out.
+
+### V6. Guard rails for customers
+
+- A per-sender limit for connector triggers (messages per minute and per day, set on the workflow), with a fixed polite reply when exceeded (L1).
+- Opt-in and notice: the first message to a new sender says it is an assistant, that voice notes are transcribed, and how to stop; `STOP` ends the assistant for that sender (P3). Wording reviewed by counsel (people).
+- 24-hour window tracking per connection and sender, and a "window closed" outcome a workflow can branch on (C13).
+- A reply check before sending: length, no placeholders left, nothing from the business's internal fields (L6).
+- One erase action for a customer across messages, transcripts, files and the conversations table (P2).
+- Hand-over: a word that pauses the assistant for that customer and tells members (K5, D13).
+- Only new messages in private chats start the assistant; other message kinds get the fixed answer chosen for each (C18, C19).
+- Download the media in the first step, before anything that can queue (C21).
+- Owner's pause for everyone and a platform off switch; per-tenant beta flag (L11, E4).
+- Alerts at 80 % and 100 % of the assistant allowance; a cap on queued runs per assistant so it cannot fill the tenant's backlog (L8, L10).
+- Threat model entries for customer chat (P7, A11).
+
+**Built** (2026-11-09), see [keeping a customer assistant safe](../assistant-guard.md):
+- **The customer guard** (`engine/assistant`, `engine/ingest/guard.go`, migration 00598). A chat trigger takes `guard` (wd/v1, SDK, read-back, builder rule 21). The channel's manifest reads each event as a customer's message: connector/v1 rule 23 `conversation`, declared by `whatsapp@1` `messages` and `telegram@1` `update`. The guard decides before a run is recorded, in this order:
+  - Only new messages in private chats start a run (C18).
+  - Taskiem's `TASKIEM_ASSISTANTS` (on, beta, off), and per business a beta flag and a stop written only from the operators' console (E4, L11).
+  - STOP and START in the five languages, each confirmed once (P3).
+  - Per-customer limits a minute and a day, the customer told once (L1).
+  - The owner's pause: messages kept, nothing answered (L11).
+  - Asking for a person ("agent", "person", "talk to someone" and the equivalents): the customer is told, the owners alerted, and the assistant quiet for them for 24 hours (K5, D13).
+  - The kinds of message: answer, a fixed answer, or drop (C19).
+  - A cap on the workflow's queue, with an alert (L8).
+- **What a run reads.** `trigger.guard` gives the outcome (`answer`, `reply`, `quiet`), the fixed reply, the notice for a new customer (P3), the customer's language, the sender, the text, the channel, and a voice note or audio fetched when it arrived (C21). The fixed answers are drafts in Pidgin, Yoruba, Hausa and Igbo.
+- **`assistant@1`**:
+  - `check_reply` (L6, A11): placeholders, prices, links, contact details, secrets and internal values the material did not give hold the reply, and "Let me check that with the team" goes instead.
+  - `hand_over` and `resume` (D13).
+  - `window` (C13). A WhatsApp send outside the window fails with `steps.<id>.error.code` `window_closed`, which `on_error` branches on (new: a connector error's code).
+- **One erase (P2).** A run started by a customer's message seals its free text and names under that customer's key (`pii.Under`, `runs.customer_subject`), and child and resumed runs inherit it. So erasing the customer erases their words, transcripts and the replies in every run's history and archive, along with their conversation rows, files and the guard's record.
+  - Erasure stays one way: a customer erased who writes again gets their key's next generation (`<subject>~2`), and erasing them again destroys every generation.
+  - Before this, an erased number writing again failed its delivery on every retry.
+- **Allowance alerts** at 80 % and 100 % of AI steps and voice, once a month each (L10).
+- **The owner's page.** Settings has **Your assistant**: pause for everyone, and the customers waiting for a person with **Let the assistant answer them now** (`/v1/assistant`).
+- **Threat model.** Boundary B21 and its threats (P7, A11).
+- **Tests:** the guard over signed WhatsApp and Telegram deliveries (STOP, START, limits, notice, kinds, a person, the owner's pause, Taskiem's stop and beta, groups and edits, the queue); erasure and a customer coming back; `assistant@1` in a run; the reply check; the switches through the API and the operators' console, which members cannot change even through the database role.
+- **Not done here:** a debounce of quick messages (L5; built in V10). The counsel's wording of the notice, and native speakers' review of the words and answers, are people items.
+
+### V7. Conversations page
+
+- A page per assistant: conversations by customer (masked until revealed with `pii.reveal`, audited), each with its turns, transcripts and the run behind each reply; links to the run inspector (P5).
+- Owner can pause the assistant for one customer and answer by hand from the page (a send through the same connection).
+- **Talk to it here**: a test conversation in the web against the draft, with a fake sender, before going live (R10).
+- Assistant metrics on the page: replies, time to reply, failures, cost this month (E5).
+
+**Built** ([conversations](../conversations.md)):
+- **The record.** `assistant_turns` (migration 00600): each customer message as the guard decided it, each step that sent them something (an action declaring `turn`, connector/v1 rule 24: WhatsApp and Telegram sends, the speech transcript), each reply the check held back, and each answer by hand; sealed under the customer, erased with them, expired with the conversation days.
+- **The page** `/conversations`: assistants, customers (last four digits or a mark), a conversation with the run behind each answer, **Show numbers and emails** (`pii.reveal`, audited), pause and resume for one customer, answering by hand (templates outside WhatsApp's window, once per request id, never after STOP; answering pauses the assistant for them), and the month's numbers. Permissions `conversation.read` and `conversation.reply`.
+- **Talk to it here**: the guard on the member's own test chat, then a *sandbox run* (`runs.sandbox`) where every write is simulated (connector writes answer an output of their shape, marked `simulated`; HTTP writes and containers too; code runs, as it only reads; a step that would ask a person, even in a subflow or template, ends the test run), alerting no one when it fails.
+- **Different from the plan:** Talk to it here runs the version published in the environment, not a draft (a draft has no trigger or guard); "cost" is the share of this month's AI and voice allowances used, all assistants together; voice notes and pictures show as their kind and transcript, not played; the test chat has no memory of earlier test messages (the recipe's memory is the conversations table, which a sandbox run does not write).
+- **Review.** Fixed after review: a sandbox run could write through HTTP, code and container steps; the run was attached to its message after the run started (a race); replies by hand could be sent twice when retried, were lost when the page closed mid-send, could reach a customer who wrote STOP, and did not pause the assistant; held replies kept text with secrets; members could see each other's test chats; metrics counted failed answers by hand. Second review: a form or approval inside a subflow or template reached people from a test run; the business's alert rules and run notices fired for test runs; a refused reply still paused the assistant; an answer was recorded after its run could end (lost on a crash, missing from the test chat), and never when a send was found done on reconcile; a simulated output failed a capability's output check and parked the run; code steps were simulated though they only read; one failing business stopped the expiry sweep; the customer list opened every number's envelope; Telegram photo and document answers lost their file; paging skipped messages of one moment; a page refresh that failed lost the draft; showing numbers was audited on every refresh.
+- **V6 review, erasure.** Values naming another person inside a customer's run are sealed twice (under each); a run still open after its customer is erased seals tombstones; a number is erased in each way it may have been written; signals carry the customer's sealing; conversation turns are erased. Residual: `signal_waits.correlation` holds the sender in clear while a run waits.
+
+### V8. The recipe
+
+- Category `assistant`. Three templates: `assistant-whatsapp`, `assistant-telegram` (entry: normalise, allow-list, per-sender limit, voice → transcript, call the assistant, reply by voice or text) and `assistant-answer` (callable: history, model, reply, write turns) (R1, R2, R3, D2).
+- Tables made on instantiate: `conversations`, `assistant_allowed` (optional allow-list).
+- Readiness covers connections, the Meta callback, the Telegram webhook, the speech and AI switches and allowances.
+- Workflow tests for each: text in/text out, voice in/voice out, photo dropped, stranger blocked, over the limit, window closed, model failure answered politely and alerted.
+- Builder: catalogue entries and plain panels for transcribe, speak, send voice, typing (R5, R6).
+- Guides: "Answer your customers on WhatsApp and Telegram" for owners and field agents, with Meta and BotFather steps, coexistence with the WhatsApp Business app, and what customers must be told (R9, C22).
+
+**Built** ([the guide](../guide/answer-customers.md), [templates](../templates.md)):
+- **Templates.** Category `assistant`: `assistant-whatsapp` and `assistant-telegram` (a guarded chat trigger: the guard's fixed answers; an optional allow-list; typing; a voice note heard, then answered by voice or text; one that cannot be heard or fetched answered politely; the notice for a new customer; a failed send tells the owners) and the callable `assistant-answer` (the conversation from `conversations`, `knowledge@1 search`, an ai step with history, system, max tokens and a fallback, `check_reply`, `hand_over` when held or unsure, the owners told when the model could not answer, both messages kept). Offered only where Taskiem lets the business's assistants answer.
+- **Tables.** `conversations` (known since V5) and the new known `assistant_allowed`.
+- **Tests.** Each template's workflow tests: text, voice in and out, unheard, photo, over the limit, stranger and listed customer, model failure, WhatsApp's window, a person answering; the answer template also as a step. An API test makes both assistants and their tables.
+- **Readiness.** Connections, the Meta callback and the speech switch were there (V3, V6); added: this month's AI and voice allowances used up, and a chat trigger whose provider subscription (a Telegram bot's webhook) failed, with its reason. A deployment without a model, a plan without AI steps, or a business with AI steps off was already refused at saving.
+- **Builder.** A Voice and chat group (hear, speak, a voice note on WhatsApp or Telegram, typing), each started from `trigger.guard`, with plain panels.
+- **Guide.** "Answer your customers on WhatsApp and Telegram" (BotFather and Meta steps, coexistence with the WhatsApp Business app, what customers are told), internal until the assistant is released.
+- **Different from the plan:** "normalise" and the per-sender limit are the guard's (V6), not template steps; the builder's dry run learned ai steps and `trigger.guard`, which no template had used.
+- **Review.** Fixed after review: a voice note that could not be heard (voice off or used up, the service down) and any failure inside the answer left the customer with nothing (now asked to write, or told someone will get back to them, and the owners told); a failure to keep the conversation or hand over stopped a ready reply; the notice for a new customer was spent but not sent with fixed answers and unheard voice notes; the allow-list let strangers get fixed answers and typing, matched the number only as WhatsApp writes it, and was read on every message (now a branch, only when on); a voice note's language came from the customer's last text, not from hearing it; messages while a person answers were not kept in the conversation; workflow hand-overs lasted 24 hours with an alert saying the customer asked for a person (now 6 hours, worded for what happened), and the could-not-answer alert came for every message (now once a day); erasing a customer left them in the allowed customers; the delivery check missed a subscription named by the only connection; "Speak a reply" filed a Telegram reply under a phone number; the AI builder, embed apps and a template's own page offered the assistant templates where assistants are off; voice and chat steps were offered for triggers without the guard; the delivery need pointed outside Taskiem; the dry run gave Telegram a WhatsApp message; guide labels.
+- **Not done:** a voice note the guard could not fetch in its 3 seconds is answered as unheard; fetching it again in the run (`get_media`, `get_file`) is left for later.
+
+### V9. Read-only tools (after launch: the first customer is a shop, Q1)
+
+- A `customers` link: phone or chat id → the business's customer record (I1).
+- Capabilities `customer_balance` and `customer_transactions` where a rail can answer them; invoices `find_by_phone` (I2).
+- The assistant's fixed routing (D4): "balance", "payment status", "recent", "something else" → a step each, identity from the trigger only.
+- Area checks surfaced at readiness (I4).
+
+**Built** (ahead of launch, at the owner's request; [the guide](../guide/answer-customers.md#answering-about-their-own-account)):
+- **The customers link (I1).** The known table `customer_accounts`: a customer's number or chat id, their wallet or account at the rail, and the phone their invoices are under. A customer is only ever read through it or their own number.
+- **Capabilities (I2).** `customer_balance` and `customer_transactions`, on iswallet (a customer wallet: `get_balance`, `list_transactions`) and Mono (a customer's linked bank account: `get_balance`, `list_transactions`, its newest 50 since the time asked). `invoices@1 find_by_phone`: what a customer owes, their open invoices and last paid one, by their number in each way it may be written.
+- **Fixed routing (D4).** `assistant-account` (callable): an ai step names what is asked (balance, payment status, recent, other, with a fallback of other); a branch reads it for `trigger.body.sender`; a transform puts it into words. `assistant-answer` takes them (`account`) for the model and the reply check's material. `assistant-whatsapp-accounts` and `assistant-telegram-accounts` call both; a failure reading gives the held answer and tells the owners.
+- **Areas (I4).** Readiness says when a step or trigger needs an area the business turned off (blocking), for any workflow.
+- **Different from the plan:** the routing is in separate `-accounts` templates, not the shop assistant: a capability step needs a rail connected (readiness blocks without one), and a shop needs no second model call. Templates nest at most three deep, so the `-accounts` entries call `assistant-account` and `assistant-answer` themselves. Paystack and Flutterwave are not mapped: they have no balance per customer, and their transactions are the whole business's.
+
+- **Review.** Fixed after review: transactions' narrations (written by whoever sent the money) reached the model and the reply check's material, where a number or link in them passed the check (now left out); amounts dropped their kobo and sign and ignored the currency; transactions were unlimited, oldest first, in UTC dates, and pending or failed ones counted; a WhatsApp number could match a Telegram row (now a `channel` column); the payments connection was resolved at each run, so connecting a second one stopped every run (now chosen when set up); a failure reading an account told the owners on every message and kept nothing (now a hand-over and the conversation kept); what a customer owes was out of order across the number's forms, missed their credit, missed an erased customer who came back and found an erased one's invoices for whoever holds the number now; iswallet counted pending and other-currency transactions; the templates were offered with Money off.
+- **Residual.** Invoices made for a customer key (a school's student) or with the number written another way are not found by phone (normalising numbers when invoices are made is a change of its own). The classification reads only the latest message, so "and last week?" is answered without the account. A customer's balance figure is kept unsealed in the run's history (sealing it would seal the business's own balance too). A business with invoices and no wallets cannot use these templates without a rail.
+
+### V10. After launch
+
+- Quality-rating watch for WhatsApp numbers (C23).
+- The AI builder and evaluation suite learn assistants (A13).
+- OCR for scanned files and photos of menus (K7, A4); a Drive and Docs connector; shop-platform connectors (K8, K9).
+- Adding a knowledge document by sending it in chat (K7).
+- Better search (embeddings) if full-text search is not good enough on real questions (K4).
+- Debounce several quick messages into one answer (L5).
+
+**Built:**
+- **Quality watch (C23).** `whatsapp@1 get_phone_number` reads the messaging limit tier and status too; every six hours each assistant's WhatsApp number is read (`whatsapp_number_health`, migration 00601, definer `taskiem_whatsapp_quality_due`), and the owners told (`whatsapp_quality`) when its rating, limit or status (flagged, rate limited, restricted, disconnected, banned, deleted) gets worse in prod, or a number read before can no longer be read; once a day per state. A number read in the last five hours is not read again, so two servers or a restart do not read it twice.
+- **The builder knows assistants (A13).** Six evaluation cases (`evals/builder/assistant.jsonl`) graded with a `customer_guard` property; the builder's prompt learned `gather`; retrieval meets the WhatsApp or Telegram assistant for an assistant goal and the `-accounts` variants only for goals naming customers' balances, accounts or wallets, never a business's own balance (the callable building blocks carry no channel words). The builder's prompt had the recipe since V8.
+- **Debounce (L5).** `assistant@1 gather` and a short wait in the templates (**Wait for more messages**, 4 seconds): the newest of several quick messages answers them all, the others stay quiet. Each run claims the turns it answers (`step_run`, under an advisory lock), so two runs never answer the same message; a newer STOP or a request for a person, or a newer message whose run has not started in 30 seconds, does not silence this one. Earlier turns are those not answered in the last 15 minutes (at most 20); an unheard voice note among them is named, not dropped. The guard repeats the first-answer notice when it was given under a minute ago and the customer has not been answered since. The wait holds a run slot for seconds; WhatsApp's typing indicator lasts 25 seconds, so a wait longer than about 20 is not offered.
+- **A document sent in chat (K7).** A PDF or Word document sent in Taskiem's chat by someone with `secret.manage` becomes a document source waiting for **Use this** (up to 10 MB; a scan refused in plain words). The document is read after the chat's answer ("Reading…"), with its own time, and the person told how it went; the same document sent again updates its source; a file that is not really a PDF or .docx, an old .doc, and the most sources a business may have each get their own words.
+- **Not built, and why:**
+  - **OCR** of scans and photos of menus needs image input to the model (A4), which this plan leaves out.
+  - **Google Docs and Drive** need the Google Picker or a broader scope that Google must verify (`drive.readonly` with a security assessment): a decision for the business running Taskiem, not code.
+  - **Shop-platform connectors** (Shopify, WooCommerce, Jumia) are each a connector of their own, from the platform's own documentation and, for some, a partnership.
+  - **Embeddings** wait for evidence from real questions that full-text search misses answers (K4: "if full-text search is not good enough").
+
+### Not in this plan
+
+- Money moving from a conversation (needs a non-member confirmation design, I3, D8).
+- Model tool calling (A3), image or audio input to the model (A4), streaming replies.
+- A **call agent** (the assistant answering and making phone calls): its own plan, [call-agent.md](call-agent.md), started only after this one is built end to end.
+- Taskiem's own channel serving businesses' customers (D1 option b), template submission for tenants' WhatsApp accounts (C14).
+
+## 6. People items (nothing in code can close these)
+
+| # | Item | Who | Unblocks |
+| --- | --- | --- | --- |
+| VP1 | Speech provider account and its NDPA data-processing terms (no training, retention, transfer out of Nigeria); extends L5 | Founders, legal | V3 in production |
+| VP2 | Model provider terms and residency (AI1) cover customers' messages, not only owners' | Founders, legal | V4 in production |
+| VP3 | Consent and notice wording for customers; what the business must tell them; retention periods | Counsel | V6 |
+| VP4 | Recordings in Pidgin, Yoruba, Hausa, Igbo and Nigerian English to test transcription and voices, from consenting speakers | Operations | V3 quality |
+| VP5 | A Meta test app with a WhatsApp number and a Telegram test bot on staging (P13) | Engineering | V2, V8 tests |
+| VP6 | One or two pilot businesses | Sales | V8 |
+| VP7 | Prices: assistant allowance per plan (tokens, speech seconds) | Founders, finance | V3, V4 |
+| VP8 ⊕ | Where Xenibase stores audio (region) and whether it satisfies residency | Xenibase, legal | V1 in production |
+| VP9 ⊕ | Meta's current coexistence rules for numbers used in the WhatsApp Business app and the Cloud API at once | Engineering with Meta docs | V8 guide |
+
+## 7. Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Voice round trip too slow (download, transcribe, model, speak, upload, send) | Typing indicator at once; small model; measure in V4 before building V8 |
+| Wrong transcription of Pidgin or names leads to a wrong answer | Echo what was heard when unsure; never act on a voice note alone (D4, D8) |
+| Cost runs away (a busy number, long voice notes) | Per-sender limits, audio length cap, separate allowance, alerts at 80% |
+| Personal data in model prompts and in clear in history | Trigger `pii` (V2), personal table columns (V5), placeholders, retention, erase |
+| A customer talks the model into revealing another's data | No record reaches the model unless a step fetched it for the sender the trigger names (D4) |
+| Meta's rules (window, business verification, quality rating) | Window tracking (V6); the business's own app and number (D1) |
+| ⊕ Facts out of date (a price changed on the website but not yet re-read) | Daily refresh, "last read" shown to the owner, a refresh button, and the source named in the reply when it matters |
+| ⊕ The assistant promises what the business never said (a price, a refund) | Facts from "About my business" only; reply check; hand-over when unsure (D12, D13) |
+| ⊕ A customer gets silence (lost send, budget out, queue full) | Retry rule (D11), fall-back answer (A12), queue cap and alerts (L8, L10) |
+
+## 8. Open questions, answered (2026-11-08)
+
+| # | Question | Answer | What it changes |
+| --- | --- | --- | --- |
+| Q1 | Is the first customer a fintech or a shop? | **A shop.** | The first release answers from the business's facts, hours, products, prices and FAQ (K1 to K3). V9 (read-only tools over records) stays after launch; I1, I2 and I4 are not in the first release |
+| Q2 | Should a business run its assistant on Taskiem's shared number (D1 option b)? | **Not now.** | D1 is decided as (a): the business's own WhatsApp app and Telegram bot. C11 and C12 stay out of the first release (the dead `whatsapp` trigger is still cleaned up in V0) |
+| Q3 | A separate assistant area (D10), or plain workflows? | **Plain workflows.** | No new area: E3 is dropped. What a switch would have given is kept by other means: the owner's AI switch, the "Voice in workflows" switch (T7), the per-tenant beta flag (E4), consent at first contact (P3) and the owner's pause (L11) |
+| Q4 | How long are conversations kept by default? | **30 days, the owner may change it** within the plan's limit. | One retention rule (M6) for messages, transcripts, audio and the runs behind them, 30 days by default, set per assistant in V5 |

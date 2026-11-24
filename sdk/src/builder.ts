@@ -92,7 +92,18 @@ export function webhook(
 export function schedule(config: { cron: string; timezone?: string } & Values): Trigger {
   return { type: "schedule", config };
 }
-export function connectorEvent(config: { connector: string; trigger: string; events?: string[] } & Values): Trigger {
+/** A chat trigger's customer guard (decision 0074 V6): true for the defaults, or its settings. */
+export type CustomerGuard =
+  | true
+  | {
+      per_minute?: number;
+      per_day?: number;
+      max_queued?: number;
+      notice?: boolean;
+      handover_hours?: number;
+      kinds?: Partial<Record<"text" | "voice" | "audio" | "image" | "video" | "document" | "sticker" | "location" | "contact" | "reaction" | "button" | "other", "answer" | "reply" | "drop">>;
+    };
+export function connectorEvent(config: { connector: string; trigger: string; events?: string[]; connection?: string; guard?: CustomerGuard } & Values): Trigger {
   return { type: "connector_event", config };
 }
 /** Starts on a payment event from whichever rail is connected (decision 0044). */
@@ -319,9 +330,24 @@ export function subflow(config: { workflow: string; version?: number; wait?: boo
 /**
  * Asks the deployment's AI model at run time. Personal data in the prompt
  * and input reaches the model as placeholders, put back in the answer;
- * personal_data lists the input fields it may read as they are.
+ * personal_data lists the input fields it may read as they are. For a
+ * conversation, history gives the turns so far, system the business's
+ * instruction, max_tokens a short answer, and fallback the output when the
+ * model cannot answer.
  */
-export function ai(config: { prompt: Expr<string> | string; output_schema: object | boolean; model?: string; personal_data?: string[] }, input?: Values): StepSpec {
+export function ai(
+  config: {
+    prompt: Expr<string> | string;
+    output_schema: object | boolean;
+    model?: string;
+    personal_data?: string[];
+    system?: Expr<string> | string;
+    history?: { role: "user" | "assistant"; text: string }[] | Expr<unknown> | string;
+    max_tokens?: number;
+    fallback?: Record<string, unknown> | Expr<unknown> | string;
+  },
+  input?: Values,
+): StepSpec {
   return { type: "ai", ...(input === undefined ? {} : { input }), config };
 }
 

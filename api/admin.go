@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -18,15 +19,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
+	"github.com/israel-duff/taskiem/engine/tunnel"
 )
 
 var nameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,62}$`)
@@ -214,6 +219,17 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Name = name
 	out := map[string]any{"id": id, "environment": env, "connector": c.Manifest.ID, "name": req.Name}
+	// Saved, but a trigger it cannot receive is said now, not at the
+	// first silent day (decision 0074 C17, review gap 6).
+	// Fields Taskiem made (a webhook token) count as given.
+	given := maps.Clone(req.Credentials)
+	if given == nil {
+		given = map[string]string{}
+	}
+	maps.Copy(given, made)
+	if warn := unsignedTriggers(c, given); len(warn) > 0 {
+		out["warnings"] = warn
+	}
 	if hooks := connectionWebhooks(c, s.hooksBase(), p.TenantID, env, name, made); len(hooks) > 0 {
 		out["webhooks"] = hooks // shown this once: they carry the token Taskiem made
 	}
@@ -610,6 +626,14 @@ func (s *Server) runsHolding(r *http.Request, subjects []string) ([]uuid.UUID, e
 // erase destroys a data subject's key (NDPA erasure, spec 9.4), named
 // either by subject id or by the identifying value and its category.
 // Every sealed copy of their data becomes unreadable. It cannot be undone.
+//
+// A value names a person however it was written where it was sealed: a
+// phone number as WhatsApp gives it (2348031234567), with + or a leading
+// 0; a number as a number or as a string (a Telegram chat id, category
+// chat_id). Each form is erased wherever it has a key. A subject id is
+// erased with its
+// later generations (a person who came back), whichever generation is
+// named. It answers 404 only when nothing at all was found to erase.
 func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 	var req eraseReq
 	if err := decodeBody(r, &req); err != nil {
@@ -642,12 +666,28 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, fmt.Errorf("%w: give subject, or category and value", errBadRequest))
 			return
 		}
+		if !eraseCategoryRe.MatchString(req.Category) {
+			s.fail(w, r, fmt.Errorf("%w: category is lower-case letters and underscores (phone, email, bvn, other...)", errBadRequest))
+			return
+		}
 		// The person as they are sealed now, and under the ways the value
 		// was written before subject ids were canonical.
 		var err error
 		if subjects, err = s.Vault.SubjectsFor(r.Context(), p.TenantID, req.Category, req.Value); err != nil {
 			s.fail(w, r, err)
 			return
+		}
+		// And the ways our own channels write it (a chat id as a number or
+		// a string, a number with + or 0), each where it has a key.
+		for _, f := range eraseForms(req.Category, req.Value) {
+			id, err := s.Vault.SubjectFor(r.Context(), p.TenantID, req.Category, f)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if !slices.Contains(subjects, id) {
+				subjects = append(subjects, id)
+			}
 		}
 		subject = subjects[0]
 	}
@@ -695,6 +735,23 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A generation named (<subject>~1) is the person: what is kept by
+	// subject below works on the base, which reaches all its generations.
+	subject = pii.BaseSubject(subject)
+	// What they said to the business's assistant goes too, where they are
+	// named by their number or chat id (decision 0074 V5): a subject id
+	// alone cannot be matched to rows. Their rows go even when nothing of
+	// theirs was ever sealed (no key to erase).
+	rowsOut := map[string]any{}
+	rowsGone := 0
+	if req.Category != "" && req.Value != nil {
+		n, err := s.eraseConversationRows(r.Context(), p.TenantID, req.Category, req.Value)
+		if err != nil {
+			s.Logger.Warn("erase: conversation rows not all deleted", "err", err)
+			rowsOut["conversation_rows_pending"] = true
+		}
+		rowsOut["conversation_rows_deleted"], rowsGone = n, n
+	}
 	erased := []string{}
 	for _, x := range subjects {
 		err := s.Vault.Erase(r.Context(), p.TenantID, x, p.Actor())
@@ -723,7 +780,7 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scrubbed += watched
-	if len(erased) == 0 && scrubbed == 0 {
+	if len(erased) == 0 && scrubbed == 0 && rowsGone == 0 {
 		s.fail(w, r, fmt.Errorf("%w: no such subject, or already erased", secrets.ErrNotFound))
 		return
 	}
@@ -738,8 +795,138 @@ func (s *Server) erase(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Warn("erasure: the customer's lines", "tenant", p.TenantID, "err", err)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"subject": subject, "erased": true, "subjects": erased, "saved": scrubbed})
+	out := map[string]any{"subject": subject, "erased": len(erased) > 0, "subjects": erased, "saved": scrubbed}
+	for k, v := range rowsOut {
+		out[k] = v
+	}
+	// The subjects whatever else is kept about the person is found by:
+	// the base of the one named, and of each that had a key.
+	reach := []string{subject}
+	for _, id := range erased {
+		if b := pii.BaseSubject(id); !slices.Contains(reach, b) {
+			reach = append(reach, b)
+		}
+	}
+	// Files a person sent go with them (decision 0074): their key is gone,
+	// and the files themselves are deleted now, not at their expiry.
+	if s.EraseFiles != nil {
+		total, pending := 0, false
+		for _, id := range reach {
+			n, err := s.EraseFiles(r.Context(), p.TenantID, id)
+			if err != nil {
+				s.Logger.Warn("erase: files about the subject not deleted yet", "err", err)
+				pending = true
+			}
+			total += n
+		}
+		if pending {
+			out["files_pending"] = true
+		}
+		out["files_deleted"] = total
+	}
+	// The customer guard's record of them (their counts, STOP, a hand-over)
+	// goes, and the messages from them buffered for runs not waiting yet
+	// (a chat message's correlation is its sender); what they said in the
+	// runs their messages started was sealed under them, and is erased
+	// with their key (decision 0074 P2).
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		contacts, runs, turns := 0, 0, 0
+		for _, id := range reach {
+			n, err := assistant.EraseContacts(r.Context(), tx, p.TenantID, id)
+			if err != nil {
+				return err
+			}
+			contacts += n
+			// Their conversations (V7): unreadable once the key is gone; the
+			// rows go too.
+			if n, err = assistant.EraseTurns(r.Context(), tx, p.TenantID, id); err != nil {
+				return err
+			}
+			turns += n
+			var c int
+			if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM runs WHERE tenant_id = $1 AND customer_subject IS NOT NULL
+				AND customer_subject ~>=~ $2 AND customer_subject ~<~ ($2 || chr(127))`, p.TenantID, id).Scan(&c); err != nil {
+				return err
+			}
+			runs += c
+		}
+		out["assistant_contacts_deleted"], out["customer_runs"], out["conversation_turns_deleted"] = contacts, runs, turns
+		if req.Category != "" && req.Value != nil {
+			var forms []string
+			for _, v := range eraseForms(req.Category, req.Value) {
+				if str, ok := v.(string); ok {
+					forms = append(forms, str)
+				}
+			}
+			if _, err := tx.Exec(r.Context(), `DELETE FROM signals WHERE tenant_id = $1 AND correlation = ANY($2)`, p.TenantID, forms); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		s.Logger.Warn("erase: the assistant's record of the customer not deleted yet", "err", err)
+		out["assistant_contacts_pending"] = true
+	}
+	// What the assistant knows from tables and sheets is read again within
+	// minutes, so it holds what they hold now (docs/knowledge.md).
+	if s.Knowledge != nil {
+		if n, err := s.Knowledge.RequestRefreshKinds(r.Context(), p.TenantID, knowledge.Table, knowledge.Sheet); err != nil {
+			s.Logger.Warn("erase: knowledge sources not asked to be read again", "err", err)
+		} else {
+			out["knowledge_rereads"] = n
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
+
+var eraseCategoryRe = regexp.MustCompile(`^[a-z0-9_]+$`)
+
+// eraseForms are the ways a value naming a person may have been sealed:
+// as given; a phone number in each way it is written (senderForms:
+// digits as WhatsApp gives them, with +, with a leading 0); a number as a
+// string (a Telegram chat id is sealed as its string) and a string of
+// digits as a number.
+func eraseForms(category string, value any) []any {
+	var out []any
+	add := func(v any) {
+		for _, x := range out {
+			if x == v {
+				return
+			}
+		}
+		out = append(out, v)
+	}
+	add(value)
+	var str string
+	switch v := value.(type) {
+	case string:
+		str = strings.TrimSpace(v)
+		add(str)
+		if digitsRe.MatchString(str) {
+			if f, err := strconv.ParseFloat(str, 64); err == nil && f < 1<<53 {
+				add(f)
+			}
+		}
+	case float64:
+		if v == float64(int64(v)) {
+			str = strconv.FormatInt(int64(v), 10)
+		} else {
+			str = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		add(str)
+	default:
+		return out
+	}
+	if str == "" {
+		return out
+	}
+	for _, f := range senderForms(category, str) {
+		add(f)
+	}
+	return out
+}
+
+var digitsRe = regexp.MustCompile(`^[1-9][0-9]{0,15}$`)
 
 // listAnchors returns the tenant's signed audit-chain anchors and the key
 // they verify with. With an export, they let an auditor show the chain was
@@ -847,10 +1034,42 @@ func (s *Server) testCredentials(ctx context.Context, tenant uuid.UUID, c *conne
 	hc := g.Client(egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, 20*time.Second)
 	tctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	if _, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Logger: s.Logger, Attempt: 1}); err != nil {
+	dial, err := tunnel.Dialer(g, egress.Policy{Tenant: tenant.String(), Hosts: c.Manifest.HostsFor(creds), Purpose: "connector:" + c.Manifest.ID}, creds)
+	if err != nil {
+		return fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "tunnel: "))
+	}
+	if _, err := action.Execute(tctx, connector.Request{Input: map[string]any{}, Credentials: creds, HTTP: hc, Dial: dial, Logger: s.Logger, Attempt: 1}); err != nil {
 		return fmt.Errorf("%w: %s did not accept these details. Check you copied the whole value from the right page, then try again", errBadRequest, c.Manifest.Name)
 	}
 	return nil
+}
+
+// unsignedTriggers says, in plain words, which of a connector's triggers
+// this connection cannot receive: a trigger verified with a connection
+// field the connection does not have refuses every delivery, so a workflow
+// on it would stay silent (decision 0074 C17). Triggers Taskiem registers
+// itself keep their own secret and are not listed.
+func unsignedTriggers(c *connector.Connector, creds map[string]string) []string {
+	var out []string
+	for _, name := range slices.Sorted(maps.Keys(c.Manifest.Triggers)) {
+		t := c.Manifest.Triggers[name]
+		if t.Registered() || t.Verify == nil || t.Verify.SecretField == "" || strings.TrimSpace(creds[t.Verify.SecretField]) != "" {
+			continue
+		}
+		label := t.Verify.SecretField
+		for _, f := range c.Manifest.Auth.Fields {
+			if f.Key == t.Verify.SecretField && f.Label != "" {
+				// The label's name, without its explanation in brackets.
+				label, _, _ = strings.Cut(f.Label, " (")
+			}
+		}
+		what := t.Title
+		if what == "" {
+			what = strings.ReplaceAll(name, "_", " ")
+		}
+		out = append(out, fmt.Sprintf("%s cannot be received yet: add %q to this connection, or every one %s sends is refused.", what, label, c.Manifest.Name))
+	}
+	return out
 }
 
 // checkConnection answers POST /v1/connections/check: the same checks as
@@ -889,7 +1108,11 @@ func (s *Server) checkConnection(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	out := map[string]any{"ok": true}
+	if warn := unsignedTriggers(c, req.Credentials); len(warn) > 0 {
+		out["warnings"] = warn
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // checkSavedConnection answers POST /v1/connections/{id}/check: the
@@ -954,6 +1177,9 @@ func (s *Server) checkSavedConnection(w http.ResponseWriter, r *http.Request) {
 		s.applyConnectionSubscriptions(r)
 	}
 	out := map[string]any{"ok": true}
+	if warn := unsignedTriggers(c, creds); len(warn) > 0 {
+		out["warnings"] = warn
+	}
 	if c.Manifest.Auth.Test == nil {
 		out["message"] = c.Manifest.Name + " has no check of its own: a step that uses it is the test."
 		writeJSON(w, http.StatusOK, out)

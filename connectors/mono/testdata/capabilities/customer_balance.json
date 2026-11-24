@@ -1,0 +1,16 @@
+{
+  "capability": "customer_balance",
+  "credentials": {
+    "secret_key": "test_sk_abc"
+  },
+  "input": {
+    "account": "661d759280dbf646242634cc"
+  },
+  "exchanges": [
+    "balance"
+  ],
+  "expect": {
+    "available_kobo": 35232,
+    "currency": "NGN"
+  }
+}

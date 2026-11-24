@@ -1,0 +1,152 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-mark-expired",
+  "params": {
+    "business_name": "Sunrise Fitness",
+    "grace_days": 3,
+    "approver_role": "owner",
+    "payment_details": "Pay to 0123456789, GTBank, and your membership starts again.",
+    "send_time": "08:30",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "after approval, the expired subscriber is marked and told; the one inside the grace days is left",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-11-02T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              },
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-09T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        },
+        "expire_each[0].mark_suspended": {
+          "output": {
+            "affected": 1
+          }
+        },
+        "expire_each[0].tell_them": {
+          "output": {
+            "queued": [
+              "sms"
+            ]
+          }
+        }
+      },
+      "approvals": {
+        "ask": {
+          "decision": "approved",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ask": "completed",
+          "expire_each[0].mark_suspended": "completed",
+          "expire_each[0].tell_them": "completed"
+        },
+        "inputs": {
+          "expire_each[0].mark_suspended": {
+            "table": "subscribers",
+            "set": {
+              "status": "suspended"
+            }
+          },
+          "expire_each[0].tell_them": {
+            "to": "+2348030000003"
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing is asked when nobody has expired",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "plan": "Home 10Mbps",
+                "monthly_naira": 15000,
+                "renews_on": "2026-11-09T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-1",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "ask": "skipped",
+          "expire_each": "skipped"
+        }
+      }
+    },
+    {
+      "name": "nobody is marked when the request is rejected",
+      "trigger": {
+        "scheduled_time": "2026-11-10T07:30:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "plan": "Home 5Mbps",
+                "monthly_naira": 8000,
+                "renews_on": "2026-11-02T00:00:00Z",
+                "status": "active",
+                "account_ref": "acct-77",
+                "area": "Yaba"
+              }
+            ]
+          }
+        }
+      },
+      "approvals": {
+        "ask": {
+          "decision": "rejected",
+          "by": "owner"
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "expire_each": "skipped"
+        }
+      }
+    }
+  ]
+}

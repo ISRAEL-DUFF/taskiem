@@ -73,6 +73,11 @@ type SubFlow struct {
 
 type Effect struct {
 	IdempotencySeed string `json:"idempotency_seed,omitempty"`
+	// ResendIfLost sends the step once more when its answer was lost,
+	// for an action whose manifest allows it (a chat reply), instead of
+	// parking it for a person (decision 0074 D11). A rare duplicate
+	// message is the price; a second loss parks as before.
+	ResendIfLost bool `json:"resend_if_lost,omitempty"`
 }
 
 // Expanded is the rail's mapping a capability step was expanded with
@@ -164,7 +169,27 @@ type AIConfig struct {
 	OutputSchema json.RawMessage `json:"output_schema"`
 	Model        string          `json:"model,omitempty"`
 	PersonalData []string        `json:"personal_data,omitempty"`
+	// System is the business's standing instruction for the step (who
+	// it is, how it speaks), text or an expression; it goes after
+	// Taskiem's own rules, which it cannot change (decision 0074 V4).
+	System string `json:"system,omitempty"`
+	// History is the conversation so far, a list of {role, text} turns
+	// (role user or assistant), or an expression giving one; the last
+	// AIMaxHistory turns are sent before the question.
+	History json.RawMessage `json:"history,omitempty"`
+	// MaxTokens bounds the answer (16 to 8192; the deployment's bound
+	// when unset), so a spoken reply stays short.
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// Fallback is the output when the model cannot answer (the budget is
+	// used up, AI steps are off, the model refuses, its answer never
+	// matches, or the provider is down on the last attempt): an object
+	// matching output_schema, or an expression giving one.
+	Fallback json.RawMessage `json:"fallback,omitempty"`
 }
+
+// AIMaxHistory is how many turns of history an ai step sends at most:
+// the most recent ones.
+const AIMaxHistory = 50
 
 // SubflowConfig is a subflow step's child run: which workflow of the
 // business, which version (0: the one published when the step starts),

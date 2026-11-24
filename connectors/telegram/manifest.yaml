@@ -13,7 +13,7 @@ auth:
   type: api_key
   fields:
     - { key: bot_token, label: Bot token, secret: true, help: "In Telegram, message @BotFather, send /newbot (or /token for a bot you have), and paste the token it sends.", where: Telegram → @BotFather, link: "https://t.me/BotFather" }
-    - { key: webhook_secret, label: "Webhook secret token: 1-256 characters of A-Z, a-z, 0-9, _ and - (needed to receive updates)", secret: true, required: false }
+    - { key: webhook_secret, label: "Check value (only if you point the bot at Taskiem by hand; Taskiem uses its own otherwise)", help: "1 to 256 letters, digits, _ or -. Leave it empty: Taskiem connects the bot itself when a published workflow starts on its messages.", secret: true, required: false }
   test: { action: get_me }
 # Telegram's FAQ: about 30 messages a second across chats, one a second per chat.
 rate_limit: { requests: 30, per: 1s, scope: connection }
@@ -62,6 +62,11 @@ actions:
       parked for a person, never repeated. A 429 (flood control) proves the
       message was not sent and is retried.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: text, kind: text }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -85,6 +90,11 @@ actions:
     title: Send a photo
     description: By URL (Telegram fetches it; 5 MB) or by a file_id Telegram gave the bot. Not idempotent, like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: photo, kind: image }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -115,6 +125,11 @@ actions:
       By URL (Telegram fetches it; only .PDF and .ZIP by URL, 20 MB) or by a
       file_id. Not idempotent, like send_message.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: document, kind: document }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -133,6 +148,108 @@ actions:
     pii:
       - { field: caption, category: other }
       - { field: output.message, category: other }
+  get_file:
+    title: Get a file a customer sent
+    description: >-
+      Downloads a file from an update (a voice note, a photo, a document)
+      by its file_id and keeps it as a run file (docs/files.md): the run
+      gets the file's reference, never its bytes. A bot can download files
+      up to 20 MB. What a customer sent is scanned for malware and kept as
+      personal data.
+    class: read
+    input:
+      type: object
+      required: [file_id]
+      properties:
+        file_id: { type: string, description: "The update's file id (trigger.body.message.voice.file_id, .audio, .document, the last of .photo)" }
+        name:    { type: string, description: A file name to keep it under }
+        sender:  { type: string, description: "Who sent it (trigger.body.message.chat.id or .from.id): erasing that id deletes the file too" }
+    output:
+      type: object
+      properties:
+        file: { type: object, description: "The run file's reference: file, name, type, size, sha256" }
+    pii:
+      - { field: sender, category: chat_id }
+      - { field: output.file.name, category: other }
+  send_voice:
+    title: Send a voice message
+    description: >-
+      A run file's reference (uploaded with the message), a file_id or a
+      URL. OGG/Opus (Vorbis is refused), MP3 or M4A, shown as a voice message. Not idempotent,
+      like send_message.
+    class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: voice }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:              { type: [string, integer] }
+        file:                 { description: "A run file's reference, or its id" }
+        voice:                { type: string, description: "A file_id or URL, instead of file" }
+        caption:              { type: string, maxLength: 1024 }
+        duration:             { type: integer }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  send_audio:
+    title: Send an audio file
+    description: >-
+      A run file's reference, a file_id or a URL; MP3 or M4A, shown in the
+      music player. Not idempotent, like send_message.
+    class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: chat_id, text: caption, file: file, kind: audio }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:              { type: [string, integer] }
+        file:                 { description: "A run file's reference, or its id" }
+        audio:                { type: string, description: "A file_id or URL, instead of file" }
+        caption:              { type: string, maxLength: 1024 }
+        duration:             { type: integer }
+        reply_to_message_id:  { type: integer }
+        message_thread_id:    { type: integer }
+        disable_notification: { type: boolean }
+        protect_content:      { type: boolean }
+    output: { $ref: '#/actions/send_photo/output' }
+    pii:
+      - { field: caption, category: other }
+      - { field: output.message, category: other }
+  send_chat_action:
+    title: Show that a reply is on its way
+    description: >-
+      Shows "typing…" (or "recording a voice message…") in the chat for up
+      to 5 seconds, or until the bot sends a message. Showing it twice
+      changes nothing, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [chat_id]
+      properties:
+        chat_id:           { type: [string, integer] }
+        action:            { type: string, enum: [typing, record_voice, upload_voice, upload_document, upload_photo], default: typing }
+        message_thread_id: { type: integer }
+    output:
+      type: object
+      properties:
+        ok: { type: boolean }
   edit_message_text:
     title: Edit a message's text
     description: >-
@@ -245,6 +362,14 @@ triggers:
   # one of its optional fields is present, and that field is the event.
   update:
     type: webhook
+    # The bot's one webhook is set while a published workflow starts on
+    # this trigger with the connection, and removed when the last one is
+    # unpublished (decision 0021 registration: connection_when_used;
+    # decision 0074 C7), with a secret token Taskiem keeps. A bot used only
+    # to send is never touched. A webhook set by hand instead is verified
+    # with the connection's webhook_secret.
+    registration: connection_when_used
+    where: "Taskiem sets this bot's webhook itself while a published workflow starts on its messages; one set by hand instead needs the connection's webhook secret"
     verify: { scheme: header_secret, header: X-Telegram-Bot-Api-Secret-Token, secret_field: webhook_secret }
     events: [message, edited_message, channel_post, edited_channel_post, business_connection, business_message,
       edited_business_message, deleted_business_messages, guest_message, message_reaction, message_reaction_count,
@@ -271,3 +396,86 @@ triggers:
       : has(body.chat_join_request) ? string(body.chat_join_request.chat.id)
       : has(body.message_reaction) ? string(body.message_reaction.chat.id)
       : ""
+    # A customer's new message, for a workflow's customer guard (decision
+    # 0074 V6, connector/v1 rule 23): a new message only (not an edit, a
+    # channel post or a button press), and private only in a one-to-one
+    # chat, so a bot added to a group answers no one there. A voice note or
+    # audio is fetched before the run can wait in a queue.
+    conversation:
+      sender: '=has(body.message) ? string(body.message.chat.id) : ""'
+      sender_category: chat_id
+      private: '=has(body.message) && body.message.chat.type == "private"'
+      kind: >-
+        =!has(body.message) ? "other"
+        : has(body.message.voice) ? "voice"
+        : has(body.message.audio) ? "audio"
+        : has(body.message.photo) ? "image"
+        : has(body.message.video) || has(body.message.video_note) || has(body.message.animation) ? "video"
+        : has(body.message.document) ? "document"
+        : has(body.message.sticker) ? "sticker"
+        : has(body.message.location) || has(body.message.venue) ? "location"
+        : has(body.message.contact) ? "contact"
+        : has(body.message.text) ? "text"
+        : "other"
+      text: '=!has(body.message) ? "" : has(body.message.text) ? body.message.text : has(body.message.caption) ? body.message.caption : ""'
+      media: '=!has(body.message) ? "" : has(body.message.voice) ? body.message.voice.file_id : has(body.message.audio) ? body.message.audio.file_id : ""'
+      fetch: get_file
+      fetch_input: file_id
+      reply: { action: send_message, to: chat_id, text: text }
+    # Who wrote and what they wrote is personal data (decision 0074, P1):
+    # sealed in run history, readable by the run's steps.
+    pii:
+      - { field: body.message.from.id, category: other }
+      - { field: body.message.from.first_name, category: name }
+      - { field: body.message.from.last_name, category: name }
+      - { field: body.message.from.username, category: other }
+      - { field: body.message.chat.id, category: other }
+      - { field: body.message.chat.first_name, category: name }
+      - { field: body.message.chat.last_name, category: name }
+      - { field: body.message.chat.username, category: other }
+      - { field: body.message.text, category: other }
+      - { field: body.message.caption, category: other }
+      - { field: body.message.contact, category: other }
+      - { field: body.message.location, category: other }
+      - { field: body.edited_message.from.id, category: other }
+      - { field: body.edited_message.from.first_name, category: name }
+      - { field: body.edited_message.from.last_name, category: name }
+      - { field: body.edited_message.from.username, category: other }
+      - { field: body.edited_message.chat.id, category: other }
+      - { field: body.edited_message.chat.first_name, category: name }
+      - { field: body.edited_message.chat.last_name, category: name }
+      - { field: body.edited_message.chat.username, category: other }
+      - { field: body.edited_message.text, category: other }
+      - { field: body.edited_message.caption, category: other }
+      - { field: body.edited_message.contact, category: other }
+      - { field: body.edited_message.location, category: other }
+      - { field: body.business_message.from.id, category: other }
+      - { field: body.business_message.from.first_name, category: name }
+      - { field: body.business_message.from.last_name, category: name }
+      - { field: body.business_message.from.username, category: other }
+      - { field: body.business_message.chat.id, category: other }
+      - { field: body.business_message.chat.first_name, category: name }
+      - { field: body.business_message.chat.last_name, category: name }
+      - { field: body.business_message.chat.username, category: other }
+      - { field: body.business_message.text, category: other }
+      - { field: body.business_message.caption, category: other }
+      - { field: body.business_message.contact, category: other }
+      - { field: body.business_message.location, category: other }
+      - { field: body.edited_business_message.from.id, category: other }
+      - { field: body.edited_business_message.from.first_name, category: name }
+      - { field: body.edited_business_message.from.last_name, category: name }
+      - { field: body.edited_business_message.from.username, category: other }
+      - { field: body.edited_business_message.chat.id, category: other }
+      - { field: body.edited_business_message.chat.first_name, category: name }
+      - { field: body.edited_business_message.chat.last_name, category: name }
+      - { field: body.edited_business_message.chat.username, category: other }
+      - { field: body.edited_business_message.text, category: other }
+      - { field: body.edited_business_message.caption, category: other }
+      - { field: body.edited_business_message.contact, category: other }
+      - { field: body.edited_business_message.location, category: other }
+      - { field: body.callback_query.from.id, category: other }
+      - { field: body.callback_query.from.first_name, category: name }
+      - { field: body.callback_query.from.last_name, category: name }
+      - { field: body.callback_query.from.username, category: other }
+      - { field: body.callback_query.data, category: other }
+      - { field: body.callback_query.message.chat.id, category: other }

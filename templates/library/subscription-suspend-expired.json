@@ -1,8 +1,8 @@
 {
   "id": "subscription-suspend-expired",
-  "title": "Switch off subscribers who have not renewed",
-  "summary": "Every day, list the active subscribers whose renewal date passed by your grace days, ask you to approve, then switch them off on your system and tell them.",
-  "description": "Once a day, finds the active subscribers whose 'Renews on' date is past by more than the grace days you choose. If there are any, you get one request listing them, and nothing happens until you approve it. When you approve, each one is switched off by calling the address your system gives for that, marked suspended in your subscribers table, and sent a text saying why and how to pay. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). Your system must be reachable on the internet. If the call to your system fails for one subscriber, you are told, they stay marked active, and the others carry on. One run covers up to 1,000 subscribers: if you have more, you are told.",
+  "title": "Switch off subscribers who have not renewed, on your system",
+  "summary": "Every day, list the active subscribers whose renewal date passed by your grace days, ask you to approve, then switch them off on your own system (a billing panel, RADIUS or router) and tell them.",
+  "description": "Once a day, finds the active subscribers whose 'Renews on' date is past by more than the grace days you choose. If there are any, you get one request listing them, and nothing happens until you approve it. When you approve, each one is switched off by calling the address your system gives for that, marked suspended in your subscribers table, and sent a text saying why and how to pay. Put the key your system gives you in Settings as a secret named billing_system_key, and allow your system's address there first (both are under Settings: turn Advanced on to see the list of allowed addresses). Your system must be reachable on the internet. If the call to your system fails for one subscriber, you are told, they stay marked active, and the others carry on. One run covers up to 1,000 subscribers: if you have more, you are told. For a business with no system to switch things off in, use \"Mark subscribers who have not renewed as expired\" instead.",
   "category": "subscriptions",
   "tags": [
     "subscriptions",
@@ -12,20 +12,24 @@
     "customers"
   ],
   "keywords": [
-    "suspend",
-    "switch off",
+    "billing panel",
+    "broadband",
     "cut off",
     "disconnect",
     "expired",
     "expiry",
-    "overdue",
-    "unpaid",
-    "subscription",
-    "subscriber",
+    "grace",
     "internet",
     "isp",
-    "broadband",
-    "grace"
+    "overdue",
+    "radius",
+    "router",
+    "subscriber",
+    "subscription",
+    "suspend",
+    "switch off",
+    "switch off on my system",
+    "unpaid"
   ],
   "requires": [
     "subscribers",

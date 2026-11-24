@@ -104,6 +104,54 @@ export const anchor = {
   verify_account: (input: AnchorVerifyAccountInput, extra?: ConnectorExtra): StepSpec => connector("anchor@1", "verify_account", input, extra),
 };
 
+// Customer assistant (assistant@1)
+export interface AssistantCheckReplyInput {
+  /** What the customer wrote or said (trigger.guard.text, or the transcript) */
+  customer?: Val<string>;
+  /** The language of the held answer (trigger.guard.language) */
+  language?: Val<string>;
+  /** Links the business allows besides those in the material (its storefront, its website) */
+  links?: Value;
+  /** What the model answered from (knowledge@1 search's material) */
+  material?: Val<string>;
+  /** The longest reply in characters */
+  max?: Val<number>;
+  /** Values never said to a customer (cost prices, staff numbers) */
+  never?: Value;
+  /** The reply */
+  text: Val<string>;
+}
+export interface AssistantGatherInput {
+  [key: string]: Value;
+}
+export interface AssistantHandOverInput {
+  /** trigger.guard.channel */
+  channel: Val<string>;
+  hours?: Val<number>;
+  /** trigger.guard.sender */
+  sender: Val<string>;
+}
+export interface AssistantResumeInput {
+  channel: Val<string>;
+  sender: Val<string>;
+}
+export interface AssistantWindowInput {
+  channel: Val<string>;
+  sender: Val<string>;
+}
+export const assistant = {
+  /** Check a reply before it is sent (read) */
+  check_reply: (input: AssistantCheckReplyInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "check_reply", input, extra),
+  /** Gather a customer's quick messages (read) */
+  gather: (input?: AssistantGatherInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "gather", input, extra),
+  /** Hand a customer to a person (idempotent_write) */
+  hand_over: (input: AssistantHandOverInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "hand_over", input, extra),
+  /** Answer a customer again (idempotent_write) */
+  resume: (input: AssistantResumeInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "resume", input, extra),
+  /** Can the business still write to them (read) */
+  window: (input: AssistantWindowInput, extra?: ConnectorExtra): StepSpec => connector("assistant@1", "window", input, extra),
+};
+
 // Bills (bills@1)
 export interface BillsFinishBillPaymentInput {
   /** The bank's name for the account */
@@ -307,6 +355,23 @@ export interface EmailFileUrlInput {
 export const email = {
   /** Get a link to an attachment (read) */
   file_url: (input: EmailFileUrlInput, extra?: ConnectorExtra): StepSpec => connector("email@1", "file_url", input, extra),
+};
+
+// Files in a run (files@1)
+export interface FilesDeleteInput {
+  /** The file's reference, or its id */
+  file: Value;
+}
+export interface FilesLinkInput {
+  /** The file's reference (steps.<id>.output.file), or its id */
+  file: Value;
+  ttl_minutes?: Val<number>;
+}
+export const files = {
+  /** Delete a file (idempotent_write) */
+  delete: (input: FilesDeleteInput, extra?: ConnectorExtra): StepSpec => connector("files@1", "delete", input, extra),
+  /** Get a link to a file (read) */
+  link: (input: FilesLinkInput, extra?: ConnectorExtra): StepSpec => connector("files@1", "link", input, extra),
 };
 
 // Flutterwave (flutterwave@1)
@@ -703,6 +768,9 @@ export interface InvoicesCustomerLinkInput {
   /** Any open invoice or notebook debt of the customer's */
   number: Val<string>;
 }
+export interface InvoicesFindByPhoneInput {
+  phone: Val<string>;
+}
 export interface InvoicesGetInput {
   number: Val<string>;
 }
@@ -753,6 +821,8 @@ export const invoices = {
   create: (input: InvoicesCreateInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "create", input, extra),
   /** The customer's payment link (read) */
   customer_link: (input: InvoicesCustomerLinkInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "customer_link", input, extra),
+  /** What a customer owes, by their phone number (read) */
+  find_by_phone: (input: InvoicesFindByPhoneInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "find_by_phone", input, extra),
   /** Read an invoice (read) */
   get: (input: InvoicesGetInput, extra?: ConnectorExtra): StepSpec => connector("invoices@1", "get", input, extra),
   /** List overdue or paid invoices (read) */
@@ -870,6 +940,25 @@ export const iswallet = {
   payout: (input: IswalletPayoutInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "payout", input, extra),
   /** Transfer between wallets (idempotent_write) */
   transfer: (input: IswalletTransferInput, extra?: ConnectorExtra): StepSpec => connector("iswallet@1", "transfer", input, extra),
+};
+
+// What your assistant knows (knowledge@1)
+export interface KnowledgeRefreshInput {
+  /** The source's title or id */
+  source: Val<string>;
+}
+export interface KnowledgeSearchInput {
+  limit?: Val<number>;
+  /** The most text the passages come to */
+  max_chars?: Val<number>;
+  /** The customer's message (what was heard, for a voice note) */
+  question: Val<string>;
+}
+export const knowledge = {
+  /** Read a source again (idempotent_write) */
+  refresh: (input: KnowledgeRefreshInput, extra?: ConnectorExtra): StepSpec => connector("knowledge@1", "refresh", input, extra),
+  /** Find what answers a question (read) */
+  search: (input: KnowledgeSearchInput, extra?: ConnectorExtra): StepSpec => connector("knowledge@1", "search", input, extra),
 };
 
 // Lenco (lenco@1)
@@ -2206,6 +2295,35 @@ export const prembly = {
   verify_voters_card: (input: PremblyVerifyVotersCardInput, extra?: ConnectorExtra): StepSpec => connector("prembly@1", "verify_voters_card", input, extra),
 };
 
+// Your own network (HTTP) (privatehttp@1)
+export interface PrivatehttpGetInput {
+  /** Extra request headers (not Host, Authorization or Content-Length) */
+  headers?: Value;
+  /** Largest answer to keep; a bigger one is cut and marked truncated */
+  max_bytes?: Val<number>;
+  /** The path on the equipment, starting with /, such as /rest/ip/address */
+  path?: Val<string>;
+  /** Query parameters, added to the path */
+  query?: Value;
+}
+export interface PrivatehttpSendInput {
+  /** Sent as JSON, unless it is a string, which is sent as it is */
+  body?: Value;
+  /** Extra request headers (not Host, Authorization or Content-Length) */
+  headers?: Value;
+  max_bytes?: Val<number>;
+  method: Val<"POST" | "PUT" | "PATCH" | "DELETE">;
+  /** The path on the equipment, starting with / */
+  path: Val<string>;
+  query?: Value;
+}
+export const privatehttp = {
+  /** Read from the equipment (read) */
+  get: (input?: PrivatehttpGetInput, extra?: ConnectorExtra): StepSpec => connector("privatehttp@1", "get", input, extra),
+  /** Send to the equipment (unsafe_write) */
+  send: (input: PrivatehttpSendInput, extra?: ConnectorExtra): StepSpec => connector("privatehttp@1", "send", input, extra),
+};
+
 // QuickBooks (quickbooks@1)
 export interface QuickbooksChangesSinceInput {
   entities: Value;
@@ -3016,6 +3134,38 @@ export const slack = {
   upload_file: (input: SlackUploadFileInput, extra?: ConnectorExtra): StepSpec => connector("slack@1", "upload_file", input, extra),
 };
 
+// Speech (speech@1)
+export interface SpeechCannotHearInput {
+  language?: Val<"" | "en" | "pcm" | "yo" | "ha" | "ig">;
+  reason: Val<"empty" | "too_long" | "unreadable" | "unavailable">;
+}
+export interface SpeechSpeakInput {
+  /** Whom the reply is for (the WhatsApp number, or the Telegram chat id): erasing them deletes the spoken reply too */
+  customer?: Val<string>;
+  /** phone for a WhatsApp number, chat for a Telegram chat id */
+  customer_kind?: Val<"phone" | "chat">;
+  format?: Val<"" | "ogg" | "mp3">;
+  /** How to speak, for services that take it ("warm and unhurried, Nigerian English") */
+  how?: Val<string>;
+  text: Val<string>;
+  /** One of the voices this Taskiem offers (the first is the default); empty for the default */
+  voice?: Val<string>;
+}
+export interface SpeechTranscribeInput {
+  /** The voice note's run file reference (steps.<id>.output.file), or its id */
+  file: Value;
+  /** The customer's language, as a hint and for reply; empty lets the service detect it */
+  language?: Val<"" | "en" | "pcm" | "yo" | "ha" | "ig">;
+}
+export const speech = {
+  /** The answer for a voice note that was not heard (read) */
+  cannot_hear: (input: SpeechCannotHearInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "cannot_hear", input, extra),
+  /** Speak a reply (read) */
+  speak: (input: SpeechSpeakInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "speak", input, extra),
+  /** Hear a voice note (read) */
+  transcribe: (input: SpeechTranscribeInput, extra?: ConnectorExtra): StepSpec => connector("speech@1", "transcribe", input, extra),
+};
+
 // Stock (stock@1)
 export interface StockAdjustInput {
   change: Val<number>;
@@ -3199,11 +3349,37 @@ export interface TelegramGetChatInput {
   /** Chat id */
   chat_id: Value;
 }
+export interface TelegramGetFileInput {
+  /** The update's file id (trigger.body.message.voice.file_id, .audio, .document, the last of .photo) */
+  file_id: Val<string>;
+  /** A file name to keep it under */
+  name?: Val<string>;
+  /** Who sent it (trigger.body.message.chat.id or .from.id): erasing that id deletes the file too */
+  sender?: Val<string>;
+}
 export interface TelegramGetMeInput {
   [key: string]: Value;
 }
 export interface TelegramGetWebhookInfoInput {
   [key: string]: Value;
+}
+export interface TelegramSendAudioInput {
+  /** A file_id or URL, instead of file */
+  audio?: Val<string>;
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  duration?: Val<number>;
+  /** A run file's reference, or its id */
+  file?: Value;
+  message_thread_id?: Val<number>;
+  protect_content?: Val<boolean>;
+  reply_to_message_id?: Val<number>;
+}
+export interface TelegramSendChatActionInput {
+  action?: Val<"typing" | "record_voice" | "upload_voice" | "upload_document" | "upload_photo">;
+  chat_id: Value;
+  message_thread_id?: Val<number>;
 }
 export interface TelegramSendDocumentInput {
   caption?: Val<string>;
@@ -3245,6 +3421,19 @@ export interface TelegramSendPhotoInput {
   reply_markup?: Value;
   reply_to_message_id?: Val<number>;
 }
+export interface TelegramSendVoiceInput {
+  caption?: Val<string>;
+  chat_id: Value;
+  disable_notification?: Val<boolean>;
+  duration?: Val<number>;
+  /** A run file's reference, or its id */
+  file?: Value;
+  message_thread_id?: Val<number>;
+  protect_content?: Val<boolean>;
+  reply_to_message_id?: Val<number>;
+  /** A file_id or URL, instead of file */
+  voice?: Val<string>;
+}
 export interface TelegramSetWebhookInput {
   /** Update types to receive, e.g. [message, callback_query]; empty for Telegram's default */
   allowed_updates?: Value;
@@ -3263,16 +3452,24 @@ export const telegram = {
   edit_message_text: (input: TelegramEditMessageTextInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "edit_message_text", input, extra),
   /** Get a chat (read) */
   get_chat: (input: TelegramGetChatInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_chat", input, extra),
+  /** Get a file a customer sent (read) */
+  get_file: (input: TelegramGetFileInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_file", input, extra),
   /** Get the bot (read) */
   get_me: (input?: TelegramGetMeInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_me", input, extra),
   /** Get the webhook's status (read) */
   get_webhook_info: (input?: TelegramGetWebhookInfoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "get_webhook_info", input, extra),
+  /** Send an audio file (unsafe_write) */
+  send_audio: (input: TelegramSendAudioInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_audio", input, extra),
+  /** Show that a reply is on its way (idempotent_write) */
+  send_chat_action: (input: TelegramSendChatActionInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_chat_action", input, extra),
   /** Send a document (unsafe_write) */
   send_document: (input: TelegramSendDocumentInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_document", input, extra),
   /** Send a message (unsafe_write) */
   send_message: (input: TelegramSendMessageInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_message", input, extra),
   /** Send a photo (unsafe_write) */
   send_photo: (input: TelegramSendPhotoInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_photo", input, extra),
+  /** Send a voice message (unsafe_write) */
+  send_voice: (input: TelegramSendVoiceInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "send_voice", input, extra),
   /** Set the webhook (idempotent_write) */
   set_webhook: (input: TelegramSetWebhookInput, extra?: ConnectorExtra): StepSpec => connector("telegram@1", "set_webhook", input, extra),
 };
@@ -3297,6 +3494,14 @@ export const termii = {
 };
 
 // WhatsApp (whatsapp@1)
+export interface WhatsappGetMediaInput {
+  /** The inbound message's media id (trigger.item.message.audio.id, .image.id, .document.id) */
+  media_id: Val<string>;
+  /** A file name to keep it under */
+  name?: Val<string>;
+  /** Who sent it (trigger.item.message.from): erasing that number deletes the file too */
+  sender?: Val<string>;
+}
 export interface WhatsappGetPhoneNumberInput {
   [key: string]: Value;
 }
@@ -3317,14 +3522,18 @@ export interface WhatsappSendMediaInput {
   biz_opaque_callback_data?: Val<string>;
   /** Image */
   caption?: Val<string>;
+  /** A run file's reference (docs/files.md): uploaded to Meta, then sent */
+  file?: Value;
   /** Document only */
   filename?: Val<string>;
-  /** HTTPS URL of the file; or media_id */
+  /** HTTPS URL of the file; or media_id, or file */
   link?: Val<string>;
   media_id?: Val<string>;
   media_type: Val<"image" | "document" | "audio" | "video" | "sticker">;
   reply_to?: Val<string>;
   to: Val<string>;
+  /** Audio only: send as a voice note (needs Ogg/Opus audio; plays inline up to 512 KB) */
+  voice?: Val<boolean>;
 }
 export interface WhatsappSendTemplateInput {
   biz_opaque_callback_data?: Val<string>;
@@ -3347,7 +3556,18 @@ export interface WhatsappSendTextInput {
   /** Recipient's number with + and country code, e.g. +2348012345678 */
   to: Val<string>;
 }
+export interface WhatsappSendTypingInput {
+  /** The wamid of the message being answered */
+  message_id: Val<string>;
+}
+export interface WhatsappUploadMediaInput {
+  /** A run file's reference, or its id */
+  file: Value;
+  voice?: Val<boolean>;
+}
 export const whatsapp = {
+  /** Get a file a customer sent (read) */
+  get_media: (input: WhatsappGetMediaInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_media", input, extra),
   /** Get the business phone number (read) */
   get_phone_number: (input?: WhatsappGetPhoneNumberInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "get_phone_number", input, extra),
   /** List approved message templates (read) */
@@ -3362,6 +3582,10 @@ export const whatsapp = {
   send_template: (input: WhatsappSendTemplateInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_template", input, extra),
   /** Send a text message (unsafe_write) */
   send_text: (input: WhatsappSendTextInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_text", input, extra),
+  /** Show that a reply is being written (idempotent_write) */
+  send_typing: (input: WhatsappSendTypingInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "send_typing", input, extra),
+  /** Upload a file to send (idempotent_write) */
+  upload_media: (input: WhatsappUploadMediaInput, extra?: ConnectorExtra): StepSpec => connector("whatsapp@1", "upload_media", input, extra),
 };
 
 // Xenibase (xenibase@1)
@@ -3898,11 +4122,13 @@ export const zoho_mail = {
 export const CONNECTOR_HELPERS: Record<string, string> = {
   "africastalking@1": "africastalking",
   "anchor@1": "anchor",
+  "assistant@1": "assistant",
   "bills@1": "bills",
   "breet@1": "breet",
   "brevo@1": "brevo",
   "dojah@1": "dojah",
   "email@1": "email",
+  "files@1": "files",
   "flutterwave@1": "flutterwave",
   "form@1": "form",
   "gmail@1": "gmail",
@@ -3911,6 +4137,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "interswitch@1": "interswitch",
   "invoices@1": "invoices",
   "iswallet@1": "iswallet",
+  "knowledge@1": "knowledge",
   "lenco@1": "lenco",
   "link@1": "link",
   "mailchimp@1": "mailchimp",
@@ -3929,6 +4156,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "paystack@1": "paystack",
   "postgres@1": "postgres",
   "prembly@1": "prembly",
+  "privatehttp@1": "privatehttp",
   "quickbooks@1": "quickbooks",
   "remita@1": "remita",
   "resend@1": "resend",
@@ -3937,6 +4165,7 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
   "schools@1": "schools",
   "sftp@1": "sftp",
   "slack@1": "slack",
+  "speech@1": "speech",
   "stock@1": "stock",
   "storefront@1": "storefront",
   "telegram@1": "telegram",
@@ -3953,19 +4182,22 @@ export const CONNECTOR_HELPERS: Record<string, string> = {
 export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "africastalking@1": ["fetch_messages", "get_airtime_status", "get_balance", "send_airtime", "send_sms"],
   "anchor@1": ["book_transfer", "get_balance", "get_transfer", "get_transfer_by_reference", "list_banks", "transfer", "verify_account"],
+  "assistant@1": ["check_reply", "gather", "hand_over", "resume", "window"],
   "bills@1": ["finish_bill_payment"],
   "breet@1": ["add_bank", "generate_address", "get_balances", "get_deposit", "get_withdrawal", "list_assets", "list_banks", "verify_bank_account", "withdraw_crypto", "withdraw_to_bank"],
   "brevo@1": ["add_to_list", "create_or_update_contact", "get_account", "list_lists", "send_campaign", "send_email", "send_sms"],
   "dojah@1": ["check_balance", "lookup_bvn", "lookup_nin"],
   "email@1": ["file_url"],
+  "files@1": ["delete", "link"],
   "flutterwave@1": ["create_dynamic_account", "create_static_account", "get_balance", "get_transfer", "get_transfer_by_reference", "get_transfer_fee", "list_banks", "list_transactions", "resolve_account", "transfer", "verify_payment"],
   "form@1": ["file_url", "respond"],
   "gmail@1": ["create_draft", "get_message", "get_profile", "list_labels", "list_messages", "modify_labels", "send_message"],
   "googlesheets@1": ["add_sheet", "append_rows", "batch_get_values", "clear_values", "create_spreadsheet", "get_spreadsheet", "get_values", "update_values"],
   "instagram@1": ["get_account", "get_conversation", "get_profile", "mark_seen", "send_message", "send_typing"],
   "interswitch@1": ["get_payment", "get_transfer", "list_banks", "resolve_account", "transfer"],
-  "invoices@1": ["create", "customer_link", "get", "list", "notify_customer", "register_account", "send", "void"],
+  "invoices@1": ["create", "customer_link", "find_by_phone", "get", "list", "notify_customer", "register_account", "send", "void"],
   "iswallet@1": ["create_dynamic_account", "create_wallet", "get_balance", "get_payout", "issue_virtual_account", "issue_virtual_accounts", "list_banks", "list_providers", "list_transactions", "name_enquiry", "payout", "transfer"],
+  "knowledge@1": ["refresh", "search"],
   "lenco@1": ["create_virtual_account", "get_balance", "get_transfer", "list_accounts", "list_banks", "resolve_account", "transfer"],
   "link@1": ["get_bill", "get_order", "list_bills", "low_orders", "order_step", "pay_bill", "place_order", "price_of", "reply"],
   "mailchimp@1": ["add_or_update_member", "create_campaign", "get_account", "list_audiences", "send_campaign", "tag_member"],
@@ -3984,6 +4216,7 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "paystack@1": ["check_balance", "create_dedicated_account", "create_recipient", "initialize_transaction", "list_banks", "list_payments", "list_transactions", "list_transfers", "pay_with_transfer", "refund_status", "refund_transaction", "resolve_account", "transfer", "verify_charge", "verify_transfer"],
   "postgres@1": ["execute", "query"],
   "prembly@1": ["check_liveness", "compare_faces", "get_wallet_balance", "lookup_bvn", "lookup_bvn_basic", "lookup_bvn_by_phone", "lookup_cac", "lookup_nin", "lookup_nin_basic", "lookup_phone", "lookup_phone_basic", "resolve_bank_account", "verify_bvn_with_face", "verify_drivers_license", "verify_nin_with_face", "verify_passport", "verify_voters_card"],
+  "privatehttp@1": ["get", "send"],
   "quickbooks@1": ["changes_since", "create_bill", "create_customer", "create_invoice", "create_payment", "create_purchase", "create_sales_receipt", "create_vendor", "find_customer", "find_vendor", "get_company", "get_entity", "get_invoice", "list_accounts", "list_items", "list_tax_codes", "query_invoices"],
   "remita@1": ["bulk_transfer", "cancel_invoice", "generate_invoice", "get_bulk_transfer", "get_invoice", "get_transfer", "list_banks", "resolve_account", "transfer"],
   "resend@1": ["get_email", "list_domains", "send_email"],
@@ -3992,11 +4225,12 @@ export const CONNECTOR_ACTIONS: Record<string, readonly string[]> = {
   "schools@1": ["clearance", "clearance_list", "current_term", "daily_close", "family_link", "get_student", "invoice_term", "issue_account", "list_classes", "list_debtors", "list_fee_items", "list_students", "plan_decisions", "send_account_number", "send_receipt", "send_reminders", "tell_plan_decision", "term_invoices"],
   "sftp@1": ["delete", "download_file", "list_directory", "mkdir", "rename", "stat", "upload_file"],
   "slack@1": ["add_reaction", "auth_test", "get_conversation", "get_user", "list_conversations", "list_users", "lookup_user_by_email", "open_conversation", "post_ephemeral", "post_message", "schedule_message", "update_message", "upload_file"],
+  "speech@1": ["cannot_hear", "speak", "transcribe"],
   "stock@1": ["adjust", "count", "draft_purchase", "get_item", "list_items", "list_purchases", "low_items", "movements", "receive", "record_sale", "sales_day", "send_purchase"],
   "storefront@1": ["decide", "get_booking", "issue_tickets", "mark_returned", "notify_customer", "offer_place", "payment_link", "recent_customers", "refund"],
-  "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_me", "get_webhook_info", "send_document", "send_message", "send_photo", "set_webhook"],
+  "telegram@1": ["answer_callback_query", "delete_webhook", "edit_message_text", "get_chat", "get_file", "get_me", "get_webhook_info", "send_audio", "send_chat_action", "send_document", "send_message", "send_photo", "send_voice", "set_webhook"],
   "termii@1": ["check_balance", "send_sms"],
-  "whatsapp@1": ["get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text"],
+  "whatsapp@1": ["get_media", "get_phone_number", "list_templates", "mark_as_read", "send_interactive", "send_media", "send_template", "send_text", "send_typing", "upload_media"],
   "xenibase@1": ["call_function", "delete_rows", "get_row", "insert_rows", "query_rows", "read_rows", "test_connection", "update_rows", "upsert_rows"],
   "youverify@1": ["compare_faces", "create_address_candidate", "get_address_verification", "get_aml_check", "get_business_details", "request_address_verification", "resolve_bank_account", "screen_aml", "search_businesses", "search_phone", "verify_business", "verify_bvn", "verify_drivers_license", "verify_nin", "verify_phone"],
   "zoho_books@1": ["changes_since", "create_bill", "create_contact", "create_expense", "create_invoice", "create_sales_receipt", "find_contact", "find_invoices", "get_invoice", "list_accounts", "list_items", "list_organizations", "list_taxes", "record_payment"],
@@ -4192,6 +4426,34 @@ export type CapabilityCollectTransferOutput = {
   bank_name: string;
   expires_at: string;
   payment_id: string;
+};
+/** Check a customer's balance: input */
+export interface CapabilityCustomerBalanceInput {
+  /** The customer's own wallet or account at the rail */
+  account: Val<string>;
+  currency?: Val<string>;
+}
+/** Check a customer's balance: output */
+export type CapabilityCustomerBalanceOutput = {
+  available_kobo: number;
+  currency: string;
+};
+/** List a customer's recent transactions: input */
+export interface CapabilityCustomerTransactionsInput {
+  /** The customer's own wallet or account at the rail */
+  account: Val<string>;
+  /** From when, RFC 3339 */
+  since: Val<string>;
+}
+/** List a customer's recent transactions: output */
+export type CapabilityCustomerTransactionsOutput = {
+  transactions: Array<{
+    amount_kobo: number;
+    at: string;
+    direction: "in" | "out";
+    narration?: string;
+  }>;
+  truncated?: boolean;
 };
 /** Look a payment up: input */
 export interface CapabilityGetPaymentInput {
@@ -4415,6 +4677,10 @@ export const rail = {
   books_sale: (input: CapabilityBooksSaleInput, extra?: CapabilityExtra): StepSpec => capability("books_sale", input, extra),
   /** List the books' taxes */
   books_taxes: (input: CapabilityBooksTaxesInput, extra?: CapabilityExtra): StepSpec => capability("books_taxes", input, extra),
+  /** Check a customer's balance */
+  customer_balance: (input: CapabilityCustomerBalanceInput, extra?: CapabilityExtra): StepSpec => capability("customer_balance", input, extra),
+  /** List a customer's recent transactions */
+  customer_transactions: (input: CapabilityCustomerTransactionsInput, extra?: CapabilityExtra): StepSpec => capability("customer_transactions", input, extra),
   /** Look a payment up */
   get_payment: (input: CapabilityGetPaymentInput, extra?: CapabilityExtra): StepSpec => capability("get_payment", input, extra),
   /** Look a payout up */
@@ -4458,6 +4724,8 @@ export const CAPABILITY_HELPERS: Record<string, string> = {
   collect_link: "collect.link",
   collect_push: "collect.push",
   collect_transfer: "collect.transfer",
+  customer_balance: "rail.customer_balance",
+  customer_transactions: "rail.customer_transactions",
   get_payment: "rail.get_payment",
   get_payout: "rail.get_payout",
   list_banks: "rail.list_banks",
@@ -4486,6 +4754,8 @@ export const CAPABILITY_RAILS: Record<string, readonly string[]> = {
   collect_link: ["moniepoint@1", "paystack@1"],
   collect_push: [],
   collect_transfer: ["flutterwave@1", "iswallet@1", "opay@1", "paystack@1"],
+  customer_balance: ["iswallet@1", "mono@1"],
+  customer_transactions: ["iswallet@1", "mono@1"],
   get_payment: ["flutterwave@1", "moniepoint@1", "opay@1", "paystack@1"],
   get_payout: ["anchor@1", "flutterwave@1", "iswallet@1", "moniepoint@1", "paystack@1"],
   list_banks: ["anchor@1", "flutterwave@1", "moniepoint@1", "paystack@1"],

@@ -16,7 +16,19 @@
     "recurring",
     "internet",
     "isp",
-    "broadband"
+    "broadband",
+    "membership",
+    "members",
+    "gym",
+    "club",
+    "monthly",
+    "pay monthly",
+    "dues",
+    "class",
+    "classes",
+    "tuition",
+    "lessons",
+    "plan"
   ],
   "requires": [
     "subscribers",

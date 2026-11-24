@@ -23,7 +23,6 @@ export const TRIGGER_CHOICES: TriggerChoice[] = [
   { type: "capability_event", title: "A payment comes in", sub: "Money lands in your account, whichever bank or provider", icon: "card", apply: plain("capability_event", { events: ["payment.received"] }) },
   { type: "storefront", title: "An order comes in", sub: "Someone orders on your storefront", icon: "orders", apply: plain("storefront", { action: "order" }) },
   { type: "form", title: "Someone fills in a form", sub: "A form you share by link or QR code", icon: "forms", apply: (def) => startFormTrigger(def) as WorkflowDefinition },
-  { type: "whatsapp", title: "A WhatsApp message comes in", sub: "A customer writes to your WhatsApp number", icon: "chat", apply: plain("whatsapp") },
   { type: "email", title: "An email comes in", sub: "Mail to the workflow's own address", icon: "mail", apply: plain("email", {}) },
   { type: "manual", title: "When you start it", sub: "With a button here, or by asking the assistant", icon: "play", apply: plain("manual") },
   {

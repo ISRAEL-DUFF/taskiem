@@ -14,6 +14,12 @@ auth:
     - { key: password, label: Password, secret: true, required: false }
     - { key: sslmode, label: "SSL mode (require, verify-ca, verify-full, disable)", required: false }
     - { key: ssl_ca, label: "CA certificate (PEM) for verify-ca / verify-full", required: false }
+    - { key: tunnel_host, label: "Private network: the bastion's public host (leave all tunnel fields empty to connect directly)", required: false }
+    - { key: tunnel_port, label: "Private network: the bastion's SSH port (default 22)", required: false }
+    - { key: tunnel_user, label: "Private network: the bastion's user", required: false }
+    - { key: tunnel_private_key, label: "Private network: the user's private key (PEM or OpenSSH)", secret: true, required: false }
+    - { key: tunnel_passphrase, label: "Private network: the key's passphrase, if it has one", secret: true, required: false }
+    - { key: tunnel_host_key, label: "Private network: the bastion's host key (a known_hosts or authorized_keys line, or a SHA256: fingerprint). Required with a tunnel; leave empty once to be shown the bastion's", required: false }
   test: { action: query }
 egress_hosts: ["${connection.host}"]
 actions:

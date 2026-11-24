@@ -57,7 +57,7 @@ var difficulties = []string{"easy", "medium", "hard"}
 
 var stepTypes = []string{"connector", "capability", "template", "http", "code", "transform", "branch", "parallel", "foreach", "wait", "signal", "callback", "respond", "approval", "form"}
 
-var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "whatsapp", "ussd", "email", "subflow", "storefront", "form", "invoice", "link"}
+var triggerTypes = []string{"webhook", "schedule", "connector_event", "capability_event", "polling", "database_change", "manual", "ussd", "email", "subflow", "storefront", "form", "invoice", "link"}
 
 // check reports what is wrong with a case's own shape.
 func (c *Case) check() error {

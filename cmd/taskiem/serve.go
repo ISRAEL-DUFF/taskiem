@@ -26,19 +26,24 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/israel-duff/taskiem/api"
+	assistantconn "github.com/israel-duff/taskiem/connectors/assistant"
 	"github.com/israel-duff/taskiem/connectors/builtin"
 	emailconn "github.com/israel-duff/taskiem/connectors/email"
+	filesconn "github.com/israel-duff/taskiem/connectors/files"
 	formconn "github.com/israel-duff/taskiem/connectors/form"
 	invconn "github.com/israel-duff/taskiem/connectors/invoices"
+	knowledgeconn "github.com/israel-duff/taskiem/connectors/knowledge"
 	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/connectors/notify"
 	payconn "github.com/israel-duff/taskiem/connectors/payments"
 	ridersconn "github.com/israel-duff/taskiem/connectors/riders"
 	schconn "github.com/israel-duff/taskiem/connectors/schools"
+	speechconn "github.com/israel-duff/taskiem/connectors/speech"
 	stockconn "github.com/israel-duff/taskiem/connectors/stock"
 	sfconn "github.com/israel-duff/taskiem/connectors/storefront"
 	"github.com/israel-duff/taskiem/engine/ai"
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/audit"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/byok"
@@ -57,6 +62,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
@@ -69,11 +75,13 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/sandbox"
 	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/status"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -176,6 +184,11 @@ type config struct {
 	// Languages are languages beyond English and voice notes on WhatsApp,
 	// USSD and SMS (TASKIEM_LANGUAGES, TASKIEM_TRANSCRIBE_*; languages.go).
 	Languages LanguagesConfig
+	// Speech is speech in workflows (docs/speech.md).
+	Speech SpeechConfig
+	// Assistants is Taskiem's switch for every business's customer
+	// assistants (TASKIEM_ASSISTANTS: on, beta or off; docs/assistant-guard.md).
+	Assistants assistant.Mode
 	// Billing turns plans, subscriptions and payments on (TASKIEM_BILLING=on,
 	// docs/billing.md); off, every tenant is on the internal plan.
 	Billing BillingConfig
@@ -671,6 +684,12 @@ func loadConfig() (config, error) {
 	if c.Languages, err = languagesConfig(); err != nil {
 		return c, err
 	}
+	if c.Assistants, err = assistant.ParseMode(os.Getenv("TASKIEM_ASSISTANTS")); err != nil {
+		return c, err
+	}
+	if c.Speech, err = speechConfig(); err != nil {
+		return c, err
+	}
 	if c.Canary, err = canaryConfig(); err != nil {
 		return c, err
 	}
@@ -774,6 +793,10 @@ type engine struct {
 	schoolInboxKey []byte
 	// email is inbound email's api side (N10); nil without the public key.
 	email *inmail.Service
+	// runFiles keeps the files runs fetch or make (docs/files.md).
+	runFiles *runfiles.Service
+	// speech hears and speaks for workflows (docs/speech.md).
+	speech *speech.Service
 	// invoices are the business's invoices to its customers (decision
 	// 0045, T3).
 	invoices *invoicing.Invoices
@@ -839,6 +862,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	stockOps := &stockconn.Late{}
 	formOps := &formconn.Late{}
 	emailOps := &emailconn.Late{}
+	fileOps := &filesconn.Late{}
+	speechOps := &speechconn.Late{}
+	knowledgeOps := &knowledgeconn.Late{}
+	assistantOps := &assistantconn.Late{}
 	tell := &notify.Late{}
 	invoiceOps := &invconn.Late{}
 	linkOps := &linkconn.Late{}
@@ -856,6 +883,10 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	copts.Stock = stockOps
 	copts.Forms = formOps
 	copts.Email = emailOps
+	copts.Files = fileOps
+	copts.Speech = speechOps
+	copts.Knowledge = knowledgeOps
+	copts.Assistant = assistantOps
 	copts.Notify = tell
 	if err := builtin.Register(reg, copts); err != nil {
 		pool.Close()
@@ -910,6 +941,14 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if e.email != nil {
 		emailOps.Set(e.email)
 	}
+	e.runFiles = runFilesService(e, log)
+	fileOps.Set(e.runFiles)
+	e.speech = speechService(e, cfg.Languages.Voice, cfg.Speech, log)
+	speechOps.Set(e.speech)
+	// Workflows search what the assistant knows wherever they run; reading
+	// sources is the api role's (it holds the readers).
+	knowledgeOps.Set(&knowledge.Service{Pool: e.pool})
+	assistantOps.Set(&assistant.Service{Pool: e.pool, Vault: e.vault})
 	if cfg.Push.Enabled() || cfg.FCM != nil {
 		e.push = &push.Sender{Config: cfg.Push, FCM: cfg.FCM, Guard: &egress.Guard{Logger: log}}
 	}
@@ -1071,7 +1110,8 @@ func modeURLs(m *connector.Manifest) []string {
 func (e *engine) hooks() *ingest.Handler {
 	return &ingest.Handler{Store: e.store, Secrets: e.vault, Connections: e.vault, Registry: e.registry, Logger: e.log, MoneyLog: e.moneyLog(),
 		Egress: &egress.Guard{Logger: e.log}, Apps: platformApps(e.registry),
-		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}}}
+		Platform: map[string]ingest.Platform{"iswallet": {WebhookSecrets: e.cfg.ISWallet.WebhookSecrets}},
+		Guard:    &assistant.Guard{Mode: e.cfg.Assistants}, Vault: e.vault, RunFiles: e.runFiles}
 }
 
 // platformClient is Taskiem's own client at a provider (decision 0052),
@@ -1180,6 +1220,8 @@ func edgeServer(e *engine, cfg config, log *slog.Logger) (*api.Server, error) {
 	if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 		return nil, err
 	}
+	srv.Speech = e.speech
+	srv.AssistantMode = cfg.Assistants
 	return srv, nil
 }
 
@@ -1309,6 +1351,16 @@ func serve(ctx context.Context, args []string) error {
 			// Self-repair works its queue where a model is configured (docs/ai.md).
 			tasks = append(tasks, func(ctx context.Context) error { srv.RunRepairs(ctx, 5*time.Second); return nil })
 		}
+		// Tables that keep rows for a time (decision 0074 V5) lose their
+		// older rows every hour.
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunRowExpiry(ctx); return nil })
+		// What the assistant knows is read daily, or when asked (V5b).
+		srv.Knowledge = srv.KnowledgeService(e.pool)
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunKnowledgeRefresh(ctx); return nil })
+		// What customers said is kept the business's conversation days (V7).
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunConversationExpiry(ctx); return nil })
+		// Assistants' WhatsApp numbers: quality read every few hours (C23).
+		tasks = append(tasks, func(ctx context.Context) error { srv.RunWhatsAppQuality(ctx); return nil })
 		// Checking a Python step compiles CPython first (seconds): do it now.
 		go func() { _ = sandbox.InitPython() }()
 		srv.Done = runCtx.Done()
@@ -1339,6 +1391,8 @@ func serve(ctx context.Context, args []string) error {
 		if srv.Languages, srv.Voice, err = channelLanguages(cfg.Languages, cfg.AI, log); err != nil {
 			return err
 		}
+		srv.Speech = e.speech
+		srv.AssistantMode = cfg.Assistants
 		srv.Billing = bill
 		srv.Tables = e.tables()
 		srv.PublicHosts = cfg.Public.Domains
@@ -1379,6 +1433,9 @@ func serve(ctx context.Context, args []string) error {
 		if e.email != nil {
 			tasks = append(tasks, func(ctx context.Context) error { e.email.Run(ctx, emailDrainInterval); return nil })
 		}
+		tasks = append(tasks, func(ctx context.Context) error { sweepRunFiles(ctx, e.runFiles, log); return nil })
+		srv.EraseFiles = e.runFiles.EraseSubject
+		srv.RunFiles = e.runFiles
 		srv.Media = &media.Service{Credentials: srv.Tables.Credentials, Guard: &egress.Guard{Logger: log}, Logger: log}
 		if addr := strings.TrimSpace(os.Getenv("TASKIEM_CLAMD_ADDR")); addr != "" {
 			// Files sent in conversations are scanned as hosted forms' are;
@@ -1551,7 +1608,7 @@ func serve(ctx context.Context, args []string) error {
 			w := &runtime.Worker{Store: e.store, Registry: e.registry, Secrets: e.vault, Connections: e.vault,
 				Egress: &egress.Guard{Logger: log, Loopback: loopback}, ID: prefix + strings.TrimSpace(q) + "/" + strconv.Itoa(os.Getpid()),
 				Queue: strings.TrimSpace(q), Pool: cfg.Cloud.WorkerPool, Logger: log,
-				Drain: cfg.Shutdown.WorkerDrain}
+				Drain: cfg.Shutdown.WorkerDrain, RunFiles: e.runFiles}
 			if w.Queue == "container" {
 				// Container steps (spec 7.5): the sandbox runner and egress proxy.
 				more, err := containerSetup(ctx, w, log)
@@ -1562,8 +1619,10 @@ func serve(ctx context.Context, args []string) error {
 			}
 			if w.Queue == "ai" && cfg.AI.Provider != "" {
 				// AI steps (decision 0050): the deployment's model, the
-				// models steps may name, whether the plan has AI, and its
-				// AI overage.
+				// models steps may name, and the plan's AI overage. The
+				// plan's allowance for AI steps (ai_step_monthly_tokens,
+				// decision 0074 D7) decides whether it has them, not the
+				// ai feature, which is AI building's.
 				w.AI = &runtime.AISteps{Config: cfg.AI}
 				if cfg.Billing.On {
 					bill, err := e.billingService(ctx, nil)
@@ -1571,13 +1630,6 @@ func serve(ctx context.Context, args []string) error {
 						return fmt.Errorf("serve: ai queue: %w", err)
 					}
 					w.AI.Overage = bill.AIOverage
-					w.AI.Plan = func(ctx context.Context, tenant uuid.UUID) (bool, error) {
-						err := bill.Require(ctx, tenant, billing.FeatureAI)
-						if fe := (*billing.FeatureError)(nil); errors.As(err, &fe) {
-							return false, nil
-						}
-						return err == nil, err
-					}
 				}
 			}
 			tasks = append(tasks, w.Run)

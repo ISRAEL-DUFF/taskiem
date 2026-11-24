@@ -41,7 +41,7 @@ export interface ConnectorStep extends StepBase {
   action: string;
   connection?: string;
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   compensate?: { action: string; input?: Values };
 }
 
@@ -51,7 +51,7 @@ export interface CapabilityStep extends StepBase {
   uses: string;
   connection?: string;
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
 }
 
 /**
@@ -105,7 +105,7 @@ export interface ContainerLimits {
 export interface ContainerStep extends StepBase {
   type: "container";
   input?: Values;
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   config: {
     /** registry/repository@sha256:<64 hex>; tags are refused. */
     image: `${string}@sha256:${string}`;
@@ -122,7 +122,7 @@ export interface ContainerStep extends StepBase {
 
 export interface HttpStep extends StepBase {
   type: "http";
-  effect?: { idempotency_seed?: Expression };
+  effect?: { idempotency_seed?: Expression; resend_if_lost?: boolean };
   config:
     | { method: "GET" | "HEAD"; url: string; headers?: Values; query?: Values; body?: unknown; class?: ActionClass; idempotency_header?: string }
     | { method: "POST" | "PUT" | "PATCH" | "DELETE"; url: string; headers?: Values; query?: Values; body?: unknown; class: Exclude<ActionClass, "read">; idempotency_header?: string };
@@ -213,11 +213,33 @@ export interface TransformStep extends StepBase {
   config: { output: unknown };
 }
 
-/** Asks the deployment's AI model at run time (docs/contracts/wd-v1.md, AI steps): personal data in the prompt and input is hidden behind placeholders, except the input fields listed in personal_data; the output is the answer, matching output_schema. */
+/** One turn of an ai step's conversation: user is the customer, assistant the replies. */
+export interface AiTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** An ai step's configuration (docs/contracts/wd-v1.md, AI steps). */
+export interface AiConfig {
+  prompt: string;
+  output_schema: object | boolean;
+  model?: string;
+  personal_data?: string[];
+  /** The business's standing instruction (who it is, how it speaks), after Taskiem's own rules. */
+  system?: string;
+  /** The conversation so far, or an expression giving it; the last 50 turns are sent. */
+  history?: AiTurn[] | string;
+  /** The longest answer, in tokens (16 to 8192). */
+  max_tokens?: number;
+  /** The output when the model cannot answer, matching output_schema, or an expression giving it. */
+  fallback?: Record<string, unknown> | string;
+}
+
+/** Asks the deployment's AI model at run time (docs/contracts/wd-v1.md, AI steps): personal data in the prompt, input, history and instruction is hidden behind placeholders, except the input fields listed in personal_data; the output is the answer, matching output_schema, or the fallback when the model cannot answer. */
 export interface AiStep extends StepBase {
   type: "ai";
   input?: Values;
-  config: { prompt: string; output_schema: object | boolean; model?: string; personal_data?: string[] };
+  config: AiConfig;
 }
 
 export type Step =
@@ -323,7 +345,7 @@ export interface WorkflowDefinition {
   inputs?: { schema?: object | boolean };
   steps: Step[];
   types?: Record<string, object | boolean>;
-  settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration };
+  settings?: { timeout?: Duration; concurrency_key?: Expression; max_concurrency?: number; retention?: Duration | "conversations" };
   outputs?: Output[];
   /** Who may start it by hand (decision 0073): members holding one of these roles, beside run.start; owners always may. Left out: everyone with run.start. */
   roles?: string[];

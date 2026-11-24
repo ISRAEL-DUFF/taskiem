@@ -98,11 +98,21 @@ func TestTemplatesInstantiateCheckDryRunAndRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			used := map[string]bool{}
+			// What a template step's template declares may be declared
+			// here too (a connection passed through to it), not must.
+			passed := map[string]bool{}
 			var walk func([]*wd.Step)
 			walk = func(steps []*wd.Step) {
 				for _, st := range steps {
 					if st.Connector != "" {
 						used[st.Connector] = true
+					}
+					if st.Type == "template" {
+						if called, ok := templates.Default().Get(st.Template); ok {
+							for _, c := range called.Connectors {
+								passed[c] = true
+							}
+						}
 					}
 					if st.Type == "capability" && !wd.IsWait(st.Uses) {
 						used[templates.CapabilityPrefix+st.Uses] = true
@@ -122,7 +132,7 @@ func TestTemplatesInstantiateCheckDryRunAndRoundTrip(t *testing.T) {
 				}
 			}
 			for _, c := range tpl.Connectors {
-				if !used[c] {
+				if !used[c] && !passed[c] {
 					t.Errorf("declares %s but does not use it", c)
 				}
 			}

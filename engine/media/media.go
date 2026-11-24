@@ -59,7 +59,7 @@ var wantBuckets = []bucketInfo{
 	{ID: PublicBucket, Public: true, FileSizeLimit: ptr(int64(MaxImageBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png"},
 		CacheSeconds: ptr(int64(365 * 24 * 3600))},
 	{ID: PrivateBucket, Public: false, FileSizeLimit: ptr(int64(MaxFileBytes)), AllowedMIMETypes: []string{"image/jpeg", "image/png", "application/pdf",
-		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4"},
+		"audio/ogg", "audio/webm", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr"},
 		CacheSeconds: ptr(int64(0))},
 }
 
@@ -238,6 +238,14 @@ func (s *Service) ScanChatFile(ctx context.Context, data []byte) error {
 // Each business keeps its own copy, in its own storage. The caller scans
 // it first (ScanChatFile).
 func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte) (File, error) {
+	return s.PutPrivate(ctx, tenant, "chat/", data)
+}
+
+// PutPrivate stores a file as PutChatFile does, under prefix ("chat/",
+// "runs/"): a voice note by its container with its tags stripped, else a
+// PDF or a photo as PutFile keeps them. The caller scans what a person
+// sent first (ScanChatFile).
+func (s *Service) PutPrivate(ctx context.Context, tenant uuid.UUID, prefix string, data []byte) (File, error) {
 	ctype, clean, err := cleanVoice(data)
 	if err != nil {
 		return File{}, err
@@ -253,8 +261,8 @@ func (s *Service) PutChatFile(ctx context.Context, tenant uuid.UUID, data []byte
 	if err != nil {
 		return File{}, err
 	}
-	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a"}[ctype]
-	path := "chat/" + uuid.Must(uuid.NewV7()).String() + ext
+	ext := map[string]string{"audio/ogg": ".ogg", "audio/webm": ".webm", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/amr": ".amr"}[ctype]
+	path := prefix + uuid.Must(uuid.NewV7()).String() + ext
 	o, err := c.put(ctx, PrivateBucket, path, ctype, data)
 	if err != nil {
 		return File{}, err

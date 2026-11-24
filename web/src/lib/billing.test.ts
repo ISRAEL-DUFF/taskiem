@@ -47,3 +47,11 @@ describe("billing", () => {
     expect(blockerLines({})).toEqual([]);
   });
 });
+
+describe("a limit whose 0 turns the thing off", () => {
+  it("shows no meter when AI steps are off", () => {
+    const u = { runs_today: 0, running_runs: 0, workflows: 0, queued_runs: 0, runs_this_month: 0, ai_tokens_this_month: 0, ai_step_tokens_this_month: 0, secrets: 0, connections: 0 };
+    expect(meters({ ai_step_monthly_tokens: 0 }, u).some((m) => m.key === "ai_step_monthly_tokens")).toBe(false);
+    expect(meters({ ai_step_monthly_tokens: 1000 }, u).find((m) => m.key === "ai_step_monthly_tokens")?.limit).toBe(1000);
+  });
+});

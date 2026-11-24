@@ -388,6 +388,27 @@ func TestMessagesUseNoTechnicalWords(t *testing.T) {
 	}
 }
 
+// DetectAny is also sure of plain English, and never of a Pidgin message
+// that happens to use English words.
+func TestDetectAny(t *testing.T) {
+	on := []lang.Tag{lang.EN, lang.PCM, lang.YO, lang.HA, lang.IG}
+	for text, want := range map[string]struct {
+		tag  lang.Tag
+		sure bool
+	}{
+		"Please, what is the price of rice today?":       {lang.EN, true},
+		"Abeg how much is the rice?":                     {lang.EN, false},
+		"Abeg wetin dey happen for my account?":          {lang.PCM, true},
+		"ok":                                             {lang.EN, false},
+		"Ẹ jọ̀wọ́, kí ni mo lè ṣe lónìí?":                {lang.YO, true},
+		"I would like to know where the shop is, thanks": {lang.EN, true},
+	} {
+		if got, sure := lang.DetectAny(text, on); got != want.tag || sure != want.sure {
+			t.Errorf("DetectAny(%q) = %s %v, want %s %v", text, got, sure, want.tag, want.sure)
+		}
+	}
+}
+
 // The answers to how a purchase line is treated, typed or spoken
 // (what-a-business-buys §6): the longest words first, what follows them as
 // the rest, the person's language first and English always; every

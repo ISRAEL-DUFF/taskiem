@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -75,6 +77,53 @@ func DoJSONHeader(ctx context.Context, client *http.Client, method, url string, 
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return doClassified(client, req, headers, out)
+}
+
+// FilePart is the file of a multipart request.
+type FilePart struct {
+	Field, Name, Type string
+	Data              []byte
+}
+
+// DoMultipart POSTs a form with text fields and one file, and classifies
+// the answer as DoJSONHeader does (Telegram's sendVoice, Meta's media
+// upload).
+func DoMultipart(ctx context.Context, client *http.Client, url string, headers, fields map[string]string, file FilePart, out any) (http.Header, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := mw.WriteField(k, v); err != nil {
+			return nil, fmt.Errorf("encode form: %w: %w", err, effects.ErrFatal)
+		}
+	}
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, file.Field, file.Name))
+	if file.Type != "" {
+		h.Set("Content-Type", file.Type)
+	}
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		return nil, fmt.Errorf("encode form: %w: %w", err, effects.ErrFatal)
+	}
+	if _, err := part.Write(file.Data); err != nil {
+		return nil, fmt.Errorf("encode form: %w: %w", err, effects.ErrFatal)
+	}
+	if err := mw.Close(); err != nil {
+		return nil, fmt.Errorf("encode form: %w: %w", err, effects.ErrFatal)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", RedactURLError(err), effects.ErrFatal)
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return doClassified(client, req, headers, out)
+}
+
+// doClassified sends req and classifies the answer: a 2xx is decoded into
+// out; 429 and 503 are retryable, other 5xx an unknown outcome, other
+// statuses fatal.
+func doClassified(client *http.Client, req *http.Request, headers map[string]string, out any) (http.Header, error) {
 	req.Header.Set("Accept", "application/json")
 	for k, v := range headers {
 		req.Header.Set(k, v)

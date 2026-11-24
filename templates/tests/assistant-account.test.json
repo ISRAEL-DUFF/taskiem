@@ -1,0 +1,648 @@
+{
+  "schema": "wd-test/v1",
+  "template": "assistant-account",
+  "params": {},
+  "cases": [
+    {
+      "name": "a balance question reads the customer's own wallet, found by their number",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "How much do I have?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "bal": {
+          "output": {
+            "available_kobo": 4930000,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "completed",
+          "txns": "not_run",
+          "owed": "not_run"
+        },
+        "inputs": {
+          "acct": {
+            "table": "customer_accounts",
+            "filters": [
+              {
+                "column": "channel",
+                "op": "eq",
+                "value": "whatsapp"
+              },
+              {
+                "column": "sender",
+                "op": "in",
+                "values": [
+                  "2348031234567",
+                  "+2348031234567",
+                  "08031234567"
+                ]
+              }
+            ],
+            "limit": 1
+          },
+          "bal": {
+            "account": "c-ada"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "asked": "balance",
+            "text": "This customer asked about their balance. Their balance, read just now from their own account: 49300.00 naira."
+          }
+        }
+      }
+    },
+    {
+      "name": "recent transactions are read from the last 30 days",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Show me my last transactions",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "recent"
+          }
+        },
+        "txns": {
+          "output": {
+            "transactions": [
+              {
+                "at": "2026-10-25T09:14:02Z",
+                "direction": "in",
+                "amount_kobo": 4930000,
+                "narration": "SALARY"
+              },
+              {
+                "at": "2026-10-28T08:00:00Z",
+                "direction": "out",
+                "amount_kobo": 1200000
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "txns": "completed"
+        },
+        "inputs": {
+          "txns": {
+            "account": "c-ada"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their recent transactions. Their own account shows, newest first, in the last 30 days (date, money in or out, naira):\n2026-10-28, out, 12000.00 naira\n2026-10-25, in, 49300.00 naira"
+          }
+        }
+      }
+    },
+    {
+      "name": "what they owe is read from the invoices under their own WhatsApp number",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Have you received my payment?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        },
+        "owed": {
+          "output": {
+            "found": true,
+            "customer_name": "Ada",
+            "due_kobo": 500000,
+            "due": "₦5,000",
+            "open": [
+              {
+                "number": "INV-0002",
+                "status": "overdue",
+                "due_kobo": 500000,
+                "due": "₦5,000",
+                "due_on": "2026-11-01"
+              }
+            ],
+            "last_paid": {
+              "number": "INV-0001",
+              "total": "₦1,000",
+              "paid_on": "2026-10-31"
+            }
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "owed": "completed",
+          "bal": "not_run"
+        },
+        "inputs": {
+          "owed": {
+            "phone": "2348031234567"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "asked": "payment_status",
+            "text": "This customer asked about what they owe or their payments. Their invoices with the business, under their number: they owe ₦5,000 on 1 open invoice(s): INV-0002 ₦5,000 due 2026-11-01. Last paid: invoice INV-0001 (₦1,000, on 2026-10-31)."
+          }
+        }
+      }
+    },
+    {
+      "name": "on Telegram, what they owe is read under the phone on their record",
+      "trigger": {
+        "body": {
+          "via": "telegram",
+          "sender": "55501",
+          "text": "What do I owe?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 2,
+                "sender": "55501",
+                "phone": "+2348099999999"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        },
+        "owed": {
+          "output": {
+            "found": false,
+            "customer_name": "",
+            "due_kobo": 0,
+            "due": "₦0",
+            "open": []
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "acct": {
+            "filters": [
+              {
+                "column": "channel",
+                "op": "eq",
+                "value": "telegram"
+              },
+              {
+                "column": "sender",
+                "op": "in",
+                "values": [
+                  "55501"
+                ]
+              }
+            ]
+          },
+          "owed": {
+            "phone": "+2348099999999"
+          }
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about what they owe or their payments. The business has no invoices under their number: say someone from the team will check."
+          }
+        }
+      }
+    },
+    {
+      "name": "a balance question from someone with no linked account reads nothing",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "How much do I have?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "balance"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "not_run",
+          "unlinked": "completed"
+        },
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their own account, but the business has not linked their number to an account, so it cannot be read here: say someone from the team will help."
+          }
+        }
+      }
+    },
+    {
+      "name": "on Telegram with no record, what they owe cannot be read",
+      "trigger": {
+        "body": {
+          "via": "telegram",
+          "sender": "55501",
+          "text": "What do I owe?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "owed": "not_run",
+          "unlinked": "completed"
+        }
+      }
+    },
+    {
+      "name": "anything else reads nothing",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Are you open on Sunday?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "sender": "2348031234567",
+                "name": "Ada",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "other"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "bal": "not_run",
+          "owed": "not_run",
+          "nothing": "completed"
+        },
+        "outputs": {
+          "facts": {
+            "asked": "other",
+            "text": ""
+          }
+        }
+      }
+    },
+    {
+      "name": "a negative balance keeps its kobo and sign",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "My balance?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "channel": "whatsapp",
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "balance"
+          }
+        },
+        "bal": {
+          "output": {
+            "available_kobo": -15050,
+            "currency": "NGN"
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their balance. Their balance, read just now from their own account: -150.50 naira."
+          }
+        }
+      }
+    },
+    {
+      "name": "many transactions: the newest 20, in Lagos dates, and a note that there were more",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "Last transactions?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": [
+              {
+                "id": 1,
+                "channel": "whatsapp",
+                "sender": "2348031234567",
+                "account": "c-ada"
+              }
+            ]
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "recent"
+          }
+        },
+        "txns": {
+          "output": {
+            "transactions": [
+              {
+                "at": "2026-10-01T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100001
+              },
+              {
+                "at": "2026-10-02T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100002
+              },
+              {
+                "at": "2026-10-03T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100003
+              },
+              {
+                "at": "2026-10-04T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100004
+              },
+              {
+                "at": "2026-10-05T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100005
+              },
+              {
+                "at": "2026-10-06T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100006
+              },
+              {
+                "at": "2026-10-07T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100007
+              },
+              {
+                "at": "2026-10-08T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100008
+              },
+              {
+                "at": "2026-10-09T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100009
+              },
+              {
+                "at": "2026-10-10T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100010
+              },
+              {
+                "at": "2026-10-11T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100011
+              },
+              {
+                "at": "2026-10-12T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100012
+              },
+              {
+                "at": "2026-10-13T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100013
+              },
+              {
+                "at": "2026-10-14T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100014
+              },
+              {
+                "at": "2026-10-15T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100015
+              },
+              {
+                "at": "2026-10-16T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100016
+              },
+              {
+                "at": "2026-10-17T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100017
+              },
+              {
+                "at": "2026-10-18T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100018
+              },
+              {
+                "at": "2026-10-19T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100019
+              },
+              {
+                "at": "2026-10-20T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100020
+              },
+              {
+                "at": "2026-10-21T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100021
+              },
+              {
+                "at": "2026-10-22T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100022
+              },
+              {
+                "at": "2026-10-23T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100023
+              },
+              {
+                "at": "2026-10-24T12:00:00Z",
+                "direction": "in",
+                "amount_kobo": 100024
+              },
+              {
+                "at": "2026-10-28T23:30:00Z",
+                "direction": "out",
+                "amount_kobo": 1250
+              }
+            ],
+            "truncated": false
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about their recent transactions. Their own account shows, newest first, in the last 30 days (date, money in or out, naira):\n2026-10-29, out, 12.50 naira\n2026-10-24, in, 1000.24 naira\n2026-10-23, in, 1000.23 naira\n2026-10-22, in, 1000.22 naira\n2026-10-21, in, 1000.21 naira\n2026-10-20, in, 1000.20 naira\n2026-10-19, in, 1000.19 naira\n2026-10-18, in, 1000.18 naira\n2026-10-17, in, 1000.17 naira\n2026-10-16, in, 1000.16 naira\n2026-10-15, in, 1000.15 naira\n2026-10-14, in, 1000.14 naira\n2026-10-13, in, 1000.13 naira\n2026-10-12, in, 1000.12 naira\n2026-10-11, in, 1000.11 naira\n2026-10-10, in, 1000.10 naira\n2026-10-09, in, 1000.09 naira\n2026-10-08, in, 1000.08 naira\n2026-10-07, in, 1000.07 naira\n2026-10-06, in, 1000.06 naira\n(Only the newest are shown: there were more.)"
+          }
+        }
+      }
+    },
+    {
+      "name": "what they owe says the credit they have",
+      "trigger": {
+        "body": {
+          "via": "whatsapp",
+          "sender": "2348031234567",
+          "text": "What do I owe?",
+          "language": "en"
+        }
+      },
+      "mocks": {
+        "acct": {
+          "output": {
+            "rows": []
+          }
+        },
+        "classify": {
+          "output": {
+            "intent": "payment_status"
+          }
+        },
+        "owed": {
+          "output": {
+            "found": true,
+            "customer_name": "Ada",
+            "due_kobo": 500000,
+            "due": "₦5,000",
+            "credit_kobo": 200000,
+            "credit": "₦2,000",
+            "open": [
+              {
+                "number": "INV-0002",
+                "status": "sent",
+                "due_kobo": 500000,
+                "due": "₦5,000"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "outputs": {
+          "facts": {
+            "text": "This customer asked about what they owe or their payments. Their invoices with the business, under their number: they owe ₦5,000 on 1 open invoice(s): INV-0002 ₦5,000. They also have ₦2,000 paid in that no invoice has taken yet."
+          }
+        }
+      }
+    }
+  ]
+}

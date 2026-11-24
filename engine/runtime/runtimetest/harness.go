@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/egress"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/wasmconn"
@@ -55,6 +56,9 @@ type Env struct {
 	// a loaded machine does not time calls out); tests of timeouts set
 	// less.
 	CallTimeout time.Duration
+	// RunFiles is the run file store connectors get (docs/files.md); nil
+	// gives them none.
+	RunFiles *runfiles.Service
 	// NoReplay skips replaying run histories at cleanup, for a test that
 	// writes a history the engine would not (to test that replay fails).
 	NoReplay bool
@@ -206,7 +210,7 @@ func (e *Env) Worker(id string) *runtime.Worker {
 		timeout = DefaultCallTimeout
 	}
 	return &runtime.Worker{Store: e.Store, Registry: e.Registry, Secrets: s, Connections: e.Vault, Egress: e.Egress,
-		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: timeout}
+		ID: id, Queue: "connector", Lease: 30 * time.Second, CallTimeout: timeout, RunFiles: e.RunFiles}
 }
 
 // AIWorker returns a worker for the ai queue answering with prov, which

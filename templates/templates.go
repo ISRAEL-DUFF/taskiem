@@ -110,11 +110,20 @@ type Table struct {
 	// Front marks a known table a storefront's front makes (products,
 	// menu: docs/spec/fronts.md §6). It is filled where the front is, so
 	// chat does not offer it as a new table.
-	Front       bool     `json:"front,omitempty"`
+	Front bool `json:"front,omitempty"`
+	// Assistant marks a known table the customer assistant's templates
+	// make (conversations, assistant_allowed: decision 0074 V8), so chat
+	// does not offer it as a new table either.
+	Assistant   bool     `json:"assistant,omitempty"`
 	Name        string   `json:"name"`
 	Title       string   `json:"title,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Columns     []Column `json:"columns"`
+	// KeepDays and KeepWithConversations say how long the table keeps its
+	// rows (data tables' row expiry, decision 0074 V5); neither keeps them
+	// until deleted.
+	KeepDays              *int `json:"keep_days,omitempty"`
+	KeepWithConversations bool `json:"keep_with_conversations,omitempty"`
 }
 
 // Column is a column of a template's table, as the Tables page takes one.
@@ -1101,6 +1110,9 @@ func (t *Template) resolveKnown() error {
 		if len(tb.Columns) == 0 {
 			tb.Columns = append([]Column(nil), kt.Columns...)
 		}
+		if tb.KeepDays == nil && !tb.KeepWithConversations {
+			tb.KeepDays, tb.KeepWithConversations = kt.KeepDays, kt.KeepWithConversations
+		}
 		tb.Known = ""
 	}
 	return nil
@@ -1167,7 +1179,19 @@ const (
 	// sheet templates whose twins are stock's (sales-day-total,
 	// low-stock-alert), which do nothing without it.
 	WhenNoSheetsStock = "no_sheets_stock"
+	// WhenAssistantsOff: Taskiem lets no assistant answer the business's
+	// customers (off, a beta it is not in, or stopped): the assistant's
+	// templates (category assistant) are not offered (decision 0074 V8).
+	WhenAssistantsOff = "assistants_off"
 )
+
+// CategoryAssistant is the customer assistant's templates' category.
+const CategoryAssistant = "assistant"
+
+// Closed reports whether a template is not offered where holds hold.
+func (t *Template) Closed(holds map[string]bool) bool {
+	return t.Category == CategoryAssistant && holds[WhenAssistantsOff]
+}
 
 // ReplaceWhen are the conditions known.
 var ReplaceWhen = []string{WhenKeepsStock, WhenRecordsSales, WhenNoSheets, WhenNoSheetsStock}
@@ -1196,7 +1220,7 @@ func For(list []*Template, holds map[string]bool) []*Template {
 	}
 	placed := map[string]bool{}
 	for _, t := range list {
-		if t.ReplacedWhere.By(holds) != "" || placed[t.ID] || waits[t.ID] {
+		if t.ReplacedWhere.By(holds) != "" || placed[t.ID] || waits[t.ID] || t.Closed(holds) {
 			continue
 		}
 		// The first twin offered here goes before the template it

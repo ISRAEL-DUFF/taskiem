@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
-import { ErrorBox, Field, JsonInput, PageHeader, fmtTime, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Items, JsonInput, PageHeader, Row, fmtTime, useAction, useLoad } from "../ui";
 import { WhatsAppNumber } from "./WhatsAppNumber";
 import { PeopleYouMessage } from "./PeopleYouMessage";
 import { USSDChannels } from "./USSDChannels";
@@ -47,6 +47,156 @@ function AdvancedSwitch() {
       <p className="hint">For someone who builds workflows by hand: a blank canvas, formulas, the test environment and your own connectors. Everyone in the business sees the same.</p>
       <ErrorBox error={act.error} />
     </div>
+  );
+}
+
+interface LanguagesView {
+  languages: string[];
+  default_language: string;
+  voice_notes: boolean;
+  voice_in_workflows: boolean;
+  speech_hear: boolean;
+  speech_speak: boolean;
+  voices: string[];
+  conversation_days: number;
+  max_conversation_days: number;
+}
+
+/** Voice in workflows: the owner's switch for workflows that hear customers' voice notes and answer by voice (speech, decision 0074 T7). */
+function VoiceSwitch() {
+  const { data, error, reload } = useLoad(() => get<LanguagesView>("/v1/languages"), []);
+  const act = useAction();
+  const [days, setDays] = useState<string>();
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const can = data.speech_hear || data.speech_speak;
+  const save = (patch: { voice_in_workflows?: boolean; conversation_days?: number }) =>
+    act.run(
+      async () => (
+        await put("/v1/languages", { languages: data.languages, default_language: data.default_language, voice_notes: data.voice_notes, ...patch }),
+        reload()
+      ),
+      "Saved",
+    );
+  const what = data.speech_hear && data.speech_speak
+    ? "hear voice notes and answer by voice"
+    : data.speech_hear
+      ? "hear voice notes (answering by voice is not set up yet)"
+      : "answer by voice (hearing voice notes is not set up yet)";
+  return (
+    <section className="card" id="voice">
+      <h2 style={{ marginTop: 0 }}>Voice in workflows</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={data.voice_in_workflows}
+          disabled={act.busy || (!can && !data.voice_in_workflows)}
+          data-testid="voice-in-workflows"
+          onChange={(e) => void save({ voice_in_workflows: e.target.checked })}
+        />{" "}
+        Let workflows {can ? what : "hear voice notes and answer by voice"}
+      </label>
+      <p className="hint">
+        {can
+          ? "Your customers' voice notes are turned into text and your replies spoken back. Each second heard or spoken counts against your plan's monthly voice allowance."
+          : "Not available yet: whoever runs your Taskiem has not set up a speech service."}
+      </p>
+      <Field label="Keep conversations with customers for (days)" hint={`What customers said and what your assistant answered, with its voice notes, are deleted after this many days (at most ${data.max_conversation_days} on your plan).`}>
+        <form
+          className="toolbar"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const n = Number(days);
+            if (n >= 1) void save({ conversation_days: n }).then((ok) => ok && setDays(undefined));
+          }}
+        >
+          <input
+            type="number"
+            min={1}
+            max={data.max_conversation_days}
+            value={days ?? String(data.conversation_days)}
+            data-testid="conversation-days"
+            onChange={(e) => setDays(e.target.value)}
+            style={{ maxWidth: 120 }}
+          />
+          <button type="submit" disabled={act.busy || days === undefined}>
+            Save
+          </button>
+        </form>
+      </Field>
+      <ErrorBox error={act.error} />
+    </section>
+  );
+}
+
+interface AssistantView {
+  paused: boolean;
+  paused_at: string | null;
+  taskiem: { on: boolean; mode: string; beta: boolean; stopped: boolean };
+  handovers: { channel: string; customer: string; where: string; hint: string; at: string; until: string }[];
+}
+
+/** Your assistant (decision 0074 V6): the owner's pause for every customer, and the customers waiting for a person. */
+function AssistantCard() {
+  const { data, error, reload } = useLoad(() => get<AssistantView>("/v1/assistant"), []);
+  const act = useAction();
+  if (!data) return error ? <ErrorBox error={error} /> : null;
+  const run = (fn: () => Promise<unknown>, done: string) => void act.run(async () => (await fn(), reload()), done);
+  return (
+    <section className="card" id="assistant">
+      <h2 style={{ marginTop: 0 }}>Your assistant</h2>
+      {!data.taskiem.on && (
+        <div className="notice" role="note">
+          <p>
+            {data.taskiem.stopped
+              ? "Taskiem has turned your assistant off for now. Contact Taskiem support to find out why."
+              : data.taskiem.mode === "off"
+                ? "Assistants are turned off on this Taskiem for now. Your customers' messages are not answered."
+                : "Assistants are open to some businesses only for now. Contact Taskiem support to join."}
+          </p>
+        </div>
+      )}
+      <label>
+        <input
+          type="checkbox"
+          checked={data.paused}
+          disabled={act.busy}
+          data-testid="assistant-paused"
+          onChange={(e) => run(() => post("/v1/assistant/pause", { paused: e.target.checked }), e.target.checked ? "Paused" : "Answering again")}
+        />{" "}
+        Pause your assistant for every customer
+      </label>
+      <p className="hint">
+        {data.paused && data.paused_at
+          ? `Paused since ${fmtTime(data.paused_at)}. Customers' messages are kept, and nobody gets an automatic answer: answer them yourself.`
+          : "When you pause it, it answers nobody, and customers' messages are kept for you to answer yourself."}
+      </p>
+      <h3>Customers waiting for a person</h3>
+      {data.handovers.length === 0 ? (
+        <p className="hint">None. When a customer asks for a person, you are told, and your assistant stays quiet for them while you answer.</p>
+      ) : (
+        <Items label="Customers waiting for a person">
+          {data.handovers.map((h) => (
+            <Row
+              key={h.channel + h.customer}
+              icon="chat"
+              tone="warn"
+              title={h.hint}
+              sub={
+                <span className="sub">
+                  {h.where} · asked {fmtTime(h.at)} · your assistant answers them again {fmtTime(h.until)}
+                </span>
+              }
+              testid="assistant-handover"
+            >
+              <button disabled={act.busy} onClick={() => run(() => post("/v1/assistant/handovers/resume", { channel: h.channel, customer: h.customer }), "Answering them again")}>
+                Let the assistant answer them now
+              </button>
+            </Row>
+          ))}
+        </Items>
+      )}
+      <ErrorBox error={act.error} />
+    </section>
   );
 }
 
@@ -200,6 +350,8 @@ export function Settings() {
       )}
       {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
+      {can("secret.manage") && <VoiceSwitch />}
+      {can("secret.manage") && <AssistantCard />}
       {advanced && <Environments editable={can("secret.manage")} />}
       {can("secret.manage") && <Secrets env={env} />}
       <Variables env={env} editable={can("secret.manage")} />
@@ -227,6 +379,9 @@ interface LimitsView {
     connections: number;
     whatsapp_templates_this_month?: { sent: number; by_category: Record<string, number>; overage: number; blocked: number };
     container_seconds_this_month?: number;
+    speech_seconds_this_month?: number;
+    ai_tokens_this_month?: number;
+    ai_step_tokens_this_month?: number;
   };
   recent_hits: { limit: string; day: string; hits: number }[];
   help: Record<string, string>;
@@ -246,12 +401,15 @@ function PlanLimits() {
     max_connections: data.usage.connections,
     whatsapp_templates_monthly: data.usage.whatsapp_templates_this_month?.sent ?? 0,
     container_minutes_monthly: Math.ceil((data.usage.container_seconds_this_month ?? 0) / 60),
+    speech_seconds_monthly: data.usage.speech_seconds_this_month ?? 0,
+    ai_monthly_tokens: data.usage.ai_tokens_this_month ?? 0,
+    ai_step_monthly_tokens: data.usage.ai_step_tokens_this_month ?? 0,
   };
   const wt = data.usage.whatsapp_templates_this_month;
   return (
     <section className="card">
       <h2 style={{ marginTop: 0 }}>Plan limits</h2>
-      <p className="hint">Set by your operator; 0 means no limit. Above the ingest rate deliveries are still accepted and their runs queued.</p>
+      <p className="hint">Set by your operator; 0 means no limit, except where a row says 0 turns something off. Above the ingest rate deliveries are still accepted and their runs queued.</p>
       <table className="cards">
         <thead>
           <tr>
@@ -742,7 +900,7 @@ function Governance() {
                 ai.data.retention ? `What the provider keeps: ${ai.data.retention}.` : "This deployment has not stated what the provider keeps; ask its operator."
               }`
             : "This deployment has no AI model, so AI steps cannot run."}
-          {ai.data.enabled && !ai.data.steps_plan && " Your plan does not include AI."}
+          {ai.data.enabled && !ai.data.steps_plan && " Your plan has no allowance for AI steps."}
         </p>
       )}
       <h2>Retention</h2>

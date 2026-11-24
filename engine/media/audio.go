@@ -29,8 +29,75 @@ func cleanVoice(data []byte) (string, []byte, error) {
 		return cleanMP3(data)
 	case len(data) >= 12 && string(data[4:8]) == "ftyp":
 		return cleanMP4(data)
+	case bytes.HasPrefix(data, []byte("#!AMR\n")), bytes.HasPrefix(data, []byte("#!AMR-WB\n")):
+		// AMR (older phones' voice notes, WhatsApp's audio/amr): frames of
+		// sound after the magic, no metadata to strip.
+		return checkAMR(data)
+	case isADTS(data):
+		// AAC in ADTS frames (WhatsApp's audio/aac): no metadata to strip.
+		return checkADTS(data)
 	}
 	return "", nil, nil
+}
+
+// --- AMR and AAC (ADTS) ---
+
+func checkAMR(data []byte) (string, []byte, error) {
+	head := len("#!AMR\n")
+	if bytes.HasPrefix(data, []byte("#!AMR-WB\n")) {
+		head = len("#!AMR-WB\n")
+	}
+	if len(data) <= head {
+		return "", nil, fmt.Errorf("%w: an AMR file with no sound", ErrFile)
+	}
+	return "audio/amr", data, nil
+}
+
+// isADTS reports whether b starts with an ADTS frame header: the 12-bit
+// sync word and layer 0 (MPEG audio frames have layer 1 to 3).
+func isADTS(b []byte) bool {
+	return len(b) >= 7 && b[0] == 0xFF && b[1]&0xF6 == 0xF0
+}
+
+// adtsFrameLen is the length of the ADTS frame at b, 0 when b does not
+// start with one.
+func adtsFrameLen(b []byte) int {
+	if !isADTS(b) {
+		return 0
+	}
+	n := int(b[3]&0x03)<<11 | int(b[4])<<3 | int(b[5])>>5
+	if n < 7 {
+		return 0
+	}
+	return n
+}
+
+// checkADTS accepts a stream of consecutive ADTS frames: every frame
+// header in sequence must be valid, so a file that only starts like one
+// is refused.
+func checkADTS(data []byte) (string, []byte, error) {
+	for off, frames := 0, 0; off < len(data); frames++ {
+		n := adtsFrameLen(data[off:])
+		if n == 0 || off+n > len(data) {
+			if frames > 0 && off+n > len(data) && n > 0 {
+				break // a last frame cut short
+			}
+			return "", nil, fmt.Errorf("%w: not an AAC voice note", ErrFile)
+		}
+		off += n
+	}
+	return "audio/aac", data, nil
+}
+
+// IsOpus reports whether data is Ogg whose first packet is Opus: the only
+// audio WhatsApp accepts as a voice note (and Telegram plays as one).
+func IsOpus(data []byte) bool {
+	pages, err := parseOgg(data)
+	if err != nil {
+		return false
+	}
+	packets := oggPackets(data, pages, 1)
+	return len(packets) > 0 && bytes.HasPrefix(oggRead(data, packets[0]), []byte("OpusHead"))
 }
 
 // --- MP3 ---

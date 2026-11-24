@@ -50,6 +50,8 @@ app_event_drops.last_at
 app_event_drops.trigger_name
 approval_decisions.run_id
 approvals.run_id
+assistant_turns.at
+assistant_turns.tenant_id
 audit_anchors.anchored_at
 audit_anchors.chain_seq
 audit_anchors.tenant_id
@@ -396,6 +398,8 @@ data_tables.created_by
 data_tables.description
 data_tables.id
 data_tables.kept_by
+data_tables.keep_days
+data_tables.keep_with_conversations
 data_tables.name
 data_tables.tenant_id
 data_tables.title
@@ -625,6 +629,13 @@ invoice_payment_starts.workflow_id
 key_parked_steps.tenant_id
 key_rewrap_due.not_before
 key_rewrap_due.tenant_id
+knowledge_sources.failed_at
+knowledge_sources.id
+knowledge_sources.kind
+knowledge_sources.read_at
+knowledge_sources.refresh_at
+knowledge_sources.status
+knowledge_sources.tenant_id
 link_mirrors_due.due_at
 link_mirrors_due.invoice_id
 link_mirrors_due.tenant_id
@@ -1318,6 +1329,8 @@ telegram_link_codes.user_id
 telegram_link_codes.window_start
 tenant_byok_keys.status
 tenant_byok_keys.tenant_id
+tenant_channel_settings.conversation_days
+tenant_channel_settings.tenant_id
 tenant_connectors.connector_id
 tenant_connectors.digest
 tenant_connectors.disabled_at
@@ -1326,6 +1339,7 @@ tenant_connectors.module
 tenant_connectors.tenant_id
 tenant_connectors.version
 tenant_limits.ai_monthly_tokens
+tenant_limits.ai_step_monthly_tokens
 tenant_limits.container_concurrency
 tenant_limits.container_minutes_monthly
 tenant_limits.embed_sites
@@ -1349,6 +1363,7 @@ tenant_limits.max_workflows
 tenant_limits.runs_per_day
 tenant_limits.runs_per_month
 tenant_limits.sms_monthly
+tenant_limits.speech_seconds_monthly
 tenant_limits.storefront_bookings_monthly
 tenant_limits.storefront_items
 tenant_limits.storefront_orders_monthly
@@ -1406,6 +1421,7 @@ trigger_receipts.received_at
 triggers.connection
 triggers.connector
 triggers.environment
+triggers.guard
 triggers.id
 triggers.lease_until
 triggers.next_fire_at
@@ -1486,6 +1502,10 @@ worker_pool_workers.pool
 worker_pool_workers.queue
 worker_pool_workers.seen_at
 worker_pool_workers.worker_id
+run_files.expires_at
+run_files.id
+run_files.storage_key
+run_files.tenant_id
 business_profile.categories
 explore_featured.business
 explore_featured.created_at

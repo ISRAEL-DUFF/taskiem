@@ -52,7 +52,7 @@ func Validate(doc []byte) []Problem {
 		return []Problem{{Path: "/", Message: err.Error()}}
 	}
 	var out []Problem
-	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkWebhook(d), checkSubflows(d), checkAI(d), checkOutputs(d), checkSettings(d), checkTool(d)} {
+	for _, probs := range [][]Problem{checkExpressions(d), checkUSSD(d), checkForms(d), checkCapabilities(d), checkTemplates(d), checkCallbacks(d), checkWebhook(d), checkSubflows(d), checkAI(d), checkOutputs(d), checkSettings(d), checkRetiredTriggers(d), checkTool(d)} {
 		out = append(out, probs...)
 	}
 	return out
@@ -289,8 +289,12 @@ func findCycle(steps []any, graph map[string][]string) []string {
 // ends (Atlas part D findings), as a tenant's default retention is.
 const MinRetention = 24 * time.Hour
 
+// RetentionConversations keeps a run as long as the business keeps its
+// conversations with customers (decision 0074 V5).
+const RetentionConversations = "conversations"
+
 func checkSettings(d *Definition) []Problem {
-	if r := d.Settings.Retention; r != "" {
+	if r := d.Settings.Retention; r != "" && r != RetentionConversations {
 		if dur, err := ParseDuration(r); err != nil || dur < MinRetention {
 			return []Problem{{Path: "/settings/retention", Message: fmt.Sprintf("retention %q is shorter than a day: runs are kept at least a day after they end", r)}}
 		}

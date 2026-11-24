@@ -56,6 +56,9 @@ func New(o Options) *connector.Connector {
 		"send_media":       connector.ActionFunc(c.sendMedia),
 		"send_interactive": connector.ActionFunc(c.sendInteractive),
 		"mark_as_read":     connector.ActionFunc(c.markAsRead),
+		"get_media":        connector.ActionFunc(c.getMedia),
+		"upload_media":     connector.ActionFunc(c.uploadMedia),
+		"send_typing":      connector.ActionFunc(c.sendTyping),
 	}}
 }
 
@@ -130,6 +133,16 @@ func classify(he *connector.HTTPError) error {
 		// An undocumented code with a server error: Meta may have acted.
 		return fmt.Errorf("%w: %w", me, effects.ErrUnknownOutcome)
 	}
+	if me.Code == 131047 || me.Code == 470 {
+		// Outside the customer's 24-hour window (470 is its older code):
+		// only an approved template may be sent now (decision 0074 C13). A
+		// workflow branches on the code in on_error and sends one, or tells
+		// a member. Meta often accepts such a send and reports 131047
+		// later, as a failed status: a run that must know waits for the
+		// status (docs/assistant-guard.md), and checks assistant@1 window
+		// before sending late.
+		return connector.WithCode("window_closed", fmt.Errorf("%w: %w", me, effects.ErrFatal))
+	}
 	return fmt.Errorf("%w: %w", me, effects.ErrFatal)
 }
 
@@ -171,12 +184,17 @@ func (c *client) getPhoneNumber(ctx context.Context, req connector.Request) (con
 		VerifiedName           string `json:"verified_name"`
 		QualityRating          string `json:"quality_rating"`
 		CodeVerificationStatus string `json:"code_verification_status"`
+		MessagingLimitTier     string `json:"messaging_limit_tier"`
+		Status                 string `json:"status"`
+		NameStatus             string `json:"name_status"`
 	}
-	if err := c.do(ctx, req, http.MethodGet, "/"+id, nil, &p); err != nil {
+	// The quality and limit fields are only sent when asked for.
+	if err := c.do(ctx, req, http.MethodGet, "/"+id+"?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,messaging_limit_tier,status,name_status", nil, &p); err != nil {
 		return connector.Response{}, err
 	}
 	return connector.Response{Output: map[string]any{"id": p.ID, "display_phone_number": p.DisplayPhoneNumber, "verified_name": p.VerifiedName,
-		"quality_rating": p.QualityRating, "code_verification_status": p.CodeVerificationStatus}}, nil
+		"quality_rating": p.QualityRating, "code_verification_status": p.CodeVerificationStatus,
+		"messaging_limit_tier": p.MessagingLimitTier, "status": p.Status, "name_status": p.NameStatus}}, nil
 }
 
 // send posts one message of type kind with content, adding the fields every
@@ -255,14 +273,36 @@ func (c *client) sendMedia(ctx context.Context, req connector.Request) (connecto
 		return connector.Response{}, fmt.Errorf("whatsapp: media_type must be image, document, audio, video or sticker, got %q: %w", kind, effects.ErrFatal)
 	}
 	link, mediaID := strings.TrimSpace(str(in, "link")), strings.TrimSpace(str(in, "media_id"))
-	if (link == "") == (mediaID == "") {
-		return connector.Response{}, fmt.Errorf("whatsapp: give exactly one of link and media_id: %w", effects.ErrFatal)
+	file := in["file"]
+	given := 0
+	for _, set := range []bool{link != "", mediaID != "", file != nil} {
+		if set {
+			given++
+		}
+	}
+	if given != 1 {
+		return connector.Response{}, fmt.Errorf("%w: %w", errNoMedia, effects.ErrFatal)
+	}
+	voice, _ := in["voice"].(bool)
+	if voice && kind != "audio" {
+		return connector.Response{}, fmt.Errorf("whatsapp: only audio can be sent as a voice note: %w", effects.ErrFatal)
+	}
+	if file != nil {
+		// A run file: uploaded first, then sent by its media id.
+		id, err := c.upload(ctx, req, file, voice)
+		if err != nil {
+			return connector.Response{}, err
+		}
+		mediaID = id
 	}
 	media := map[string]any{}
 	if link != "" {
 		media["link"] = link
 	} else {
 		media["id"] = mediaID
+	}
+	if voice {
+		media["voice"] = true
 	}
 	if cp := str(in, "caption"); cp != "" {
 		if kind == "audio" || kind == "sticker" {

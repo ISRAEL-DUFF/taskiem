@@ -19,14 +19,16 @@ auth:
   fields:
     - { key: access_token, label: System user access token, secret: true }
     - { key: phone_number_id, label: Business phone number ID (not the phone number) }
-    - { key: app_secret, label: App secret (verifies webhook signatures), secret: true, required: false }
+    - { key: app_secret, label: "App secret (proves messages really come from Meta; needed to receive them)", secret: true, required: false }
     - { key: verify_token, label: Verify token (any string; enter the same in the App Dashboard), secret: true, required: false }
     - { key: business_account_id, label: WhatsApp Business Account ID (to choose your message templates by name), required: false }
   test: { action: get_phone_number }
 # Meta: 80 messages a second per business phone number by default.
 rate_limit: { requests: 80, per: 1s, scope: connection }
 base_url: https://graph.facebook.com/v25.0
-egress_hosts: [graph.facebook.com]
+# Media is downloaded from Meta's media host (Retrieve and Download media).
+# A media URL may redirect to Meta's CDN: only its hosts are followed.
+egress_hosts: [graph.facebook.com, lookaside.fbsbx.com, "*.fbcdn.net", "*.whatsapp.net"]
 actions:
   get_phone_number:
     title: Get the business phone number
@@ -38,8 +40,11 @@ actions:
         id:                       { type: string }
         display_phone_number:     { type: string }
         verified_name:            { type: string }
-        quality_rating:           { type: string }
+        quality_rating:           { type: string, description: "GREEN, YELLOW or RED (Meta's rating of how customers receive the number's messages), or UNKNOWN" }
         code_verification_status: { type: string }
+        messaging_limit_tier:     { type: string, description: "How many customers a day the business may start conversations with: TIER_250, TIER_1K, TIER_10K, TIER_100K or TIER_UNLIMITED" }
+        status:                   { type: string, description: "CONNECTED, FLAGGED (quality is low: the limit may go down), RESTRICTED (the number can only reply), …" }
+        name_status:              { type: string, description: "The display name's review: APPROVED, PENDING_REVIEW, DECLINED, …" }
   list_templates:
     title: List approved message templates
     description: The business's approved message templates with their language and words, to choose one by what it says. Needs the WhatsApp Business Account ID on the connection.
@@ -67,6 +72,11 @@ actions:
       repeated. A throughput refusal (130429 and the other rate limits)
       proves nothing was sent and is retried.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: body, kind: text }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -91,6 +101,8 @@ actions:
       button parameters exactly as Meta documents them. Not idempotent, like
       send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: name, kind: template }
     compensate: null
     input:
       type: object
@@ -120,9 +132,16 @@ actions:
   send_media:
     title: Send an image, document, audio, video or sticker
     description: >-
-      By public link (Meta fetches and caches it for 10 minutes) or by the id
-      of uploaded media. Not idempotent, like send_text.
+      By public link (Meta fetches and caches it for 10 minutes), by the id
+      of uploaded media, or by a run file's reference (uploaded first).
+      Audio with voice true is sent as a voice note. Not idempotent, like
+      send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: caption, file: file, kind_field: media_type }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -130,8 +149,10 @@ actions:
       properties:
         to:         { type: string }
         media_type: { type: string, enum: [image, document, audio, video, sticker] }
-        link:       { type: string, description: HTTPS URL of the file; or media_id }
+        link:       { type: string, description: "HTTPS URL of the file; or media_id, or file" }
         media_id:   { type: string }
+        file:       { description: "A run file's reference (docs/files.md): uploaded to Meta, then sent" }
+        voice:      { type: boolean, description: "Audio only: send as a voice note (needs Ogg/Opus audio; plays inline up to 512 KB)" }
         caption:    { type: string, maxLength: 1024, description: Image, document and video only }
         filename:   { type: string, description: Document only, with extension }
         reply_to:   { type: string }
@@ -152,6 +173,11 @@ actions:
       inbound message event with interactive.button_reply or list_reply. Not
       idempotent, like send_text.
     class: unsafe_write
+    # Speaks to a customer: recorded in the conversation (connector/v1 rule 24).
+    turn: { to: to, text: interactive.body.text, kind: button }
+    # A duplicate is a duplicate chat message: a step may ask for a lost
+    # send to be sent once more (decision 0074 D11).
+    resend_if_lost: true
     compensate: null
     input:
       type: object
@@ -185,6 +211,69 @@ actions:
       type: object
       properties:
         success: { type: boolean }
+  get_media:
+    title: Get a file a customer sent
+    description: >-
+      Downloads the media of an inbound message (a voice note, a photo, a
+      document) by its media id, within Meta's time for it, and keeps it as
+      a run file (docs/files.md): the run gets the file's reference, never
+      its bytes. What a customer sent is scanned for malware and kept as
+      personal data.
+    class: read
+    input:
+      type: object
+      required: [media_id]
+      properties:
+        media_id: { type: string, description: "The inbound message's media id (trigger.item.message.audio.id, .image.id, .document.id)" }
+        name:     { type: string, description: A file name to keep it under }
+        sender:   { type: string, description: "Who sent it (trigger.item.message.from): erasing that number deletes the file too" }
+    output:
+      type: object
+      properties:
+        file:      { type: object, description: "The run file's reference: file, name, type, size, sha256" }
+        mime_type: { type: string, description: What Meta said the media was }
+    pii:
+      - { field: sender, category: phone }
+      - { field: output.file.name, category: other }
+  upload_media:
+    title: Upload a file to send
+    description: >-
+      Uploads a run file to Meta and answers its media id, for send_media.
+      voice true checks it is Ogg/Opus audio and uploads it as a voice note.
+      Uploading twice only makes a second id, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [file]
+      properties:
+        file:  { description: "A run file's reference, or its id" }
+        voice: { type: boolean }
+    output:
+      type: object
+      properties:
+        media_id: { type: string }
+  send_typing:
+    title: Show that a reply is being written
+    description: >-
+      Marks the customer's message read and shows "typing…" in their chat
+      until the reply is sent, for at most 25 seconds. Where Meta refuses
+      the typing indicator, the read receipt alone is sent (typing false).
+      Showing it twice changes nothing, so a retry is safe.
+    class: idempotent_write
+    idempotency: { field: "header:X-Taskiem-Idempotency-Key", encoding: base32_lower, length: 32 }
+    compensate: null
+    input:
+      type: object
+      required: [message_id]
+      properties:
+        message_id: { type: string, description: The wamid of the message being answered }
+    output:
+      type: object
+      properties:
+        success: { type: boolean }
+        typing:  { type: boolean, description: False when only the read receipt could be sent }
 triggers:
   # Meta sends every subscribed field of the app to its one callback URL and
   # may batch many messages, statuses and errors in one delivery: split
@@ -192,6 +281,7 @@ triggers:
   # items and are acknowledged.
   messages:
     type: webhook
+    title: Messages from customers
     verify: { scheme: hmac_sha256, header: X-Hub-Signature-256, secret_field: app_secret }
     handshake: { method: GET, token_query: hub.verify_token, secret_field: verify_token, respond: '=query["hub.challenge"]' }
     events: [message, status.sent, status.delivered, status.read, status.failed, status.played, error]
@@ -209,3 +299,60 @@ triggers:
     # wait for the user's reply or button press. Status: the wamid (send_*
     # output message_id), so a run can wait for delivered, read or failed.
     correlation: '=item.kind == "message" ? item.message.from : item.kind == "status" ? item.status.id : ""'
+    # What a customer wrote and who they are is personal data (decision
+    # 0074, P1): sealed in run history, readable by the run's steps.
+    # A customer's new message, for a workflow's customer guard (decision
+    # 0074 V6, connector/v1 rule 23). The Cloud API has no groups: every
+    # chat is one to one. A voice note or audio is fetched before the run
+    # can wait in a queue (Meta's media links last minutes).
+    conversation:
+      sender: '=item.kind == "message" ? item.message.from : ""'
+      sender_category: phone
+      private: '=true'
+      kind: >-
+        =item.kind != "message" ? "other"
+        : item.message.type == "text" ? "text"
+        : item.message.type == "audio" ? (has(item.message.audio.voice) && item.message.audio.voice ? "voice" : "audio")
+        : item.message.type in ["image", "video", "document", "sticker", "location", "reaction"] ? item.message.type
+        : item.message.type == "contacts" ? "contact"
+        : item.message.type in ["button", "interactive"] ? "button"
+        : "other"
+      text: >-
+        =item.kind != "message" ? ""
+        : item.message.type == "text" ? item.message.text.body
+        : item.message.type == "button" ? item.message.button.text
+        : item.message.type == "interactive" && has(item.message.interactive.button_reply) ? item.message.interactive.button_reply.title
+        : item.message.type == "interactive" && has(item.message.interactive.list_reply) ? item.message.interactive.list_reply.title
+        : item.message.type == "image" && has(item.message.image.caption) ? item.message.image.caption
+        : item.message.type == "video" && has(item.message.video.caption) ? item.message.video.caption
+        : item.message.type == "document" && has(item.message.document.caption) ? item.message.document.caption
+        : ""
+      media: '=item.kind == "message" && item.message.type == "audio" ? item.message.audio.id : ""'
+      fetch: get_media
+      fetch_input: media_id
+      reply: { action: send_text, to: to, text: body, template: send_template, templates: list_templates }
+    pii:
+      - { field: body.entry.*.changes.*.value.contacts.*.wa_id, category: phone }
+      - { field: body.entry.*.changes.*.value.contacts.*.profile.name, category: name }
+      - { field: body.entry.*.changes.*.value.messages.*.from, category: phone }
+      - { field: body.entry.*.changes.*.value.messages.*.text.body, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.image.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.video.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.document.caption, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.document.filename, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.location, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.contacts, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.interactive, category: other }
+      - { field: body.entry.*.changes.*.value.messages.*.button.text, category: other }
+      - { field: body.entry.*.changes.*.value.statuses.*.recipient_id, category: phone }
+      - { field: item.message.from, category: phone }
+      - { field: item.message.text.body, category: other }
+      - { field: item.message.image.caption, category: other }
+      - { field: item.message.video.caption, category: other }
+      - { field: item.message.document.caption, category: other }
+      - { field: item.message.document.filename, category: other }
+      - { field: item.message.location, category: other }
+      - { field: item.message.contacts, category: other }
+      - { field: item.message.interactive, category: other }
+      - { field: item.message.button.text, category: other }
+      - { field: item.status.recipient_id, category: phone }

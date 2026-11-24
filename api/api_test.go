@@ -423,8 +423,18 @@ func TestAdminAndErasure(t *testing.T) {
 	}
 	secret := enrol(t, owner)
 	// By value, in another format: the same person (canonical subject ids).
-	if out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "222 9999 9999", "cancel_runs": true, "totp": codeAfter(secret, 1)}); len(out["subjects"].([]any)) != 1 {
+	// Files about the person are deleted with them (decision 0074).
+	var erasedFiles string
+	w.srv.EraseFiles = func(_ context.Context, _ uuid.UUID, subject string) (int, error) {
+		erasedFiles = subject
+		return 2, nil
+	}
+	out := owner.must(200, "POST", "/v1/pii/erase", map[string]any{"category": "bvn", "value": "222 9999 9999", "cancel_runs": true, "totp": codeAfter(secret, 1)})
+	if len(out["subjects"].([]any)) != 1 {
 		t.Fatalf("erased: %v", out)
+	}
+	if erasedFiles == "" || erasedFiles != out["subject"] || out["files_deleted"] != float64(2) {
+		t.Errorf("the person's files: hook got %q, answer %v", erasedFiles, out)
 	}
 	got := owner.must(200, "GET", "/v1/runs/"+run+"?reveal=true", nil)
 	if s := toJSON(got); strings.Contains(s, "22299999999") {

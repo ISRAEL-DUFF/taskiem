@@ -96,7 +96,9 @@ export interface BillingOverview {
     secrets: number;
     connections: number;
     ai_tokens_this_month: number;
+    ai_step_tokens_this_month?: number;
     whatsapp_templates_this_month?: { sent: number; overage: number };
+    speech_seconds_this_month?: number;
   };
   history: Snapshot[];
   subtenant_usage?: (Snapshot & { subtenants: number })[];
@@ -134,14 +136,19 @@ const meterDefs: [key: string, label: string, used: (u: BillingOverview["usage"]
   ["max_queued_runs", "Runs queued", (u) => u.queued_runs],
   ["runs_per_month", "Runs this month", (u) => u.runs_this_month],
   ["ai_monthly_tokens", "AI tokens this month", (u) => u.ai_tokens_this_month],
+  ["ai_step_monthly_tokens", "AI replies' tokens this month", (u) => u.ai_step_tokens_this_month ?? 0],
   ["whatsapp_templates_monthly", "WhatsApp templates this month", (u) => u.whatsapp_templates_this_month?.sent ?? 0],
+  ["speech_seconds_monthly", "Voice seconds this month", (u) => u.speech_seconds_this_month ?? 0],
   ["max_secrets", "Secrets", (u) => u.secrets],
   ["max_connections", "Connections", (u) => u.connections],
 ];
 
 /** Usage against the plan's limits, one meter per counted limit. */
+/** Limits whose 0 turns the thing off rather than lifting the limit: no meter is shown for them then. */
+const zeroIsOff = new Set(["ai_step_monthly_tokens"]);
+
 export function meters(limits: Record<string, number>, usage: BillingOverview["usage"]): Meter[] {
-  return meterDefs.map(([key, label, used]) => {
+  return meterDefs.filter(([key]) => !(zeroIsOff.has(key) && (limits[key] ?? 0) === 0)).map(([key, label, used]) => {
     const limit = limits[key] ?? 0;
     const n = used(usage);
     const fraction = limit > 0 ? Math.min(n / limit, 1) : null;

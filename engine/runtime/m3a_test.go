@@ -48,6 +48,53 @@ func TestConcurrencyKeySerialisesRuns(t *testing.T) {
 	}
 }
 
+// A concurrency key built from a customer's phone serialises that
+// customer's runs, but neither runs.concurrency_key nor concurrency_slots
+// keeps the phone: only a keyed hash, equal for the same phone.
+func TestConcurrencyKeyStoredAsKeyedHash(t *testing.T) {
+	e := rt.New(t)
+	wf := e.Publish(t, wfDoc(`{"id":"ok","type":"approval","config":{"role":"officer"}}`, `{"concurrency_key":"=trigger.item.message.from"}`))
+	msg := func(from string) map[string]any {
+		return map[string]any{"item": map[string]any{"message": map[string]any{"from": from}}}
+	}
+	const phone, other = "+2348031234567", "+2348099999999"
+	a := e.Start(t, wf, msg(phone))
+	b := e.Start(t, wf, msg(phone))
+	c := e.Start(t, wf, msg(other))
+	if e.Status(t, a) != "waiting" || e.Status(t, b) != "queued" || e.Status(t, c) != "waiting" {
+		t.Fatalf("statuses %s %s %s", e.Status(t, a), e.Status(t, b), e.Status(t, c))
+	}
+	keys := map[uuid.UUID]string{}
+	for _, r := range []runtime.RunRef{a, b, c} {
+		var k string
+		if err := e.DB.Admin.QueryRow(ctx, `SELECT COALESCE(concurrency_key, '') FROM runs WHERE id = $1`, r.ID).Scan(&k); err != nil {
+			t.Fatal(err)
+		}
+		keys[r.ID] = k
+	}
+	if keys[a.ID] == "" || keys[a.ID] != keys[b.ID] || keys[a.ID] == keys[c.ID] {
+		t.Errorf("stored keys: a=%q b=%q c=%q", keys[a.ID], keys[b.ID], keys[c.ID])
+	}
+	var leaked int
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT (SELECT count(*) FROM runs WHERE concurrency_key LIKE '%' || $1 || '%' OR concurrency_key LIKE '%' || $2 || '%')
+		+ (SELECT count(*) FROM concurrency_slots WHERE key LIKE '%' || $1 || '%' OR key LIKE '%' || $2 || '%')`, "8031234567", "8099999999").Scan(&leaked); err != nil {
+		t.Fatal(err)
+	}
+	if leaked != 0 {
+		t.Errorf("%d rows keep the phone in the clear", leaked)
+	}
+	var slot string
+	if err := e.DB.Admin.QueryRow(ctx, `SELECT key FROM concurrency_slots WHERE run_id = $1`, a.ID).Scan(&slot); err != nil || slot != keys[a.ID] {
+		t.Errorf("slot key %q %v, want %q", slot, err, keys[a.ID])
+	}
+	if err := e.Store.DecideApproval(ctx, a, "ok", "approved", "u", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if e.Status(t, a) != "completed" || e.Status(t, b) != "waiting" {
+		t.Fatalf("after a: %s %s", e.Status(t, a), e.Status(t, b))
+	}
+}
+
 func TestMaxConcurrencyQueuesAndCancelPromotes(t *testing.T) {
 	e := rt.New(t)
 	wf := e.Publish(t, wfDoc(`{"id":"w","type":"wait","config":{"duration":"1h"}}`, `{"max_concurrency":1}`))

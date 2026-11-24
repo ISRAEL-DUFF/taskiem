@@ -170,8 +170,10 @@ type Proposal struct {
 // published (no-technical-steps N3).
 type Need struct {
 	// Kind is connection, variable, secret, table, role, saved (a saved
-	// thing the workflow reads, by name), or field (a form
-	// field asking for a chat id: problem chat_id).
+	// thing the workflow reads, by name), setup (something to set in a
+	// provider's own dashboard, or on this Taskiem by whoever runs it),
+	// setting (a switch the owner turns on in Settings: problem off), or
+	// field (a form field asking for a chat id: problem chat_id).
 	Kind string `json:"kind"`
 	// Name is the connection's, variable's, secret's, table's or role's
 	// name; "" for a connection a step does not name (the only one of its

@@ -1,10 +1,14 @@
 package media
 
 import (
+	"time"
+
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"testing"
+
+	"github.com/israel-duff/taskiem/engine/media/mediatest"
 )
 
 // Fixtures built here: each container with a tag that must not survive,
@@ -230,5 +234,55 @@ func TestVoiceNotesCleaned(t *testing.T) {
 		if ctype, _, err := cleanVoice(data); ctype != "" || err != nil {
 			t.Errorf("%s: %q %v", name, ctype, err)
 		}
+	}
+}
+
+// adtsFrame is one ADTS frame of n bytes (header and silence).
+func adtsFrame(n int) []byte {
+	f := make([]byte, n)
+	f[0], f[1] = 0xFF, 0xF1
+	f[3] = byte(n >> 11 & 0x03)
+	f[4] = byte(n >> 3)
+	f[5] = byte(n&0x07)<<5 | 0x1F
+	f[6] = 0xFC
+	return f
+}
+
+func TestAACAndAMRAreKept(t *testing.T) {
+	aac := append(append(adtsFrame(40), adtsFrame(52)...), adtsFrame(33)...)
+	if ct, out, err := cleanVoice(aac); err != nil || ct != "audio/aac" || !bytes.Equal(out, aac) {
+		t.Fatalf("AAC: %q %v", ct, err)
+	}
+	broken := append(adtsFrame(40), 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07)
+	if _, _, err := cleanVoice(broken); !errors.Is(err, ErrFile) {
+		t.Fatalf("a stream that only starts like AAC: %v", err)
+	}
+	amr := append([]byte("#!AMR\n"), 0x3C, 0x48, 0xF5, 0x1F)
+	if ct, _, err := cleanVoice(amr); err != nil || ct != "audio/amr" {
+		t.Fatalf("AMR: %q %v", ct, err)
+	}
+	if _, _, err := cleanVoice([]byte("#!AMR\n")); !errors.Is(err, ErrFile) {
+		t.Fatalf("an empty AMR: %v", err)
+	}
+	if AudioType(append([]byte("#!AMR-WB\n"), 1, 2, 3)) != "audio/amr" {
+		t.Fatal("AMR-WB")
+	}
+}
+
+func TestIsOpus(t *testing.T) {
+	if !IsOpus(oggOpus(nil, false)) {
+		t.Fatal("an Ogg Opus voice note")
+	}
+	if IsOpus([]byte("OggS not really")) || IsOpus([]byte("ID3 mp3")) {
+		t.Fatal("not Opus")
+	}
+}
+
+func TestMediatestFiles(t *testing.T) {
+	if ct, _, err := cleanVoice(mediatest.OggOpus(3 * time.Second)); err != nil || ct != "audio/ogg" || !IsOpus(mediatest.OggOpus(time.Second)) {
+		t.Fatalf("mediatest Opus: %q %v", ct, err)
+	}
+	if ct, _, err := cleanVoice(mediatest.OggVorbis()); err != nil || ct != "audio/ogg" || IsOpus(mediatest.OggVorbis()) {
+		t.Fatalf("mediatest Vorbis: %q %v", ct, err)
 	}
 }

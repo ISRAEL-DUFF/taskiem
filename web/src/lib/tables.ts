@@ -37,6 +37,10 @@ export interface Table {
   row_count?: number;
   /** The Taskiem feature that keeps the table (money_log), or null: a kept table is read-only here. */
   kept_by?: string | null;
+  /** Rows are deleted this many days after they were added; null keeps them until deleted. */
+  keep_days?: number | null;
+  /** Rows are kept as long as the business keeps its conversations with customers. */
+  keep_with_conversations?: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

@@ -450,6 +450,12 @@ func TestTriggerExpressions(t *testing.T) {
 	}
 }
 
+// customer_balance and customer_transactions on a customer's own bank
+// account linked through Mono (decision 0074 V9).
+func TestCapabilities(t *testing.T) {
+	fixture.Capabilities(t, func(base string) *connector.Connector { return New(Options{BaseURL: base}) })
+}
+
 // Reconcile must not answer "not found" from lookups Mono has not
 // confirmed: the engine would debit the customer again, or make a second
 // mandate. The step parks instead.

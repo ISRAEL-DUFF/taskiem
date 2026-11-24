@@ -113,6 +113,13 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 				if st.Capability != nil {
 					out = append(out, pr(path+"/capability", "set when a capability step is expanded; write a capability step instead"))
 				}
+				if ok && st.Effect != nil && st.Effect.ResendIfLost && hasAction(c, st.Action) && !c.Manifest.Actions[st.Action].ResendIfLost {
+					out = append(out, pr(path+"/effect/resend_if_lost", fmt.Sprintf("%s %s cannot be sent again when its answer is lost: only chat replies can (decision 0074)", st.Connector, st.Action)))
+				} else if st.Effect != nil && st.Effect.ResendIfLost && st.Retry != nil && st.Retry.Max <= 0 {
+					// The resend spends one of the step's retries: with none
+					// it would silently never happen.
+					out = append(out, pr(path+"/effect/resend_if_lost", "a reply that is sent again needs at least one retry; remove retry max 0 or resend_if_lost"))
+				}
 			case "http":
 				// reconcilable_write means "ask the provider before sending
 				// again", which needs a connector's reconcile action; an
@@ -127,6 +134,9 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 					out = append(out, pr(path+"/config/headers", msg))
 				}
 			case "capability":
+				if st.Effect != nil && st.Effect.ResendIfLost {
+					out = append(out, pr(path+"/effect/resend_if_lost", "a payment step is never sent again when its answer is lost: it is checked or parked (decision 0074)"))
+				}
 				if !wd.IsWait(st.Uses) && !anyRail(reg, st.Uses) {
 					out = append(out, pr(path, fmt.Sprintf("no rail Taskiem connects to can %s yet", st.Uses)))
 				}

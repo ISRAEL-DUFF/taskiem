@@ -26,6 +26,9 @@ import (
 
 var schema = schemacheck.New("https://schemas.taskiem.dev/connector/v1.json", schemas.ConnectorV1)
 
+// MaxCallTimeout is the longest call_timeout an action may declare.
+const MaxCallTimeout = 300
+
 // Manifest is the subset of a connector/v1 manifest the engine reads.
 type Manifest struct {
 	ID       string `json:"id"`
@@ -443,15 +446,29 @@ func (a Auth) Modes() []KeyPrefix {
 }
 
 type ActionSpec struct {
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	Class       effects.Class   `json:"class"`
-	Idempotency *effects.Spec   `json:"idempotency"`
-	Reconcile   string          `json:"reconcile"`
-	Compensate  *string         `json:"compensate"`
-	Input       json.RawMessage `json:"input"`
-	Output      json.RawMessage `json:"output"`
-	PII         []PIIField      `json:"pii"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Class       effects.Class `json:"class"`
+	Idempotency *effects.Spec `json:"idempotency"`
+	Reconcile   string        `json:"reconcile"`
+	Compensate  *string       `json:"compensate"`
+	// ResendIfLost says a duplicate of this unsafe write is a duplicate
+	// chat message and nothing worse, so a step may ask for it to be sent
+	// once more when its answer is lost (decision 0074 D11). Never for an
+	// action that moves money or costs per message.
+	ResendIfLost bool `json:"resend_if_lost,omitempty"`
+	// CallTimeout is how long one call to a read action may take, in
+	// seconds, when the worker's usual bound (30 s) is too short: hearing
+	// a five-minute voice note or speaking a long reply (decision 0074).
+	// Reads only: a write's deadline also decides when reconciling may
+	// conclude it was never sent. At most MaxCallTimeout.
+	CallTimeout int `json:"call_timeout,omitempty"`
+	// Turn says the action speaks to (or hears) a customer, for the
+	// conversation's record (decision 0074 V7; rule 24).
+	Turn   *TurnSpec       `json:"turn,omitempty"`
+	Input  json.RawMessage `json:"input"`
+	Output json.RawMessage `json:"output"`
+	PII    []PIIField      `json:"pii"`
 }
 
 // PIIField accepts either "field" or {field, category}.
@@ -593,6 +610,12 @@ func (m *Manifest) check() []string {
 		p := "/actions/" + name
 		if a.Class == effects.Read && a.Compensate != nil {
 			add("%s: read actions cannot declare compensate", p)
+		}
+		if a.CallTimeout != 0 && (a.Class != effects.Read || a.CallTimeout < 1 || a.CallTimeout > MaxCallTimeout) {
+			add("%s/call_timeout: only a read action may set its own call timeout, of 1 to %d seconds", p, MaxCallTimeout)
+		}
+		if a.ResendIfLost && a.Class != effects.UnsafeWrite {
+			add("%s/resend_if_lost: only an unsafe write can be resent; other classes retry or reconcile already", p)
 		}
 		if a.Reconcile != "" {
 			if r, ok := m.Actions[a.Reconcile]; !ok {
@@ -967,4 +990,20 @@ type PickerSpec struct {
 	Items  string `json:"items"`
 	ID     string `json:"id"`
 	Label  string `json:"label"`
+}
+
+// TurnSpec is how an action takes part in a conversation with a customer
+// (rule 24). A send names its input fields: To (the customer, as the
+// channel's trigger gives them: its conversation's sender), Text and File
+// (a run file sent); Kind is its kind (text, voice, audio, image,
+// document, template), or KindField an input field holding it. Transcript
+// names the output field of what an action heard in the customer's voice
+// note (speech@1 transcribe).
+type TurnSpec struct {
+	To         string `json:"to,omitempty"`
+	Text       string `json:"text,omitempty"`
+	File       string `json:"file,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	KindField  string `json:"kind_field,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
 }

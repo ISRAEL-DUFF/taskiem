@@ -115,6 +115,23 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		out["provider"], out["model"] = s.AI.Provider.Name(), s.AI.Provider.Model()
 		out["budget"] = map[string]int64{"monthly_tokens": limit, "used_tokens": used}
+		// AI steps spend their own allowance (decision 0074 D7).
+		tenant := principalFrom(r.Context()).TenantID
+		lim, err := s.Store.LimitsFor(r.Context(), tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		var steps int64
+		if err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			steps, err = runtime.AIStepTokensThisMonth(r.Context(), tx, tenant)
+			return err
+		}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		out["step_budget"] = map[string]int64{"monthly_tokens": lim.AIStepMonthlyTokens, "used_tokens": steps}
 		// AI steps (decision 0050): the models they may name, what the
 		// provider keeps, and whether the business allows them.
 		out["step_models"] = nonNil(s.AI.Config.OfferedStepModels())
@@ -130,7 +147,7 @@ func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out["steps_allowed"] = allowed
-	out["steps_plan"] = s.Billing.Require(r.Context(), principalFrom(r.Context()).TenantID, billing.FeatureAI) == nil
+	out["steps_plan"] = s.aiStepsInPlan(r.Context(), principalFrom(r.Context()).TenantID)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -209,8 +226,9 @@ func (s *Server) startAIBuild(ctx context.Context, who aiActor, req aiBuildReq, 
 		if breq.Context, err = aiContext(ctx, tx, reg, req.Environment, req.Workflow); err != nil {
 			return err
 		}
-		// A plan without AI gets no ai steps proposed.
-		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil
+		// A plan without AI, or without an allowance for AI steps, gets none
+		// proposed.
+		breq.Context.AISteps = breq.Context.AISteps && s.Billing.Require(ctx, who.tenant, billing.FeatureAI) == nil && s.aiStepsInPlan(ctx, who.tenant)
 		// A goal typed in chat is the member's words, as their chat history
 		// is: sealed under them, with no clear copy (F50b).
 		goal := pii.Redact(req.Goal)

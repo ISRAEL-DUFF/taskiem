@@ -7,7 +7,7 @@ import (
 )
 
 func TestSet(t *testing.T) {
-	rails := []string{"balance", "collect_link", "collect_push", "collect_transfer", "get_payment", "get_payout", "list_banks", "list_credits", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
+	rails := []string{"balance", "collect_link", "collect_push", "collect_transfer", "customer_balance", "customer_transactions", "get_payment", "get_payout", "list_banks", "list_credits", "pay_bank", "pay_many", "pay_mobile_money", "pay_wallet", "refund", "resolve_account", "virtual_account"}
 	books := []string{"books_accounts", "books_bill", "books_customer", "books_expense", "books_invoice", "books_items", "books_payment", "books_sale", "books_taxes"}
 	want := append(append([]string{}, rails...), books...)
 	if got := Names(); len(got) != len(want) {

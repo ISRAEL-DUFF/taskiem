@@ -11,6 +11,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/wd"
 )
 
@@ -27,7 +28,7 @@ import (
 // startSubflow starts a subflow step's child run. What keeps the run
 // from starting (no such workflow, no published version, a plan limit,
 // too deep a chain) fails the step rather than the parent's decision.
-func (s *Store) startSubflow(ctx context.Context, tx pgx.Tx, run runRow, ev decide.NewEvent, p history.ScheduledPayload) (func() error, error) {
+func (s *Store) startSubflow(ctx context.Context, tx pgx.Tx, run runRow, ev decide.NewEvent, p history.ScheduledPayload, taint pii.Taint) (func() error, error) {
 	failStep := func(format string, args ...any) (func() error, error) {
 		msg := fmt.Sprintf(format, args...)
 		return func() error {
@@ -93,7 +94,7 @@ func (s *Store) startSubflow(ctx context.Context, tx pgx.Tx, run runRow, ev deci
 		"parent": map[string]any{"run_id": run.ref.ID.String(), "step": ev.StepID, "workflow_id": run.workflowID.String()}}
 	_, err = s.startIn(ctx, tx, StartRequest{TenantID: run.ref.TenantID, WorkflowID: wf, Version: version, Environment: run.env, Trigger: trigger,
 		StartedBy: "subflow:" + run.ref.ID.String() + "/" + ev.StepID,
-		Parent:    &ParentRun{Run: run.ref.ID, Step: ev.StepID, Waits: p.Subflow.Wait, Seed: seed + "/" + ev.StepID}}, &child)
+		Parent:    &ParentRun{Run: run.ref.ID, Step: ev.StepID, Waits: p.Subflow.Wait, Seed: seed + "/" + ev.StepID, taint: taint}}, &child)
 	if err != nil {
 		if _, limited := IsLimit(err); limited || errors.Is(err, ErrTenantSuspended) || errors.Is(err, ErrNotFound) {
 			if p.Subflow.Wait {
@@ -106,6 +107,7 @@ func (s *Store) startSubflow(ctx context.Context, tx pgx.Tx, run runRow, ev deci
 		return nil, err
 	}
 	if !p.Subflow.Wait {
+		// Nothing personal: the child's id and "started".
 		raw, _ := json.Marshal(map[string]any{"run_id": child.ID.String(), "status": "started"})
 		return func() error {
 			_, err := appendEvent(ctx, tx, run.ref.ID, history.SignalReceived, ev.StepID, 0, signalPayload(history.SubflowEvent, raw), history.OriginSignal)
@@ -175,7 +177,9 @@ func (s *Store) notifyParent(ctx context.Context, tx pgx.Tx, r runRow, status st
 	if err != nil {
 		return err
 	}
-	_, err = s.deliverSignalTx(ctx, tx, r.ref.TenantID, r.env, history.SubflowEvent, history.SubflowCorrelation(parent.String(), *step), raw, false)
+	// The report is sealed with the parent's cipher as it is appended
+	// (deliverSignalTx): its error text and any output left in the clear.
+	_, err = s.deliverSignalTx(ctx, tx, r.ref.TenantID, r.env, history.SubflowEvent, history.SubflowCorrelation(parent.String(), *step), raw, nil, false)
 	return err
 }
 

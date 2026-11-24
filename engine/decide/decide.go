@@ -1395,7 +1395,11 @@ func (d *decider) activation(sc scope, _ map[string]any) map[string]any {
 		case f.completed:
 			steps[id] = map[string]any{"output": f.output}
 		case f.finalFailure != nil:
-			steps[id] = map[string]any{"error": map[string]any{"kind": f.finalFailure.Kind, "message": f.finalFailure.Message}}
+			e := map[string]any{"kind": f.finalFailure.Kind, "message": f.finalFailure.Message}
+			if f.finalFailure.Code != "" {
+				e["code"] = f.finalFailure.Code
+			}
+			steps[id] = map[string]any{"error": e}
 		default:
 			continue
 		}
@@ -1476,8 +1480,40 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 		if err == nil {
 			in, keptIn, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 		}
-		p.Input = map[string]any{"prompt": prompt, "input": in}
-		p.SecretPaths = append(under("/input", keptIn), under("/prompt", keptPrompt)...)
+		q := map[string]any{"prompt": prompt, "input": in}
+		secretPaths := append(under("/input", keptIn), under("/prompt", keptPrompt)...)
+		// The conversation parts (decision 0074 V4), only when the step
+		// has them, so a step without them schedules as it always did.
+		if err == nil && s.AI != nil {
+			if s.AI.System != "" {
+				var kept []string
+				q["system"], kept, err = engine.ResolveKeeping(s.AI.System, act)
+				secretPaths = append(secretPaths, under("/system", kept)...)
+			}
+			for _, part := range []struct {
+				key string
+				raw []byte
+			}{{"history", s.AI.History}, {"fallback", s.AI.Fallback}} {
+				if err != nil || len(part.raw) == 0 {
+					continue
+				}
+				var v any
+				if err = json.Unmarshal(part.raw, &v); err == nil {
+					var kept []string
+					q[part.key], kept, err = engine.ResolveKeeping(v, act)
+					secretPaths = append(secretPaths, under("/"+part.key, kept)...)
+				}
+				// Only the last turns are sent: only they are kept with
+				// the scheduled step, however long the conversation.
+				if list, ok := q[part.key].([]any); ok && part.key == "history" && len(list) > wd.AIMaxHistory {
+					drop := len(list) - wd.AIMaxHistory
+					q[part.key] = list[drop:]
+					secretPaths = shiftHistoryPaths(secretPaths, drop)
+				}
+			}
+		}
+		p.Input = q
+		p.SecretPaths = secretPaths
 	default:
 		p.Input, p.SecretPaths, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 	}

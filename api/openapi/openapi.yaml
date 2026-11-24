@@ -172,6 +172,15 @@ tags:
 - name: USSD
   description: USSD channels.
   x-taskiem-guide: ussd
+- name: Assistant
+  description: "A business's customer assistant on its own WhatsApp number or Telegram bot: the owner's pause and the customers handed to a person."
+  x-taskiem-guide: assistant-guard
+- name: Conversations
+  description: "What customers said to a business's assistant, answering them by hand, its numbers, and Talk to it here."
+  x-taskiem-guide: conversations
+- name: Knowledge
+  description: What the business's assistant knows, from its own words, storefront, tables, website, documents, sheets and books.
+  x-taskiem-guide: knowledge
 - name: Languages
   description: Languages beyond English and voice notes on WhatsApp, USSD and SMS (drafts until reviewed by native speakers).
   x-taskiem-guide: languages
@@ -19739,6 +19748,11 @@ paths:
                 properties:
                   ok:
                     type: boolean
+                  warnings:
+                    type: array
+                    description: In plain words, events these details cannot receive (a signing value is missing).
+                    items:
+                      type: string
         default:
           $ref: '#/components/responses/Error'
   /v1/connections/oauth/start:
@@ -20110,8 +20124,20 @@ paths:
               $ref: '#/components/schemas/ConnectionCredentialsMerge'
         required: true
       responses:
-        '204':
-          $ref: '#/components/responses/NoContent'
+        '200':
+          description: Saved. warnings lists, in plain words, events this connection still cannot receive.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  warnings:
+                    type: array
+                    items:
+                      type: string
         '400':
           description: A field the connector does not take, or a required one cleared.
           content:
@@ -21785,6 +21811,778 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/StepUpProof'
+  /v1/assistant:
+    get:
+      operationId: getAssistant
+      tags:
+      - Assistant
+      summary: The customer assistant's state
+      description: 'Whether the owner has paused the business''s assistant for every customer, what Taskiem allows (TASKIEM_ASSISTANTS, the business''s beta flag, a stop by Taskiem), and the customers waiting for a person (decision 0074 V6, docs/assistant-guard.md).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/assistant/pause:
+    post:
+      operationId: pauseAssistant
+      tags:
+      - Assistant
+      summary: Pause or resume the assistant for every customer
+      description: Paused, customers' messages are kept and nothing is answered (trigger.guard.outcome quiet, reason paused). Audited (assistant.pause, assistant.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/assistant/handovers/resume:
+    post:
+      operationId: resumeAssistantHandover
+      tags:
+      - Assistant
+      summary: Answer a customer handed to a person with the assistant again
+      description: Ends a customer's hand-over before it runs out. Audited (assistant.handover.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, customer]
+              properties:
+                channel:
+                  type: string
+                customer:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assistant'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations:
+    get:
+      operationId: listConversations
+      tags:
+      - Conversations
+      summary: The assistants and their customers
+      description: 'The business''s assistants (workflows whose chat trigger has a guard), by channel, and their customers, latest first, with their state: answered by the assistant, waiting for a person, or stopped (decision 0074 V7, docs/conversations.md).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationList'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/thread:
+    get:
+      operationId: getConversation
+      tags:
+      - Conversations
+      summary: A customer's conversation
+      description: Their turns, oldest first (the last 200, before pages back), with what was done with each message and the run that answered it. Numbers, emails and identity numbers in the words are hidden unless reveal is true, which takes pii.reveal and is audited (conversation.reveal).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: customer
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: reveal
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: before
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: before_id
+        in: query
+        required: false
+        description: With before, the id of the earliest message shown, so messages of one moment are not skipped
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/metrics:
+    get:
+      operationId: conversationMetrics
+      tags:
+      - Conversations
+      summary: An assistant's month
+      description: Customers, messages, answers, time to answer (median and slowest tenth, in seconds), replies held back, hand-overs, answers by hand, runs that did not finish, and the share of the month's allowances used.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationMetrics'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/templates:
+    get:
+      operationId: conversationTemplates
+      tags:
+      - Conversations
+      summary: The channel's approved templates
+      description: For answering a WhatsApp customer after the 24-hour window. Empty for a channel without templates.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.reply
+      x-taskiem-all-environments: true
+      parameters:
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationTemplates'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/reply:
+    post:
+      operationId: replyToCustomer
+      tags:
+      - Conversations
+      summary: Answer a customer by hand
+      description: Sends text (inside WhatsApp's 24-hour window, or on Telegram) or an approved template through the channel's connection, as the business, and records it with who sent it. The same request_id sends once. Refused (409) with text outside the window; 502 when the channel refused it or did not say whether it was sent. Audited (conversation.reply).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.reply
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, customer]
+              properties:
+                channel:
+                  type: string
+                customer:
+                  type: string
+                text:
+                  type: string
+                  maxLength: 4000
+                request_id:
+                  type: string
+                  maxLength: 100
+                  description: The same id sends once. One that failed may be sent again; one being sent or whose outcome is unknown is refused (409)
+                template:
+                  type: object
+                  required: [name, language]
+                  properties:
+                    name:
+                      type: string
+                    language:
+                      type: string
+                    parameters:
+                      type: array
+                      items:
+                        type: string
+                    body:
+                      type: string
+                      description: The template's words, so what the customer reads is recorded with {{n}} filled in
+              additionalProperties: false
+      responses:
+        '200':
+          description: Sent; or already sent for this request_id (duplicate)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationSent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/pause:
+    post:
+      operationId: pauseCustomer
+      tags:
+      - Conversations
+      summary: Answer a customer yourself
+      description: The assistant is quiet for this customer for hours (default 24) while a person answers. No alert. Audited (conversation.pause).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.reply
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, customer]
+              properties:
+                channel:
+                  type: string
+                customer:
+                  type: string
+                hours:
+                  type: integer
+                  minimum: 1
+                  maximum: 168
+              additionalProperties: false
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/resume:
+    post:
+      operationId: resumeCustomer
+      tags:
+      - Conversations
+      summary: Let the assistant answer a customer again
+      description: Ends a hand-over. Audited (assistant.handover.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.reply
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, customer]
+              properties:
+                channel:
+                  type: string
+                customer:
+                  type: string
+              additionalProperties: false
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/test:
+    post:
+      operationId: startTestMessage
+      tags:
+      - Conversations
+      summary: Talk to it here
+      description: 'A message to an assistant as a customer would write it, on the member''s own test chat: through the guard, then a sandbox run of the version in the environment (dev before prod), in which everything that would change something is simulated. Answers the run (to ask about with GET /v1/conversations/test/{run}), or why nothing started.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read,run.start
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workflow, text]
+              properties:
+                workflow:
+                  type: string
+                  format: uuid
+                environment:
+                  type: string
+                text:
+                  type: string
+                  maxLength: 4000
+              additionalProperties: false
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationTestStarted'
+        '200':
+          description: Not answered, so no run (they had written STOP, too many messages, a kind it does not read, too busy, or assistants are off); STOP, START and asking for a person start a run (201) with a fixed answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationTestStarted'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: resetTestChats
+      tags:
+      - Conversations
+      summary: Start the test chats again
+      description: Forgets the member's own test chats (what was said, and STOP or a hand-over tried in them).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read,run.start
+      x-taskiem-all-environments: true
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/conversations/test/{run}:
+    get:
+      operationId: getTestMessage
+      tags:
+      - Conversations
+      summary: What the assistant would have answered
+      description: The test message's run and, once it has ended, what it would have sent and what the check held back.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: conversation.read
+      x-taskiem-all-environments: true
+      parameters:
+      - name: run
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationTestTurn'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge:
+    get:
+      operationId: listKnowledge
+      tags:
+      - Knowledge
+      summary: What the business's assistant knows
+      description: The business's knowledge sources (docs/knowledge.md, decision 0074 D12), oldest first, with their state and how many passages each has in use and waiting for approval.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createKnowledge
+      tags:
+      - Knowledge
+      summary: Add a knowledge source and read it
+      description: 'A source of a kind (about, storefront, table, website, sheet, books; a file is added with POST /v1/knowledge/files) with its config, read at once. The answer shows what it gave (shown); a source from outside Taskiem waits for approval. A read that fails is answered too (status failed, error). Audited (knowledge.source.create).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeRequest'
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/files:
+    post:
+      operationId: createKnowledgeFile
+      tags:
+      - Knowledge
+      summary: Add a document as a knowledge source
+      description: A PDF or Word (.docx) document, at most 25 MB (413 when larger), as the file field (and an optional title). Only its text is kept, never the file. A scan with no text is refused with 422 in plain words. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                source:
+                  type: string
+                  format: uuid
+                  description: A document source to give a new version of the document; what it gives waits for approval again (answered 200).
+      responses:
+        '200':
+          description: A document source's new version, read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/search:
+    post:
+      operationId: searchKnowledge
+      tags:
+      - Knowledge
+      summary: What the assistant would find for a question
+      description: The passages of the approved sources that best answer a question, as knowledge@1 search finds them.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                limit:
+                  type: integer
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSearch'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}:
+    get:
+      operationId: getKnowledge
+      tags:
+      - Knowledge
+      summary: A knowledge source and its passages
+      description: The source, and in shown its passages waiting for approval (when there are) or else those in use; pending=true or false picks.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: pending
+        in: query
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: patchKnowledge
+      tags:
+      - Knowledge
+      summary: Change a knowledge source
+      description: Its title, or its config (then it is read again, unless paused, and what it gives waits for approval again; a document is changed by uploading it again). Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteKnowledge
+      tags:
+      - Knowledge
+      summary: Delete a knowledge source and its passages
+      description: Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/refresh:
+    post:
+      operationId: refreshKnowledge
+      tags:
+      - Knowledge
+      summary: Read a knowledge source again now
+      description: Before the owner's first approval (or after its settings changed) its text waits; after it, it replaces what is used at once. Refused (429) within a minute of a read, and (400) while paused. Audited (knowledge.source.refresh).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/approve:
+    post:
+      operationId: approveKnowledge
+      tags:
+      - Knowledge
+      summary: Use what a knowledge source gave
+      description: Its passages waiting for approval replace those in use, and later refreshes are used at once (until its settings change). Refused with 409 when it was read again since the read the owner looked at. Audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read_at]
+              properties:
+                read_at:
+                  type: string
+                  format: date-time
+                  description: The read the owner looked at (the source's read_at). When it was read again since, nothing is approved (409).
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/knowledge/{id}/pause:
+    post:
+      operationId: pauseKnowledge
+      tags:
+      - Knowledge
+      summary: Pause or resume a knowledge source
+      description: A paused source is not used or refreshed. Audited (knowledge.source.pause, knowledge.source.resume).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: secret.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paused]
+              properties:
+                paused:
+                  type: boolean
+              additionalProperties: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSource'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/languages:
     get:
       operationId: getLanguages
@@ -42984,7 +43782,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [connection, variable, secret, table, role, field, saved]
+          enum: [connection, variable, secret, table, role, field, saved, setup, setting]
         name:
           type: string
           description: The connection's, variable's, secret's, table's or role's name; empty for a connection a step does not name.
@@ -42996,7 +43794,7 @@ components:
           description: The connector's display name.
         problem:
           type: string
-          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support]
+          enum: [missing, expired, disabled, ambiguous, nobody, chat_id, cannot, support, setup, "off", limit, reconnect]
           description: "cannot, for a capability step whose connection's rail cannot do it; support, for a connection whose service must turn a feature on for the business (Paystack's Pay with Transfer), never blocking."
         capability:
           type: string
@@ -44067,6 +44865,399 @@ components:
         reviewed_entries:
           type: integer
       additionalProperties: false
+    Assistant:
+      type: object
+      required: [paused, taskiem, handovers]
+      properties:
+        paused:
+          type: boolean
+        paused_at:
+          type: [string, 'null']
+        paused_by:
+          type: [string, 'null']
+        taskiem:
+          type: object
+          description: What Taskiem allows for this business's assistants.
+          properties:
+            'on':
+              type: boolean
+            mode:
+              type: string
+              enum: ['on', beta, 'off']
+            beta:
+              type: boolean
+            stopped:
+              type: boolean
+            stopped_reason:
+              type: [string, 'null']
+        handovers:
+          type: array
+          items:
+            type: object
+            properties:
+              channel:
+                type: string
+              customer:
+                type: string
+                description: The customer's pseudonymous id, never their number.
+              where:
+                type: string
+              hint:
+                type: string
+                description: Their number's last four digits (WhatsApp), or a short mark of their pseudonymous id (Telegram).
+              at:
+                $ref: '#/components/schemas/Timestamp'
+              until:
+                $ref: '#/components/schemas/Timestamp'
+      additionalProperties: false
+    ConversationList:
+      type: object
+      required: [assistants, customers]
+      properties:
+        assistants:
+          type: array
+          items:
+            type: object
+            properties:
+              workflow:
+                type: string
+                format: uuid
+              name:
+                type: string
+              environment:
+                type: string
+              connector:
+                type: string
+              where:
+                type: string
+              channel:
+                type: string
+        customers:
+          type: array
+          items:
+            type: object
+            properties:
+              channel:
+                type: string
+              customer:
+                type: string
+                description: Their pseudonymous id, never their number.
+              hint:
+                type: string
+              number:
+                type: string
+                description: Only when revealed.
+              state:
+                type: string
+                enum: [assistant, waiting, stopped]
+              first_at:
+                $ref: '#/components/schemas/Timestamp'
+              last_at:
+                $ref: '#/components/schemas/Timestamp'
+              last_role:
+                type: string
+              waiting_until:
+                $ref: '#/components/schemas/Timestamp'
+              window_open:
+                type: boolean
+      additionalProperties: false
+    Conversation:
+      type: object
+      required: [customer, turns]
+      properties:
+        customer:
+          type: object
+          properties:
+            channel:
+              type: string
+            customer:
+              type: string
+              description: Their pseudonymous id, never their number.
+            hint:
+              type: string
+            number:
+              type: string
+              description: Only when revealed.
+            state:
+              type: string
+              enum: [assistant, waiting, stopped]
+            first_at:
+              $ref: '#/components/schemas/Timestamp'
+            last_at:
+              $ref: '#/components/schemas/Timestamp'
+            last_role:
+              type: string
+            waiting_until:
+              $ref: '#/components/schemas/Timestamp'
+            window_open:
+              type: boolean
+        turns:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              at:
+                $ref: '#/components/schemas/Timestamp'
+              role:
+                type: string
+                enum: [customer, assistant, member, held]
+              kind:
+                type: string
+              text:
+                type: string
+              transcript:
+                type: string
+              file: {}
+              status:
+                type: string
+              reason:
+                type: string
+              run_id:
+                type: string
+                format: uuid
+              step:
+                type: string
+              by:
+                type: string
+              erased:
+                type: boolean
+      additionalProperties: false
+    ConversationMetrics:
+      type: object
+      properties:
+        month:
+          type: object
+          additionalProperties:
+            type: [number, 'null']
+        allowances:
+          type: object
+          properties:
+            ai_answers:
+              type: [integer, 'null']
+            voice:
+              type: [integer, 'null']
+      additionalProperties: false
+    ConversationTemplates:
+      type: object
+      required: [templates]
+      properties:
+        templates:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {}
+              language: {}
+              category: {}
+              body:
+                type: string
+      additionalProperties: false
+    ConversationSent:
+      type: object
+      properties:
+        sent:
+          type: boolean
+        duplicate:
+          type: boolean
+      additionalProperties: false
+    ConversationTestStarted:
+      type: object
+      properties:
+        run:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        customer:
+          type: string
+        outcome:
+          type: string
+        reason:
+          type: string
+        dropped:
+          type: string
+      additionalProperties: false
+    ConversationTestTurn:
+      type: object
+      properties:
+        status:
+          type: string
+        ended:
+          type: boolean
+        turns:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              at:
+                $ref: '#/components/schemas/Timestamp'
+              role:
+                type: string
+                enum: [customer, assistant, member, held]
+              kind:
+                type: string
+              text:
+                type: string
+              transcript:
+                type: string
+              file: {}
+              status:
+                type: string
+              reason:
+                type: string
+              run_id:
+                type: string
+                format: uuid
+              step:
+                type: string
+              by:
+                type: string
+              erased:
+                type: boolean
+      additionalProperties: false
+    KnowledgeRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [about, storefront, table, website, sheet, books]
+        title:
+          type: string
+          maxLength: 120
+        config:
+          type: object
+          description: 'about: {text}; table: {table, columns? (fixed when saved: none means its current columns that are not personal)}; website: {site (a verified website of the business), start?, max_pages? (1 to 50)}; sheet: {connection?, spreadsheet_id (the id or the sheet''s link), range}; books: {connector, connection?}; storefront: {}.'
+      additionalProperties: false
+    KnowledgePassage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        kind:
+          type: string
+        title:
+          type: string
+        text:
+          type: string
+        link:
+          type: string
+        read_at:
+          $ref: '#/components/schemas/Timestamp'
+        pending:
+          type: boolean
+        rank:
+          type: number
+      additionalProperties: false
+    KnowledgeSource:
+      type: object
+      required: [id, kind, title, config, status, outside, passages, pending]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [about, storefront, table, website, file, sheet, books]
+        title:
+          type: string
+        config:
+          type: object
+          description: The source's settings (a file's text is left out).
+        status:
+          type: string
+          enum: [new, review, active, failed, paused]
+          description: new (never read), review (read, waiting for the owner's approval), active (used), failed (the last read failed; the last text is still used), paused.
+        outside:
+          type: boolean
+          description: Its text comes from outside Taskiem (a website, a document, a sheet, books).
+        approved_at:
+          type: [string, 'null']
+        approved_by:
+          type: [string, 'null']
+        read_at:
+          type: [string, 'null']
+        changed_at:
+          type: [string, 'null']
+          description: The last time its text changed.
+        error:
+          type: [string, 'null']
+          description: Why the last read failed, in plain words.
+        created_by:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        passages:
+          type: integer
+          description: Passages in use.
+        pending:
+          type: integer
+          description: Passages waiting for approval.
+        shown:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgePassage'
+          description: What it gave (waiting for approval) or what is in use.
+        reading:
+          type: boolean
+          description: It is being read right now (by the daily refresh or another click); what is shown is from before.
+      additionalProperties: false
+    KnowledgeList:
+      type: object
+      required: [sources, kinds, sites, tables]
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeSource'
+        kinds:
+          type: array
+          items:
+            type: string
+        sites:
+          type: array
+          description: The business's verified websites, to pick for a website source.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              origin:
+                type: string
+        tables:
+          type: array
+          description: The data tables that can be read (not those kept by Taskiem).
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              title:
+                type: string
+      additionalProperties: false
+    KnowledgeSearch:
+      type: object
+      required: [found, passages]
+      properties:
+        found:
+          type: boolean
+        passages:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgePassage'
+      additionalProperties: false
     Languages:
       type: object
       required:
@@ -44077,6 +45268,12 @@ components:
       - voice_notes
       - voice_available
       - catalogues
+      - voice_in_workflows
+      - speech_hear
+      - speech_speak
+      - voices
+      - conversation_days
+      - max_conversation_days
       properties:
         operator:
           type:
@@ -44112,6 +45309,28 @@ components:
           - 'null'
           items:
             $ref: '#/components/schemas/CatalogueProgress'
+        voice_in_workflows:
+          type: boolean
+          description: The owner's "Voice in workflows" switch for speech@1 (docs/speech.md), separate from voice_notes.
+        speech_hear:
+          type: boolean
+          description: This Taskiem can hear voice notes for workflows (a transcription service is set up).
+        speech_speak:
+          type: boolean
+          description: This Taskiem can speak replies (a speech service is set up).
+        voices:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: The voices speech@1 speak offers, the first the default.
+        conversation_days:
+          type: integer
+          description: How long conversations with customers are kept (the conversations table's rows, and runs kept "conversations" long with their files); 30 by default.
+        max_conversation_days:
+          type: integer
+          description: The longest the plan lets conversations be kept.
       additionalProperties: false
     LanguagesUpdate:
       type: object
@@ -44130,6 +45349,13 @@ components:
           description: '`en` or a language that is on.'
         voice_notes:
           type: boolean
+        voice_in_workflows:
+          type: boolean
+          description: Turns speech@1 on or off; left out, it stays as it is. Turning it on needs a speech service on this Taskiem (409 otherwise).
+        conversation_days:
+          type: integer
+          minimum: 1
+          description: How long conversations with customers are kept, up to the plan's longest retention; left out, unchanged.
     Transcript:
       type: object
       required:
@@ -47282,7 +48508,19 @@ components:
           properties:
             monthly_tokens:
               type: integer
-              description: The plan's monthly token budget; 0 is no limit (or overage billed).
+              description: The plan's monthly token budget for AI building, repair and chat routing; 0 is no limit (or overage billed).
+            used_tokens:
+              type: integer
+          additionalProperties: false
+        step_budget:
+          type: object
+          description: The plan's monthly allowance for AI steps in runs (ai_step_monthly_tokens; 0 turns them off) and what they used. Present when enabled.
+          required:
+          - monthly_tokens
+          - used_tokens
+          properties:
+            monthly_tokens:
+              type: integer
             used_tokens:
               type: integer
               description: This UTC month's tokens recorded, plus those the model calls running now have reserved.
@@ -55541,8 +56779,34 @@ components:
           type: string
         erased:
           type: boolean
-          enum:
-          - true
+          description: The person's key was destroyed; false only when nothing of theirs was ever sealed but their conversation rows were deleted.
+        files_deleted:
+          type: integer
+          description: Run files about the person deleted with them (files they sent a workflow).
+        files_pending:
+          type: boolean
+          description: Their files could not all be deleted now; they are deleted at the latest when they expire.
+        conversation_rows_deleted:
+          type: integer
+          description: Rows of the business's conversations tables (kept with conversations, with a sender column) whose sender is the person, deleted with them; only when the person is named by category and value (a number or chat id), not by subject id.
+        conversation_rows_pending:
+          type: boolean
+          description: Their conversation rows could not all be deleted now; they go at the latest when the conversation's time is up.
+        assistant_contacts_deleted:
+          type: integer
+          description: The customer guard's records of the person (their counts, STOP, a hand-over), one per channel, deleted (decision 0074 P2).
+        assistant_contacts_pending:
+          type: boolean
+          description: The guard's records could not be deleted now.
+        conversation_turns_deleted:
+          type: integer
+          description: What they said to the business's assistant and what was answered (the conversations page), deleted with them.
+        customer_runs:
+          type: integer
+          description: Runs started by the person's messages, whose record of what they said (sealed under their key) is erased with it.
+        knowledge_rereads:
+          type: integer
+          description: Table and sheet knowledge sources asked to be read again within minutes.
         subjects:
           type: array
           description: Every subject erased. By value, the person as they are sealed now and under the ways the value was
@@ -55864,8 +57128,14 @@ components:
           type: integer
         ai_monthly_tokens:
           type: integer
+        ai_step_monthly_tokens:
+          type: integer
+          description: Tokens the AI steps of runs may use per UTC month (0 turns AI steps off).
         whatsapp_templates_monthly:
           type: integer
+        speech_seconds_monthly:
+          type: integer
+          description: Seconds of speech workflows may hear and speak per UTC month (0 means no limit).
         container_minutes_monthly:
           type: integer
         container_concurrency:
@@ -55907,9 +57177,11 @@ components:
       - secrets
       - connections
       - ai_tokens_this_month
+      - ai_step_tokens_this_month
       - tasks_in_flight
       - whatsapp_templates_this_month
       - container_seconds_this_month
+      - speech_seconds_this_month
       properties:
         runs_today:
           type: integer
@@ -55927,6 +57199,10 @@ components:
           type: integer
         ai_tokens_this_month:
           type: integer
+          description: AI building, repair and chat routing this UTC month.
+        ai_step_tokens_this_month:
+          type: integer
+          description: AI steps in runs this UTC month (ai_step_monthly_tokens).
         tasks_in_flight:
           type:
           - object
@@ -55957,6 +57233,9 @@ components:
           additionalProperties: false
         container_seconds_this_month:
           type: integer
+        speech_seconds_this_month:
+          type: integer
+          description: Seconds of speech heard and spoken by workflows this UTC month.
       additionalProperties: false
     UsageDay:
       type: object
@@ -57323,6 +58602,12 @@ components:
               personal:
                 type: boolean
             additionalProperties: false
+        keep_days:
+          type: integer
+          description: Rows go this many days after they were added
+        keep_with_conversations:
+          type: boolean
+          description: Rows are kept as long as the business keeps its conversations with customers
       additionalProperties: false
     TemplateList:
       type: object
@@ -57921,6 +59206,11 @@ components:
           type: string
         name:
           type: string
+        warnings:
+          type: array
+          description: In plain words, events this connection cannot receive yet (a signing value is missing).
+          items:
+            type: string
         webhooks:
           type: array
           description: "For a connector with a field Taskiem makes (`generate: webhook_token`, Prembly), the webhook addresses to paste into the provider's dashboard, each carrying the random token made for this connection. Shown only in this answer; to get a new token, connect again."
@@ -62283,6 +63573,14 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/ColumnRequest'
+        keep_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Delete rows this many days after they were added; left out, rows are kept until deleted.
+        keep_with_conversations:
+          type: boolean
+          description: Keep rows as long as the business keeps its conversations with customers (conversation_days); the conversations table does.
       additionalProperties: false
     TablePatch:
       type: object
@@ -62291,6 +63589,13 @@ components:
           type: string
         description:
           type: string
+        keep_days:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 3650
+          description: Delete rows this many days after they were added, or null to keep them until deleted; left out, unchanged.
+        keep_with_conversations:
+          type: boolean
       additionalProperties: false
     Table:
       type: object
@@ -62304,6 +63609,8 @@ components:
       - connection
       - created_by
       - kept_by
+      - keep_days
+      - keep_with_conversations
       - created_at
       - updated_at
       properties:
@@ -62316,6 +63623,12 @@ components:
           type: string
         description:
           type: string
+        keep_days:
+          type: [integer, 'null']
+          description: Rows are deleted this many days after they were added; null keeps them until deleted.
+        keep_with_conversations:
+          type: boolean
+          description: Rows are kept as long as the business keeps its conversations with customers.
         columns:
           type: array
           items:

@@ -1,0 +1,77 @@
+# Equipment and systems on a business's own network, over HTTP(S), reached
+# through an SSH bastion the business runs (decision 0013, docs/integrations/private-network.md).
+# No provider documentation is involved: the connector speaks plain HTTP to
+# whatever API the equipment has (a router's REST API, a RADIUS or billing
+# panel, an internal service).
+manifest: connector/v1
+id: privatehttp
+version: 1.0.0
+name: Your own network (HTTP)
+description: Call a web address that exists only inside your own network, such as a router, a RADIUS or billing panel, or an internal service, through a small SSH server you run (a bastion).
+category: developer
+auth:
+  type: custom
+  fields:
+    - { key: host, label: "The equipment's address inside your network, such as 10.0.0.1 or panel.internal" }
+    - { key: port, label: "Port (default 443 for https, 80 for http)", required: false }
+    - { key: scheme, label: "https (default) or http", required: false }
+    - { key: username, label: "Username for basic sign-in, if the equipment uses one", required: false }
+    - { key: password, label: Password, secret: true, required: false }
+    - { key: token, label: "A token, sent as Authorization: Bearer <token>, if the equipment uses one", secret: true, required: false }
+    - { key: skip_tls_verify, label: "Type yes if the equipment has a self-signed certificate (the SSH tunnel already protects the way there)", required: false }
+    - { key: ca_cert, label: "Or the certificate authority that signed its certificate (PEM)", required: false }
+    - { key: tunnel_host, label: "The bastion's public host" }
+    - { key: tunnel_port, label: "The bastion's SSH port (default 22)", required: false }
+    - { key: tunnel_user, label: "The bastion's user" }
+    - { key: tunnel_private_key, label: "The user's private key (PEM or OpenSSH)", secret: true }
+    - { key: tunnel_passphrase, label: "The key's passphrase, if it has one", secret: true, required: false }
+    - { key: tunnel_host_key, label: "The bastion's host key (a known_hosts or authorized_keys line, or a SHA256: fingerprint). Required; leave empty once to be shown the bastion's", required: false }
+  test: { action: get }
+egress_hosts: ["${connection.host}"]
+actions:
+  get:
+    title: Read from the equipment
+    description: Sends a GET and returns the answer. A 4xx answer such as 404 is returned, not failed, so a workflow can branch on it; a 5xx or a refused connection is retried.
+    class: read
+    input:
+      type: object
+      properties:
+        path:    { type: string, default: /, description: "The path on the equipment, starting with /, such as /rest/ip/address" }
+        query:   { type: object, description: "Query parameters, added to the path" }
+        headers: { type: object, description: "Extra request headers (not Host, Authorization or Content-Length)" }
+        max_bytes: { type: integer, minimum: 1, maximum: 1048576, default: 262144, description: "Largest answer to keep; a bigger one is cut and marked truncated" }
+    output:
+      type: object
+      properties:
+        status:    { type: integer }
+        ok:        { type: boolean, description: True for a 2xx answer }
+        headers:   { type: object }
+        body:      { description: "The answer: parsed when it is JSON, else text" }
+        truncated: { type: boolean }
+    pii:
+      - { field: output.body, category: other }
+  send:
+    title: Send to the equipment
+    description: Sends a POST, PUT, PATCH or DELETE. The equipment cannot be asked whether it already did this, so if the answer is lost the step parks for a person instead of repeating it. Make the call safe to repeat where the equipment lets you (set a value rather than add one).
+    class: unsafe_write
+    input:
+      type: object
+      required: [method, path]
+      properties:
+        method:  { type: string, enum: [POST, PUT, PATCH, DELETE] }
+        path:    { type: string, description: "The path on the equipment, starting with /" }
+        query:   { type: object }
+        headers: { type: object, description: "Extra request headers (not Host, Authorization or Content-Length)" }
+        body:    { description: "Sent as JSON, unless it is a string, which is sent as it is" }
+        max_bytes: { type: integer, minimum: 1, maximum: 1048576, default: 262144 }
+    output:
+      type: object
+      properties:
+        status:    { type: integer }
+        ok:        { type: boolean }
+        headers:   { type: object }
+        body:      {}
+        truncated: { type: boolean }
+    pii:
+      - { field: input.body, category: other }
+      - { field: output.body, category: other }

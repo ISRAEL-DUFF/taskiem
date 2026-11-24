@@ -8208,6 +8208,166 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "speech.cannot_hear.empty": {
+      "text": "Yi haƙuri, ban ji komai a cikin saƙon muryar ba. Don Allah a sake nadawa ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Yi haƙuri, saƙon muryar ya yi tsawo sosai. Don Allah a aiko da gajere ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Yi haƙuri, ban iya kunna saƙon muryar ba. Don Allah a sake nadawa ko a rubuta saƙon.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Yi haƙuri, ba zan iya sauraron saƙon murya yanzu ba. Don Allah a rubuta saƙon, zan amsa.",
+      "reviewed": false
+    },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "A ƙara *{name}* da {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "A fara ajiye kaya da *{name}*: {qty}{cost}? Taskiem zai yi teburin products don kayanka.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "An rubuta don *{name}*. Zai isa teburin products ɗinka nan ba da daɗewa ba.",
+      "reviewed": false
+    },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Sannu! Kana magana da mataimakin {business} na atomatik. Yana karanta sakonninka kuma yana sauraron sakon muryarka don ya amsa maka. Rubuta PERSON don yin magana da wani a {business}, ko STOP don dakatar da mataimakin.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ka aiko sakonni da yawa cikin ɗan lokaci. Don Allah ka jira kaɗan, zan sake amsa maka.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "To. Mataimakin ba zai ƙara amsa maka ba. Rubuta START don sake kunna shi.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Barka da dawowa! Mataimakin zai sake amsa maka. Yaya zan taimake ka?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "To, na roƙi wani a {business} ya amsa maka. Za su amsa a nan da zarar sun samu dama.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Yi haƙuri, sakon rubutu da sakon murya kawai zan iya karantawa da saurara. Don Allah ka rubuta sakonka ko ka aiko da sakon murya.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Bari in duba da ƙungiyar mu, zan dawo maka.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Amsoshin AI da tsarinka ya ba ka na wannan wata sun ƙare, don haka matakan AI na wannan aikin za su tsaya har zuwa wata mai zuwa: wanda ke da amsar madadi zai yi amfani da ita (mataimakinka zai gaya wa abokan ciniki cewa wani zai dawo musu). Duba tsarinka, ko ka tambayi wanda ke gudanar da Taskiem ɗinka.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Muryar da tsarinka ya ba ka na wannan wata ta ƙare, don haka wannan aikin ba zai iya jin saƙon murya ko amsa da murya ba har zuwa wata mai zuwa: za a nemi abokan cinikin da suka aiko su rubuta. Duba tsarinka, ko ka tambayi wanda ke gudanar da Taskiem ɗinka.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} ba ya aika saƙonnin wannan aikin zuwa Taskiem: {why}. Taskiem yana ci gaba da ƙoƙari; duba haɗin a Connections, kuma sake haɗa bot ɗin idan an canza shi a BotFather.",
+      "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} ba a kunna shi ga wannan kasuwancin ba, don haka wannan aikin ba zai iya yin abin da yake buƙata daga gare shi ba. Mai shi yana kunna shi a Settings, What your business uses.",
+      "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Waɗanda ke kula da saitunan {org} ne kawai za su iya ƙara abin da mataimakinsa ya sani.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Ƙara takardu don mataimakinka a yanar gizo: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Abin da mataimakinka ya sani ba ya samuwa a wannan Taskiem.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Wannan takardar ta yi girma da yawa don karantawa daga hira. Ƙara ta a yanar gizo: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Wannan takardar hoto ce babu rubutu a ciki, kuma Taskiem ba ya iya karanta hotunan takardu tukuna. Aika wadda ke da rubutun da za ka iya zaɓa, ko ka rubuta abin da ta ce.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Ban iya karanta wannan takardar ba. Aika fayil na PDF ko Word (.docx) da ba shi da kalmar sirri.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Na ƙara {name} cikin abin da mataimakinka ya sani. Ba a fara amfani da shi ba: duba shi ka danna Use this a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Ina karanta {name} don mataimakinka…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Na karanta sabon {name} don mataimakinka. Ba a fara amfani da sabon ba: duba shi ka danna Use this a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Na ƙara {name} cikin abin da mataimakinka ya sani, amma ana ci gaba da karanta shi. Duba bayan minti ɗaya ka danna Use this a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Ban iya ƙara wannan takardar ba: {why}. Duba abin da mataimakinka ya sani a nan: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Wannan tsohuwar takardar Word ce (.doc), wadda Taskiem ba ya iya karantawa. Ajiye ta a matsayin .docx ko PDF ka sake aikawa.",
+      "reviewed": false
     }
   }
 }

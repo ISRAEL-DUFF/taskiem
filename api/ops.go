@@ -580,6 +580,7 @@ var opsStepUpOps = map[string]bool{
 	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
 	"ops.explore.feature": true, "ops.explore.unfeature": true,
 	"ops.tenant.suspend": true, "ops.tenant.resume": true,
+	"ops.tenant.assistants-stop": true, "ops.tenant.assistants-start": true, "ops.tenant.assistants-beta-on": true, "ops.tenant.assistants-beta-off": true,
 	"ops.discover.remove": true, "ops.discover.restore": true,
 }
 

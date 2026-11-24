@@ -26,6 +26,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/assistant"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
 	"github.com/israel-duff/taskiem/engine/chatlinks"
@@ -40,6 +41,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/inmail"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/knowledge"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
@@ -51,9 +53,11 @@ import (
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
+	"github.com/israel-duff/taskiem/engine/runfiles"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/secrets"
 	"github.com/israel-duff/taskiem/engine/sender"
+	"github.com/israel-duff/taskiem/engine/speech"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/telegram"
@@ -182,6 +186,10 @@ type Server struct {
 	// Media stores storefront photos in tenants' Xenibase storage
 	// (docs/media.md); nil refuses uploads.
 	Media *media.Service
+	// RunFiles keeps the files runs fetch or make (docs/files.md), for
+	// the workers the api builds (repair's reconcile check): a step whose
+	// connector keeps or reads run files needs it. nil gives them none.
+	RunFiles *runfiles.Service
 	// Push sends a notification to the browsers a member allowed when a chat
 	// message comes and the app is closed (push.go, docs/spec/chat-push.md). Nil,
 	// or with no keys, it is off.
@@ -235,6 +243,9 @@ type Server struct {
 	// linked supplier's bill (bills.go); nil asks the connection.
 	BillBanks func(ctx context.Context, tenant uuid.UUID, connection string) ([]map[string]any, error)
 	PublicURL string
+	// EraseFiles deletes the run files about a person when they are erased
+	// (POST /v1/pii/erase; docs/files.md): runfiles.Service.EraseSubject.
+	EraseFiles func(ctx context.Context, tenant uuid.UUID, subject string) (int, error)
 	// HooksURL is where providers reach /hooks (TASKIEM_HOOKS_URL); the
 	// addresses on the Connections page are built from it, or from
 	// PublicURL + /hooks when it is empty.
@@ -341,6 +352,21 @@ type Server struct {
 	// Voice transcribes WhatsApp voice notes (a beta; whatsapp_voice.go);
 	// nil: people are asked to type.
 	Voice *VoiceSettings
+	// Speech hears and speaks for workflows (speech@1, docs/speech.md):
+	// the owner's switch and readiness ask it what this Taskiem can do.
+	Speech *speech.Service
+	// Knowledge is what the business's assistant knows (docs/knowledge.md);
+	// KnowledgeService builds it with this server's readers.
+	Knowledge *knowledge.Service
+	// AssistantMode is Taskiem's switch for customer assistants
+	// (TASKIEM_ASSISTANTS), shown to owners.
+	AssistantMode assistant.Mode
+	// KnowledgeWebClient, when set, reads businesses' websites instead of
+	// the egress guard's client (tests).
+	KnowledgeWebClient *http.Client
+	// KnowledgeRereadAfter is how soon the owner can ask to read a source
+	// again (a minute when zero; negative: at once, for tests).
+	KnowledgeRereadAfter time.Duration
 	// Billing is plans, subscriptions and payments (billing.go); nil or
 	// not enabled is billing off: the internal plan, every feature.
 	Billing *billing.Service
@@ -580,6 +606,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermApprovalDecide)).Get("/whatsapp/handoff/{token}", s.getHandoff)
 			r.With(s.need(PermApprovalDecide)).Post("/whatsapp/handoff/{token}", s.completeHandoff)
 			r.With(s.need(PermSecretManage)).Get("/ussd", s.getUSSD)
+			r.With(s.need(PermSecretManage), s.tenantWide).Route("/knowledge", s.knowledgeRoutes) // what the assistant knows (knowledge.go)
+			r.With(s.need(PermSecretManage), s.tenantWide).Route("/assistant", s.assistantRoutes) // the customer assistant's pause and hand-overs (assistant.go)
+			r.With(s.tenantWide).Route("/conversations", s.conversationRoutes)                    // the customer assistant's conversations (conversations.go)
 			r.With(s.need(PermSecretManage)).Get("/languages", s.getLanguages)
 			r.With(s.need(PermSecretManage), s.tenantWide).Put("/languages", s.putLanguages)
 			r.With(s.need(PermPIIReveal)).Get("/languages/transcripts", s.getTranscripts)

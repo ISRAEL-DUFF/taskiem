@@ -8208,6 +8208,166 @@
     "bill.transfer.off": {
       "text": "They have turned off invoices in Taskiem: pay on their checkout instead.",
       "reviewed": false
+    },
+    "speech.cannot_hear.empty": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò gbọ́ nǹkan kankan nínú ohùn tí ẹ fi ránṣẹ́. Ẹ jọ̀ọ́ ẹ gbà á sílẹ̀ lẹ́ẹ̀kan sí i tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.too_long": {
+      "text": "Ẹ jọ̀ọ́ má bínú, ohùn tí ẹ fi ránṣẹ́ ti gùn jù fún mi. Ẹ jọ̀ọ́ ẹ fi èyí tó kúrú ránṣẹ́ tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unreadable": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò lè ṣí ohùn tí ẹ fi ránṣẹ́. Ẹ jọ̀ọ́ ẹ gbà á sílẹ̀ lẹ́ẹ̀kan sí i tàbí kí ẹ tẹ ọ̀rọ̀ yín.",
+      "reviewed": false
+    },
+    "speech.cannot_hear.unavailable": {
+      "text": "Ẹ jọ̀ọ́ má bínú, mi ò lè gbọ́ ohùn lásìkò yìí. Ẹ jọ̀ọ́ ẹ tẹ ọ̀rọ̀ yín, màá sì fèsì.",
+      "reviewed": false
+    },
+    "ready.speech_hear": {
+      "text": "This Taskiem cannot hear voice notes yet, and this workflow listens to them. Ask whoever runs your Taskiem to set up hearing voice notes.",
+      "reviewed": false
+    },
+    "ready.speech_speak": {
+      "text": "This Taskiem cannot answer by voice yet, and this workflow speaks its replies. Ask whoever runs your Taskiem to set up spoken replies.",
+      "reviewed": false
+    },
+    "ready.voice_in_workflows": {
+      "text": "Voice in workflows is off, so this workflow cannot hear voice notes or answer by voice. Turn it on in Settings.",
+      "reviewed": false
+    },
+    "ready.file_scanner": {
+      "text": "This Taskiem cannot check files customers send for viruses yet, so it refuses them, and this workflow fetches them. Ask whoever runs your Taskiem to turn file checking on.",
+      "reviewed": false
+    },
+    "ready.whatsapp_callback": {
+      "text": "Customers' messages reach this workflow only once {service} sends them to Taskiem. In Meta's App Dashboard, under WhatsApp then Configuration, paste {url} as the callback address, enter the same check value you saved on your connection, and subscribe to messages. Keep the app secret on your connection too, or every message is refused.",
+      "reviewed": false
+    },
+    "wa.stock.confirm_new": {
+      "text": "Ṣé kí a fi *{name}* kún un pẹ̀lú {qty}{cost}?",
+      "reviewed": false
+    },
+    "wa.stock.confirm_first": {
+      "text": "Ṣé kí a bẹ̀rẹ̀ sí í tọ́jú ọjà pẹ̀lú *{name}*: {qty}{cost}? Taskiem yóò ṣe tábìlì products fún àwọn ọjà rẹ.",
+      "reviewed": false
+    },
+    "wa.stock.waiting": {
+      "text": "A ti kọ ọ́ sílẹ̀ fún *{name}*. Yóò dé tábìlì products rẹ láìpẹ́.",
+      "reviewed": false
+    },
+    "wd.ai.conversation": {
+      "text": "Answer in the conversation with the AI model, with personal data hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.conversation_through": {
+      "text": "Answer in the conversation with the AI model, which sees {fields} as they are; other personal data is hidden from it",
+      "reviewed": false
+    },
+    "wd.ai.history_words": {
+      "text": "the conversation's words (its numbers, emails and names stay hidden)",
+      "reviewed": false
+    },
+    "wd.ai.fallback": {
+      "text": "If the AI model cannot answer, it answers with a set reply instead",
+      "reviewed": false
+    },
+    "assistant.notice": {
+      "text": "Ẹ n lẹ́! Olùrànlọ́wọ́ aládàáṣe {business} ni ẹ ń bá sọ̀rọ̀. Ó ń ka ọ̀rọ̀ yín, ó sì ń gbọ́ ohùn tí ẹ fi ránṣẹ́ láti dá yín lóhùn. Ẹ kọ PERSON láti bá ẹnìkan ní {business} sọ̀rọ̀, tàbí STOP láti dá olùrànlọ́wọ́ dúró.",
+      "reviewed": false
+    },
+    "assistant.limited": {
+      "text": "Ẹ ti fi ọ̀pọ̀ ọ̀rọ̀ ránṣẹ́ láàárín àkókò kúkúrú. Ẹ jọ̀ọ́ ẹ dúró díẹ̀, màá tún dá yín lóhùn.",
+      "reviewed": false
+    },
+    "assistant.stopped": {
+      "text": "Ó dáa. Olùrànlọ́wọ́ náà kò ní dá yín lóhùn mọ́. Ẹ kọ START láti tún un tàn.",
+      "reviewed": false
+    },
+    "assistant.started": {
+      "text": "Ẹ kú àbọ̀! Olùrànlọ́wọ́ náà yóò máa dá yín lóhùn padà. Báwo ni mo ṣe lè ràn yín lọ́wọ́?",
+      "reviewed": false
+    },
+    "assistant.handover": {
+      "text": "Ó dáa, mo ti sọ fún ẹnìkan ní {business} láti dá yín lóhùn. Wọn yóò fèsì níbí ní kété tí wọ́n bá lè ṣe é.",
+      "reviewed": false
+    },
+    "assistant.kind": {
+      "text": "Ẹ jọ̀ọ́ má bínú, ọ̀rọ̀ tí a tẹ̀ àti ohùn nìkan ni mo lè kà àti gbọ́. Ẹ jọ̀ọ́ ẹ tẹ ọ̀rọ̀ yín tàbí kí ẹ fi ohùn ránṣẹ́.",
+      "reviewed": false
+    },
+    "assistant.held": {
+      "text": "Ẹ jẹ́ kí n bá àwọn ẹgbẹ́ wa ṣàyẹ̀wò rẹ̀, màá padà wá bá yín.",
+      "reviewed": false
+    },
+    "wd.trigger.guard": {
+      "text": ", from customers' new messages in private chats only (at most {per_minute} a minute and {per_day} a day each; STOP and asking for a person are honoured)",
+      "reviewed": false
+    },
+    "ready.ai_allowance": {
+      "text": "Ìdáhùn AI tí ètò rẹ fún ọ fún oṣù yìí ti tán, nítorí náà àwọn ìgbésẹ̀ AI inú iṣẹ́ yìí yóò dúró títí di oṣù tó ń bọ̀: èyí tó ní ìdáhùn àfidípò yóò lò ó (olùrànlọ́wọ́ rẹ yóò sọ fún àwọn oníbàárà pé ẹnìkan yóò pada sí wọn). Wo ètò rẹ, tàbí béèrè lọ́wọ́ ẹni tó ń ṣiṣẹ́ Taskiem rẹ.",
+      "reviewed": false
+    },
+    "ready.voice_allowance": {
+      "text": "Ohùn tí ètò rẹ fún ọ fún oṣù yìí ti tán, nítorí náà iṣẹ́ yìí kò lè gbọ́ àwọn ìfiránṣẹ́ ohùn tàbí dáhùn pẹ̀lú ohùn títí di oṣù tó ń bọ̀: a ó ní kí àwọn oníbàárà tó fi ránṣẹ́ kọ ọ́ dípò. Wo ètò rẹ, tàbí béèrè lọ́wọ́ ẹni tó ń ṣiṣẹ́ Taskiem rẹ.",
+      "reviewed": false
+    },
+    "ready.delivery": {
+      "text": "{service} kò fi àwọn ìfiránṣẹ́ iṣẹ́ yìí ránṣẹ́ sí Taskiem: {why}. Taskiem ń gbìyànjú síbẹ̀; ṣàyẹ̀wò ìsopọ̀ náà ní Connections, kí o sì so bot náà pọ̀ lẹ́ẹ̀kan sí i bí wọ́n bá yí i padà ní BotFather.",
+      "reviewed": false
+    },
+    "ready.area_off": {
+      "text": "{area} kò tíì tàn fún iṣẹ́ òwò yìí, nítorí náà iṣẹ́ yìí kò lè ṣe ohun tó nílò láti inú rẹ̀. Olúwa rẹ̀ lè tàn án ní Settings, What your business uses.",
+      "reviewed": false
+    },
+    "wa.knowledge.denied": {
+      "text": "Àwọn tó ń ṣàkóso ètò {org} nìkan ló lè fi kún ohun tí olùrànlọ́wọ́ rẹ̀ mọ̀.",
+      "reviewed": false
+    },
+    "wa.knowledge.slack": {
+      "text": "Fi àwọn ìwé kún un fún olùrànlọ́wọ́ rẹ lórí wẹ́ẹ̀bù: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.unavailable": {
+      "text": "Ohun tí olùrànlọ́wọ́ rẹ mọ̀ kò sí lórí Taskiem yìí.",
+      "reviewed": false
+    },
+    "wa.knowledge.too_big": {
+      "text": "Ìwé yẹn tóbi jù láti kà láti inú ìjíròrò. Fi kún un lórí wẹ́ẹ̀bù: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.scanned": {
+      "text": "Ìwé yẹn jẹ́ àwòrán tí kò ní ọ̀rọ̀ nínú, Taskiem kò sì lè ka irú rẹ̀ báyìí. Fi èyí tó ní ọ̀rọ̀ tí o lè yàn ránṣẹ́, tàbí tẹ ohun tó sọ.",
+      "reviewed": false
+    },
+    "wa.knowledge.unreadable": {
+      "text": "Mi ò lè ka ìwé yẹn. Fi fáìlì PDF tàbí Word (.docx) tí kò ní ọ̀rọ̀ aṣínà ránṣẹ́.",
+      "reviewed": false
+    },
+    "wa.knowledge.added": {
+      "text": "Mo ti fi {name} kún ohun tí olùrànlọ́wọ́ rẹ mọ̀. A kò tíì lò ó: ṣàyẹ̀wò rẹ̀ kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.reading": {
+      "text": "Mo ń ka {name} fún olùrànlọ́wọ́ rẹ…",
+      "reviewed": false
+    },
+    "wa.knowledge.updated": {
+      "text": "Mo ti ka {name} tuntun fún olùrànlọ́wọ́ rẹ. A kò tíì lo ẹ̀yà tuntun náà: ṣàyẹ̀wò rẹ̀ kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.still_reading": {
+      "text": "Mo ti fi {name} kún ohun tí olùrànlọ́wọ́ rẹ mọ̀, ṣùgbọ́n mo ṣì ń kà á. Wò ó lẹ́yìn ìṣẹ́jú kan kí o sì tẹ Use this níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.not_kept": {
+      "text": "Mi ò lè fi ìwé yẹn kún un: {why}. Wo ohun tí olùrànlọ́wọ́ rẹ mọ̀ níbí: {link}",
+      "reviewed": false
+    },
+    "wa.knowledge.old_word": {
+      "text": "Ìwé Word àtijọ́ (.doc) nìyẹn, Taskiem kò sì lè kà á. Fi pamọ́ bí .docx tàbí PDF kí o sì fi ránṣẹ́ lẹ́ẹ̀kan sí i.",
+      "reviewed": false
     }
   }
 }

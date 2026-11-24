@@ -72,9 +72,7 @@ export function summary(s: Step): string {
         ? `wait up to ${s.config.timeout} to be called back`
         : "wait to be called back";
     case "ai":
-      return s.config.personal_data?.length
-        ? `ask the AI model · sees ${s.config.personal_data.join(", ")}`
-        : "ask the AI model · personal data hidden";
+      return `${s.config.history ? "answer in the conversation" : "ask the AI model"} · ${s.config.personal_data?.length ? `sees ${s.config.personal_data.join(", ")}` : "personal data hidden"}${s.config.fallback ? " · has a set reply" : ""}`;
     case "subflow":
       return s.config.wait === false
         ? "start one of your workflows · carry on"

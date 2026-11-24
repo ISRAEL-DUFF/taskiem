@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/israel-duff/taskiem/engine/internal/schemacheck"
 )
 
 // checkAI enforces the ai step rules of the wd-v1 contract (decision
@@ -35,6 +37,9 @@ func checkAI(d *Definition) []Problem {
 			add("an ai step's output_schema is an object schema ({\"type\": \"object\", \"properties\": ...}): the answer is a JSON object")
 		}
 		for _, f := range s.AI.PersonalData {
+			if f == "history" && len(s.AI.History) > 0 {
+				continue // the conversation's words (decision 0074 D6)
+			}
 			if _, ok := s.Input[f]; !ok {
 				add("personal_data names %q, which is not a field of the step's input", f)
 			}
@@ -49,6 +54,40 @@ func checkAI(d *Definition) []Problem {
 		EachExpr(s.Input, func(src string) { bad = bad || readsSecrets(src) })
 		if bad {
 			add("an ai step's input may not read secrets: it is sent to the AI model")
+		}
+		if strings.HasPrefix(s.AI.System, "=") && readsSecrets(s.AI.System) {
+			add("an ai step's system instruction may not read secrets: it is sent to the AI model")
+		}
+		if len(s.AI.History) > 0 {
+			var h any
+			_ = json.Unmarshal(s.AI.History, &h)
+			if src, ok := h.(string); ok {
+				if readsSecrets(src) {
+					add("an ai step's history may not read secrets: it is sent to the AI model")
+				}
+			} else if _, err := AIHistory(h); err != nil {
+				add("history: %v", err)
+			}
+		}
+		if len(s.AI.Fallback) > 0 && s.Retry != nil && s.Retry.MaxDuration != "" {
+			// The fallback is used on the last attempt by count; a retry
+			// budget in time can give up before it, leaving the customer
+			// with nothing.
+			add("an ai step with a fallback counts its attempts (retry.max); remove retry.max_duration")
+		}
+		if len(s.AI.Fallback) > 0 {
+			var f any
+			_ = json.Unmarshal(s.AI.Fallback, &f)
+			switch v := f.(type) {
+			case string:
+				if readsSecrets(v) {
+					add("an ai step's fallback may not read secrets")
+				}
+			case map[string]any:
+				if probs := schemacheck.New("https://schemas.taskiem.dev/ai-fallback/"+s.ID+".json", s.AI.OutputSchema).Validate(s.AI.Fallback); len(probs) > 0 {
+					add("the fallback does not match output_schema: %s", strings.Join(probs, "; "))
+				}
+			}
 		}
 	}
 	return out
@@ -84,4 +123,45 @@ func (d *Definition) AIModels() []string {
 	})
 	sort.Strings(out)
 	return out
+}
+
+// AITurn is one turn of an ai step's history.
+type AITurn struct {
+	Role string // user or assistant
+	Text string
+}
+
+// AIHistory reads a history value (a list of {role, text}) as turns, the
+// last AIMaxHistory of them; empty texts are left out.
+func AIHistory(v any) ([]AITurn, error) {
+	if v == nil {
+		return nil, nil
+	}
+	list, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("the history is a list of turns ({\"role\": \"user\" or \"assistant\", \"text\": ...}), not %T", v)
+	}
+	var out []AITurn
+	for i, x := range list {
+		m, ok := x.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("turn %d is not an object with role and text", i+1)
+		}
+		role, _ := m["role"].(string)
+		if role != "user" && role != "assistant" {
+			return nil, fmt.Errorf("turn %d: role is user (the customer) or assistant (the replies), not %q", i+1, role)
+		}
+		text, ok := m["text"].(string)
+		if !ok {
+			return nil, fmt.Errorf("turn %d: text is not text", i+1)
+		}
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		out = append(out, AITurn{Role: role, Text: text})
+	}
+	if len(out) > AIMaxHistory {
+		out = out[len(out)-AIMaxHistory:]
+	}
+	return out, nil
 }

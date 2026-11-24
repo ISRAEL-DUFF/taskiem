@@ -1,0 +1,95 @@
+{
+  "schema": "wd-test/v1",
+  "template": "subscription-area-summary",
+  "params": {
+    "day": "monday",
+    "send_time": "08:00",
+    "subscribers_table": "subscribers"
+  },
+  "cases": [
+    {
+      "name": "each area is counted and added up, and the owner is told",
+      "trigger": {
+        "scheduled_time": "2026-11-09T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": [
+              {
+                "name": "Ada Obi",
+                "phone": "+2348031234567",
+                "monthly_naira": 15000,
+                "area": "Yaba",
+                "status": "active"
+              },
+              {
+                "name": "Chidi Eze",
+                "phone": "+2348030000003",
+                "monthly_naira": 8000,
+                "area": "Yaba",
+                "status": "active"
+              },
+              {
+                "name": "Bola Ade",
+                "phone": "+2348030000004",
+                "monthly_naira": 8000,
+                "area": "Ikeja",
+                "status": "active"
+              },
+              {
+                "name": "Dayo",
+                "phone": "+2348030000005",
+                "monthly_naira": 5000,
+                "status": "active"
+              }
+            ]
+          }
+        },
+        "tell_me": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "steps": {
+          "by_area": "completed",
+          "tell_me": "completed"
+        },
+        "inputs": {
+          "tell_me": {
+            "message": "Yaba: 2 (N23000 a month); Ikeja: 1 (N8000 a month); No area: 1 (N5000 a month). In all: 4 subscribers, N36000 a month."
+          }
+        }
+      }
+    },
+    {
+      "name": "with no subscribers it says so",
+      "trigger": {
+        "scheduled_time": "2026-11-09T07:00:00Z"
+      },
+      "mocks": {
+        "read_subscribers": {
+          "output": {
+            "rows": []
+          }
+        },
+        "tell_me": {
+          "output": {
+            "sent": true
+          }
+        }
+      },
+      "expect": {
+        "status": "completed",
+        "inputs": {
+          "tell_me": {
+            "message": "You have no active subscribers yet."
+          }
+        }
+      }
+    }
+  ]
+}
