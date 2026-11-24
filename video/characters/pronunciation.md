@@ -45,3 +45,18 @@ Naira is "NYE-rah". Say prices as words ("forty-three thousand naira").
 | Audu | AH-doo | Schools |
 | Danjuma | dan-JOO-mah | Schools |
 | Ikorodu | ee-koh-ROH-doo | Schools (place) |
+
+## Fashion series names (to confirm with a native speaker)
+
+| Name | Say it | Notes |
+| --- | --- | --- |
+| Zuri Atelier | ZOO-ree AT-uh-lyay | The business |
+| Surulere | soo-roo-LEH-reh | The Lagos area |
+| Alhaja Sade | ah-LAH-jah SHAH-deh | Alhaja: a woman who has made the pilgrimage; Sade (shah-DEH) |
+| Balogun | bah-LOH-goon | The market, Lagos Island |
+| Ojo | OH-joh | Dami's surname |
+| Eze | EH-zeh | Nneka's surname |
+| Ankara | an-KAH-rah | The cloth |
+| aso-oke | AH-shoh OH-keh | The woven cloth |
+| owambe | oh-WAHM-beh | A party |
+| gele | GEH-leh | A headwrap |

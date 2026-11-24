@@ -102,8 +102,12 @@ class Phone:
         self.sw, self.sh = round(SCREEN_W * s), round(SCREEN_H * s)
         self.bg = bg
         self.clock = clock
+        self.layers = {}
         self._back()
-        self._front()
+        self._front("static", True)
+        for which in ("status", "gesture"):
+            for dk in (True, False):
+                self._front(which, dk)
 
     # -- helpers ---------------------------------------------------------
     def px(self, v):
@@ -178,76 +182,79 @@ class Phone:
         self.screen_mask = rrect_mask((self.sw, self.sh), (0, 0, self.sw, self.sh), self.px(R_SCREEN))
         self.back = back
 
-    def _front(self):
+    def _front(self, which="static", dark=True):
         s = self.s
         cw, ch = self.cw, self.ch
         S = 2
         fr = Image.new("RGBA", (cw * S, ch * S), (0, 0, 0, 0))
         d = ImageDraw.Draw(fr)
-        dark = self.theme == "light"             # dark icons on a light screen
+        # dark icons on a light screen, light icons on a dark one
         ink = (18, 22, 20, 235) if dark else (250, 250, 250, 240)
 
         def P(x, y):                             # screen points -> canvas pixels (x S)
             return ((self.sx + self.px(x)) * S, (self.sy + self.px(y)) * S)
 
-        # Status bar: the time, then signal, wifi, battery.
-        f = font("Medium", self.px(15.5) * S)
-        tx, ty = P(27, 23.5)
-        d.text((tx, ty), self.clock, font=f, fill=ink, anchor="lm")
-        # signal: four rising bars
-        x = 297
-        for i in range(4):
-            h = 5 + i * 2.6
-            bx0, by1 = P(x + i * 4.6, 23.5 + 6.5)
-            bx1, by0 = P(x + i * 4.6 + 3.2, 23.5 + 6.5 - h)
-            col = ink if i < 4 else (ink[0], ink[1], ink[2], 90)
-            d.rounded_rectangle((bx0, by0, bx1, by1), radius=self.px(0.8) * S, fill=col)
-        # wifi: three arcs and a dot
-        cx, cy = P(331, 29.5)
-        for r in (11.5, 7.7, 3.9):
-            rr = self.px(r) * S
-            d.arc((cx - rr, cy - rr, cx + rr, cy + rr), 225, 315, fill=ink, width=max(2, round(self.px(1.7) * S)))
-        dr = self.px(1.5) * S
-        d.ellipse((cx - dr, cy - dr * 0.2 - dr, cx + dr, cy - dr * 0.2 + dr), fill=ink)
-        # battery: an outline, a fill to 82 per cent, and a nub
-        bx0, by0 = P(345, 17.5)
-        bx1, by1 = P(366.5, 29.5)
-        d.rounded_rectangle((bx0, by0, bx1, by1), radius=self.px(3.2) * S, outline=ink, width=max(2, round(self.px(1.3) * S)))
-        d.rounded_rectangle((bx0 + self.px(2.1) * S, by0 + self.px(2.1) * S, bx0 + (bx1 - bx0) * 0.82, by1 - self.px(2.1) * S),
-                            radius=self.px(1.7) * S, fill=ink)
-        nx0, ny0 = P(367.6, 21.2)
-        nx1, ny1 = P(369.2, 25.8)
-        d.rounded_rectangle((nx0, ny0, nx1, ny1), radius=self.px(0.8) * S, fill=ink)
+        if which == "status":
+            # Status bar: the time, then signal, wifi, battery.
+            f = font("Medium", self.px(15.5) * S)
+            tx, ty = P(27, 23.5)
+            d.text((tx, ty), self.clock, font=f, fill=ink, anchor="lm")
+            # signal: four rising bars
+            x = 297
+            for i in range(4):
+                h = 5 + i * 2.6
+                bx0, by1 = P(x + i * 4.6, 23.5 + 6.5)
+                bx1, by0 = P(x + i * 4.6 + 3.2, 23.5 + 6.5 - h)
+                col = ink if i < 4 else (ink[0], ink[1], ink[2], 90)
+                d.rounded_rectangle((bx0, by0, bx1, by1), radius=self.px(0.8) * S, fill=col)
+            # wifi: three arcs and a dot
+            cx, cy = P(331, 29.5)
+            for r in (11.5, 7.7, 3.9):
+                rr = self.px(r) * S
+                d.arc((cx - rr, cy - rr, cx + rr, cy + rr), 225, 315, fill=ink, width=max(2, round(self.px(1.7) * S)))
+            dr = self.px(1.5) * S
+            d.ellipse((cx - dr, cy - dr * 0.2 - dr, cx + dr, cy - dr * 0.2 + dr), fill=ink)
+            # battery: an outline, a fill to 82 per cent, and a nub
+            bx0, by0 = P(345, 17.5)
+            bx1, by1 = P(366.5, 29.5)
+            d.rounded_rectangle((bx0, by0, bx1, by1), radius=self.px(3.2) * S, outline=ink, width=max(2, round(self.px(1.3) * S)))
+            d.rounded_rectangle((bx0 + self.px(2.1) * S, by0 + self.px(2.1) * S, bx0 + (bx1 - bx0) * 0.82, by1 - self.px(2.1) * S),
+                                radius=self.px(1.7) * S, fill=ink)
+            nx0, ny0 = P(367.6, 21.2)
+            nx1, ny1 = P(369.2, 25.8)
+            d.rounded_rectangle((nx0, ny0, nx1, ny1), radius=self.px(0.8) * S, fill=ink)
 
-        # The gesture bar at the bottom.
-        gx0, gy0 = P(195 - 62, 844 - 12)
-        gx1, gy1 = P(195 + 62, 844 - 7.4)
-        d.rounded_rectangle((gx0, gy0, gx1, gy1), radius=self.px(2.3) * S, fill=ink[:3] + (200,))
+        if which == "gesture":
+            # The gesture bar at the bottom.
+            gx0, gy0 = P(195 - 62, 844 - 12)
+            gx1, gy1 = P(195 + 62, 844 - 7.4)
+            d.rounded_rectangle((gx0, gy0, gx1, gy1), radius=self.px(2.3) * S, fill=ink[:3] + (200,))
 
-        # The punch-hole camera: black, a ring, a hint of lens glass.
-        cx, cy = P(195, 22)
-        for r, col in ((10.6, (26, 28, 34, 255)), (8.6, (6, 6, 8, 255)), (5.2, (14, 16, 26, 255))):
-            rr = self.px(r) * S
-            d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=col)
-        rr = self.px(2.1) * S
-        d.ellipse((cx - self.px(1.7) * S - rr / 2, cy - self.px(1.9) * S - rr / 2,
-                   cx - self.px(1.7) * S + rr / 2, cy - self.px(1.9) * S + rr / 2), fill=(70, 86, 140, 150))
+        if which == "static":
+            # The punch-hole camera: black, a ring, a hint of lens glass.
+            cx, cy = P(195, 22)
+            for r, col in ((10.6, (26, 28, 34, 255)), (8.6, (6, 6, 8, 255)), (5.2, (14, 16, 26, 255))):
+                rr = self.px(r) * S
+                d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=col)
+            rr = self.px(2.1) * S
+            d.ellipse((cx - self.px(1.7) * S - rr / 2, cy - self.px(1.9) * S - rr / 2,
+                       cx - self.px(1.7) * S + rr / 2, cy - self.px(1.9) * S + rr / 2), fill=(70, 86, 140, 150))
         fr = fr.resize((cw, ch), Image.LANCZOS)
-
-        # The glass sheen: a diagonal soft light from the top left, over the screen only.
-        sheen = gradient((self.sw, self.sh), [(0, (255, 255, 255)), (0.34, (255, 255, 255)), (1, (255, 255, 255))], 70)
-        a = np.zeros((self.sh, self.sw), np.float32)
-        ys, xs = np.mgrid[0:self.sh, 0:self.sw].astype(np.float32)
-        t = (xs / self.sw * 0.55 + ys / self.sh * 0.45)
-        a = np.clip((0.40 - t) / 0.40, 0, 1) ** 1.6 * (0.10 if dark else 0.07) * 255
-        sheen_a = Image.fromarray(a.astype(np.uint8), "L")
-        sheen_a = ImageChops.multiply(sheen_a, self.screen_mask)
-        fr.paste(Image.new("RGBA", (self.sw, self.sh), (255, 255, 255, 255)), (self.sx, self.sy), sheen_a)
-        # A hair of darkening at the screen's rim, as glass over a display has.
-        rim = ImageChops.subtract(self.screen_mask, rrect_mask((self.sw, self.sh),
-                                  (self.px(1.2), self.px(1.2), self.sw - self.px(1.2), self.sh - self.px(1.2)), self.px(R_SCREEN - 1.2)))
-        fr.paste(Image.new("RGBA", (self.sw, self.sh), (0, 0, 0, 255)), (self.sx, self.sy), rim.point(lambda v: v * 45 // 255))
-        self.front = fr
+        if which == "static":
+            # The glass sheen: a diagonal soft light from the top left, over the screen only.
+            sheen = gradient((self.sw, self.sh), [(0, (255, 255, 255)), (0.34, (255, 255, 255)), (1, (255, 255, 255))], 70)
+            a = np.zeros((self.sh, self.sw), np.float32)
+            ys, xs = np.mgrid[0:self.sh, 0:self.sw].astype(np.float32)
+            t = (xs / self.sw * 0.55 + ys / self.sh * 0.45)
+            a = np.clip((0.40 - t) / 0.40, 0, 1) ** 1.6 * 0.07 * 255
+            sheen_a = Image.fromarray(a.astype(np.uint8), "L")
+            sheen_a = ImageChops.multiply(sheen_a, self.screen_mask)
+            fr.paste(Image.new("RGBA", (self.sw, self.sh), (255, 255, 255, 255)), (self.sx, self.sy), sheen_a)
+            # A hair of darkening at the screen's rim, as glass over a display has.
+            rim = ImageChops.subtract(self.screen_mask, rrect_mask((self.sw, self.sh),
+                                      (self.px(1.2), self.px(1.2), self.sw - self.px(1.2), self.sh - self.px(1.2)), self.px(R_SCREEN - 1.2)))
+            fr.paste(Image.new("RGBA", (self.sw, self.sh), (0, 0, 0, 255)), (self.sx, self.sy), rim.point(lambda v: v * 45 // 255))
+        self.layers[(which, dark)] = fr
 
     # -- per frame -------------------------------------------------------
     def frame(self, app_png, rings, under=(), over=()):
@@ -260,8 +267,15 @@ class Phone:
             screen = Image.alpha_composite(screen, ring(self))
         for layer in over:
             screen = Image.alpha_composite(screen, layer)
-        img.paste(screen.convert("RGB"), (self.sx, self.sy), self.screen_mask)
-        return Image.alpha_composite(img, self.front).convert("RGB")
+        rgb = screen.convert("RGB")
+        img.paste(rgb, (self.sx, self.sy), self.screen_mask)
+        # Icons dark on a light screen, light on a dark one, each bar by what is under it.
+        top = np.asarray(rgb.crop((0, 0, self.sw, max(2, round(self.px(40))))).convert("L"), np.float32).mean()
+        bot = np.asarray(rgb.crop((0, self.sh - round(self.px(20)), self.sw, self.sh)).convert("L"), np.float32).mean()
+        img = Image.alpha_composite(img.convert("RGBA"), self.layers[("static", True)])
+        img = Image.alpha_composite(img, self.layers[("status", top > 128)])
+        img = Image.alpha_composite(img, self.layers[("gesture", bot > 128)])
+        return img.convert("RGB")
 
     def to_px(self, x, y):
         return x * self.s, y * self.s
