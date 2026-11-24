@@ -127,47 +127,47 @@
     "button.treat_label_another": {
       "text": "Another one",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+      "context": "Draft, not reviewed: A purchase line's label in chat: a label not offered, typed next"
     },
     "button.treat_label_none": {
       "text": "No label",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)",
+      "context": "Draft, not reviewed: A purchase line's label in chat: none (shown as Not labelled)",
       "same": true
     },
     "button.treat_many_record": {
       "text": "Just record them",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them",
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: no, just record them",
       "same": true
     },
     "button.treat_many_yes": {
       "text": "Yes, one row each",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each",
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: yes, a row on Things we have for each",
       "same": true
     },
     "button.treat_new_item": {
       "text": "New one",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+      "context": "Draft, not reviewed: Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
     },
     "button.treat_record": {
       "text": "Just record it",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes",
+      "context": "Draft, not reviewed: A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes",
       "same": true
     },
     "button.treat_stock": {
       "text": "Add to stock",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes",
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: counted into a stock item when it comes",
       "same": true
     },
     "button.treat_track": {
       "text": "Keep track of it",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have",
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: each one a row on Things we have",
       "same": true
     },
     "button.yes": {
@@ -182,12 +182,12 @@
     "button.yes_sell": {
       "text": "Yes, I dey sell am",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.no_sell": {
       "text": "No, I no dey sell",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Yes, publish am",
@@ -1639,17 +1639,17 @@
     "menu.stock.new": {
       "text": "Add new thing to count",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.new.ask.what": {
       "text": "Wetin be am, and how many? Like 20 yards of ankara fabric.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.new.line": {
       "text": "New thing wey you dey sell or use: fabric, thread, bags",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.one": {
       "text": "How many one item get",
@@ -3396,79 +3396,79 @@
     "wa.treat.ask": {
       "text": "*{item}* ({count}) from *{supplier}*: how we go treat am?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+      "context": "Draft, not reviewed: An order drafted in chat: a line the business has not said how to treat before"
     },
     "wa.treat.how": {
       "text": "*Just record it*: no stock go move. *Add to stock*: we go count am enter when e land. *Keep track of it*: each one go dey on Things we have. Or type am, like _keep track of it, Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+      "context": "Draft, not reviewed: Under how should we treat it?: what each answer does, and how to type one with its label"
     },
     "wa.treat.item_reminder": {
       "text": "Pick the stock item wey *{item}* go enter, or type im name. *New one* go make am.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+      "context": "Draft, not reviewed: Which stock item? was answered with something else"
     },
     "wa.treat.label": {
       "text": "Label for *{item}*? Pick one, or type am.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+      "context": "Draft, not reviewed: A purchase line's label in chat: the business's most used labels, Another, No label"
     },
     "wa.treat.label_reminder": {
       "text": "Pick label for *{item}*, type one, or press *No label*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+      "context": "Draft, not reviewed: The label question was answered with something else"
     },
     "wa.treat.label_type": {
       "text": "Type the label wey *{item}* go get, like _Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+      "context": "Draft, not reviewed: Another was pressed: the label typed"
     },
     "wa.treat.many": {
       "text": "Make I put {count} {item} on Things we have, one row for each?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+      "context": "Draft, not reviewed: Keep track of it for more than 50: asked first"
     },
     "wa.treat.new_item": {
       "text": "*{name}* go be new stock item. You dey sell am?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+      "context": "Draft, not reviewed: A new stock item for a purchase line: one question before it is made"
     },
     "wa.treat.no_item": {
       "text": "No stock item wey you get dey called *{name}*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+      "context": "Draft, not reviewed: A stock item typed for a purchase line is not one of the business's"
     },
     "wa.treat.not_labelled": {
       "text": "No label",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+      "context": "Draft, not reviewed: A purchase line with no label, said back"
     },
     "wa.treat.not_saved": {
       "text": "*{item}* no fit change: {reason}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+      "context": "Draft, not reviewed: A purchase line's answer could not be saved (the order moved on meanwhile)"
     },
     "wa.treat.reminder": {
       "text": "How we go treat *{item}*? Press one, or type *just record it*, *add to stock* or *keep track of it*. *cancel* go leave am.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+      "context": "Draft, not reviewed: How should we treat it? was answered with something else"
     },
     "wa.treat.saved": {
       "text": "*{item}*: {how}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label",
+      "context": "Draft, not reviewed: A purchase line's answer saved and remembered: how it is treated, and its label",
       "same": true
     },
     "wa.treat.to_stock": {
       "text": "Add to stock ({item})",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item",
+      "context": "Draft, not reviewed: How a purchase line is treated, said back: into which stock item",
       "same": true
     },
     "wa.treat.too_many": {
       "text": "{count} {item} too plenty to track one by one (no pass {max}), so we just record am. You fit add one row for everything on Things we have.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+      "context": "Draft, not reviewed: Keep track of it for more than 200: it cannot be, and is just recorded"
     },
     "wa.treat.uses": {
       "text": "Na for {unit} we dey count *{stock}*. How many {unit} dey inside one {one}? Talk number, like 1000.",
@@ -3483,7 +3483,7 @@
     "wa.treat.which_item": {
       "text": "Which stock item *{item}* go enter? Pick one, or type im name.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+      "context": "Draft, not reviewed: Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "I think say you mean: *{command}*\nMake I do am?",
@@ -5114,27 +5114,27 @@
     "wa.stock.ask_sell": {
       "text": "*{name}* na new: {qty}{cost}. You dey sell am?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
+      "context": "Draft, not reviewed: Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
     "wa.stock.ask_sell_first": {
       "text": "Start to keep stock with *{name}*: {qty}{cost}. You dey sell am?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+      "context": "Draft, not reviewed: The first thing counted in, which starts keeping stock: the same question"
     },
     "wa.stock.sell_how": {
       "text": "*Yes* go add am to your products too. *No* go only count am: something wey you dey use, no be to sell.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+      "context": "Draft, not reviewed: Under Do you sell it?: what each answer does"
     },
     "wa.stock.sell_reminder": {
       "text": "You dey sell *{name}*? Reply *yes* or *no*, or *cancel* to leave am.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+      "context": "Draft, not reviewed: Do you sell it? was answered with something else"
     },
     "wa.stock.added_material": {
       "text": "We only dey count am: e no be one of your products.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
+      "context": "Draft, not reviewed: After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "Add {qty} to *{name}* ({from} → {to}){cost}?",

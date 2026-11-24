@@ -115,42 +115,42 @@
     "button.treat_label_another": {
       "text": "Wani daban",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: a label not offered, typed next"
+      "context": "Draft, not reviewed: A purchase line's label in chat: a label not offered, typed next"
     },
     "button.treat_label_none": {
       "text": "Babu lakabi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: none (shown as Not labelled)"
+      "context": "Draft, not reviewed: A purchase line's label in chat: none (shown as Not labelled)"
     },
     "button.treat_many_record": {
       "text": "A rubuta kawai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: no, just record them"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: no, just record them"
     },
     "button.treat_many_yes": {
       "text": "Eh, layi ga kowanne",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
+      "context": "Draft, not reviewed: Keeping track of more than 50 of something bought: yes, a row on Things we have for each"
     },
     "button.treat_new_item": {
       "text": "Sabon kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
+      "context": "Draft, not reviewed: Which stock item a purchase line goes into: a new stock item, asking Do you sell it?"
     },
     "button.treat_record": {
       "text": "A rubuta shi kawai",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat (what a business buys §6): no stock moves when it comes"
     },
     "button.treat_stock": {
       "text": "Ƙara cikin kaya",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: counted into a stock item when it comes"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: counted into a stock item when it comes"
     },
     "button.treat_track": {
       "text": "Bi diddiginsa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's treatment in chat: each one a row on Things we have"
+      "context": "Draft, not reviewed: A purchase line's treatment in chat: each one a row on Things we have"
     },
     "button.yes": {
       "text": "Eh",
@@ -163,12 +163,12 @@
     "button.yes_sell": {
       "text": "Eh, ina sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.no_sell": {
       "text": "A'a, ba na sayarwa",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Reply button, at most 20 characters: Do you sell it?"
+      "context": "Draft, not reviewed: Reply button, at most 20 characters: Do you sell it?"
     },
     "button.yes_publish": {
       "text": "Eh, wallafa",
@@ -1582,17 +1582,17 @@
     "menu.stock.new": {
       "text": "Ƙara abin da za a ƙirga",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A menu row's title (api/chat_actions.go), at most 24 characters"
+      "context": "Draft, not reviewed: A menu row's title (api/chat_actions.go), at most 24 characters"
     },
     "menu.stock.new.ask.what": {
       "text": "Menene shi, kuma nawa ne? Kamar yadi 20 na ankara.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A question a menu row asks in the chat (api/chat_actions.go)"
+      "context": "Draft, not reviewed: A question a menu row asks in the chat (api/chat_actions.go)"
     },
     "menu.stock.new.line": {
       "text": "Sabon abu, na sayarwa ko amfani: yadi, zare, jakunkuna",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The line under a menu row (api/chat_actions.go), at most 72 characters"
+      "context": "Draft, not reviewed: The line under a menu row (api/chat_actions.go), at most 72 characters"
     },
     "menu.stock.one": {
       "text": "Adadin wani kaya",
@@ -3283,78 +3283,78 @@
     "wa.treat.ask": {
       "text": "*{item}* ({count}) daga *{supplier}*: yaya za mu ɗauke shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. An order drafted in chat: a line the business has not said how to treat before"
+      "context": "Draft, not reviewed: An order drafted in chat: a line the business has not said how to treat before"
     },
     "wa.treat.how": {
       "text": "*Just record it*: babu kayan da zai motsa. *Add to stock*: za a ƙirga shi a ciki idan ya iso. *Keep track of it*: kowanne a kan Things we have. Ko ka rubuta, kamar _keep track of it, Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under how should we treat it?: what each answer does, and how to type one with its label"
+      "context": "Draft, not reviewed: Under how should we treat it?: what each answer does, and how to type one with its label"
     },
     "wa.treat.item_reminder": {
       "text": "Zaɓi kayan ajiya da *{item}* zai shiga, ko ka rubuta sunansa. *A new one* zai yi sabo.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Which stock item? was answered with something else"
+      "context": "Draft, not reviewed: Which stock item? was answered with something else"
     },
     "wa.treat.label": {
       "text": "Lakabi na *{item}*? Zaɓi ɗaya, ko ka rubuta.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's label in chat: the business's most used labels, Another, No label"
+      "context": "Draft, not reviewed: A purchase line's label in chat: the business's most used labels, Another, No label"
     },
     "wa.treat.label_reminder": {
       "text": "Zaɓi lakabi na *{item}*, rubuta ɗaya, ko danna *No label*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The label question was answered with something else"
+      "context": "Draft, not reviewed: The label question was answered with something else"
     },
     "wa.treat.label_type": {
       "text": "Rubuta lakabi na *{item}*, kamar _Machines_.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Another was pressed: the label typed"
+      "context": "Draft, not reviewed: Another was pressed: the label typed"
     },
     "wa.treat.many": {
       "text": "A saka {item} {count} a kan Things we have, layi ɗaya ga kowanne?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 50: asked first"
+      "context": "Draft, not reviewed: Keep track of it for more than 50: asked first"
     },
     "wa.treat.new_item": {
       "text": "*{name}* zai zama sabon kayan ajiya. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A new stock item for a purchase line: one question before it is made"
+      "context": "Draft, not reviewed: A new stock item for a purchase line: one question before it is made"
     },
     "wa.treat.no_item": {
       "text": "Babu kayan ajiyarka mai suna *{name}*.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A stock item typed for a purchase line is not one of the business's"
+      "context": "Draft, not reviewed: A stock item typed for a purchase line is not one of the business's"
     },
     "wa.treat.not_labelled": {
       "text": "Ba shi da lakabi",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line with no label, said back"
+      "context": "Draft, not reviewed: A purchase line with no label, said back"
     },
     "wa.treat.not_saved": {
       "text": "Ba a iya canza *{item}* ba: {reason}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer could not be saved (the order moved on meanwhile)"
+      "context": "Draft, not reviewed: A purchase line's answer could not be saved (the order moved on meanwhile)"
     },
     "wa.treat.reminder": {
       "text": "Yaya za mu ɗauki *{item}*? Danna ɗaya, ko ka rubuta *just record it*, *add to stock* ko *keep track of it*. *cancel* zai bar shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How should we treat it? was answered with something else"
+      "context": "Draft, not reviewed: How should we treat it? was answered with something else"
     },
     "wa.treat.saved": {
       "text": "*{item}*: {how}.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. A purchase line's answer saved and remembered: how it is treated, and its label",
+      "context": "Draft, not reviewed: A purchase line's answer saved and remembered: how it is treated, and its label",
       "same": true
     },
     "wa.treat.to_stock": {
       "text": "Ƙara cikin kaya ({item})",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. How a purchase line is treated, said back: into which stock item"
+      "context": "Draft, not reviewed: How a purchase line is treated, said back: into which stock item"
     },
     "wa.treat.too_many": {
       "text": "{item} {count} sun yi yawa da za a bi diddigin su ɗaya bayan ɗaya (mafi yawa {max}), don haka an rubuta su kawai. Kana iya ƙara layi ɗaya don duka a kan Things we have.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Keep track of it for more than 200: it cannot be, and is just recorded"
+      "context": "Draft, not reviewed: Keep track of it for more than 200: it cannot be, and is just recorded"
     },
     "wa.treat.uses": {
       "text": "Ana ƙirga *{stock}* da {unit}. {unit} nawa ne a cikin {one} ɗaya? Faɗi lamba, kamar 1000.",
@@ -3369,7 +3369,7 @@
     "wa.treat.which_item": {
       "text": "Wane kayan ajiya ne *{item}* zai shiga? Zaɓi ɗaya, ko ka rubuta sunansa.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Add to stock was chosen for a purchase line: the stock item, materials included"
+      "context": "Draft, not reviewed: Add to stock was chosen for a purchase line: the stock item, materials included"
     },
     "wa.understood.confirm": {
       "text": "Ina tsammani kana nufin: *{command}*\nIn yi shi?",
@@ -4969,27 +4969,27 @@
     "wa.stock.ask_sell": {
       "text": "*{name}* sabo ne: {qty}{cost}. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
+      "context": "Draft, not reviewed: Counting in something the business has none of (add 20 yards of ankara fabric): one question before it is added"
     },
     "wa.stock.ask_sell_first": {
       "text": "Fara ajiye kaya da *{name}*: {qty}{cost}. Kana sayar da shi?",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. The first thing counted in, which starts keeping stock: the same question"
+      "context": "Draft, not reviewed: The first thing counted in, which starts keeping stock: the same question"
     },
     "wa.stock.sell_how": {
       "text": "*Yes* zai ƙara shi cikin kayan sayarwarka ma. *No* zai ƙirga shi kawai: abin da kake amfani da shi, ba sayarwa ba.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Under Do you sell it?: what each answer does"
+      "context": "Draft, not reviewed: Under Do you sell it?: what each answer does"
     },
     "wa.stock.sell_reminder": {
       "text": "Kana sayar da *{name}*? Amsa *yes* ko *no*, ko *cancel* don barin shi.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. Do you sell it? was answered with something else"
+      "context": "Draft, not reviewed: Do you sell it? was answered with something else"
     },
     "wa.stock.added_material": {
       "text": "Ana ƙirga shi kawai: ba ya cikin kayan sayarwarka.",
       "reviewed": false,
-      "context": "Not translated yet: in English until a translator writes it. After adding something not sold (No to Do you sell it?)"
+      "context": "Draft, not reviewed: After adding something not sold (No to Do you sell it?)"
     },
     "wa.stock.confirm_topup": {
       "text": "A ƙara {qty} ga *{name}* ({from} → {to}){cost}?",
