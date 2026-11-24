@@ -63,7 +63,7 @@ A refused key says what to do: `scope_required` (make a key with Read payroll an
 
 ## What is not here yet
 
-Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built so far: 1–3; 4 and 5 are next.
+Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-requests.md); Payrolla's replies [A](payrolla-reference/05-phase-a-response.md), [B](payrolla-reference/06-phase-b-response.md) and [C](payrolla-reference/07-phase-c-response.md)). Taskiem builds on it as P4b, in five slices ([decision 0074](../decisions/0074-payroll-run-from-taskiem.md), accepted; [the plan](../spec/chat-pay-people.md#p4b-slice-by-slice)). Built so far: 1–4; 5 is next.
 
 1. **Connecting in one step** (P4b-1), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-1-connect-in-one-step-keep-keys-reconnect-link-approvers)), live once Payrolla registers Taskiem:
    - OAuth 2.0 with PKCE, with sign-up in the same step (`POST /v1/payroll/connect`; Payrolla sends the browser back to `/v1/payrolla/callback`);
@@ -81,7 +81,7 @@ Payrolla shipped everything Taskiem asked for in P7 ([the request](payrolla-api-
    - approve and **Lock and pay**, confirmed with **Payrolla's own one-time code**, typed into Taskiem.
 
    Approving is no longer a link into Payrolla, and there is no Taskiem-signed approval: Payrolla chose its own code instead.
-4. **After locking** (P4b-4): the payment's progress, the wallet's shortfall, **Pay now**, **Pay the failed ones again**, and payslips as Taskiem's own cards.
+4. **After locking** (P4b-4), **built 24 November 2026** ([as built](../spec/chat-pay-people.md#p4b-4-after-locking-paid-short-again-and-payslips)): the payment's progress (`GET /connect/runs/{id}/payment`), the wallet's shortfall told on the day and warned before it, **Pay now** and **Pay the failed ones again** with Payrolla's code, and payslips as Taskiem's own cards (`/v1/payroll/payslips`, `/v1/payroll/me/payslips`). `payrolla-tell-staff` now sends the 7-day payslip link only to someone not linked to a staff member.
 5. **Settings and the tax and pension schedules** (P4b-5).
 
 **Also not here yet:**
@@ -95,7 +95,7 @@ Seven templates work around Payrolla ([template library](../templates.md)), offe
 
 | Template | Starts on | Does |
 | --- | --- | --- |
-| `payrolla-tell-staff` | `payout.succeeded` | Tells the employee their pay arrived (on the WhatsApp they asked for updates on, else by SMS), and sends their payslip link when you allow it |
+| `payrolla-tell-staff` | `payout.succeeded` | Tells the employee their pay arrived (on the WhatsApp they asked for updates on, else by SMS), and sends their payslip link when you allow it, to someone not linked to a staff member (a linked one gets Taskiem's own payslip card) |
 | `payrolla-payroll-summary` | `run.completed`, `run.partially_completed` | Tells the owner and a role who was paid, the total, and who was not and why |
 | `payrolla-approve-by-chat` | `run.computed` | Sends the approvers the total and `approval_url`; reminds them the day before payday if it is still not approved |
 | `payrolla-reversal-alert` | `payout.reversed` | Alerts the owner and the payroll admin whose pay came back |
