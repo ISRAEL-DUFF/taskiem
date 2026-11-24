@@ -26,7 +26,9 @@ import (
 	"github.com/israel-duff/taskiem/engine/policy"
 	"github.com/israel-duff/taskiem/engine/runtime"
 	"github.com/israel-duff/taskiem/engine/saved"
+	"github.com/israel-duff/taskiem/engine/wd"
 	"github.com/israel-duff/taskiem/engine/wdmerge"
+	"github.com/israel-duff/taskiem/engine/wdtext"
 	"github.com/israel-duff/taskiem/templates"
 )
 
@@ -521,9 +523,10 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	if err := rows.Err(); err != nil {
 		return c, err
 	}
-	// Saved things by name, title and kind, never what they hold (saved
-	// objects S3).
-	rows, err = tx.Query(ctx, `SELECT o.name, o.title, o.kind, COALESCE(k.name, ''), COALESCE(k.fields, '[]'::jsonb) FROM saved_objects o
+	// Saved things by name and kind, never what they hold (saved objects
+	// S3; build plan M6: not a title either, a saved person's being their
+	// name).
+	rows, err = tx.Query(ctx, `SELECT o.name, o.kind, COALESCE(k.name, ''), COALESCE(k.fields, '[]'::jsonb) FROM saved_objects o
 		LEFT JOIN saved_kinds k ON k.id = o.kind_id
 		WHERE o.person_id IS NULL AND o.archived_at IS NULL ORDER BY o.updated_at DESC LIMIT 200`)
 	if err != nil {
@@ -532,7 +535,7 @@ func aiContext(ctx context.Context, tx pgx.Tx, reg connector.Lookup, env string,
 	for rows.Next() {
 		var x builder.SavedThing
 		var fields []saved.Field
-		if err := rows.Scan(&x.Name, &x.Title, &x.Kind, &x.KindName, &fields); err != nil {
+		if err := rows.Scan(&x.Name, &x.Kind, &x.KindName, &fields); err != nil {
 			rows.Close()
 			return c, err
 		}
@@ -710,6 +713,10 @@ type aiBuildView struct {
 	SavedVersion    *int            `json:"saved_version"`
 	TemplateID      *string         `json:"template_id"`
 	Channel         string          `json:"channel"`
+	// ReadBack is the proposal's workflow in plain steps, its tool after
+	// them (the command, who may use it, what it asks and says back), as
+	// the chat reads it back (Describe it, build plan M6).
+	ReadBack []wdtext.Line `json:"read_back"`
 }
 
 func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
@@ -757,8 +764,19 @@ func (s *Server) aiGetBuild(w http.ResponseWriter, r *http.Request) {
 		msg := "the build was interrupted; start it again"
 		v.Status, v.Error = "failed", &msg
 	}
+	v.ReadBack = []wdtext.Line{}
 	if prop != nil {
 		v.Proposal = prop
+		var p struct {
+			Definition json.RawMessage `json:"definition"`
+		}
+		if json.Unmarshal(prop, &p) == nil && len(p.Definition) > 0 {
+			if def, err := wd.Load(p.Definition); err == nil {
+				if reg, err := s.Registry.For(r.Context(), principalFrom(r.Context()).TenantID.String()); err == nil {
+					v.ReadBack = wdtext.Describe(def, reg)
+				}
+			}
+		}
 	} else {
 		v.Proposal = json.RawMessage("null")
 	}

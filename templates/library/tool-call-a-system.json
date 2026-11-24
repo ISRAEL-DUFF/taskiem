@@ -5,6 +5,7 @@
   "description": "A tool for your team that asks another system, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word and a value (\"/check-order AD-12\"): it reads the web address you give, with the value added as q, and shows the two fields of the answer you choose, as a card. It only reads (it never changes anything there), so it answers at once. For someone who knows the other system's address. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (check-order-2) and says so.",
   "category": "tools",
   "tags": ["tool", "developer", "look up"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["call", "system", "api", "web address", "check", "status", "look up", "fetch", "tool", "command"],
   "connectors": [],
   "params": [

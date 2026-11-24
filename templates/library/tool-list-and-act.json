@@ -5,6 +5,7 @@
   "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word (\"/open-tickets\") and it lists the rows of your table whose state is open, ten in the chat and every one on the web and in the app. Each row has a button that changes its state to done, marks that row, and shows the list again. Since its button changes a row, it asks yes before it runs. Choose the word it is called by, the table, the state column and its two values when you install it; if the word is taken, it gets the next free one (open-tickets-2) and says so.",
   "category": "tools",
   "tags": ["tool", "list", "data table"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["list", "open", "pending", "to do", "mark", "done", "close", "state", "status", "tickets", "tool", "command"],
   "connectors": ["xenibase@1"],
   "params": [

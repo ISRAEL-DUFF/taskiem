@@ -6436,6 +6436,36 @@
       "reviewed": false,
       "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
     },
+    "wd.tool.called": {
+      "text": "Lò ó nínú ìjíròrò pẹ̀lú {command}: {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Àwọn ènìyàn rẹ nìkan ló lè lò ó",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Àwọn oníbàárà rẹ lè lò ó, wọn yóò sì rí ohun tí a sàmì sí fún wọn nìkan",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "Ó ń béèrè fún: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "Ó ń fèsì pẹ̀lú {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "Ó kàn ń sọ pé ó ti ṣiṣẹ́",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
     "wd.change.roles": {
       "text": "Àwọn ipa wọ̀nyí nìkan ló lè bẹ̀rẹ̀ rẹ̀ báyìí: {roles}",
       "reviewed": false,

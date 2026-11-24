@@ -48094,6 +48094,23 @@ components:
         channel:
           type: string
           description: Where the build was asked for (`web`, `whatsapp`).
+        read_back:
+          type: array
+          description: The proposal's workflow in plain steps, its tool after them (the command it is called by, who may use it, what it asks and what it says back), as the chat reads it back (Describe it, build plan M6). Empty while it runs.
+          items:
+            type: object
+            required:
+            - number
+            - depth
+            - text
+            properties:
+              number:
+                type: string
+              depth:
+                type: integer
+              text:
+                type: string
+            additionalProperties: false
       additionalProperties: false
     AIInteractionList:
       type: object

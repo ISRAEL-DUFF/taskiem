@@ -5,6 +5,7 @@
   "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word with what it was and an amount (\"/add-sale 2 bags of rice 45000\") and a row is added to your table, with a sentence back saying so. People see what will be added and say yes first. It is fixed to one table, with its own name: what, amount and note. Taskiem makes the table if it does not exist. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (add-sale-2) and says so.",
   "category": "tools",
   "tags": ["tool", "record", "data table"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["add", "record", "log", "write down", "note", "row", "table", "tool", "command", "type"],
   "connectors": ["xenibase@1"],
   "params": [

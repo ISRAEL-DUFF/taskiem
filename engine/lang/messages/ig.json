@@ -6434,6 +6434,36 @@
       "reviewed": false,
       "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
     },
+    "wd.tool.called": {
+      "text": "Jiri ya na nkata site na {command}: {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Ọ bụ naanị ndị nke gị nwere ike iji ya",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Ndị ahịa gị nwere ike iji ya, ma ha ga-ahụ naanị ihe e debere maka ha",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "Ọ na-ajụ maka: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "Ọ na-aza site na {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "Ọ na-ekwu naanị na ọ rụrụ ọrụ",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
     "wd.change.roles": {
       "text": "Naanị ọrụ ndị a nwere ike ịmalite ya ugbu a: {roles}",
       "reviewed": false,

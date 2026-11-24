@@ -5,6 +5,7 @@
   "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word and a message (\"/tell-team shop opens at 10 tomorrow\") and everyone with the role you choose hears it on the WhatsApp or Telegram they linked to Taskiem, or by email. You see the message and say yes first, then hear how many it went to. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (tell-team-2) and says so.",
   "category": "tools",
   "tags": ["tool", "team", "message"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["tell", "team", "staff", "everyone", "announce", "broadcast", "message", "notice", "tool", "command"],
   "connectors": ["notify@1"],
   "params": [

@@ -5,6 +5,7 @@
   "description": "Two parts, installed together. Every day at the time you choose, the people with the role you choose hear how many rows were added to your table today and the total of its amount column, with a See the list button. The button opens a tool, also used from the chat on the web, the phone app, WhatsApp, Telegram and Slack by its word (\"/sales-today\"), that lists today's rows. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (sales-today-2) and says so.",
   "category": "tools",
   "tags": ["tool", "report", "schedule", "data table"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["daily", "report", "every day", "today", "count", "total", "sum", "summary", "evening", "list", "tool"],
   "connectors": ["xenibase@1", "notify@1"],
   "params": [

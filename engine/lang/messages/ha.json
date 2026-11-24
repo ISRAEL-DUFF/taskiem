@@ -6435,6 +6435,36 @@
       "reviewed": false,
       "context": "Draft, not reviewed: Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
     },
+    "wd.tool.called": {
+      "text": "Yi amfani da shi a hira da {command}: {name}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Mutanenka ne kawai za su iya amfani da shi",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Abokan cinikinka za su iya amfani da shi, kuma za su ga abin da aka keɓe musu kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "Yana tambayar: {fields}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "Yana amsawa da {kind}",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "Yana faɗin cewa ya yi aiki kawai",
+      "reviewed": false,
+      "context": "Draft, not reviewed: A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
     "wd.change.roles": {
       "text": "Waɗannan matsayi ne kaɗai za su iya fara shi yanzu: {roles}",
       "reviewed": false,

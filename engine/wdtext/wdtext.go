@@ -14,6 +14,7 @@ package wdtext
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -56,6 +57,75 @@ func DescribeWith(def *wd.Definition, reg connector.Lookup, t lang.Tag, find exp
 	d := describer{reg: reg, lang: t, find: find}
 	out := []Line{{Number: "1", Text: d.trigger(def.Trigger)}}
 	d.steps(&out, def.Steps, 0, "", 2)
+	return append(out, d.tool(def)...)
+}
+
+// tool reads a workflow's tool aloud after its steps (made tools §13,
+// Describe it): the command it is called by, who may use it, what it asks
+// and what it says back. Nothing for a workflow that is not a tool.
+func (d describer) tool(def *wd.Definition) []Line {
+	t := def.Tool
+	if t == nil {
+		return nil
+	}
+	out := []Line{{Number: "•", Text: d.t("wd.tool.called", "command", "/"+t.Command, "name", plain(t.Name))}}
+	switch t.Audience() {
+	case wd.ToolForCustomers:
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_customers")})
+	case wd.ToolForLinked:
+		out = append(out, Line{Number: "•", Text: d.t("wd.change.for_linked")})
+	default:
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.for_members")})
+	}
+	if asks := inputTitles(def); len(asks) > 0 {
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.asks", "fields", strings.Join(asks, ", "))})
+	}
+	if t.Answer != nil {
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.answers", "kind", d.answerKind(t.Answer.Type))})
+	} else {
+		out = append(out, Line{Number: "•", Text: d.t("wd.tool.says_ran")})
+	}
+	return out
+}
+
+// inputTitles are the titles of what a workflow asks when it starts (its
+// field names where it has no titles), in the schema's order of required
+// first, then the rest by name.
+func inputTitles(def *wd.Definition) []string {
+	schema, _ := def.InputsSchema()
+	s, _ := schema.(map[string]any)
+	props, _ := s["properties"].(map[string]any)
+	if len(props) == 0 {
+		return nil
+	}
+	var names []string
+	seen := map[string]bool{}
+	if req, ok := s["required"].([]any); ok {
+		for _, r := range req {
+			if n, ok := r.(string); ok && props[n] != nil && !seen[n] {
+				names = append(names, n)
+				seen[n] = true
+			}
+		}
+	}
+	var rest []string
+	for n := range props {
+		if !seen[n] {
+			rest = append(rest, n)
+		}
+	}
+	slices.Sort(rest)
+	names = append(names, rest...)
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		title := strings.ReplaceAll(n, "_", " ")
+		if p, ok := props[n].(map[string]any); ok {
+			if t, ok := p["title"].(string); ok && strings.TrimSpace(t) != "" {
+				title = t
+			}
+		}
+		out = append(out, plain(title))
+	}
 	return out
 }
 

@@ -5,6 +5,7 @@
   "description": "A tool for your team, used from the chat on the web, the phone app, WhatsApp, Telegram and Slack. Type its word with what you need and why (\"/ask-approval new printer, ours is broken\"). The people with the role you choose get it with Approve and Reject buttons, and whoever asked is told the decision in the chat they asked from. Nothing is paid or bought by it: it only asks. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (ask-approval-2) and says so.",
   "category": "tools",
   "tags": ["tool", "approval", "request"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["ask", "approval", "approve", "permission", "request", "decide", "manager", "tool", "command"],
   "connectors": [],
   "params": [

@@ -7584,6 +7584,36 @@
       "reviewed": true,
       "context": "Fills {kind} in wd.change.answer_now: an answer that is a list of rows"
     },
+    "wd.tool.called": {
+      "text": "Use it from the chat with {command}: {name}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps (Describe it, the template library): it is a tool called from the chat; {command} is like /add-sale, {name} the tool's name"
+    },
+    "wd.tool.for_members": {
+      "text": "Your own people can use it",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool is for the business's own people"
+    },
+    "wd.tool.for_customers": {
+      "text": "Your customers can use it, and see only what it marks for them",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool is for the business's customers, whose answer shows only the outputs marked public"
+    },
+    "wd.tool.asks": {
+      "text": "It asks for: {fields}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: what its tool asks for when it is called; {fields} is a list of field names"
+    },
+    "wd.tool.answers": {
+      "text": "It answers with {kind}",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: what its tool says back; {kind} is wd.change.answer.text, .card or .list"
+    },
+    "wd.tool.says_ran": {
+      "text": "It says only that it ran",
+      "reviewed": true,
+      "context": "A workflow read back in plain steps: its tool has no answer, so it only says it ran"
+    },
     "wd.change.roles": {
       "text": "Only these roles can start it now: {roles}",
       "reviewed": true,

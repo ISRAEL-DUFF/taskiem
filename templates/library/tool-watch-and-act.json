@@ -5,6 +5,7 @@
   "description": "Two parts, installed together. Every day at the time you choose, Taskiem looks for rows of your table whose number column is at or below the level you set (stock running low, a balance too small) and, when it finds some, tells the people with the role you choose, with a Deal with it button. The button opens a tool, also used from the chat on the web, the phone app, WhatsApp, Telegram and Slack by its word (\"/handle\"), that marks the row handled once they say yes. Choose the word it is called by when you install it; if that word is taken, it gets the next free one (handle-2) and says so.",
   "category": "tools",
   "tags": ["tool", "watch", "alert", "schedule", "data table"],
+  "requires": ["tool", "command", "type", "button"],
   "keywords": ["watch", "threshold", "act", "button", "handled", "deal with it", "tool"],
   "connectors": ["xenibase@1", "notify@1"],
   "params": [
