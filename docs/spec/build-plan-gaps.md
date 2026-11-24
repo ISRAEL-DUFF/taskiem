@@ -90,19 +90,19 @@ The specs are [chat menus](chat-menus.md) and menus everywhere. Three of these a
 
 **As built** (every task; [chat menus](chat-menus.md#what-h4-built-24-november-2026), [menus everywhere](menus-everywhere.md#what-h4-built-24-november-2026)): a command typed in full counts in every chat, its action read back from the catalogue's own commands (`api/chat_typed.go`; "invoice …" typed three times puts Send an invoice first in Money, `TestChatMenusTypedCommandsCount`); the topics' words in `engine/lang/intents/*.json` (`topics`), drafts for pcm, yo, ig and ha, the person's language first ("owo" is Money in Yoruba, `TestChatMenusTopicWordsInTheirLanguage`); `GET /v1/chat-refs` `kind=saved` (names, kinds and owner only; the person's own and their business's) and `kind=service`, in search everywhere on the web and in the app with Show more (`TestSearchFindsSavedAndServices`, the Playwright and app tests); Telegram's topics two to a row and a topic's five then All N (`TestTelegramMenuLayout`); Slack's five then More… for topics and a topic's rows (`TestSlackMenuFiveThenMore`). No migration was needed.
 
-## 7. Phase H5: pages, the rest of G1 to G3
+## 7. Phase H5: pages, the rest of G1 to G3 — done 24 November 2026
 
-The spec is [pages](pages.md). Three of these are against the spec.
+The spec is [pages](pages.md). Three of these are against the spec. **Built 24 November 2026**, every task below ([As built](pages.md#18b-as-built-the-rest-of-g1-to-g3-h5)); migrations 00630 and 00631.
 
 | Task | Item | Details |
 | --- | --- | --- |
-| **Mine on a phone column** | `g-pages-mine` | The drawing handles a phone already (`engine/pages/render.go` 259–266), but `check.go` 272–273 refuses anything but email, `api/pages.go` 772 never sets the viewer's phone, and the editor offers email columns only (`PageEditor.tsx` 728). Allow phone columns in all three. |
-| **The app ticks a row in place** | `g-pages-tick` | The app opens the row today. Tick a yes/no cell through `PATCH /v1/tables/{id}/rows/{row}`, shown only with `table.edit`, as the web does. |
-| **An estimate of a day's tool runs in a page's settings** | `g-pages-runs` | For a page with tool parts: views a day (from the last seven days) times its tool parts, against the plan's run limit, in the page's settings on the web. |
-| **Buttons, tool parts, status, alerts, ticks and place in the plain-words editor** | `g-pages-editor` | The editor's Add a part offers count, sum, list, table and heading only (`web/src/lib/pages.ts` 470–476). Add buttons (a tool, a signal, an approval; `when`), a tool as a source, a status part, a figure as an alert, an editable yes/no column, and where the page shows (pinned, a tab under an area). No technical words; the plain-words test covers it. |
-| **A page opened from a notification** | `g-pages-notif` | `notify.tell` buttons take a tool only (`connectors/notify/notify.go` 104–127). Add a page button (a page and its filters), drawn in each chat, opening the page in the app and on the web, only for people its roles let open it. SDK helpers regenerated. |
-| **A row's own status** | `g-pages-rowstatus` | A status line on each row and card, for a run named by the row (a column holding a run id) or by the page's address, `run.read` rules as the page status. |
-| **A page as a tab under Linked businesses** | `g-pages-tab` | Linked businesses gets a tab bar (web and app), and `place.area` accepts it (`engine/pages/pages.go` 365–370). |
+| **Mine on a phone column** (done) | `g-pages-mine` | The drawing handles a phone already (`engine/pages/render.go` 259–266), but `check.go` 272–273 refuses anything but email, `api/pages.go` 772 never sets the viewer's phone, and the editor offers email columns only (`PageEditor.tsx` 728). Allow phone columns in all three. |
+| **The app ticks a row in place** (done) | `g-pages-tick` | The app opens the row today. Tick a yes/no cell through `PATCH /v1/tables/{id}/rows/{row}`, shown only with `table.edit`, as the web does. |
+| **An estimate of a day's tool runs in a page's settings** (done) | `g-pages-runs` | For a page with tool parts: views a day (from the last seven days) times its tool parts, against the plan's run limit, in the page's settings on the web. |
+| **Buttons, tool parts, status, alerts, ticks and place in the plain-words editor** (done) | `g-pages-editor` | The editor's Add a part offers count, sum, list, table and heading only (`web/src/lib/pages.ts` 470–476). Add buttons (a tool, a signal, an approval; `when`), a tool as a source, a status part, a figure as an alert, an editable yes/no column, and where the page shows (pinned, a tab under an area). No technical words; the plain-words test covers it. |
+| **A page opened from a notification** (done) | `g-pages-notif` | `notify.tell` buttons take a tool only (`connectors/notify/notify.go` 104–127). Add a page button (a page and its filters), drawn in each chat, opening the page in the app and on the web, only for people its roles let open it. SDK helpers regenerated. |
+| **A row's own status** (done) | `g-pages-rowstatus` | A status line on each row and card, for a run named by the row (a column holding a run id) or by the page's address, `run.read` rules as the page status. |
+| **A page as a tab under Linked businesses** (done) | `g-pages-tab` | Linked businesses gets a tab bar (web and app), and `place.area` accepts it (`engine/pages/pages.go` 365–370). |
 
 **Done when:** a page of my tickets filtered by Mine on a phone column shows a staff member's own; the app ticks Done on a row; the deliveries fixture page is made from the editor alone, without a file; a notification opens a page filtered to today; each delivery row shows its run's status; and a page sits as a tab under Linked businesses.
 
@@ -243,9 +243,9 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-menu-words | H4 (built) |
 | g-menu-nocmd | Built; H1 fixes the doc |
 | g-search-saved | H4 (built) |
-| g-pages-mine | H5 |
-| g-pages-runs | H5 |
-| g-pages-tick | H5 |
+| g-pages-mine | H5, done 24 November 2026 |
+| g-pages-runs | H5, done 24 November 2026 |
+| g-pages-tick | H5, done 24 November 2026 |
 | g-recipes | §12 |
 | g-own-purchase | §12 |
 | g-old-cols | H2 (done 24 November 2026) |
@@ -270,10 +270,10 @@ Any of these can be moved into a phase by the founder's word; then it gets a tas
 | g-photo-phone | §12 |
 | g-pages-g4 | §11 G4 |
 | g-pages-g5 | §11 G5 |
-| g-pages-editor | H5 |
-| g-pages-notif | H5 |
-| g-pages-rowstatus | H5 |
-| g-pages-tab | H5 |
+| g-pages-editor | H5, done 24 November 2026 |
+| g-pages-notif | H5, done 24 November 2026 |
+| g-pages-rowstatus | H5, done 24 November 2026 |
+| g-pages-tab | H5, done 24 November 2026 |
 | g-pages-cust | §12 |
 | g-ct-m6 | §11 M6 |
 | g-ct-linked | §12 |

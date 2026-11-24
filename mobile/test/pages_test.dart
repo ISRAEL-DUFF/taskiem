@@ -523,6 +523,9 @@ void main() {
             {'id': 'd2', 'title': 'AC-13 · Ngozi', 'sub': 'Yaba · ₦1,200', 'state': {'text': 'on the way', 'tone': 'plain'}},
           ],
         },
+        // Started in an earlier year: drawn as "2 Nov 2025, 09:00" whatever
+        // today is, so the page-buttons picture never changes with the date
+        // (a date this year reads "Yesterday", a weekday or a day).
         {'id': 'state', 'type': 'status', 'title': 'Paying riders', 'run': 'r1', 'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
           'started_at': '2025-11-02T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
       ],

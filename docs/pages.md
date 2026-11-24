@@ -13,9 +13,9 @@ On a table's page, **Show as a page** makes a page from it in one tap: a figure 
 | **Heading** | A title and a line of words |
 | **Figure** | One number: how many rows, or a column added up (an amount in kobo drawn as naira), with its colour; optionally only this day, week or month's, with the change on the one before ("up 12% on last week"). Up to four sit side by side; one may be the page's main figure, drawn large |
 | **List** | Rows, each a title, a line under it and a state; may be put in groups by a column (Open, Doing, Done). A press opens the row as a card |
-| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order. A yes or no column you mark **can be changed here** is a tick for those who may change the table's rows |
+| **Table** | Rows in up to six columns you pick; a press on a column (in the app, **Order**) puts them in its order. A yes or no column you mark **can be ticked here** is a tick for those who may change the table's rows, on the web and in the app |
 | **Buttons** | Up to three buttons for the whole page (**New ticket**) |
-| **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest. The run itself, its times and who it waits for show to those who may read runs |
+| **Status** | Where a run of one of your workflows is, in plain words: queued, working, waiting for whom, done, failed. The run the page's address names (`?run=`), else the latest. The run itself, its times and who it waits for show to those who may read runs. A list's or a table's rows can each show **where their own run is** too (below) |
 
 Each figure, list and table reads one table (or your orders or invoices, below), with conditions every row it shows meets ("status is open") and an order. At the top of a page up to four **filters** narrow the parts that use them: a **search**, a **choice** from values you list, **dates** (today, this week, this month, or two days) and **Mine** (rows whose email or phone number column is the person's own: their phone is the number they sign in by). A list or table shows 25 rows, then **More**. A page has at most 12 parts.
 
@@ -45,7 +45,9 @@ A button on a page (in a **Buttons** part) or on each row of a list or table (sh
 - **A signal to a run**: tells a run of one of your workflows something it waits for (**Confirm** on a delivery), after **Yes**. Only to a run of the workflow the button names, waiting at a step that says a page may send it (`"pages": true` on the signal step), held to that workflow's roles; to no other run. A run that has moved on says so. Sending one needs the right to start runs (`run.start`).
 - **An approval**: opens the approval sheet of a run waiting at that step, with its PIN and rules, when it waits for the person.
 
-**When** hides a button for the rows it does not fit (`"when": "=row.status == 'delivered'"`). Pressing a button reads the row again on the server: nothing the screen sends is taken for a row's value.
+**When** hides a button for the rows it does not fit (`"when": "=row.status == 'delivered'"`; in the editor, **Show it only when**). Pressing a button reads the row again on the server: nothing the screen sends is taken for a row's value.
+
+**Where each row's run is:** a list or a table can show, on each row and its card, where a run of one of your workflows is for that row (`"status": {"workflow": "Confirm deliveries", "to": "=row.id"}`): the run waiting for the row, or that last did (**Confirm** on a delivery waits for that delivery), or the run whose number a column holds (`"run": "=row.run"`). Its words (Waiting, Done, Not started…) show to everyone the page opens to; the run itself and who it waits for only to those who may read runs.
 
 ## Parts a tool works out
 
@@ -56,7 +58,8 @@ A figure or a list can be fed by one of your tools that **answers at once** (onl
 ## A page as an alert, and as a tab
 
 - **An alert:** a figure that counts (a table's or a view's rows), marked **alert**, shows in the alerts at the end of your Taskiem chat while it is above zero: the page's name and the count, with **Open the page**. Only to those who may open the page.
-- **A tab under an area** (`"place": {"area": "orders"}`): the published page shows as a tab after Taskiem's own on that area's screens (Online shop and Orders, Money, Schools on the web; a **Your pages** section on the app's Money and Orders), while that area is on.
+- **A tab under an area** (`"place": {"area": "orders"}`): the published page shows as a tab after Taskiem's own on that area's screens (Online shop and Orders, Money, Schools on the web; a **Your pages** section on the app's Money and Orders), while that area is on. **Linked businesses** has tabs too (Linked businesses, Your business in Explore, then your pages placed there); in the app they are chips at its top.
+- **From a notification:** a Tell me message (`notify.tell`) can carry a button that opens a page with its filters set (`{"label": "See db-2", "page": "disk-alerts", "filters": {"host": "db-2"}}`). It shows, on WhatsApp and Telegram, only to people the page's roles let open it; pressed, it answers with the page's short form with those filters and its link, which opens the page with them in the app and on the web. Anyone else pressing it is told they cannot open the page.
 
 ## In the chat
 
@@ -77,7 +80,7 @@ An open page keeps itself up to date: when a row of a table it shows is changed 
 
 ## Making and changing one
 
-On the web, **Pages** lists your pages, pinned first. **New page** starts from a table; the editor has no technical words: **Add a part** (a count, a total, a list, a table, a heading), pick its table, what each row shows, the groups and the conditions, **Move up** and **Move down**, and a live preview at phone width. Changes are kept as a **draft** (Save draft); people keep seeing the published page until you **Publish**. Up to five pages can be **pinned**, shown in the menu under **Your pages**.
+On the web, **Pages** lists your pages, pinned first. **New page** starts from a table, from your orders, invoices, deliveries, customers or staff, or from nothing. The editor has no technical words: **Add a part** (a count, a total, a list, a table, a heading, a figure or a list a tool works out, **Buttons**, **Where a run is**), pick its table, what each row shows (a row's title can be two columns, "AC-12 · Musa"), the groups and the conditions, **Buttons on each row** (opens a tool's form with each value from the row, a filter, words or asked; tells a run something; opens a run's approval; and **Show it only when**), **Where each row's run is**, a count as **an alert**, a yes/no column that **can be ticked here**, **Also a tab under** one of Taskiem's areas, **Move up** and **Move down**, and a live preview at phone width. **About the page** also says about how many runs its tools start a day ("About 40 runs a day from this page: 20 views a day, 2 tools each") beside your plan's limit, and warns when that is more. Changes are kept as a **draft** (Save draft); people keep seeing the published page until you **Publish**. Up to five pages can be **pinned**, shown in the menu under **Your pages**.
 
 **Earlier versions**, in the editor, lists each time the page was published: who published it, when, and what changed ("Added Owed. Now opened by owners and support."). **Bring back** makes a version your draft, in place of your changes not published yet: people keep seeing the published page until you publish it, and publishing it is checked as any change is (a column gone since is said, and with four-eyes publishing another person publishes it).
 
@@ -114,6 +117,7 @@ If a table or a column a page uses is gone, that part shows "This part needs fix
 | `GET /v1/pages/{name}/live` | Server-sent events while the page is open: `changed` names the parts to read again (no data), at most once in two seconds |
 | `POST /v1/pages/{name}/act` | A button pressed: `{"block", "row", "action", "yes"}`; gives the tool to open with its values (start it with the `button`), sends a signal after `yes`, or gives the approval to open |
 | `POST /v1/pages/{name}/refresh` | What tools worked out on the page for you is let go, so it is worked out again |
+| `GET /v1/page-choices` | Your tools (whether each only reads, its answers and values) and workflows (the signals a page may send them, their approvals) by name, for the editor (`page.edit`) |
 | `GET /v1/page-records` | Your orders, invoices, deliveries, customers and staff as a page may show them: their columns, whether their area is on and whether you may see them (`page.edit`) |
 | `GET /v1/pages/{name}/versions` | Every published version, newest first: who, when, who it let open the page, what changed (`page.edit`) |
 | `POST /v1/pages/{name}/versions/{v}/bring-back` | That version becomes the draft (never published by this) |
@@ -126,4 +130,4 @@ In code, `@taskiem/sdk` (`sdk/src/page.ts`) writes a page: `page({ name, title }
 
 ## Not yet
 
-Making buttons, tool parts, a status and a tab in the editor (they are written in the page's file or the SDK, and drawn and pressed everywhere), a page opened from a notification, boards and charts, starters and **Describe it** come in later phases ([the plan](spec/pages.md#14-phases)).
+Boards and charts, starters and **Describe it** come in later phases ([the plan](spec/pages.md#14-phases)).
