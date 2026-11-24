@@ -29,6 +29,13 @@ import type { Table } from "../lib/tables";
 
 type Col = { name: string; words: string };
 
+/** Values with one set (or, given none, left out); none at all is none. */
+function withValue(m: Record<string, unknown> | undefined, k: string, v: string | undefined): Record<string, unknown> | undefined {
+  const out = Object.fromEntries(Object.entries(m ?? {}).filter(([x]) => x !== k));
+  if (v !== undefined) out[k] = v;
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Picks one of a few, with words. */
 function Pick({ label, value, choices, onChange, none }: { label: string; value: string; choices: Col[]; onChange: (v: string) => void; none?: string }) {
   return (
@@ -144,7 +151,9 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
   const telling = choices.workflows.filter((w) => w.signals.length > 0);
   const approving = choices.workflows.filter((w) => w.approvals.length > 0);
   const tool = choices.tools.find((t) => t.command === a.tool);
-  const which = (v: string | undefined) => v ?? "";
+  // The signal and the approval as they stand (empty until picked).
+  const sig = a.signal ?? { workflow: "", name: "" };
+  const ap = a.approve ?? { workflow: "", run: "", step: "" };
   const kinds: Col[] = [
     { name: "tool", words: "Opens a tool's form, filled in" },
     ...(telling.length ? [{ name: "signal", words: "Tells a run something, after a Yes" }] : []),
@@ -186,10 +195,8 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
               filters={filters}
               personal={i.personal}
               onChange={(v) => {
-                const inputs = { ...(a.inputs ?? {}) };
-                if (v === undefined) delete inputs[i.name];
-                else inputs[i.name] = v;
-                onChange({ ...a, inputs: Object.keys(inputs).length ? inputs : undefined });
+                const inputs = withValue(a.inputs, i.name, v);
+                onChange({ ...a, inputs });
               }}
             />
           ))}
@@ -205,13 +212,13 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
             label="Which workflow"
             value={a.signal.workflow}
             choices={telling.map((w) => ({ name: w.name, words: w.name }))}
-            onChange={(workflow) => onChange({ ...a, signal: { ...a.signal!, workflow, name: telling.find((w) => w.name === workflow)?.signals[0] ?? "" } })}
+            onChange={(workflow) => onChange({ ...a, signal: { ...sig, workflow, name: telling.find((w) => w.name === workflow)?.signals[0] ?? "" } })}
           />
           <Pick
             label="Tells it"
             value={a.signal.name}
             choices={(telling.find((w) => w.name === a.signal?.workflow)?.signals ?? []).map((s) => ({ name: s, words: s }))}
-            onChange={(name) => onChange({ ...a, signal: { ...a.signal!, name } })}
+            onChange={(name) => onChange({ ...a, signal: { ...sig, name } })}
           />
           {cols.length > 0 ? (
             <>
@@ -225,7 +232,7 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
                 onChange={(how) => {
                   const col = valueFrom(a.signal?.run ?? a.signal?.to);
                   const c = col?.from === "column" ? col.column : cols[0]?.name ?? "id";
-                  const { run: _run, to: _to, ...rest } = a.signal!;
+                  const rest = { workflow: sig.workflow, name: sig.name, ...(sig.input ? { input: sig.input } : {}) };
                   onChange({ ...a, signal: how === "run" ? { ...rest, run: `=row.${c}` } : { ...rest, to: `=row.${c}` } });
                 }}
               />
@@ -236,11 +243,11 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
                   return v?.from === "column" ? v.column : "";
                 })()}
                 choices={cols}
-                onChange={(c) => onChange({ ...a, signal: a.signal!.run !== undefined ? { ...a.signal!, run: `=row.${c}` } : { ...a.signal!, to: `=row.${c}` } })}
+                onChange={(c) => onChange({ ...a, signal: sig.run !== undefined ? { ...sig, run: `=row.${c}` } : { ...sig, to: `=row.${c}` } })}
               />
             </>
           ) : (
-            <ValuePick label="What the run waits for" value={a.signal.to} cols={[]} filters={filters} onChange={(v) => onChange({ ...a, signal: { ...a.signal!, run: undefined, to: v ?? "" } })} />
+            <ValuePick label="What the run waits for" value={a.signal.to} cols={[]} filters={filters} onChange={(v) => onChange({ ...a, signal: { ...sig, run: undefined, to: v ?? "" } })} />
           )}
         </>
       )}
@@ -250,13 +257,13 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
             label="Which workflow"
             value={a.approve.workflow}
             choices={approving.map((w) => ({ name: w.name, words: w.name }))}
-            onChange={(workflow) => onChange({ ...a, approve: { ...a.approve!, workflow, step: approving.find((w) => w.name === workflow)?.approvals[0]?.step ?? "" } })}
+            onChange={(workflow) => onChange({ ...a, approve: { ...ap, workflow, step: approving.find((w) => w.name === workflow)?.approvals[0]?.step ?? "" } })}
           />
           <Pick
             label="At which approval"
             value={a.approve.step}
             choices={(approving.find((w) => w.name === a.approve?.workflow)?.approvals ?? []).map((s) => ({ name: s.step, words: s.name }))}
-            onChange={(step) => onChange({ ...a, approve: { ...a.approve!, step } })}
+            onChange={(step) => onChange({ ...a, approve: { ...ap, step } })}
           />
           {cols.length > 0 ? (
             <Pick
@@ -266,10 +273,10 @@ function ActionForm({ a, n, cols, filters, choices, onChange, onRemove }: { a: P
                 return v?.from === "column" ? v.column : "";
               })()}
               choices={cols}
-              onChange={(c) => onChange({ ...a, approve: { ...a.approve!, run: `=row.${c}` } })}
+              onChange={(c) => onChange({ ...a, approve: { ...ap, run: `=row.${c}` } })}
             />
           ) : (
-            <ValuePick label="The run's number" value={a.approve.run} cols={[]} filters={filters} onChange={(v) => onChange({ ...a, approve: { ...a.approve!, run: v ?? "" } })} />
+            <ValuePick label="The run's number" value={a.approve.run} cols={[]} filters={filters} onChange={(v) => onChange({ ...a, approve: { ...ap, run: v ?? "" } })} />
           )}
         </>
       )}
@@ -344,12 +351,7 @@ export function ToolSourceForm({ part, choices, filters, onChange }: { part: Par
           cols={[]}
           filters={filters}
           personal={i.personal}
-          onChange={(v) => {
-            const inputs = { ...(src.inputs ?? {}) };
-            if (v === undefined) delete inputs[i.name];
-            else inputs[i.name] = v;
-            onChange({ ...part, source: { ...src, inputs: Object.keys(inputs).length ? inputs : undefined } });
-          }}
+          onChange={(v) => onChange({ ...part, source: { ...src, inputs: withValue(src.inputs, i.name, v) } })}
         />
       ))}
       <p className="hint">It runs for each person who opens the page, kept for a minute; Refresh works it out again.</p>

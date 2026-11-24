@@ -669,7 +669,7 @@ void main() {
     await settle(t);
     final box = find.bySemanticsLabel('Done: Fix the gate');
     expect(box, findsOneWidget);
-    expect(t.getSemantics(box), containsSemantics(isChecked: false));
+    expect(t.getSemantics(box), isSemantics(isChecked: false));
     // The column's words are not repeated under the row when it is a box.
     expect(find.textContaining('Done: No'), findsNothing);
     await looks(t, 'page-tick');
@@ -680,7 +680,7 @@ void main() {
     expect(patched.url.path, '/v1/tables/tbl-1/rows/7');
     expect(jsonDecode(patched.body), {'set': {'done': true}});
     expect(done, isTrue);
-    expect(t.getSemantics(find.bySemanticsLabel('Done: Fix the gate')), containsSemantics(isChecked: true));
+    expect(t.getSemantics(find.bySemanticsLabel('Done: Fix the gate')), isSemantics(isChecked: true));
     expect(api.calls.where((c) => c.url.path == '/v1/pages/jobs/view').length, 2);
 
     // Without table.edit the server sends no ticks: the words, and the row opens.
