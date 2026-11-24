@@ -31,7 +31,7 @@ func TestConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := conntest.Run(context.Background(), New(Options{}), s, conntest.Options{})
+	rep := conntest.Run(context.Background(), New(Options{Now: func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }}), s, conntest.Options{})
 	for _, r := range rep.Results {
 		for _, p := range r.Problems {
 			t.Errorf("%s: %s", r.Case, p)

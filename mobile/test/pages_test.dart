@@ -477,6 +477,9 @@ void main() {
     final api = _Api();
     final acts = <Map<String, dynamic>>[];
     final worked = DateTime.now().toUtc().subtract(const Duration(minutes: 3)).toIso8601String();
+    // Yesterday at 09:00, as its picture shows it ("Started Yesterday, 09:00").
+    final now = DateTime.now();
+    final started = DateTime(now.year, now.month, now.day - 1, 9).toUtc().toIso8601String();
     api.routes['GET /v1/pages/deliveries/view'] = (_) => {
       'page': _summary('deliveries', 'Deliveries today'),
       'draft': false,
@@ -524,7 +527,7 @@ void main() {
           ],
         },
         {'id': 'state', 'type': 'status', 'title': 'Paying riders', 'run': 'r1', 'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
-          'started_at': '2026-11-22T09:00:00Z', 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
+          'started_at': started, 'waiting_for': [{'kind': 'approval', 'who': 'an owner'}]},
       ],
     };
     api.routes['POST /v1/pages/deliveries/act'] = (r) {
