@@ -133,8 +133,22 @@ type Block struct {
 	Actions []Action `json:"actions,omitempty"`
 	// Workflow: a status part's declared workflow, whose run it shows.
 	Workflow string `json:"workflow,omitempty"`
+	// RowStatus: a list's or a table's rows each show where a run of a
+	// workflow is (§4, a row's own status).
+	RowStatus *RowStatus `json:"status,omitempty"`
 	// Every part but a heading, buttons and a status.
 	Source *Source `json:"source,omitempty"`
+}
+
+// RowStatus names, for each row of a list or a table, the run of Workflow
+// whose state it shows (§4, Status): by the run's number a column holds
+// (Run, "=row.run"), by what the run waits for or last waited for (To, its
+// correlation, "=row.id": a delivery has no run of its own), or, with
+// neither, the run the page's address names (?run=).
+type RowStatus struct {
+	Workflow string `json:"workflow"`
+	Run      string `json:"run,omitempty"`
+	To       string `json:"to,omitempty"`
 }
 
 // Change makes a figure this period's, beside the period before.
@@ -547,6 +561,21 @@ func (b Block) check(i int, at string, filters map[string]Filter, ps *problems) 
 		for j, a := range b.Actions {
 			a.check(fmt.Sprintf("%s/actions/%d", at, j), rowEngine, ps)
 		}
+		if rs := b.RowStatus; rs != nil {
+			if strings.TrimSpace(rs.Workflow) == "" {
+				ps.add(at+"/status/workflow", "%s shows where each row's run is: say which workflow.", name)
+			}
+			if rs.Run != "" && rs.To != "" {
+				ps.add(at+"/status", "%s finds each row's run by its number (run) or by what it waits for (to), not both.", name)
+			}
+			for _, v := range []struct{ path, v string }{{"/status/run", rs.Run}, {"/status/to", rs.To}} {
+				if v.v != "" {
+					checkValueIn(rowEngine, at+v.path, v.v, ps)
+				}
+			}
+		}
+	} else if b.RowStatus != nil {
+		ps.add(at+"/status", "Only a list's or a table's rows show where their run is.")
 	}
 	if b.Detail != nil {
 		checkValueIn(rowEngine, at+"/detail/title", b.Detail.Title, ps)

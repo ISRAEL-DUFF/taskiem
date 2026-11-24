@@ -225,10 +225,12 @@ func stepOfInstance(d *wd.Definition, id string) *wd.Step {
 // that is an alert; and a table's ticks, for one who may change its rows.
 func (s *Server) drawBlock(ctx context.Context, pc *pageCtx, b pages.Block, cursor pages.Cursor, order *pages.Order) map[string]any {
 	if out := s.drawG2(ctx, pc, b); out != nil {
+		s.markRowRuns(ctx, pc, b, out) // a tool's list (pages_rowstatus.go)
 		return out
 	}
 	out := s.drawPart(ctx, pc, b, cursor, order)
 	s.markRows(ctx, pc, out)
+	s.markRowRuns(ctx, pc, b, out)
 	if b.Type == "figure" && b.Alert {
 		out["alert"] = true
 	}

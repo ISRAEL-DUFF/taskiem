@@ -605,7 +605,12 @@ class _PageScreenState extends State<PageScreen> {
         child: TkSheet(
           title: d.title.isEmpty ? 'Details' : d.title,
           body: TkFormBody(children: [
-            TkFormGroup(children: [TkLines([for (final l in d.lines) (l.label, l.value.isEmpty ? '—' : l.value)])]),
+            TkFormGroup(children: [
+              TkLines([
+                for (final l in d.lines) (l.label, l.value.isEmpty ? '—' : l.value),
+                if (r.runStatus != null) ('Where it is', runStatusLine(r.runStatus)),
+              ]),
+            ]),
             if (actions.isNotEmpty && block != null) _actionButtons(block, r.id, actions, before: () => Navigator.of(sheet).pop()),
           ]),
         ),
@@ -766,15 +771,23 @@ class _PageScreenState extends State<PageScreen> {
           inset: 16,
           children: [
             for (final r in g.rows)
-              TkListRow(
-                title: (r.title ?? '').isEmpty ? '—' : r.title!,
-                sub: r.sub ?? '',
-                status: r.state?.text,
-                statusTone: pageTone(r.state?.tone),
-                chevron: _opens(r),
-                semanticsLabel: [r.title ?? '', if ((r.sub ?? '').isNotEmpty) r.sub!, if (r.state != null) r.state!.text].join(', ') + (_opens(r) ? '. Open' : ''),
-                onTap: _opens(r) ? () => _open(r, b.id) : null,
-              ),
+              () {
+                // Its run's status (H5): the pill when the row has no state
+                // of its own, else a line under it.
+                final run = runStatusLine(r.runStatus);
+                final pill = r.state == null && run.isNotEmpty;
+                final under = pill ? runWaitsFor(r.runStatus) : run;
+                final sub = [if ((r.sub ?? '').isNotEmpty) r.sub!, if (under.isNotEmpty) under].join(' · ');
+                return TkListRow(
+                  title: (r.title ?? '').isEmpty ? '—' : r.title!,
+                  sub: sub,
+                  status: pill ? r.runStatus!.words : r.state?.text,
+                  statusTone: pageTone(pill ? r.runStatus!.tone : r.state?.tone),
+                  chevron: _opens(r),
+                  semanticsLabel: [r.title ?? '', if (sub.isNotEmpty) sub, if (r.state != null) r.state!.text, if (pill) r.runStatus!.words].join(', ') + (_opens(r) ? '. Open' : ''),
+                  onTap: _opens(r) ? () => _open(r, b.id) : null,
+                );
+              }(),
           ],
         ));
       }
@@ -807,17 +820,22 @@ class _PageScreenState extends State<PageScreen> {
                 for (var i = 0; i < (r.ticks?.length ?? 0) && i < cols.length; i++)
                   if (r.ticks![i] is bool) i,
               ];
+              final waits = runWaitsFor(r.runStatus);
               final sub = [
                 for (var i = 1; i < cells.length && i < cols.length; i++)
                   if (!ticks.contains(i)) '${cols[i].label}: ${cells[i].isEmpty ? '—' : cells[i]}',
+                if (waits.isNotEmpty) waits,
               ].join(' · ');
               final title = cells.isEmpty || cells.first.isEmpty ? '—' : cells.first;
+              final run = r.runStatus?.words ?? '';
               final row = TkListRow(
                 title: title,
                 sub: sub,
                 subLines: 3,
+                status: run.isEmpty ? null : run,
+                statusTone: pageTone(r.runStatus?.tone),
                 chevron: _opens(r),
-                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${_opens(r) ? '. Open' : ''}',
+                semanticsLabel: '$title${sub.isEmpty ? '' : ', $sub'}${run.isEmpty ? '' : ', $run'}${_opens(r) ? '. Open' : ''}',
                 onTap: _opens(r) ? () => _open(r, b.id) : null,
               );
               if (ticks.isEmpty) return row;
@@ -1049,6 +1067,21 @@ class _PlacedPageTabsState extends State<PlacedPageTabs> {
 
 /// The published pages placed under these areas.
 List<PageSummary> placedPages(List<PageSummary> pages, List<String> areas) => [for (final p in pages) if (p.published && p.place != null && areas.contains(p.place)) p];
+
+/// A row's own status in a line (pages §4; H5): its run's words, and who
+/// it waits for when the server says (run.read): "Waiting: for Ada".
+String runStatusLine(PageRowRunStatus? s) {
+  if (s == null) return '';
+  final who = runWaitsFor(s);
+  return who.isEmpty ? s.words : '${s.words}: ${who.substring(0, 1).toLowerCase()}${who.substring(1)}';
+}
+
+/// Who a row's run waits for, as a line under the row ("For Ada"); '' when
+/// the server says no one (or the viewer may not read runs).
+String runWaitsFor(PageRowRunStatus? s) {
+  final who = [for (final w in s?.waitingFor ?? const <ToolAnswerWait>[]) if (w.you == true) 'you' else w.who];
+  return who.isEmpty ? '' : 'For ${who.join(', ')}';
+}
 
 /// A tone for a status pill, exported for the tests' words.
 Widget pagePill(String words, String? tone) => CardPill(words, pageTone(tone));

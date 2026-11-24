@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runsWords } from "./pages";
+import { runStatusLine, runsWords } from "./pages";
 
 // Pages H5 (build-plan-gaps §7).
 describe("pages H5", () => {
@@ -15,5 +15,11 @@ describe("pages H5", () => {
     const month = runsWords({ views_a_day: 50, tools: 1, runs_a_day: 50, runs_per_month: 1000 });
     expect(month?.over).toBe(true);
     expect(month?.line).toContain("about 1,500 a month from this page");
+  });
+
+  it("says a row's run in a line (g-pages-rowstatus)", () => {
+    expect(runStatusLine(undefined)).toBe("");
+    expect(runStatusLine({ words: "Done", tone: "good" })).toBe("Done");
+    expect(runStatusLine({ words: "Waiting", tone: "warn", waiting_for: [{ kind: "approval", who: "Ada" }, { kind: "form", who: "Sam", you: true }] })).toBe("Waiting: for Ada, you");
   });
 });

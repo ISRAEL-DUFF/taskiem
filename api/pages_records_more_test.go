@@ -91,7 +91,9 @@ func TestPagesDeliveriesFixture(t *testing.T) {
 				"source": map[string]any{"records": "deliveries", "uses": []string{"when"}, "order": []map[string]any{{"column": "offered_at", "desc": true}}},
 				"item":   map[string]any{"title": "=row.order + ' · ' + row.rider", "sub": "=row.customer", "state": map[string]any{"text": "=row.status"}},
 				"actions": []map[string]any{{"label": "Confirm", "when": "=row.status == 'delivered' && row.confirmed_at == ''",
-					"signal": map[string]any{"workflow": "Confirm deliveries", "name": "confirm", "to": "=row.id"}}}},
+					"signal": map[string]any{"workflow": "Confirm deliveries", "name": "confirm", "to": "=row.id"}}},
+				// Each delivery's run, by what it waits for (pages H5, g-pages-rowstatus).
+				"status": map[string]any{"workflow": "Confirm deliveries", "to": "=row.id"}},
 			{"id": "who", "type": "table", "title": "Customers", "source": map[string]any{"records": "customers"},
 				"columns": []map[string]any{{"column": "customer"}, {"column": "owed", "naira": true}}},
 			{"id": "team", "type": "table", "title": "Staff", "source": map[string]any{"records": "staff"},
@@ -114,6 +116,10 @@ func TestPagesDeliveriesFixture(t *testing.T) {
 	if row["title"] != "AC-12 · Musa" || strings.Contains(row["sub"].(string), "Bayo") || len(row["actions"].([]any)) != 1 {
 		t.Errorf("a delivery: %v", row)
 	}
+	// Its run's status: waiting, the run itself for an owner (run.read).
+	if st, _ := row["run_status"].(map[string]any); st == nil || st["words"] != "Waiting" || st["run"] != run {
+		t.Errorf("a delivery's run: %v", row["run_status"])
+	}
 	if got := toJSON(blockOf(t, v, "who")["rows"]); strings.Contains(got, "Ngozi") || !strings.Contains(got, "•") {
 		t.Errorf("customers masked: %s", got)
 	}
@@ -129,6 +135,11 @@ func TestPagesDeliveriesFixture(t *testing.T) {
 	if status != "completed" {
 		t.Errorf("confirmed run: %s", status)
 	}
+	// The row's status follows the run past its wait: done.
+	after := blockOf(t, viewOf(t, owner, "deliveries-today", map[string]any{"when": "today"}), "today")["rows"].([]any)[0].(map[string]any)
+	if st, _ := after["run_status"].(map[string]any); st == nil || st["words"] != "Done" {
+		t.Errorf("a confirmed delivery's run: %v", after["run_status"])
+	}
 	// A delivery changed says when (changed_at, for the live notices).
 	var changed *time.Time
 	_, _ = w.env.DB.Admin.Exec(context.Background(), `UPDATE deliveries SET confirmed_at = now() WHERE id = $1`, delivery)
@@ -141,6 +152,15 @@ func TestPagesDeliveriesFixture(t *testing.T) {
 	cv := viewOf(t, cashier, "deliveries-today", nil)
 	if blockOf(t, cv, "today")["unavailable"] != nil || blockOf(t, cv, "who")["unavailable"] != nil || blockOf(t, cv, "team")["unavailable"] != "You cannot see staff." {
 		t.Errorf("cashier: %v", cv["blocks"])
+	}
+	// A cashier (no run.read) sees where the run is in words, never the run.
+	if rows, _ := blockOf(t, cv, "today")["rows"].([]any); len(rows) == 1 {
+		st, _ := rows[0].(map[string]any)["run_status"].(map[string]any)
+		if st == nil || st["words"] != "Done" || st["run"] != nil || st["started_at"] != nil {
+			t.Errorf("cashier's row status: %v", st)
+		}
+	} else {
+		t.Errorf("cashier's deliveries: %v", rows)
 	}
 	vv := viewOf(t, viewer, "deliveries-today", nil)
 	if blockOf(t, vv, "today")["unavailable"] != "You cannot see deliveries." || blockOf(t, vv, "owed")["unavailable"] == nil {

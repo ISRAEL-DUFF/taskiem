@@ -438,6 +438,25 @@ type Shown struct {
 	// Ticks are a table's yes/no cells that can be changed here, as
 	// true or false, by the column's place (nil for the others).
 	Ticks []*bool `json:"ticks,omitempty"`
+	// RunStatus is where the row's run is (the part's status), set by the
+	// API: its words for every viewer, the run itself for one with run.read.
+	RunStatus map[string]any `json:"run_status,omitempty"`
+	// RunID and RunTo name the row's run (the part's status: run, or to),
+	// worked out from the row as this viewer is shown it; never sent.
+	RunID string `json:"-"`
+	RunTo string `json:"-"`
+}
+
+// rowRun works out what names a row's run, for the part's status.
+func (s *Shown) rowRun(b Block, act map[string]any) {
+	if rs := b.RowStatus; rs != nil {
+		if rs.Run != "" {
+			s.RunID = Word(b, rs.Run, act)
+		}
+		if rs.To != "" {
+			s.RunTo = Word(b, rs.To, act)
+		}
+	}
 }
 
 // ShownState is a row's state as drawn.
@@ -527,6 +546,7 @@ func Shape(b Block, t datatables.Table, rows []map[string]any, v Values) []Shown
 			s.Detail = sd
 		}
 		s.Actions = ShownActions(b, act)
+		s.rowRun(b, act)
 		out = append(out, s)
 	}
 	return out

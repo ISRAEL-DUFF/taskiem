@@ -30,6 +30,7 @@ describe("page builder", () => {
           signalAction("Confirm", { workflow: "Confirm deliveries", name: "confirm", to: ({ row }) => row.id }, { when: ({ row }) => row.status === "delivered" }),
           toolAction("Note", "add-note", { ref: ({ row }) => row.id, kind: "delivery" }, { once: true }),
         ],
+        status: { workflow: "Confirm deliveries", to: ({ row }) => row.id },
       }),
       table("all", { source: { table: "tickets" }, columns: [{ column: "title" }, { column: "done", edit: true }], actions: [approveAction("Approve", { workflow: "Refunds", run: "=row.run", step: "ok" })] }),
       buttons("new", [toolAction("New delivery", "new-delivery")]),
@@ -42,6 +43,7 @@ describe("page builder", () => {
     expect(l.actions?.[0]?.signal).toEqual({ workflow: "Confirm deliveries", name: "confirm", to: "=row.id" });
     expect(l.actions?.[0]?.when).toMatch(/^=row\.status == ["']delivered["']$/);
     expect(l.actions?.[1]).toEqual({ label: "Note", tool: "add-note", inputs: { ref: "=row.id", kind: "delivery" }, once: true });
+    expect(l.status).toEqual({ workflow: "Confirm deliveries", to: "=row.id" });
     expect(JSON.parse(JSON.stringify(doc))).toEqual(doc);
   });
 

@@ -556,6 +556,57 @@ void main() {
     await t.pump(const Duration(seconds: 4));
   });
 
+  // g-pages-rowstatus: each delivery row shows where its run is (the
+  // server's words; who it waits for only for one who may read runs), and
+  // its card says it too.
+  testWidgets('Each delivery shows its run’s status, on the row and its card', (t) async {
+    phone(t, 640);
+    final api = _Api();
+    Map<String, dynamic> delivery(String id, String title, Map<String, dynamic>? run) => {
+      'id': id,
+      'title': title,
+      'sub': 'Lekki · ₦1,500',
+      'detail': {'title': title, 'lines': [{'label': 'Rider', 'value': 'Musa'}]},
+      'run_status': ?run,
+    };
+    api.routes['GET /v1/pages/deliveries/view'] = (_) => {
+      'page': _summary('deliveries', 'Deliveries today'),
+      'draft': false,
+      'can_edit': false,
+      'drawn_at': '2026-11-24T10:00:00Z',
+      'filters': <Object>[],
+      'blocks': [
+        {
+          'id': 'today',
+          'type': 'list',
+          'title': 'Today’s deliveries',
+          'size': 'full',
+          'empty': 'No deliveries',
+          'has_detail': true,
+          'count': 3,
+          'more': null,
+          'rows': [
+            delivery('d1', 'AC-12 · Musa', {'status': 'waiting', 'words': 'Waiting', 'tone': 'warn',
+              'waiting_for': [{'kind': 'signal', 'who': 'a cashier'}]}),
+            delivery('d2', 'AC-13 · Ngozi', {'status': 'completed', 'words': 'Done', 'tone': 'good'}),
+            delivery('d3', 'AC-14 · Tunde', {'words': 'Not started', 'tone': 'plain'}),
+          ],
+        },
+      ],
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PageScreen(auth: api.auth(), name: 'deliveries', backLabel: 'Back to Pages')));
+    await settle(t);
+    expect(find.text('Waiting'), findsOneWidget);
+    expect(find.text('Lekki · ₦1,500 · For a cashier'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Not started'), findsOneWidget);
+    await looks(t, 'page-row-status');
+    await t.tap(find.text('AC-12 · Musa'));
+    await settle(t);
+    expect(find.text('Where it is'), findsOneWidget);
+    expect(find.text('Waiting: for a cashier'), findsOneWidget);
+  });
+
   // g-pages-tick: a yes/no column ticked in place, as the web does: the row
   // changed in its table (PATCH, table.edit), the page read again; a person
   // the server sends no ticks to sees words and opens the row.

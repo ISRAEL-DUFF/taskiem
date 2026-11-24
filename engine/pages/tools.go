@@ -226,6 +226,7 @@ func ShapeTool(b Block, outputs map[string]any, v Values) (rows []Shown, count i
 			s.Detail = sd
 		}
 		s.Actions = ShownActions(b, act)
+		s.rowRun(b, act)
 		rows = append(rows, s)
 	}
 	return rows, count

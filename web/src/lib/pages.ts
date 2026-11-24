@@ -143,6 +143,23 @@ export function runsWords(r: PageRuns | undefined): { line: string; over: boolea
   return { line, over };
 }
 
+export interface RowRunStatus {
+  status?: string;
+  words: string;
+  tone: string;
+  run?: string;
+  started_at?: string;
+  ended_at?: string;
+  waiting_for?: { kind: string; who: string; you?: boolean; request?: string }[];
+}
+
+/** A row's run status as one line: "Waiting for Ada", "Done". */
+export function runStatusLine(s: RowRunStatus | undefined): string {
+  if (!s) return "";
+  const who = (s.waiting_for ?? []).map((w) => (w.you ? "you" : w.who)).filter(Boolean);
+  return who.length ? `${s.words}: for ${who.join(", ")}` : s.words;
+}
+
 export interface PageList {
   pages: PageSummary[];
   can_edit: boolean;
@@ -165,6 +182,9 @@ export interface DrawnRow {
   actions?: DrawnAction[];
   /** A table's yes/no cells this person may tick here, by column; null for the rest. */
   ticks?: (boolean | null)[];
+  /** Where the row's run is (the part's status): words for everyone; the
+   * run, its times and who it waits for only for those who may read runs. */
+  run_status?: RowRunStatus;
 }
 
 /** A button as drawn: pressed by its part, row and place (POST /v1/pages/{name}/act). */

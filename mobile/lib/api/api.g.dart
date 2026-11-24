@@ -17361,7 +17361,7 @@ class PageBlockOrder {
 }
 
 class PageRow {
-  const PageRow({this.actions, this.cells, this.detail, this.group, required this.id, this.link, this.state, this.sub, this.ticks, this.title});
+  const PageRow({this.actions, this.cells, this.detail, this.group, required this.id, this.link, this.runStatus, this.state, this.sub, this.ticks, this.title});
 
   /// The row's buttons that show for it (G2; when hides one), drawn on the row
   /// and its card.
@@ -17376,6 +17376,12 @@ class PageRow {
   /// record's own screen, as the web's address (/storefront/orders/AD-12,
   /// /invoices/INV-0001); the app opens it too.
   final String? link;
+  /// Where the row's run is (a list's or a table's status, pages H5): the run a
+  /// column names, the one waiting (or that last waited) under what the row
+  /// names, or the one the page's address names; only a run of the part's
+  /// workflow in prod. The words for everyone the page opens to; the run, its
+  /// times and who it waits for only with run.read.
+  final PageRowRunStatus? runStatus;
   final PageRowState? state;
   final String? sub;
   /// A table's yes/no cells the caller may tick here (table.edit, a column
@@ -17390,6 +17396,7 @@ class PageRow {
         group: j['group'] == null ? null : j['group'] as String,
         id: j['id'] as String,
         link: j['link'] == null ? null : j['link'] as String,
+        runStatus: j['run_status'] == null ? null : PageRowRunStatus.fromJson(j['run_status'] as Map<String, dynamic>),
         state: j['state'] == null ? null : PageRowState.fromJson(j['state'] as Map<String, dynamic>),
         sub: j['sub'] == null ? null : j['sub'] as String,
         ticks: j['ticks'] == null ? null : (j['ticks'] as List).map((e) => e).toList(),
@@ -17403,6 +17410,7 @@ class PageRow {
         'group': ?group,
         'id': id,
         'link': ?link,
+        'run_status': ?runStatus?.toJson(),
         'state': ?state?.toJson(),
         'sub': ?sub,
         'ticks': ?ticks?.map((e) => e).toList(),
@@ -17441,6 +17449,43 @@ class PageRowDetailLinesItem {
   Map<String, dynamic> toJson() => {
         'label': label,
         'value': value,
+      };
+}
+
+/// Where the row's run is (a list's or a table's status, pages H5): the run a
+/// column names, the one waiting (or that last waited) under what the row
+/// names, or the one the page's address names; only a run of the part's
+/// workflow in prod. The words for everyone the page opens to; the run, its
+/// times and who it waits for only with run.read.
+class PageRowRunStatus {
+  const PageRowRunStatus({this.endedAt, this.run, this.startedAt, this.status, required this.tone, this.waitingFor, required this.words});
+
+  final DateTime? endedAt;
+  final String? run;
+  final DateTime? startedAt;
+  final String? status;
+  final String tone;
+  final List<ToolAnswerWait>? waitingFor;
+  final String words;
+
+  factory PageRowRunStatus.fromJson(Map<String, dynamic> j) => PageRowRunStatus(
+        endedAt: j['ended_at'] == null ? null : DateTime.parse(j['ended_at'] as String),
+        run: j['run'] == null ? null : j['run'] as String,
+        startedAt: j['started_at'] == null ? null : DateTime.parse(j['started_at'] as String),
+        status: j['status'] == null ? null : j['status'] as String,
+        tone: j['tone'] as String,
+        waitingFor: j['waiting_for'] == null ? null : (j['waiting_for'] as List).map((e) => ToolAnswerWait.fromJson(e as Map<String, dynamic>)).toList(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ended_at': ?endedAt?.toUtc().toIso8601String(),
+        'run': ?run,
+        'started_at': ?startedAt?.toUtc().toIso8601String(),
+        'status': ?status,
+        'tone': tone,
+        'waiting_for': ?waitingFor?.map((e) => e.toJson()).toList(),
+        'words': words,
       };
 }
 

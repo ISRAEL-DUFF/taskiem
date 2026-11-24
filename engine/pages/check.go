@@ -95,6 +95,9 @@ func Check(p *Page, env Env) []Problem {
 				checkActionEnv(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, env)
 			}
 		}
+		if rs := b.RowStatus; rs != nil && rs.Workflow != "" && (env.Workflow == nil || !env.Workflow(rs.Workflow)) {
+			ps.add(at+"/status/workflow", "%s shows where each row's run of %s is, which the business does not have.", name, rs.Workflow)
+		}
 		if b.Source == nil {
 			continue
 		}
@@ -186,6 +189,10 @@ func Check(p *Page, env Env) []Problem {
 		}
 		for j, a := range b.Actions {
 			checkActionReads(&ps, fmt.Sprintf("%s/actions/%d", at, j), a, t, name)
+		}
+		if rs := b.RowStatus; rs != nil {
+			checkReads(&ps, at+"/status/run", rs.Run, t, name)
+			checkReads(&ps, at+"/status/to", rs.To, t, name)
 		}
 		if d := b.Detail; d != nil {
 			checkReads(&ps, at+"/detail/title", d.Title, t, name)

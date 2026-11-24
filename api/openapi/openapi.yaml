@@ -62795,6 +62795,34 @@ components:
             type:
             - boolean
             - 'null'
+        run_status:
+          type: object
+          description: >-
+            Where the row's run is (a list's or a table's status, pages H5): the run a column names, the one waiting (or that last
+            waited) under what the row names, or the one the page's address names; only a run of the part's workflow in prod.
+            The words for everyone the page opens to; the run, its times and who it waits for only with run.read.
+          required: [words, tone]
+          properties:
+            status:
+              type: string
+            words:
+              type: string
+            tone:
+              type: string
+            run:
+              type: string
+              format: uuid
+            started_at:
+              type: string
+              format: date-time
+            ended_at:
+              type: string
+              format: date-time
+            waiting_for:
+              type: array
+              items:
+                $ref: '#/components/schemas/ToolAnswerWait'
+          additionalProperties: false
       additionalProperties: false
     PageAction:
       type: object

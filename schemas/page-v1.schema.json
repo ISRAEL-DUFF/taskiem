@@ -204,6 +204,18 @@
       }
     },
     "rowActions": { "type": "array", "maxItems": 2, "items": { "$ref": "#/$defs/action" } },
+    "rowStatus": {
+      "description": "Each row shows where a run of the workflow is: the run a column names (run), the run that waits or last waited under what the row names (to), or, with neither, the run the page's address names (?run=).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow"],
+      "not": { "required": ["run", "to"] },
+      "properties": {
+        "workflow": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "run": { "$ref": "#/$defs/value" },
+        "to": { "$ref": "#/$defs/value" }
+      }
+    },
     "block": {
       "type": "object",
       "required": ["id", "type"],
@@ -271,6 +283,7 @@
             },
             "detail": { "$ref": "#/$defs/detail" },
             "actions": { "$ref": "#/$defs/rowActions" },
+            "status": { "$ref": "#/$defs/rowStatus" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
@@ -301,6 +314,7 @@
             },
             "detail": { "$ref": "#/$defs/detail" },
             "actions": { "$ref": "#/$defs/rowActions" },
+            "status": { "$ref": "#/$defs/rowStatus" },
             "empty": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },

@@ -24,8 +24,10 @@ import {
   liveQueue,
   type PageChanged,
   rowsWord,
+  runStatusLine,
   toneClass,
   viewWithFilters,
+  type Tone,
   whoWords,
   type DrawnFilter,
   type DrawnPage,
@@ -456,6 +458,15 @@ export function DrawnPageView({
                 <dd>{l.value || "—"}</dd>
               </div>
             ))}
+            {open.run_status && (
+              <div data-testid="page-detail-run">
+                <dt>Where it is</dt>
+                <dd>
+                  {runStatusLine(open.run_status)}
+                  {open.run_status.started_at && <span className="hint"> · started {fmtTime(open.run_status.started_at)}</span>}
+                </dd>
+              </div>
+            )}
           </dl>
           <div className="toolbar">
             {!preview && (open.actions ?? []).map((a) => (
@@ -872,6 +883,7 @@ function Rows({
                     ) : (
                       cell || "—"
                     )}
+                    {i === 0 && <RowRun r={r} />}
                   </td>
                 ))}
                 {shown.has_detail ? (
@@ -916,6 +928,18 @@ function RowWords({ r }: { r: DrawnRow }) {
         {r.state && <span className={`badge sf-status ${toneClass(r.state.tone)}`}>{r.state.text}</span>}
       </span>
       {r.sub && <span className="sub">{r.sub}</span>}
+      <RowRun r={r} />
+    </span>
+  );
+}
+
+/** A row's own status (pages §4): where its run is, in words. */
+function RowRun({ r }: { r: DrawnRow }) {
+  const s = r.run_status;
+  if (!s) return null;
+  return (
+    <span className="sub pg-row-run" data-testid="page-row-run">
+      <span className={`badge sf-status ${toneClass(s.tone as Tone)}`}>{runStatusLine(s)}</span>
     </span>
   );
 }

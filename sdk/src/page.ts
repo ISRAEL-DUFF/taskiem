@@ -116,6 +116,7 @@ export type PageBlock =
       group?: { column: string; order?: string[] };
       detail?: PageDetail;
       actions?: PageAction[];
+      status?: RowStatus;
       empty?: string;
     }
   | {
@@ -127,10 +128,18 @@ export type PageBlock =
       size?: "full" | "half";
       detail?: PageDetail;
       actions?: PageAction[];
+      status?: RowStatus;
       empty?: string;
     }
   | { id: string; type: "buttons"; actions: PageAction[]; title?: string }
   | { id: string; type: "status"; workflow: string; title?: string };
+
+/** Each row shows where a run of workflow is: the run a column names (run), the run that waits, or last waited, under what the row names (to), or, with neither, the run the page's address names. */
+export interface RowStatus {
+  workflow: string;
+  run?: string;
+  to?: string;
+}
 
 /** A page/v1 document. */
 export interface PageDocument {
@@ -189,6 +198,11 @@ export function figure(id: string, f: Omit<Extract<PageBlock, { type: "figure" }
 
 type ItemIn = { title: PageValue; sub?: PageValue; state?: { text: PageValue; tone?: Tone; tones?: Record<string, Tone> } };
 type DetailIn = { title: PageValue; lines?: { label: string; value: PageValue; naira?: boolean }[] };
+type RowStatusIn = { workflow: string; run?: PageValue; to?: PageValue };
+
+function rowStatus(r: RowStatusIn | undefined, path: string): RowStatus | undefined {
+  return r && clean({ workflow: r.workflow, run: word(r.run, `${path}.run`), to: word(r.to, `${path}.to`) });
+}
 
 function item(i: ItemIn, path: string): PageItem {
   return clean({
@@ -209,17 +223,17 @@ function detail(d: DetailIn | undefined, path: string): PageDetail | undefined {
 /** A list: rows, each a title, a line and a state; grouped, with a card and buttons. */
 export function list(
   id: string,
-  l: { source: PageSource; item: ItemIn; title?: string; size?: "full" | "half"; group?: { column: string; order?: string[] }; detail?: DetailIn; actions?: PageAction[]; empty?: string },
+  l: { source: PageSource; item: ItemIn; title?: string; size?: "full" | "half"; group?: { column: string; order?: string[] }; detail?: DetailIn; actions?: PageAction[]; status?: RowStatusIn; empty?: string },
 ): PageBlock {
-  return clean({ id, type: "list" as const, ...l, item: item(l.item, `${id}.item`), detail: detail(l.detail, `${id}.detail`) });
+  return clean({ id, type: "list" as const, ...l, item: item(l.item, `${id}.item`), detail: detail(l.detail, `${id}.detail`), status: rowStatus(l.status, `${id}.status`) });
 }
 
 /** A table: rows in up to six columns, a yes/no one ticked in place with edit. */
 export function table(
   id: string,
-  t: { source: PageSource; columns: { column: string; label?: string; naira?: boolean; edit?: boolean }[]; title?: string; size?: "full" | "half"; detail?: DetailIn; actions?: PageAction[]; empty?: string },
+  t: { source: PageSource; columns: { column: string; label?: string; naira?: boolean; edit?: boolean }[]; title?: string; size?: "full" | "half"; detail?: DetailIn; actions?: PageAction[]; status?: RowStatusIn; empty?: string },
 ): PageBlock {
-  return clean({ id, type: "table" as const, ...t, detail: detail(t.detail, `${id}.detail`) });
+  return clean({ id, type: "table" as const, ...t, detail: detail(t.detail, `${id}.detail`), status: rowStatus(t.status, `${id}.status`) });
 }
 
 /** The page's own buttons, three at most. */
