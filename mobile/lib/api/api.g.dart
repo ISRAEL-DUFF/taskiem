@@ -5090,17 +5090,26 @@ class ChatRefsResponse {
       };
 }
 
-/// A thing "/" may tag
+/// A thing "/" may tag; in a search also a service or a saved thing
 class ChatRef {
-  const ChatRef({required this.id, required this.kind, required this.name, this.party, this.status, this.totalKobo, required this.when});
+  const ChatRef({required this.id, required this.kind, this.kindName, this.minutes, required this.name, this.owner, this.party, this.savedKind, this.status, this.totalKobo, required this.when});
 
   final String id;
   final String kind;
+  /// A made-up kind's name, for a saved thing of one
+  final String? kindName;
+  /// A service's minutes
+  final int? minutes;
   /// Its number or reference, or a customer's name
   final String name;
+  /// Whose saved thing it is
+  final String? owner;
   /// Who it is with (a person masked, a business in full); a customer's number,
   /// masked
   final String? party;
+  /// A saved thing's kind. A saved thing is answered by its name, kind and
+  /// owner only, never its title or what it holds.
+  final String? savedKind;
   final String? status;
   final int? totalKobo;
   final DateTime when;
@@ -5108,8 +5117,12 @@ class ChatRef {
   factory ChatRef.fromJson(Map<String, dynamic> j) => ChatRef(
         id: j['id'] as String,
         kind: j['kind'] as String,
+        kindName: j['kind_name'] == null ? null : j['kind_name'] as String,
+        minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
         name: j['name'] as String,
+        owner: j['owner'] == null ? null : j['owner'] as String,
         party: j['party'] == null ? null : j['party'] as String,
+        savedKind: j['saved_kind'] == null ? null : j['saved_kind'] as String,
         status: j['status'] == null ? null : j['status'] as String,
         totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
         when: DateTime.parse(j['when'] as String),
@@ -5118,8 +5131,12 @@ class ChatRef {
   Map<String, dynamic> toJson() => {
         'id': id,
         'kind': kind,
+        'kind_name': ?kindName,
+        'minutes': ?minutes,
         'name': name,
+        'owner': ?owner,
         'party': ?party,
+        'saved_kind': ?savedKind,
         'status': ?status,
         'total_kobo': ?totalKobo,
         'when': when.toUtc().toIso8601String(),

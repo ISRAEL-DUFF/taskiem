@@ -9731,7 +9731,7 @@ paths:
         in: query
         schema:
           type: string
-        description: One or more of invoice, bill, order, purchase, customer, comma separated; all when none.
+        description: One or more of invoice, bill, order, purchase, customer, service (the business's services, storefront.manage) and saved (the person's own saved things and their business's, by name and kind only), comma separated; when none, invoice, bill, order, purchase and customer.
       - name: cursor
         in: query
         schema:
@@ -49934,11 +49934,11 @@ components:
       type: object
       additionalProperties: false
       required: [kind, id, name, when]
-      description: A thing "/" may tag
+      description: A thing "/" may tag; in a search also a service or a saved thing
       properties:
         kind:
           type: string
-          enum: [invoice, bill, order, purchase, customer]
+          enum: [invoice, bill, order, purchase, customer, service, saved]
         id:
           type: string
         name:
@@ -49954,6 +49954,20 @@ components:
           type: integer
         status:
           type: string
+        minutes:
+          type: integer
+          description: A service's minutes
+        saved_kind:
+          type: string
+          enum: [bank_account, person, place, text, file, provider_account, custom]
+          description: A saved thing's kind. A saved thing is answered by its name, kind and owner only, never its title or what it holds.
+        kind_name:
+          type: string
+          description: A made-up kind's name, for a saved thing of one
+        owner:
+          type: string
+          enum: [mine, business]
+          description: Whose saved thing it is
     ChatCard:
       type: object
       additionalProperties: false

@@ -31,7 +31,8 @@ import (
 // chatRef is one thing that may be tagged.
 type chatRef struct {
 	// Kind: invoice (we sent it), bill (sent to us), order (placed with
-	// us), purchase (we placed it) or customer.
+	// us), purchase (we placed it) or customer; in a search also service
+	// (one of ours) or saved (a saved thing, by its name and kind only).
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
 	// Name is its number or reference, or a customer's name.
@@ -42,6 +43,14 @@ type chatRef struct {
 	When      time.Time `json:"when"`
 	TotalKobo *int64    `json:"total_kobo,omitempty"`
 	Status    string    `json:"status,omitempty"`
+	// A service's minutes.
+	Minutes int `json:"minutes,omitempty"`
+	// A saved thing's kind (bank_account, person, place, text, file,
+	// provider_account or custom), a made-up kind's name, and whose it is
+	// (mine, business). Never its title or anything it holds.
+	SavedKind string `json:"saved_kind,omitempty"`
+	KindName  string `json:"kind_name,omitempty"`
+	Owner     string `json:"owner,omitempty"`
 	// find is the name a search matches, a person's in full though it
 	// is shown masked; never sent.
 	find string

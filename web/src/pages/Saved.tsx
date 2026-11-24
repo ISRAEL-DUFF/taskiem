@@ -67,6 +67,8 @@ export function SavedPage() {
       <ErrorBox error={provider.error} />
       {provider.data && showConnectStep(provider.data) && <ConnectStep p={provider.data} />}
       <SavedCard mine={false} provider={provider.data} />
+      {/* The person's own, which search everywhere opens here (menus-everywhere §6). */}
+      <SavedCard mine />
     </>
   );
 }
