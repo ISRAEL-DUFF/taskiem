@@ -1,0 +1,151 @@
+{
+  "number": 0,
+  "slug": "one-week-at-zuri-atelier",
+  "title": "One week at Zuri Atelier",
+  "headline": "One week at *Zuri Atelier*",
+  "sub": "Orders, fittings, money, staff and suppliers, all run alongside her chats.",
+  "mood": "build",
+  "reel": [
+    {
+      "film": "open-your-shop",
+      "from": 19.0,
+      "to": 31.1,
+      "tag": "Episode 1 · Open your shop",
+      "caption": "Zainab signs up and sets up her business in minutes.",
+      "narration": {
+        "en": "Zainab signs up and sets up her business in minutes.",
+        "pcm": "Zainab sign up and set up her business for few minutes."
+      }
+    },
+    {
+      "film": "put-goods-in",
+      "from": 18.7,
+      "to": 32.6,
+      "tag": "Episode 2 · Put your goods in",
+      "caption": "One dress, every size and colour, counted.",
+      "narration": {
+        "en": "One dress, every size and colour, each with its own count.",
+        "pcm": "One dress, every size and colour, each get im own count."
+      }
+    },
+    {
+      "film": "customer-order",
+      "from": 4.5,
+      "to": 17.7,
+      "tag": "Episode 3 · Take orders",
+      "caption": "A WhatsApp order becomes an order card.",
+      "narration": {
+        "en": "When a customer orders on WhatsApp, Taskiem turns it into an order.",
+        "pcm": "When customer order for WhatsApp, Taskiem go turn am to order."
+      }
+    },
+    {
+      "film": "match-payment",
+      "from": 8.8,
+      "to": 20.7,
+      "tag": "Episode 4 · Get paid",
+      "caption": "Money arrives and finds its invoice.",
+      "narration": {
+        "en": "When the money arrives, she matches it to the invoice in one tap.",
+        "pcm": "When the money enter, she go match am to the invoice with one tap."
+      }
+    },
+    {
+      "film": "deliver",
+      "from": 8.2,
+      "to": 19.4,
+      "tag": "Episode 5 · Deliver",
+      "caption": "A rider takes it, and she follows it.",
+      "narration": {
+        "en": "A rider takes the order, and she follows it to the door.",
+        "pcm": "Rider go carry the order, and she go follow am reach door."
+      }
+    },
+    {
+      "film": "tasks-and-handover",
+      "from": 9.3,
+      "to": 20.3,
+      "tag": "Episode 6 · Your team",
+      "caption": "Tasks for her team, done on their phones.",
+      "narration": {
+        "en": "She gives Dami a task, and Dami marks it done.",
+        "pcm": "She give Dami task, and Dami go mark am done."
+      }
+    },
+    {
+      "film": "reorder",
+      "from": 4.2,
+      "to": 18.0,
+      "tag": "Episode 7 · Your suppliers",
+      "caption": "Low on fabric? Reorder in a few taps.",
+      "narration": {
+        "en": "When fabric runs low, she reorders from her supplier in a few taps.",
+        "pcm": "When fabric dey finish, she go reorder from her supplier with few taps."
+      }
+    },
+    {
+      "film": "a-deal",
+      "from": 11.0,
+      "to": 25.9,
+      "tag": "Episode 8 · Sell to businesses",
+      "caption": "A deal, within the limits she sets.",
+      "narration": {
+        "en": "A business haggles for fifty uniforms. Staff deal within her limits, and she approves the rest.",
+        "pcm": "Business dey haggle for fifty uniform. Staff go deal inside her limits, and she go approve the rest."
+      }
+    },
+    {
+      "film": "know-your-numbers",
+      "from": 0.0,
+      "to": 13.6,
+      "tag": "Episode 9 · Know your numbers",
+      "caption": "Her morning, at a glance.",
+      "narration": {
+        "en": "Every morning, her numbers are waiting: money in, orders, and what needs her.",
+        "pcm": "Every morning, her numbers dey wait: money wey enter, orders, and wetin need her."
+      }
+    },
+    {
+      "film": "approve-a-payment",
+      "from": 7.6,
+      "to": 20.6,
+      "tag": "Episode 10 · Keep it safe",
+      "caption": "Nothing goes out without her OK.",
+      "narration": {
+        "en": "And nothing goes out without her OK.",
+        "pcm": "And nothing go out without her OK."
+      }
+    }
+  ],
+  "bridge": {
+    "en": "It all starts with opening her shop.",
+    "pcm": "Everything start with how she go open her shop."
+  },
+  "next": {
+    "number": 1,
+    "title": "Open your shop",
+    "headline": "Open your *shop*"
+  },
+  "flow": [
+    {
+      "id": "E0-C1",
+      "who": "Zainab Yusuf",
+      "purpose": "cold open: Monday morning, a full week ahead",
+      "seconds": 4,
+      "goes": "before the title card",
+      "action": "Turns the pages of a paper diary full of handwritten orders, lets out a small sigh, then picks up her phone with a determined smile",
+      "setting": "Zuri Atelier workroom, Surulere: a bright room, a cutting table with bolts of Ankara in indigo, gold and green, two sewing machines, a rack of finished outfits in plastic covers, a mirror with a fitting platform, a window on a yellow-painted wall",
+      "camera": "slow push-in, medium close-up, warm morning light"
+    },
+    {
+      "id": "E0-C2",
+      "who": "Zainab Yusuf",
+      "purpose": "closing: the week done, the doorway at dusk",
+      "seconds": 5,
+      "goes": "closing, after the footage, before the call to action",
+      "action": "Stands in the workroom doorway at dusk, phone in hand, looks back at the busy room with quiet pride, then smiles and switches off the light",
+      "setting": "Zuri Atelier workroom at dusk, warm lamp light, the rack full of finished outfits",
+      "camera": "wide-to-medium slow pull-back"
+    }
+  ]
+}
