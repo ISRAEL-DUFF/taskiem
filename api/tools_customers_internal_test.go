@@ -80,19 +80,3 @@ func TestCustomerAnswerLongList(t *testing.T) {
 		t.Errorf("words: %q", w)
 	}
 }
-
-// A public menu's label gives a command as migration 00569 does.
-func TestMenuCommand(t *testing.T) {
-	taken := map[string]bool{"pay-a-supplier": true}
-	for label, want := range map[string]string{
-		"Pay a supplier":           "pay-a-supplier-2",
-		"24/7 help":                "menu-24-7-help",
-		"Ọ̀rọ̀":                    "item",
-		"Check where my parcel is": "check-where-my-parcel",
-		"  Book!  ":                "book",
-	} {
-		if got := menuCommand(label, func(c string) bool { return taken[c] }); got != want {
-			t.Errorf("%q: %q, want %q", label, got, want)
-		}
-	}
-}

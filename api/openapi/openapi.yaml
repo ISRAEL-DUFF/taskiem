@@ -23683,7 +23683,7 @@ paths:
       tags:
       - You
       summary: Their tools
-      description: 'Through the door (`customer.tools`), the business''s tools for its customers (made tools T5, decision 0073): those it deploys in prod with `tool.for` `customers`, and the entries of its public menu carried over (migration 00569). Only tools a customer may start: none whose steps move money, none whose workflow names roles, none whose inputs a form cannot carry (nested, or more than ten). Each with its form; never its care, roles or steps.'
+      description: 'Through the door (`customer.tools`), the business''s tools for its customers (made tools T5, decision 0073): those it deploys in prod with `tool.for` `customers` (its customer menu: the separate public menu was retired, migration 00640). Only tools a customer may start: none whose steps move money, none whose workflow names roles, none whose inputs a form cannot carry (nested, or more than ten). Each with its form; never its care, roles or steps.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -39313,47 +39313,6 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
-  /v1/whatsapp/public-menu:
-    put:
-      operationId: putWhatsAppPublicMenu
-      tags:
-      - WhatsApp
-      summary: Set the WhatsApp public menu
-      description: What the tenant's number offers people who are not members.
-      security:
-      - sessionCookie: []
-        csrfHeader: []
-      - sessionToken: []
-      - apiKey: []
-      x-taskiem-permission: workflow.publish
-      x-taskiem-all-environments: true
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WhatsAppPublicMenuRequest'
-        required: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WhatsAppNumber'
-        '400':
-          description: More than 9 workflows, a bad label, a repeat, or an unknown workflow.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '409':
-          description: The organisation has no number of its own.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        default:
-          $ref: '#/components/responses/Error'
   /v1/workflows:
     get:
       operationId: listWorkflows
@@ -43795,7 +43754,7 @@ components:
           description: The tool's inputs schema, for its form (flat, ten fields at most)
         answer:
           type: string
-          description: text, card or list; left out when the tool tells only that it started (a public menu's entry)
+          description: text, card or list; left out when the tool declares no answer and tells only that it started
     ToolStart:
       type: object
       required:
@@ -61249,25 +61208,6 @@ components:
         passkey:
           $ref: '#/components/schemas/PasskeyCredential'
       additionalProperties: false
-    WhatsAppPublicWorkflow:
-      type: object
-      required:
-      - workflow_id
-      - label
-      properties:
-        workflow_id:
-          type: string
-          format: uuid
-        label:
-          type: string
-          maxLength: 24
-        name:
-          type: string
-          description: The workflow's name (answers only).
-        command:
-          type: string
-          description: The customers' tool the entry is (made tools T5), made from its label and kept while the entry is (answers only).
-      additionalProperties: false
     WhatsAppTemplateStatus:
       type: object
       required:
@@ -61332,8 +61272,6 @@ components:
       required:
       - connected
       - own_app
-      - public_menu
-      - public_workflows
       - flows_enabled
       properties:
         connected:
@@ -61355,18 +61293,11 @@ components:
           - embedded_signup
         status:
           type: string
-        public_menu:
-          type: boolean
-          description: Numbers bound to no one get a menu of public workflows.
         webhook_path:
           type: string
           description: Where Meta sends the number's webhooks, relative to the edge host.
         flows_endpoint_path:
           type: string
-        public_workflows:
-          type: array
-          items:
-            $ref: '#/components/schemas/WhatsAppPublicWorkflow'
         flows_enabled:
           type: boolean
         shared_number:
@@ -61405,19 +61336,6 @@ components:
         own_app:
           type: boolean
           description: Default true.
-      additionalProperties: false
-    WhatsAppPublicMenuRequest:
-      type: object
-      required:
-      - enabled
-      properties:
-        enabled:
-          type: boolean
-        workflows:
-          type: array
-          maxItems: 9
-          items:
-            $ref: '#/components/schemas/WhatsAppPublicWorkflow'
       additionalProperties: false
     WhatsAppOutbox:
       type: object

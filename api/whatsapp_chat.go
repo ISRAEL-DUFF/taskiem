@@ -327,7 +327,7 @@ type chatData struct {
 
 // WhatsAppPublic, when set, answers a message to the shared number from a
 // number bound to no one. It reports whether it handled the message.
-// Tenants' own numbers have their public menus built in
+// Tenants' own numbers have their customer menus built in
 // (whatsapp_public.go).
 type WhatsAppPublic func(ctx context.Context, number string, in whatsapp.Inbound) (bool, error)
 
@@ -614,7 +614,7 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 }
 
 // waUnbound answers a number bound to no one: the code it was sent, if it
-// sends that back; a tenant's public menu on its own number; or how to
+// sends that back; a tenant's customer menu on its own number; or how to
 // link it. guest is a number that is bound, writing to the own number of
 // a business its person is not on the team of: a customer, a rider or a
 // supplier there like any other number, never linked or signed up again.
@@ -706,7 +706,7 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 		}
 	}
 	if wa.Own() {
-		// The public menu answers a customer who asks for it (its word,
+		// The customer menu answers a customer who asks for it (its word,
 		// or a choice of it under way); anything else a customer writes
 		// to the business's own number is their conversation with it.
 		if s.waPublicAsked(ctx, wa, number, in) {

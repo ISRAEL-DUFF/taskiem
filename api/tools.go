@@ -56,10 +56,6 @@ type toolRow struct {
 	AnswerType  string         `json:"answer,omitempty"`
 	AlwaysAsk   bool           `json:"always_ask"`
 	Inputs      map[string]any `json:"inputs,omitempty"`
-	// Menu: a customers' tool carried over from the public menu (made
-	// tools T5, migration 00569): its workflow declares no tool, its name
-	// is the menu's label, and it has no answer but how its run ended.
-	Menu bool `json:"-"`
 }
 
 // Asks is the care the person meets: the steps' care, raised to yes by
@@ -129,18 +125,6 @@ func (s *Server) writeToolIndex(ctx context.Context, tx pgx.Tx, tenant, wf uuid.
 		return fmt.Errorf("%w: in %s, the command /%s is already %s's; choose another", errConflict, env, t.Command, other)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
-	}
-	if env == "prod" {
-		// A public menu's entry is a customers' tool by its command too
-		// (made tools T5).
-		var label string
-		err := tx.QueryRow(ctx, `SELECT label FROM whatsapp_public_workflows WHERE command = $1 AND workflow_id <> $2`, t.Command, wf).Scan(&label)
-		switch {
-		case err == nil:
-			return fmt.Errorf("%w: the command /%s is your public menu's %s; choose another", errConflict, t.Command, label)
-		case !errors.Is(err, pgx.ErrNoRows):
-			return err
-		}
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO workflow_tools (tenant_id, workflow_id, environment, version, command, name, about, says, icon, audience, roles, care, answer_type)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)

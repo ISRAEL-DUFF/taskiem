@@ -6505,8 +6505,8 @@ class CustomerTool {
   const CustomerTool({this.about, this.answer, required this.command, this.icon, this.inputs, required this.name});
 
   final String? about;
-  /// text, card or list; left out when the tool tells only that it started (a
-  /// public menu's entry)
+  /// text, card or list; left out when the tool declares no answer and tells
+  /// only that it started
   final String? answer;
   final String command;
   final String? icon;

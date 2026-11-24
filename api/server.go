@@ -563,7 +563,6 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage)).Get("/whatsapp/number/templates", s.getWhatsAppTemplates) // the own number's templates (whatsapp_templates.go)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/check", s.checkWhatsAppTemplates)
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
-			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
 			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
 			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)

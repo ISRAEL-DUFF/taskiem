@@ -1444,7 +1444,6 @@ whatsapp_numbers.created_by
 whatsapp_numbers.display_number
 whatsapp_numbers.own_app
 whatsapp_numbers.phone_number_id
-whatsapp_numbers.public_menu
 whatsapp_numbers.source
 whatsapp_numbers.status
 whatsapp_numbers.tenant_id
